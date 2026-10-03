@@ -147,6 +147,17 @@ class ColumnNames:
             out.setdefault(column, entry)
         return ColumnNames(out)
 
+    def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
+        """Only the entries for ``columns`` — a frame's actual columns.
+
+        After an edit, :meth:`through` keeps every earlier entry the edit did
+        not rebuild, including one for a column the edit removed (a cleared
+        reading measure); restricting to the saved frame drops those, so the
+        record never names a column the dataset no longer has.
+        """
+        keep = {str(c) for c in columns}
+        return ColumnNames({c: e for c, e in self.entries.items() if c in keep})
+
     def to_payload(self) -> dict:
         """A JSON-safe form, for a `_datasets` entry and the recovery cache."""
         return {
@@ -255,10 +266,13 @@ def from_schema(
         out["trial_id"] = out["unique_trial_id"] = trial
     if table != "raw_gaze" and "unique_paragraph_id" in present:
         out["text_id"] = out["unique_text_id"] = SourceName(("unique_paragraph_id",))
+    elif text_id := _id_entry(schema.get("text_id")):
+        # A remap fills `unique_text_id` from the mapped Text ID
+        # (`data.remap_normalized_frame`); a first load has no such column, and
+        # an entry for an absent column names nothing.
+        out["text_id"] = out["unique_text_id"] = text_id
     else:
-        out["text_id"] = _id_entry(schema.get("text_id")) or SourceName(
-            (), GENERATED, "the trial id"
-        )
+        out["text_id"] = SourceName((), GENERATED, "the trial id")
     for key, canonical in _SCREEN_FIELDS:
         if schema.get(key):
             out[canonical] = SourceName((str(schema[key]),))

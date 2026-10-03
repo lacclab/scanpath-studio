@@ -377,3 +377,57 @@ def test_compare_b_carries_a_stored_uploads_names():
     assert b.column_names["fixations"].display("duration_ms") == (
         "CURRENT_FIX_DURATION"
     )
+
+
+def test_a_mapped_text_id_names_unique_text_id_too():
+    """A remap fills `unique_text_id` from the mapped Text ID
+    (`data.remap_normalized_frame`); the record must say the same."""
+    raw = pd.DataFrame(columns=["trial", "IA_ID", "x", "y", "width", "height", "art"])
+    schema = {
+        "trial": "trial",
+        "word_id": "IA_ID",
+        "text_id": "art",
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    names = from_schema("words", schema, raw.columns)
+    assert names.display("unique_text_id") == "art"
+
+
+def test_restricted_to_drops_columns_a_frame_does_not_have():
+    names = ColumnNames({"a": SourceName(("A",)), "gone": SourceName(("G",))})
+    assert names.restricted_to(["a", "b"]) == ColumnNames({"a": SourceName(("A",))})
+
+
+def test_a_measure_cleared_on_edit_dataset_loses_its_name():
+    """Clear *Total fixation duration* on ✏️ Edit dataset: the column leaves the
+    frame, and the record must not keep naming it — a computed TFD filled in
+    later would otherwise read as the user's."""
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    entry = _stored_upload()
+    pending = {
+        "words": dict(
+            tabs._remap_proposed(
+                entry["schemas"]["words"],
+                entry["words"].columns,
+                tabs._WORD_REMAP_CANON,
+            ),
+            measure_tfd=None,
+        )
+    }
+    st.session_state.clear()
+    st.session_state["data_source_choice"] = "study"
+    st.session_state["_datasets"] = {"study": entry}
+    st.session_state["_remap_pending_schemas"] = pending
+    st.session_state["_remap_added_tables"] = []
+    tabs._apply_remap()
+    assert not st.session_state.get("_remap_problems")
+    saved = st.session_state["_datasets"]["study"]
+    assert "total_fixation_duration_ms" not in saved["words"].columns
+    words = ColumnNames.from_payload(saved["column_names"]["words"])
+    assert words.source("total_fixation_duration_ms") is None

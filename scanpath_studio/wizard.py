@@ -4092,7 +4092,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # aggregation, narrowed to the kept columns.
             "column_names": for_tables(
                 wizard_schemas,
-                {"words": raw_words, "fixations": raw_fix, "raw_gaze": raw_gaze},
+                {
+                    "words": raw_words,
+                    "fixations": raw_fix,
+                    # Raw gaze the wizard ignored (a broken mapping) is not
+                    # stored, so it gets no names either.
+                    "raw_gaze": raw_gaze if not raw_gaze_norm.empty else None,
+                },
                 {"words": keep_words, "fixations": keep_fix},
             ),
         }

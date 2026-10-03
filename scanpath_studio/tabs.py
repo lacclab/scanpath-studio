@@ -11724,7 +11724,11 @@ def _apply_remap() -> None:
         new_schemas[table_key] = schema
         earlier = ColumnNames.from_payload(new_names.get(table_key))
         new_names[table_key] = (
-            from_schema(table_key, schema, frame.columns).through(earlier).to_payload()
+            from_schema(table_key, schema, frame.columns)
+            .through(earlier)
+            # A field the edit cleared left the frame; its name goes with it.
+            .restricted_to(new_entry[table_key].columns)
+            .to_payload()
         )
     # …then the added ones, which are *raw*: they take the same normalization
     # the add-dataset screen runs, and then `harmonize_frames` — the

@@ -12694,7 +12694,8 @@ def _reading_keys(frame, columns) -> set:
         return set()
     if not set(columns) <= set(frame.columns):
         return set()
-    rows = frame[list(columns)].dropna().astype(str).drop_duplicates()
+    # Deduplicated before the text conversion: a raw-gaze table is samples.
+    rows = frame[list(columns)].drop_duplicates().dropna().astype(str)
     return set(map(tuple, rows.to_numpy()))
 
 
@@ -13183,27 +13184,38 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             st.session_state.pop(raw_key, None)
             st.session_state.pop(signature_key, None)
             continue
-        # The files, and the picks the read depends on: a new Trial or text
-        # column changes which columns must be read as literal text, and a
-        # value pandas has already turned into a number or a missing cell
-        # cannot be recovered by a later mapping — so the file is read again.
-        signature = (
-            tuple(
-                getattr(upload, "file_id", None)
-                or (upload.name, getattr(upload, "size", None))
-                for upload in uploads
-            ),
-            _added_table_picks(name, table_key),
+        # The files, and the columns read as literal text: a new Trial or text
+        # pick can change those, and a value pandas has already turned into a
+        # number or a missing cell cannot be recovered by a later mapping — so
+        # the file is read again then, and only then (not when a pick names a
+        # column that is already read as text, nor when the fields first seed
+        # themselves with what auto-detection proposed).
+        files = tuple(
+            getattr(upload, "file_id", None)
+            or (upload.name, getattr(upload, "size", None))
+            for upload in uploads
         )
-        if st.session_state.get(signature_key) != signature:
+        held = st.session_state.get(signature_key)
+        current = st.session_state.get(raw_key)
+        stale = not (
+            isinstance(held, tuple)
+            and held[0] == files
+            and isinstance(current, pd.DataFrame)
+            and held[1] == _literal_columns(name, table_key, current.columns)
+        )
+        if stale:
             try:
-                st.session_state[raw_key] = read_tables(
+                fresh = read_tables(
                     list(uploads),
                     plan_for=lambda header, table_key=table_key: _added_table_plan(
                         name, table_key, header
                     ),
                 )
-                st.session_state[signature_key] = signature
+                st.session_state[raw_key] = fresh
+                st.session_state[signature_key] = (
+                    files,
+                    _literal_columns(name, table_key, fresh.columns),
+                )
             except Exception as exc:  # unreadable file — say so, keep the page
                 st.session_state.pop(raw_key, None)
                 box.error(f"Could not read that file: {exc}")
@@ -13251,6 +13263,12 @@ def _added_table_plan(name: str, table_key: str, header) -> ReadPlan:
     if table_key == "words":
         return verbatim_text_plan(names, schema)
     return identity_text_plan(names, schema, kind=table_key)
+
+
+def _literal_columns(name: str, table_key: str, header) -> tuple:
+    """The columns `_added_table_plan` reads as literal text, for ``header``."""
+    plan = _added_table_plan(name, table_key, header)
+    return (tuple(sorted(plan.verbatim)), tuple(sorted(plan.identity)))
 
 
 def aggregate_key(name: str) -> str:

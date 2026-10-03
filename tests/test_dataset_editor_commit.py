@@ -339,6 +339,16 @@ class TestAnAddedTableIsReadLikeTheAddScreenReadsIt:
         assert [row["trial_id"] for row in editor] == ["01", "01"]
         assert [row["text"] for row in editor] == ["NA", "001"]
 
+    def test_a_pick_that_changes_nothing_does_not_read_the_file_again(self):
+        at = AppTest.from_function(
+            _missing_table_app, args=("words", _AOI_CSV, "aoi.csv")
+        ).run()
+        first = at.session_state["_remap_add_raw_Probe_words"]
+        # The column auto-detection proposed — already read as text.
+        at.session_state["remap_Probe_words_add_participant"] = "participant_id"
+        at.run()
+        assert at.session_state["_remap_add_raw_Probe_words"] is first
+
     def test_a_fixation_table_keeps_its_zeros(self):
         at = AppTest.from_function(
             _missing_table_app, args=("fixations", _FIX_CSV, "fix.csv")

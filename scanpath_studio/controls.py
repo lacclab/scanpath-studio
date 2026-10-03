@@ -3477,6 +3477,71 @@ def forget_color_range(state_key: str) -> None:
         st.query_params.pop(param, None)
 
 
+#: The reading's grain, in the order a per-word dwell groups by: one word of one
+#: screen of one reading (the screen only on multipart data).
+_WORD_DWELL_KEYS = ("participant_id", "trial_id", "screen_id", "word_id")
+
+
+def heatmap_value_bounds(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None
+) -> tuple[float, float] | None:
+    """The span of the values a duration-weighted word-box heatmap maps, in ms.
+
+    A word box is tinted by the *summed* duration of the fixations in it, so
+    its range is per-word dwell — which refixations and rereading push well
+    past the longest single fixation the rail used to bound it by (round-7
+    review, finding 11). Summed over the pool's ``word_id`` assignment, the
+    grouping Compare's shared word heatmap uses too; the static heatmap bins by
+    box containment, which can differ by a stray fixation, so these are the
+    slider's *suggested* bounds and any endpoint can still be typed.
+
+    Without a ``word_id`` the upper bound is a reading's whole dwell (no word
+    can hold more); words-only data (no fixations) maps its own
+    ``total_fixation_duration_ms``, as the figure's fallback does. ``None``
+    when there is nothing to map. One groupby over the pool, cached on its
+    fingerprint by :func:`_heatmap_value_bounds_cached`.
+    """
+    if (
+        fixations is not None
+        and not fixations.empty
+        and "duration_ms" in fixations.columns
+    ):
+        duration = pd.to_numeric(fixations["duration_ms"], errors="coerce")
+        keys = [k for k in _WORD_DWELL_KEYS if k in fixations.columns]
+        if "word_id" in keys and fixations["word_id"].notna().any():
+            frame = fixations[keys].assign(_d=duration)
+            frame = frame[frame["word_id"].notna()]
+            dwell = frame.groupby(keys, dropna=False, sort=False)["_d"].sum()
+            values = dwell[dwell > 0]
+            if not values.empty:
+                return float(values.min()), float(values.max())
+        positive = duration[duration > 0]
+        if positive.empty:
+            return None
+        reading = [k for k in _WORD_DWELL_KEYS[:3] if k in fixations.columns]
+        if reading:
+            per_reading = positive.groupby(
+                [fixations.loc[positive.index, k] for k in reading], dropna=False
+            ).sum()
+            upper = float(per_reading.max())
+        else:
+            upper = float(positive.sum())
+        return float(positive.min()), upper
+    if words is not None and "total_fixation_duration_ms" in words.columns:
+        values = pd.to_numeric(words["total_fixation_duration_ms"], errors="coerce")
+        values = values[values > 0]
+        if not values.empty:
+            return float(values.min()), float(values.max())
+    return None
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _heatmap_value_bounds_cached(
+    _fixations: pd.DataFrame | None, _words: pd.DataFrame | None, cache_key
+) -> tuple[float, float] | None:
+    return heatmap_value_bounds(_fixations, _words)
+
+
 def _render_color_range(
     label: str,
     state_key: str,
@@ -3487,8 +3552,12 @@ def _render_color_range(
     reason: str,
     help: str | None = None,
     field_host=None,
+    slider_format: str = "%d",
 ) -> None:
     """*Auto* checkbox + the ``[lo, hi]``-bounded range slider (VIZ-46).
+
+    ``slider_format`` labels the handles, e.g. ``"%d ms"`` for a range in ms;
+    the number boxes beside it keep a bare number.
 
     ``field_host`` (UX-158) draws *Auto*, the slider and its boxes into that
     column, for a `_sub_row` whose title and caption the caller has already
@@ -3563,7 +3632,8 @@ def _render_color_range(
         min_value=lo,
         max_value=hi,
         step=1.0,
-        slider_format="%d",
+        slider_format=slider_format,
+        number_format="%d",
         disabled=disabled,
         on_change=_commit_view,
         help=range_help,
@@ -4536,16 +4606,11 @@ def _collect_viz_settings(
             # pinned scale must not move when a filter narrows the pool.
             fixation_color_range = _explicit_pair(ss.get("global_fixation_color_range"))
 
-    # Heatmap colour range only applies for the duration-weighted heatmap.
+    # Heatmap colour range only applies for the duration-weighted heatmap —
+    # over fixations, or a words-only dataset's own dwell column.
     heatmap_range = None
-    if (
-        show_heatmap
-        and ss.get("global_heatmap_metric") == "duration_ms"
-        and "duration_ms" in trial_fixations.columns
-    ):
-        heat = trial_fixations["duration_ms"]
-        if len(heat) > 0 and pd.notna(heat.min()) and pd.notna(heat.max()):
-            heatmap_range = _explicit_pair(ss.get("global_heatmap_color_range"))
+    if show_heatmap and ss.get("global_heatmap_metric") == "duration_ms":
+        heatmap_range = _explicit_pair(ss.get("global_heatmap_color_range"))
 
     # Fixation-index window (VIZ-7): a (start, end) tuple over `order_in_trial`,
     # or None for the full trial. Read straight from the slider's session key;
@@ -6438,21 +6503,32 @@ def render_plot_controls(
             help=norm_help,
             label_visibility="collapsed",
         )
-        heat_data = (
-            trial_fixations["duration_ms"]
+        # Finding 11: bounded by what a word box maps — its summed dwell —
+        # not by the longest single fixation, which refixations exceed.
+        heat_bounds = (
+            _heatmap_value_bounds_cached(
+                trial_fixations,
+                words,
+                (
+                    frame_fingerprint(trial_fixations),
+                    None if words is None else frame_fingerprint(words),
+                ),
+            )
             if heatmap_metric == "duration_ms"
-            and "duration_ms" in trial_fixations.columns
             else None
         )
-        if (
-            heat_data is not None
-            and len(heat_data) > 0
-            and pd.notna(heat_data.min())
-            and pd.notna(heat_data.max())
-        ):
-            hmin = float(math.floor(heat_data.min()))
-            hmax = float(math.ceil(heat_data.max()))
+        if heat_bounds is not None:
+            hmin = float(math.floor(heat_bounds[0]))
+            hmax = float(math.ceil(heat_bounds[1]))
             hmax_eff = hmax if hmax > hmin else hmin + 1.0
+            range_text = (
+                "Dwell time per word, in ms — the summed duration of the "
+                "fixations in a word box — mapped to the two ends of the "
+                "colorscale. The slider spans this pool's words; type any "
+                "endpoint, beyond them too. Lower the max for more contrast; "
+                "raise it to compress. Log scaling keeps these ms endpoints and "
+                "bends only the colour curve between them."
+            )
             # VIZ-46: auto (per trial, like the API) until a range is chosen.
             _render_color_range(
                 "Color range",
@@ -6461,14 +6537,9 @@ def render_plot_controls(
                 hmax_eff,
                 disabled=heat_disabled,
                 reason=heat_reason,
-                help="Min/max heatmap value mapped to the two ends of the "
-                "colorscale (for Interpolated, the smoothed density). Lower the "
-                "max for more contrast; raise it to compress.",
-                field_host=_sub_row(
-                    "Range",
-                    caption_help="The heatmap values mapped to the two ends of "
-                    "the colorscale.",
-                ),
+                help=range_text,
+                slider_format="%d ms",
+                field_host=_sub_row("Range", caption_help=range_text),
             )
 
     # Raw gaze is drawn by the static and comparison builders. The toggle is on

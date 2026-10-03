@@ -204,3 +204,81 @@ class TestAPinnedRangeSurvivesANarrowerPool:
         at = _rail(_wide=True, global_color_by="duration_ms")
         assert at.session_state["_viz"]["fixation_color_range"] is None
         assert FIX_KEY not in at.session_state
+
+
+WORD_HEAT = {
+    "global_show_heatmap": True,
+    "global_heatmap_style": "Word boxes",
+    "global_heatmap_metric": "duration_ms",
+}
+
+
+class TestTheWordHeatmapRangeIsInDwell:
+    """Finding 11: a word box maps its summed dwell, so the range's bounds are
+    per-word dwell — 300 and 600 ms here — not the 100-300 ms of the single
+    fixations, which pinned both words to one colour."""
+
+    def test_unticking_auto_pins_the_dwell_span_and_keeps_the_words_apart(self):
+        at = _rail(**WORD_HEAT)
+        auto_fills = _heat_fills(_static(at.session_state["_viz"]))
+        at.checkbox(key="_heatmap_color_range_auto").uncheck()
+        _rerun(at)
+        viz = at.session_state["_viz"]
+        assert viz["heatmap_range"] == (300.0, 600.0)
+        fills = _heat_fills(_static(viz))
+        assert fills == auto_fills
+        assert len(set(fills)) == 2
+
+    def test_an_endpoint_beyond_the_observed_dwell_can_be_typed(self):
+        at = _rail(**WORD_HEAT)
+        at.number_input(key=f"{HEAT_VIEW}__num_lo").set_value(0)
+        at.number_input(key=f"{HEAT_VIEW}__num_hi").set_value(900)
+        _rerun(at)
+        assert at.session_state["_viz"]["heatmap_range"] == (0.0, 900.0)
+        slider = at.slider(key=HEAT_VIEW)
+        assert slider.value == (0.0, 900.0)
+        assert slider.proto.max >= 900
+        # Both words keep distinct colours on the wider scale.
+        assert len(set(_heat_fills(_static(at.session_state["_viz"])))) == 2
+
+    def test_compare_and_log_keep_the_distinction_on_a_0_600_scale(self):
+        at = _rail(**WORD_HEAT, **{HEAT_KEY: (0, 600)})
+        viz = at.session_state["_viz"]
+        assert len(set(_heat_fills(_comparison(viz)))) == 2
+        log = _settings(viz).with_overrides(heatmap_norm="Log")
+        words, fixations = _frames()
+        fig = plots.make_scanpath_figure(words, fixations, settings=log)
+        assert len(set(_heat_fills(fig))) == 2
+
+    def test_counts_keep_no_range(self):
+        at = _rail(**{**WORD_HEAT, "global_heatmap_metric": "counts"})
+        assert at.session_state["_viz"]["heatmap_range"] is None
+        assert not [s for s in at.slider if s.key == HEAT_VIEW]
+
+
+class TestHeatmapValueBounds:
+    def test_repeated_fixations_sum_per_word(self):
+        from scanpath_studio.controls import heatmap_value_bounds
+
+        words, fixations = _frames()
+        assert heatmap_value_bounds(fixations, words) == (300.0, 600.0)
+        # A second reading of word 2 counts toward its dwell.
+        reread = pd.concat([fixations, fixations.iloc[[3]]], ignore_index=True)
+        assert heatmap_value_bounds(reread, words) == (300.0, 900.0)
+
+    def test_without_word_ids_a_reading_bounds_it(self):
+        from scanpath_studio.controls import heatmap_value_bounds
+
+        words, fixations = _frames()
+        assert heatmap_value_bounds(fixations.drop(columns="word_id"), words) == (
+            100.0,
+            900.0,
+        )
+
+    def test_words_only_data_maps_its_own_dwell(self):
+        from scanpath_studio.controls import heatmap_value_bounds
+
+        words, _ = _frames()
+        words["total_fixation_duration_ms"] = [250.0, 0.0]
+        assert heatmap_value_bounds(pd.DataFrame(), words) == (250.0, 250.0)
+        assert heatmap_value_bounds(pd.DataFrame(), words.iloc[:0]) is None

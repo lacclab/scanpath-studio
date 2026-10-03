@@ -36,7 +36,10 @@ and a **▾** with its settings.
 | :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels |
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it
-fixed as you step through trials, so they stay comparable.
+fixed as you step through trials and filters, so they stay comparable; its
+number boxes take any endpoint, beyond the data shown too. The word-box
+heatmap's range is in dwell time per word (ms), the summed duration of the
+fixations in each box.
 
 Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the
 smallest to the largest marker in every trial, both sides of a comparison, the

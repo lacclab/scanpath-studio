@@ -3442,6 +3442,52 @@ def _render_data_setup(active: bool) -> _UploadResult:
         extra_rows["words"] = words_block.container()
         keep_rows["words"] = words_block.container()
 
+    # The raw-gaze block's upload, here rather than further down where its
+    # pickers are drawn: *Derive columns from the filename* runs before those
+    # pickers and has to see this table too, or its Table picker could never
+    # offer Raw gaze. `s3` is still created after `s2`, so it still draws below
+    # the Fixations and AOI blocks.
+    # UX-104 — the raw-gaze block. UX-113: same "name column + evenly split
+    # pickers" grid as the Fixations/AOI blocks above (a single generic
+    # `column_mapping_ui` grid read as a cramped, differently-shaped block
+    # beside them). UX-122: its own uploader replaces the "Raw gaze" label
+    # in row 1's name column, so — like Fixations/AOI above — row 1 always
+    # renders (there is nowhere else to upload); row 2 and everything below
+    # only once there is something to map.
+    # UX-125: keyed like `fix_block`/`words_block` above — the raw-gaze
+    # uploader centers against this whole block's height too.
+    s3 = sections_host.container(key="wiz_map_block_col_map_raw_gaze")
+    # UX-127: reserved here, right after `s3` (raw gaze) — a sibling of `s2`/
+    # `s3` in `sections_host`, so whatever `_render_metadata_uploads` fills
+    # into it later lands after all three main tables' rows in the DOM,
+    # regardless of how late in the script it actually runs.
+    meta_host = sections_host.container()
+    # UX-129: unconditional now — UX-125/127's `min-height` fix means the
+    # Fixations/AOI blocks above always render a visible block even with
+    # nothing uploaded, so raw gaze is never actually "the first block" any
+    # more (the `has_words or has_fix` guard this used to carry was stale;
+    # without it, AOI and Raw gaze had no line between them when both were
+    # still empty).
+    s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
+    # Word text/label — same six-cell grid, same field order, as the
+    # Fixations/AOI row above.
+    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    raw_gaze = upload_box(
+        rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
+        label="Raw gaze table (optional)",
+        short_label="Raw gaze",
+        # VIZ-45: raw gaze can be the dataset's only table, not just an
+        # overlay — and nothing is derived from it, which is worth saying
+        # before someone uploads samples expecting fixations back.
+        help_text="Sample-level gaze (one file), drawn as recorded — under the "
+        "fixations, or on its own as the dataset's only table. No fixations "
+        "are detected from it. " + _upload_types_note,
+        prefix="col_map_raw_gaze",
+        multi=False,
+        noun="gaze points",
+    )
+
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
     # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
     # guard below already tolerates all three being empty (the same guards the
@@ -3471,13 +3517,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # either row so screen order puts it first regardless of fill order.
     # What the files themselves held — a mapped column outside it was made from
     # the file names, which Share → Code has to name (its loader has no such
-    # step). Read before the derive step below adds its columns. Raw gaze
-    # uploads further down, after that step, so its entry is filled in there.
+    # step). Read before the derive step below adds its columns.
     uploaded_columns = {
         "words": set(map(str, raw_words.columns)),
         "fixations": set(map(str, raw_fix.columns)),
+        "raw_gaze": set(map(str, raw_gaze.columns)),
     }
-    if has_words or has_fix:
+    if has_words or has_fix or not raw_gaze.empty:
         # UX-129: the same nudge the top of the stage shows before anything
         # is uploaded, repeated here above "Derive columns from the
         # filename" — once one table is in, this is the next thing on
@@ -3498,6 +3544,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
 
+    if has_words or has_fix:
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
         def _cells_for(index: int) -> list:
             return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
@@ -3719,49 +3766,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     )
                 )
 
-    # UX-104 — the raw-gaze block. UX-113: same "name column + evenly split
-    # pickers" grid as the Fixations/AOI blocks above (a single generic
-    # `column_mapping_ui` grid read as a cramped, differently-shaped block
-    # beside them). UX-122: its own uploader replaces the "Raw gaze" label
-    # in row 1's name column, so — like Fixations/AOI above — row 1 always
-    # renders (there is nowhere else to upload); row 2 and everything below
-    # only once there is something to map.
-    # UX-125: keyed like `fix_block`/`words_block` above — the raw-gaze
-    # uploader centers against this whole block's height too.
-    s3 = sections_host.container(key="wiz_map_block_col_map_raw_gaze")
-    # UX-127: reserved here, right after `s3` (raw gaze) — a sibling of `s2`/
-    # `s3` in `sections_host`, so whatever `_render_metadata_uploads` fills
-    # into it later lands after all three main tables' rows in the DOM,
-    # regardless of how late in the script it actually runs.
-    meta_host = sections_host.container()
-    # UX-129: unconditional now — UX-125/127's `min-height` fix means the
-    # Fixations/AOI blocks above always render a visible block even with
-    # nothing uploaded, so raw gaze is never actually "the first block" any
-    # more (the `has_words or has_fix` guard this used to carry was stale;
-    # without it, AOI and Raw gaze had no line between them when both were
-    # still empty).
-    s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
-    # Word text/label — same six-cell grid, same field order, as the
-    # Fixations/AOI row above.
-    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
-    raw_gaze = upload_box(
-        rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
-        label="Raw gaze table (optional)",
-        short_label="Raw gaze",
-        # VIZ-45: raw gaze can be the dataset's only table, not just an
-        # overlay — and nothing is derived from it, which is worth saying
-        # before someone uploads samples expecting fixations back.
-        help_text="Sample-level gaze (one file), drawn as recorded — under the "
-        "fixations, or on its own as the dataset's only table. No fixations "
-        "are detected from it. " + _upload_types_note,
-        prefix="col_map_raw_gaze",
-        multi=False,
-        noun="gaze points",
-    )
-    # The derive step above ran before this upload existed, so nothing here was
-    # made from the file names: every column is the file's own.
-    uploaded_columns["raw_gaze"] = set(map(str, raw_gaze.columns))
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
     # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
     # guard below already tolerates all three being empty (the same guards the

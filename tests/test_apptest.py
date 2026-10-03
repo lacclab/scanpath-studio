@@ -4221,6 +4221,67 @@ class TestGenericFilenamePowers:
         assert fixation_rows, "the Fixations row rendered no field pickers"
         assert keys.index("wizard_filename_split") < fixation_rows[0]
 
+    def test_raw_gaze_columns_can_be_derived_from_its_filename(self, monkeypatch):
+        """The derive step ran before the raw-gaze upload, so its Table picker
+        could never offer Raw gaze. Now it can, and Share → Code still tells
+        the file's own columns from the ones made from its name."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        gaze = pd.DataFrame(
+            {
+                "gx": [100.0, 110.0, 120.0],
+                "gy": [50.0, 50.0, 51.0],
+                "time": [0, 2, 4],
+                "source_file": ["p1_t1_gaze"] * 3,
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                gaze if kw["state_prefix"] == "col_map_raw_gaze" else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.session_state["wizard_dataset_name"] = "Gaze only"
+        at.session_state["wizard_filename_split"] = True
+        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_regex"] = (
+            r"(?P<reader>p\d+)_(?P<item>t\d+)_gaze"
+        )
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = "Estimate from my data"
+        at.session_state[_SETUP_MODE_KEYS["geometry"]] = (
+            "Skip — I don't need visual-angle units"
+        )
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        table = next(s for s in at.selectbox if s.key == "wizard_filename_table")
+        assert table.options == ["Raw gaze"]
+        next(b for b in at.button if b.key == "wizard_filename_apply").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        trial = next(m for m in at.multiselect if m.key == "col_map_raw_gaze_trial")
+        assert "item" in trial.options
+        trial.set_value(["item"])
+        at.selectbox(key="col_map_raw_gaze_participant").set_value("reader")
+        at.selectbox(key="col_map_raw_gaze_x").set_value("gx")
+        at.selectbox(key="col_map_raw_gaze_y").set_value("gy")
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        entry = at.session_state["_datasets"]["Gaze only"]
+        assert entry["raw_gaze"]["trial_id"].astype(str).unique().tolist() == ["t1"]
+        # Made from the file name, so a script reading the file has to be told.
+        assert entry["source_recipe"]["derived"] == ["item", "reader"]
+
     def test_aggregate_toggle_finalizes_word_boxes(self, monkeypatch):
         # End-to-end: a char-level words upload + the aggregate toggle → the
         # stored dataset holds one box per word (4 char rows → 2 word boxes).

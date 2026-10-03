@@ -648,6 +648,22 @@ def _call_names(
     return _cn.across_tables(present) if present else None
 
 
+def _table_names(
+    given: dict | None, table: str, carried: ColumnNames | None
+) -> ColumnNames | None:
+    """``table``'s own map for a call — from ``column_names=`` when given, else
+    what its frame carried. A word option is read in the words table's names
+    first: the merged map gives a shared column (``word_id``) the fixations'."""
+    if given:
+        names = given.get(table)
+        if names is None:
+            return None
+        return (
+            names if isinstance(names, ColumnNames) else ColumnNames.from_payload(names)
+        )
+    return carried
+
+
 def _require_normalized(frame, label: str) -> pd.DataFrame:
     """Guard the plotting entry points against raw / wrongly-typed input.
 
@@ -669,7 +685,10 @@ def _require_normalized(frame, label: str) -> pd.DataFrame:
             f"{label} frame is not normalized: missing the canonical column(s) "
             f"{', '.join(missing)}. Its columns are: {_column_preview(frame)}. "
             "Pass the frames returned by load_scanpath_data(...) (raw tables have "
-            "to go through it first)."
+            "to go through it first). A frame it returned under the dataset's own "
+            "names loses that map when merged or concatenated with another table "
+            "(pandas drops DataFrame.attrs there): pass the result through "
+            "load_scanpath_data(...) again, or load with names='canonical'."
         )
     return frame
 
@@ -867,7 +886,7 @@ def load_participant_metadata(
             f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
         )
     if isinstance(participants, pd.DataFrame):
-        participants = _metadata.participant_ids(participants)
+        participants = _metadata.participant_ids(_cn.to_canonical_frame(participants))
     return _metadata.build_participant_metadata(
         frame,
         resolved,
@@ -935,7 +954,11 @@ def load_trial_metadata(
             f"participant_column={participant_column!r} is not in the metadata "
             f"table. Columns: {_column_preview(frame)}."
         )
-    keys = _metadata.trial_keys(trials) if trials is not None else None
+    keys = (
+        _metadata.trial_keys(_cn.to_canonical_frame(trials))
+        if trials is not None
+        else None
+    )
     return _metadata.build_trial_metadata(
         frame,
         resolved,
@@ -993,7 +1016,7 @@ def load_text_metadata(
             f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
         )
     if isinstance(texts, pd.DataFrame):
-        texts = _metadata.text_keys(texts)
+        texts = _metadata.text_keys(_cn.to_canonical_frame(texts))
     return _metadata.build_text_metadata(
         frame,
         resolved,
@@ -1140,7 +1163,12 @@ def preprocess_data(
             "discard_blink_adjacent": discard_blink_adjacent,
         },
     )
-    return given_words, _named_out(processed, "fixations", fix_names), report
+    # The QA report is derived: it names its ids as the fixations do.
+    return (
+        given_words,
+        _named_out(processed, "fixations", fix_names),
+        _named_out(report, "cleaning_qa", fix_names.identity() if fix_names else None),
+    )
 
 
 def analysis_tables(
@@ -1766,22 +1794,41 @@ _ONE_COLUMN_OPTIONS = (
     "y_field",
 )
 _COLUMN_LIST_OPTIONS = ("word_hover_fields", "fixation_hover_fields")
+#: …and of those, the ones naming a column of the words table.
+_WORD_OPTIONS = frozenset(
+    ("highlight_column", "word_hover_measure", "word_heatmap_col", "word_hover_fields")
+)
 
 
-def _canonical_options(overrides: dict, names: ColumnNames | None) -> dict:
-    """``overrides`` with every column it names in the internal vocabulary.
+def _canonical_options(
+    overrides: dict,
+    names: ColumnNames | None,
+    *,
+    words: ColumnNames | None = None,
+) -> dict:
+    """``overrides`` with every column it names in the internal vocabulary —
+    a word option in the words table's names (``words``) before the merged
+    map's.
 
     ``heatmap_metric`` is checked here too: the heatmap weights by the fixation
     duration or counts fixations, and any other value used to count silently —
     which, once the dataset's own names are accepted, a misspelt name would."""
     out = dict(overrides)
-    if names is not None:
+
+    def canonical(option: str, value) -> str:
+        if words is not None and option in _WORD_OPTIONS:
+            found = words.to_canonical(value)
+            if found != str(value):
+                return found
+        return names.to_canonical(value) if names is not None else value
+
+    if names is not None or words is not None:
         for option in _ONE_COLUMN_OPTIONS:
             if isinstance(out.get(option), str):
-                out[option] = names.to_canonical(out[option])
+                out[option] = canonical(option, out[option])
         for option in _COLUMN_LIST_OPTIONS:
             if out.get(option) is not None and not isinstance(out[option], str):
-                out[option] = [names.to_canonical(value) for value in out[option]]
+                out[option] = [canonical(option, value) for value in out[option]]
     metric = out.get("heatmap_metric")
     if metric not in (None, "duration_ms", "counts"):
         duration = (
@@ -1796,13 +1843,31 @@ def _canonical_options(overrides: dict, names: ColumnNames | None) -> dict:
     return out
 
 
-def _column_labels(names: ColumnNames | None, *frames) -> dict | None:
+def _column_labels(
+    names: ColumnNames | None,
+    word_frame,
+    fixation_frame,
+    *,
+    words: ColumnNames | None = None,
+) -> dict | None:
     """`FigureSettings.column_labels` for frames that carried names — the
-    figure's text in the dataset's own names, as the app writes it."""
+    figure's text in the dataset's own names, as the app writes it, a word
+    column also under the words table's own name (`table_figure_labels`)."""
     if names is None:
         return None
-    columns = [column for frame in frames if frame is not None for column in frame]
-    return names.figure_labels(columns)
+    labels = names.figure_labels(
+        [
+            column
+            for frame in (word_frame, fixation_frame)
+            if frame is not None
+            for column in frame
+        ]
+    )
+    if words is not None and word_frame is not None:
+        for column, label in words.figure_labels(word_frame.columns).items():
+            if labels.get(column) != label:
+                labels[f"words:{column}"] = label
+    return labels
 
 
 def _check_column_options(
@@ -1992,6 +2057,12 @@ def plot_scanpath(
     defaults. A ``color_by`` / ``highlight_column`` naming a column the trial's table
     doesn't have raises a ``ValueError`` naming the closest ones, rather than drawing
     without it.
+
+    Frames under the dataset's own column names (what ``load_scanpath_data``
+    returns by default) are read through the map they carry, and an option naming
+    a column takes either name. ``column_names`` is that map for frames loaded with
+    ``names="canonical"`` (``data.column_names``): the options then take the
+    dataset's names too, and the figure's text uses them.
     """
     if illustration:
         figure_overrides = {
@@ -2020,7 +2091,8 @@ def plot_scanpath(
     names = _call_names(
         column_names, fixations=fix_names, words=word_names, raw_gaze=gaze_names
     )
-    figure_overrides = _canonical_options(figure_overrides, names)
+    word_side = _table_names(column_names, "words", word_names)
+    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
         words, fixations, participant, trial, screen, raw_gaze=raw_gaze
     )
@@ -2090,7 +2162,9 @@ def plot_scanpath(
         font_family=font_family,
         x_field=x_field,
         y_field=y_field,
-        column_labels=_column_labels(names, trial_words, trial_fixations),
+        column_labels=_column_labels(
+            names, trial_words, trial_fixations, words=word_side
+        ),
     )
     fig = make_scanpath_figure(
         trial_words,
@@ -2129,9 +2203,9 @@ def animate_scanpath(
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
 
-    Same trial selection and canvas semantics as
-    [`plot_scanpath`][scanpath_studio.api.plot_scanpath], including ``screen`` selection
-    for multipart trials. The replay takes the reading time divided by
+    Same trial selection, canvas and column-name semantics as
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (``column_names`` included),
+    and ``screen`` selection for multipart trials. The replay takes the reading time divided by
     ``playback_speed``: save it as interactive HTML with
     [`save_figure`][scanpath_studio.api.save_figure], whose page keeps that clock
     itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which
@@ -2229,8 +2303,11 @@ def animate_scanpath(
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     names = _call_names(column_names, fixations=fix_names, words=word_names)
-    animation_overrides = _canonical_options(animation_overrides, names)
-    named = _canonical_options(named, names)
+    word_side = _table_names(column_names, "words", word_names)
+    animation_overrides = _canonical_options(
+        animation_overrides, names, words=word_side
+    )
+    named = _canonical_options(named, names, words=word_side)
     trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
         words, fixations, participant, trial, screen
     )
@@ -2349,7 +2426,9 @@ def animate_scanpath(
         font_family=font_family,
         playback_speed=playback_speed,
         autoplay=autoplay,
-        column_labels=_column_labels(names, trial_words, trial_fixations),
+        column_labels=_column_labels(
+            names, trial_words, trial_fixations, words=word_side
+        ),
     )
     fig = make_scanpath_animation(
         trial_words,
@@ -2771,7 +2850,10 @@ def compare_scanpaths(
     Remaining keywords are forwarded to `plots.make_comparison_figure`
     (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
     raises ``TypeError`` naming the closest valid options;
-    ``figure_options("comparison")`` lists the accepted keywords.
+    ``figure_options("comparison")`` lists the accepted keywords. Column names
+    follow [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s rule: A's
+    names (or ``column_names``) name the options and the figure's text, and
+    either dataset's frames may come under their own names.
     """
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import (
@@ -2796,15 +2878,14 @@ def compare_scanpaths(
     cross_dataset = words_b is not None or fixations_b is not None
     # DATA-66: A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.
-    names = _call_names(
-        column_names,
-        **{
-            table: found[1]
-            for table, frame in (("fixations", fixations), ("words", words))
-            if (found := _cn.frame_names(frame)) is not None
-        },
-    )
-    figure_overrides = _canonical_options(figure_overrides, names)
+    carried = {
+        table: found[1]
+        for table, frame in (("fixations", fixations), ("words", words))
+        if (found := _cn.frame_names(frame)) is not None
+    }
+    names = _call_names(column_names, **carried)
+    word_side = _table_names(column_names, "words", carried.get("words"))
+    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
     words, fixations, words_b, fixations_b = (
         _cn.to_canonical_frame(frame)
         for frame in (words, fixations, words_b, fixations_b)
@@ -2979,7 +3060,9 @@ def compare_scanpaths(
         trial_labels=tuple(labels) if labels else None,
         style_a=style_a,
         style_b=style_b,
-        column_labels=_column_labels(names, trial_words_a, trial_fix_a),
+        column_labels=_column_labels(
+            names, trial_words_a, trial_fix_a, words=word_side
+        ),
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.
         canvas_b=resolved_setup_b.canvas,

@@ -99,6 +99,17 @@ class TestEveryFunctionTakesEitherKind:
         text = fig.to_json()
         assert "CURRENT_FIX_DURATION" in text
 
+    def test_a_word_option_reads_the_words_tables_names(self, demo, demo_trial):
+        # `word_id` is the AOI table's IA_ID but the fixations' shifted
+        # interest-area id: a word hover is in the words table's names.
+        words, fixations = demo
+        fig = sps.plot_scanpath(
+            words, fixations, *demo_trial, word_hover_fields=["IA_ID"]
+        )
+        (labels,) = (trace for trace in fig.data if trace.name == "words")
+        assert "IA_ID:" in labels.hovertemplate
+        assert "CURRENT_FIX_INTEREST_AREA_ID" not in labels.hovertemplate
+
     def test_canonical_frames_draw_as_before(self, demo_trial):
         words, fixations = sps.load_sample_data(names="canonical")
         fig = sps.plot_scanpath(words, fixations, *demo_trial, color_by="duration_ms")
@@ -152,6 +163,12 @@ class TestOutputsFollowTheInputs:
         summary = tables["trial_summary"]
         assert "unique_trial_id" in summary
         assert "IA_FIXATION_COUNT" not in summary
+
+    def test_the_cleaning_report_names_its_ids_as_the_fixations_do(self, demo):
+        words, fixations = demo
+        _words, cleaned, report = sps.preprocess_data(words, fixations, enabled=True)
+        assert "CURRENT_FIX_DURATION" in cleaned
+        assert "unique_trial_id" in report and "trial_id" not in report
 
     def test_canonical_in_canonical_out(self):
         words, fixations = sps.load_sample_data(names="canonical")

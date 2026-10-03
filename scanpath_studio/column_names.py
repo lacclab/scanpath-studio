@@ -15,6 +15,7 @@ accepts (DATA-66 phases 2–4).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
@@ -482,6 +483,40 @@ def active_all(session: Mapping) -> ColumnNames:
     return across_tables({table: active(session, table) for table in _TABLES})
 
 
+def table_figure_labels(
+    maps: Mapping[str, ColumnNames], columns: Mapping[str, Iterable]
+) -> dict[str, str]:
+    """`FigureSettings.column_labels` for a figure drawn from several tables.
+
+    One flat map cannot hold two names for one column — ``word_id`` is the AOI
+    table's ``IA_ID`` and the fixation table's interest-area column — so the
+    merged map's labels (fixations' winning) sit under the plain keys and a
+    word column the words table names differently also under
+    ``"words:<column>"``, which a word hover reads first (`plots._table_label`).
+    Only the tables the figure is drawn from are consulted, so a words-only
+    figure is labelled by the words table alone.
+    """
+    columns = {table: list(cols) for table, cols in columns.items()}
+    drawn = {table: names for table, names in maps.items() if table in columns}
+    out = across_tables(drawn).figure_labels(
+        [column for cols in columns.values() for column in cols]
+    )
+    words = maps.get("words")
+    if words is not None and "words" in columns:
+        for column, label in words.figure_labels(columns["words"]).items():
+            if out.get(column) != label:
+                out[f"words:{column}"] = label
+    return out
+
+
+def active_figure_labels(session: Mapping, **columns: Iterable) -> dict[str, str]:
+    """:func:`table_figure_labels` for the open dataset — ``columns`` keyed by
+    table (``words=…``, ``fixations=…``)."""
+    return table_figure_labels(
+        {table: active(session, table) for table in _TABLES}, columns
+    )
+
+
 #: The tables a dataset's map covers, in the order their entries win.
 _TABLES = ("fixations", "words", "raw_gaze")
 
@@ -852,8 +887,10 @@ def stored_source_recipe(stored: Mapping) -> dict:
 
 #: The `DataFrame.attrs` key a frame under the dataset's own names carries its
 #: map in (`attach`). pandas 3 keeps `attrs` through filtering, `loc`, `copy`,
-#: `assign`, `merge`, `concat` and `groupby`, so a script can slice the frame it
-#: loaded and hand it back to the API.
+#: `assign` and `groupby`, so a script can slice the frame it loaded and hand it
+#: back to the API. `merge` and `concat` keep them only when every input carries
+#: the same `attrs`: a frame joined with a table of the user's own loses its map,
+#: and `api._require_normalized` says how to get it back.
 ATTRS_KEY = "scanpath_studio.columns"
 
 
@@ -866,23 +903,36 @@ def attach(frame, table: str, names: ColumnNames | None):
     hidden, headers = _written_plan(frame, names)
     partners = {alias: main for main, alias in _ALIAS_PAIRS}
     out = as_written(frame, names, hidden)
-    out.attrs = {
-        **frame.attrs,
-        ATTRS_KEY: {
-            "table": table,
-            "names": names.to_payload(),
-            "renamed": {header: column for column, header in headers.items()},
-            "aliases": {alias: partners[alias] for alias in hidden},
-        },
+    # One JSON string, not a nested dict: pandas deep-copies `attrs` on every
+    # operation, and walking a dict of dicts made a script's per-trial loop
+    # over a corpus 2-3x slower; a string is copied for nothing.
+    record = {
+        "table": table,
+        "names": names.to_payload(),
+        "renamed": {header: column for column, header in headers.items()},
+        "aliases": {alias: partners[alias] for alias in hidden},
     }
+    out.attrs = {**frame.attrs, ATTRS_KEY: json.dumps(record)}
     return out
+
+
+def _record(frame) -> dict | None:
+    """The record :func:`attach` left on ``frame``, else ``None``."""
+    raw = getattr(frame, "attrs", {}).get(ATTRS_KEY)
+    if not isinstance(raw, str):
+        return None
+    try:
+        record = json.loads(raw)
+    except ValueError:
+        return None
+    return record if isinstance(record, dict) else None
 
 
 def frame_names(frame) -> tuple[str, ColumnNames] | None:
     """``(table, map)`` a frame under the dataset's own names carries, else
     ``None`` (a canonical frame, or any other table)."""
-    record = getattr(frame, "attrs", {}).get(ATTRS_KEY)
-    if not isinstance(record, Mapping):
+    record = _record(frame)
+    if record is None:
         return None
     return str(record.get("table", "")), ColumnNames.from_payload(record.get("names"))
 
@@ -891,8 +941,8 @@ def to_canonical_frame(frame):
     """A frame :func:`attach` named, back under the canonical names it is
     processed in — the inverse every API function applies on entry. Any other
     frame is returned unchanged."""
-    record = getattr(frame, "attrs", {}).get(ATTRS_KEY)
-    if not isinstance(record, Mapping):
+    record = _record(frame)
+    if record is None:
         return frame
     renamed = {
         header: column

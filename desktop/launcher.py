@@ -422,12 +422,13 @@ def selfcheck() -> int:
     if combos.empty:
         print("selfcheck FAILED: bundled sample yielded no trials")
         return 1
-    first = combos.iloc[0]
+    # (participant, trial), named as the dataset names them (DATA-66).
+    participant, trial = combos.iloc[0]
     fig = api.plot_scanpath(
         words,
         fixations,
-        str(first["participant_id"]),
-        str(first["trial_id"]),
+        str(participant),
+        str(trial),
         canvas_size=(2560, 1440),
     )
     html = fig.to_html(include_plotlyjs=False)

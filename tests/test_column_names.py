@@ -786,6 +786,35 @@ class TestFigureText:
         templates = " ".join(str(t.hovertemplate) for t in fig.data)
         assert "CURRENT_FIX_DURATION: " in templates
 
+    def test_a_word_hover_reads_the_words_tables_label(self, demo):
+        fig = self._figure(
+            demo,
+            word_hover_fields=("word_id",),
+            fixation_hover_fields=("word_id",),
+            column_labels={"word_id": "FIX_IA", "words:word_id": "IA_ID"},
+        )
+        by_name = {trace.name: str(trace.hovertemplate) for trace in fig.data}
+        assert "IA_ID: " in by_name["words"]
+        assert "FIX_IA: " in " ".join(
+            template for name, template in by_name.items() if name != "words"
+        )
+
+    def test_table_labels_keep_each_tables_name(self):
+        words = ColumnNames({"word_id": SourceName(("IA_ID",), cn.MAPPED, "")})
+        fixations = ColumnNames(
+            {"word_id": SourceName(("FIX_IA",), cn.CONVERTED, "FIX_IA − 1")}
+        )
+        labels = cn.table_figure_labels(
+            {"words": words, "fixations": fixations},
+            {"words": ["word_id"], "fixations": ["word_id"]},
+        )
+        assert labels["words:word_id"] == "IA_ID"
+        assert labels["word_id"] == "FIX_IA − 1"
+        words_only = cn.table_figure_labels(
+            {"words": words, "fixations": fixations}, {"words": ["word_id"]}
+        )
+        assert words_only == {"word_id": "IA_ID"}
+
     def test_without_labels_a_figure_is_unchanged(self, demo):
         """The API passes none (phase 4), and its figures keep today's text."""
         assert (

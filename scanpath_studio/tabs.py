@@ -93,6 +93,7 @@ from scanpath_studio.column_names import (
     ColumnNames,
     across_tables,
     active_all,
+    active_figure_labels,
     as_written,
     from_schema,
     source_schema,
@@ -6727,8 +6728,10 @@ def render_single_trial_tab(
         compare_stimulus=compare_stimulus,
         # DATA-66: the figure's text names columns as the dataset does. A's
         # names, Compare included — the rail that picks the columns is A's.
-        column_labels=active_all(st.session_state).figure_labels(
-            [*trial_words.columns, *trial_fixations.columns]
+        column_labels=active_figure_labels(
+            st.session_state,
+            words=trial_words.columns,
+            fixations=trial_fixations.columns,
         ),
     )
 
@@ -9787,7 +9790,9 @@ def render_per_text_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
-            column_labels=active_all(st.session_state).figure_labels(agg_words.columns),
+            column_labels=active_figure_labels(
+                st.session_state, words=agg_words.columns
+            ),
             show_words=True,
             show_word_labels=viz_settings.get("show_labels", True),
             show_fixations=False,
@@ -11089,8 +11094,8 @@ def render_alignment_comparison_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
-            column_labels=active_all(st.session_state).figure_labels(
-                [*trial_words.columns, *fix.columns]
+            column_labels=active_figure_labels(
+                st.session_state, words=trial_words.columns, fixations=fix.columns
             ),
             **kwargs,
         )
@@ -11457,8 +11462,8 @@ def render_multiple_comparison_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
-            column_labels=active_all(st.session_state).figure_labels(
-                [*words.columns, *fix.columns]
+            column_labels=active_figure_labels(
+                st.session_state, words=words.columns, fixations=fix.columns
             ),
             **settings,
         )

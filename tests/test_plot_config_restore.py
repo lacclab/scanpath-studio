@@ -328,13 +328,40 @@ class TestPlotConfigRestore:
         assert "global_x_field" not in ss
         assert ss["global_y_field"] == "y"  # the valid one still applies
         skipped = ss["_skipped"]
-        for label in (
-            "color-by field",
-            "heatmap style",
-            "X axis field",
-            "trial selection",
-        ):
+        for label in ("color-by field", "heatmap style", "X axis field"):
             assert label in skipped
+        assert (
+            "trial selection (reader p9's trial missing is not in the current "
+            "trial pool)" in skipped
+        )
+
+    @pytest.mark.parametrize(
+        ("selection", "trial", "reason"),
+        [
+            # A supplied reader is binding: p9 is not in the pool, and p1/p2's
+            # trial `t1` is not a stand-in for p9's.
+            ({"participant_id": "p9", "trial_id": "t1"}, None, "reader p9's"),
+            # No reader named and only one reader has `t2`: that reading.
+            ({"trial_id": "t2"}, "t2", None),
+            ({"participant_id": "", "trial_id": "t2"}, "t2", None),
+            # No reader named, and two readers have `t1`: reported, not guessed.
+            ({"trial_id": "t1"}, None, "belongs to 2 readers"),
+            ({"participant_id": "p2", "trial_id": "t1"}, "t1", None),
+        ],
+    )
+    def test_a_selection_restores_only_the_reading_it_names(
+        self, selection, trial, reason
+    ):
+        ss = _run(_restore_app, _config={"selection": selection}).session_state
+        if trial is None:
+            assert "single_trial_id" not in ss
+            assert any(
+                item.startswith("trial selection (") and reason in item
+                for item in ss["_skipped"]
+            ), ss["_skipped"]
+        else:
+            assert ss["single_trial_id"] == trial
+            assert ss["_skipped"] == []
 
     def test_numeric_values_are_clamped_to_widget_bounds(self):
         config = {

@@ -9705,7 +9705,10 @@ def _run_app() -> None:
     # Same hop, from inside the app: a "go to this trial" button in a Corpus
     # Analysis table parks its request in a callback (before combos exist) and
     # it is applied here — see url_state.request_trial (ENG-36).
-    _apply_pending_trial_selection(combos)
+    # A reading the pool cannot answer — its reader filtered out, say — is
+    # reported, never replaced by another reader's trial of the same name.
+    if missed := _apply_pending_trial_selection(combos):
+        menu.notices.warning(missed, icon=ICONS["warning"])
 
     # Restore settings from an uploaded settings file BEFORE the rail widgets
     # render, so they pick up the saved values (see _apply_url_preset for the

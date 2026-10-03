@@ -486,6 +486,60 @@ class TestBuildShareQuery:
         assert any("malformed authored-fixation" in str(w) for w in fake_st.warnings)
 
 
+class TestExplicitReaderIsBinding:
+    """A named reader is never swapped for another reader's same-named trial."""
+
+    _COMBOS = pd.DataFrame(
+        {"participant_id": ["other-reader"], "trial_id": ["trial-1"]}
+    )
+
+    def test_a_filtered_out_reader_is_not_substituted(self, fake_st):
+        from scanpath_studio.url_state import _restore_selection
+
+        selection = {"participant_id": "requested-reader", "trial_id": "trial-1"}
+        assert _restore_selection(selection, self._COMBOS) is False
+        assert "single_trial_id" not in fake_st.session_state
+
+    def test_a_participant_free_request_takes_a_unique_trial(self, fake_st):
+        from scanpath_studio.url_state import _restore_selection
+
+        assert _restore_selection({"trial_id": "trial-1"}, self._COMBOS) is True
+        assert fake_st.session_state["single_trial_id"] == "trial-1"
+
+    def test_the_in_app_open_says_why_it_could_not_navigate(self, fake_st):
+        from scanpath_studio.url_state import (
+            PENDING_TRIAL_KEY,
+            _apply_pending_trial_selection,
+        )
+
+        fake_st.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "requested-reader",
+            "trial_id": "trial-1",
+            "screen_id": None,
+        }
+        message = _apply_pending_trial_selection(self._COMBOS)
+        assert message == (
+            "Couldn't open that reading: reader requested-reader's trial trial-1 "
+            "is not in the current trial pool."
+        )
+        assert PENDING_TRIAL_KEY not in fake_st.session_state
+        assert "single_trial_id" not in fake_st.session_state
+
+    def test_the_in_app_open_still_opens_a_reading_in_the_pool(self, fake_st):
+        from scanpath_studio.url_state import (
+            PENDING_TRIAL_KEY,
+            _apply_pending_trial_selection,
+        )
+
+        fake_st.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "other-reader",
+            "trial_id": "trial-1",
+            "screen_id": None,
+        }
+        assert _apply_pending_trial_selection(self._COMBOS) is None
+        assert fake_st.session_state["single_trial_id"] == "trial-1"
+
+
 class TestApplyUrlTrialSelection:
     """The ``?trial_id=`` deep link → trial-picker seeding (applied once)."""
 

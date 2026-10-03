@@ -86,7 +86,7 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
-from .data import respell_reading
+from .data import composite_respelling_map, respell_reading
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
@@ -1486,37 +1486,70 @@ def _migrate_plot_config(config: dict) -> tuple[dict, str | None]:
     return working, None
 
 
+def _match_selection(
+    selection: dict, combos: pd.DataFrame
+) -> tuple[pd.Series | None, str]:
+    """Find the one reading ``selection`` names in ``combos``, or say why not.
+
+    Returns ``(row, "")`` on a match and ``(None, reason)`` otherwise, the
+    reason a short phrase a notice can quote. A **supplied participant is
+    binding**: only that exact ``(participant, trial)`` pair matches, so a
+    reader filtered out of the pool is reported as missing rather than replaced
+    by another reader's trial of the same name. Only a request that *omitted*
+    the participant (a trial-only link, `_build_share_query(include_participant=
+    False)`) is looked up by trial id alone — and then only a unique match is
+    taken; a trial id several readers share is reported as ambiguous.
+    """
+    pid = selection.get("participant_id")
+    tid = selection.get("trial_id")
+    if tid in (None, ""):
+        return None, "it names no trial"
+    if combos is None or combos.empty:
+        return None, "the trial pool is empty"
+    tid = str(tid)
+    participant_given = pid not in (None, "")
+    readings = list(zip(combos["participant_id"], combos["trial_id"], strict=True))
+    if participant_given:
+        # A link or config saved before composite ids escaped a `_` inside a
+        # part names the trial by its old spelling (`composite_respelling_map`).
+        pid, tid = respell_reading(str(pid), tid, readings)
+        match = combos[
+            (combos["participant_id"].astype(str) == pid)
+            & (combos["trial_id"].astype(str) == tid)
+        ]
+        if match.empty:
+            return None, (
+                f"reader {pid}'s trial {tid} is not in the current trial pool"
+            )
+        return match.iloc[0], ""
+    trial_ids = {str(t) for _, t in readings}
+    if tid not in trial_ids:
+        tid = composite_respelling_map([tid], trial_ids).get(tid, tid)
+    match = combos[combos["trial_id"].astype(str) == tid]
+    if match.empty:
+        return None, f"trial {tid} is not in the current trial pool"
+    readers = match["participant_id"].astype(str).unique()
+    if len(readers) > 1:
+        return None, (
+            f"trial {tid} belongs to {len(readers)} readers in the current pool "
+            "and no reader was named"
+        )
+    return match.iloc[0], ""
+
+
 def _restore_selection(
     selection: dict, combos: pd.DataFrame, key_prefix: str = "single"
 ) -> bool:
     """Best-effort: point a tab's trial picker at the saved ``(participant,
-    trial)``. Returns True when a matching trial is found in the current
-    (filtered) data. Mirrors the key scheme of ``utils.select_trial`` for the
-    given ``key_prefix``, which is now one scheme for every dataset (BUG-23 —
-    a composite trial id no longer gets a picker, or keys, of its own).
-
-    The trial id is sufficient on its own: a missing/blank participant (e.g. a
-    ``?trial_id=`` link with no ``?participant=``) falls through to the trial-id-
-    alone match below, so the picker still lands on the trial."""
-    pid = selection.get("participant_id")
-    tid = selection.get("trial_id")
-    if tid in (None, "") or combos.empty:
+    trial)``. Returns True when that reading is found in the current
+    (filtered) data — see :func:`_match_selection` for what counts as found,
+    and for the reason when it is not. Mirrors the key scheme of
+    ``utils.select_trial`` for the given ``key_prefix``, which is now one
+    scheme for every dataset (BUG-23 — a composite trial id no longer gets a
+    picker, or keys, of its own)."""
+    row, _reason = _match_selection(selection, combos)
+    if row is None:
         return False
-    pid, tid = str(pid), str(tid)
-    # A link or config saved before composite ids escaped a `_` inside a part
-    # names the trial by its old spelling (`data.composite_respelling_map`).
-    pid, tid = respell_reading(
-        pid, tid, zip(combos["participant_id"], combos["trial_id"], strict=True)
-    )
-    match = combos[
-        (combos["participant_id"].astype(str) == pid)
-        & (combos["trial_id"].astype(str) == tid)
-    ]
-    if match.empty:  # participant absent/blank or filtered out — try trial id alone
-        match = combos[combos["trial_id"].astype(str) == tid]
-    if match.empty:
-        return False
-    row = match.iloc[0]
     st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     # The picker renders a single dropdown keyed `<prefix>_trial_id` whose
     # *options* are the trial_field values (`unique_trial_id` when present), so
@@ -1598,7 +1631,7 @@ def request_trial(
     _go_scanpath()
 
 
-def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
+def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
     """Consume a :func:`request_trial` hop, if one is waiting.
 
     Held over only while the pool cannot answer — an *empty* ``combos`` means
@@ -1609,13 +1642,22 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
     silently re-pointing the picker the moment a filter change happens to bring
     that trial back into scope. Unlike the deep-link twin there is no once-flag —
     each click is its own request, and the key *is* the flag.
+
+    Returns ``None`` when nothing was waiting or the reading opened, and
+    otherwise a sentence saying why it could not — a reader filtered out of the
+    pool is never swapped for another reader's same-named trial — for the
+    caller to show where the Open click lands.
     """
     selection = st.session_state.get(PENDING_TRIAL_KEY)
     if not selection or combos is None or combos.empty:
-        return
+        return None
+    st.session_state.pop(PENDING_TRIAL_KEY, None)
+    _row, reason = _match_selection(selection, combos)
+    if reason:
+        return f"Couldn't open that reading: {reason}."
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
-    st.session_state.pop(PENDING_TRIAL_KEY, None)
+    return None
 
 
 def _seed_column_mapping(
@@ -2417,7 +2459,8 @@ def _restore_plot_config(
         if _restore_selection(selection, combos):
             restore.applied += 1
         else:
-            skipped.append("trial selection")
+            _row, reason = _match_selection(selection, combos)
+            skipped.append(f"trial selection ({reason})")
 
     return restore.applied, skipped
 
@@ -2482,8 +2525,9 @@ def _build_share_query(
     ``include_participant`` / ``include_trial`` (S3) let the caller leave the
     identifying half out of the link — a URL lands in browser history, proxy
     logs, ``Referer`` headers and chat previews, so naming a participant there
-    is opt-out-able. Dropping only the participant still lands on the exact
-    trial: ``_restore_selection`` falls through to a trial-id-alone match. The
+    is opt-out-able. Dropping only the participant still lands on the
+    trial when its id is unique in the recipient's pool: ``_restore_selection``
+    looks a participant-free request up by trial id alone. The
     view settings are unaffected either way.
 
     Returns ``(query_string, caveats)`` — ``caveats`` holds human-readable notes

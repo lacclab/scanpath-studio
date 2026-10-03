@@ -252,9 +252,7 @@ def _rail_names() -> cn.ColumnNames:
     The fixations table's, then the words table's for the word-level fields
     (surprisal, frequency …) carried onto fixations. The pickers' values stay
     canonical — only what they show changes."""
-    return cn.active(st.session_state, "fixations").merged(
-        cn.active(st.session_state, "words")
-    )
+    return cn.active_all(st.session_state)
 
 
 def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
@@ -6674,8 +6672,8 @@ def render_plot_controls(
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
             _gated_help(
-                "The fixation columns plotted on the X and Y axes (default `x` "
-                "and `y`).",
+                "The fixation columns plotted on the X and Y axes (by default, "
+                "the fixation's position on the screen).",
                 axis_reason,
             ),
         )
@@ -6948,21 +6946,13 @@ def _bool_filter_narrowing(
     return vals or None
 
 
-# Friendly labels for well-known trial-level condition columns. Any other field
-# the user picks as a filter just uses its column name + raw values.
+# What the two values of a well-known boolean condition column mean. A filter's
+# *title* is the dataset's own name for its column (DATA-66, `trial_filter_labels`);
+# these name its values, and any other boolean column reads Yes / No.
 _FILTER_FIELD_LABELS = {
-    "question_preview": {
-        "label": "Reading regime",
-        "true": "Hunting",
-        "false": "Gathering",
-    },
-    "repeated_reading_trial": {
-        "label": "Reading number",
-        "true": "Repeated",
-        "false": "First",
-    },
-    "is_correct": {"label": "Answer", "true": "Correct", "false": "Incorrect"},
-    "difficulty_level": {"label": "Difficulty"},
+    "question_preview": {"true": "Hunting", "false": "Gathering"},
+    "repeated_reading_trial": {"true": "Repeated", "false": "First"},
+    "is_correct": {"true": "Correct", "false": "Incorrect"},
 }
 
 # Built-in sources (no wizard) auto-offer these known trial-level conditions when
@@ -7253,7 +7243,8 @@ def active_filter_items(
         return []
     values = dict(st.session_state.get(f"{prefix}_trial_filters_raw") or {})
     values.update({k: st.session_state[k] for k in keys if k in st.session_state})
-    labels = trial_filter_labels(words, fixations)
+    names = _rail_names()
+    labels = trial_filter_labels(words, fixations, names=names)
 
     def label_for(key: str) -> str:
         from scanpath_studio import metadata as md
@@ -7267,7 +7258,7 @@ def active_filter_items(
         col = bare.removeprefix("filter_")
         if col.endswith("_range") and col.removesuffix("_range") in labels:
             col = col.removesuffix("_range")
-        return labels.get(col) or _trial_filter_label(col)
+        return labels.get(col) or names.label(col)
 
     return describe_filter_keys(keys, values, label_for, prefix)
 
@@ -7406,45 +7397,12 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     return cols
 
 
-#: Friendly labels for chip fields whose column name does not humanize into
-#: anything a reader can act on. Lives here, beside `SUMMARY_CHIP_FIELDS`,
-#: because **two** surfaces name these fields — the ✏️ Edit chips picker below
-#: and the chip strip itself (`tabs._chip_field_label`, which imports this) —
-#: and they used to keep separate maps, so the same field read "Age" on a chip
-#: and "Pp age" in the picker that offers it.
-CHIP_FIELD_LABELS = {
-    "participant_id": "Participant",
-    "unique_text_id": "Text",
-    "text_id": "Text",
-    "unique_paragraph_id": "Text",
-    "paragraph_id": "Text",
-    # The stimulus-image placement columns (`data.resolve_stimulus_image_paths`
-    # and the corpora that stamp their own). They humanize to "Image x" /
-    # "Image y", which reads like an image *identifier* rather than where on
-    # the monitor the page was drawn — so they say so.
-    "image_path": "Stimulus image",
-    "image_x": "Stimulus image left (px)",
-    "image_y": "Stimulus image top (px)",
-    # MultiplEYE facets + reader metadata.
-    "genre": "Genre",
-    "session": "Session",
-    "is_practice": "Practice",
-    "trial_num": "Trial #",
-    "pp_age": "Age",
-    "pp_gender": "Gender",
-    "pp_native_language": "Native language",
-    "pp_years_education": "Years of education",
-    "pp_education_level": "Education",
-}
-
-
 def unique_field_labels(columns, label_of) -> dict[str, str]:
     """``{column: label}`` with every label distinct, in ``columns``' order.
 
-    Two columns can humanize to the same text — two text-id columns both read
-    "Text", OneStop's ``TRIAL_INDEX`` and ``trial_index`` both "Trial index" —
-    so the first keeps its label and each later one adds its column name:
-    "Trial index (trial_index)". The ✏️ chip editor needs this to stay
+    Two columns can share a label — `text_id` and `unique_text_id` read from
+    one column of the user's file — so the first keeps its label and each later
+    one adds its column name: "PARAGRAPH (unique_text_id)". The ✏️ chip editor needs this to stay
     invertible; the trial filters use it (UX-149) so two sliders over different
     columns never carry the same title.
     """
@@ -7460,15 +7418,16 @@ def unique_field_labels(columns, label_of) -> dict[str, str]:
     return labels
 
 
-def _chip_option_label(col: str) -> str:
-    """Display label for a chip-field option (identity / virtual / humanized)."""
+def chip_field_label(col: str, names: cn.ColumnNames | None = None) -> str:
+    """What a chip field is called, on the chip and in ✏️ Edit chips alike.
+
+    A summary statistic keeps the app's name (`SUMMARY_CHIP_FIELDS`); a data
+    column is shown under the dataset's own name (DATA-66). ``names`` is the
+    map to read, the open dataset's by default (Compare's B passes its own).
+    """
     if col in SUMMARY_CHIP_FIELDS:
         return SUMMARY_CHIP_FIELDS[col]
-    if col in CHIP_FIELD_LABELS:
-        return CHIP_FIELD_LABELS[col]
-    if col in _CHIP_TEXT_ID_COLS:
-        return "Text"
-    return col.replace("_", " ").strip().capitalize()
+    return (names if names is not None else _rail_names()).label(col)
 
 
 def _default_chip_fields(available: list[str]) -> list[str]:
@@ -7521,9 +7480,12 @@ def render_trial_chip_picker(
     if not available:
         return
 
-    # Display labels must be unique to stay invertible: some fields humanize to the
-    # same text (e.g. two text-id columns both read "Text"), so disambiguate.
-    key_to_label = unique_field_labels(available, _chip_option_label)
+    # Display labels must be unique to stay invertible: two fields can share a
+    # name (`text_id` and `unique_text_id` read from one column), so disambiguate.
+    names = _rail_names()
+    key_to_label = unique_field_labels(
+        available, lambda col: chip_field_label(col, names)
+    )
     label_to_key = {label: key for key, label in key_to_label.items()}
 
     # Current selection/order, pruned to what's available + seeded once.
@@ -7549,12 +7511,15 @@ def render_trial_chip_picker(
     ]
     with host:
         # Key varies with the field universe so the component re-mounts (rather than
-        # keeping a stale drag order) when the dataset / columns change.
+        # keeping a stale drag order) when the dataset / columns change. DATA-66:
+        # and with the labels — the component hands back the labels it holds, so
+        # one renamed by ✏️ Edit dataset → Save would otherwise drop its chip.
         result = sort_items(
             buckets,
             multi_containers=True,
             direction="vertical",
-            key=f"trial_chip_sort_{abs(hash(signature))}",
+            key="trial_chip_sort_"
+            f"{abs(hash((signature, tuple(key_to_label.items()))))}",
         )
     shown_labels = result[0]["items"] if result else []
     st.session_state["trial_chip_fields"] = [
@@ -8307,32 +8272,39 @@ def render_narrow_by(
         )
 
 
-def _trial_filter_label(col: str) -> str:
-    """A trial filter's title before `unique_field_labels` disambiguates it."""
-    spec = _FILTER_FIELD_LABELS.get(col, {})
-    return spec.get("label", col.replace("_", " ").strip().title())
-
-
 def trial_filter_labels(
-    words: pd.DataFrame, fixations: pd.DataFrame, numeric_fields: dict | None = None
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    numeric_fields: dict | None = None,
+    *,
+    names: cn.ColumnNames | None = None,
 ) -> dict[str, str]:
     """``{column: title}`` for the trial-filter panel's data-column filters.
 
+    DATA-66: a filter is titled by the dataset's own name for its column
+    (``names``, the open dataset's map by default; Compare's B passes its own).
     UX-149: one label namespace across the range sliders and the multiselects,
-    so the demo's `TRIAL_INDEX` and `trial_index` don't render two sliders both
-    titled "Trial Index" — the ✏️ chip editor's rule (`unique_field_labels`).
+    so two filters over different columns never share a title — the ✏️ chip
+    editor's rule (`unique_field_labels`).
     """
     if numeric_fields is None:
         numeric_fields = _numeric_filter_fields(words, fixations)
+    if names is None:
+        names = _rail_names()
     columns = [
         *numeric_fields,
         *(c for c in _filter_fields_for(words, fixations) if c not in numeric_fields),
     ]
-    return unique_field_labels(columns, _trial_filter_label)
+    return unique_field_labels(columns, names.label)
 
 
 def render_trial_filters(
-    words: pd.DataFrame, fixations: pd.DataFrame, *, host, prefix: str = ""
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    host,
+    prefix: str = "",
+    names: cn.ColumnNames | None = None,
 ) -> dict:
     """Render the trial-filter controls into ``host`` and persist the selections.
 
@@ -8362,7 +8334,7 @@ def render_trial_filters(
     # of a multiselect over its distinct floats. Rendered first, as extra rows
     # among the categorical ones rather than in a section of their own.
     numeric_fields = _numeric_filter_fields(words, fixations)
-    labels = trial_filter_labels(words, fixations, numeric_fields)
+    labels = trial_filter_labels(words, fixations, numeric_fields, names=names)
     for col, (frame, lo, hi) in numeric_fields.items():
         label = labels[col]
         _seed_range_widget(col, lo, hi, prefix=prefix)

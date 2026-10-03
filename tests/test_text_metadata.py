@@ -208,4 +208,4 @@ class TestChips:
         assert not at.exception, at.exception
         assert "genre" in at.session_state["trial_chip_fields"]
         table = " ".join(m.value for m in at.markdown)
-        assert ">Genre</th>" in table and ">news</td>" in table, table[:400]
+        assert ">genre</th>" in table and ">news</td>" in table, table[:400]

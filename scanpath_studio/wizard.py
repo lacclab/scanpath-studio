@@ -1355,8 +1355,8 @@ def _wizard_trial_step(
         if not set.intersection(*values):
             return (
                 f"{ICONS['warning']} No trial ids are shared across tables — {counts_str}. Check "
-                "the trial-id mapping lines up (try *Different trial-id columns "
-                "per table*)."
+                "that each table's **Trial ID** picks the column that names the "
+                "same trials."
             )
     return None
 

@@ -244,7 +244,7 @@ class TestAnimationParity:
     def test_colorbar_keeps_its_placement_and_reserve(self):
         fig = _anim(color_by="duration_ms", show_colorbars=True)
         cb = _trail(fig).marker.colorbar
-        assert cb.title.text == "Duration Ms"
+        assert cb.title.text == "Duration (ms)"
         assert cb.lenmode == "fraction"
         assert cb.len == pytest.approx(COLORBAR_LEN_FRACTION)
         assert (cb.y, cb.yanchor) == (0.5, "middle")
@@ -528,7 +528,7 @@ class TestComparisonColorbarStyle:
 
     def test_default_is_the_shared_styled_bar(self):
         cb = self._colorbar(_compare(color_by="duration_ms", show_colorbars=True))
-        assert cb.title.text == "Duration Ms"
+        assert cb.title.text == "Duration (ms)"
         assert cb.thickness == 14
         assert cb.tickfont.size == 12
         assert cb.orientation in (None, "v")

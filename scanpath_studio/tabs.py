@@ -91,6 +91,8 @@ from scanpath_studio.code_snippet import (
 from scanpath_studio.column_names import EMPTY as EMPTY_NAMES
 from scanpath_studio.column_names import (
     ColumnNames,
+    across_tables,
+    active_all,
     from_schema,
     source_schema,
     stored_source_recipe,
@@ -153,7 +155,6 @@ from scanpath_studio.constants import (
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
-    CHIP_FIELD_LABELS,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
@@ -168,6 +169,7 @@ from scanpath_studio.controls import (
     _sub_row,
     _text_field_and_frame,
     active_filter_items,
+    chip_field_label,
     clear_trial_filters,
     column_mapping_ui,
     compare_b_filters,
@@ -2311,6 +2313,7 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
         source.fixations,
         prefix=_COMPARE_FILTER_PREFIX,
         host=box,
+        names=across_tables(source.column_names),
     )
 
 
@@ -2461,6 +2464,10 @@ def _render_compare_selector(
             composite_trial_columns=tuple(
                 st.session_state.get("_composite_trial_columns") or ()
             ),
+            column_names={
+                table: active_column_names(st.session_state, table)
+                for table in ("fixations", "words", "raw_gaze")
+            },
         )
         same_filters = read_trial_filters(_COMPARE_FILTER_PREFIX)
         if st.session_state.get(_COMPARE_SOURCE_RESOLVED_KEY) != THIS_DATASET:
@@ -2541,6 +2548,11 @@ def _render_compare_selector(
         "trial_id",
         words=words_filtered,
         fixations=fixations_filtered,
+        label_of=(
+            across_tables(source.column_names)
+            if source is not None
+            else active_all(st.session_state)
+        ).label,
     )
     sort_options = [_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT, *sort_keys]
 
@@ -2800,17 +2812,10 @@ _DISTRACTOR_SPAN_BG = "#E5E7EB"  # light grey — distractor-span words
 # light in dark mode and the highlighted text is unreadable (light-on-light).
 _HIGHLIGHT_TEXT_COLOR = "#212529"
 
-# Friendly labels + fixed span colours for the known OneStop stimulus/question
-# columns, so the OneStop experience is unchanged while the panel still works on
-# arbitrary datasets (unknown columns get a humanized name + a palette colour).
-_STIMULUS_FIELD_LABELS = {
-    "question": "Question",
-    "question_preview": "Question preview",
-    "selected_answer": "Selected answer",
-    "is_correct": "Correct",
-    "is_in_aspan": "Answer (critical) span",
-    "is_in_dspan": "Distractor span",
-}
+# Fixed span colours for the known OneStop span columns, so the OneStop
+# experience is unchanged while the panel still works on arbitrary datasets
+# (other span columns cycle through a palette). A field is *named* by the
+# dataset's own name for its column (DATA-66, `_field_label`).
 _KNOWN_SPAN_BG = {"is_in_aspan": _CRITICAL_SPAN_BG, "is_in_dspan": _DISTRACTOR_SPAN_BG}
 # Light backgrounds for any further detected span columns (cycled).
 _SPAN_BG_PALETTE = ["#FEF3C7", "#DBEAFE", "#DCFCE7", "#FAE8FF", "#FFE4E6"]
@@ -2831,9 +2836,9 @@ _QA_NAME_HINTS = (
 )
 
 
-def _humanize_field(col: str) -> str:
-    """Friendly display label for a stimulus/question column."""
-    return _STIMULUS_FIELD_LABELS.get(col, col.replace("_", " ").strip().capitalize())
+def _field_label(col: str) -> str:
+    """A stimulus / context field's name: the dataset's own for it (DATA-66)."""
+    return active_all(st.session_state).label(col)
 
 
 def _is_boolish(series: pd.Series) -> bool:
@@ -3056,6 +3061,7 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
                 "multiselect",
                 "Highlighted spans",
                 options=span_options,
+                format_func=_field_label,
                 key=_STIMULUS_SPAN_KEY,
                 persist_state="session",
                 help="Per-word true/false columns. Each selected one tints its "
@@ -3067,6 +3073,7 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
                 "multiselect",
                 "Context fields",
                 options=qa_options,
+                format_func=_field_label,
                 key=_STIMULUS_QA_KEY,
                 persist_state="session",
                 help="Trial-level context such as a title, instruction, question, "
@@ -3319,7 +3326,7 @@ def _render_paragraph_panel(
         for col in question_cols:
             val = _first_str(trial_words, col)
             if val:
-                st.markdown(f"**{_humanize_field(col)}:** {val}")
+                st.markdown(f"**{_field_label(col)}:** {val}")
 
         rendered = set(question_cols)
         if "selected_answer" in qa_cols and "is_correct" in qa_cols:
@@ -3341,11 +3348,11 @@ def _render_paragraph_panel(
             bval = _first_bool(trial_words, col) if "correct" in col.lower() else None
             if bval is not None:
                 mark = ":green[✓ yes]" if bval else ":red[✗ no]"
-                st.markdown(f"**{_humanize_field(col)}:** " + mark)
+                st.markdown(f"**{_field_label(col)}:** " + mark)
             else:
                 val = _first_str(trial_words, col)
                 if val:
-                    st.markdown(f"**{_humanize_field(col)}:** {val}")
+                    st.markdown(f"**{_field_label(col)}:** {val}")
 
         # Each highlighted span's text + (optional) fixation note.
         for col in span_cols:
@@ -3373,7 +3380,7 @@ def _span_summary_html(col: str, span_str: str, bg: str, note: str) -> str:
     return (
         f'<span style="background-color:{bg};'
         f'color:{_HIGHLIGHT_TEXT_COLOR};padding:0 4px;border-radius:2px;">'
-        f"<b>{html.escape(_humanize_field(col))}:</b></span> "
+        f"<b>{html.escape(_field_label(col))}:</b></span> "
         f"{html.escape(span_str)}{note}"
     )
 
@@ -5098,18 +5105,6 @@ def _render_export_panel(
 _CHIP_NEUTRAL_BG = "#EEF2F7"
 
 
-def _chip_field_label(col: str) -> str:
-    """Friendly label for a chip field (summary / identity, else humanized).
-
-    The map is `controls.CHIP_FIELD_LABELS`, shared with the ✏️ Edit chips
-    picker that offers the same fields — keeping a private copy here is how a
-    field came to read "Age" on the chip and "Pp age" in the picker.
-    """
-    if col in SUMMARY_CHIP_FIELDS:
-        return SUMMARY_CHIP_FIELDS[col]
-    return CHIP_FIELD_LABELS.get(col, _humanize_field(col))
-
-
 def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
     """``(value, is_trial_level)`` for ``col`` in the trial.
 
@@ -5250,11 +5245,16 @@ def _trial_chip_entries(
     *,
     trial_raw_gaze: pd.DataFrame | None = None,
     gaze_samples: int | None = None,
+    names: ColumnNames | None = None,
 ) -> list[ChipEntry]:
     """The chips one trial gets for ``fields``, in order, with nothing to show
     dropped — what the chip table draws, for one reading or two (UX-190, UX-195).
 
-    ``gaze_samples`` is `_summary_rows`' count in place of the samples."""
+    ``gaze_samples`` is `_summary_rows`' count in place of the samples.
+    ``names`` labels the fields (DATA-66): the open dataset's map by default,
+    the reading's own dataset's for Compare's B."""
+    if names is None:
+        names = active_all(st.session_state)
     entries: list[ChipEntry] = []
     summary_lookup: dict | None = None  # computed once, only if a summary chip
     for col in fields or []:
@@ -5294,7 +5294,7 @@ def _trial_chip_entries(
         entries.append(
             ChipEntry(
                 col,
-                _chip_field_label(col),
+                chip_field_label(col, names),
                 value_str,
                 bool(trial_level),
                 _chip_color(col, value_str),
@@ -5433,6 +5433,7 @@ class ChipReading:
     trial_shown: str  # `utils.trial_id_shown` — the id as the pickers show it
     raw_gaze: pd.DataFrame | None = None
     gaze_samples: int | None = None
+    names: ColumnNames | None = None  # DATA-66: its dataset's map, else the open one
 
 
 @st.cache_data(show_spinner=False, max_entries=256)
@@ -5475,6 +5476,7 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
             fields,
             trial_raw_gaze=reading.raw_gaze,
             gaze_samples=reading.gaze_samples,
+            names=reading.names,
         )
         trial_id = ChipEntry(_TRIAL_ID_COLUMN, "Trial ID", reading.trial_shown)
         sides.append(
@@ -6598,6 +6600,11 @@ def render_single_trial_tab(
         # stops a cross-dataset co-animation running B's trace over A's text.
         # The comparison branch re-applies this through `with_overrides`.
         compare_stimulus=compare_stimulus,
+        # DATA-66: the figure's text names columns as the dataset does. A's
+        # names, Compare included — the rail that picks the columns is A's.
+        column_labels=active_all(st.session_state).figure_labels(
+            [*trial_words.columns, *trial_fixations.columns]
+        ),
     )
 
     # PRE-3 drift correction (VIZ-23) — hoisted ABOVE the render-mode split, so the
@@ -6751,6 +6758,11 @@ def render_single_trial_tab(
                         fixations=compare_meta["fixations"],
                         gaze_samples=b_gaze_samples,
                         participant=compare_participant,
+                        names=(
+                            across_tables(compare_source.column_names)
+                            if compare_source is not None
+                            else None
+                        ),
                         trial_shown=trial_id_shown(
                             compare_trial,
                             compare_meta["fixations"],
@@ -7145,6 +7157,8 @@ def render_single_trial_tab(
                 build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
                 _amend_snippet_settings(static_settings, "static")
                 build_inputs["raw_gaze"] = figure_raw_gaze
+                # Not an option, but the figure's text: a renamed column redraws.
+                build_inputs["column_labels"] = static_settings.column_labels
                 displayed_fig = _cached_scanpath_figure(
                     trial_words,
                     plot_fixations,
@@ -7735,7 +7749,8 @@ def _render_comparison_figure(
             )
     if dropped_metric:
         st.caption(
-            f"{ICONS['warning']} **{dropped_metric}** isn't in both datasets, so it can't colour "
+            f"{ICONS['warning']} **{active_all(st.session_state).label(dropped_metric)}** "
+            "isn't in both datasets, so it can't colour "
             "this comparison. Your choice is kept for same-dataset comparisons."
         )
     return fig_compare
@@ -7852,19 +7867,6 @@ def _c_trial_keys(_frame, fkey):
 _AGG_OPTIONS = ["mean", "median", "sum"]
 _SPREAD_OPTIONS = ["SD", "SEM", "IQR", "Bootstrap CI"]
 
-# Friendly labels for the common condition columns the group pickers expose
-# (mirrors controls._FILTER_FIELD_LABELS without importing it).
-_GROUP_COL_LABELS = {
-    "difficulty_level": "Difficulty",
-    "question_preview": "Reading regime",
-    "repeated_reading_trial": "Reading number",
-    "is_correct": "Answer",
-    "participant_id": "Participant",
-    "genre": "Genre",
-    "session": "Session",
-    "pp_gender": "Gender",
-}
-
 
 def _pretty_col(col: str) -> str:
     """Friendly label for a raw column id (group-definition pickers).
@@ -7887,7 +7889,8 @@ def _pretty_col(col: str) -> str:
         return f"{_META_GRAIN_MARKS[grain]} {md.field_label(name)}"
     if isinstance(col, tuple):
         return " × ".join(_pretty_col(part) for part in col)
-    return _GROUP_COL_LABELS.get(col, str(col).replace("_", " ").strip().title())
+    # DATA-66: a data column is shown under the dataset's own name for it.
+    return active_all(st.session_state).label(col)
 
 
 def _measure_picker(
@@ -8077,8 +8080,14 @@ def _render_trials_with_open_button(
     ``url_state.request_trial`` and ``app.main`` applies it once the trial pool
     exists, the same hop a ``?trial_id=`` deep link takes.
     """
+    # DATA-66: the identity columns under the dataset's own names.
+    headers = (
+        column_label_config(trials.columns, active_all(st.session_state))
+        if trials is not None
+        else {}
+    )
     if trials is None or trials.empty or "trial_id" not in trials.columns:
-        st.dataframe(trials, width="stretch", hide_index=True)
+        st.dataframe(trials, width="stretch", hide_index=True, column_config=headers)
         return
     click_key = f"{key}_open_trial_click"
     # `click["row"]` is a position in the frame we hand to `st.dataframe`, not in
@@ -8105,6 +8114,7 @@ def _render_trials_with_open_button(
         width="stretch",
         hide_index=True,
         column_config={
+            **headers,
             "Open": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
@@ -8112,7 +8122,7 @@ def _render_trials_with_open_button(
                 help="Show this trial's scanpath in the Scanpath view.",
                 on_click=_open,
                 key=click_key,
-            )
+            ),
         },
     )
 
@@ -9058,7 +9068,13 @@ def _render_per_sentence_tab(
                 .drop(columns="_order")
                 .reset_index(drop=True)
             )
-        st.dataframe(summary, hide_index=True, width="stretch")
+        # DATA-66: the text and screen ids under the dataset's own names.
+        st.dataframe(
+            summary,
+            hide_index=True,
+            width="stretch",
+            column_config=column_label_config(identity, active_all(st.session_state)),
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -9343,6 +9359,7 @@ def render_per_text_tab(
             make_word_matrix_heatmap(
                 per,
                 row_col="participant_id",
+                row_label=active_all(st.session_state).label("participant_id"),
                 measure_label=measure.axis_label,
                 colorscale=viz_settings.get(
                     "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
@@ -9428,6 +9445,7 @@ def render_per_text_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
+            column_labels=active_all(st.session_state).figure_labels(agg_words.columns),
             show_words=True,
             show_word_labels=viz_settings.get("show_labels", True),
             show_fixations=False,
@@ -9681,7 +9699,14 @@ def render_per_reader_tab(
                 selected_reader = cohort[
                     cohort["participant_id"].astype(str) == str(pid)
                 ]
-                st.dataframe(selected_reader, width="stretch", hide_index=True)
+                st.dataframe(
+                    selected_reader,
+                    width="stretch",
+                    hide_index=True,
+                    column_config=column_label_config(
+                        selected_reader.columns, active_all(st.session_state)
+                    ),
+                )
                 _download_tidy(
                     st,
                     selected_reader,
@@ -9711,11 +9736,12 @@ def render_per_reader_tab(
             x_options.append("timestamp_ms")
         if st.session_state.get("prdr9_x") not in (None, *x_options):
             del st.session_state["prdr9_x"]
+        names = active_all(st.session_state)
         by = c[1].selectbox(
             "X axis",
             x_options,
             key="prdr9_x",
-            format_func=lambda s: s.replace("_", " "),
+            format_func=names.label,
         )
         _measure_note(
             c[0],
@@ -9728,8 +9754,9 @@ def render_per_reader_tab(
             make_trend_figure(
                 df,
                 x_col="x",
+                x_label=names.label(by),
                 y_label=measure.axis_label,
-                title=f"{measure.label} over {by.replace('_', ' ')} — {pid}",
+                title=f"{measure.label} over {names.label(by)} — {pid}",
                 **fw,
             )
         )
@@ -9769,8 +9796,8 @@ def render_per_reader_tab(
         vals = landing_positions(words_filtered, fix_e, participant_id=pid)
         if vals.size == 0:
             st.info(
-                "Needs first-fixation landing positions (first_fix_x or fixation "
-                "x + word boxes)."
+                "Needs first-fixation landing positions: fixation positions and "
+                "word boxes."
             )
             return
         _chart(make_landing_curve_figure(vals, **fw))
@@ -10036,7 +10063,14 @@ def render_per_group_tab(
         )
         reader_tab, trial_tab = st.tabs(["Readers", "Trials"])
         with reader_tab:
-            st.dataframe(table, width="stretch", hide_index=True)
+            st.dataframe(
+                table,
+                width="stretch",
+                hide_index=True,
+                column_config=column_label_config(
+                    table.columns, active_all(st.session_state)
+                ),
+            )
             _download_tidy(
                 st,
                 table,
@@ -10049,7 +10083,14 @@ def render_per_group_tab(
                 ),
             )
         with trial_tab:
-            st.dataframe(trials, width="stretch", hide_index=True)
+            st.dataframe(
+                trials,
+                width="stretch",
+                hide_index=True,
+                column_config=column_label_config(
+                    trials.columns, active_all(st.session_state)
+                ),
+            )
             _download_tidy(
                 st,
                 trials,
@@ -10706,6 +10747,9 @@ def render_alignment_comparison_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
+            column_labels=active_all(st.session_state).figure_labels(
+                [*trial_words.columns, *fix.columns]
+            ),
             **kwargs,
         )
 
@@ -11008,6 +11052,7 @@ def render_multiple_comparison_tab(
     intro_col, field_col, grid_col = st.columns(
         [4.6, 3.2, 2.2], gap="medium", vertical_alignment="center"
     )
+    names = active_all(st.session_state)
     with intro_col:
         st.caption("Show trials matching the selected trial on one field.")
     with field_col:
@@ -11016,6 +11061,7 @@ def render_multiple_comparison_tab(
             "selectbox",
             "Match field",
             options=gen_cols,
+            format_func=names.option_labels(gen_cols).__getitem__,
             key="multi_gen_col",
             help="Show trials with the same value as the selected trial.",
         )
@@ -11039,7 +11085,7 @@ def render_multiple_comparison_tab(
         selected_trial,
     )
     if not candidates:
-        st.info(f"No other filtered trial matches **{gen_col}**.")
+        st.info(f"No other filtered trial matches **{names.label(gen_col)}**.")
         return
     # More scanpaths of this text exist than we score (very high-cardinality
     # column); the ones we do score are ranked by similarity below.
@@ -11069,6 +11115,9 @@ def render_multiple_comparison_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
+            column_labels=active_all(st.session_state).figure_labels(
+                [*words.columns, *fix.columns]
+            ),
             **settings,
         )
 
@@ -11501,12 +11550,12 @@ def _fill_raw_data_tabs(
         render_raw_gaze_tab(raw_gaze_filtered)
     with tabs[3]:
         _render_raw_metadata_tab(
-            "Participants", active_participant_metadata(), "`participant_id`"
+            "Participants", active_participant_metadata(), "the reader id"
         )
     with tabs[4]:
         _render_raw_metadata_tab("Trials", md.active_trials(), "the trial id")
     with tabs[5]:
-        _render_raw_metadata_tab("Texts", md.active_texts(), "`text_id`")
+        _render_raw_metadata_tab("Texts", md.active_texts(), "the text id")
 
 
 # -----------------------------------------------------------------------------
@@ -11848,7 +11897,7 @@ def _participant_metadata_body(
     # (`inline_field_label`), rather than Streamlit's own label + native
     # (~1s) help tooltip.
     _pm_help = (
-        "One row per reader, with a `participant_id` column. The columns "
+        "One row per reader, with a reader-id column. The columns "
         "then behave like fields in the data: filters, chips, trial sorting, "
         "inspection and export. CSV / TSV / Parquet / Excel."
     )
@@ -13313,7 +13362,7 @@ def _render_remap_editor(
     if st.session_state.pop(FOCUS_MAPPING_KEY, None) == name:
         st.info(f"Editing **{name}** — its mapping and saved tables are below.")
     st.caption(
-        "Change how this dataset's columns map to the app's canonical fields. "
+        "Change which of this dataset's columns fills each field the app reads. "
         "Only columns that survived the original import are available."
     )
     # UX-71: the same wide option lists the add-dataset screen gets — this is
@@ -13729,7 +13778,7 @@ def _render_column_mapping_section(
         st.info("No column mapping available for the current data source.")
     else:
         _render_readonly_mapping_grid(rows)
-        st.caption("How each source column maps to the app's canonical fields.")
+        st.caption("Which of the dataset's columns fills each field the app reads.")
     # Not behind the `return` that branch used to take: the recording setup is a
     # *different* question from the mapping and, since UX-135, a numbered part of
     # its own — leaving it undrawn strands its headline over an empty body.

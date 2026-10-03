@@ -854,6 +854,7 @@ class TestAddDatasetMenu:
         assert at.session_state["data_source_choice"] == AUTHOR_CHOICE
         assert not any("Plot controls" in h.value for h in at.subheader)
         assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        authored = at.session_state["_authored_events_frame"].copy()
         at.text_area(key="author_text").set_value("A small manual trial.").run(
             timeout=60
         )
@@ -862,7 +863,11 @@ class TestAddDatasetMenu:
         at.button(key="add_manual_dataset_btn").click().run(timeout=60)
         _clean(at)
         assert at.text_area(key="author_text").value == "A small manual trial."
-        assert len(at.session_state["_authored_events_frame"]) == 4
+        # Editing the text keeps the authored fixations rather than reseeding.
+        kept = at.session_state["_authored_events_frame"]
+        assert kept[["fixation_id", "x", "y"]].equals(
+            authored[["fixation_id", "x", "y"]]
+        )
 
     def test_import_action_opens_the_existing_wizard(self):
         at = _boot(synthetic=True)
@@ -944,15 +949,25 @@ class TestAuthoringEditorFlow:
             assert list(base.index) == list(range(len(base)))
             pd.testing.assert_frame_equal(base, original)
 
-    def test_a_new_stimulus_reseeds_the_grid(self):
-        """The base is stable, but not frozen — new text means new rows."""
+    def test_a_new_stimulus_keeps_the_fixations(self):
+        """New text re-lays the words but keeps every authored fixation; the
+        targets it left out of date are flagged, and one per word is an
+        explicit reset."""
         at = self._author()
-        before = len(at.session_state["_authored_events_frame"])
+        before = at.session_state["_authored_events_frame"].copy()
         at.session_state["author_text"] = "one two three"
         at = at.run(timeout=60)
-        _clean(at, "after changing the stimulus:")
         after = at.session_state["_authored_events_frame"]
-        assert len(after) == 3 != before
+        assert after[["fixation_id", "x", "y", "duration_ms"]].equals(
+            before[["fixation_id", "x", "y", "duration_ms"]]
+        )
+        assert any("target word" in str(w.value) for w in at.warning)
+        next(
+            b for b in at.button if b.label == "Reset fixations to the text"
+        ).click().run(timeout=60)
+        _clean(at, "after resetting the fixations:")
+        after = at.session_state["_authored_events_frame"]
+        assert len(after) == 3
         assert list(after.index) == [0, 1, 2]
         geometry_tables = [
             frame

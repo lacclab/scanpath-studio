@@ -718,17 +718,29 @@ def set_entry(
         store[key] = entry
 
 
-def known_tags(prefix: str = "") -> list[str]:
+def known_tags(prefix: str = "", *, trial_level: bool = False) -> list[str]:
     """Preset tags plus any tag used in the dataset's store, sorted.
 
     ``prefix`` picks the dataset as :func:`store_for_prefix` does, so compare
     mode's scanpath B lists its own dataset's tags (DATA-48).
+
+    ``trial_level`` leaves out tags used only on screen annotations — what the
+    trial filters offer, since they read the trial's own entry (:func:`select_keys`)
+    and a screen-only tag there could never match.
     """
     tags: set[str] = set(PRESET_TAGS)
     store = store_for_prefix(prefix) if prefix else _store()
-    for entry in store.values():
+    for key, entry in store.items():
+        if trial_level and len(key) > 2:
+            continue
         tags.update(entry.get("tags", []))
     return sorted(tags)
+
+
+def has_screen_annotations(prefix: str = "") -> bool:
+    """Whether the dataset's store holds any screen annotation."""
+    store = store_for_prefix(prefix) if prefix else _store()
+    return any(len(key) > 2 for key in store)
 
 
 def current_records() -> list[dict]:
@@ -951,6 +963,12 @@ def select_keys(
     excluded_tags: list[str] | None = None,
 ) -> list[Key]:
     """Pure core of :func:`filter_keys` — filter ``keys`` against ``store``.
+
+    Trial level only: each key is looked up as given, so a parent
+    ``(participant_id, trial_id)`` key reads the trial's own annotation and
+    never a screen's. That is the filters' stated scope — a screen star or tag
+    neither keeps nor drops its trial, and
+    the panel offers only trial-level tags (:func:`known_tags`).
 
     - ``favorites_only``: keep only starred trials.
     - ``required_tags``: keep trials carrying *any* of these tags.

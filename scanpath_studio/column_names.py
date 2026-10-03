@@ -245,12 +245,30 @@ class ColumnNames:
         Every column the dataset brought, under its own name; the columns the
         app made are left out, so a figure keeps its short labels for them
         ("Fixation #", "FFD") rather than writing "(computed)" into a hover.
+        Bookkeeping columns (`data.INTERNAL_COLUMNS`) are no figure's text. A
+        column converted from one source (a duration read in seconds) is named
+        by that source: the figure writes its unit after the value, and the
+        note's "…, in ms" would say it twice.
         """
-        return {
-            str(column): self.label(column)
-            for column in columns
-            if self.kind_of(column) not in (COMPUTED, GENERATED)
-        }
+        from .data import INTERNAL_COLUMNS
+
+        out: dict[str, str] = {}
+        for column in columns:
+            if column in INTERNAL_COLUMNS or self.kind_of(column) in (
+                COMPUTED,
+                GENERATED,
+            ):
+                continue
+            entry = self.source(column)
+            single_conversion = (
+                entry is not None
+                and entry.kind == CONVERTED
+                and len(entry.sources) == 1
+            )
+            out[str(column)] = (
+                entry.sources[0] if single_conversion else self.label(column)
+            )
+        return out
 
     def merged(self, other: ColumnNames) -> ColumnNames:
         """Both tables' entries, this map's winning where both name a column."""

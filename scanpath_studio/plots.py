@@ -6303,17 +6303,21 @@ def make_word_matrix_heatmap(
     colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
     row_order: Iterable | None = None,
     height: int | None = None,
+    row_label: str | None = None,
 ) -> go.Figure:
     """Word × {reader|group} heatmap (AN-2, AN-22).
 
     ``df`` is long ``[row_col, word_id, value_col]``; rows become Y, ``word_id``
     X, ``value_col`` the color. ``row_order`` pins the row order (e.g. Group A
     above Group B). Bright columns = universally hard words; bright rows = a
-    uniformly slow reader.
+    uniformly slow reader. ``row_label`` names the rows (the dataset's own name
+    for ``row_col``, DATA-66); without one, ``row_col`` humanized.
     """
+    if row_label is None:
+        row_label = _humanize_column(row_col)
     if df is None or df.empty:
         return _no_data_figure(
-            f"{measure_label} by {row_col} × word",
+            f"{measure_label} by {row_label} × word",
             font_family=font_family,
             base_font_size=base_font_size,
         )
@@ -6343,9 +6347,9 @@ def make_word_matrix_heatmap(
         margin=dict(l=120, r=10, t=50, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title=f"{measure_label} — {row_col.replace('_', ' ')} × word",
+        title=f"{measure_label} — {row_label} × word",
         xaxis=dict(title="Word (reading order)"),
-        yaxis=dict(title=row_col.replace("_", " ").title(), autorange="reversed"),
+        yaxis=dict(title=row_label, autorange="reversed"),
     )
     return fig
 

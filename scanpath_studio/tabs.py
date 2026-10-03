@@ -9189,6 +9189,7 @@ def render_per_text_tab(
             make_word_matrix_heatmap(
                 per,
                 row_col="participant_id",
+                row_label=active_all(st.session_state).label("participant_id"),
                 measure_label=measure.axis_label,
                 colorscale=viz_settings.get(
                     "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
@@ -9273,6 +9274,7 @@ def render_per_text_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
+            column_labels=active_all(st.session_state).figure_labels(agg_words.columns),
             show_words=True,
             show_word_labels=viz_settings.get("show_labels", True),
             show_fixations=False,
@@ -10454,6 +10456,9 @@ def render_alignment_comparison_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
+            column_labels=active_all(st.session_state).figure_labels(
+                [*trial_words.columns, *fix.columns]
+            ),
             **kwargs,
         )
 
@@ -10819,6 +10824,9 @@ def render_multiple_comparison_tab(
             font_family=font_family,
             x_field="x",
             y_field="y",
+            column_labels=active_all(st.session_state).figure_labels(
+                [*words.columns, *fix.columns]
+            ),
             **settings,
         )
 

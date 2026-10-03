@@ -786,3 +786,58 @@ def test_the_trial_sort_offers_an_alias_of_the_same_column_once():
     # A column the app made sorts after the dataset's own.
     if "Line (computed)" in keys:
         assert keys.index("Line (computed)") > keys.index("PARAGRAPH")
+
+
+def test_a_converted_duration_is_named_by_its_source_in_a_figure():
+    """The hover row writes "ms" after the value; "…, in ms" would say it twice."""
+    names = ColumnNames(
+        {
+            "duration_ms": SourceName(("FPOGD",), cn.CONVERTED, "FPOGD, in ms"),
+            "width": SourceName(("R", "L"), cn.CONVERTED, "R − L"),
+        }
+    )
+    labels = names.figure_labels(["duration_ms", "width", "_text_id_mapped"])
+    assert labels == {"duration_ms": "FPOGD", "width": "R − L"}
+
+
+def test_a_column_called_like_a_fixed_sort_option_names_its_column():
+    from scanpath_studio.utils import TRIAL_SORT_DEFAULT, trial_sort_keys
+
+    combos = pd.DataFrame(
+        {
+            "participant_id": ["p", "p"],
+            "trial_id": ["t1", "t2"],
+            "trial_no": [2, 1],
+        }
+    )
+    names = ColumnNames({"trial_no": SourceName((TRIAL_SORT_DEFAULT,))})
+    keys = trial_sort_keys(combos, "trial_id", label_of=names.label)
+    assert TRIAL_SORT_DEFAULT not in keys
+    assert f"{TRIAL_SORT_DEFAULT} (trial_no)" in keys
+
+
+def test_the_word_matrix_names_its_rows_as_the_dataset_does():
+    from scanpath_studio import plots
+
+    df = pd.DataFrame(
+        {"participant_id": ["p1", "p2"], "word_id": [0, 0], "value": [1.0, 2.0]}
+    )
+    fig = plots.make_word_matrix_heatmap(
+        df,
+        row_col="participant_id",
+        row_label="RECORDING_SESSION_LABEL",
+        measure_label="TFD",
+        canvas_width=800,
+        base_font_size=12,
+        font_family="sans-serif",
+    )
+    assert fig.layout.yaxis.title.text == "RECORDING_SESSION_LABEL"
+    default = plots.make_word_matrix_heatmap(
+        df,
+        row_col="participant_id",
+        measure_label="TFD",
+        canvas_width=800,
+        base_font_size=12,
+        font_family="sans-serif",
+    )
+    assert default.layout.yaxis.title.text == "Participant Id"

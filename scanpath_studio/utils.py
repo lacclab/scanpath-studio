@@ -657,6 +657,9 @@ def trial_sort_keys(
                 if keys[label].equals(series):
                     continue
                 label = f"{label} ({col})"
+            elif label in (TRIAL_SORT_DEFAULT, TRIAL_SORT_DATA_ORDER):
+                # A column the dataset itself calls "Trial ID" is not the menu's.
+                label = f"{label} ({col})"
             keys[label] = series
     picker_ids = (
         set(combos[trial_field].dropna().astype(str).unique()) if has_combos else set()

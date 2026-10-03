@@ -7378,12 +7378,15 @@ def render_trial_chip_picker(
     ]
     with host:
         # Key varies with the field universe so the component re-mounts (rather than
-        # keeping a stale drag order) when the dataset / columns change.
+        # keeping a stale drag order) when the dataset / columns change. DATA-66:
+        # and with the labels — the component hands back the labels it holds, so
+        # one renamed by ✏️ Edit dataset → Save would otherwise drop its chip.
         result = sort_items(
             buckets,
             multi_containers=True,
             direction="vertical",
-            key=f"trial_chip_sort_{abs(hash(signature))}",
+            key="trial_chip_sort_"
+            f"{abs(hash((signature, tuple(key_to_label.items()))))}",
         )
     shown_labels = result[0]["items"] if result else []
     st.session_state["trial_chip_fields"] = [

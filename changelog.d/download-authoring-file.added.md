@@ -1,0 +1,1 @@
+The scanpath authoring screen has a Download authoring file button that saves the editable draft (text, layout and every fixation) for Restore authoring file, load_authored_scanpath and render --authoring.

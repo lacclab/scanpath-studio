@@ -54,9 +54,12 @@ The **Share** subtab passes a view on in three ways:
 | favorites, tags and notes | **:material/database: Data → Annotations → Export** |
 | column mapping and recording setup | **:material/edit: Edit dataset → Save setup** |
 | saved figure designs | **:material/palette: My designs → Export** |
+| an authored scanpath (text, layout and fixations) | **:material/draw: Author a scanpath → Download authoring file** |
 
 None of these files contain your data rows; load the same data before restoring
-one. Notes may contain participant information, so check them before sharing.
+one. The authoring file is the exception: it is the whole authored scanpath, and
+**Restore authoring file** on the same screen loads it back, as do
+`load_authored_scanpath` and `scanpath-studio render --authoring`. Notes may contain participant information, so check them before sharing.
 
 On a local or desktop install, the app also keeps a recovery copy of your
 datasets and work, restored after a refresh or restart.

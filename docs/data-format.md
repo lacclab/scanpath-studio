@@ -156,7 +156,14 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   the matching word-box centers.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial
   ID* to several columns (e.g. participant + paragraph + repeated-reading) and a
-  combined unique id is built on the fly.
+  combined unique id is built on the fly: the values joined with `_`. A `_`
+  inside a value is written `\_` (and a `\` as `\\`), so `block_A` + `B`
+  (`block\_A_B`) and `block` + `A_B` (`block_A\_B`) stay two trials. Values
+  without either character join exactly as before. Participant and Text ID
+  mappings compose the same way. A dataset saved on this computer before this
+  spelling keeps the ids it was saved with. A link, an annotations file or a
+  script that names a trial by the old spelling still finds it, unless two
+  trials shared that old id.
 
 ## Multipart logical trials
 

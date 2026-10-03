@@ -1041,19 +1041,140 @@ def zero_padding_map(ids: Iterable, reference: Iterable) -> dict[str, str]:
     return {mine[k]: theirs[k] for k in shared}
 
 
+#: The separator between the parts of a composite id, and the escape that lets a
+#: part contain it. See :func:`compose_id`.
+COMPOSITE_SEPARATOR = "_"
+_COMPOSITE_ESCAPE = "\\"
+
+
+def _escape_parts(parts: pd.Series) -> pd.Series:
+    return parts.str.replace(
+        _COMPOSITE_ESCAPE, _COMPOSITE_ESCAPE * 2, regex=False
+    ).str.replace(
+        COMPOSITE_SEPARATOR, _COMPOSITE_ESCAPE + COMPOSITE_SEPARATOR, regex=False
+    )
+
+
+def compose_id(parts: Iterable) -> str:
+    r"""One composite id from its parts, such that different parts never give
+    the same id.
+
+    The parts are joined with ``_``. A part that itself contains ``_`` or ``\``
+    has each one escaped with a ``\`` first, so ``("block_A", "B")`` is
+    ``block\_A_B`` and ``("block", "A_B")`` is ``block_A\_B`` — before the
+    escape both were ``block_A_B``, and two readings became one trial. Parts
+    with neither character, which is almost every id, compose exactly as they
+    always did (``("p1", "t3")`` is still ``p1_t3``). The encoding is
+    reversible, which is what makes it injective: :func:`split_composite_id`
+    reads the parts back. :func:`trial_id_series` is the vectorised form.
+    """
+    escaped = _escape_parts(pd.Series([str(part) for part in parts], dtype=object))
+    return COMPOSITE_SEPARATOR.join(escaped)
+
+
+def split_composite_id(value: str) -> list[str]:
+    """The parts :func:`compose_id` joined into ``value``."""
+    parts: list[str] = []
+    current: list[str] = []
+    chars = iter(str(value))
+    for char in chars:
+        if char == _COMPOSITE_ESCAPE:
+            current.append(next(chars, _COMPOSITE_ESCAPE))
+        elif char == COMPOSITE_SEPARATOR:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    parts.append("".join(current))
+    return parts
+
+
+def legacy_composite_id(value: str) -> str:
+    """How a composite id was spelled before :func:`compose_id` escaped its
+    parts — plainly joined with ``_``. The same as ``value`` unless one of its
+    parts held a ``_`` or a backslash."""
+    value = str(value)
+    if _COMPOSITE_ESCAPE not in value:
+        return value
+    return COMPOSITE_SEPARATOR.join(split_composite_id(value))
+
+
+def composite_respelling_map(ids: Iterable, reference: Iterable) -> dict[str, str]:
+    r"""How each id in ``ids`` is spelled in ``reference``, when the only thing
+    keeping them apart is the escaping :func:`compose_id` added to composite ids.
+
+    An id saved before it — in a stored dataset, an annotations file, a link —
+    spells a composite id whose parts contain ``_`` without the escapes; one
+    composed since spells it with them. Returns ``{"block_A_B": "block\_A_B"}``
+    (or the reverse), for the ids of ``ids`` that ``reference`` lacks. An old
+    spelling two current ids share is left out: that old id named both readings
+    at once, and nothing here picks one. Nothing is renamed on a guess, as with
+    :func:`zero_padding_map`.
+    """
+    own = {str(v) for v in ids if pd.notna(v)}
+    other = {str(v) for v in reference if pd.notna(v)}
+    missing = own - other
+    if not missing or not other:
+        return {}
+    by_legacy: dict[str, str | None] = {}
+    for value in other:
+        legacy = legacy_composite_id(value)
+        if legacy != value:
+            by_legacy[legacy] = None if legacy in by_legacy else value
+    mapping: dict[str, str] = {}
+    for value in missing:
+        current = by_legacy.get(value)
+        if current is not None:
+            mapping[value] = current
+            continue
+        legacy = legacy_composite_id(value)
+        if legacy != value and legacy in other:
+            mapping[value] = legacy
+    # Two ids landing on one would merge them — leave both alone.
+    landed: dict[str, int] = {}
+    for target in mapping.values():
+        landed[target] = landed.get(target, 0) + 1
+    return {k: v for k, v in mapping.items() if landed[v] == 1}
+
+
+def respell_reading(participant, trial, readings: Iterable) -> tuple[str, str]:
+    """``(participant, trial)`` spelled the way ``readings`` — ``(participant,
+    trial)`` pairs — spell them, through :func:`composite_respelling_map`.
+
+    For an id saved before composite ids escaped a ``_`` inside a part: a link,
+    an annotations file or a script. Each half is respelled only when it is
+    missing as given and its other spelling is unambiguous; otherwise it comes
+    back unchanged and the caller's own "not found" applies.
+    """
+    pid, tid = str(participant), str(trial)
+    pairs = (
+        readings
+        if isinstance(readings, frozenset)  # already strings, e.g. a trial set
+        else frozenset((str(p), str(t)) for p, t in readings)
+    )
+    if (pid, tid) in pairs:
+        return pid, tid
+    pid = composite_respelling_map([pid], {p for p, _ in pairs}).get(pid, pid)
+    own = {t for p, t in pairs if p == pid} or {t for _, t in pairs}
+    return pid, composite_respelling_map([tid], own).get(tid, tid)
+
+
 def trial_id_series(source: pd.DataFrame, trial_mapping) -> pd.Series:
     """Trial-id values for a single-column or composite (multi-column) mapping.
 
-    A multi-column mapping builds a unique trial ID on the fly by joining the
-    columns' string values with ``_`` — for datasets that ship no precomputed
-    unique-trial column (e.g. OneStop-style participant + paragraph +
-    repeated-reading). Each component is passed through :func:`stable_id`
-    first, so a composite id cannot inherit a ``.0`` from one of its parts.
+    A multi-column mapping builds a unique trial ID on the fly from the
+    columns' string values with :func:`compose_id` — joined with ``_``, a ``_``
+    or backslash inside a part escaped, so two different tuples never share an
+    id — for datasets that ship no precomputed unique-trial column (e.g.
+    OneStop-style participant + paragraph + repeated-reading). Each component
+    is passed through :func:`stable_id` first, so a composite id cannot inherit
+    a ``.0`` from one of its parts.
     """
     cols = trial_mapping_columns(trial_mapping)
     if len(cols) == 1:
         return stable_id(source[cols[0]])
-    return source[cols].apply(stable_id).agg("_".join, axis=1)
+    escaped = [_escape_parts(stable_id(source[c])) for c in cols]
+    return escaped[0].str.cat(escaped[1:], sep=COMPOSITE_SEPARATOR)
 
 
 def _preserve_composite_columns(
@@ -4229,30 +4350,40 @@ def _restore_zero_padding(
     columns = ["trial_id", "text_id"]
     if STIMULUS_WORDS_FLAG not in words.columns:
         columns.insert(0, "participant_id")
+    # The second respelling: one table stored before composite ids escaped a
+    # `_` inside a part (`compose_id`), the other composed since — a table
+    # added on ✏️ Edit dataset to a dataset restored from the recovery cache.
+    respellings = (
+        (zero_padding_map, "without the zero-padding the other table uses"),
+        (composite_respelling_map, "with the other spelling of a composite id"),
+    )
     for column in columns:
         if column not in words.columns or column not in fixations.columns:
             continue
         w_ids, f_ids = words[column].unique(), fixations[column].unique()
-        for frame_name, ids, reference in (
-            ("words", w_ids, f_ids),
-            ("fixations", f_ids, w_ids),
-        ):
-            mapping = zero_padding_map(ids, reference)
-            if not mapping:
-                continue
-            if frame_name == "words":
-                words = _pad_ids(words, column, mapping)
-            else:
-                fixations = _pad_ids(fixations, column, mapping)
-            _LOGGER.info(
-                "The %s table spelled %d %s value(s) without the zero-padding the "
-                "other table uses (e.g. %r for %r); matched them up.",
-                frame_name,
-                len(mapping),
-                column,
-                *next(iter(mapping.items()))[::-1],
-            )
-            break
+        for respell, how in respellings:
+            for frame_name, ids, reference in (
+                ("words", w_ids, f_ids),
+                ("fixations", f_ids, w_ids),
+            ):
+                mapping = respell(ids, reference)
+                if not mapping:
+                    continue
+                if frame_name == "words":
+                    words = _pad_ids(words, column, mapping)
+                else:
+                    fixations = _pad_ids(fixations, column, mapping)
+                _LOGGER.info(
+                    "The %s table spelled %d %s value(s) %s (e.g. %r for %r); "
+                    "matched them up.",
+                    frame_name,
+                    len(mapping),
+                    column,
+                    how,
+                    *next(iter(mapping.items()))[::-1],
+                )
+                w_ids, f_ids = words[column].unique(), fixations[column].unique()
+                break
     return words, fixations
 
 

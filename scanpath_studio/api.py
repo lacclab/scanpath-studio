@@ -1230,6 +1230,19 @@ def list_parts(
         ]
         if any(own):
             catalog = pd.concat([catalog, samples[own]], ignore_index=True)
+    if participant is not None or trial is not None:
+        # An id spelled before composite ids escaped a `_` inside a part.
+        participant, trial = (
+            None if participant is None else str(participant),
+            None if trial is None else str(trial),
+        )
+        respelled = _data.respell_reading(
+            participant or "",
+            trial or "",
+            zip(catalog["participant_id"], catalog["trial_id"], strict=True),
+        )
+        participant = respelled[0] if participant is not None else None
+        trial = respelled[1] if trial is not None else None
     if participant is not None:
         catalog = catalog[catalog["participant_id"].astype(str) == str(participant)]
     if trial is not None:
@@ -1258,7 +1271,13 @@ def _resolve_trial(
     if combos.empty:
         raise ValueError("No (participant, trial) combo exists in the data.")
     scoped = combos
+    # Ids written before composite ids escaped a `_` inside a part
+    # (`data.compose_id`) still find their reading when that is unambiguous.
+    readings = list(zip(combos["participant_id"], combos["trial_id"], strict=True))
     if participant is not None:
+        participant = _data.respell_reading(
+            participant, trial if trial is not None else "", readings
+        )[0]
         scoped = scoped[scoped["participant_id"] == str(participant)]
         if scoped.empty:
             raise ValueError(
@@ -1266,6 +1285,9 @@ def _resolve_trial(
                 f"id is not in the data. {_value_hint(combos, 'participant_id', participant)}"
             )
     if trial is not None:
+        trial = _data.respell_reading(
+            participant if participant is not None else "", trial, readings
+        )[1]
         narrowed = scoped[scoped["trial_id"] == str(trial)]
         if narrowed.empty:
             if participant is None:
@@ -2386,8 +2408,10 @@ def compare_scanpaths(
     if raw_gaze_b is None and not cross_dataset:
         raw_gaze_b = raw_gaze
 
-    pid_a, tid_a = str(trial_a[0]), str(trial_a[1])
-    pid_b, tid_b = str(trial_b[0]), str(trial_b[1])
+    # Ids written before composite ids escaped a `_` inside a part still name
+    # their reading when that is unambiguous (`data.respell_reading`).
+    pid_a, tid_a = _data.respell_reading(*trial_a, _data.trial_keys(fixations))
+    pid_b, tid_b = _data.respell_reading(*trial_b, _data.trial_keys(fixations_b))
     trial_words_a = extract_trial(words, pid_a, tid_a)
     trial_fix_a = extract_trial(fixations, pid_a, tid_a)
     trial_words_b = extract_trial(words_b, pid_b, tid_b)

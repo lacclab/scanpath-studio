@@ -4517,6 +4517,66 @@ def _cancel_authoring() -> None:
     st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
+#: ``{source: {fixation_id: (word_id, word)}}`` — target words a stimulus edit
+#: left out of date (`authoring.stale_target_words`). Flagged on the editor,
+#: never rewritten.
+_AUTHOR_STALE_TARGETS_KEY = "_author_stale_targets"
+#: ``{source: (text, layout, events)}`` — the draft before the last change that
+#: removed, moved or retimed fixations (`authoring.destructive_change`). One
+#: step, swapped with the current draft by **Restore previous draft**.
+_AUTHOR_PREVIOUS_DRAFT_KEY = "_author_previous_drafts"
+#: What the downloaded authoring file is called — the name Share → Code's
+#: snippet reads it by (`url_state._snippet_source`).
+AUTHORING_FILE_NAME = "scanpath.json"
+
+
+def _load_author_draft(source: str, draft: tuple) -> None:
+    """Put ``draft`` — ``(text, layout, events)`` — on the authoring screen.
+
+    Written before the widgets render (a callback), and the table remounts from
+    the new events rather than replaying its old edits over them (BUG-19)."""
+    text, layout, events = draft
+    st.session_state["author_text"] = text
+    st.session_state["_author_layout"] = dict(layout)
+    st.session_state["_authored_events_frame"] = events.copy()
+    st.session_state["_author_text_for_events"] = text
+    st.session_state["_author_selected_fixation"] = None
+    st.session_state["_author_events_editor_revision"] = (
+        int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+    )
+    st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).pop(source, None)
+
+
+def _restore_previous_author_draft(source: str) -> None:
+    """Swap the current draft with the one before the last destructive edit.
+
+    Pressing it again swaps back, so a restore is never itself a loss."""
+    previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
+    drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
+    if previous is None:
+        return
+    current = drafts.get(source)
+    _load_author_draft(source, previous)
+    drafts[source] = previous
+    if current is not None:
+        st.session_state[_AUTHOR_PREVIOUS_DRAFT_KEY][source] = current
+
+
+def _reset_author_fixations(source: str, words: pd.DataFrame) -> None:
+    """Replace the fixations with one per word — the explicit regeneration.
+
+    The draft it replaces becomes the previous draft at the end of the run
+    (a destructive change), so **Restore previous draft** brings it back."""
+    from scanpath_studio.authoring import default_events
+
+    st.session_state["_authored_events_frame"] = default_events(words)
+    st.session_state["_author_selected_fixation"] = None
+    st.session_state["_author_events_editor_revision"] = (
+        int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+    )
+    st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).pop(source, None)
+
+
 def _save_authored_dataset(name_key: str) -> None:
     from scanpath_studio.wizard import _safe_dataset_name
 
@@ -7180,11 +7240,14 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         authored_fixations,
         authoring_json,
         default_events,
+        destructive_change,
         event_problems,
         layout_problems,
         layout_text,
         parse_authoring_document,
         reconcile_event_table,
+        stale_target_words,
+        unresolved_targets,
         unusable_event_rows,
     )
     from scanpath_studio.authoring_component import render_authoring_canvas
@@ -7249,13 +7312,10 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             except (ValueError, UnicodeDecodeError) as exc:
                 st.error(str(exc))
             else:
-                st.session_state["author_text"] = document.text
-                st.session_state["_author_layout"] = document.layout
-                st.session_state["_authored_events_frame"] = document.events
-                st.session_state["_author_text_for_events"] = document.text
-                st.session_state["_author_selected_fixation"] = None
-                st.session_state["_author_events_editor_revision"] = (
-                    int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+                # The draft it replaces becomes the previous draft at the end
+                # of this run, so Restore previous draft brings it back.
+                _load_author_draft(
+                    source, (document.text, document.layout, document.events)
                 )
                 st.session_state["_author_restore_identity"] = identity
 
@@ -7292,13 +7352,28 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     ):
         st.warning(problem)
 
-    if st.session_state.get("_author_text_for_events") != text:
-        st.session_state["_authored_events_frame"] = default_events(words)
-        st.session_state["_author_events_editor_revision"] = (
-            int(st.session_state.get("_author_events_editor_revision", 0)) + 1
-        )
+    events_text = st.session_state.get("_author_text_for_events")
+    if events_text is None:
+        # A fresh editor: one fixation per word to start from.
+        st.session_state.setdefault("_authored_events_frame", default_events(words))
+        st.session_state.setdefault("_author_events_editor_revision", 0)
         st.session_state["_author_text_for_events"] = text
-        st.session_state["_author_selected_fixation"] = None
+    elif events_text != text:
+        # Editing the text keeps every authored fixation — id, X/Y, order and
+        # duration. Only a target word can go out of date, and that is flagged
+        # below rather than regenerated. The current table is the base for the
+        # flag: `_authored_events_frame` lags behind the table's own edits.
+        previous_draft = drafts.get(source)
+        current = previous_draft[2] if previous_draft else None
+        stale = st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).setdefault(
+            source, {}
+        )
+        found = stale_target_words(layout_text(events_text, **layout), words, current)
+        # An entry already flagged keeps the word it named first, so undoing
+        # the edit (or fixing it in two steps) resolves it.
+        for fixation_id, entry in found.items():
+            stale.setdefault(fixation_id, entry)
+        st.session_state["_author_text_for_events"] = text
     seed = st.session_state.get("_authored_events_frame", default_events(words))
     last_word = int(words["word_id"].max()) if not words.empty else 1
     canvas_panel = st.container()
@@ -7377,6 +7452,35 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         st.caption(
             "Rows without finite X/Y or a valid target are not drawn until corrected."
         )
+    stale_entries = st.session_state.get(_AUTHOR_STALE_TARGETS_KEY, {}).get(source, {})
+    stale = unresolved_targets(stale_entries, words, effective_events)
+    if stale_entries and len(stale) < len(stale_entries):
+        # Resolved ones (target changed, fixation deleted, text put back) go.
+        st.session_state[_AUTHOR_STALE_TARGETS_KEY][source] = {
+            fixation_id: stale_entries[fixation_id] for fixation_id in stale
+        }
+    if stale:
+        listed = ", ".join(
+            f"fixation {fixation_id} → word {word_id}"
+            for fixation_id, word_id in sorted(stale.items())[:8]
+        )
+        more = f" (+{len(stale) - 8} more)" if len(stale) > 8 else ""
+        st.warning(
+            f"The text edit changed or removed the target word of "
+            f"{len(stale)} {'fixation' if len(stale) == 1 else 'fixations'}: "
+            f"{listed}{more}. Their position, timing and order are unchanged. "
+            "Set each **Target word** in the Fixation table, or clear them.",
+            icon=ICONS["warning"],
+        )
+        if st.button("Clear those target words", key=f"author_clear_stale_{source}"):
+            cleared = effective_events.copy()
+            mask = cleared["fixation_id"].map(int).isin(stale)
+            cleared["word_id"] = cleared["word_id"].astype(object)
+            cleared.loc[mask, "word_id"] = None
+            st.session_state["_authored_events_frame"] = cleared
+            st.session_state["_author_events_editor_revision"] = editor_revision + 1
+            st.session_state[_AUTHOR_STALE_TARGETS_KEY].pop(source, None)
+            st.rerun()
 
     canvas_height = max(
         480,
@@ -7431,7 +7535,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         }
     else:
         st.session_state.pop("_author_save_payload", None)
-    st.button(
+    actions = st.container(horizontal=True, vertical_alignment="center")
+    actions.button(
         "Save dataset",
         icon=ICONS["save"],
         key="save_authored_dataset",
@@ -7440,7 +7545,50 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         on_click=_save_authored_dataset,
         args=(name_key,),
     )
-    drafts[source] = (text, dict(layout), effective_events.copy())
+    actions.download_button(
+        "Download authoring file",
+        data=authoring_json(text, effective_events, layout=layout),
+        file_name=AUTHORING_FILE_NAME,
+        mime="application/json",
+        icon=ICONS["download"],
+        key=f"author_download_{source}",
+        on_click="ignore",
+        disabled=not events_valid,
+        help=(
+            "The editable draft — text, layout and every fixation with its id, "
+            "position, order and duration. Load it again with **Restore "
+            "authoring file**, or from a script with `load_authored_scanpath`."
+        ),
+    )
+    previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
+    actions.button(
+        "Restore previous draft",
+        icon=ICONS["undo"],
+        key=f"author_restore_previous_{source}",
+        disabled=previous is None,
+        on_click=_restore_previous_author_draft,
+        args=(source,),
+        help=(
+            "Go back to the draft before the last change that removed, moved or "
+            "retimed fixations — one step. Press again to return."
+        ),
+    )
+    actions.button(
+        "Reset fixations to the text",
+        key=f"author_reset_fixations_{source}",
+        disabled=words.empty,
+        on_click=_reset_author_fixations,
+        args=(source, words),
+        help=(
+            "Replace every fixation with one per word, 220 ms each. "
+            "**Restore previous draft** brings the current ones back."
+        ),
+    )
+    draft = (text, dict(layout), effective_events.copy())
+    last = drafts.get(source)
+    if events_valid and last is not None and destructive_change(last[2], draft[2]):
+        st.session_state.setdefault(_AUTHOR_PREVIOUS_DRAFT_KEY, {})[source] = last
+    drafts[source] = draft
     return words, fixations
 
 

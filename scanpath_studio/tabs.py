@@ -212,6 +212,7 @@ from scanpath_studio.data import (
     read_tables,
     remap_normalized_frame,
     repeat_bases,
+    respell_reading,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
@@ -2690,6 +2691,8 @@ def _render_compare_selector(
     pending = st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
     if isinstance(pending, dict):
         wanted = (str(pending.get("participant_id")), str(pending.get("trial_id")))
+        # A link from before composite ids escaped a `_` in a part.
+        wanted = respell_reading(*wanted, identity_to_label)
         if wanted in identity_to_label:
             st.session_state[sel_key] = identity_to_label[wanted]
 
@@ -12370,7 +12373,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         key_host,
         "Trial ID column *",
         "Pick the column holding this table's trial id — or pick SEVERAL "
-        "columns to build one on the fly (values joined with '_'), the same "
+        "columns to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), the same "
         "way the uploaded data's own Trial ID mapping does. Required — it is "
         "the only thing that makes the join possible.",
     )
@@ -12579,7 +12582,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         key_host,
         "Text ID column *",
         "Pick the column holding this table's text id — or pick SEVERAL "
-        "columns to build one on the fly (values joined with '_'), the same "
+        "columns to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), the same "
         "way the uploaded data's own Text ID mapping does. Required — it is "
         "the only thing that makes the join possible.",
     )

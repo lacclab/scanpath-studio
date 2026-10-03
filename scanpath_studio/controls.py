@@ -2026,7 +2026,7 @@ def _popover_selectbox(label: str, options: list, state_key: str, host=None, **k
 # Help text for the (multi-capable) Trial ID mapping, shared by all tables.
 _TRIAL_MAPPING_HELP = (
     "Pick the column holding your unique trial ID — or pick SEVERAL columns "
-    "to build one on the fly (values joined with '_'), e.g. participant + "
+    "to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + "
     "paragraph + repeated-reading when no single column identifies a trial. "
     "Use the same columns for every uploaded table so trials line up."
 )

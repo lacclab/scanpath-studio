@@ -278,3 +278,88 @@ def test_an_upload_stores_its_column_names(monkeypatch):
     # …and the wizard's own live view has it too.
     stashed = at.session_state[app.ACTIVE_COLUMN_NAMES_KEY]
     assert stashed["fixations"] == payload["column_names"]["fixations"]
+
+
+def _stored_upload() -> dict:
+    """A stored upload as the wizard leaves it, with its column-name record."""
+    from scanpath_studio import api
+
+    word_schema = data.propose_word_schema(_UPLOAD_WORDS)
+    fix_schema = data.propose_fix_schema(_UPLOAD_FIXATIONS)
+    words, fixations = api.load_scanpath_data(
+        _UPLOAD_WORDS, _UPLOAD_FIXATIONS, word_schema=word_schema, fix_schema=fix_schema
+    )
+    return {
+        "words": words,
+        "fixations": fixations,
+        "raw_gaze": pd.DataFrame(),
+        "filter_fields": [],
+        "composite_trial_columns": [],
+        "schemas": {"words": word_schema, "fixations": fix_schema},
+        "column_names": cn.for_tables(
+            {"words": word_schema, "fixations": fix_schema},
+            {"words": _UPLOAD_WORDS, "fixations": _UPLOAD_FIXATIONS},
+        ),
+    }
+
+
+def test_an_edit_dataset_save_keeps_the_users_names():
+    """✏️ Edit dataset maps fields onto the stored canonical columns; the save
+    used to overwrite the dataset's record of its own names with that identity."""
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    entry = _stored_upload()
+    pending = {
+        "fixations": tabs._remap_proposed(
+            entry["schemas"]["fixations"],
+            entry["fixations"].columns,
+            tabs._FIX_REMAP_CANON,
+        )
+    }
+    st.session_state.clear()
+    st.session_state["data_source_choice"] = "study"
+    st.session_state["_datasets"] = {"study": entry}
+    st.session_state["_remap_pending_schemas"] = pending
+    st.session_state["_remap_added_tables"] = []
+    tabs._apply_remap()
+    assert not st.session_state.get("_remap_problems")
+    saved = st.session_state["_datasets"]["study"]["column_names"]
+    fixations = ColumnNames.from_payload(saved["fixations"])
+    assert fixations.display("duration_ms") == "CURRENT_FIX_DURATION"
+    assert fixations.display("x") == "CURRENT_FIX_X"
+    # The words table was not edited: its record is unchanged.
+    assert saved["words"] == entry["column_names"]["words"]
+
+
+def test_a_changed_field_is_named_by_its_new_source():
+    """Swap X and Y on ✏️ Edit dataset: the record follows the edit, still in
+    the user's names — never the canonical column the editor offered."""
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    entry = _stored_upload()
+    pending = {
+        "fixations": dict(
+            tabs._remap_proposed(
+                entry["schemas"]["fixations"],
+                entry["fixations"].columns,
+                tabs._FIX_REMAP_CANON,
+            ),
+            x="y",
+            y="x",
+        )
+    }
+    st.session_state.clear()
+    st.session_state["data_source_choice"] = "study"
+    st.session_state["_datasets"] = {"study": entry}
+    st.session_state["_remap_pending_schemas"] = pending
+    st.session_state["_remap_added_tables"] = []
+    tabs._apply_remap()
+    assert not st.session_state.get("_remap_problems")
+    saved = st.session_state["_datasets"]["study"]["column_names"]
+    fixations = ColumnNames.from_payload(saved["fixations"])
+    assert fixations.display("x") == "CURRENT_FIX_Y"
+    assert fixations.display("y") == "CURRENT_FIX_X"

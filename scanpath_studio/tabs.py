@@ -13466,38 +13466,139 @@ _EDITOR_TO_WIZARD_PREFIX = {
 _EDITOR_KEY_NOISE = ("_cell", "_upload", "_header")
 
 
+#: Each table's name in a setup-file note.
+_SETUP_TABLE_NAMES = {"words": "AOI", "fixations": "Fixations", "raw_gaze": "Raw gaze"}
+_BOX_EDGE_KEYS = ("left", "right", "top", "bottom")
+_BOX_ORIGIN_KEYS = ("x", "y", "width", "height")
+
+
+def _setup_file_mapping(
+    pending: dict,
+    stored: dict,
+    *,
+    added=(),
+    box_formats: dict | None = None,
+) -> tuple[dict, list[str]]:
+    """The editor's pending mapping as the add screen's ``col_map_*`` keys, in
+    the **dataset's own files'** column names, plus what the file cannot carry.
+
+    A table already in the dataset is mapped onto the stored frame's canonical
+    columns (``x``, ``duration_ms``); restated through its column-name map
+    (`column_names.source_schema`) each becomes the file column it was read
+    from — a seconds column by its own name (the add screen converts it again),
+    a composite id as its parts, a box stored as x/y/width/height but read from
+    edges as those edges. A column the app *made* (a text id from the trial id)
+    is written unmapped, so the add screen makes it again. A field that cannot
+    be traced back is left out — the add screen then detects it — and named in
+    the notes. A table being *added* is raw, so its mapping already speaks the
+    file's names; only its widget namespace (``…_add``) differs, and the file
+    uses the add screen's.
+    """
+    from scanpath_studio.controls import (
+        _HIDDEN_MAPPING_KEYS,
+        BOX_FORMAT_EDGES,
+        BOX_FORMAT_ORIGIN,
+    )
+
+    box_formats = box_formats or {}
+    names_by_table = stored.get("column_names") or {}
+    recipe = stored.get("source_recipe") or {}
+    derived = {str(c) for c in recipe.get("derived") or ()}
+    specs = {table: spec for table, _label, spec, _canon in _REMAP_TABLES}
+    mapping: dict = {}
+    notes: list[str] = []
+    for table, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
+        schema = pending.get(table)
+        if not isinstance(schema, dict):
+            continue
+        label = _SETUP_TABLE_NAMES[table]
+        if table in added:
+            source: dict = dict(schema)
+        else:
+            names = ColumnNames.from_payload(names_by_table.get(table))
+            if not names.entries:
+                notes.append(
+                    f"{label}: this dataset was added before the app kept its "
+                    "files' column names, so the file names the app's own "
+                    "columns. Check them after restoring."
+                )
+            restated, unresolved = source_schema(schema, names)
+            source = dict(restated or {})
+            for key in unresolved:
+                source.pop(key, None)
+            if unresolved:
+                notes.append(
+                    f"{label}: {', '.join(unresolved)} could not be traced back "
+                    "to your files and is left out; map it after restoring."
+                )
+        multi = {spec["key"] for spec in specs[table] if spec.get("multi")}
+        if table == "words":
+            if any(source.get(k) for k in _BOX_EDGE_KEYS):
+                box = BOX_FORMAT_EDGES
+            elif any(source.get(k) for k in _BOX_ORIGIN_KEYS):
+                box = BOX_FORMAT_ORIGIN
+            else:
+                box = box_formats.get(table)
+            other = _BOX_ORIGIN_KEYS if box == BOX_FORMAT_EDGES else _BOX_EDGE_KEYS
+            for key in other:
+                source.pop(key, None)
+            if box:
+                mapping[f"{wizard_prefix}_box_format"] = box
+        from_file_names: set = set()
+        for key, value in source.items():
+            if key in _HIDDEN_MAPPING_KEYS:
+                continue  # never a widget: the add screen detects them
+            if isinstance(value, (list, tuple)):
+                value = [str(item) for item in value]
+            elif value is not None:
+                value = str(value)
+            if key in multi and isinstance(value, str):
+                value = [value]
+            mapping[f"{wizard_prefix}_{key}"] = value
+            for column in value if isinstance(value, list) else [value]:
+                if column in derived:
+                    from_file_names.add(column)
+        if from_file_names:
+            notes.append(
+                f"{label}: {', '.join(sorted(from_file_names))} came from the "
+                "file names, not a column; set up *Derive columns from the "
+                "filename* again after restoring."
+            )
+    if "aggregate_char_boxes" in (recipe.get("steps") or ()):
+        notes.append(
+            "AOI: character boxes were combined into word boxes; turn "
+            "*Aggregate character AOIs into word boxes* on again after restoring."
+        )
+    return mapping, notes
+
+
 def _editor_setup_config(name: str) -> dict:
     """The open editor's mapping + recording setup, in the add screen's setup
     format (``wizard._wizard_setup_config``).
 
     So ⬇️ Save setup means the same thing on both screens, and a file saved from
-    either is restored by the same *Restore a saved setup* uploader. The mapping
-    is swept out of session state rather than rebuilt from
-    ``_remap_pending_schemas`` because the coordinate-format radio
-    (``*_box_format``) is a widget answer, not a schema field, and a restored
-    file without it opens the wizard on the wrong box format.
+    either is restored by the same *Restore a saved setup* uploader — over the
+    **original files**, which is why the mapping is written in their column
+    names rather than the stored frame's (`_setup_file_mapping`). What a
+    restore cannot reproduce is listed under ``column_mapping_notes``, and the
+    footer says it beside the button.
     """
     from datetime import datetime
 
     from scanpath_studio import __version__
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-    mapping: dict = {}
-    for table_key, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
-        prefix = f"remap_{name}_{table_key}_"
-        for key in sorted(k for k in st.session_state if isinstance(k, str)):
-            if not key.startswith(prefix) or any(
-                noise in key for noise in _EDITOR_KEY_NOISE
-            ):
-                continue
-            value = st.session_state[key]
-            if value is None or isinstance(value, (str, int, float, bool)):
-                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = value
-            elif isinstance(value, (list, tuple)):
-                # The composite trial id — a list of component columns.
-                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = [
-                    str(item) for item in value
-                ]
+    stored = (st.session_state.get("_datasets") or {}).get(name) or {}
+    added = set(st.session_state.get("_remap_added_tables") or ())
+    mapping, notes = _setup_file_mapping(
+        st.session_state.get("_remap_pending_schemas") or {},
+        stored,
+        added=added,
+        box_formats={
+            table: st.session_state.get(f"remap_{name}_{table}_add_box_format")
+            for table in added
+        },
+    )
     setup = st.session_state.get("_remap_pending_setup")
     return {
         "schema": PLOT_CONFIG_SCHEMA,
@@ -13505,6 +13606,7 @@ def _editor_setup_config(name: str) -> dict:
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": name,
         "column_mapping": mapping,
+        "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
     }
 
@@ -13549,9 +13651,10 @@ def render_dataset_editor_footer(host) -> None:
     save_col, apply_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
+    config = _editor_setup_config(name)
     save_col.download_button(
         f"{ICONS['download']} Save setup",
-        data=json.dumps(_editor_setup_config(name), indent=2),
+        data=json.dumps(config, indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
         key=f"remap_setup_download_{name}",
@@ -13570,6 +13673,13 @@ def render_dataset_editor_footer(host) -> None:
         width="stretch",
         help="Save the mapping and recording setup, then re-derive the dataset.",
     )
+    # What a restore over the original files will not reproduce on its own —
+    # said before the file is sent, not discovered by whoever restores it.
+    if config["column_mapping_notes"]:
+        box.caption(
+            "**The saved setup needs a hand after restoring.** "
+            + " ".join(config["column_mapping_notes"])
+        )
 
 
 def _request_full_identity_scan() -> None:

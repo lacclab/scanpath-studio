@@ -63,7 +63,10 @@ values from assumed ones.
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 **Edit dataset** opens under the list, below the open dataset's counts and
 tables, and changes its name, column mapping and recording setup, or adds a
-table it is missing; its mapped fields show the same value preview. Changes
+table it is missing; its mapped fields show the same value preview. Its
+**:material/download: Save setup** writes the mapping in your files' own column names, so
+whoever has the same files can restore it on the add screen; anything a
+restore cannot redo by itself is listed beside the button. Changes
 apply when you click **Save changes**;
 **Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.

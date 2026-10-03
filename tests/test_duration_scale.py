@@ -281,6 +281,7 @@ def test_bulk_export_figures_share_the_scale(sample, contrasting_trials, monkeyp
         "marker_size_range": DEFAULT_MARKER_SIZE_RANGE,
         "marker_size_scale": "sqrt",
         "marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
+        "duration_size_legend": False,
     }
     options = export_mod.ExportOptions(
         include_png=False, include_svg=False, include_html=True
@@ -306,10 +307,12 @@ def test_bulk_export_figures_share_the_scale(sample, contrasting_trials, monkeyp
     _assert_one_size_per_duration(pairs)
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         configs = [n for n in zf.namelist() if n.endswith("plot_config.json")]
+        assert configs
         for name in configs:
             sizing = json.loads(zf.read(name))["sizing"]
             assert sizing["marker_size_scale"] == "sqrt"
             assert sizing["marker_duration_range"] == [50, 600]
+            assert sizing["duration_size_legend"] is False
 
 
 # ---------------------------------------------------------------------------

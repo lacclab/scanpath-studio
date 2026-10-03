@@ -458,7 +458,8 @@ def _share_app():
     from scanpath_studio.url_state import _apply_url_preset, _build_share_query
 
     _apply_url_preset()
-    words, fixations = api.load_sample_data()
+    # The rail works in the canonical names the app normalizes to.
+    words, fixations = api.load_sample_data(names="canonical")
     fixations = fixations.assign(pupil_size=fixations["duration_ms"] / 100.0)
     pid, tid = fixations.iloc[0][["participant_id", "trial_id"]]
     trial_fix = fixations[

@@ -60,11 +60,15 @@ GIF_PIXEL_BUDGET_HOSTED = 800_000_000
 
 _MIME = {"gif": "image/gif", "mp4": "video/mp4"}
 
-# make_scanpath_animation reserves this many px of top margin for the play/slider
-# controls. With the controls stripped we reclaim it down to a slim band that
-# still fits the "Elapsed" annotation.
-_CONTROL_BAND_PX = 80
+# make_scanpath_animation reserves `plots._CONTROLS_MARGIN_PX` of top margin for
+# the play/slider controls. With the controls stripped we reclaim that band down
+# to a slim one that still fits the "Elapsed" annotation. Only that band goes: a
+# title above it, a caption or horizontal colour bar below the plot, a vertical
+# colour bar on the right and the coordinate-grid ticks keep their own margins.
 _STATIC_TOP_MARGIN_PX = 28
+# The one annotation the raster loop owns — found by name so a frame updates its
+# text and nothing else (the figure's captions, keys and disclosures stay).
+_ELAPSED_ANNOTATION_NAME = "elapsed_readout"
 
 # Floor on a GIF frame delay: the format stores delays in centiseconds and many
 # viewers silently promote sub-20 ms delays to ~100 ms, so clamp here to keep
@@ -182,7 +186,9 @@ def _static_base(fig: go.Figure) -> go.Figure:
     clear array layout properties (passing ``None`` is a no-op and ``[]`` doesn't
     truncate the existing entries), so we assign the attributes directly. The
     reserved control band is then reclaimed so the clip isn't topped by an empty
-    strip; a slim margin remains for the "Elapsed" annotation. The replay's clock
+    strip; a slim margin remains for the "Elapsed" annotation. Only the control
+    band is reclaimed: the other margins hold a title, a caption, a colour bar or
+    the coordinate-grid ticks, and are kept as they are. The replay's clock
     on ``layout.meta`` (BUG-93) goes too — only the live player reads it, and it
     would otherwise ride into every frame Kaleido renders.
     """
@@ -192,10 +198,20 @@ def _static_base(fig: go.Figure) -> go.Figure:
     base.layout.sliders = []
     base.layout.meta = None
     base.update_layout(
-        margin=dict(l=0, r=0, t=_STATIC_TOP_MARGIN_PX, b=0),
+        margin=dict(t=int(fig.layout.margin.t or 0) - _control_band_trim(fig)),
         height=_static_height(fig),
     )
     return base
+
+
+def _control_band_trim(fig: go.Figure) -> int:
+    """How many px of top margin the stripped transport controls free up."""
+    if not (fig.layout.sliders or fig.layout.updatemenus):
+        return 0
+    from .plots import _CONTROLS_MARGIN_PX
+
+    top = int(fig.layout.margin.t or 0)
+    return max(min(top, _CONTROLS_MARGIN_PX) - _STATIC_TOP_MARGIN_PX, 0)
 
 
 def _static_height(fig: go.Figure) -> int:
@@ -205,9 +221,30 @@ def _static_height(fig: go.Figure) -> int:
     the figure (and every one of its frames) the way :func:`_static_base` must.
     """
     height = int(fig.layout.height or 600)
-    return max(
-        height - (_CONTROL_BAND_PX - _STATIC_TOP_MARGIN_PX), _STATIC_TOP_MARGIN_PX + 1
+    return max(height - _control_band_trim(fig), _STATIC_TOP_MARGIN_PX + 1)
+
+
+def _add_elapsed_annotation(base: go.Figure) -> int:
+    """Append the clip's own "Elapsed" readout to ``base``; return its index.
+
+    A separate entry, so each frame rewrites only its text. Passing
+    ``annotations=[...]`` to ``update_layout`` instead *merges* into the existing
+    array and stamps the readout over every caption, duration key and
+    Illustration disclosure the figure already carries.
+    """
+    base.add_annotation(
+        text="",
+        name=_ELAPSED_ANNOTATION_NAME,
+        x=0.99,
+        y=1.0,
+        xref="paper",
+        yref="paper",
+        xanchor="right",
+        yanchor="bottom",
+        showarrow=False,
+        font=dict(size=14, color="#444"),
     )
+    return len(base.layout.annotations) - 1
 
 
 def _served_to_other_machines() -> bool:
@@ -324,6 +361,7 @@ def render_png_frames(
     width = int(fig.layout.width or 900)
     height = int(base.layout.height)
     elapsed = _elapsed_labels(fig, len(frames)) if show_elapsed else None
+    elapsed_index = _add_elapsed_annotation(base) if elapsed is not None else None
 
     # A single warm browser renders every frame fast; if it won't start, fall back
     # to per-frame cold `to_image` (slow, ~10 s/frame) ONLY when Chrome is actually
@@ -345,22 +383,10 @@ def render_png_frames(
                 frame = frames[k]
                 for data_obj, trace_idx in zip(frame.data, frame.traces):
                     base.data[trace_idx].update(data_obj)
-                if elapsed is not None:
-                    base.update_layout(
-                        annotations=[
-                            dict(
-                                text=f"Elapsed: {elapsed[k]}",
-                                x=0.99,
-                                y=1.0,
-                                xref="paper",
-                                yref="paper",
-                                xanchor="right",
-                                yanchor="bottom",
-                                showarrow=False,
-                                font=dict(size=14, color="#444"),
-                            )
-                        ]
-                    )
+                if elapsed_index is not None:
+                    base.layout.annotations[
+                        elapsed_index
+                    ].text = f"Elapsed: {elapsed[k]}"
                 try:
                     if cold_fallback:
                         png = base.to_image(

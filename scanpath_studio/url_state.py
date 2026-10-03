@@ -84,6 +84,7 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
+from .data import respell_reading
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
@@ -1490,6 +1491,11 @@ def _restore_selection(
     if tid in (None, "") or combos.empty:
         return False
     pid, tid = str(pid), str(tid)
+    # A link or config saved before composite ids escaped a `_` inside a part
+    # names the trial by its old spelling (`data.composite_respelling_map`).
+    pid, tid = respell_reading(
+        pid, tid, zip(combos["participant_id"], combos["trial_id"], strict=True)
+    )
     match = combos[
         (combos["participant_id"].astype(str) == pid)
         & (combos["trial_id"].astype(str) == tid)

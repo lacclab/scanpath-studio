@@ -1313,7 +1313,7 @@ def _wizard_trial_step(
         "trial",
         "Trial ID *",
         "The column holding your unique trial ID — or several to build one on "
-        "the fly (values joined with '_'), e.g. participant + text.",
+        "the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + text.",
         cells if cells is not None else [body] * 2,
         raw_words,
         raw_fix,

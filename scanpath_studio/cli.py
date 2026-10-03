@@ -1593,11 +1593,16 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     data (CMP-21). This used to check only when ``--compare-canvas`` was given,
     and co-animated without looking otherwise.
     """
+    from .data import respell_reading, trial_keys
     from .utils import extract_trial
 
     participant_b, trial_b = _parse_compare_with(args.compare_with)
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
         api, args, words, fixations
+    )
+    # An id spelled before composite ids escaped a `_` in a part still finds B.
+    participant_b, trial_b = respell_reading(
+        participant_b, trial_b, trial_keys(fixations_b)
     )
     trial_words_b = extract_trial(words_b, participant_b, trial_b)
     trial_fix_b = extract_trial(fixations_b, participant_b, trial_b)
@@ -2286,6 +2291,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(str(exc)) from exc
         canvas = canvas or source_canvas(SOURCE_AUTHOR)
     elif args.potec:
+        from .data import split_composite_id
         from .datasets import load_potec
 
         try:
@@ -2296,7 +2302,7 @@ def render(argv: list[str]) -> None:
                 # ids always need the full reader list for --list-trials so
                 # only narrow with an explicit -p.
                 readers=[args.participant] if args.participant else None,
-                texts=[str(args.trial).rsplit("_", 1)[-1]] if args.trial else None,
+                texts=[split_composite_id(args.trial)[-1]] if args.trial else None,
                 download=True,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:

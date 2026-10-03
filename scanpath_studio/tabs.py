@@ -188,8 +188,10 @@ from scanpath_studio.controls import (
     render_viz_reset,
 )
 from scanpath_studio.data import (
+    IDENTITY_SCHEMA_FIELDS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    ReadPlan,
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
@@ -204,6 +206,7 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames,
     has_explicit_trial_index,
+    identity_text_plan,
     normalize_fixations,
     normalize_words,
     propose_fix_schema,
@@ -220,6 +223,7 @@ from scanpath_studio.data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+    verbatim_text_plan,
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
@@ -13056,6 +13060,10 @@ _ADDABLE_TABLES = (
 )
 
 
+#: Each addable table's auto-detect, by table.
+_ADDABLE_PROPOSERS = {key: propose for key, _h, _p, propose in _ADDABLE_TABLES}
+
+
 def _added_raw_key(name: str, table_key: str) -> str:
     return f"_remap_add_raw_{name}_{table_key}"
 
@@ -13100,14 +13108,26 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             st.session_state.pop(raw_key, None)
             st.session_state.pop(signature_key, None)
             continue
-        signature = tuple(
-            getattr(upload, "file_id", None)
-            or (upload.name, getattr(upload, "size", None))
-            for upload in uploads
+        # The files, and the picks the read depends on: a new Trial or text
+        # column changes which columns must be read as literal text, and a
+        # value pandas has already turned into a number or a missing cell
+        # cannot be recovered by a later mapping — so the file is read again.
+        signature = (
+            tuple(
+                getattr(upload, "file_id", None)
+                or (upload.name, getattr(upload, "size", None))
+                for upload in uploads
+            ),
+            _added_table_picks(name, table_key),
         )
         if st.session_state.get(signature_key) != signature:
             try:
-                st.session_state[raw_key] = read_tables(list(uploads))
+                st.session_state[raw_key] = read_tables(
+                    list(uploads),
+                    plan_for=lambda header, table_key=table_key: _added_table_plan(
+                        name, table_key, header
+                    ),
+                )
                 st.session_state[signature_key] = signature
             except Exception as exc:  # unreadable file — say so, keep the page
                 st.session_state.pop(raw_key, None)
@@ -13118,6 +13138,44 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             box.caption(f"{len(raw):,} rows · {len(raw.columns)} columns.")
             added[table_key] = raw
     return added
+
+
+#: The mapping fields whose source columns are read as literal text: the ids
+#: (BUG-59 — `007` stays `007`) and the word text (BUG-53 — `NA` stays a word).
+_LITERAL_READ_FIELDS = (*IDENTITY_SCHEMA_FIELDS, "text")
+
+
+def _added_table_picks(name: str, table_key: str) -> tuple:
+    """What the user has picked so far for the literal-text fields of a table
+    being added — the part of its mapping the file's read depends on."""
+    prefix = f"remap_{name}_{table_key}_add"
+    picks = []
+    for field in _LITERAL_READ_FIELDS:
+        key = f"{prefix}_{field}"
+        if key in st.session_state:
+            value = st.session_state[key]
+            if isinstance(value, (list, tuple)):
+                value = tuple(str(item) for item in value)
+            picks.append((field, value))
+    return tuple(picks)
+
+
+def _added_table_plan(name: str, table_key: str, header) -> ReadPlan:
+    """How to read a table being added on ✏️ Edit dataset — as the add screen does.
+
+    The ids as text and the word text verbatim, decided before pandas infers
+    anything (`data.verbatim_text_plan` / `identity_text_plan`): the columns
+    the user has picked for those fields, else the ones auto-detection would
+    propose from the header. Every column is still read — the editor decides
+    what to keep only once the table is mapped.
+    """
+    names = [str(column) for column in header]
+    schema = dict(_ADDABLE_PROPOSERS[table_key](pd.DataFrame(columns=names)))
+    for field, value in _added_table_picks(name, table_key):
+        schema[field] = list(value) if isinstance(value, tuple) else value
+    if table_key == "words":
+        return verbatim_text_plan(names, schema)
+    return identity_text_plan(names, schema, kind=table_key)
 
 
 def aggregate_key(name: str) -> str:

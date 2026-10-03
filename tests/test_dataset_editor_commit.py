@@ -280,3 +280,96 @@ class TestAnInvalidStoredMappingIsReportedNotRaised:
         assert "_remap_problems" not in at.session_state
         stored = at.session_state["_datasets"]["Probe"]
         assert stored["words"]["text"].tolist() == ["Yo", "you"]
+
+
+def _missing_table_app(table_key: str, content: bytes, file_name: str) -> None:
+    import io
+
+    import pandas as pd
+    import streamlit as st
+    from streamlit.delta_generator import DeltaGenerator
+
+    from scanpath_studio.app import _read_upload
+    from scanpath_studio.tabs import _render_missing_table_uploads
+
+    class Upload(io.BytesIO):
+        name = file_name
+        file_id = "probe-file"
+        size = len(content)
+
+    other = "fixations" if table_key == "words" else "words"
+    original = DeltaGenerator.file_uploader
+    DeltaGenerator.file_uploader = lambda *a, **k: [Upload(content)]
+    try:
+        added = _render_missing_table_uploads(
+            "Probe", {other: pd.DataFrame({"x": [1]})}
+        )
+    finally:
+        DeltaGenerator.file_uploader = original
+    st.session_state["editor_read"] = added[table_key].to_dict("records")
+    prefixes = {
+        "words": "col_map_words",
+        "fixations": "col_map_fix",
+        "raw_gaze": "col_map_raw_gaze",
+    }
+    st.session_state["wizard_read"] = _read_upload(
+        [Upload(content)], prefixes[table_key], multi=True, kind=table_key
+    ).to_dict("records")
+
+
+_AOI_CSV = (
+    b"participant_id,trial_id,word_id,text,x,y,width,height\n"
+    b"007,01,1,NA,10,20,30,20\n"
+    b"007,01,2,001,40,20,30,20\n"
+)
+_FIX_CSV = (
+    b"participant_id,trial_id,x,y,duration_ms\n007,01,10,20,200\n007,01,40,20,180\n"
+)
+
+
+class TestAnAddedTableIsReadLikeTheAddScreenReadsIt:
+    def test_an_aoi_table_keeps_its_zeros_and_literal_words(self):
+        at = AppTest.from_function(
+            _missing_table_app, args=("words", _AOI_CSV, "aoi.csv")
+        ).run()
+        assert not at.exception
+        editor = at.session_state["editor_read"]
+        assert editor == at.session_state["wizard_read"]
+        assert [row["participant_id"] for row in editor] == ["007", "007"]
+        assert [row["trial_id"] for row in editor] == ["01", "01"]
+        assert [row["text"] for row in editor] == ["NA", "001"]
+
+    def test_a_fixation_table_keeps_its_zeros(self):
+        at = AppTest.from_function(
+            _missing_table_app, args=("fixations", _FIX_CSV, "fix.csv")
+        ).run()
+        assert not at.exception
+        editor = at.session_state["editor_read"]
+        assert editor == at.session_state["wizard_read"]
+        assert [row["participant_id"] for row in editor] == ["007", "007"]
+        assert [row["trial_id"] for row in editor] == ["01", "01"]
+
+    def test_unfamiliar_columns_are_read_again_once_they_are_mapped(self):
+        content = (
+            b"rdr,itm,wnum,wort,x,y,width,height\n"
+            b"007,01,1,NA,10,20,30,20\n"
+            b"007,01,2,001,40,20,30,20\n"
+        )
+        at = AppTest.from_function(
+            _missing_table_app, args=("words", content, "aoi.csv")
+        ).run()
+        # Nothing names these columns yet, so nothing protects them.
+        before = at.session_state["editor_read"]
+        assert [row["rdr"] for row in before] == [7, 7]
+        # Mapped by hand — the file is read again under the new plan.
+        at.session_state["remap_Probe_words_add_participant"] = "rdr"
+        at.session_state["remap_Probe_words_add_trial"] = ["itm"]
+        at.session_state["remap_Probe_words_add_text"] = "wort"
+        at.run()
+        assert not at.exception
+        after = at.session_state["editor_read"]
+        assert [row["rdr"] for row in after] == ["007", "007"]
+        assert [row["itm"] for row in after] == ["01", "01"]
+        assert [row["wort"] for row in after] == ["NA", "001"]
+        # Unmapped columns are all still there for the editor to offer.
+        assert set(after[0]) >= {"rdr", "itm", "wnum", "wort", "x", "width"}

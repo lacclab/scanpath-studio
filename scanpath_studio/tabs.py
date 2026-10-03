@@ -10277,7 +10277,7 @@ def render_group_comparison_tab(
             "Aggregate",
             _AGG_OPTIONS,
             key="cmp20_agg",
-            help="How each measure is combined across each group's readers.",
+            help="How each measure's values are combined within each group: all its words or fixations together, across readers.",
         )
         spread = c[1].selectbox(
             "Error bars", _SPREAD_OPTIONS, index=1, key="cmp20_spread"

@@ -70,6 +70,34 @@ def _apply_app():
     _apply_uploaded_plot_config(combos, fixations)
 
 
+def _reupload_app():
+    """Like ``_apply_app``, but ``_bytes=None`` is a cleared uploader and
+    ``_file_id`` names the upload event, as Streamlit's ``UploadedFile`` does."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.url_state import _apply_uploaded_plot_config
+    from scanpath_studio.utils import build_combo_options
+
+    class _FakeUpload:
+        def __init__(self, data: bytes, file_id: str):
+            self._data = data
+            self.name = "plot_config.json"
+            self.size = len(data)
+            self.file_id = file_id
+
+        def getvalue(self) -> bytes:
+            return self._data
+
+    fixations = pd.DataFrame(st.session_state["_fix"])
+    combos, _, _ = build_combo_options(fixations)
+    data = st.session_state["_bytes"]
+    st.session_state["plot_config_upload"] = (
+        None if data is None else _FakeUpload(data, st.session_state["_file_id"])
+    )
+    _apply_uploaded_plot_config(combos, fixations)
+
+
 def _run(app, **state):
     at = AppTest.from_function(app)
     at.session_state["_fix"] = _FIX_COLUMNS
@@ -384,6 +412,57 @@ class TestApplyUploadedPlotConfig:
     def test_non_object_json_does_not_crash(self):
         ss = _run(_apply_app, _bytes=b"[1, 2, 3]").session_state
         assert "global_show_heatmap" not in ss
+
+    def test_a_same_size_replacement_and_a_reupload_both_apply(self):
+        """Deduped by upload identity, not name + size: a revised file of the
+        same length applies, an ordinary rerun keeps a manual edit, and
+        clearing then re-choosing the original applies it again."""
+        import json
+
+        def cfg(color: str) -> bytes:
+            return json.dumps({"coloring": {"fixation_color": color}}).encode()
+
+        at = AppTest.from_function(_reupload_app)
+        at.session_state["_fix"] = _FIX_COLUMNS
+        at.session_state["_bytes"] = cfg("#111111")
+        at.session_state["_file_id"] = "upload-1"
+        at.run(timeout=20)
+        assert at.session_state["global_fixation_color"] == "#111111"
+
+        # Same name, same byte count, different colour → applies.
+        at.session_state["_bytes"] = cfg("#222222")
+        at.session_state["_file_id"] = "upload-2"
+        at.run(timeout=20)
+        assert at.session_state["global_fixation_color"] == "#222222"
+
+        # A manual edit survives ordinary reruns with the file still there.
+        at.session_state["global_fixation_color"] = "#333333"
+        at.run(timeout=20)
+        assert at.session_state["global_fixation_color"] == "#333333"
+
+        # Clear the uploader, then choose the original again → applies.
+        at.session_state["_bytes"] = None
+        at.run(timeout=20)
+        assert "_plot_config_last_import" not in at.session_state
+        at.session_state["_bytes"] = cfg("#111111")
+        at.session_state["_file_id"] = "upload-3"
+        at.run(timeout=20)
+        assert not at.exception, at.exception
+        assert at.session_state["global_fixation_color"] == "#111111"
+
+    def test_reuploading_the_same_file_without_clearing_applies_again(self):
+        import json
+
+        data = json.dumps({"coloring": {"fixation_color": "#111111"}}).encode()
+        at = AppTest.from_function(_reupload_app)
+        at.session_state["_fix"] = _FIX_COLUMNS
+        at.session_state["_bytes"] = data
+        at.session_state["_file_id"] = "upload-1"
+        at.run(timeout=20)
+        at.session_state["global_fixation_color"] = "#333333"
+        at.session_state["_file_id"] = "upload-2"  # a fresh upload event
+        at.run(timeout=20)
+        assert at.session_state["global_fixation_color"] == "#111111"
 
 
 def test_build_studio_config_includes_provenance_and_round_trips():

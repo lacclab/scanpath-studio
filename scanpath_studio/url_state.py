@@ -68,6 +68,7 @@ from .constants import (
     drift_correction_enabled,
     onestop_regime_for_choice,
     plural,
+    upload_identity,
 )
 from .controls import (
     _ALIGN_OPTIONS,
@@ -2328,13 +2329,17 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     Reads the file captured by 🔗 Share → File's ``plot_config_upload``
     uploader (persisted in session_state across reruns) and writes the saved
     settings into session_state *before* the widgets render — the same mechanism
-    as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made
-    after a restore aren't clobbered on every rerun. Call right after the trial
-    combos are built, before the canvas/visualization controls."""
+    as ``_apply_url_preset``. Deduped by upload identity (``upload_identity``:
+    the upload's ``file_id`` + a content hash) so manual tweaks made after a
+    restore aren't clobbered on every rerun, while a fresh upload — another
+    file, or the same one again — applies. Clearing the uploader forgets the
+    marker. Call right after the trial combos are built, before the
+    canvas/visualization controls."""
     uploaded = st.session_state.get("plot_config_upload")
     if uploaded is None:
+        st.session_state.pop("_plot_config_last_import", None)
         return
-    signature = (uploaded.name, uploaded.size)
+    signature = upload_identity(uploaded)
     if st.session_state.get("_plot_config_last_import") == signature:
         return
     # Stamp the signature up front so a malformed file isn't retried every rerun.

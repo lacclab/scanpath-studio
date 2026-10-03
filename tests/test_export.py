@@ -1066,3 +1066,114 @@ class TestMissingBrowserNote:
         assert missing_browser_note(False) == ""
         monkeypatch.setattr(anim, "chrome_available", lambda: True)
         assert missing_browser_note(True) == ""
+
+
+class TestInventory:
+    """`index.csv` names every file in the bundle at its actual path."""
+
+    @staticmethod
+    def _build(combos, words, fixations, settings, **options):
+        data, progress = bulk_export(
+            combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=settings,
+            options=ExportOptions(include_png=False, include_svg=False, **options),
+        )
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = zf.namelist()
+            index = pd.read_csv(
+                io.BytesIO(zf.read("index.csv")), dtype=str, keep_default_na=False
+            )
+            readme = zf.read("README.md").decode("utf-8")
+        return names, index, readme, progress
+
+    def test_every_file_is_listed_with_its_reading(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        names, index, _, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_html=True,
+            include_fixations=True,
+        )
+        written = index[index["status"] == "written"]
+        assert set(written["path"]) == set(names) - {"index.csv"}
+        figure = written[written["path"] == "per_trial/p1__t2/figure.html"].iloc[0]
+        assert (figure["artifact"], figure["format"]) == ("figure", "html")
+        assert (figure["participant_id"], figure["trial_id"]) == ("p1", "t2")
+
+    def test_a_collision_suffix_is_the_path_listed(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """A pattern without the trial id puts both trials at one name."""
+        names, index, _, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_fixations=True,
+            include_plot_config=False,
+            path_pattern="{participant_id}/{artifact}.{ext}",
+        )
+        assert {"p1/fixations.csv", "p1/fixations-2.csv"} <= set(names)
+        rows = index.set_index("path")
+        assert rows.loc["p1/fixations.csv", "trial_id"] == "t1"
+        assert rows.loc["p1/fixations-2.csv", "trial_id"] == "t2"
+
+    def test_a_failed_figure_is_listed_as_failed(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        import scanpath_studio.export as export_module
+
+        def broken(*_args, **_kwargs):
+            raise RuntimeError("no figure")
+
+        monkeypatch.setattr(export_module, "make_scanpath_figure", broken)
+        names, index, _, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_html=True,
+            include_plot_config=False,
+        )
+        failed = index[index["status"] == "failed"]
+        assert sorted(failed["path"]) == [
+            "per_trial/p1__t1/figure.html",
+            "per_trial/p1__t2/figure.html",
+        ]
+        assert not any(name.endswith(".html") for name in names)
+        assert "no figure" in failed["note"].iloc[0]
+
+    def test_the_readme_names_the_version_and_scope(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio import __version__
+
+        _, _, readme, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_fixations=True,
+            scope="trial",
+            scope_participant="p1",
+            scope_trial="t2",
+        )
+        assert f"Version: {__version__}" in readme
+        assert "one trial (participant p1, trial t2)" in readme
+        assert "1 trial(s), 1 screen export unit(s)" in readme

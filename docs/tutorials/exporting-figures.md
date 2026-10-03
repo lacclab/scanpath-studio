@@ -50,8 +50,11 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.
 ## 4. Keep provenance
 
 Keep `plot_config.json` with the batch (or a **:material/share: Share → File** settings file
-for a single figure), and record the package version, dataset version and any trial
-filtering in the caption or analysis log — the export does not store them.
+for a single figure). The bundle's `README.md` records the package version and
+which readings it was built from, and `index.csv` lists every file with its
+participant, trial and screen, and any that failed. Record the dataset version and
+the trial filters you used in the caption or analysis log — the export does not
+store them.
 
 **Done:** the exported files share one visual configuration and can be recreated.
 For scripted runs, see [Automation](../automation.md).

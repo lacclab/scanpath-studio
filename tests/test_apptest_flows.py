@@ -538,7 +538,7 @@ class TestBulkExportFlow:
         assert options.include_fixations is True
         assert options.export_unfiltered is False
 
-        expected = {"README.md"}
+        expected = {"README.md", "index.csv"}
         for trial in pool:
             expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
             expected.add(f"per_trial/l7_1090__{trial}/plot_config.json")
@@ -608,7 +608,7 @@ class TestBulkExportFlow:
             if name.startswith("per_trial/")
         }
         assert exported == {"l7_1090", "l37_1129"}
-        assert len(names_all) == 1 + 2 * DEMO_TRIALS_IN_PICKER
+        assert len(names_all) == 2 + 2 * DEMO_TRIALS_IN_PICKER
 
     def test_a_missing_browser_is_said_and_a_partial_build_counts_its_failures(
         self, monkeypatch

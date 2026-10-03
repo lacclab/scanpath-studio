@@ -1870,6 +1870,60 @@ def _session_participant_metadata():
         return None
 
 
+#: `index.csv`'s columns, in order.
+INVENTORY_COLUMNS = (
+    "path",
+    "artifact",
+    "format",
+    "participant_id",
+    "trial_id",
+    "screen_id",
+    "status",
+    "note",
+)
+
+
+def _write_inventory(zf: zipfile.ZipFile, inventory: list[dict]) -> None:
+    """Write ``index.csv``: one row per file in the bundle, plus each requested
+    file that failed and each reading skipped. ``status`` is ``written``,
+    ``failed`` or ``skipped``; a file type nobody asked for has no row."""
+    frame = pd.DataFrame(inventory, columns=list(INVENTORY_COLUMNS))
+    zf.writestr("index.csv", frame.to_csv(index=False))
+
+
+def _package_version() -> str:
+    from scanpath_studio import __version__
+
+    return __version__
+
+
+def _scope_lines(
+    options: ExportOptions, combos: pd.DataFrame, units: pd.DataFrame
+) -> list[str]:
+    """The README's *Scope* section: which readings the bundle was built from."""
+    if options.scope == "trial":
+        chosen = (
+            f"one trial (participant {options.scope_participant}, "
+            f"trial {options.scope_trial})"
+        )
+    elif options.scope == "participant":
+        chosen = f"one participant ({options.scope_participant})"
+    elif options.scope == "text":
+        chosen = f"one text ({options.scope_text})"
+    elif options.export_unfiltered:
+        chosen = "the whole dataset, ignoring the trial filters"
+    else:
+        chosen = "the trials passing the trial filters"
+    lines = []
+    if options.dataset_name:
+        lines.append(f"- Dataset: {options.dataset_name}")
+    lines += [
+        f"- Readings: {chosen}",
+        f"- {len(combos):,} trial(s), {len(units):,} screen export unit(s)",
+    ]
+    return lines
+
+
 def bulk_export(
     combos: pd.DataFrame,
     words: pd.DataFrame,
@@ -1940,6 +1994,26 @@ def bulk_export(
     )
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
+    # The bundle's inventory, written last as `index.csv`: every file in it at
+    # its actual path, and every requested file that failed, with the reading
+    # and screen it belongs to.
+    inventory: list[dict] = []
+
+    def _inventory(path, artifact, status, unit=None, note="", fmt=None):
+        inventory.append(
+            {
+                "path": path,
+                "artifact": artifact,
+                "format": PurePosixPath(path).suffix.lstrip(".")
+                if fmt is None
+                else fmt,
+                "participant_id": (unit or {}).get("participant_id", ""),
+                "trial_id": (unit or {}).get("trial_id", ""),
+                "screen_id": (unit or {}).get("screen_id", ""),
+                "status": status,
+                "note": note,
+            }
+        )
 
     # EXP-23: each table's per-trial frames, stacked into `aggregate/all_<table>`
     # when the tables are combined. The family's words + fixations are kept
@@ -1959,9 +2033,17 @@ def bulk_export(
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",
+        f"Version: {_package_version()}",
         f"DOI: https://doi.org/{CITATION['doi']}",
         "",
+        "## Scope",
+        *_scope_lines(options, combos, units),
+        "",
         "## Layout",
+        "- `index.csv` lists every file in this bundle — its path, what it is, "
+        "its participant, trial and screen — and every requested file that "
+        "failed (`status` = `failed`) or reading skipped (`skipped`). A file "
+        "type that was not requested is not listed.",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
         "- Multipart parents add `screens/screen-001-<id>/` below that trial.",
         *(
@@ -2015,6 +2097,7 @@ def bulk_export(
         f"Demo corpus note: {CITATION['corpus_note']}",
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
+    _inventory("README.md", "readme", "written")
     if options.include_analysis_family:
         zf.writestr(
             "run_config.json",
@@ -2028,6 +2111,7 @@ def bulk_export(
                 default=str,
             ),
         )
+        _inventory("run_config.json", "run_config", "written")
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
@@ -2071,6 +2155,11 @@ def bulk_export(
             slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
             if screen_slug:
                 slug += f"__{screen_slug}"
+            unit_ids = {
+                "participant_id": str(participant),
+                "trial_id": str(trial),
+                "screen_id": str(screen_id) if screen_slug else "",
+            }
 
             # Slice via the same str-normalized position index the live view uses
             # (utils.extract_trial), so the export selects *exactly* what the trial
@@ -2104,6 +2193,7 @@ def bulk_export(
                 progress.finished_trials += 1
                 progress.trials_skipped += 1
                 progress.errors.append(f"{slug}: empty data, skipped")
+                _inventory("", "reading", "skipped", unit_ids, "no data", fmt="")
                 if progress_callback:
                     progress_callback(progress)
                 continue
@@ -2141,7 +2231,11 @@ def bulk_export(
                 ),
             )
 
-            def _path(artifact: str, ext: str, _f=fields, _slug=screen_slug) -> str:
+            def _path(
+                artifact: str, ext: str, _f=fields, _slug=screen_slug, reserve=True
+            ) -> str:
+                # `reserve=False` names a file that failed: the path it would
+                # have had, for the inventory, without taking it from the next.
                 if _slug:
                     artifact = f"screens/{_slug}/{artifact}"
                 return resolve_export_path(
@@ -2149,7 +2243,7 @@ def bulk_export(
                     _f,
                     artifact=artifact,
                     ext=ext,
-                    used=used_paths,
+                    used=used_paths if reserve else set(used_paths),
                 )
 
             title = (
@@ -2219,6 +2313,16 @@ def bulk_export(
                     # Its formats, and its layer set when one was asked for.
                     progress.figures_failed += len(figure_formats) + bool(layer_formats)
                     progress.errors.append(f"{slug}: figure export failed ({exc})")
+                    for fmt in figure_formats:
+                        _inventory(
+                            _path("figure", fmt, reserve=False),
+                            "figure",
+                            "failed",
+                            unit_ids,
+                            str(exc),
+                        )
+                    if layer_formats:
+                        _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
                 # EXP-24: each format on its own, so a missing browser costs the
                 # PNG/SVG/PDF and still leaves the trial's HTML in the zip.
                 if fig is not None:
@@ -2239,13 +2343,22 @@ def bulk_export(
                             else:
                                 scale = options.png_scale if fmt == "png" else 1
                                 data = render_figure(fig, fmt, out_w, out_h, scale)
-                            zf.writestr(_path("figure", fmt), data)
+                            path = _path("figure", fmt)
+                            zf.writestr(path, data)
                         except Exception as exc:
                             progress.figures_failed += 1
                             progress.errors.append(
                                 f"{slug}: {fmt.upper()} figure export failed ({exc})"
                             )
+                            _inventory(
+                                _path("figure", fmt, reserve=False),
+                                "figure",
+                                "failed",
+                                unit_ids,
+                                str(exc),
+                            )
                             continue
+                        _inventory(path, "figure", "written", unit_ids)
                         progress.bytes_written += len(data)
                         progress.figures_written += 1
 
@@ -2265,12 +2378,17 @@ def bulk_export(
                                 data = render_figure(
                                     layer_fig, fmt, out_w, out_h, scale
                                 )
-                                zf.writestr(_path(f"layers/{layer_name}", fmt), data)
+                                path = _path(f"layers/{layer_name}", fmt)
+                                zf.writestr(path, data)
+                                _inventory(
+                                    path, f"layer:{layer_name}", "written", unit_ids
+                                )
                                 progress.bytes_written += len(data)
                                 progress.figures_written += 1
                     except Exception as exc:
                         progress.figures_failed += 1
                         progress.errors.append(f"{slug}: layer export failed ({exc})")
+                        _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
 
             if options.include_plot_config:
                 # Same guard as _drift_corrected_for_figure: correction runs
@@ -2305,7 +2423,9 @@ def bulk_export(
                         "synthesized": bool(settings.get("raw_gaze_synthesized")),
                     }
                 data = json.dumps(cfg, indent=2).encode("utf-8")
-                zf.writestr(_path("plot_config", "json"), data)
+                path = _path("plot_config", "json")
+                zf.writestr(path, data)
+                _inventory(path, "plot_config", "written", unit_ids)
                 progress.bytes_written += len(data)
 
             # AN-32 / EXP-23: the word table *is* the measures table — it carries
@@ -2370,9 +2490,9 @@ def bulk_export(
             else:
                 for fmt in options.table_formats():
                     for artifact, table in tables.items():
-                        progress.bytes_written += _write_table(
-                            zf, _path(artifact, fmt), table, fmt
-                        )
+                        path = _path(artifact, fmt)
+                        progress.bytes_written += _write_table(zf, path, table, fmt)
+                        _inventory(path, artifact, "written", unit_ids)
             if options.include_analysis_family:
                 family_words.append(measured)
                 family_fixations.append(family["fixations"])
@@ -2404,9 +2524,9 @@ def bulk_export(
     }
     for fmt in options.table_formats():
         for artifact, table in stacked.items():
-            progress.bytes_written += _write_table(
-                zf, f"aggregate/all_{artifact}.{fmt}", table, fmt
-            )
+            path = f"aggregate/all_{artifact}.{fmt}"
+            progress.bytes_written += _write_table(zf, path, table, fmt)
+            _inventory(path, artifact, "written")
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a
     # reader attribute distinguishable from a per-fixation measurement on the
@@ -2427,12 +2547,9 @@ def bulk_export(
     )
     if participant_metadata is not None and not participant_metadata.empty:
         for fmt in options.table_formats():
-            progress.bytes_written += _write_table(
-                zf,
-                f"metadata/participants.{fmt}",
-                participant_metadata,
-                fmt,
-            )
+            path = f"metadata/participants.{fmt}"
+            progress.bytes_written += _write_table(zf, path, participant_metadata, fmt)
+            _inventory(path, "participant_metadata", "written")
     # DATA-29: and the trial table beside it, on the same terms — its own
     # per-grain file, keyed as it was attached, so a reading's attributes stay
     # distinguishable from the per-fixation measurements of that reading.
@@ -2447,12 +2564,9 @@ def bulk_export(
     )
     if trial_metadata is not None and not trial_metadata.empty:
         for fmt in options.table_formats():
-            progress.bytes_written += _write_table(
-                zf,
-                f"metadata/trials.{fmt}",
-                trial_metadata,
-                fmt,
-            )
+            path = f"metadata/trials.{fmt}"
+            progress.bytes_written += _write_table(zf, path, trial_metadata, fmt)
+            _inventory(path, "trial_metadata", "written")
     # And the text table, the third grain — same reasoning again.
     text_metadata = (settings or {}).get("text_metadata")
     if text_metadata is None:
@@ -2465,12 +2579,9 @@ def bulk_export(
     )
     if text_metadata is not None and not text_metadata.empty:
         for fmt in options.table_formats():
-            progress.bytes_written += _write_table(
-                zf,
-                f"metadata/texts.{fmt}",
-                text_metadata,
-                fmt,
-            )
+            path = f"metadata/texts.{fmt}"
+            progress.bytes_written += _write_table(zf, path, text_metadata, fmt)
+            _inventory(path, "text_metadata", "written")
     # UX-179: the exported trials' annotations, in the Data → Annotations file
     # format, so the bundle's notes can be imported back into the app.
     if options.include_annotations and annotation_records:
@@ -2483,6 +2594,7 @@ def bulk_export(
                 "utf-8"
             )
             zf.writestr("annotations.json", data)
+            _inventory("annotations.json", "annotations", "written")
             progress.bytes_written += len(data)
     emit_status(
         status_callback,
@@ -2492,6 +2604,7 @@ def bulk_export(
         completed=progress.finished_trials,
         total=progress.total_trials,
     )
+    _write_inventory(zf, inventory)
     progress.files_written = len(zf.namelist())
     zf.close()
     buf.seek(0)

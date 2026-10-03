@@ -13,6 +13,8 @@ Open the **Export** subtab in the Scanpath view.
   more tables. Tables are written per trial, or combined into one file each.
   Word tables carry the reading measures your data brought; the export computes
   none.
+  Each bundle has an `index.csv` listing every file with its participant,
+  trial and screen, and any requested file that failed.
 
 <figure class="sps-screenshot" markdown>
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)

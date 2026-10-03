@@ -65,6 +65,7 @@ from .multipart import (
     screen_canvas_size,
 )
 from .plots import (
+    SCANPATH_LAYER_ORDER,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     make_scanpath_figure,
@@ -76,6 +77,7 @@ from .preprocessing import (
     saccade_table,
     sentence_measures,
 )
+from .progress import report as report_progress
 from .utils import extract_trial
 
 # --- EXP-1 · customizable export paths ---------------------------------------
@@ -161,6 +163,10 @@ class ExportOptions:
     # And the same opt-out for the attached *text* table, written to
     # `metadata/texts.*` — the third grain, same reasoning again.
     text_metadata_fields: tuple[str, ...] | None = None
+    # HTML figures embed the Plotly library (opens offline, ~4.8 MB more per
+    # file) instead of loading it from cdn.plot.ly when opened. Off by default:
+    # the app's Export subtab sets it from its *HTML files* choice.
+    html_self_contained: bool = False
     # When True, export operates on the whole loaded dataset, ignoring the
     # trial-filter funnel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
@@ -241,6 +247,17 @@ class ExportSummary:
     level: str
     message: str
     expand_errors: bool
+
+
+#: Session key of the Export subtab's *HTML files* choice — every HTML file
+#: the subtab writes (the figure, the replay, the bundles) follows it.
+HTML_SELF_CONTAINED_KEY = "export_html_self_contained"
+
+
+def html_plotlyjs(self_contained: bool) -> bool | str:
+    """``to_html``'s ``include_plotlyjs`` for a downloaded HTML file: the
+    library embedded (opens offline), or loaded from cdn.plot.ly when opened."""
+    return True if self_contained else "cdn"
 
 
 def missing_browser_note(static_formats: bool) -> str:
@@ -1106,6 +1123,26 @@ def _preview_fields(combos: pd.DataFrame) -> dict:
     return fields
 
 
+def _prune_stale_fields(state, state_key: str, names: list[str]) -> None:
+    """Drop field names the attached table no longer has from a stored picker
+    selection — the house `controls._drop_stale_multi` pattern.
+
+    Two states must stay apart. An **empty** stored list is the user clearing
+    the picker, which leaves the table out of the bundle, so it is kept as is.
+    A non-empty list that names **only** stale fields is what a replaced table
+    leaves behind; Streamlit would filter it to `[]` and read it as that same
+    omission, so it is removed and the picker starts again on every field.
+    """
+    stored = state.get(state_key)
+    if not isinstance(stored, (list, tuple)) or not stored:
+        return
+    kept = [name for name in stored if name in names]
+    if not kept:
+        state.pop(state_key, None)
+    elif list(stored) != kept:
+        state[state_key] = kept
+
+
 def _render_metadata_field_picker(key_prefix: str):
     """DATA-20 milestone 10 — which participant fields ride along in the bundle.
 
@@ -1128,20 +1165,8 @@ def _render_metadata_field_picker(key_prefix: str):
         return None
     names = [field.name for field in attached.fields]
     labels = {field.name: field.label for field in attached.fields}
-    # Prune the persisted selection against *this* table's fields, the house
-    # `controls._drop_stale_multi` pattern. Without it, attaching a second table
-    # leaves a selection naming only the first one's columns; Streamlit filters
-    # invalid values out silently, the widget yields `[]`, and an empty tuple is
-    # "leave the table out of the bundle" — so a stale key would read as a
-    # deliberate omission and the participant file would just be missing.
     state_key = f"{key_prefix}_meta_fields"
-    stored = st.session_state.get(state_key)
-    if isinstance(stored, (list, tuple)):
-        kept = [name for name in stored if name in names]
-        if not kept:
-            st.session_state.pop(state_key, None)
-        elif list(stored) != kept:
-            st.session_state[state_key] = kept
+    _prune_stale_fields(st.session_state, state_key, names)
     chosen = panel_field(
         st,
         "multiselect",
@@ -1174,13 +1199,7 @@ def _render_trial_metadata_field_picker(key_prefix: str):
     names = [field.name for field in attached.fields]
     labels = {field.name: field.label for field in attached.fields}
     state_key = f"{key_prefix}_trial_meta_fields"
-    stored = st.session_state.get(state_key)
-    if isinstance(stored, (list, tuple)):
-        kept = [name for name in stored if name in names]
-        if not kept:
-            st.session_state.pop(state_key, None)
-        elif list(stored) != kept:
-            st.session_state[state_key] = kept
+    _prune_stale_fields(st.session_state, state_key, names)
     chosen = panel_field(
         st,
         "multiselect",
@@ -1213,13 +1232,7 @@ def _render_text_metadata_field_picker(key_prefix: str):
     names = [field.name for field in attached.fields]
     labels = {field.name: field.label for field in attached.fields}
     state_key = f"{key_prefix}_text_meta_fields"
-    stored = st.session_state.get(state_key)
-    if isinstance(stored, (list, tuple)):
-        kept = [name for name in stored if name in names]
-        if not kept:
-            st.session_state.pop(state_key, None)
-        elif list(stored) != kept:
-            st.session_state[state_key] = kept
+    _prune_stale_fields(st.session_state, state_key, names)
     chosen = panel_field(
         st,
         "multiselect",
@@ -1652,7 +1665,9 @@ def pair_export(
             height = int(getattr(fig.layout, "height", None) or canvas_height)
             if fmt == "html":
                 data = fig.to_html(
-                    include_plotlyjs="cdn", full_html=True, config={**PLOTLY_CONFIG}
+                    include_plotlyjs=html_plotlyjs(options.html_self_contained),
+                    full_html=True,
+                    config={**PLOTLY_CONFIG},
                 ).encode("utf-8")
             else:
                 data = render_static_figure_bytes(
@@ -1766,6 +1781,70 @@ def _selected_text_metadata_columns(frame, fields: tuple[str, ...] | None):
     return frame[keep] if keep else None
 
 
+def _rows_in_scope(
+    frame,
+    *,
+    pairs: set[tuple[str, str]],
+    texts: set[str],
+    grain: str,
+):
+    """``frame``'s rows about what the bundle exports, or ``None`` when none are.
+
+    A bundle's metadata describes only its own readers, trials and texts:
+    ``grain`` ``"participant"`` keeps the readers in ``pairs``, ``"trial"`` the
+    readings — by the (reader, trial) pair when the table has a reader column,
+    else by trial id — and ``"text"`` the texts in ``texts``. Ids compare as
+    text, as the metadata module matches them. A table with no key column, or
+    no matching row, is left out rather than shipped whole.
+    """
+    if frame is None or frame.empty:
+        return None
+    if grain == "participant":
+        if "participant_id" not in frame.columns:
+            return None
+        mask = frame["participant_id"].astype(str).isin({p for p, _ in pairs})
+    elif grain == "trial":
+        if "trial_id" not in frame.columns:
+            return None
+        if "participant_id" in frame.columns:
+            keys = pd.Series(
+                list(
+                    zip(
+                        frame["participant_id"].astype(str),
+                        frame["trial_id"].astype(str),
+                        strict=True,
+                    )
+                ),
+                index=frame.index,
+                dtype=object,
+            )
+            mask = keys.isin(pairs)
+        else:
+            mask = frame["trial_id"].astype(str).isin({t for _, t in pairs})
+    else:
+        if "text_id" not in frame.columns:
+            return None
+        mask = frame["text_id"].astype(str).isin(texts)
+    kept = frame[mask]
+    return None if kept.empty else kept
+
+
+def _unit_text_ids(combo_row: dict, *frames: pd.DataFrame) -> set[str]:
+    """Every text id one exported reading carries — its combo row's, and the
+    ``unique_text_id`` / ``text_id`` values in its own rows — as text."""
+    found: set[str] = set()
+    value = combo_row.get("text_id")
+    if value is not None and not pd.isna(value):
+        found.add(str(value))
+    for frame in frames:
+        if frame is None or frame.empty:
+            continue
+        for column in ("unique_text_id", "text_id"):
+            if column in frame.columns:
+                found.update(frame[column].dropna().astype(str).unique())
+    return found
+
+
 def _session_text_metadata():
     """The attached text table, when running inside the app.
 
@@ -1810,6 +1889,173 @@ def _session_participant_metadata():
         return None
 
 
+#: `index.csv`'s columns, in order.
+INVENTORY_COLUMNS = (
+    "path",
+    "artifact",
+    "format",
+    "participant_id",
+    "trial_id",
+    "screen_id",
+    "status",
+    "note",
+)
+
+
+def _write_inventory(zf: zipfile.ZipFile, inventory: list[dict]) -> None:
+    """Write ``index.csv``: one row per file in the bundle, plus each requested
+    file that failed and each reading skipped. ``status`` is ``written``,
+    ``failed`` or ``skipped``; a file type nobody asked for has no row."""
+    frame = pd.DataFrame(inventory, columns=list(INVENTORY_COLUMNS))
+    zf.writestr("index.csv", frame.to_csv(index=False))
+
+
+def export_units(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """One row per **screen export unit**: each trial in ``combos``, or each of
+    its screens when it is a multipart reading. ``combos`` is already scoped.
+    """
+    rows: list[dict] = []
+    for combo in combos.to_dict("records"):
+        participant, trial = combo["participant_id"], combo["trial_id"]
+        parent_words = extract_trial(words, participant, trial)
+        parent_fixations = extract_trial(fixations, participant, trial)
+        screens = part_catalog(parent_words, parent_fixations)
+        if (
+            screens.empty
+            and parent_words.empty
+            and parent_fixations.empty
+            and raw_gaze is not None
+            and SCREEN_ID in raw_gaze.columns
+        ):
+            # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
+            # gaze alone takes its screens from its samples, so each screen's
+            # coordinate space is exported on its own instead of pooled.
+            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
+        if screens.empty:
+            rows.append(combo)
+        else:
+            for screen in screens.to_dict("records"):
+                rows.append({**combo, **screen})
+    return pd.DataFrame(rows)
+
+
+@dataclass(frozen=True)
+class ExportPlan:
+    """What a bundle will hold, worked out before it is built.
+
+    ``layer_files`` is a ceiling: a screen writes one file per layer it
+    actually draws, which is only known once its figure is built.
+    """
+
+    trials: int
+    units: int
+    figure_files: int
+    layer_files: int
+
+
+def apply_export_scope(combos: pd.DataFrame, options: ExportOptions) -> pd.DataFrame:
+    """``combos`` narrowed to ``options``' scope, as :func:`bulk_export` does."""
+    return _apply_scope(combos, options)
+
+
+def plan_export(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    options: ExportOptions,
+    raw_gaze: pd.DataFrame | None = None,
+) -> ExportPlan:
+    """The trial, screen and figure-file counts :func:`bulk_export` will
+    produce for these inputs and ``options``."""
+    scoped = _apply_scope(combos, options)
+    units = count_export_units(scoped, words, fixations, raw_gaze)
+    return plan_from_counts(len(scoped), units, options)
+
+
+def count_export_units(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+) -> int:
+    """``len(export_units(...))`` — without walking every trial when no frame
+    carries screens, the common case, where each trial is one unit."""
+    if not any(
+        frame is not None and SCREEN_ID in frame.columns
+        for frame in (words, fixations, raw_gaze)
+    ):
+        return len(combos)
+    return len(export_units(combos, words, fixations, raw_gaze))
+
+
+def plan_from_counts(trials: int, units: int, options: ExportOptions) -> ExportPlan:
+    """:class:`ExportPlan` for known trial and unit counts — the formats'
+    multiplication, apart from the (slower) unit expansion."""
+    return ExportPlan(
+        trials=trials,
+        units=units,
+        figure_files=units * len(options.figure_formats()),
+        layer_files=units * len(SCANPATH_LAYER_ORDER) * len(options.layer_formats()),
+    )
+
+
+def describe_plan(plan: ExportPlan) -> str:
+    """One line for the panel: what Build export is about to write."""
+
+    def plural(n: int, word: str) -> str:
+        return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+    readings = plural(plan.trials, "trial")
+    if plan.units != plan.trials:
+        readings += f" ({plural(plan.units, 'screen')})"
+    parts = []
+    if plan.figure_files:
+        parts.append(plural(plan.figure_files, "figure file"))
+    if plan.layer_files:
+        parts.append(f"up to {plural(plan.layer_files, 'layer file')}")
+    if not parts:
+        return f"Exports {readings}."
+    return f"Exports {readings}: {' and '.join(parts)}."
+
+
+def _package_version() -> str:
+    from scanpath_studio import __version__
+
+    return __version__
+
+
+def _scope_lines(
+    options: ExportOptions, combos: pd.DataFrame, units: pd.DataFrame
+) -> list[str]:
+    """The README's *Scope* section: which readings the bundle was built from."""
+    if options.scope == "trial":
+        chosen = (
+            f"one trial (participant {options.scope_participant}, "
+            f"trial {options.scope_trial})"
+        )
+    elif options.scope == "participant":
+        chosen = f"one participant ({options.scope_participant})"
+    elif options.scope == "text":
+        chosen = f"one text ({options.scope_text})"
+    elif options.export_unfiltered:
+        chosen = "the whole dataset, ignoring the trial filters"
+    else:
+        chosen = "the trials passing the trial filters"
+    lines = []
+    if options.dataset_name:
+        lines.append(f"- Dataset: {options.dataset_name}")
+    lines += [
+        f"- Readings: {chosen}",
+        f"- {len(combos):,} trial(s), {len(units):,} screen export unit(s)",
+    ]
+    return lines
+
+
 def bulk_export(
     combos: pd.DataFrame,
     words: pd.DataFrame,
@@ -1847,29 +2093,7 @@ def bulk_export(
     trial so the UI can update a progress bar.
     """
     combos = _apply_scope(combos, options)
-    export_units: list[dict] = []
-    for combo in combos.to_dict("records"):
-        participant, trial = combo["participant_id"], combo["trial_id"]
-        parent_words = extract_trial(words, participant, trial)
-        parent_fixations = extract_trial(fixations, participant, trial)
-        screens = part_catalog(parent_words, parent_fixations)
-        if (
-            screens.empty
-            and parent_words.empty
-            and parent_fixations.empty
-            and raw_gaze is not None
-            and SCREEN_ID in raw_gaze.columns
-        ):
-            # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
-            # gaze alone takes its screens from its samples, so each screen's
-            # coordinate space is exported on its own instead of pooled.
-            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
-        if screens.empty:
-            export_units.append(combo)
-        else:
-            for screen in screens.to_dict("records"):
-                export_units.append({**combo, **screen})
-    units = pd.DataFrame(export_units)
+    units = export_units(combos, words, fixations, raw_gaze)
     progress = ExportProgress(total_trials=len(units))
     started = perf_counter()
     emit_status(
@@ -1880,6 +2104,26 @@ def bulk_export(
     )
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
+    # The bundle's inventory, written last as `index.csv`: every file in it at
+    # its actual path, and every requested file that failed, with the reading
+    # and screen it belongs to.
+    inventory: list[dict] = []
+
+    def _inventory(path, artifact, status, unit=None, note="", fmt=None):
+        inventory.append(
+            {
+                "path": path,
+                "artifact": artifact,
+                "format": PurePosixPath(path).suffix.lstrip(".")
+                if fmt is None
+                else fmt,
+                "participant_id": (unit or {}).get("participant_id", ""),
+                "trial_id": (unit or {}).get("trial_id", ""),
+                "screen_id": (unit or {}).get("screen_id", ""),
+                "status": status,
+                "note": note,
+            }
+        )
 
     # EXP-23: each table's per-trial frames, stacked into `aggregate/all_<table>`
     # when the tables are combined. The family's words + fixations are kept
@@ -1899,9 +2143,17 @@ def bulk_export(
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",
+        f"Version: {_package_version()}",
         f"DOI: https://doi.org/{CITATION['doi']}",
         "",
+        "## Scope",
+        *_scope_lines(options, combos, units),
+        "",
         "## Layout",
+        "- `index.csv` lists every file in this bundle — its path, what it is, "
+        "its participant, trial and screen — and every requested file that "
+        "failed (`status` = `failed`) or reading skipped (`skipped`). A file "
+        "type that was not requested is not listed.",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
         "- Multipart parents add `screens/screen-001-<id>/` below that trial.",
         *(
@@ -1955,6 +2207,7 @@ def bulk_export(
         f"Demo corpus note: {CITATION['corpus_note']}",
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
+    _inventory("README.md", "readme", "written")
     if options.include_analysis_family:
         zf.writestr(
             "run_config.json",
@@ -1968,6 +2221,7 @@ def bulk_export(
                 default=str,
             ),
         )
+        _inventory("run_config.json", "run_config", "written")
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
@@ -1979,6 +2233,10 @@ def bulk_export(
     # the trial id, say). Two zip entries at one name silently loses a file, so
     # `resolve_export_path` disambiguates against what's already been written.
     used_paths: set = set()
+    # The readers, trials and texts the bundle actually holds — what its
+    # metadata tables are narrowed to at the end.
+    exported_pairs: set[tuple[str, str]] = set()
+    exported_texts: set[str] = set()
     emit_status(
         status_callback,
         (
@@ -1995,6 +2253,15 @@ def bulk_export(
     )
     with _figure_renderer(options.needs_kaleido()) as render_figure:
         for combo in units.itertuples(index=False):
+            # The cancel checkpoint (`progress.Cancelled`), between units so a
+            # stopped build never leaves one half-written; a no-op headlessly.
+            try:
+                report_progress(
+                    progress.finished_trials, progress.total_trials, unit="screens"
+                )
+            except BaseException:  # `progress.Cancelled`: close the zip, go
+                zf.close()
+                raise
             participant = combo.participant_id
             trial = combo.trial_id
             screen_id = getattr(combo, SCREEN_ID, None)
@@ -2007,6 +2274,11 @@ def bulk_export(
             slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
             if screen_slug:
                 slug += f"__{screen_slug}"
+            unit_ids = {
+                "participant_id": str(participant),
+                "trial_id": str(trial),
+                "screen_id": str(screen_id) if screen_slug else "",
+            }
 
             # Slice via the same str-normalized position index the live view uses
             # (utils.extract_trial), so the export selects *exactly* what the trial
@@ -2040,9 +2312,15 @@ def bulk_export(
                 progress.finished_trials += 1
                 progress.trials_skipped += 1
                 progress.errors.append(f"{slug}: empty data, skipped")
+                _inventory("", "reading", "skipped", unit_ids, "no data", fmt="")
                 if progress_callback:
                     progress_callback(progress)
                 continue
+
+            exported_pairs.add((str(participant), str(trial)))
+            exported_texts.update(
+                _unit_text_ids(combo._asdict(), trial_words, trial_fix, trial_raw_gaze)
+            )
 
             # A screen's own canvas, for its figure and its plot config alike.
             unit_canvas = (
@@ -2072,7 +2350,11 @@ def bulk_export(
                 ),
             )
 
-            def _path(artifact: str, ext: str, _f=fields, _slug=screen_slug) -> str:
+            def _path(
+                artifact: str, ext: str, _f=fields, _slug=screen_slug, reserve=True
+            ) -> str:
+                # `reserve=False` names a file that failed: the path it would
+                # have had, for the inventory, without taking it from the next.
                 if _slug:
                     artifact = f"screens/{_slug}/{artifact}"
                 return resolve_export_path(
@@ -2080,7 +2362,7 @@ def bulk_export(
                     _f,
                     artifact=artifact,
                     ext=ext,
-                    used=used_paths,
+                    used=used_paths if reserve else set(used_paths),
                 )
 
             title = (
@@ -2150,6 +2432,16 @@ def bulk_export(
                     # Its formats, and its layer set when one was asked for.
                     progress.figures_failed += len(figure_formats) + bool(layer_formats)
                     progress.errors.append(f"{slug}: figure export failed ({exc})")
+                    for fmt in figure_formats:
+                        _inventory(
+                            _path("figure", fmt, reserve=False),
+                            "figure",
+                            "failed",
+                            unit_ids,
+                            str(exc),
+                        )
+                    if layer_formats:
+                        _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
                 # EXP-24: each format on its own, so a missing browser costs the
                 # PNG/SVG/PDF and still leaves the trial's HTML in the zip.
                 if fig is not None:
@@ -2163,20 +2455,31 @@ def bulk_export(
                             if fmt == "html":
                                 # Browser-free + interactive; no Kaleido needed.
                                 data = fig.to_html(
-                                    include_plotlyjs="cdn",
+                                    include_plotlyjs=html_plotlyjs(
+                                        options.html_self_contained
+                                    ),
                                     full_html=True,
                                     config={**PLOTLY_CONFIG},
                                 ).encode("utf-8")
                             else:
                                 scale = options.png_scale if fmt == "png" else 1
                                 data = render_figure(fig, fmt, out_w, out_h, scale)
-                            zf.writestr(_path("figure", fmt), data)
+                            path = _path("figure", fmt)
+                            zf.writestr(path, data)
                         except Exception as exc:
                             progress.figures_failed += 1
                             progress.errors.append(
                                 f"{slug}: {fmt.upper()} figure export failed ({exc})"
                             )
+                            _inventory(
+                                _path("figure", fmt, reserve=False),
+                                "figure",
+                                "failed",
+                                unit_ids,
+                                str(exc),
+                            )
                             continue
+                        _inventory(path, "figure", "written", unit_ids)
                         progress.bytes_written += len(data)
                         progress.figures_written += 1
 
@@ -2196,12 +2499,17 @@ def bulk_export(
                                 data = render_figure(
                                     layer_fig, fmt, out_w, out_h, scale
                                 )
-                                zf.writestr(_path(f"layers/{layer_name}", fmt), data)
+                                path = _path(f"layers/{layer_name}", fmt)
+                                zf.writestr(path, data)
+                                _inventory(
+                                    path, f"layer:{layer_name}", "written", unit_ids
+                                )
                                 progress.bytes_written += len(data)
                                 progress.figures_written += 1
                     except Exception as exc:
                         progress.figures_failed += 1
                         progress.errors.append(f"{slug}: layer export failed ({exc})")
+                        _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
 
             if options.include_plot_config:
                 # Same guard as _drift_corrected_for_figure: correction runs
@@ -2236,7 +2544,9 @@ def bulk_export(
                         "synthesized": bool(settings.get("raw_gaze_synthesized")),
                     }
                 data = json.dumps(cfg, indent=2).encode("utf-8")
-                zf.writestr(_path("plot_config", "json"), data)
+                path = _path("plot_config", "json")
+                zf.writestr(path, data)
+                _inventory(path, "plot_config", "written", unit_ids)
                 progress.bytes_written += len(data)
 
             # AN-32 / EXP-23: the word table *is* the measures table — it carries
@@ -2301,9 +2611,9 @@ def bulk_export(
             else:
                 for fmt in options.table_formats():
                     for artifact, table in tables.items():
-                        progress.bytes_written += _write_table(
-                            zf, _path(artifact, fmt), table, fmt
-                        )
+                        path = _path(artifact, fmt)
+                        progress.bytes_written += _write_table(zf, path, table, fmt)
+                        _inventory(path, artifact, "written", unit_ids)
             if options.include_analysis_family:
                 family_words.append(measured)
                 family_fixations.append(family["fixations"])
@@ -2335,9 +2645,9 @@ def bulk_export(
     }
     for fmt in options.table_formats():
         for artifact, table in stacked.items():
-            progress.bytes_written += _write_table(
-                zf, f"aggregate/all_{artifact}.{fmt}", table, fmt
-            )
+            path = f"aggregate/all_{artifact}.{fmt}"
+            progress.bytes_written += _write_table(zf, path, table, fmt)
+            _inventory(path, artifact, "written")
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a
     # reader attribute distinguishable from a per-fixation measurement on the
@@ -2350,49 +2660,49 @@ def bulk_export(
     participant_metadata = (settings or {}).get("participant_metadata")
     if participant_metadata is None:
         participant_metadata = _session_participant_metadata()
-    participant_metadata = _selected_metadata_columns(
-        participant_metadata, options.metadata_fields
+    participant_metadata = _rows_in_scope(
+        _selected_metadata_columns(participant_metadata, options.metadata_fields),
+        pairs=exported_pairs,
+        texts=exported_texts,
+        grain="participant",
     )
     if participant_metadata is not None and not participant_metadata.empty:
         for fmt in options.table_formats():
-            progress.bytes_written += _write_table(
-                zf,
-                f"metadata/participants.{fmt}",
-                participant_metadata,
-                fmt,
-            )
+            path = f"metadata/participants.{fmt}"
+            progress.bytes_written += _write_table(zf, path, participant_metadata, fmt)
+            _inventory(path, "participant_metadata", "written")
     # DATA-29: and the trial table beside it, on the same terms — its own
     # per-grain file, keyed as it was attached, so a reading's attributes stay
     # distinguishable from the per-fixation measurements of that reading.
     trial_metadata = (settings or {}).get("trial_metadata")
     if trial_metadata is None:
         trial_metadata = _session_trial_metadata()
-    trial_metadata = _selected_trial_metadata_columns(
-        trial_metadata, options.trial_metadata_fields
+    trial_metadata = _rows_in_scope(
+        _selected_trial_metadata_columns(trial_metadata, options.trial_metadata_fields),
+        pairs=exported_pairs,
+        texts=exported_texts,
+        grain="trial",
     )
     if trial_metadata is not None and not trial_metadata.empty:
         for fmt in options.table_formats():
-            progress.bytes_written += _write_table(
-                zf,
-                f"metadata/trials.{fmt}",
-                trial_metadata,
-                fmt,
-            )
+            path = f"metadata/trials.{fmt}"
+            progress.bytes_written += _write_table(zf, path, trial_metadata, fmt)
+            _inventory(path, "trial_metadata", "written")
     # And the text table, the third grain — same reasoning again.
     text_metadata = (settings or {}).get("text_metadata")
     if text_metadata is None:
         text_metadata = _session_text_metadata()
-    text_metadata = _selected_text_metadata_columns(
-        text_metadata, options.text_metadata_fields
+    text_metadata = _rows_in_scope(
+        _selected_text_metadata_columns(text_metadata, options.text_metadata_fields),
+        pairs=exported_pairs,
+        texts=exported_texts,
+        grain="text",
     )
     if text_metadata is not None and not text_metadata.empty:
         for fmt in options.table_formats():
-            progress.bytes_written += _write_table(
-                zf,
-                f"metadata/texts.{fmt}",
-                text_metadata,
-                fmt,
-            )
+            path = f"metadata/texts.{fmt}"
+            progress.bytes_written += _write_table(zf, path, text_metadata, fmt)
+            _inventory(path, "text_metadata", "written")
     # UX-179: the exported trials' annotations, in the Data → Annotations file
     # format, so the bundle's notes can be imported back into the app.
     if options.include_annotations and annotation_records:
@@ -2405,6 +2715,7 @@ def bulk_export(
                 "utf-8"
             )
             zf.writestr("annotations.json", data)
+            _inventory("annotations.json", "annotations", "written")
             progress.bytes_written += len(data)
     emit_status(
         status_callback,
@@ -2414,6 +2725,7 @@ def bulk_export(
         completed=progress.finished_trials,
         total=progress.total_trials,
     )
+    _write_inventory(zf, inventory)
     progress.files_written = len(zf.namelist())
     zf.close()
     buf.seek(0)

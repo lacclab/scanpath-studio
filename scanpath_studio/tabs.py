@@ -224,12 +224,18 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
+    HTML_SELF_CONTAINED_KEY,
     ComparisonSide,
     ExportOptions,
     annotate_figure,
+    apply_export_scope,
     bulk_export,
+    count_export_units,
+    describe_plan,
+    html_plotlyjs,
     pair_export,
     pattern_fields,
+    plan_from_counts,
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
@@ -1221,7 +1227,11 @@ def _render_save_plot_button(
     st.download_button(
         f"⬇ Download {fmt}",
         data=_figure_download_data(
-            fig, fmt, canvas_width=canvas_width, canvas_height=canvas_height
+            fig,
+            fmt,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            self_contained=_html_self_contained(),
         ),
         file_name=f"{file_stem}.{fmt.lower()}",
         mime=_MIME_FOR_FORMAT[fmt],
@@ -1237,14 +1247,45 @@ def _render_save_plot_button(
     )
 
 
+def _html_self_contained() -> bool:
+    """The Export subtab's *HTML files* choice (`_render_html_files_choice`)."""
+    return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
+
+
+def _render_html_files_choice() -> None:
+    """One choice for every HTML file the Export subtab writes — the figure,
+    the replay and the bundles: embed the Plotly library, or load it from
+    cdn.plot.ly when the file is opened. The scripted surfaces (`save_figure`,
+    `render -o figure.html`) always embed it."""
+    panel_field(
+        st,
+        "checkbox",
+        "Self-contained HTML (opens offline, larger file)",
+        display="HTML files",
+        value=False,
+        key=HTML_SELF_CONTAINED_KEY,
+        persist_state="session",
+        help="On: each HTML file carries the Plotly library, so it opens "
+        "offline and contacts no other host; it is about 4.8 MB larger. Off: "
+        "the file loads the library from cdn.plot.ly when opened, which needs "
+        "an internet connection. Applies to the figure, the replay and the "
+        "bundles' HTML.",
+    )
+
+
 def _figure_download_data(
-    fig, fmt: str, *, canvas_width: int, canvas_height: int
+    fig,
+    fmt: str,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    self_contained: bool = False,
 ) -> Callable[[], str | bytes]:
     """The zero-argument callable `st.download_button` runs on click (UX-150)."""
     if fmt == "HTML":
         return partial(
             fig.to_html,
-            include_plotlyjs="cdn",
+            include_plotlyjs=html_plotlyjs(self_contained),
             full_html=True,
             config={**PLOTLY_CONFIG},
         )
@@ -1269,7 +1310,7 @@ _ANIM_RENDER_S_PER_FRAME = 0.18
 _ANIM_RENDER_COLD_START_S = 3.0
 
 
-def _animation_html(fig) -> str:
+def _animation_html(fig, *, self_contained: bool = False) -> str:
     """The animation as a standalone HTML page, as `api.save_figure` writes it.
 
     It replays on the same wall-clock player as the live embed (BUG-93), which
@@ -1277,9 +1318,11 @@ def _animation_html(fig) -> str:
     ``auto_play`` stays off, since it ignores ``frame_duration``. The frames
     travel packed and are rebuilt in the browser (PERF-17). ``fig`` may also be a
     figure's ``to_dict()`` (a replay's cached view), serialized as is.
+    ``self_contained`` embeds the Plotly library ahead of the player's script,
+    as `api.save_figure` does, so the page replays offline.
     """
     options = dict(
-        include_plotlyjs="cdn",
+        include_plotlyjs=html_plotlyjs(self_contained),
         full_html=True,
         auto_play=False,
         config={**PLOTLY_CONFIG},
@@ -1329,16 +1372,19 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         # megabytes and about a second to serialize.
         st.download_button(
             "⬇ Download HTML",
-            data=partial(_replay_page_html, replay),
+            data=partial(
+                _replay_page_html, replay, self_contained=_html_self_contained()
+            ),
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
             on_click="ignore",
-            # ENG-64: not self-contained — a saved file has no app server to
-            # load plotly.js from, so it keeps the CDN (see docs/privacy.md).
+            # ENG-64: a saved file has no app server to load plotly.js from,
+            # so it embeds it or loads it from the CDN — the *HTML files*
+            # choice above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
-            "interactivity. It loads the Plotly library from cdn.plot.ly, so "
-            "opening it needs an internet connection.",
+            "interactivity. *HTML files* above decides whether it opens "
+            "offline or loads the Plotly library from cdn.plot.ly.",
         )
         return
 
@@ -2018,12 +2064,12 @@ def _cached_replay_view(
     )
 
 
-def _replay_page_html(replay: _ReplayView) -> str:
+def _replay_page_html(replay: _ReplayView, *, self_contained: bool = False) -> str:
     """The replay's standalone HTML page: `st.download_button` calls this on click.
 
     Written from the view's dict, so the click never builds a figure.
     """
-    return _animation_html(replay.figure_dict())
+    return _animation_html(replay.figure_dict(), self_contained=self_contained)
 
 
 _CMP_SORT_DEFAULT = "Same text, then same participant"
@@ -4902,6 +4948,7 @@ def _render_pair_export(
             include_fixations=True,
             include_measures=True,
             table_format=table_fmt,
+            html_self_contained=_html_self_contained(),
         )
         settings = _build_figure_settings(viz_settings, False)
         settings["line_spacing"] = line_spacing
@@ -4976,6 +5023,7 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
+    _render_html_files_choice()
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
     elif animate or displayed_fig is None:
@@ -7324,6 +7372,58 @@ def render_single_trial_tab(
             st.caption("Sharing is unavailable in this context.")
 
 
+#: Set by Stop on a running bundle build, read (and dropped) by the next run
+#: of the Export panel, which says the build was stopped. Internal: never on
+#: the wire, never in the recovery cache.
+_BULK_EXPORT_STOPPED = "_bulk_export_stopped"
+
+
+def _bulk_export_task_key() -> tuple:
+    """The bundle build's progress task — one per session."""
+    return ("bulk_export", loading.session_id())
+
+
+def _stop_bulk_export(task_key: tuple) -> None:
+    """Stop on a running bundle build: it ends before its next screen, and no
+    bundle is offered. Session state and annotations are left as they were."""
+    progress.cancel(task_key)
+    st.session_state[_BULK_EXPORT_STOPPED] = True
+    st.session_state.pop("_bulk_export_cache", None)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_export_unit_count(
+    _combos: pd.DataFrame,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    frame_keys: tuple,
+    scope: tuple,
+) -> tuple[int, int] | None:
+    """``(trials, screen units)`` the bundle will export, for the plan line
+    above Build export. Cached on the four frames' fingerprints
+    (``frame_keys``) and the scope choice, since it walks every trial.
+
+    ``None`` when screens contradict each other (Build export reports it) —
+    returned, not raised, so that answer is cached too rather than re-walked
+    on every rerun."""
+    scope_name, participant, trial, text = scope
+    scoped = apply_export_scope(
+        _combos,
+        ExportOptions(
+            scope=scope_name,
+            scope_participant=participant,
+            scope_trial=trial,
+            scope_text=text,
+        ),
+    )
+    try:
+        units = count_export_units(scoped, _words, _fixations, _raw_gaze)
+    except ValueError:
+        return None
+    return len(scoped), units
+
+
 def _render_bulk_export(
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -7355,6 +7455,8 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
+    # The subtab's *HTML files* choice, in `options` so it is in the cache key.
+    options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
     if options.export_unfiltered:
@@ -7369,6 +7471,12 @@ def _render_bulk_export(
             words_filtered,
             fixations_filtered,
         )
+    frame_keys = (
+        frame_fingerprint(active_combos),
+        frame_fingerprint(active_words),
+        frame_fingerprint(active_fix),
+        frame_fingerprint(active_raw_gaze),
+    )
     run_col, info_col = st.columns([1, 3])
     with run_col:
         run = st.button(
@@ -7383,6 +7491,35 @@ def _render_bulk_export(
                     or options.any_table()
                 )
             ),
+        )
+        stop_slot = st.empty()
+    task_key = _bulk_export_task_key()
+    if not run and progress.running(task_key):
+        # A build an earlier run left going — the user clicked something else
+        # mid-build. That run can no longer hand its bundle over, so stop it.
+        progress.cancel(task_key)
+    if not active_combos.empty:
+        # What Build export is about to write: a parent trial can hold many
+        # screens, and each screen one file per format (and per layer).
+        counts = _c_export_unit_count(
+            active_combos,
+            active_words,
+            active_fix,
+            active_raw_gaze,
+            frame_keys,
+            (
+                options.scope,
+                options.scope_participant,
+                options.scope_trial,
+                options.scope_text,
+            ),
+        )
+        if counts is not None:
+            info_col.caption(describe_plan(plan_from_counts(*counts, options)))
+    if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
+        info_col.warning(
+            "Export stopped — no bundle was built. Build export starts again.",
+            icon=ICONS["warning"],
         )
     # UX-179: the session's annotations, only when the bundle asks for them —
     # and in the cache key then, so a note edited after a build is not served
@@ -7401,10 +7538,7 @@ def _render_bulk_export(
 
         annotation_dataset = _dataset_display_name(annotation_owner)
     sig = (
-        frame_fingerprint(active_combos),
-        frame_fingerprint(active_words),
-        frame_fingerprint(active_fix),
-        frame_fingerprint(active_raw_gaze),
+        *frame_keys,
         int(canvas_width),
         int(canvas_height),
         int(base_font_size),
@@ -7447,39 +7581,49 @@ def _render_bulk_export(
                 else:
                     progress_bar.progress(status.fraction, text=text)
 
+        stop_slot.button(
+            "Stop",
+            key="bulk_export_stop",
+            on_click=_stop_bulk_export,
+            args=(task_key,),
+            help="Stop after the screen being written. No bundle is offered.",
+        )
         try:
-            zip_bytes, progress = bulk_export(
-                active_combos,
-                active_words,
-                active_fix,
-                # EXP-22: each trial's metadata rows, for `{table.field}`.
-                metadata_rows_for=_metadata_mod.pattern_rows,
-                annotation_records=annotation_records,
-                annotation_dataset=annotation_dataset,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                x_field=x_field,
-                y_field=y_field,
-                settings=figure_settings,
-                options=options,
-                raw_gaze=active_raw_gaze,
-                status_callback=on_status,
-            )
+            with progress.task(task_key, title="Building the export bundle"):
+                zip_bytes, built_progress = bulk_export(
+                    active_combos,
+                    active_words,
+                    active_fix,
+                    # EXP-22: each trial's metadata rows, for `{table.field}`.
+                    metadata_rows_for=_metadata_mod.pattern_rows,
+                    annotation_records=annotation_records,
+                    annotation_dataset=annotation_dataset,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    x_field=x_field,
+                    y_field=y_field,
+                    settings=figure_settings,
+                    options=options,
+                    raw_gaze=active_raw_gaze,
+                    status_callback=on_status,
+                )
         except Exception as exc:
+            stop_slot.empty()
             progress_slot.empty()
             status_box.update(label=f"Export failed: {exc}", state="error")
             st.session_state.pop("_bulk_export_cache", None)
             st.warning(f"Could not build export: {exc}")
             cache = None
         else:
+            stop_slot.empty()
             progress_slot.empty()
-            cache = {"sig": sig, "data": zip_bytes, "progress": progress}
+            cache = {"sig": sig, "data": zip_bytes, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
             # EXP-24: the status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
-            built = summarize_export(progress, len(zip_bytes))
+            built = summarize_export(built_progress, len(zip_bytes))
             status_box.update(
                 label=built.message,
                 state="error" if built.level == "error" else "complete",
@@ -7488,16 +7632,16 @@ def _render_bulk_export(
 
     if cache and cache.get("sig") == sig:
         zip_bytes = cache["data"]
-        progress = cache["progress"]
+        built_progress = cache["progress"]
         # EXP-24: what was made and what failed; a partial zip still downloads.
-        built = summarize_export(progress, len(zip_bytes))
+        built = summarize_export(built_progress, len(zip_bytes))
         getattr(info_col, built.level)(built.message, icon=ICONS[built.level])
-        if progress.errors:
+        if built_progress.errors:
             with st.expander(
-                f"Export errors ({len(progress.errors):,})",
+                f"Export errors ({len(built_progress.errors):,})",
                 expanded=built.expand_errors,
             ):
-                for err in progress.errors:
+                for err in built_progress.errors:
                     st.write(err)
         st.download_button(
             "Download zip",

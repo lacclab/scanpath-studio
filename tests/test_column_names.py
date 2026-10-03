@@ -363,3 +363,17 @@ def test_a_changed_field_is_named_by_its_new_source():
     fixations = ColumnNames.from_payload(saved["fixations"])
     assert fixations.display("x") == "CURRENT_FIX_Y"
     assert fixations.display("y") == "CURRENT_FIX_X"
+
+
+def test_compare_b_carries_a_stored_uploads_names():
+    import streamlit as st
+
+    from scanpath_studio import compare_source
+
+    st.session_state.clear()
+    st.session_state["_datasets"] = {"study": _stored_upload()}
+    b = compare_source.load_secondary_dataset("study")
+    assert b is not None
+    assert b.column_names["fixations"].display("duration_ms") == (
+        "CURRENT_FIX_DURATION"
+    )

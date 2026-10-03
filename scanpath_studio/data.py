@@ -2421,17 +2421,57 @@ def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
 
 
 def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> ReadPlan:
-    """A whole-table plan that only keeps the word-text column verbatim (BUG-53).
+    """A whole-table words plan: the word text verbatim, the ids as text.
 
     For readers that parse every column (the headless API) but still must not
-    lose a word spelled "None" or "NA". ``schema`` is the caller's own word
-    mapping; without one the text column is auto-detected from the header, the
-    way the mapping itself will be.
+    lose a word spelled "None" or "NA" (BUG-53), nor merge reader ``01`` into
+    reader ``1`` by reading the ids as numbers. ``schema`` is the caller's own
+    word mapping; without one the columns are auto-detected from the header,
+    the way the mapping itself will be.
     """
     names = list(header)
     schema = schema or propose_word_schema(pd.DataFrame(columns=names))
     text = schema.get("text")
-    return ReadPlan(verbatim=(text,) if isinstance(text, str) and text in names else ())
+    verbatim = (text,) if isinstance(text, str) and text in names else ()
+    return ReadPlan(
+        verbatim=verbatim, identity=_identity_columns_in(names, schema, verbatim)
+    )
+
+
+def identity_text_plan(
+    header: Sequence[str], schema: dict | None = None, *, kind: str = "fixations"
+) -> ReadPlan:
+    """A whole-table plan that reads only the identity columns as text.
+
+    The headless counterpart of what :func:`plan_table_read` does for the app,
+    for the tables whose word text is not at stake (fixations, raw gaze): the
+    participant / trial / text / screen columns — the caller's ``schema``'s,
+    else auto-detected from the header, composite ids expanded — are read as
+    text, so ``01`` and ``1`` stay two readers. Every column is still parsed.
+    """
+    proposers = {
+        "fixations": propose_fix_schema,
+        "raw_gaze": propose_raw_gaze_schema,
+    }
+    if kind not in proposers:
+        raise ValueError(f"kind must be one of {sorted(proposers)}, not {kind!r}")
+    names = list(header)
+    schema = schema or proposers[kind](pd.DataFrame(columns=names))
+    return ReadPlan(identity=_identity_columns_in(names, schema, ()))
+
+
+def _identity_columns_in(
+    names: Sequence[str], schema: dict, verbatim: Sequence[str]
+) -> tuple[str, ...]:
+    """The schema's identity source columns that this header carries."""
+    present = set(names)
+    return tuple(
+        column
+        for column in dict.fromkeys(
+            [*_schema_identity_columns(schema), *_IDENTITY_SOURCES]
+        )
+        if column in present and column not in verbatim and column not in _ORDINALS
+    )
 
 
 def plan_table_read(

@@ -229,6 +229,28 @@ def _as_dataframe(table: TablesLike, label: str, *, plan_for=None) -> pd.DataFra
     return _data.read_tables(items, plan_for=plan_for)
 
 
+def _metadata_id_plan(id_column, infer, *extra):
+    """``plan_for`` for a metadata table: read its id column(s) as text.
+
+    The same protection the data tables get — read as numbers, readers ``1``
+    and ``01`` become one reader before the metadata ever sees them. The id
+    column is the caller's, else the one ``infer`` would pick from the header.
+    """
+
+    def plan(header) -> _data.ReadPlan:
+        names = [str(name) for name in header]
+        # `infer_*` treats a row-less frame as "no table" — give it one row.
+        resolved = id_column or infer(
+            pd.DataFrame([[None] * len(names)], columns=names)
+        )
+        columns = [*_data.trial_mapping_columns(resolved or []), *extra]
+        return _data.ReadPlan(
+            identity=tuple(c for c in dict.fromkeys(columns) if c and c in names)
+        )
+
+    return plan
+
+
 # ---------------------------------------------------------------------------
 # Schema diagnostics
 #
@@ -621,7 +643,11 @@ def load_scanpath_data(
         words_norm = _data.empty_words_frame()
 
     if fixations is not None:
-        fixations_df = _as_dataframe(fixations, "fixations")
+        fixations_df = _as_dataframe(
+            fixations,
+            "fixations",
+            plan_for=lambda header: _data.identity_text_plan(header, fix_schema),
+        )
         explicit = fix_schema is not None
         fix_schema = fix_schema or _data.propose_fix_schema(fixations_df)
         _check_mapped_columns("fixations", fixations_df, fix_schema)
@@ -686,7 +712,11 @@ def load_participant_metadata(
     """
     from scanpath_studio import metadata as _metadata
 
-    frame = _as_dataframe(table, "participant metadata")
+    frame = _as_dataframe(
+        table,
+        "participant metadata",
+        plan_for=_metadata_id_plan(id_column, _metadata.infer_participant_id_column),
+    )
     resolved = id_column or _metadata.infer_participant_id_column(frame)
     if not resolved or resolved not in frame.columns:
         raise ValueError(
@@ -744,7 +774,13 @@ def load_trial_metadata(
     """
     from scanpath_studio import metadata as _metadata
 
-    frame = _as_dataframe(table, "trial metadata")
+    frame = _as_dataframe(
+        table,
+        "trial metadata",
+        plan_for=_metadata_id_plan(
+            id_column, _metadata.infer_trial_id_column, participant_column
+        ),
+    )
     resolved = id_column or _metadata.infer_trial_id_column(frame)
     if not resolved or resolved not in frame.columns:
         raise ValueError(
@@ -800,7 +836,11 @@ def load_text_metadata(
     """
     from scanpath_studio import metadata as _metadata
 
-    frame = _as_dataframe(table, "text metadata")
+    frame = _as_dataframe(
+        table,
+        "text metadata",
+        plan_for=_metadata_id_plan(id_column, _metadata.infer_text_id_column),
+    )
     resolved = id_column or _metadata.infer_text_id_column(frame)
     if not resolved or any(
         c not in frame.columns for c in _metadata.trial_mapping_columns(resolved)
@@ -842,7 +882,13 @@ def load_raw_gaze(
         raw_gaze = sps.load_raw_gaze("gaze_samples.csv")
         fig = sps.plot_scanpath(words, fixations, "p1", "t3", raw_gaze=raw_gaze)
     """
-    frame = _as_dataframe(table, "raw gaze")
+    frame = _as_dataframe(
+        table,
+        "raw gaze",
+        plan_for=lambda header: _data.identity_text_plan(
+            header, raw_gaze_schema, kind="raw_gaze"
+        ),
+    )
     explicit = raw_gaze_schema is not None
     schema = raw_gaze_schema or _data.propose_raw_gaze_schema(frame)
     _check_mapped_columns("raw_gaze", frame, schema)

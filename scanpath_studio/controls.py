@@ -52,6 +52,7 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_DIRECTION_CLASSES,
     SACCADE_WIDTH_BOUNDS,
+    SELF_SCALED_HEATMAP_STYLES,
     UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -443,8 +444,14 @@ def _range_slider(
     display: str | None = None,
     lead=None,
     field_host=None,
+    number_bounds: tuple | None = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
+
+    ``number_bounds`` bounds the two number boxes when it differs from the
+    slider's (``None`` on either side = unbounded); a typed value outside the
+    slider's span is then the caller's to make room for on the next run, as
+    `_render_color_range` does by widening the slider to the stored range.
 
     ``lead`` (UX-157) is a callable given a column ahead of the slider, to draw
     a control of its own there. ``field_host`` (UX-158) draws the whole line
@@ -507,11 +514,14 @@ def _range_slider(
         ),
     )
     fmt = number_format if number_format is not None else slider_format
+    num_min, num_max = (
+        number_bounds if number_bounds is not None else (min_value, max_value)
+    )
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
         col.number_input(
             f"{label} ({side})",
-            min_value=min_value,
-            max_value=max_value,
+            min_value=num_min,
+            max_value=num_max,
             step=step,
             format=_number_box_format(
                 fmt, min_value, max_value, step, st.session_state.get(num_key)
@@ -2370,8 +2380,9 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "key": "timestamp",
         "label": "Timestamp (ms)",
         "required": False,
-        "help": "Sample time (ms); orders the continuous gaze path. "
-        "Defaults to row order.",
+        "help": "Sample time (ms); orders the continuous gaze path. Left "
+        "unmapped, the samples keep their row order and are numbered "
+        "1, 2, … per trial — with no time, since no sampling rate is known.",
     },
 ]
 
@@ -3274,9 +3285,30 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
 # Field-option helpers — shared by the rail's selectors and the plot-config
 # restore path (`app._restore_plot_config`) so both agree on what's valid for
 # the current data.
+#: Numeric fixation columns 'Color fixations by' never offers on its own:
+#: identifiers and on-screen geometry, which say *which* fixation or *where* —
+#: the figure already shows both — not something about it.
+_COLOR_BY_EXCLUDED = frozenset(
+    {
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "screen_id",
+        "screen_index",
+        "fixation_id",
+        "screen_fixation_id",
+        "x",
+        "y",
+        "canvas_width",
+        "canvas_height",
+    }
+)
+
+
 def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
-    """Columns offered in the 'Color fixations by' selector — a preferred order
-    intersected with what's present, falling back to ``['duration_ms']``."""
+    """Columns offered in the 'Color fixations by' selector — the familiar fields
+    in a preferred order, then the dataset's other numeric columns, falling back
+    to ``['duration_ms']``."""
     preferred_color_fields = [
         "duration_ms",
         "pass_index",
@@ -3298,6 +3330,19 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
         "ptb_pos",
     ]
     fields = [f for f in preferred_color_fields if f in trial_fixations.columns]
+    # Then every other numeric column the dataset kept (pupil size, a detection
+    # confidence, a measure of its own), as the axis and hover pickers offer
+    # them — but no identifier, no position (the plot already *is* x/y) and no
+    # bookkeeping column (`user_columns`), and no boolean: a 0–1 colorscale over
+    # a flag reads worse than the flags' own pickers.
+    fields += [
+        col
+        for col in user_columns(trial_fixations)
+        if col not in fields
+        and col not in _COLOR_BY_EXCLUDED
+        and pd.api.types.is_numeric_dtype(trial_fixations[col])
+        and not pd.api.types.is_bool_dtype(trial_fixations[col])
+    ]
     fields = fields or ["duration_ms"]
     # `(uniform)` leads and is the default (VIZ-17): marker *size* already encodes
     # duration, so mapping duration to hue as well spends the colour channel on a
@@ -3401,20 +3446,25 @@ def _drop_stale_multi(state_key: str, options: list) -> None:
         st.session_state.pop(state_key, None)
 
 
-def _clamped_pair(val, lo: float, hi: float) -> tuple | None:
-    """Clamp a stored ``(min, max)`` into ``[lo, hi]`` and return it, or ``None``
-    for a malformed/missing value — WITHOUT touching session_state. Shared by
-    the rail's colour-range slider (``_render_color_range``, for display) and
-    ``_collect_viz_settings`` (for the figure), so a range stored on
-    differently-scaled data is clamped the same way on screen and in the Corpus
-    / Save-&-restore figures, and never rewritten (VIZ-46)."""
+def _explicit_pair(val) -> tuple | None:
+    """A stored ``(min, max)`` as an ordered pair of finite floats, or ``None``
+    for a malformed/missing value — WITHOUT touching session_state.
+
+    Shared by the rail's colour-range slider (``_render_color_range``) and
+    ``_collect_viz_settings``, so the figure and the slider read one value. It
+    is deliberately **not** clamped to the loaded data: an explicit range is
+    the user's endpoints, and narrowing the trial pool must not change the
+    mapping it pins (round-7 review, finding 10). VIZ-46 clamped it to the
+    pool's span, which re-scaled a pinned figure whenever a filter removed the
+    trial holding its extreme value."""
     if not (isinstance(val, (list, tuple)) and len(val) == 2):
         return None
     try:
         a, b = float(val[0]), float(val[1])
     except (TypeError, ValueError):
         return None
-    a, b = max(lo, min(a, hi)), max(lo, min(b, hi))
+    if not (math.isfinite(a) and math.isfinite(b)):
+        return None
     return (min(a, b), max(a, b))
 
 
@@ -3463,6 +3513,117 @@ def forget_color_range(state_key: str) -> None:
         st.query_params.pop(param, None)
 
 
+#: The reading's grain, in the order a per-word dwell groups by: one word of one
+#: screen of one reading (the screen only on multipart data).
+_WORD_DWELL_KEYS = ("participant_id", "trial_id", "screen_id", "word_id")
+
+
+def heatmap_value_bounds(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None
+) -> tuple[float, float] | None:
+    """The span of the values a duration-weighted word-box heatmap maps, in ms.
+
+    A word box is tinted by the *summed* duration of the fixations in it, so
+    its range is per-word dwell — which refixations and rereading push well
+    past the longest single fixation the rail used to bound it by (round-7
+    review, finding 11). Summed over the pool's ``word_id`` assignment, the
+    grouping Compare's shared word heatmap uses too; the static heatmap bins by
+    box containment, which can differ by a stray fixation, so these are the
+    slider's *suggested* bounds and any endpoint can still be typed.
+
+    Without a ``word_id`` the upper bound is a reading's whole dwell (no word
+    can hold more); words-only data (no fixations) maps its own
+    ``total_fixation_duration_ms``, as the figure's fallback does. ``None``
+    when there is nothing to map. One groupby over the pool, cached on its
+    fingerprint by :func:`_heatmap_value_bounds_cached`.
+    """
+    if (
+        fixations is not None
+        and not fixations.empty
+        and "duration_ms" in fixations.columns
+    ):
+        duration = pd.to_numeric(fixations["duration_ms"], errors="coerce")
+        keys = [k for k in _WORD_DWELL_KEYS if k in fixations.columns]
+        if "word_id" in keys and fixations["word_id"].notna().any():
+            frame = fixations[keys].assign(_d=duration)
+            frame = frame[frame["word_id"].notna()]
+            dwell = frame.groupby(keys, dropna=False, sort=False)["_d"].sum()
+            values = dwell[dwell > 0]
+            if not values.empty:
+                return float(values.min()), float(values.max())
+        positive = duration[duration > 0]
+        if positive.empty:
+            return None
+        reading = [k for k in _WORD_DWELL_KEYS[:3] if k in fixations.columns]
+        if reading:
+            per_reading = positive.groupby(
+                [fixations.loc[positive.index, k] for k in reading], dropna=False
+            ).sum()
+            upper = float(per_reading.max())
+        else:
+            upper = float(positive.sum())
+        return float(positive.min()), upper
+    if words is not None and "total_fixation_duration_ms" in words.columns:
+        values = pd.to_numeric(words["total_fixation_duration_ms"], errors="coerce")
+        values = values[values > 0]
+        if not values.empty:
+            return float(values.min()), float(values.max())
+    return None
+
+
+def _heatmap_bounds_for_rail(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None
+) -> tuple[float, float] | None:
+    """:func:`heatmap_value_bounds`, cached on the frames it actually reads.
+
+    The words table is read only when the fixations carry no durations (the
+    words-only fallback), so only then does it — and its fingerprint — enter
+    the cache key; otherwise a change to the words cannot change the answer.
+    """
+    from scanpath_studio.data import frame_fingerprint
+
+    words_used = (
+        fixations is None or fixations.empty or "duration_ms" not in fixations.columns
+    )
+    if not words_used:
+        words = None
+    return _heatmap_value_bounds_cached(
+        fixations,
+        words,
+        (
+            frame_fingerprint(fixations),
+            None if words is None else frame_fingerprint(words),
+        ),
+    )
+
+
+def _cheap_heatmap_bounds(fixations: pd.DataFrame | None) -> tuple[float, float] | None:
+    """Placeholder bounds for the greyed range while the heatmap is off.
+
+    The shortest and longest single fixation — one vectorised pass and no
+    groupby — or ``None`` when there is none (the range is then not drawn,
+    as before). The heatmap's own bounds (:func:`_heatmap_bounds_for_rail`)
+    replace them once it is shown.
+    """
+    if (
+        fixations is not None
+        and not fixations.empty
+        and "duration_ms" in fixations.columns
+    ):
+        duration = pd.to_numeric(fixations["duration_ms"], errors="coerce")
+        duration = duration[duration > 0]
+        if not duration.empty:
+            return float(duration.min()), float(duration.max())
+    return None
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _heatmap_value_bounds_cached(
+    _fixations: pd.DataFrame | None, _words: pd.DataFrame | None, cache_key
+) -> tuple[float, float] | None:
+    return heatmap_value_bounds(_fixations, _words)
+
+
 def _render_color_range(
     label: str,
     state_key: str,
@@ -3473,8 +3634,12 @@ def _render_color_range(
     reason: str,
     help: str | None = None,
     field_host=None,
+    slider_format: str = "%d",
 ) -> None:
     """*Auto* checkbox + the ``[lo, hi]``-bounded range slider (VIZ-46).
+
+    ``slider_format`` labels the handles, e.g. ``"%d ms"`` for a range in ms;
+    the number boxes beside it keep a bare number.
 
     ``field_host`` (UX-158) draws *Auto*, the slider and its boxes into that
     column, for a `_sub_row` whose title and caption the caller has already
@@ -3487,17 +3652,23 @@ def _render_color_range(
     dataset-wide scale the app used to default to, now one click away. An
     explicit range is sticky across trials until *Auto* is ticked again.
 
-    The stored value is clamped for display only and never rewritten, so a
-    range that arrived on a link built on other data is not eroded by a
-    narrower pool here; `_collect_viz_settings` clamps it the same way for the
-    figure.
+    ``[lo, hi]`` is the span the data suggests. An explicit range is drawn —
+    and reaches the figure — exactly as stored, never clamped to it: the
+    slider's bounds widen to hold its endpoints when no remaining observation
+    reaches them (a filter removed the trial with the extreme value, or the
+    range came on a link built on other data), and the number boxes take any
+    endpoint, beyond the observed span too (round-7 review, findings 10–11).
     """
     ss = st.session_state
     view_key = _color_range_view_key(state_key)
     auto_key = _color_range_auto_key(state_key)
-    explicit = _clamped_pair(ss.get(state_key), lo, hi)
+    explicit = _explicit_pair(ss.get(state_key))
     if explicit is None:
         ss.pop(state_key, None)  # a malformed value is not a range
+    else:
+        lo = min(lo, float(math.floor(explicit[0])))
+        hi = max(hi, float(math.ceil(explicit[1])))
+        hi = hi if hi > lo else lo + 1.0
     shown = explicit if explicit is not None else (lo, hi)
     if ss.get(view_key) != shown:
         ss[view_key] = shown
@@ -3543,12 +3714,16 @@ def _render_color_range(
         min_value=lo,
         max_value=hi,
         step=1.0,
-        slider_format="%d",
+        slider_format=slider_format,
+        number_format="%d",
         disabled=disabled,
         on_change=_commit_view,
         help=range_help,
         lead=_auto,
         field_host=field_host,
+        # Any endpoint can be typed: the slider spans the data, but a common
+        # scale often reaches past this pool's largest value.
+        number_bounds=(None, None),
     )
 
 
@@ -4509,29 +4684,15 @@ def _collect_viz_settings(
     ):
         cmin, cmax = trial_fixations[color_by].min(), trial_fixations[color_by].max()
         if pd.notna(cmin) and pd.notna(cmax):
-            # Clamp to the same [floor(min), ceil(max)] bounds the rendered slider
-            # uses, so the non-rendering reader can't leak a stale out-of-bounds
-            # range (cmax_eff mirrors the slider's `cmax if cmax > cmin else +1`).
-            lo = float(math.floor(cmin))
-            hi = float(math.ceil(cmax))
-            hi = hi if hi > lo else lo + 1.0
-            fixation_color_range = _clamped_pair(
-                ss.get("global_fixation_color_range"), lo, hi
-            )
+            # Passed through as stored, not clamped to this pool's span: a
+            # pinned scale must not move when a filter narrows the pool.
+            fixation_color_range = _explicit_pair(ss.get("global_fixation_color_range"))
 
-    # Heatmap colour range only applies for the duration-weighted heatmap.
+    # Heatmap colour range only applies for the duration-weighted heatmap —
+    # over fixations, or a words-only dataset's own dwell column.
     heatmap_range = None
-    if (
-        show_heatmap
-        and ss.get("global_heatmap_metric") == "duration_ms"
-        and "duration_ms" in trial_fixations.columns
-    ):
-        heat = trial_fixations["duration_ms"]
-        if len(heat) > 0 and pd.notna(heat.min()) and pd.notna(heat.max()):
-            lo = float(math.floor(heat.min()))
-            hi = float(math.ceil(heat.max()))
-            hi = hi if hi > lo else lo + 1.0
-            heatmap_range = _clamped_pair(ss.get("global_heatmap_color_range"), lo, hi)
+    if show_heatmap and ss.get("global_heatmap_metric") == "duration_ms":
+        heatmap_range = _explicit_pair(ss.get("global_heatmap_color_range"))
 
     # Fixation-index window (VIZ-7): a (start, end) tuple over `order_in_trial`,
     # or None for the full trial. Read straight from the slider's session key;
@@ -4542,10 +4703,16 @@ def _collect_viz_settings(
     if isinstance(_fr, (tuple, list)) and len(_fr) == 2:
         fix_index_range = (int(_fr[0]), int(_fr[1]))
 
-    # Highlight column only applies when Text is shown and a span style is active.
+    # The highlight column applies only while its style has something to draw on:
+    # **Mark text** recolours the word labels, so it needs Text; **Mark border**
+    # is its own outline layer (independent of Text and Word boxes, as in the
+    # builder), so it needs only the 📄 Stimulus master switch.
     critical_span_style = ss.get("global_critical_span_style", "Mark text")
+    span_drawable = (
+        show_labels if critical_span_style == "Mark text" else show_stimulus
+    ) and critical_span_style in ("Mark text", "Mark border")
     highlight_column = None
-    if show_labels and critical_span_style != "None" and highlight_options:
+    if span_drawable and highlight_options:
         candidate = ss.get("global_highlight_column")
         highlight_column = candidate if candidate in highlight_options else None
 
@@ -5391,15 +5558,12 @@ def render_plot_controls(
         ),
         _popover_rows("fix"),
     ):
-        # The metric that maps to fixation HUE — applies to the static
-        # figure, the single animated replay AND the comparison overlay (in
-        # compare it colours both scanpaths by the metric; the per-scanpath
-        # flat colour below becomes the A/B marker outline). The one path
-        # that ignores it is the DUAL animation (Animate + Compare), where
-        # the flat A/B colours are all that tells the readings apart.
-        metric_disabled, metric_reason = _mode_gate(
-            animating, comparing, in_animation=not comparing
-        )
+        # The metric that maps to fixation HUE — applies on every render path.
+        # In Compare and the co-animation (Animate + Compare) the chosen values
+        # — numeric, a category, or the text line — fill both scanpaths'
+        # markers on one shared scale / one shared category→colour mapping,
+        # and each scanpath's flat colour becomes its marker outline.
+        metric_disabled, metric_reason = _mode_gate(animating, comparing)
         # UX-158: colour, shape, size and opacity are one "Marker" group — a
         # title on the first row and a short caption per row, instead of a full
         # title each (VIZ-17 → UX-154 put the flat colour / colorscale beside
@@ -5412,10 +5576,14 @@ def render_plot_controls(
             f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
             "(the default) maps nothing — marker *size* already shows fixation "
             "duration, so colour is free for a second variable — and the box "
-            "beside it is the one colour every marker wears. Pick a column, or "
-            "'line' to tint each fixation by the text line it lands on (static "
-            "plot + single animation only), and that box becomes its colorscale. "
-            "In compare mode it colours both scanpaths by this metric.",
+            "beside it is the one colour every marker wears. Pick a column — the "
+            "familiar fields first, then any other numeric column your data "
+            "kept, under its own name — or "
+            "'line' to tint each fixation by the text line it lands on, and that "
+            "box becomes its colorscale (a categorical column or 'line' takes a "
+            "discrete palette instead). In Compare, animated or not, both "
+            "scanpaths share one scale or one category→colour mapping, and each "
+            "scanpath's own colour outlines its markers so A and B stay apart.",
             metric_reason,
         )
         by_disabled, by_help = _layer_gate(metric_disabled, by_help)
@@ -5541,8 +5709,11 @@ def render_plot_controls(
         # NOT override per scanpath.
         shape_help = (
             "Shape of the fixation markers. Unlike colour, shape still reads in "
-            "black & white. Applies on all three render paths, including both "
-            "compared scanpaths."
+            "black & white. Applies on every render path — the static plot, "
+            "the replay and Compare (animated or not), on both compared "
+            "scanpaths. ♥ is drawn as a text glyph; where Compare outlines a "
+            "marker in its scanpath's colour, a heart's outline is a slightly "
+            "larger heart behind it."
         )
         shape_dis, shape_help = _layer_gate(False, shape_help)
         _sub_row("Shape", caption_help=shape_help).selectbox(
@@ -6100,7 +6271,9 @@ def render_plot_controls(
             )
         style_help = (
             "**Mark text** colours the span's words; **Mark border** draws a thin "
-            "outline around the span. The box beside it is that colour."
+            "outline around the span. The box beside it is that colour. "
+            "**Mark text** needs **Text** on; **Mark border** is its own layer "
+            "and shows with the text and word boxes off — over a screenshot, say."
             + (
                 f"\n\n{ICONS['warning']} **Mark border** draws on the static plot only — the replay "
                 "and the comparison figure have no border layer, so the span shows "
@@ -6424,37 +6597,54 @@ def render_plot_controls(
             help=norm_help,
             label_visibility="collapsed",
         )
-        heat_data = (
-            trial_fixations["duration_ms"]
+        # Finding 11: bounded by what a word box maps — its summed dwell —
+        # not by the longest single fixation, which refixations exceed.
+        # The dwell groupby runs only while the heatmap is shown; switched off,
+        # the greyed range is drawn from the single-fixation span instead.
+        heat_bounds = (
+            (
+                _heatmap_bounds_for_rail(trial_fixations, words)
+                if show_heatmap
+                else _cheap_heatmap_bounds(trial_fixations)
+            )
             if heatmap_metric == "duration_ms"
-            and "duration_ms" in trial_fixations.columns
             else None
         )
-        if (
-            heat_data is not None
-            and len(heat_data) > 0
-            and pd.notna(heat_data.min())
-            and pd.notna(heat_data.max())
-        ):
-            hmin = float(math.floor(heat_data.min()))
-            hmax = float(math.ceil(heat_data.max()))
+        if heat_bounds is not None:
+            hmin = float(math.floor(heat_bounds[0]))
+            hmax = float(math.ceil(heat_bounds[1]))
             hmax_eff = hmax if hmax > hmin else hmin + 1.0
+            range_text = (
+                "Dwell time per word, in ms — the summed duration of the "
+                "fixations in a word box — mapped to the two ends of the "
+                "colorscale. The slider spans this pool's words; type any "
+                "endpoint, beyond them too. Lower the max for more contrast; "
+                "raise it to compress. Log scaling keeps these ms endpoints and "
+                "bends only the colour curve between them."
+            )
+            # Finding 12: the smoothed styles scale their density to their own
+            # peak, so a range does nothing there — greyed, and kept for Word
+            # boxes. Compare always draws word boxes, so it applies again.
+            self_scaled = not comparing and heat_style in SELF_SCALED_HEATMAP_STYLES
             # VIZ-46: auto (per trial, like the API) until a range is chosen.
             _render_color_range(
                 "Color range",
                 "global_heatmap_color_range",
                 hmin,
                 hmax_eff,
-                disabled=heat_disabled,
-                reason=heat_reason,
-                help="Min/max heatmap value mapped to the two ends of the "
-                "colorscale (for Interpolated, the smoothed density). Lower the "
-                "max for more contrast; raise it to compress.",
-                field_host=_sub_row(
-                    "Range",
-                    caption_help="The heatmap values mapped to the two ends of "
-                    "the colorscale.",
+                disabled=heat_disabled or self_scaled,
+                reason=heat_reason
+                or (
+                    f"{ICONS['warning']} **{heat_style}** scales its smoothed "
+                    "density to each figure's own peak, so a range has nothing "
+                    "to pin. Your range is kept and applies again to **Word "
+                    "boxes** and in Compare."
+                    if self_scaled
+                    else ""
                 ),
+                help=range_text,
+                slider_format="%d ms",
+                field_host=_sub_row("Range", caption_help=range_text),
             )
 
     # Raw gaze is drawn by the static and comparison builders. The toggle is on
@@ -6612,12 +6802,10 @@ def render_plot_controls(
 
         # VIZ-23: all three builders route their colour bar through
         # `_colorbar_dict`, so the styling applies wherever a colour bar is
-        # drawn. The one mode without one is the DUAL animation (Animate +
-        # Compare) — there the flat A/B colours replace metric colouring
-        # entirely, so there is no bar to style. Same gate as "Color by".
-        cb_disabled, cb_reason = _mode_gate(
-            animating, comparing, in_animation=not comparing
-        )
+        # drawn — the co-animation (Animate + Compare) included, since it
+        # colours by the metric like the comparison figure. Same gate as
+        # "Color by".
+        cb_disabled, cb_reason = _mode_gate(animating, comparing)
         show_colorbars, cb_rest = _check_row(
             "Color bar",
             key="global_show_colorbars",
@@ -6987,6 +7175,9 @@ _EMPTY_TRIAL_FILTERS: dict = {
     # apart from `metadata` because that one is membership (`.isin`) and
     # enumerating a float column's values is exactly what doesn't work.
     "ranges": {},
+    # The ranged columns whose *Keep unknown values* is off: a trial with no
+    # value there is left out instead of kept (`data.filter_trials`).
+    "ranges_drop_unknown": (),
     # DATA-20: widget keys behind a participant-grain metadata narrowing (which
     # lands in `participants`, not `metadata`), so UX-7's per-filter clear can
     # reset the control that actually caused it.
@@ -7144,7 +7335,9 @@ def clear_trial_filter(
     """
     raw_key = f"{prefix}_trial_filters_raw"
     mirror = dict(st.session_state.get(raw_key) or {})
-    for key in keys:
+    # A range's *Keep unknown values* choice is part of that filter, so it
+    # goes with it.
+    for key in (*keys, *(keep_unknown_key(k) for k in keys)):
         st.session_state.pop(key, None)
         mirror.pop(key, None)
     st.session_state[raw_key] = mirror
@@ -7229,6 +7422,12 @@ def describe_filter_keys(
     two-number tuple, or a two-number list under a range or metadata key —
     a categorical multiselect also holds a list. ``Favorites only`` has
     neither values nor range: it is on or absent.
+
+    A range also says what happens to the records with no value —
+    ``"unknown": "kept"`` or ``"excluded"``, from its *Keep unknown values*
+    choice (``values`` holds it under :func:`keep_unknown_key`). A constant
+    field has no range to slide, so its entry is only ``"unknown":
+    "excluded"``: that choice is the whole filter.
     """
     items: list[dict] = []
     for key in keys:
@@ -7238,14 +7437,22 @@ def describe_filter_keys(
             if value:
                 items.append({"field": label_for(key)})
             continue
+        unknown = "excluded" if values.get(keep_unknown_key(key)) is False else "kept"
         ranged = isinstance(value, tuple) or (
             isinstance(value, list)
             and (bare.endswith("_range") or bare.startswith(_METADATA_FILTER_STEMS))
         )
         if ranged and len(value) == 2 and all(_is_number(v) for v in value):
             items.append(
-                {"field": label_for(key), "range": [float(value[0]), float(value[1])]}
+                {
+                    "field": label_for(key),
+                    "range": [float(value[0]), float(value[1])],
+                    "unknown": unknown,
+                }
             )
+            continue
+        if value is None and unknown == "excluded":
+            items.append({"field": label_for(key), "unknown": unknown})
             continue
         if isinstance(value, (list, tuple, set)) and value:
             items.append({"field": label_for(key), "values": [str(v) for v in value]})
@@ -7267,7 +7474,8 @@ def active_filter_items(
     if not keys:
         return []
     values = dict(st.session_state.get(f"{prefix}_trial_filters_raw") or {})
-    values.update({k: st.session_state[k] for k in keys if k in st.session_state})
+    live = [*keys, *(keep_unknown_key(k) for k in keys)]
+    values.update({k: st.session_state[k] for k in live if k in st.session_state})
     names = _rail_names()
     labels = trial_filter_labels(words, fixations, names=names)
 
@@ -7289,10 +7497,18 @@ def active_filter_items(
 
 
 def format_filter_item(item: dict, *, max_values: int = 3) -> str:
-    """``Participant: p1, p2`` / ``Trial index: 3–10`` / ``Favorites only``."""
+    """``Participant: p1, p2`` / ``Trial index: 3–10`` / ``Favorites only``.
+
+    A filter that leaves out the records with no value says so:
+    ``Score: 80–100 (unknown values excluded)``.
+    """
+    excluded = item.get("unknown") == "excluded"
     if "range" in item:
         lo, hi = item["range"]
-        return f"{item['field']}: {lo:g}–{hi:g}"
+        text = f"{item['field']}: {lo:g}–{hi:g}"
+        return f"{text} (unknown values excluded)" if excluded else text
+    if excluded and not item.get("values"):
+        return f"{item['field']}: unknown values excluded"
     values = list(item.get("values") or ())
     if not values:
         return str(item["field"])
@@ -7683,6 +7899,83 @@ def _range_filter_key(col: str, prefix: str = "") -> str:
     return f"{prefix}filter_{col}_range"
 
 
+#: The stem a range filter's *Keep unknown values* key carries after
+#: ``filter_`` — see :func:`keep_unknown_key`.
+_KEEP_UNKNOWN_STEM = "keepunknown_"
+
+
+def keep_unknown_key(range_key: str) -> str:
+    """Session key of the *Keep unknown values* choice beside a range filter.
+
+    ``filter_score_range`` → ``filter_keepunknown_score_range``,
+    ``cmpfilter_meta_age`` → ``cmpfilter_keepunknown_meta_age``. Under the
+    filter layer's own ``…filter_`` prefix, so *✕ Clear all filters*, the
+    ``_trial_filters_raw`` mirror and compare-mode B's namespace treat it as
+    one more filter key without being taught about it. A plain session key:
+    trial filters travel in no share link or settings file, so it is not a
+    wire key either. ``True`` (or absent) keeps the records with no value —
+    the filter's long-standing rule; ``False`` leaves them out.
+    """
+    head, sep, rest = range_key.partition("filter_")
+    if not sep or rest.startswith(_KEEP_UNKNOWN_STEM):
+        return range_key
+    return f"{head}filter_{_KEEP_UNKNOWN_STEM}{rest}"
+
+
+def _keeps_unknown(range_key: str, prefix: str = "") -> bool:
+    """The *Keep unknown values* choice for ``range_key``, mirror as fallback."""
+    key = keep_unknown_key(range_key)
+    if key in st.session_state:
+        return st.session_state[key] is not False
+    mirror = st.session_state.get(f"{prefix}_trial_filters_raw") or {}
+    return mirror.get(key, True) is not False
+
+
+def _render_keep_unknown(
+    host, range_key: str, *, unknown: int, noun: str, prefix: str, on_change
+) -> None:
+    """The *Keep unknown values* checkbox under a range, and what it does.
+
+    Drawn only when some record has no value — with none, there is nothing to
+    keep or leave out, and the stale choice is dropped so it cannot narrow a
+    pool where it means nothing. The caption names how many records it
+    concerns, in the unit the filter keeps or drops.
+    """
+    key = keep_unknown_key(range_key)
+    if unknown <= 0:
+        st.session_state.pop(key, None)
+        return
+    if key not in st.session_state:
+        mirror = st.session_state.get(f"{prefix}_trial_filters_raw") or {}
+        st.session_state[key] = mirror.get(key, True) is not False
+    _labeled(
+        host,
+        "checkbox",
+        "Keep unknown values",
+        key=key,
+        on_change=on_change,
+        help=f"On: {noun}s with no value stay in the pool whatever the range. "
+        f"Off: only {noun}s with a value in the range are kept.",
+    )
+    plural = f"{unknown:,} {noun}{'s' if unknown != 1 else ''}"
+    one = unknown == 1
+    verb = "has" if one else "have"
+    if st.session_state[key]:
+        fate = "and stays in the pool" if one else "and stay in the pool"
+    else:
+        fate = "and is left out" if one else "and are left out"
+    host.caption(f"{plural} {verb} no value {fate}.")
+
+
+def _render_fixed_value(host, label: str, value: float, noun: str) -> None:
+    """A numeric field with one value: shown as that value, not a slider.
+
+    Streamlit refuses a slider whose ends are equal, and there is no range to
+    pick anyway.
+    """
+    host.caption(f"**{label}**: {value:g} for every {noun} that has a value.")
+
+
 def _numeric_filter_fields(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> dict[str, tuple]:
@@ -7779,6 +8072,74 @@ def text_metadata_fields():
     return attached.fields if attached is not None else ()
 
 
+def _render_metadata_range(
+    host,
+    attached,
+    field,
+    key: str,
+    *,
+    noun: str,
+    table: str,
+    unknown: int,
+    prefix: str,
+    on_change,
+) -> None:
+    """One numeric metadata field's filter, at any of the three grains.
+
+    A slider over the loaded records' values, then *Keep unknown values* when
+    some record has none. A field with one value has no range to slide —
+    Streamlit refuses a slider whose ends are equal, which stopped the whole
+    Scanpath view for a one-row trial table — so it is shown as that value,
+    and its unknowns choice is the only narrowing it offers.
+    """
+    extent = _metadata_numeric_summary(attached)[field.name][0]
+    if extent is None:
+        st.session_state.pop(keep_unknown_key(key), None)
+        return
+    low, high = extent
+    if low < high:
+        _seed_range_bounds(key, low, high, prefix=prefix)
+        host.slider(
+            field.label,
+            min_value=low,
+            max_value=high,
+            key=key,
+            on_change=on_change,
+            help=f"From your {table} table ({field.source}). Keep only {noun}s "
+            "whose value falls in this range.",
+        )
+    else:
+        _render_fixed_value(host, field.label, low, noun)
+    _render_keep_unknown(
+        host, key, unknown=unknown, noun=noun, prefix=prefix, on_change=on_change
+    )
+
+
+def _metadata_range_narrowing(attached, field, key: str, prefix: str):
+    """``(range, keep_unknown)`` one numeric metadata field narrows by, or
+    ``None`` when it does not narrow.
+
+    It narrows when its slider is off full extent, or when *Keep unknown
+    values* is off — then even the full extent (or a constant field's one
+    value) leaves out the records with no value.
+    """
+    extent = _metadata_numeric_summary(attached)[field.name][0]
+    if extent is None:
+        return None
+    keep = _keeps_unknown(key, prefix)
+    chosen = st.session_state.get(key)
+    if (
+        extent[0] < extent[1]
+        and isinstance(chosen, (tuple, list))
+        and len(chosen) == 2
+        and tuple(chosen) != extent
+    ):
+        return (float(chosen[0]), float(chosen[1])), keep
+    if not keep:
+        return extent, keep
+    return None
+
+
 def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> None:
     """One control per registered participant-grain field.
 
@@ -7796,19 +8157,16 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
     for field in attached.fields:
         key = metadata_filter_key(field.name, prefix)
         if field.is_numeric:
-            bounds = md.bounds_for(attached, field.name)
-            if bounds is None:
-                continue
-            low, high = bounds
-            _seed_range_bounds(key, low, high, prefix=prefix)
-            host.slider(
-                field.label,
-                min_value=low,
-                max_value=high,
-                key=key,
+            _render_metadata_range(
+                host,
+                attached,
+                field,
+                key,
+                noun="reader",
+                table="participant",
+                unknown=_metadata_numeric_summary(attached)[field.name][1],
+                prefix=prefix,
                 on_change=on_change,
-                help=f"From your participant table ({field.source}). Readers with "
-                "no value are kept.",
             )
             continue
         options = md.options_for(attached, field.name)
@@ -7826,13 +8184,25 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
         )
 
 
-def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
+def _render_trial_metadata_filters(
+    host,
+    *,
+    prefix: str,
+    on_change,
+    keys: Callable[[], set] | None = None,
+    pool_key: tuple | None = None,
+) -> None:
     """One control per registered trial-grain field (DATA-29).
 
     The mirror image of :func:`_render_participant_metadata_filters`, and simpler
     for the reason DATA-29 opened with: a trial attribute already *is* the grain
     the pool is keyed on, so the selection resolves straight to
     ``(participant_id, trial_id)`` keys with no reader indirection in between.
+
+    ``keys`` returns the loaded pool's ``(participant_id, trial_id)`` pairs, so
+    the *Keep unknown values* caption counts readings; without it the count is
+    of the table's own keys. ``pool_key`` identifies that pool (the frames'
+    fingerprints) for the cached count, so ``keys`` is called only on a miss.
     """
     from scanpath_studio import metadata as md
 
@@ -7843,19 +8213,18 @@ def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
     for field in attached.fields:
         key = trial_metadata_filter_key(field.name, prefix)
         if field.is_numeric:
-            bounds = md.trial_bounds_for(attached, field.name)
-            if bounds is None:
-                continue
-            low, high = bounds
-            _seed_range_bounds(key, low, high, prefix=prefix)
-            host.slider(
-                field.label,
-                min_value=low,
-                max_value=high,
-                key=key,
+            _render_metadata_range(
+                host,
+                attached,
+                field,
+                key,
+                noun="trial",
+                table="trial",
+                unknown=_metadata_numeric_summary(attached, keys, pool_key)[field.name][
+                    1
+                ],
+                prefix=prefix,
                 on_change=on_change,
-                help=f"From your trial table ({field.source}). Trials with no "
-                "value are kept.",
             )
             continue
         options = md.trial_options_for(attached, field.name)
@@ -7890,19 +8259,16 @@ def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
     for field in attached.fields:
         key = text_metadata_filter_key(field.name, prefix)
         if field.is_numeric:
-            bounds = md.text_bounds_for(attached, field.name)
-            if bounds is None:
-                continue
-            low, high = bounds
-            _seed_range_bounds(key, low, high, prefix=prefix)
-            host.slider(
-                field.label,
-                min_value=low,
-                max_value=high,
-                key=key,
+            _render_metadata_range(
+                host,
+                attached,
+                field,
+                key,
+                noun="text",
+                table="text",
+                unknown=_metadata_numeric_summary(attached)[field.name][1],
+                prefix=prefix,
                 on_change=on_change,
-                help=f"From your text table ({field.source}). Texts with no "
-                "value are kept.",
             )
             continue
         options = md.text_options_for(attached, field.name)
@@ -7933,26 +8299,25 @@ def _text_metadata_narrowing(prefix: str) -> tuple:
         return None, ()
     selections: dict[str, list] = {}
     ranges: dict[str, tuple] = {}
+    keep_unknown: dict[str, bool] = {}
     keys: list = []
     for field in attached.fields:
         key = text_metadata_filter_key(field.name, prefix)
         chosen = st.session_state.get(key)
         if field.is_numeric:
-            bounds = md.text_bounds_for(attached, field.name)
-            if (
-                bounds
-                and isinstance(chosen, (tuple, list))
-                and len(chosen) == 2
-                and tuple(chosen) != bounds
-            ):
-                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+            narrowing = _metadata_range_narrowing(attached, field, key, prefix)
+            if narrowing is not None:
+                ranges[field.name], keep_unknown[field.name] = narrowing
                 keys.append(key)
             continue
         options = md.text_options_for(attached, field.name)
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
-    return md.texts_matching(attached, selections, ranges), tuple(keys)
+    return (
+        md.texts_matching(attached, selections, ranges, keep_unknown=keep_unknown),
+        tuple(keys),
+    )
 
 
 def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
@@ -7971,19 +8336,15 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
         return None, ()
     selections: dict[str, list] = {}
     ranges: dict[str, tuple] = {}
+    keep_unknown: dict[str, bool] = {}
     widget_keys: list = []
     for field in attached.fields:
         key = trial_metadata_filter_key(field.name, prefix)
         chosen = st.session_state.get(key)
         if field.is_numeric:
-            bounds = md.trial_bounds_for(attached, field.name)
-            if (
-                bounds
-                and isinstance(chosen, (tuple, list))
-                and len(chosen) == 2
-                and tuple(chosen) != bounds
-            ):
-                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+            narrowing = _metadata_range_narrowing(attached, field, key, prefix)
+            if narrowing is not None:
+                ranges[field.name], keep_unknown[field.name] = narrowing
                 widget_keys.append(key)
             continue
         options = md.trial_options_for(attached, field.name)
@@ -7991,7 +8352,9 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
             selections[field.name] = list(chosen)
             widget_keys.append(key)
     return (
-        md.trials_matching(attached, selections, ranges, keys=keys()),
+        md.trials_matching(
+            attached, selections, ranges, keys=keys(), keep_unknown=keep_unknown
+        ),
         tuple(widget_keys),
     )
 
@@ -8029,26 +8392,27 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
         return None, ()
     selections: dict[str, list] = {}
     ranges: dict[str, tuple] = {}
+    keep_unknown: dict[str, bool] = {}
     keys: list = []
     for field in attached.fields:
         key = metadata_filter_key(field.name, prefix)
         chosen = st.session_state.get(key)
         if field.is_numeric:
-            bounds = md.bounds_for(attached, field.name)
-            if (
-                bounds
-                and isinstance(chosen, (tuple, list))
-                and len(chosen) == 2
-                and tuple(chosen) != bounds
-            ):
-                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+            narrowing = _metadata_range_narrowing(attached, field, key, prefix)
+            if narrowing is not None:
+                ranges[field.name], keep_unknown[field.name] = narrowing
                 keys.append(key)
             continue
         options = md.options_for(attached, field.name)
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
-    return md.participants_matching(attached, selections, ranges), tuple(keys)
+    return (
+        md.participants_matching(
+            attached, selections, ranges, keep_unknown=keep_unknown
+        ),
+        tuple(keys),
+    )
 
 
 def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
@@ -8069,6 +8433,54 @@ def _c_loaded_trial_keys(_words, _fixations, wkey, fkey) -> frozenset:
     return frozenset(_keys(_words)) | frozenset(_keys(_fixations))
 
 
+def _pool_fingerprint(words: pd.DataFrame, fixations: pd.DataFrame) -> tuple:
+    """The loaded pool's identity, for a cache keyed on it."""
+    from scanpath_studio.data import frame_fingerprint
+
+    return (frame_fingerprint(words), frame_fingerprint(fixations))
+
+
+def _metadata_numeric_summary(
+    attached, keys: Callable[[], set] | None = None, pool_key: tuple | None = None
+) -> dict:
+    """``{field: (extent, unknown count)}`` for an attached metadata table's
+    numeric fields — what each range filter is drawn and narrowed from.
+
+    Cached on the table's content (its frame's fingerprint and its join report)
+    and, when ``keys`` counts unknowns over the loaded pool, on ``pool_key``:
+    the filter panel draws on every rerun, and these were several Python passes
+    over the table and the pool per numeric field each time. ``keys`` without a
+    ``pool_key`` is called every time, and the pool it returns is the key.
+    """
+    from scanpath_studio.data import frame_fingerprint
+
+    names = tuple(f.name for f in attached.fields if f.is_numeric)
+    table_key = (
+        type(attached).__name__,
+        frame_fingerprint(attached.frame),
+        hash(attached.report),
+        names,
+    )
+    if keys is not None and pool_key is None:
+        loaded = frozenset(keys())
+        keys, pool_key = (lambda: loaded), loaded
+    return _c_metadata_numeric_summary(attached, table_key, keys, pool_key)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_metadata_numeric_summary(_attached, table_key, _keys, pool_key) -> dict:
+    from scanpath_studio import metadata as md
+
+    loaded = _keys() if _keys is not None else None
+    return {
+        name: (
+            md.numeric_extent(_attached, name),
+            md.unknown_count(_attached, name, loaded),
+        )
+        for name in table_key[-1]
+    }
+
+
 def _compute_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
 ) -> dict:
@@ -8085,6 +8497,8 @@ def _compute_trial_filters(
         "participants": None,
         "metadata": {},
         "ranges": {},
+        # Ranged columns whose *Keep unknown values* is off.
+        "ranges_drop_unknown": (),
         # column -> the session key holding it, so "clear just this filter"
         # (UX-7) can reset one widget. Not derivable from the column name: the
         # Narrow-by Text multiselect lands in `metadata` under the *text column*
@@ -8180,17 +8594,25 @@ def _compute_trial_filters(
             result["text_filter_keys"] = text_meta_keys
     # UX-49: numeric trial-level columns narrow by range, not by membership. A
     # slider still at full extent is "no filter" and contributes nothing.
+    # With *Keep unknown values* off, even the full extent narrows: it leaves
+    # out the trials with no value.
     numeric_fields = _numeric_filter_fields(words, fixations)
+    drop_unknown: list = []
     for col, (_frame, lo, hi) in numeric_fields.items():
         key = _range_filter_key(col, prefix)
         chosen = st.session_state.get(key)
-        if not (isinstance(chosen, (tuple, list)) and len(chosen) == 2):
-            continue
-        sel_lo, sel_hi = float(chosen[0]), float(chosen[1])
-        if sel_lo <= lo and sel_hi >= hi:
+        keep = _keeps_unknown(key, prefix)
+        if isinstance(chosen, (tuple, list)) and len(chosen) == 2:
+            sel_lo, sel_hi = float(chosen[0]), float(chosen[1])
+        else:
+            sel_lo, sel_hi = float(lo), float(hi)
+        if sel_lo <= lo and sel_hi >= hi and keep:
             continue
         result["ranges"][col] = (sel_lo, sel_hi)
         result["metadata_keys"][col] = key
+        if not keep:
+            drop_unknown.append(col)
+    result["ranges_drop_unknown"] = tuple(drop_unknown)
     for col in _filter_fields_for(words, fixations):
         if col in numeric_fields:
             continue
@@ -8369,18 +8791,20 @@ def render_trial_filters(
             max_value=hi,
             key=_range_filter_key(col, prefix),
             on_change=_apply,
-            help="Keep only trials whose value falls in this range. Trials with "
-            "no value are kept.",
+            help="Keep only trials whose value falls in this range.",
         )
-        missing = _trials_missing_column(
-            frame, col, cache_key=(frame_fingerprint(frame), col)
+        # Say how many trials have no value and what happens to them, or the
+        # kept-anyway trials look like the range isn't working.
+        _render_keep_unknown(
+            host,
+            _range_filter_key(col, prefix),
+            unknown=_trials_missing_column(
+                frame, col, cache_key=(frame_fingerprint(frame), col)
+            ),
+            noun="trial",
+            prefix=prefix,
+            on_change=_apply,
         )
-        if missing:
-            # Say it, or the kept-anyway trials look like the range isn't working.
-            host.caption(
-                f"{missing} trial{'s' if missing != 1 else ''} have no "
-                f"**{label}** value and are kept regardless."
-            )
     for col in _filter_fields_for(words, fixations):
         if col in numeric_fields:
             continue
@@ -8418,7 +8842,13 @@ def render_trial_filters(
                 )
 
     _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)
-    _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
+    _render_trial_metadata_filters(
+        host,
+        prefix=prefix,
+        on_change=_apply,
+        keys=lambda: _loaded_trial_keys(words, fixations),
+        pool_key=_pool_fingerprint(words, fixations),
+    )
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
     # The annotation filters are trial level: they read the trial's own star
@@ -8508,6 +8938,9 @@ def render_trial_filters(
         # And the text table, the third grain — same reasoning again.
         + [text_metadata_filter_key(f.name, prefix) for f in text_metadata_fields()]
     )
+    # Each range's *Keep unknown values* choice, for the same reason as the
+    # range itself.
+    keys += [keep_unknown_key(k) for k in keys]
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }

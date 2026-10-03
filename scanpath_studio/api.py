@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -702,6 +703,7 @@ def load_scanpath_data(
     trial_parts_manifest: dict | None = None,
     image_root: str | Path | None = None,
     image_pattern: str = "{text_id}.png",
+    keep_columns: Iterable[str] | None = None,
     names: str = NAMES_SOURCE,
 ) -> ScanpathData:
     """Load and normalize a words/IA table and/or a fixations table.
@@ -741,6 +743,13 @@ def load_scanpath_data(
     word-box centers. Columns named in ``data.INTERNAL_COLUMNS`` are the
     pipeline's bookkeeping (``data.drop_internal_columns`` removes them).
 
+    Normalization keeps the mapped fields and the recognised optional ones
+    (eye, EyeLink's interest-area measures, linguistic features …) and drops the
+    rest. ``keep_columns`` names further columns of your own to carry through
+    under their own names — a pupil size, a detection confidence — from
+    whichever table has them, so a figure can colour, hover or plot by them
+    (the app's *Keep columns*; ``render --keep-columns`` on the command line).
+
     Returns the normalized ``(words, fixations)`` frames the plotting
     functions expect. Raises ``ValueError`` if a required field can't be found —
     the message names the canonical field, the column names auto-detection
@@ -773,7 +782,13 @@ def load_scanpath_data(
         problems = _data.validate_word_schema(word_schema)
         if problems:
             raise _schema_error("words", words_df, word_schema, problems, explicit)
-        words_norm = _data.normalize_words(words_df, word_schema)
+        words_norm = _data.normalize_words(
+            words_df,
+            word_schema,
+            keep_columns=_with_optional_fields(
+                keep_columns, _data.WORD_OPTIONAL_FIELDS
+            ),
+        )
         if trial_parts_manifest is not None:
             words_norm = apply_trial_parts_manifest(
                 words_norm, words_df, trial_parts_manifest, kind="words"
@@ -795,7 +810,11 @@ def load_scanpath_data(
             raise _schema_error(
                 "fixations", fixations_df, fix_schema, problems, explicit
             )
-        fixations_norm = _data.normalize_fixations(fixations_df, fix_schema)
+        fixations_norm = _data.normalize_fixations(
+            fixations_df,
+            fix_schema,
+            keep_columns=_with_optional_fields(keep_columns, _data.FIX_OPTIONAL_FIELDS),
+        )
         if trial_parts_manifest is not None:
             fixations_norm = apply_trial_parts_manifest(
                 fixations_norm,
@@ -838,6 +857,19 @@ def load_scanpath_data(
         words_norm = _cn.attach(words_norm, "words", maps.get("words"))
         fixations_norm = _cn.attach(fixations_norm, "fixations", maps.get("fixations"))
     return ScanpathData(words_norm, fixations_norm, maps)
+
+
+def _with_optional_fields(
+    keep_columns: Iterable[str] | None, registry: list
+) -> set | None:
+    """``keep_columns`` as the normalizers take it: ``None`` (every recognised
+    optional field, nothing else) when none are named, else those names *plus*
+    every optional field — a non-``None`` set would otherwise limit them."""
+    if not keep_columns:
+        return None
+    if isinstance(keep_columns, str):
+        keep_columns = [keep_columns]
+    return {str(c) for c in keep_columns} | {entry[0] for entry in registry}
 
 
 def load_participant_metadata(
@@ -1084,6 +1116,72 @@ def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     OneStop ships no sample-level gaze, so this is **synthesized** from one of
     the demo's real trials and covers that trial alone."""
     return load_raw_gaze(_data.load_sample_raw_gaze(), names=names)
+
+
+def check_data_health(
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
+
+    Checks the normalized tables (from
+    [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data] /
+    [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) for fixations lasting
+    0 ms or less, fixations and raw-gaze samples whose position is missing or
+    infinite, and word boxes with no area. One row per check that found
+    anything: ``table``, ``check``, ``problem``, the ``columns`` it read (in the
+    names the frames carry),
+    ``rows`` of ``of_rows``, the ``trials`` they fall in, a ``breakdown`` by
+    kind, ``severity`` (``"note"`` for raw-gaze gaps, which blinks and track
+    loss make ordinary), ``what_happens`` to those rows in the app, and a few
+    ``examples``. An empty frame means every check passed. Nothing is changed
+    or dropped::
+
+        words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+        print(sps.check_data_health(words, fixations))
+    """
+    from .data_health import findings_frame
+
+    return findings_frame(_health_findings(words, fixations, raw_gaze))
+
+
+def _health_findings(words, fixations, raw_gaze) -> list:
+    """`data_health.check_data_health` on frames in either naming, its findings
+    naming the columns as the frames did (DATA-66). The CLI's ``check`` prints
+    these; :func:`check_data_health` tabulates them."""
+    from dataclasses import replace
+
+    from .data_health import check_data_health as _check
+
+    named = {}
+    for table, frame in (
+        ("words", words),
+        ("fixations", fixations),
+        ("raw_gaze", raw_gaze),
+    ):
+        found = _cn.frame_names(frame) if frame is not None else None
+        named[table] = (
+            _cn.to_canonical_frame(frame) if frame is not None else None,
+            found[1] if found else None,
+        )
+    findings = _check(*(frame for frame, _names in named.values()))
+
+    def _in_own_names(finding):
+        # DATA-66: name the columns and example fields as the frames did.
+        names = named[finding.table][1]
+        if names is None:
+            return finding
+        return replace(
+            finding,
+            columns=tuple(names.display(c) for c in finding.columns),
+            examples=tuple(
+                {names.display(k): v for k, v in row.items()}
+                for row in finding.examples
+            ),
+        )
+
+    return [_in_own_names(f) for f in findings]
 
 
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
@@ -3365,7 +3463,9 @@ def cache_status() -> dict:
     reports that store without launching the app: ``enabled``, ``directory``,
     ``datasets`` (name + per-frame row counts), ``rows``, ``annotations``,
     ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
-    missing or unreadable manifest. Delete it with
+    missing or unreadable manifest, and ``damaged`` (name + reason) for a stored
+    dataset whose entry or files are broken — the app restores the others and
+    keeps that one in the cache rather than dropping it. Delete it with
     [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the
     app's 🗂️ Data Management → *Saved on this computer* section and in
     ``scanpath-studio cache``."""

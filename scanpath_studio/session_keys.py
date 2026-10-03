@@ -376,6 +376,9 @@ FIX_RANGE_PARAM = "fix_range"
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
 PENDING_COMPARE_STATE_KEY = "_pending_compare"
+#: B's own screen navigator, seeded by `cmp_screen=` and by a settings file's
+#: `selection.compare.screen_id` (schema 6).
+SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
 
 # ---------------------------------------------------------------------------
 # Frozen groupings — `url_key -> session_state key`, one mapping per encoding.
@@ -789,7 +792,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 5
+PLOT_CONFIG_SCHEMA_VERSION = 6
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -949,6 +952,14 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         SINGLE_PLAYBACK_SPEED,
         # CMP-24 — B's filters, from the config's second `compare` entry.
         *COMPARE_B_FILTER_STATE_KEYS,
+        # Schema 6 — the figure mode, and scanpath B by identity: its dataset,
+        # its screen, and the one-shot request B's picker resolves (the same
+        # handoff a `?compare=` link uses).
+        SINGLE_ANIMATE,
+        SINGLE_COMPARE_TOGGLE,
+        COMPARE_SOURCE_STATE_KEY,
+        PENDING_COMPARE_STATE_KEY,
+        SINGLE_COMPARE_SCREEN_ID,
     }
 )
 

@@ -402,6 +402,8 @@ class TestTrialFilterFlow:
             "participants": None,
             "metadata": {},
             "ranges": {},  # UX-49's continuous filters, likewise unconstrained
+            # …and none of them leaves out the trials with no value.
+            "ranges_drop_unknown": (),
             "metadata_keys": {},
             # DATA-20: the widget keys behind a participant-grain metadata
             # narrowing. Empty here — nothing was attached — and it must reset
@@ -1053,6 +1055,70 @@ class TestAuthoringEditorFlow:
             "an undrawable row was dropped without saying so"
         )
         assert "Row 2" in warnings
+
+    def _linked(self, events: str) -> AppTest:
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params["source"] = "author"
+        at.query_params["author_text"] = "alpha beta"
+        at.query_params["author_events"] = events
+        return at.run(timeout=60)
+
+    def test_a_malformed_authored_link_warns_and_keeps_the_text(self):
+        """A mixed event list used to raise from `pd.DataFrame` before the app
+        drew its navigation — now it is ignored with the existing warning."""
+        at = self._linked('[{"x":100},1]')
+        _clean(at, "with a malformed authored link:")
+        assert any("malformed authored-fixation" in str(w.value) for w in at.warning)
+        assert at.session_state["author_text"] == "alpha beta"
+
+    def test_valid_authored_link_events_survive_the_first_render(self):
+        at = self._linked('[{"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}]')
+        _clean(at, "with a valid authored link:")
+        events = at.session_state["_authored_events_frame"]
+        assert events[["word_id", "x", "y", "duration_ms"]].to_dict("records") == [
+            {"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}
+        ]
+
+
+@pytest.mark.timeout(180)
+def test_co_animating_two_readings_of_one_text_renders():
+    """Animate + Compare on two readings in one coordinate space reaches the
+    same-text check, which called a two-argument helper with one argument —
+    a second `_trial_text_id` had shadowed the first — and stopped the view."""
+    from scanpath_studio.session_keys import (
+        PENDING_COMPARE_STATE_KEY,
+        SINGLE_ANIMATE,
+        SINGLE_COMPARE_TOGGLE,
+    )
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = make_multipart_synthetic_data()
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {
+        "Two readers": {
+            "words": pd.concat(
+                [words, words.assign(participant_id="reader2")], ignore_index=True
+            ),
+            "fixations": pd.concat(
+                [fixations, fixations.assign(participant_id="reader2")],
+                ignore_index=True,
+            ),
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Two readers"
+    at.run()
+    _clean(at, "on boot:")
+    at.session_state[SINGLE_ANIMATE] = True
+    at.session_state[SINGLE_COMPARE_TOGGLE] = True
+    at.session_state[PENDING_COMPARE_STATE_KEY] = {
+        "participant_id": "synthetic",
+        "trial_id": "multipart_demo",
+    }
+    at.run()
+    _clean(at, "co-animating two readings of one text:")
 
 
 @pytest.mark.timeout(180)

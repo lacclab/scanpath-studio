@@ -1,0 +1,1 @@
+The heatmap colour range is greyed for the Interpolated and Duration mass styles, which scale their density to their own peak, and the code snippet no longer passes it for them; the stored range still applies to Word boxes and Compare.

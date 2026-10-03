@@ -56,7 +56,8 @@ provider. Sessions are temporary and server resources are limited.
   with **:material/draw: Author a scanpath**, whose link carries the typed text and every
   hand-placed fixation, because they *are* its data.
 - A **settings file** (:material/share: Share → File) contains the figure's settings and the
-  selected participant and trial IDs.
+  selected participant and trial IDs — for a comparison, the second reading's
+  participant and trial IDs and its dataset's name too.
 - An **annotations file** (:material/database: Data → Annotations, or `annotations.json` in an
   Export bundle) contains your notes, which may mention participants.
 - A **setup file** (:material/edit: Edit dataset → Save setup) contains the

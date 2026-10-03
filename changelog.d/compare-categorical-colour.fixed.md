@@ -1,0 +1,1 @@
+Compare (overlay, side by side, stacked, and animated) now colours fixations by a categorical column or by text line on one shared palette, with each reading's own colour kept as its marker outline and a legend entry per category; the co-animation colours by a numeric column too.

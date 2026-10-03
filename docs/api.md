@@ -69,6 +69,8 @@ print(measures[columns].head(3))
 
 ::: scanpath_studio.api.list_parts
 
+::: scanpath_studio.api.check_data_health
+
 ::: scanpath_studio.api.compute_word_metrics
 
 ::: scanpath_studio.api.preprocess_data

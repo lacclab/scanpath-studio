@@ -48,7 +48,9 @@ The **Share** subtab passes a view on in three ways:
   It never contains your uploaded data: the recipient must load the same
   dataset. (A scanpath created by hand is the exception; its link carries it.)
 - **Code** — Python or a CLI command that reproduces the figure.
-- **File** — the figure's settings as a file, to restore later.
+- **File** — the figure's settings as a file, to restore later: its mode
+  (static, animated or a comparison) and, for a comparison, which reading it
+  was compared with and on which screen.
 
 <figure class="sps-screenshot" markdown>
 ![The Share subtab: the Link · Code · File switch, on Link](../assets/screenshots/share.webp)

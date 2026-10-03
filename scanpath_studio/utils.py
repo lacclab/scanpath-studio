@@ -1708,9 +1708,12 @@ def align_compare_columns(
     matters here because two corpora rarely ship the same measure set. Aligning
     first keeps the concat quiet and the dtypes stable.
 
-    The third element is the intersection of *numeric* columns — the metrics a
-    cross-dataset figure may legitimately colour by (CMP-8 §5.4). A metric present
-    in only one corpus would colour one panel and blank the other.
+    The third element is the columns both frames carry *as the same kind* —
+    numeric in both, or categorical in both: what a cross-dataset figure may
+    legitimately colour by (CMP-8 §5.4; categorical since Compare colours by a
+    category too). A column present in only one corpus would colour one panel
+    and blank the other, and one numeric on one side only would be a scale on
+    one panel and a palette on the other.
     """
     union = list(dict.fromkeys([*a.columns, *b.columns]))
     a_aligned = a.reindex(columns=union) if list(a.columns) != union else a
@@ -1719,6 +1722,6 @@ def align_compare_columns(
         col
         for col in set(a.columns) & set(b.columns)
         if pd.api.types.is_numeric_dtype(a[col])
-        and pd.api.types.is_numeric_dtype(b[col])
+        == pd.api.types.is_numeric_dtype(b[col])
     )
     return a_aligned, b_aligned, shared

@@ -78,6 +78,14 @@ goes back to it. Nothing applies until you click **Save changes**;
 **Cancel** discards all of it. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 
+Above the open dataset's tables, **Data checks** looks for values that loaded
+as numbers but cannot be right: fixations lasting 0 ms or less, fixations or
+raw-gaze samples whose position is missing or infinite, and word boxes with no
+width or height. Each finding gives the rows and trials affected, the columns
+they came from, a few example rows, and what the app does with them. Nothing
+is removed: the rows stay in every table and export. `check_data_health` runs
+the same checks from Python, and `scanpath-studio check` from the terminal.
+
 Columns are named as they are in your files: in the tables, the plot
 controls, the trial chips, filters and sort, Corpus Analysis, the figure's
 hover and colour bar, and the setup screens, a column you uploaded as

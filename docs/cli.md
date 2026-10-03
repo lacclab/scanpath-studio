@@ -188,7 +188,7 @@ B's frames directly.
 | hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
-| color fixations | `--color-by FIELD` |
+| color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
@@ -266,6 +266,27 @@ from docs_support import cli_reference
 print(cli_reference("corpus"))
 ```
 
+## Data checks
+
+`check` runs the **:material/database: Data** page's **Data checks** on your
+tables without opening the app: fixations lasting 0 ms or less, fixations and
+raw-gaze samples with no finite position, and word boxes with no area. Each
+finding gives the rows and trials affected, a few example rows, and what the
+app does with them. It changes nothing, and it exits 0 whatever it finds;
+`--json` prints the table
+[`api.check_data_health`](api.md#scanpath_studio.api.check_data_health) returns.
+
+```bash
+scanpath-studio check --words ia.csv --fixations fixations.csv
+scanpath-studio check --raw-gaze gaze_samples.csv --json
+```
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("check"))
+```
+
 ## Many trials
 
 The `render` command renders one trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
@@ -321,4 +342,4 @@ print(cli_help())
     print(cli_reference("cache"))
     ```
 
-`analyze` and `corpus` are listed in full in their own sections above.
+`analyze`, `corpus` and `check` are listed in full in their own sections above.

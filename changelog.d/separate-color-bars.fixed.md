@@ -1,0 +1,1 @@
+With a heatmap and numeric fixation colouring both showing a colour bar, the bars now stand side by side (vertical) or stack below the plot (horizontal), in the static figure and every Compare layout, instead of drawing over each other.

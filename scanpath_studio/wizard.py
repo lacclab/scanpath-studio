@@ -960,6 +960,30 @@ def _next_available_names(existing: set, base: str, count: int) -> list:
     return names
 
 
+#: The last derivation each Apply line made, per table: what it was made from
+#: and the frame it gave. A derivation is a pure function of its input frame and
+#: its settings, and the add screen reruns on every click — so without this a
+#: multi-million-row raw-gaze table was split (or regex-matched) again on each
+#: one. One slot per (table, line), replaced when its input or settings change.
+_FILENAME_DERIVE_MEMO_KEY = "_wizard_filename_derive_memo"
+
+
+def _memo_derive(slot: tuple, key: tuple, compute):
+    """``compute()``'s result for ``key``, reused while ``key`` is unchanged.
+
+    ``key`` holds the input frame's fingerprint (`data.frame_fingerprint`, an
+    assigned ID for an uploaded table, so looking it up hashes nothing) and the
+    settings, so new data or a new pattern always derives afresh.
+    """
+    memo = st.session_state.setdefault(_FILENAME_DERIVE_MEMO_KEY, {})
+    hit = memo.get(slot)
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    result = compute()
+    memo[slot] = (key, result)
+    return result
+
+
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     """Optional step: derive columns from an uploaded column's own text — the
     captured ``source_file`` by default, or any other column — so identity
@@ -1174,7 +1198,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     # than reusing (and silently overwriting) the first split's own columns.
     existing_by_table = {label: set(fr.columns) for label, fr in frames.items()}
 
-    for config in applied_configs:
+    for line, config in enumerate(applied_configs):
         # Older sessions' applied state predates the column picker (UX-113) —
         # `source_file` was the only option then, so that's the correct
         # fallback.
@@ -1197,26 +1221,45 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         existing = existing_by_table.setdefault(target_table, set())
         parent = target
 
+        slot = (target_table, line)
         if config["mode"] == "Split on a delimiter":
-            split = split_source_file(
-                target, delimiter=config["delimiter"], column=applied_column
+
+            def _split(
+                parent=parent,
+                existing=frozenset(existing),
+                delimiter=config["delimiter"],
+                column=applied_column,
+            ):
+                split = split_source_file(parent, delimiter=delimiter, column=column)
+                # UX-129: `split_source_file` always names positionally
+                # (`file_part_N`) — rename to `<source column>_<n>` here, using
+                # the next names not already claimed in this table, rather than
+                # letting a second split of the same (or another) column
+                # collide with the first's `file_part_1`/`_2`/….
+                temp_cols = [c for c in split.columns if c not in parent.columns]
+                new_names = _next_available_names(set(existing), column, len(temp_cols))
+                derived = split.rename(columns=dict(zip(temp_cols, new_names)))
+                # BUG-103: named by what made it, so it is not re-hashed each rerun.
+                assign_derived(
+                    derived,
+                    "split_source_file",
+                    parent,
+                    (delimiter, column, tuple(new_names)),
+                )
+                return derived, new_names
+
+            target, new_cols = _memo_derive(
+                slot,
+                (
+                    "split",
+                    frame_fingerprint(parent),
+                    config["delimiter"],
+                    applied_column,
+                    tuple(sorted(existing)),
+                ),
+                _split,
             )
-            # UX-129: `split_source_file` always names positionally
-            # (`file_part_N`) — rename to `<source column>_<n>` here, using
-            # the next names not already claimed in this table, rather than
-            # letting a second split of the same (or another) column collide
-            # with the first's `file_part_1`/`_2`/….
-            temp_cols = [c for c in split.columns if c not in target.columns]
-            new_names = _next_available_names(existing, applied_column, len(temp_cols))
-            target = split.rename(columns=dict(zip(temp_cols, new_names)))
-            new_cols = new_names
-            # BUG-103: named by what made it, so it is not re-hashed each rerun.
-            assign_derived(
-                target,
-                "split_source_file",
-                parent,
-                (config["delimiter"], applied_column, tuple(new_names)),
-            )
+            existing.update(new_cols)
         else:
             applied_pattern = config.get("pattern")
             if not applied_pattern:
@@ -1233,17 +1276,34 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                     f"untouched: {', '.join(sorted(collisions))}. Rename the "
                     "group(s) and Apply again to extract them."
                 )
-            target = extract_columns_from_source_file(
-                target,
-                applied_pattern,
+
+            def _extract(
+                parent=parent,
+                pattern=applied_pattern,
                 column=applied_column,
-                lowercase=config["lower"],
-            )
-            assign_derived(
-                target,
-                "extract_columns_from_source_file",
-                parent,
-                (applied_pattern, applied_column, bool(config["lower"])),
+                lower=bool(config["lower"]),
+            ):
+                derived = extract_columns_from_source_file(
+                    parent, pattern, column=column, lowercase=lower
+                )
+                assign_derived(
+                    derived,
+                    "extract_columns_from_source_file",
+                    parent,
+                    (pattern, column, lower),
+                )
+                return derived
+
+            target = _memo_derive(
+                slot,
+                (
+                    "regex",
+                    frame_fingerprint(parent),
+                    applied_pattern,
+                    applied_column,
+                    bool(config["lower"]),
+                ),
+                _extract,
             )
             new_cols = [
                 c for c in re.compile(applied_pattern).groupindex if c in target.columns

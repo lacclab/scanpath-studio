@@ -4394,6 +4394,65 @@ class TestGenericFilenamePowers:
         # Made from the file name, so a script reading the file has to be told.
         assert entry["source_recipe"]["derived"] == ["item", "reader"]
 
+    def test_a_filename_derivation_is_made_once_not_on_every_rerun(self, monkeypatch):
+        """The add screen reruns on every click; deriving columns from a
+        multi-million-row raw-gaze table again each time is what made it slow.
+        The derived table is reused until the table or the settings change."""
+        import pandas as pd
+
+        from scanpath_studio import app, wizard
+
+        gaze = pd.DataFrame(
+            {
+                "gx": [100.0, 110.0, 120.0],
+                "gy": [50.0, 50.0, 51.0],
+                "time": [0, 2, 4],
+                "source_file": ["p1_t1_gaze"] * 3,
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                gaze if kw["state_prefix"] == "col_map_raw_gaze" else pd.DataFrame()
+            ),
+        )
+        calls = []
+        real = wizard.extract_columns_from_source_file
+
+        def counting(*args, **kwargs):
+            calls.append(kwargs.get("column"))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(wizard, "extract_columns_from_source_file", counting)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.session_state["wizard_filename_split"] = True
+        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_regex"] = (
+            r"(?P<reader>p\d+)_(?P<item>t\d+)_gaze"
+        )
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_filename_apply").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert len(calls) == 1
+        at.run(timeout=60)
+        at.run(timeout=60)
+        assert len(calls) == 1, "a rerun derived the columns again"
+        trial = next(m for m in at.multiselect if m.key == "col_map_raw_gaze_trial")
+        assert "item" in trial.options
+        # New settings derive afresh.
+        at.session_state["wizard_filename_regex"] = r"(?P<reader>p\d+)_.*"
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_filename_apply").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert len(calls) == 2
+
     def test_aggregate_toggle_finalizes_word_boxes(self, monkeypatch):
         # End-to-end: a char-level words upload + the aggregate toggle → the
         # stored dataset holds one box per word (4 char rows → 2 word boxes).

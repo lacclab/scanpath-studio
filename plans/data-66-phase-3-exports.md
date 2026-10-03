@@ -17,6 +17,14 @@
 - **Corpus Analysis tidy CSVs** go through `as_written` with the across-tables map, matching their on-screen headers.
 - **Bulk-export cache:** its signature includes the maps, so a rename rebuilds the bundle.
 
+## After the parity review
+
+- **Derived artifacts carry only their ids under the file's names** (`ColumnNames.identity`). A saccade table's `duration_ms`, a summary's `n_fixations` and a character grid's `x` are their own values, not the file's columns of the same canonical name.
+- **Rewritten values are not the file's.** `data.harmonize_frames_reporting` returns the `data.Rewrite`s a load made: zero-padded ids, a BUG-8 word-id shift, positions filled from word boxes, and `_rN` repeat ids. `ColumnNames.with_rewrites` marks those columns converted, so they read "CURRENT_FIX_INTEREST_AREA_ID − 1" on screen and keep their internal names in an export. Applied at all four places a map is built: the app's stash, the add wizard, ✏️ Edit dataset → Save, and a built-in Compare B.
+- **`columns.json` and the README describe the files as written.** `written_columns` runs on each table's whole frame, the same frame whose alias decision every per-trial file then follows.
+- **An alias is dropped only when its values equal its partner's** (`redundant_aliases`). A `unique_text_id` the file itself has is the user's own column.
+- A dataset with no map exports exactly as a headless caller does.
+
 ## Not in phase 3
 
 - `analyze` and every headless caller: they have no map until the API's loaders return one (phase 4). Without a map, every exporter writes the internal names exactly as before.

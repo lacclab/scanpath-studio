@@ -2699,6 +2699,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
                 schemas,
                 {"words": words_raw, "fixations": fix_raw},
                 {"words": keep_words, "fixations": keep_fix},
+                rewrites=st.session_state.get(app.HARMONIZE_REWRITES_KEY),
             ),
             "dropped_columns": {
                 "words": dropped_columns(words_raw, keep=keep_words)
@@ -4135,6 +4136,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     "raw_gaze": raw_gaze if not raw_gaze_norm.empty else None,
                 },
                 {"words": keep_words, "fixations": keep_fix},
+                # And the columns whose values the load changed.
+                rewrites=st.session_state.get(app.HARMONIZE_REWRITES_KEY),
             ),
         }
         for table, names in st.session_state["_wizard_finalize_payload"][

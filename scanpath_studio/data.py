@@ -3994,7 +3994,7 @@ def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
 
 
 def correct_word_id_offset(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame, fixations: pd.DataFrame, *, offset: int | None = None
 ) -> pd.DataFrame:
     """Shift fixation ``word_id`` back onto the words table when it's 1-based.
 
@@ -4006,8 +4006,12 @@ def correct_word_id_offset(
     landing view, and a WARNING was the first line `render --sample`,
     `load_sample_data()` and the README quickstart printed to a new user's
     terminal — about a correction that needs nothing from them.
+
+    ``offset`` is :func:`detect_word_id_offset`'s answer when the caller
+    already asked it (DATA-66's harmonize report).
     """
-    offset = detect_word_id_offset(words, fixations)
+    if offset is None:
+        offset = detect_word_id_offset(words, fixations)
     if not offset:
         return fixations
     fixations = fixations.copy()
@@ -4043,14 +4047,17 @@ def _pad_ids(frame: pd.DataFrame, column: str, mapping: dict) -> pd.DataFrame:
 
 
 def _restore_zero_padding(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    padded: list[tuple[str, str]] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Spell a zero-padded id the same way in both frames (BUG-59).
 
     A CSV read ``007`` as 7 while a Parquet table kept "007", and the two
     tables then shared no participant — every fixation drew over no text. When
     padding is the only difference (:func:`zero_padding_map`), the side that
-    lost its zeros is given them back, and the rename is logged.
+    lost its zeros is given them back, and the rename is logged — and recorded
+    in ``padded`` as ``(table, column)`` when given.
     """
     if words.empty or fixations.empty:
         return words, fixations
@@ -4072,6 +4079,8 @@ def _restore_zero_padding(
                 words = _pad_ids(words, column, mapping)
             else:
                 fixations = _pad_ids(fixations, column, mapping)
+            if padded is not None:
+                padded.append((frame_name, column))
             _LOGGER.info(
                 "The %s table spelled %d %s value(s) without the zero-padding the "
                 "other table uses (e.g. %r for %r); matched them up.",
@@ -4097,18 +4106,62 @@ def harmonize_frames_with_join(
     route through this). Also returns the :class:`StimulusJoin` a
     stimulus-level AOI table was attached by — ``None`` for a per-reader one —
     which the add-dataset wizard states (DATA-49)."""
+    words, fixations, join, _rewrites = harmonize_frames_reporting(words, fixations)
+    return words, fixations, join
+
+
+#: DATA-66: a column whose values normalization or the fixups changed, as
+#: ``(table, column, how)`` — ``how`` follows the source column's name in its
+#: label ("CURRENT_FIX_INTEREST_AREA_ID − 1"), since a header the file used must
+#: not sit over values the file never held. ``column_names.with_rewrites``
+#: applies them.
+Rewrite = tuple[str, str, str]
+
+
+def harmonize_frames_reporting(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None, tuple[Rewrite, ...]]:
+    """:func:`harmonize_frames_with_join`, also saying which columns' values it
+    changed (:data:`Rewrite`): ids it zero-padded (BUG-59), a fixation
+    ``word_id`` shifted onto 0-based boxes (BUG-8), fixation positions filled
+    from word boxes, and a repeated reading's ``_rN`` trial id (BUG-57)."""
     from .preprocessing import add_text_direction
 
-    words, fixations = _restore_zero_padding(words, fixations)
+    rewrites: list[Rewrite] = []
+    padded: list[tuple[str, str]] = []
+    words, fixations = _restore_zero_padding(words, fixations, padded)
+    rewrites += [(table, column, ", zero-padded") for table, column in padded]
     words, join = _broadcast_stimulus_words(words, fixations)
     words = add_text_direction(words)
     words = _reconcile_participant_asymmetry(words, fixations)
     words = normalize_screen_identity(words)
     fixations = normalize_screen_identity(fixations)
     validate_matching_parts(words, fixations)
-    fixations = correct_word_id_offset(words, fixations)
+    offset = detect_word_id_offset(words, fixations)
+    fixations = correct_word_id_offset(words, fixations, offset=offset)
+    if offset:
+        rewrites.append(("fixations", "word_id", f" − {offset}"))
+    blank = (
+        fixations[["x", "y"]].isna().sum()
+        if {"x", "y"} <= set(fixations.columns)
+        else None
+    )
     fixations = fill_fixation_xy_from_words(fixations, words)
-    return words, fixations, join
+    if blank is not None:
+        filled = blank - fixations[["x", "y"]].isna().sum()
+        rewrites += [
+            ("fixations", axis, ", blanks filled from the word boxes")
+            for axis in ("x", "y")
+            if filled[axis] > 0
+        ]
+    if (
+        BASE_TRIAL_ID in fixations.columns
+        and (_as_key(fixations["trial_id"]) != _as_key(fixations[BASE_TRIAL_ID]))
+        .where(fixations[BASE_TRIAL_ID].notna(), False)
+        .any()
+    ):
+        rewrites.append(("fixations", "trial_id", " + _rN for a repeated reading"))
+    return words, fixations, join, tuple(rewrites)
 
 
 def harmonize_frames(

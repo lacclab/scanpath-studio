@@ -175,7 +175,7 @@ from scanpath_studio.data import (
     filter_trials,
     frame_cache,
     frame_fingerprint,
-    harmonize_frames_with_join,
+    harmonize_frames_reporting,
     hashable_key,
     infer_raw_gaze_schema,
     load_onestop_server_bundle,
@@ -3027,6 +3027,11 @@ def _schema_key(schema: dict | None) -> tuple | None:
 #: for the add-dataset wizard (DATA-49). Scratch state, not wire format.
 STIMULUS_JOIN_KEY = "_stimulus_join"
 
+#: DATA-66: the columns the last `_normalize_pair` changed the values of
+#: (``data.Rewrite``s), which `_stash_active_mapping` marks converted in the
+#: column-name map. Scratch state, cleared with the map each load.
+HARMONIZE_REWRITES_KEY = "_harmonize_rewrites"
+
 
 def _normalize_pair_uncached(
     _words_df: pd.DataFrame,
@@ -3036,7 +3041,7 @@ def _normalize_pair_uncached(
     cache_key,
     _keep_words: set | None = None,
     _keep_fix: set | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None]:
+) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None, tuple]:
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
 
     Also returns how a stimulus-level AOI table attached to the readings
@@ -3079,12 +3084,13 @@ def _normalize_pair_uncached(
         )
         progress.report(2, 3, detail="cross-checks")
         # The join the fixups actually made, after BUG-59's zero padding — never
-        # a plan of the frames before it, which can disagree.
-        words_norm, fixations_norm, join = harmonize_frames_with_join(
+        # a plan of the frames before it, which can disagree. DATA-66: and the
+        # columns whose values they changed, for the column-name map.
+        words_norm, fixations_norm, join, rewrites = harmonize_frames_reporting(
             words_norm, fixations_norm
         )
         progress.report(3, 3)
-        return words_norm, fixations_norm, join
+        return words_norm, fixations_norm, join, rewrites
 
 
 def _normalize_pair(
@@ -3137,7 +3143,7 @@ def _normalize_pair(
     with loading.spinner(
         f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
     ):
-        words_norm, fixations_norm, join = frame_cache(
+        words_norm, fixations_norm, join, rewrites = frame_cache(
             "normalized_pair",
             cache_key,
             lambda: _normalize_pair_uncached(
@@ -3157,6 +3163,7 @@ def _normalize_pair(
     # add-dataset wizard to say — bookkeeping like `_composite_trial_columns`
     # above, written on a cache hit too so it always describes this pair.
     st.session_state[STIMULUS_JOIN_KEY] = join
+    st.session_state[HARMONIZE_REWRITES_KEY] = rewrites
     return words_norm, fixations_norm
 
 
@@ -3165,6 +3172,7 @@ def _reset_active_mapping() -> None:
     source doesn't inherit the previous one's mapping in the Data Inspection tab."""
     st.session_state["_active_column_mapping"] = {}
     st.session_state[ACTIVE_COLUMN_NAMES_KEY] = {}
+    st.session_state.pop(HARMONIZE_REWRITES_KEY, None)
 
 
 def _stash_active_mapping(
@@ -3186,7 +3194,9 @@ def _stash_active_mapping(
     mapping[table] = dict(schema) if schema else None
     stash = st.session_state.setdefault(ACTIVE_COLUMN_NAMES_KEY, {})
     if names is None and schema and columns is not None:
-        names = from_schema(table, schema, columns, keep_columns=keep_columns)
+        names = from_schema(
+            table, schema, columns, keep_columns=keep_columns
+        ).with_rewrites(table, st.session_state.get(HARMONIZE_REWRITES_KEY))
     if names is None:
         stash.pop(table, None)
     else:

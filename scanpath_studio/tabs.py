@@ -195,7 +195,7 @@ from scanpath_studio.data import (
     filter_to_keys,
     filter_trials,
     frame_fingerprint,
-    harmonize_frames,
+    harmonize_frames_reporting,
     has_explicit_trial_index,
     normalize_fixations,
     normalize_words,
@@ -7937,7 +7937,7 @@ def _download_tidy(
     # Written on click, not on every rerun: a words × readers table on a full
     # corpus took most of a second to serialize. DATA-66: under the dataset's
     # own names, as on screen — the map is read here, where the session is.
-    csv = partial(_tidy_csv, df, active_all(st.session_state))
+    csv = partial(_tidy_csv, df, active_all(st.session_state).identity())
     button = dict(data=csv, file_name=name, mime="text/csv", key=key, on_click="ignore")
     if recipe is None or context is None:
         host.download_button(label, **button)
@@ -8016,7 +8016,7 @@ def _render_trials_with_open_button(
     """
     # DATA-66: the identity columns under the dataset's own names.
     headers = (
-        column_label_config(trials.columns, active_all(st.session_state))
+        column_label_config(trials.columns, active_all(st.session_state).identity())
         if trials is not None
         else {}
     )
@@ -9546,7 +9546,7 @@ def render_per_reader_tab(
                     width="stretch",
                     hide_index=True,
                     column_config=column_label_config(
-                        selected_reader.columns, active_all(st.session_state)
+                        selected_reader.columns, active_all(st.session_state).identity()
                     ),
                 )
                 _download_tidy(
@@ -9884,7 +9884,7 @@ def render_per_group_tab(
                 width="stretch",
                 hide_index=True,
                 column_config=column_label_config(
-                    table.columns, active_all(st.session_state)
+                    table.columns, active_all(st.session_state).identity()
                 ),
             )
             _download_tidy(
@@ -9904,7 +9904,7 @@ def render_per_group_tab(
                 width="stretch",
                 hide_index=True,
                 column_config=column_label_config(
-                    trials.columns, active_all(st.session_state)
+                    trials.columns, active_all(st.session_state).identity()
                 ),
             )
             _download_tidy(
@@ -11074,7 +11074,7 @@ def _render_raw_table(
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
     # A copy of a partner from the same source column is shown once — left out
     # of `column_order` rather than dropped, so a large frame is not copied.
-    hidden = names.aliases(shown.columns)
+    hidden = names.redundant_aliases(shown)
     order = [c for c in shown.columns if c not in hidden]
     st.dataframe(
         shown,
@@ -12445,16 +12445,22 @@ STIMULUS_JOIN_NOTICE_KEY = "_stimulus_join_notice"
 
 
 def _harmonize_noting_join(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    rewrites: list | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """``harmonize_frames``, keeping its ``StimulusJoinWarning`` for the page.
 
     ✅ Save changes runs in an ``on_click``, where a warning only reaches the
     server's terminal; this parks its text under ``STIMULUS_JOIN_NOTICE_KEY``
-    instead (DATA-49). Any other warning is re-raised as it was."""
+    instead (DATA-49). Any other warning is re-raised as it was. The columns
+    whose values it changed (``data.Rewrite``) go into ``rewrites`` (DATA-66)."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = harmonize_frames(words, fixations)
+        words, fixations, _join, changed = harmonize_frames_reporting(words, fixations)
+        result = (words, fixations)
+    if rewrites is not None:
+        rewrites.extend(changed)
     notices = []
     for record in caught:
         if issubclass(record.category, StimulusJoinWarning):
@@ -12518,6 +12524,8 @@ def _apply_remap() -> None:
     # stored before the join recorded provenance folds a repeat's copy of the
     # boxes back into the trial it copied (`data.repeat_bases`).
     repeat_of = repeat_bases(stored.get("fixations"))
+    # DATA-66: the columns the fixups below change the values of.
+    rewrites: list = []
     for table_key in ("words", "fixations", "raw_gaze"):
         frame = stored.get(table_key)
         if frame is None or frame.empty or table_key not in pending:
@@ -12558,14 +12566,14 @@ def _apply_remap() -> None:
                 other = new_entry.get("fixations")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_fixations_frame()
-                fresh, other = _harmonize_noting_join(fresh, other)
+                fresh, other = _harmonize_noting_join(fresh, other, rewrites)
                 new_entry["words"], new_entry["fixations"] = fresh, other
             else:
                 fresh = normalize_fixations(raw, schema)
                 other = new_entry.get("words")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_words_frame()
-                other, fresh = _harmonize_noting_join(other, fresh)
+                other, fresh = _harmonize_noting_join(other, fresh, rewrites)
                 new_entry["words"], new_entry["fixations"] = other, fresh
             harmonized = True
         except Exception as exc:
@@ -12606,7 +12614,9 @@ def _apply_remap() -> None:
         has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
         try:
             words, fixations = _harmonize_noting_join(
-                before, fixations if has_fixations else empty_fixations_frame()
+                before,
+                fixations if has_fixations else empty_fixations_frame(),
+                rewrites,
             )
         except Exception as exc:
             # Same reason as the added tables above: an `on_click` must report,
@@ -12625,7 +12635,12 @@ def _apply_remap() -> None:
         if has_fixations:
             new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
-    new_entry["column_names"] = new_names
+    new_entry["column_names"] = {
+        table: ColumnNames.from_payload(payload)
+        .with_rewrites(table, rewrites)
+        .to_payload()
+        for table, payload in new_names.items()
+    }
     # Recompute the composite trial components from the new trial mapping so the
     # cascading trial picker stays in sync (mirrors the wizard finalize).
     trial_schema = next(

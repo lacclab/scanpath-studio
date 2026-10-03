@@ -155,7 +155,10 @@ class TestBulkExport:
         assert manifest["schema"] == cn.COLUMNS_FILE_SCHEMA
         rows = {row["canonical"]: row for row in manifest["tables"]["fixations"]}
         assert rows["duration_ms"]["column"] == "CURRENT_FIX_DURATION"
-        assert rows["fixation_id"]["kind"] == cn.GENERATED
+        # Only what the files hold: the map's fixation_id is not in this table.
+        assert "fixation_id" not in rows
+        # The alias left out of the file is left out of the manifest too.
+        assert "unique_trial_id" not in rows
         words = {row["canonical"]: row for row in manifest["tables"]["words"]}
         assert words["width"]["column"] == "width"
         assert words["width"]["sources"] == ["IA_RIGHT", "IA_LEFT"]
@@ -223,3 +226,136 @@ class TestPairExport:
         zf, fix = self._pair(frames, "Other corpus")
         assert "duration_ms" in fix
         assert not any(n.endswith("columns.json") for n in zf.namelist())
+
+
+# --- The parity review's cases ---------------------------------------------
+
+
+def test_columns_json_matches_the_files_on_a_demo_shaped_map(frames):
+    """The demo's file calls its trial id `unique_trial_id`: the alias is left
+    out and `trial_id` is written under that name — and the manifest says so."""
+    names = ColumnNames(
+        {
+            "trial_id": SourceName(("unique_trial_id",)),
+            "unique_trial_id": SourceName(("unique_trial_id",)),
+            "duration_ms": SourceName(("CURRENT_FIX_DURATION",)),
+        }
+    )
+    with _export(frames, column_names={"fixations": names}) as zf:
+        fix = pd.read_csv(zf.open("per_trial/p1__t1/fixations.csv"))
+        manifest = json.loads(zf.read("columns.json"))
+    rows = {row["canonical"]: row["column"] for row in manifest["tables"]["fixations"]}
+    assert rows == {
+        "trial_id": "unique_trial_id",
+        "duration_ms": "CURRENT_FIX_DURATION",
+    }
+    assert set(rows.values()) <= set(fix.columns)
+    assert list(fix.columns).count("unique_trial_id") == 1
+
+
+def test_a_derived_table_names_only_its_ids():
+    """A summary's `n_fixations` is its own count, not the file's column of the
+    same canonical name."""
+    names = ColumnNames(
+        {
+            "participant_id": SourceName(("RECORDING_SESSION_LABEL",)),
+            "n_fixations": SourceName(("IA_FIXATION_COUNT",)),
+            "x": SourceName(("CURRENT_FIX_X",)),
+        }
+    )
+    summary = pd.DataFrame({"participant_id": ["p1"], "n_fixations": [12], "x": [3]})
+    out = cn.as_written(summary, names.identity())
+    assert list(out.columns) == ["RECORDING_SESSION_LABEL", "n_fixations", "x"]
+
+
+def test_a_dataset_with_no_map_exports_as_before(frames):
+    """An app dataset with no names (synthetic, authored) passes empty maps."""
+    with _export(frames, column_names={"fixations": cn.EMPTY, "words": cn.EMPTY}) as zf:
+        assert "columns.json" not in zf.namelist()
+        readme = zf.read("README.md").decode("utf-8")
+    assert "Canonical column names from the visualization tool" in readme
+
+
+def test_an_alias_whose_values_differ_is_kept():
+    """A `unique_text_id` that parted from its `text_id` is data, not a copy."""
+    names = ColumnNames(
+        {
+            "text_id": SourceName(("PARAGRAPH",)),
+            "unique_text_id": SourceName(("PARAGRAPH",)),
+        }
+    )
+    frame = pd.DataFrame({"text_id": ["P1"], "unique_text_id": ["U-A"]})
+    assert names.redundant_aliases(frame) == set()
+    assert "unique_text_id" in cn.as_written(frame, names)
+
+
+def test_a_kept_unique_text_id_is_the_users_own_column():
+    raw = pd.DataFrame(columns=["T", "PARAGRAPH", "unique_text_id", "D", "X", "Y"])
+    schema = {"trial": "T", "text_id": "PARAGRAPH", "duration": "D", "x": "X", "y": "Y"}
+    names = cn.from_schema("fixations", schema, raw.columns)
+    assert names.source("unique_text_id") is None
+    assert names.source("text_id") == SourceName(("PARAGRAPH",))
+
+
+def test_a_pattern_alias_never_names_the_apps_own_count(frames):
+    _, words, fixations = frames
+    names = ColumnNames({"n_fixations": SourceName(("IA_FIXATION_COUNT",))})
+    fields = pattern_fields("p1", "t1", words, fixations, {}, column_names=names)
+    assert "IA_FIXATION_COUNT" not in fields
+
+
+class TestRewrites:
+    """A header the file used never sits over values the load changed."""
+
+    def test_a_rewritten_column_is_marked_converted(self):
+        names = ColumnNames({"word_id": SourceName(("IA_ID",))})
+        rewritten = names.with_rewrites("fixations", [("fixations", "word_id", " − 1")])
+        assert rewritten.kind_of("word_id") == cn.CONVERTED
+        assert rewritten.label("word_id") == "IA_ID − 1"
+        # …so it is exported under its internal name.
+        assert rewritten.export_headers(["word_id"]) == {}
+        # Another table's rewrite leaves this one alone.
+        assert names.with_rewrites("words", [("fixations", "word_id", " − 1")]) == names
+
+    def test_harmonizing_reports_a_shifted_word_id(self):
+        from scanpath_studio import data
+
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p"] * 3,
+                "trial_id": ["t"] * 3,
+                "text_id": ["t"] * 3,
+                "word_id": [0, 1, 2],
+                "text": ["a", "b", "c"],
+                "x": [0.0, 10.0, 20.0],
+                "y": [0.0, 0.0, 0.0],
+                "width": [10.0] * 3,
+                "height": [10.0] * 3,
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p"] * 3,
+                "trial_id": ["t"] * 3,
+                "text_id": ["t"] * 3,
+                "word_id": [1, 2, 3],
+                "x": [5.0, None, 25.0],
+                "y": [5.0, None, 5.0],
+                "duration_ms": [100] * 3,
+            }
+        )
+        *_frames, rewrites = data.harmonize_frames_reporting(words, fixations)
+        assert ("fixations", "word_id", " − 1") in rewrites
+        assert {("fixations", axis) for axis in ("x", "y")} <= {
+            (table, column) for table, column, _how in rewrites
+        }
+
+    def test_the_demo_names_its_shifted_word_id_honestly(self):
+        """BUG-8 shifts the demo's fixation word ids on every load."""
+        from scanpath_studio.compare_source import _builtin_column_names
+        from scanpath_studio.constants import DEMO_CHOICE
+
+        payload = _builtin_column_names(DEMO_CHOICE)["fixations"]
+        names = ColumnNames.from_payload(payload)
+        assert names.kind_of("word_id") == cn.CONVERTED
+        assert names.label("word_id").endswith(" − 1")

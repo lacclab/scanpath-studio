@@ -48,6 +48,7 @@ from .column_names import (
     as_written,
     columns_manifest,
     dictionary_lines,
+    written_columns,
 )
 from .constants import (
     CITATION,
@@ -521,7 +522,11 @@ def pattern_fields(
         fields[f"{name}_a"] = fields.get(name, "")
         fields[f"{name}_b"] = (compare_row or {}).get(name, "")
     if column_names is not None:
-        for canonical, header in column_names.export_headers(list(fields)).items():
+        # The counts and the settings summary are the app's, whatever a column
+        # of the same canonical name was called in the file.
+        own = {"n_fixations", "n_words", "reading_time_s", "settings", "dataset_name"}
+        named = [field for field in fields if field not in own]
+        for canonical, header in column_names.export_headers(named).items():
             fields.setdefault(header, fields[canonical])
     return fields
 
@@ -712,17 +717,17 @@ def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-#: DATA-66: which of the dataset's tables each written artifact's columns come
-#: from, so a fixation table's `x` is named as the fixation file named it and a
-#: word table's `x` as the AOI file did. An artifact not here (a summary
-#: across tables) takes the identity names any table gives.
+#: DATA-66: the artifacts that *are* one of the dataset's tables (rows of it,
+#: perhaps with computed columns added), and which one — so a fixation table's
+#: `x` is named as the fixation file named it and a word table's `x` as the AOI
+#: file did. Every other artifact is derived (a saccade table, a summary, a
+#: character grid) and reuses canonical names for values of its own, so only its
+#: id columns take the file's names (`ColumnNames.identity`).
 _ARTIFACT_TABLE = {
     "fixations": "fixations",
-    "saccades": "fixations",
     "raw_gaze": "raw_gaze",
     "measures": "words",
     "word_measures": "words",
-    "characters": "words",
 }
 
 
@@ -732,11 +737,12 @@ def _write_table(
     df: pd.DataFrame,
     fmt: str,
     names: ColumnNames | None = None,
+    hidden: set[str] | None = None,
 ) -> int:
     # DATA-49: the pipeline's bookkeeping columns stay out of what is shared.
     df = strip_local_paths(drop_internal_columns(df))
     # DATA-66: and the columns the user's file named go out under those names.
-    df = as_written(df, names)
+    df = as_written(df, names, hidden)
     if fmt == "parquet":
         buf = io.BytesIO()
         df.to_parquet(buf, index=False)
@@ -1710,41 +1716,49 @@ def pair_export(
         words_a, fix_a = side_a.stamped("A")
         words_b, fix_b = side_b.stamped("B")
         maps = (
-            {table: names for table, names in (column_names or {}).items() if names}
+            {
+                table: names
+                for table, names in (column_names or {}).items()
+                if names is not None and names.entries
+            }
             if side_b.dataset in (None, side_a.dataset)
             else {}
         )
-        if maps and options.any_table():
-            zf.writestr(
-                f"{folder}/columns.json",
-                json.dumps(columns_manifest(maps), indent=2),
-            )
+        # AN-32 / EXP-23: the measures each side's dataset brought.
+        measures = [
+            words.assign(scanpath=side)
+            for side, words in (("A", words_a), ("B", words_b))
+            if words is not None and not words.empty and brought_reading_measures(words)
+        ]
+        tables = {
+            "fixations": pd.concat([fix_a, fix_b], ignore_index=True)
+            if options.include_fixations
+            else None,
+            "words": pd.concat(measures, ignore_index=True)
+            if options.include_measures and measures
+            else None,
+        }
+        files = {"fixations": "fixations", "words": "measures"}
+        written = {
+            table: written_columns(drop_internal_columns(frame), maps[table])
+            for table, frame in tables.items()
+            if frame is not None and table in maps
+        }
         for fmt in options.table_formats():
-            if options.include_fixations:
-                _write_table(
-                    zf,
-                    f"{folder}/fixations.{fmt}",
-                    pd.concat([fix_a, fix_b], ignore_index=True),
-                    fmt,
-                    maps.get("fixations"),
-                )
-            if options.include_measures:
-                # AN-32 / EXP-23: the measures each side's dataset brought.
-                measures = [
-                    words.assign(scanpath=side)
-                    for side, words in (("A", words_a), ("B", words_b))
-                    if words is not None
-                    and not words.empty
-                    and brought_reading_measures(words)
-                ]
-                if measures:
+            for table, frame in tables.items():
+                if frame is not None:
                     _write_table(
                         zf,
-                        f"{folder}/measures.{fmt}",
-                        pd.concat(measures, ignore_index=True),
+                        f"{folder}/{files[table]}.{fmt}",
+                        frame,
                         fmt,
-                        maps.get("words"),
+                        maps.get(table),
                     )
+        if any(written.values()):
+            zf.writestr(
+                f"{folder}/columns.json",
+                json.dumps(columns_manifest(written), indent=2),
+            )
 
         config = _plot_config_dict(
             side_a.participant,
@@ -1909,14 +1923,35 @@ def bulk_export(
     trial so the UI can update a progress bar.
     """
     combos = _apply_scope(combos, options)
-    maps = {table: names for table, names in (column_names or {}).items() if names}
+    maps = {
+        table: names
+        for table, names in (column_names or {}).items()
+        if names is not None and names.entries
+    }
     every_table = across_tables(maps)
+    # Each table's columns as written, decided once from the whole table so
+    # every per-trial file of it has the same columns — and what `columns.json`
+    # and the README then describe.
+    whole = {
+        table: drop_internal_columns(frame)
+        for table, frame in (
+            ("fixations", fixations),
+            ("words", words),
+            ("raw_gaze", raw_gaze),
+        )
+        if table in maps and frame is not None and not frame.empty
+    }
+    hidden = {
+        table: maps[table].redundant_aliases(frame) for table, frame in whole.items()
+    }
 
-    def names_for(artifact: str) -> ColumnNames:
-        """The map an artifact's columns come from — its own table's, for the
-        three tables; for a summary of several, the identity columns any of
-        them names (`across_tables`)."""
-        return maps.get(_ARTIFACT_TABLE.get(artifact, ""), every_table)
+    def names_for(artifact: str) -> tuple[ColumnNames, set[str] | None]:
+        """The map an artifact is written with, and the aliases it leaves out:
+        its own table's for the three tables, only the ids for a derived one."""
+        table = _ARTIFACT_TABLE.get(artifact)
+        if table in maps:
+            return maps[table], hidden.get(table)
+        return every_table.identity(), None
 
     export_units: list[dict] = []
     for combo in combos.to_dict("records"):
@@ -1963,7 +1998,21 @@ def bulk_export(
     # and the README says why.
     measures_wanted = options.include_measures or options.include_analysis_family
     brought = brought_reading_measures(words)
-    measure_headers = names_for("measures").export_headers(brought)
+    # What the bundle's own tables are written as, for its README and its
+    # `columns.json`: only the tables it writes.
+    exported = {
+        "fixations": options.include_fixations or options.include_analysis_family,
+        "words": measures_wanted and bool(brought),
+        "raw_gaze": options.include_raw_gaze,
+    }
+    written = {
+        table: written_columns(frame, maps[table])
+        for table, frame in whole.items()
+        if exported[table]
+    }
+    measure_headers = {
+        row["canonical"]: row["column"] for row in written.get("words", [])
+    }
 
     readme_lines = [
         "# Bulk export",
@@ -2004,12 +2053,17 @@ def bulk_export(
                 "A column Scanpath Studio built, converted or computed keeps its "
                 "internal name; `columns.json` maps every column below to its "
                 "internal name, for scripts that work across datasets. Columns "
-                "not listed are written under their own names.",
-                *dictionary_lines(maps),
-                "",
-                "Reading measures in the word tables:",
+                "not listed are written under their own names. A table the app "
+                "derives (a summary, the saccades) carries the dataset's ids under "
+                "these names, and its own values under the app's.",
+                *dictionary_lines(written, maps),
+                *(
+                    ["", "Reading measures in the word tables:"]
+                    if measures_wanted
+                    else []
+                ),
             ]
-            if maps
+            if any(written.values())
             else [
                 "Canonical column names from the visualization tool:",
                 "- participant_id, trial_id, text_id, word_id",
@@ -2042,8 +2096,8 @@ def bulk_export(
         f"Demo corpus note: {CITATION['corpus_note']}",
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
-    if maps and options.any_table():
-        zf.writestr("columns.json", json.dumps(columns_manifest(maps), indent=2))
+    if any(written.values()):
+        zf.writestr("columns.json", json.dumps(columns_manifest(written), indent=2))
     if options.include_analysis_family:
         zf.writestr(
             "run_config.json",
@@ -2392,7 +2446,7 @@ def bulk_export(
                 for fmt in options.table_formats():
                     for artifact, table in tables.items():
                         progress.bytes_written += _write_table(
-                            zf, _path(artifact, fmt), table, fmt, names_for(artifact)
+                            zf, _path(artifact, fmt), table, fmt, *names_for(artifact)
                         )
             if options.include_analysis_family:
                 family_words.append(measured)
@@ -2430,7 +2484,7 @@ def bulk_export(
                 f"aggregate/all_{artifact}.{fmt}",
                 table,
                 fmt,
-                names_for(artifact),
+                *names_for(artifact),
             )
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a

@@ -12909,6 +12909,11 @@ def _apply_remap() -> None:
             }
         )
     st.session_state["_datasets"][name] = new_entry
+    # Improvement A — the description and the metadata tables are part of the
+    # same save; committed under the old name, which the rename below carries.
+    from scanpath_studio.app import commit_editor_staging
+
+    commit_editor_staging(name)
     # UX-178 — and the name typed at the top of the screen. Applied last, after
     # the entry is saved under the name its widgets were keyed by: every editor
     # key carries the dataset's name, so renaming mid-edit would orphan them.

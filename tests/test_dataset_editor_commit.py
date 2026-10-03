@@ -373,3 +373,124 @@ class TestAnAddedTableIsReadLikeTheAddScreenReadsIt:
         assert [row["wort"] for row in after] == ["NA", "001"]
         # Unmapped columns are all still there for the editor to offer.
         assert set(after[0]) >= {"rdr", "itm", "wnum", "wort", "x", "width"}
+
+
+class TestNameDescriptionAndMetadataWaitForSave:
+    """Improvement A — the parts of an edit the editor's widgets do not hold
+    (the metadata tables) are noted when it opens and put back on Cancel; the
+    name and description are drafts until Save."""
+
+    @staticmethod
+    def _session(monkeypatch) -> dict:
+        from scanpath_studio import app
+
+        state: dict = {}
+        monkeypatch.setattr(app.st, "session_state", state)
+        return state
+
+    @staticmethod
+    def _table(ids):
+        import pandas as pd
+
+        from scanpath_studio import metadata as md
+
+        raw = pd.DataFrame({"participant_id": ids, "age": [30] * len(ids)})
+        return raw, md.build_participant_metadata(raw, "participant_id")
+
+    def _attach(self, state, ids, file_sig):
+        from scanpath_studio import metadata as md
+
+        raw, table = self._table(ids)
+        state[md.SESSION_KEY] = table
+        state[md.RAW_SESSION_KEY] = raw
+        state[md.FILE_SESSION_KEY] = file_sig
+        state["participant_metadata_upload"] = object()
+        return table
+
+    def test_a_table_attached_during_a_cancelled_edit_is_detached(self, monkeypatch):
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        state = self._session(monkeypatch)
+        state[md.OWNER_KEY] = "Probe"
+        app.hold_editor_staging("Probe")
+        assert not app.editor_staging_dirty()
+        self._attach(state, ["p1"], "file-1")
+        assert app.editor_staging_dirty()
+        app._discard_editor_staging()
+        app.apply_editor_restore()
+        for key in (md.SESSION_KEY, md.RAW_SESSION_KEY, md.FILE_SESSION_KEY):
+            assert key not in state
+        assert "participant_metadata_upload" not in state
+
+    def test_a_table_replaced_during_a_cancelled_edit_comes_back(self, monkeypatch):
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        state = self._session(monkeypatch)
+        state[md.OWNER_KEY] = "Probe"
+        original = self._attach(state, ["p1"], "file-1")
+        app.hold_editor_staging("Probe")
+        self._attach(state, ["p2"], "file-2")
+        assert app.editor_staging_dirty()
+        app._discard_editor_staging()
+        app.apply_editor_restore()
+        assert state[md.SESSION_KEY] is original
+        # Its file is no longer in the uploader: it is back as a restored table.
+        assert md.is_restored(state, "participant")
+        assert "participant_metadata_upload" not in state
+
+    def test_an_untouched_table_is_left_alone(self, monkeypatch):
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        state = self._session(monkeypatch)
+        state[md.OWNER_KEY] = "Probe"
+        self._attach(state, ["p1"], "file-1")
+        upload = state["participant_metadata_upload"]
+        app.hold_editor_staging("Probe")
+        # Rebuilt by the section on the next run: a new object, same content.
+        state[md.SESSION_KEY] = self._table(["p1"])[1]
+        assert not app.editor_staging_dirty()
+        app._discard_editor_staging()
+        app.apply_editor_restore()
+        assert state[md.FILE_SESSION_KEY] == "file-1"
+        assert state["participant_metadata_upload"] is upload
+
+    def test_save_keeps_what_is_attached(self, monkeypatch):
+        from scanpath_studio import app
+        from scanpath_studio import metadata as md
+
+        state = self._session(monkeypatch)
+        state[md.OWNER_KEY] = "Probe"
+        app.hold_editor_staging("Probe")
+        table = self._attach(state, ["p1"], "file-1")
+        app.commit_editor_staging("Probe")
+        app._discard_editor_staging()
+        app.apply_editor_restore()
+        assert state[md.SESSION_KEY] is table
+
+    def test_a_description_is_a_draft_until_save(self, monkeypatch):
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
+
+        state = self._session(monkeypatch)
+        state["_datasets"] = {"Probe": {}}
+        app.hold_editor_staging("Probe")
+        state[app._description_field_key("Probe")] = "A pilot."
+        assert app.editor_staging_dirty()
+        assert DATASET_DESCRIPTIONS_KEY not in state
+        app.commit_editor_staging("Probe")
+        assert state[DATASET_DESCRIPTIONS_KEY]["Probe"] == "A pilot."
+        assert app._description_field_key("Probe") not in state
+
+    def test_a_cancelled_description_is_dropped(self, monkeypatch):
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
+
+        state = self._session(monkeypatch)
+        app.hold_editor_staging("Probe")
+        state[app._description_field_key("Probe")] = "Not this."
+        app._discard_editor_staging()
+        assert app._description_field_key("Probe") not in state
+        assert DATASET_DESCRIPTIONS_KEY not in state

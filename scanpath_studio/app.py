@@ -3335,12 +3335,16 @@ def restore_builtin_mapping(source_key) -> None:
         st.session_state[key] = value
 
 
-def _save_builtin_mapping() -> None:
-    """✅ Save changes for a built-in source: adopt the draft mapping.
+def _save_builtin_mapping(mapping: bool = True) -> None:
+    """✅ Save changes for a built-in source: adopt the draft mapping, name,
+    description and metadata tables.
 
     A draft that leaves a required field empty is refused here, with the
-    reasons shown above the button, rather than applied and then failing."""
-    pending = st.session_state.get(BUILTIN_MAPPING_PENDING_KEY) or {}
+    reasons shown above the button, rather than applied and then failing.
+    ``mapping=False`` is a source with no mapping panels to adopt."""
+    pending = (
+        (st.session_state.get(BUILTIN_MAPPING_PENDING_KEY) or {}) if mapping else {}
+    )
     problems: dict = {}
     for table_key, validate in (
         ("words", validate_word_schema),
@@ -3355,16 +3359,19 @@ def _save_builtin_mapping() -> None:
     # Dropped first, so closing the editor does not restore the held keys.
     st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
     saved = str(st.session_state.get("data_source_choice") or "")
+    commit_editor_staging(saved)
     _close_dataset_editor()
     st.session_state[BUILTIN_MAPPING_SAVED_KEY] = saved
 
 
-def _render_builtin_editor_footer(host) -> None:
+def _render_builtin_editor_footer(host, *, mapping: bool = True) -> None:
     """✅ Save changes at the foot of a built-in source's ✏️ Edit dataset screen.
 
     `tabs.render_dataset_editor_footer`'s row, for a dataset with no stored
     entry: the same divider, the same blockers, the button in the same column.
     There is no ⬇️ Save setup beside it — the corpus' own loader is the setup.
+    ``mapping=False``: a source with no mapping panels, whose Save holds the
+    name, description and metadata tables.
     """
     from scanpath_studio.wizard import _FOOTER_ROW_W
 
@@ -3383,8 +3390,11 @@ def _render_builtin_editor_footer(host) -> None:
         type="primary",
         key="builtin_mapping_save",
         on_click=_save_builtin_mapping,
+        args=(mapping,),
         width="stretch",
-        help="Apply the column mapping above to this dataset.",
+        help="Save the name, description, column mapping and metadata tables above."
+        if mapping
+        else "Save the name, description and metadata tables above.",
     )
 
 
@@ -5161,15 +5171,22 @@ def _description_field_key(token: str) -> str:
     return f"dataset_description_{_dataset_row_slug(token)}"
 
 
-def _save_description_field(token: str) -> None:
-    set_dataset_description(token, st.session_state.get(_description_field_key(token)))
+def _description_draft(token: str) -> str | None:
+    """The description typed on the open editor, if it differs from the saved
+    one (``None`` when it does not, or the field has not drawn)."""
+    key = _description_field_key(token)
+    if key not in st.session_state:
+        return None
+    text = str(st.session_state.get(key) or "").strip()
+    return None if text == dataset_description(token)[0].strip() else text
 
 
 def render_description_field(host, token: str) -> None:
     """✏️ Edit dataset's **Description** — the sentence under its name.
 
-    Saved as it changes, not by ✅ Save changes: a description re-derives
-    nothing, and a built-in dataset has no Save button to wait for.
+    Held, like everything else on the screen, until ✅ Save changes
+    (`commit_editor_staging`); ✕ Cancel drops it with the rest of the edit.
+    The catalogue's own text is only adopted as the user's when they change it.
     """
     key = _description_field_key(token)
     if key not in st.session_state:
@@ -5177,11 +5194,12 @@ def render_description_field(host, token: str) -> None:
     host.text_area(
         "Description",
         key=key,
-        on_change=_save_description_field,
-        args=(token,),
         placeholder="What this dataset is — the readers, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
         height=80,
+        # A draft outlives a visit to another view while the editor is open.
+        persist_state="session",
     )
 
 
@@ -5274,22 +5292,30 @@ def render_dataset_inspection_head(token: str) -> None:
     _render_dataset_overview(token, registry=public_dataset_registry())
 
 
-def _rename_builtin_from_field(token: str) -> None:
-    """``on_change`` of **Name** for a dataset that is not an upload.
-
-    A built-in or public source's token is a load-path identifier (deep links,
-    loader dispatch), so its name is a display alias — nothing to re-key, and
-    no ✅ Save changes on its editor to wait for.
-    """
+def _builtin_name_draft(token: str) -> str | None:
+    """The name typed for a dataset that is not an upload, if it is a new one."""
+    if EDITOR_NAME_FIELD_KEY not in st.session_state:
+        return None
     requested = str(st.session_state.get(EDITOR_NAME_FIELD_KEY) or "").strip()
     if not requested or requested == _dataset_display_name(token):
+        return None
+    return requested
+
+
+def _apply_builtin_name(token: str) -> None:
+    """✅ Save changes' rename of a dataset that is not an upload.
+
+    A built-in or public source's token is a load-path identifier (deep links,
+    loader dispatch), so its name is a display alias — nothing to re-key.
+    """
+    requested = _builtin_name_draft(token)
+    if requested is None:
         return
     tokens = list(st.session_state.get("_data_source_entries") or [])
     final = _unique_dataset_alias(requested, token, tokens)
     aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
     aliases[token] = final
     st.session_state[DATASET_ALIASES_KEY] = aliases
-    st.session_state[EDITOR_NAME_FIELD_KEY] = final
 
 
 def _stage_upload_name() -> None:
@@ -5307,10 +5333,10 @@ def _stage_upload_name() -> None:
 def render_name_field(host, token: str) -> None:
     """✏️ Edit dataset's **Name** (UX-178; renaming used to be a dialog).
 
-    An upload's name is the key its every editor widget is filed under, so it
-    is applied by ✅ Save changes with the rest of the edit (`tabs._apply_remap`)
-    and counts as an unsaved change until then. Any other dataset's name is a
-    display alias, applied as soon as the field changes.
+    Applied by ✅ Save changes with the rest of the edit, and an unsaved change
+    until then. An upload's name is the key its every editor widget is filed
+    under, so `tabs._apply_remap` re-keys it last; any other dataset's name is
+    a display alias (`_apply_builtin_name`).
     """
     uploaded = token in (st.session_state.get("_datasets") or {})
     if EDITOR_NAME_FIELD_KEY not in st.session_state:
@@ -5320,11 +5346,11 @@ def render_name_field(host, token: str) -> None:
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
-        on_change=_stage_upload_name if uploaded else _rename_builtin_from_field,
-        args=() if uploaded else (token,),
-        help=f"Saved with **{ICONS['confirm']} Save changes**."
-        if uploaded
-        else "Shown in the list of datasets and the dataset picker.",
+        on_change=_stage_upload_name if uploaded else None,
+        help="Shown in the list of datasets and the dataset picker. Saved with "
+        f"**{ICONS['confirm']} Save changes**.",
+        # A draft outlives a visit to another view while the editor is open.
+        persist_state="session",
     )
 
 
@@ -5431,6 +5457,151 @@ _SCROLL_TO_EDITOR_SCRIPT = """<script>
 </script>"""
 
 
+#: ✏️ Edit dataset's record of the metadata tables as the edit found them.
+#: The three metadata sections are the add screen's, and attach a table as its
+#: file is read — so rather than stage them, the editor notes what was attached
+#: when it opened, ✕ Cancel puts that back, and ✅ Save changes keeps what is
+#: there. Taken by `hold_editor_staging` on the editor's first run.
+_EDITOR_SNAPSHOT_KEY = "_dataset_editor_snapshot"
+#: ✕ Cancel's metadata restore, parked for the next run to apply before the
+#: metadata sections draw (`apply_editor_restore`) — the Leave confirmation is
+#: a dialog, whose click runs after the page's widgets.
+_EDITOR_RESTORE_KEY = "_dataset_editor_restore"
+
+
+def _metadata_grain_state(grain: str) -> dict:
+    """One metadata grain's attached table and the read behind it."""
+    key, raw, file = metadata_mod.grain_keys(grain)
+    table = st.session_state.get(key)
+    frame = getattr(table, "frame", None)
+    # Its content, not its identity: the sections rebuild the table every run.
+    # Small (one row per reader, trial or text), so hashing it is cheap.
+    digest = None
+    if isinstance(frame, pd.DataFrame):
+        try:
+            cells = pd.util.hash_pandas_object(frame, index=False).to_numpy().tobytes()
+        except (TypeError, ValueError):  # unhashable cells — hash their text
+            cells = frame.to_csv(index=False).encode("utf-8")
+        digest = (tuple(map(str, frame.columns)), hashlib.sha256(cells).hexdigest())
+    return {
+        "table": table,
+        "raw": st.session_state.get(raw),
+        "file": st.session_state.get(file),
+        "name": st.session_state.get(f"_{grain}_metadata_name"),
+        "content": digest,
+    }
+
+
+def _metadata_grains_changed(snapshot: dict) -> list[str]:
+    """The grains whose attached table differs from the editor's snapshot."""
+    changed = []
+    for grain, before in (snapshot.get("grains") or {}).items():
+        now = _metadata_grain_state(grain)
+        if (
+            (now["table"] is None) != (before["table"] is None)
+            or now["raw"] is not before["raw"]
+            or now["file"] != before["file"]
+            or now["content"] != before["content"]
+        ):
+            changed.append(grain)
+    return changed
+
+
+def hold_editor_staging(token: str) -> None:
+    """Note the metadata tables as this edit finds them (once per edit)."""
+    held = st.session_state.get(_EDITOR_SNAPSHOT_KEY)
+    if isinstance(held, dict) and held.get("token") == token:
+        return
+    st.session_state[_EDITOR_SNAPSHOT_KEY] = {
+        "token": token,
+        "owner": st.session_state.get(metadata_mod.OWNER_KEY),
+        "grains": {
+            grain: _metadata_grain_state(grain)
+            for grain in (metadata_mod.GRAIN_PARTICIPANT, "trial", "text")
+        },
+    }
+
+
+def editor_staging_dirty() -> bool:
+    """Whether the open editor's name, description or metadata tables differ
+    from what it opened on — the part of an edit `tabs.dataset_editor_is_dirty`
+    does not see."""
+    snapshot = st.session_state.get(_EDITOR_SNAPSHOT_KEY)
+    if not isinstance(snapshot, dict):
+        return False
+    token = str(snapshot.get("token") or "")
+    return bool(
+        _description_draft(token) is not None
+        or _builtin_name_draft(token) is not None
+        or _metadata_grains_changed(snapshot)
+    )
+
+
+def _editor_is_dirty() -> bool:
+    """Whether ✕ Cancel would lose anything (UX-107): the mapping, setup and
+    uploads (`tabs.dataset_editor_is_dirty`), or the name, description and
+    metadata tables."""
+    return dataset_editor_is_dirty() or editor_staging_dirty()
+
+
+def commit_editor_staging(token: str) -> None:
+    """✅ Save changes' share of the edit: the description, a built-in's name,
+    and the metadata tables as they now stand.
+
+    Called by both Saves — an upload's (`tabs._apply_remap`, before it re-keys
+    the dataset under a new name) and a built-in's — once they know the save
+    goes ahead.
+    """
+    if (text := _description_draft(token)) is not None:
+        set_dataset_description(token, text)
+    if token not in (st.session_state.get("_datasets") or {}):
+        _apply_builtin_name(token)
+    _drop_description_drafts()
+    # Kept, not restored: what is attached now is what was saved.
+    st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
+
+
+def _drop_description_drafts() -> None:
+    for key in [
+        k
+        for k in list(st.session_state)
+        if isinstance(k, str) and k.startswith("dataset_description_")
+    ]:
+        st.session_state.pop(key, None)
+
+
+def apply_editor_restore() -> None:
+    """Put back the metadata tables a cancelled edit changed (`_EDITOR_RESTORE_KEY`).
+
+    Runs before `metadata.activate_dataset` and before the sections draw, so
+    the tables go back to the dataset they were taken from. A table the edit
+    replaced or detached returns as a *restored* one — its file is no longer in
+    the uploader, so it is re-attached the way the recovery cache re-attaches
+    a table (`metadata.mark_restored`) rather than read again.
+    """
+    snapshot = st.session_state.pop(_EDITOR_RESTORE_KEY, None)
+    if not isinstance(snapshot, dict):
+        return
+    if snapshot.get("owner") != st.session_state.get(metadata_mod.OWNER_KEY):
+        return
+    for grain in _metadata_grains_changed(snapshot):
+        before = snapshot["grains"][grain]
+        key, raw, file = metadata_mod.grain_keys(grain)
+        for name in (
+            f"{grain}_metadata_upload",
+            f"{grain}_metadata_id_column",
+            f"{grain}_metadata_keep_fields",
+        ):
+            st.session_state.pop(name, None)
+        if before["table"] is None:
+            for name in (key, raw, file, f"_{grain}_metadata_name"):
+                st.session_state.pop(name, None)
+            continue
+        metadata_mod.mark_restored(st.session_state, grain, before["table"])
+        if before["name"] is not None:
+            st.session_state[f"_{grain}_metadata_name"] = before["name"]
+
+
 def _close_dataset_editor() -> None:
     """``on_click`` for the editor's way out — back to 📂 Available datasets."""
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
@@ -5451,6 +5622,18 @@ def _close_dataset_editor() -> None:
     # A built-in source's unsaved mapping goes too (✅ Save changes has already
     # dropped what it would restore).
     _discard_builtin_mapping_edit()
+    # The name and description typed into it, and the metadata tables it
+    # changed (✅ Save changes has already dropped the snapshot it would
+    # restore them from).
+    _discard_editor_staging()
+
+
+def _discard_editor_staging() -> None:
+    """Drop the editor's description drafts; park its metadata restore."""
+    _drop_description_drafts()
+    snapshot = st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
+    if isinstance(snapshot, dict) and _metadata_grains_changed(snapshot):
+        st.session_state[_EDITOR_RESTORE_KEY] = snapshot
 
 
 def _ask_leave_dataset_editor() -> None:
@@ -5462,7 +5645,7 @@ def _ask_leave_dataset_editor() -> None:
     towards *dirty*, so the confirmation is skipped only when the mapping, the
     recording setup and the uploads are all exactly as the editor opened.
     """
-    if not dataset_editor_is_dirty():
+    if not _editor_is_dirty():
         _close_dataset_editor()
         return
     st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
@@ -5493,8 +5676,8 @@ def _leave_dataset_editor_dialog() -> None:
     """
     st.caption(
         "Changes you have already saved are kept. Anything edited since — the "
-        "mapping, the recording setup, and any table uploaded to fill a "
-        "missing half — is discarded."
+        "name and description, the mapping, the recording setup, the metadata "
+        "tables, and any table uploaded to fill a missing one — is discarded."
     )
     leave, stay = st.columns(2, gap="small")
     if leave.button(
@@ -5717,7 +5900,7 @@ def _open_dataset_row(token: str) -> None:
         return
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
     if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
-        if dataset_editor_is_dirty():
+        if _editor_is_dirty():
             st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
             st.session_state[_EDITOR_LEAVE_TARGET_KEY] = token
             return
@@ -5737,10 +5920,13 @@ def _edit_open_dataset(token: str) -> None:
     if token == MANUAL_SAMPLE_CHOICE:
         _edit_manual_sample()
         return
-    # UX-178 — the Name field is seeded on open; whatever an editor left behind
-    # without Cancel or Save (a switch of dataset, say) is not this one's name.
-    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
-    st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
+    if not st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+        # UX-178 — the Name and Description fields are seeded on open; whatever
+        # an editor left behind without Cancel or Save (a switch of dataset,
+        # say) is not this edit's. An edit already open keeps its drafts.
+        st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
+        st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
+        _drop_description_drafts()
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
@@ -8361,6 +8547,9 @@ def _run_app() -> None:
         if data_choice == UPLOAD_CHOICE
         else str(st.session_state.get("data_source_choice") or data_choice)
     )
+    # A cancelled edit's metadata tables go back first, to the dataset they
+    # were taken from, before the swap below files them away.
+    apply_editor_restore()
     _metadata.activate_dataset(st.session_state, _dataset_owner)
     # Adoption of an old cache's unassigned entries waits for the load, which
     # says what is really shown (`_file_annotations_under_shown_dataset`).
@@ -8444,6 +8633,7 @@ def _run_app() -> None:
         # dataset, at the top of part 1 (the add screen asks for it beside the
         # name). The public loader's own caption lands under it, in this slot.
         editing_token = str(st.session_state.get("data_source_choice") or data_choice)
+        hold_editor_staging(editing_token)
         render_name_field(editor_name_body, editing_token)
         render_description_field(editor_name_body, editing_token)
     # PRE-22: the section is held back from this release — heading, caption and
@@ -8504,8 +8694,8 @@ def _run_app() -> None:
         builtin_saved = st.session_state.pop(BUILTIN_MAPPING_SAVED_KEY, None)
         if builtin_saved is not None:
             dataset_table_slot.success(
-                f"**{_dataset_display_name(str(builtin_saved))}** updated — its "
-                "column mapping is saved.",
+                f"**{_dataset_display_name(str(builtin_saved))}** updated — "
+                "your changes are saved.",
                 icon=ICONS["success"],
             )
         if saved:
@@ -9337,6 +9527,13 @@ def _run_app() -> None:
         render_dataset_editor_footer(editor_footer_slot)
         if mapping_editor_rendered:
             _render_builtin_editor_footer(editor_footer_slot)
+        elif str(st.session_state.get("data_source_choice") or "") not in (
+            st.session_state.get("_datasets") or {}
+        ) and data_choice not in (UPLOAD_CHOICE, AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+            # A source with no mapping panels (the synthetic trial, a server
+            # bundle) still has a name, a description and metadata tables to
+            # save — and they wait for Save like everything else.
+            _render_builtin_editor_footer(editor_footer_slot, mapping=False)
         with setup_body_slot:
             st.divider()
             active_token = str(

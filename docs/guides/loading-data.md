@@ -62,10 +62,10 @@ values from assumed ones.
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 **Edit dataset** opens under the list, below the open dataset's counts and
-tables, and changes its name, column mapping and recording setup, or adds a
-table it is missing; its mapped fields show the same value preview. Changes
-apply when you click **Save changes**;
-**Cancel** discards them. The page also holds each dataset's tables and its
+tables, and changes its name, description, column mapping, recording setup
+and metadata tables, or adds a table it is missing; its mapped fields show the
+same value preview. Nothing applies until you click **Save changes**;
+**Cancel** discards all of it. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 
 Columns are named as they are in your files: in the tables, the plot

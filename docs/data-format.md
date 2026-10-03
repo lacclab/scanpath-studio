@@ -73,7 +73,9 @@ Three rules are worth knowing:
 - **Nothing is guessed.** The join is reported before anything uses it: readers
   in your data with no row, rows describing readers you did not load, and
   duplicate rows. Duplicates that *disagree* are dropped and named rather than
-  resolved by taking the first one, so the field reads as missing.
+  resolved by taking the first one, so the field reads as missing. Duplicates
+  that do not disagree are combined: each field keeps the one value the rows
+  hold, so one row's age and another's language both survive.
 - **A missing reader is missing, not excluded.** Attaching a table that forgets
   someone never removes them from the pool.
 

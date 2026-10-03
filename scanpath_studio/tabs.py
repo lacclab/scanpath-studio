@@ -12390,6 +12390,7 @@ def _participant_metadata_body(
         # caption + colored banner this used to be.
         parts = [f"~{id_count:,} identified" if id_count is not None else None]
         parts.append(f"{matched:,} joined")
+        parts.append(_combined_rows_note(report))
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-20 — zero matches is the same silent trap the trial table had
@@ -12621,6 +12622,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         # caption + colored banner this used to be.
         parts = [f"~{id_count:,} identified" if id_count is not None else None]
         parts.append(f"{matched:,} joined")
+        parts.append(_combined_rows_note(report))
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-29 — nothing matched. This used to read as a quiet blue
@@ -12828,12 +12830,28 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         # caption + colored banner this used to be.
         parts = [f"~{id_count:,} identified" if id_count is not None else None]
         parts.append(f"{matched:,} joined")
+        parts.append(_combined_rows_note(report))
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # Loud on purpose — unlike the line above, this stays a real alert
         # (DATA-20/29's "a metadata table that joins to nothing says so").
         with status_host:
             _render_key_mismatch(attached, report, "text")
+
+
+def _combined_rows_note(report) -> str | None:
+    """``combined 2 compatible duplicate rows`` — or ``None`` when none were.
+
+    Rows that repeat a key without disagreeing are folded into one, each field
+    taking the one value they hold (`metadata._merge_duplicates`); the status
+    line says so, so a table shorter than its file is not a surprise.
+    """
+    combined = int(getattr(report, "combined_rows", 0) or 0)
+    if not combined:
+        return None
+    return (
+        f"combined {combined:,} compatible duplicate row{'s' if combined != 1 else ''}"
+    )
 
 
 def _render_key_mismatch(attached, report, grain: str) -> None:

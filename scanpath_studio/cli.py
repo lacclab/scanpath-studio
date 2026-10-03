@@ -1678,6 +1678,18 @@ def _compare_setup_snapshot(canvas: tuple | None):
     )
 
 
+def _print_combined_rows(report) -> None:
+    """Say how many duplicate rows a metadata table folded together."""
+    combined = int(getattr(report, "combined_rows", 0) or 0)
+    if combined:
+        print(
+            f"  combined {combined} compatible duplicate row"
+            f"{'s' if combined != 1 else ''} (each field keeps the one value "
+            "they hold)",
+            file=sys.stderr,
+        )
+
+
 def _format_trial_key(key) -> str:
     """One trial-metadata report key as text (DATA-29).
 
@@ -2459,6 +2471,7 @@ def render(argv: list[str]) -> None:
         ):
             if ids:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
+        _print_combined_rows(report)
 
     # DATA-29: the same, one grain down. A trial table's report is worth more
     # than the participant one, not less: getting the *key* wrong is silent
@@ -2494,6 +2507,7 @@ def render(argv: list[str]) -> None:
                 # code page prints the single glyph as a replacement mark.
                 more = "" if len(keys) <= 20 else f", ... (+{len(keys) - 20})"
                 print(f"  {len(keys)} {label}: {shown}{more}", file=sys.stderr)
+        _print_combined_rows(report)
     elif args.trial_metadata_reader_column:
         raise SystemExit(
             "--trial-metadata-reader-column needs --trial-metadata: it names a "
@@ -2523,6 +2537,7 @@ def render(argv: list[str]) -> None:
         ):
             if ids:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
+        _print_combined_rows(report)
 
     if args.list_trials:
         combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)

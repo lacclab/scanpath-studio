@@ -275,7 +275,9 @@ REGISTER: tuple[Computation, ...] = (
         summary="Attach a participant-level table without broadcasting it (DATA-20).",
         formula=(
             "Left join on string `participant_id`. Duplicate ids that agree "
-            "collapse; duplicate ids that **disagree** are dropped and reported, "
+            "are combined field by field (each field keeps the one non-missing "
+            "value the rows hold); duplicate ids that **disagree** are dropped "
+            "and reported, "
             "so no `groupby.first()` winner is ever invented. A field is "
             "projected onto the per-trial frame, never onto word/fixation rows."
         ),
@@ -286,7 +288,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A, C, D",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _CLI, _EXPORT, _INSPECT),
-        tests=("tests/test_metadata.py",),
+        tests=("tests/test_metadata.py", "tests/test_metadata_duplicates.py"),
     ),
     # ------------------------------------------------------------------
     # Assignment / classification

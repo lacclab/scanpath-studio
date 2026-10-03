@@ -175,6 +175,9 @@ class JoinReport:
     only_in_data: tuple[str, ...] = ()
     duplicated: tuple[str, ...] = ()
     conflicting: tuple[str, ...] = ()
+    #: How many rows of the file were folded together because they repeated a
+    #: key without disagreeing (each field takes the one value its rows hold).
+    combined_rows: int = 0
 
     @property
     def is_clean(self) -> bool:
@@ -401,6 +404,47 @@ def _rows_with_ids(frame: pd.DataFrame, columns) -> pd.DataFrame:
     return frame.loc[~missing.any(axis=1)].copy()
 
 
+def _merge_duplicates(work: pd.DataFrame, key: pd.Series, value_columns) -> tuple:
+    """Fold the rows that repeat a key, unless they disagree.
+
+    Returns ``(work, key, duplicated, conflicting, combined_rows)``: ``work``
+    and ``key`` with one row per key, the keys that repeated, the keys whose
+    rows disagree (dropped whole, as every grain here has always done), and how
+    many rows were folded together.
+
+    Rows *disagree* when a field holds two different non-missing values. Rows
+    that do not are one record written twice, and each field takes the one
+    value they hold — two ``p1`` rows, one with a language and one with an age,
+    become one reader with both. Keeping the first row instead lost the second
+    row's values, and which ones depended on the file's row order.
+    """
+    repeated = key.duplicated(keep=False)
+    if not repeated.any():
+        return work, key, (), set(), 0
+    duplicated = tuple(sorted(set(key[repeated]), key=str))
+    columns = [column for column in value_columns if column in work.columns]
+    conflicting: set = set()
+    folded: list = []
+    combined = 0
+    # A positional index, so writing the folded values into a group's first row
+    # cannot also land on another row a user's frame gave the same label.
+    work, key = work.reset_index(drop=True), key.reset_index(drop=True)
+    repeated = repeated.reset_index(drop=True)
+    for group_key, rows in work[repeated].groupby(key[repeated], sort=False):
+        if any(rows[column].dropna().nunique() > 1 for column in columns):
+            conflicting.add(group_key)
+            continue
+        first = rows.index[0]
+        for column in columns:
+            present = rows[column].dropna()
+            if not present.empty:
+                work.at[first, column] = present.iloc[0]
+        folded.extend(rows.index[1:])
+        combined += len(rows)
+    keep = ~key.isin(conflicting) & ~work.index.isin(folded)
+    return work[keep], key[keep], duplicated, conflicting, combined
+
+
 def active_trials() -> TrialMetadata | None:
     """The trial table attached to this session, or ``None`` (DATA-29)."""
     try:
@@ -512,21 +556,9 @@ def build_trial_metadata(
         if participant_column
         else work["trial_id"]
     )
-    duplicated = tuple(sorted(set(key_frame[key_frame.duplicated()]), key=str))
-    conflicting: list = []
-    if duplicated:
-        for key, group in work.groupby(key_frame, sort=False):
-            if key not in set(duplicated):
-                continue
-            for column in value_columns:
-                if group[column].dropna().nunique() > 1:
-                    conflicting.append(key)
-                    break
-    conflicting_set = set(conflicting)
-    keep = ~key_frame.isin(conflicting_set)
-    work, key_frame = work[keep], key_frame[keep]
-    first = ~key_frame.duplicated(keep="first")
-    work, key_frame = work[first], key_frame[first]
+    work, key_frame, duplicated, conflicting_set, combined = _merge_duplicates(
+        work, key_frame, value_columns
+    )
 
     clean = pd.DataFrame({"trial_id": work["trial_id"].to_numpy()})
     if participant_column:
@@ -558,6 +590,7 @@ def build_trial_metadata(
             matched=tuple(sorted(set(key_frame), key=str)),
             duplicated=tuple(sorted(duplicated, key=str)),
             conflicting=tuple(sorted(conflicting_set, key=str)),
+            combined_rows=combined,
         ),
     )
     if keys is None:
@@ -600,6 +633,7 @@ def rejoin_trials(metadata: TrialMetadata, keys: Iterable) -> TrialMetadata:
             only_in_data=tuple(sorted(data_keys - table_keys, key=str)),
             duplicated=metadata.report.duplicated,
             conflicting=metadata.report.conflicting,
+            combined_rows=metadata.report.combined_rows,
         ),
     )
 
@@ -858,19 +892,9 @@ def build_text_metadata(
         str(column) for column in frame.columns if str(column) not in reserved
     ]
 
-    duplicated = tuple(sorted(set(work.loc[work["text_id"].duplicated(), "text_id"])))
-    conflicting: list[str] = []
-    if duplicated:
-        for tid, group in work[work["text_id"].isin(duplicated)].groupby(
-            "text_id", sort=True
-        ):
-            for column in value_columns:
-                if group[column].dropna().nunique() > 1:
-                    conflicting.append(str(tid))
-                    break
-    conflicting_set = set(conflicting)
-    work = work[~work["text_id"].isin(conflicting_set)]
-    work = work.drop_duplicates(subset=["text_id"], keep="first")
+    work, _, duplicated, conflicting_set, combined = _merge_duplicates(
+        work, work["text_id"], value_columns
+    )
 
     fields: list[MetadataField] = []
     clean = pd.DataFrame({"text_id": work["text_id"].to_numpy()})
@@ -896,6 +920,7 @@ def build_text_metadata(
             matched=tuple(sorted(clean["text_id"])),
             duplicated=duplicated,
             conflicting=tuple(sorted(conflicting_set)),
+            combined_rows=combined,
         )
     else:
         data_ids = {str(tid) for tid in keys}
@@ -905,6 +930,7 @@ def build_text_metadata(
             only_in_data=tuple(sorted(data_ids - table_ids)),
             duplicated=duplicated,
             conflicting=tuple(sorted(conflicting_set)),
+            combined_rows=combined,
         )
     return TextMetadata(clean, tuple(fields), source_name, label, report)
 
@@ -1127,9 +1153,10 @@ def build_participant_metadata(
 
     ``participants`` is the set of reader ids actually present in the loaded
     data; passing it fills in the two "unmatched" halves of the report. Rows
-    whose id repeats are only a problem when they *disagree* — a duplicated row
-    that says the same thing collapses silently, a duplicated row that says
-    something different is dropped and reported.
+    whose id repeats are only a problem when they *disagree* — duplicated rows
+    that do not are combined field by field (:func:`_merge_duplicates`, counted
+    in ``report.combined_rows``), duplicated rows that say something different
+    are dropped and reported.
     """
     if frame is None or frame.empty or id_column not in frame.columns:
         return ParticipantMetadata(
@@ -1148,21 +1175,9 @@ def build_participant_metadata(
         if str(column) not in {str(id_column), "participant_id", *_BOOKKEEPING_COLUMNS}
     ]
 
-    duplicated = tuple(
-        sorted(set(work.loc[work["participant_id"].duplicated(), "participant_id"]))
+    work, _, duplicated, conflicting_set, combined = _merge_duplicates(
+        work, work["participant_id"], value_columns
     )
-    conflicting: list[str] = []
-    if duplicated:
-        for pid, group in work[work["participant_id"].isin(duplicated)].groupby(
-            "participant_id", sort=True
-        ):
-            for column in value_columns:
-                if group[column].dropna().nunique() > 1:
-                    conflicting.append(str(pid))
-                    break
-    conflicting_set = set(conflicting)
-    work = work[~work["participant_id"].isin(conflicting_set)]
-    work = work.drop_duplicates(subset=["participant_id"], keep="first")
 
     fields: list[MetadataField] = []
     clean = pd.DataFrame({"participant_id": work["participant_id"].to_numpy()})
@@ -1188,6 +1203,7 @@ def build_participant_metadata(
             matched=tuple(sorted(clean["participant_id"])),
             duplicated=duplicated,
             conflicting=tuple(sorted(conflicting_set)),
+            combined_rows=combined,
         )
     else:
         data_ids = {str(pid) for pid in participants}
@@ -1197,6 +1213,7 @@ def build_participant_metadata(
             only_in_data=tuple(sorted(data_ids - table_ids)),
             duplicated=duplicated,
             conflicting=tuple(sorted(conflicting_set)),
+            combined_rows=combined,
         )
     return ParticipantMetadata(
         clean, tuple(fields), source_name, str(id_column), report
@@ -1257,6 +1274,7 @@ def rejoin(
             only_in_data=tuple(sorted(data_ids - table_ids)),
             duplicated=metadata.report.duplicated,
             conflicting=metadata.report.conflicting,
+            combined_rows=metadata.report.combined_rows,
         ),
     )
 

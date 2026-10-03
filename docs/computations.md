@@ -206,7 +206,7 @@ Place a fixation with no x/y at its word box's center.
 
 Attach a participant-level table without broadcasting it (DATA-20).
 
-**Formula.** Left join on string `participant_id`. Duplicate ids that agree collapse; duplicate ids that **disagree** are dropped and reported, so no `groupby.first()` winner is ever invented. A field is projected onto the per-trial frame, never onto word/fixation rows.
+**Formula.** Left join on string `participant_id`. Duplicate ids that agree are combined field by field (each field keeps the one non-missing value the rows hold); duplicate ids that **disagree** are dropped and reported, so no `groupby.first()` winner is ever invented. A field is projected onto the per-trial frame, never onto word/fixation rows.
 
 | | |
 | --- | --- |
@@ -215,7 +215,7 @@ Attach a participant-level table without broadcasting it (DATA-20).
 | **Precedence & caveats** | A real recorded column of the same name always wins. |
 | **Code** | `scanpath_studio/metadata.py:build_participant_metadata` |
 | **Consumers** | UI, API, CLI, Export, Data Inspection |
-| **Tests** | `tests/test_metadata.py` |
+| **Tests** | `tests/test_metadata.py`, `tests/test_metadata_duplicates.py` |
 | **Verification** | tier A, C, D — **Verified** |
 
 ## Assignment / classification

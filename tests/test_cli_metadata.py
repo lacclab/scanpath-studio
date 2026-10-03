@@ -105,6 +105,26 @@ class TestParticipantMetadata:
         assert "rows that disagree" in err
         assert readers[0] in err
 
+    def test_duplicate_rows_that_agree_are_combined_and_counted(
+        self, tmp_path, sample, capsys
+    ):
+        _words, fixations = sample
+        readers = sorted(fixations["participant_id"].astype(str).unique())
+        path = tmp_path / "readers.csv"
+        pd.DataFrame(
+            {
+                "participant_id": [readers[0], readers[0]],
+                "age": [21, None],
+                "language": [None, "English"],
+            }
+        ).to_csv(path, index=False)
+
+        _render(tmp_path, "--participant-metadata", str(path))
+
+        err = capsys.readouterr().err
+        assert "combined 2 compatible duplicate rows" in err
+        assert "rows that disagree" not in err
+
     def test_a_missing_file_exits_rather_than_rendering(self, tmp_path):
         with pytest.raises(SystemExit):
             _render(tmp_path, "--participant-metadata", str(tmp_path / "nope.csv"))

@@ -1,7 +1,7 @@
 """Rail choices that must mean the same thing on every layer and in every mode.
 
 Each test drives the real plot rail (`controls.render_plot_controls`) under
-AppTest over a tiny two-word trial, then builds the figure the Scanpath view
+AppTest over a tiny three-word, two-line trial, then builds the figure the Scanpath view
 would build from what the rail returned — so a gate in the collector, not just
 in the builder, is what is under test.
 """
@@ -26,17 +26,17 @@ def _frames():
 
     words = pd.DataFrame(
         {
-            "participant_id": ["p"] * 2,
-            "trial_id": ["t"] * 2,
-            "text_id": ["text"] * 2,
-            "word_id": [1, 2],
-            "text": ["One", "Two"],
-            "line_idx": [0, 0],
-            "x": [100, 200],
-            "y": [100, 100],
-            "width": [80, 80],
-            "height": [20, 20],
-            "flag": [True, False],
+            "participant_id": ["p"] * 3,
+            "trial_id": ["t"] * 3,
+            "text_id": ["text"] * 3,
+            "word_id": [1, 2, 3],
+            "text": ["One", "Two", "Three"],
+            "line_idx": [0, 0, 1],
+            "x": [100, 200, 100],
+            "y": [100, 100, 150],
+            "width": [80, 80, 80],
+            "height": [20, 20, 20],
+            "flag": [True, False, False],
         }
     )
     fixations = pd.DataFrame(
@@ -44,13 +44,13 @@ def _frames():
             "participant_id": ["p"] * 4,
             "trial_id": ["t"] * 4,
             "text_id": ["text"] * 4,
-            "x": [110, 120, 210, 220],
-            "y": [110] * 4,
+            "x": [110, 120, 210, 120],
+            "y": [110, 110, 110, 160],
             "duration_ms": [100, 200, 300, 300],
             "timestamp_ms": [0, 100, 300, 600],
             "order_in_trial": [1, 2, 3, 4],
             "fixation_id": [1, 2, 3, 4],
-            "word_id": [1, 1, 2, 2],
+            "word_id": [1, 1, 2, 3],
             "eye": ["L", "R", "L", "R"],
             "pupil_size": [2.1, 2.2, 2.3, 2.4],
         }
@@ -153,3 +153,161 @@ def test_mark_text_stays_inactive_while_text_is_hidden():
     at.session_state["global_show_labels"] = True
     _rerun(at)
     assert at.session_state["_viz"]["highlight_column"] == "flag"
+
+
+# --- Color by in Compare and the co-animation --------------------------------
+
+
+def _pair():
+    """A and B: two readers of one text, B's eyes in a different order."""
+    import pandas as pd
+
+    words, fixations = _frames()
+    words_b, fixations_b = words.copy(), fixations.copy()
+    words_b["participant_id"] = "q"
+    fixations_b["participant_id"] = "q"
+    fixations_b["eye"] = ["R", "R", "B", "L"]
+    fixations_b["duration_ms"] = [400, 150, 250, 300]
+    return (
+        pd.concat([words, words_b], ignore_index=True),
+        pd.concat([fixations, fixations_b], ignore_index=True),
+        (words_b, fixations_b),
+    )
+
+
+def _compare(viz: dict, layout: str, **overrides):
+    words, fixations, _ = _pair()
+    return plots.make_comparison_figure(
+        words,
+        fixations,
+        ("p", "t"),
+        ("q", "t"),
+        settings=_settings(viz, layout=layout, **overrides),
+    )
+
+
+def _scanpath_markers(fig) -> list:
+    """The two scanpaths' marker traces (they carry the per-fixation hover)."""
+    return [
+        t
+        for t in fig.data
+        if t.mode
+        and "markers" in t.mode
+        and t.customdata is not None
+        and len(t.x) == 4
+        and t.x[0] is not None
+    ]
+
+
+def _trails(fig) -> list:
+    """A replay's trail traces (the frames restate them by position)."""
+    return [
+        t
+        for t in fig.data
+        if t.customdata is not None and t.name in ("Scanpath A", "Scanpath B")
+    ]
+
+
+def _category_entries(fig) -> list:
+    return [t.name for t in fig.data if t.showlegend and ": " in str(t.name)]
+
+
+LAYOUTS = ["overlay", "side_by_side", "stacked"]
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_compare_colours_a_categorical_column_on_one_shared_mapping(layout):
+    at = _rail(global_color_by="eye", single_compare_toggle=True)
+    assert not at.selectbox(key="global_color_by").disabled
+    a, b = _scanpath_markers(_compare(at.session_state["_viz"], layout))
+    # A reads L R L R, B reads R R B L: one colour per eye on both scanpaths.
+    assert a.marker.color[0] == a.marker.color[2] == b.marker.color[3]
+    assert a.marker.color[1] == b.marker.color[0] == b.marker.color[1]
+    assert len(set(a.marker.color) | set(b.marker.color)) == 3
+    # A and B stay apart by their outline, which no category wears.
+    outlines = {a.marker.line.color, b.marker.line.color}
+    assert len(outlines) == 2
+    assert not outlines & (set(a.marker.color) | set(b.marker.color))
+    assert _category_entries(_compare(at.session_state["_viz"], layout)) == [
+        "eye: L",
+        "eye: R",
+        "eye: B",
+    ]
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_compare_colours_by_line(layout):
+    at = _rail(global_color_by="line", single_compare_toggle=True)
+    fig = _compare(at.session_state["_viz"], layout)
+    a, b = _scanpath_markers(fig)
+    # The last fixation of each reading is on the second line.
+    assert a.marker.color[0] == a.marker.color[2] != a.marker.color[3]
+    assert list(a.marker.color) == list(b.marker.color)
+    assert _category_entries(fig) == ["line: Line 1", "line: Line 2"]
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_compare_numeric_colouring_is_unchanged(layout):
+    at = _rail(global_color_by="duration_ms", single_compare_toggle=True)
+    a, b = _scanpath_markers(_compare(at.session_state["_viz"], layout))
+    assert list(a.marker.color) == [100, 200, 300, 300]
+    assert (a.marker.cmin, a.marker.cmax) == (b.marker.cmin, b.marker.cmax)
+    assert (a.marker.cmin, a.marker.cmax) == (100.0, 400.0)
+    assert a.marker.line.color != b.marker.line.color
+    assert _category_entries(_compare(at.session_state["_viz"], layout)) == []
+
+
+@pytest.mark.parametrize("color_by", ["eye", "line", "duration_ms"])
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_every_colour_choice_changes_the_comparison(color_by, layout):
+    at = _rail(global_color_by=color_by, single_compare_toggle=True)
+    viz = at.session_state["_viz"]
+    coloured = _compare(viz, layout).to_json()
+    uniform = _compare(
+        viz, layout, color_by=plots.UNIFORM_COLOR_FIELD, color_by_line=False
+    ).to_json()
+    assert coloured != uniform
+
+
+def test_leaving_compare_keeps_the_static_choice():
+    at = _rail(global_color_by="eye", single_compare_toggle=True)
+    at.session_state["single_compare_toggle"] = False
+    _rerun(at)
+    assert at.session_state["global_color_by"] == "eye"
+    static = next(t for t in _static(at).data if t.name == "Fixations")
+    assert len(set(static.marker.color)) == 2
+
+
+@pytest.mark.parametrize("color_by", ["eye", "line", "duration_ms"])
+def test_the_co_animation_colours_like_the_comparison(color_by):
+    at = _rail(global_color_by=color_by, single_compare_toggle=True)
+    words, fixations = _frames()
+    _, _, (words_b, fixations_b) = _pair()
+    fig = plots.make_scanpath_animation(
+        words,
+        fixations,
+        settings=_settings(at.session_state["_viz"], show_legend=True),
+        fixations_b=fixations_b,
+        words_b=words_b,
+    )
+    a, b = _trails(fig)
+    assert a.marker.line.color != b.marker.line.color
+    if color_by == "duration_ms":
+        assert list(b.marker.color) == [400, 150, 250, 300]
+        assert (a.marker.cmin, a.marker.cmax) == (b.marker.cmin, b.marker.cmax)
+    else:
+        assert len(set(a.marker.color) | set(b.marker.color)) > 1
+        assert fig.frames[-1].data[0].marker.color == a.marker.color
+        assert _category_entries(fig)
+
+
+@pytest.mark.parametrize("color_by", ["eye", "line"])
+def test_the_single_replay_colours_discrete_choices(color_by):
+    at = _rail(global_color_by=color_by, single_animate=True)
+    words, fixations = _frames()
+    fig = plots.make_scanpath_animation(
+        words, fixations, settings=_settings(at.session_state["_viz"])
+    )
+    (trail,) = _trails(fig)
+    assert len(set(trail.marker.color)) == 2
+    assert _category_entries(fig)

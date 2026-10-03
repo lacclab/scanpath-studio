@@ -5397,15 +5397,12 @@ def render_plot_controls(
         ),
         _popover_rows("fix"),
     ):
-        # The metric that maps to fixation HUE — applies to the static
-        # figure, the single animated replay AND the comparison overlay (in
-        # compare it colours both scanpaths by the metric; the per-scanpath
-        # flat colour below becomes the A/B marker outline). The one path
-        # that ignores it is the DUAL animation (Animate + Compare), where
-        # the flat A/B colours are all that tells the readings apart.
-        metric_disabled, metric_reason = _mode_gate(
-            animating, comparing, in_animation=not comparing
-        )
+        # The metric that maps to fixation HUE — applies on every render path.
+        # In Compare and the co-animation (Animate + Compare) the chosen values
+        # — numeric, a category, or the text line — fill both scanpaths'
+        # markers on one shared scale / one shared category→colour mapping,
+        # and each scanpath's flat colour becomes its marker outline.
+        metric_disabled, metric_reason = _mode_gate(animating, comparing)
         # UX-158: colour, shape, size and opacity are one "Marker" group — a
         # title on the first row and a short caption per row, instead of a full
         # title each (VIZ-17 → UX-154 put the flat colour / colorscale beside
@@ -5419,9 +5416,11 @@ def render_plot_controls(
             "(the default) maps nothing — marker *size* already shows fixation "
             "duration, so colour is free for a second variable — and the box "
             "beside it is the one colour every marker wears. Pick a column, or "
-            "'line' to tint each fixation by the text line it lands on (static "
-            "plot + single animation only), and that box becomes its colorscale. "
-            "In compare mode it colours both scanpaths by this metric.",
+            "'line' to tint each fixation by the text line it lands on, and that "
+            "box becomes its colorscale (a categorical column or 'line' takes a "
+            "discrete palette instead). In Compare, animated or not, both "
+            "scanpaths share one scale or one category→colour mapping, and each "
+            "scanpath's own colour outlines its markers so A and B stay apart.",
             metric_reason,
         )
         by_disabled, by_help = _layer_gate(metric_disabled, by_help)
@@ -6620,12 +6619,10 @@ def render_plot_controls(
 
         # VIZ-23: all three builders route their colour bar through
         # `_colorbar_dict`, so the styling applies wherever a colour bar is
-        # drawn. The one mode without one is the DUAL animation (Animate +
-        # Compare) — there the flat A/B colours replace metric colouring
-        # entirely, so there is no bar to style. Same gate as "Color by".
-        cb_disabled, cb_reason = _mode_gate(
-            animating, comparing, in_animation=not comparing
-        )
+        # drawn — the co-animation (Animate + Compare) included, since it
+        # colours by the metric like the comparison figure. Same gate as
+        # "Color by".
+        cb_disabled, cb_reason = _mode_gate(animating, comparing)
         show_colorbars, cb_rest = _check_row(
             "Color bar",
             key="global_show_colorbars",

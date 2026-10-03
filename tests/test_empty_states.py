@@ -147,6 +147,32 @@ class TestClearOneTrialFilter:
 
         clear_trial_filter("filter_never_set")  # must not raise
 
+    def test_the_other_filters_survive_a_run_without_the_funnel(self, pool):
+        """BUG-115: the empty-pool panel replaces the view, funnel and all, so on
+        that run Streamlit has dropped every ``filter_*`` widget key and only the
+        ``_trial_filters_raw`` mirror remembers them. Clearing one culprit must
+        leave the rest of that mirror alone, and with the frames it re-derives
+        the pool on the same run rather than one run late."""
+        import streamlit as st
+
+        from scanpath_studio.controls import clear_trial_filter
+
+        for key in list(st.session_state):
+            del st.session_state[key]
+        st.session_state["_trial_filters_raw"] = {
+            "filter_participants": ["p1"],
+            "filter_favorites": True,
+        }
+        st.session_state["_trial_filters"] = {"participants": ["p1"]}
+
+        clear_trial_filter("filter_favorites", frames=pool)
+
+        assert st.session_state["_trial_filters_raw"] == {"filter_participants": ["p1"]}
+        assert st.session_state["filter_participants"] == ["p1"]
+        assert "filter_favorites" not in st.session_state
+        assert st.session_state["_trial_filters"]["participants"] == ["p1"]
+        assert not st.session_state["_trial_filters"]["favorites_only"]
+
 
 class TestFilterResetKeys:
     """The Narrow-by *Text* multiselect lands in `metadata` under the text

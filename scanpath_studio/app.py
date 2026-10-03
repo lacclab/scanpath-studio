@@ -261,6 +261,7 @@ from scanpath_studio.tabs import (
     _build_figure_settings,
     _render_column_mapping_section,
     dataset_editor_is_dirty,
+    pool_filter_frames,
     render_analysis_pool_bar,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
@@ -682,7 +683,10 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
 
 
 def _render_empty_after_filtering(
-    words_all: pd.DataFrame, fixations_all: pd.DataFrame, trial_filters: dict
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    trial_filters: dict,
+    filter_frames: tuple,
 ) -> None:
     """UX-7(a): say *which* filter emptied the pool, and offer a way out.
 
@@ -740,6 +744,9 @@ def _render_empty_after_filtering(
                     key=f"clear_one_filter_{i}",
                     on_click=clear_trial_filter,
                     args=tuple(row["keys"]),
+                    # BUG-115: the funnel is not drawn beside this panel, so the
+                    # other filters are re-derived from the frames it filters.
+                    kwargs={"frames": filter_frames},
                     help=f"Reset only this filter — {row['label']}.",
                     width="stretch",
                 )
@@ -9054,7 +9061,12 @@ def _run_app() -> None:
     # (words-only / fixations-only / raw-gaze-only datasets); all empty means the
     # filters removed everything.
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
-        _render_empty_after_filtering(words_all, fixations_all, trial_filters)
+        _render_empty_after_filtering(
+            words_all,
+            fixations_all,
+            trial_filters,
+            pool_filter_frames(words_all, fixations_all, raw_gaze_all),
+        )
         _finish_page()
         _render_datasets_table(words_all, fixations_all, raw_gaze_all)
         _end_loading()

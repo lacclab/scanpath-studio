@@ -128,6 +128,15 @@ class TestAlignCompareColumns:
         assert "duration_ms" in shared
         assert "gpt2_surprisal" not in shared and "word_length" not in shared
 
+    def test_a_category_both_corpora_carry_is_shared(self):
+        """Compare colours by a category too, so one both sides carry as text
+        may colour a cross-dataset figure; one numeric on a side only may not."""
+        a = _fixations("p1", "t1").assign(eye=["L", "R", "L"], mixed=[1, 2, 3])
+        b = _fixations("p2", "t2").assign(eye=["R", "R", "L"], mixed=["a", "b", "c"])
+        _, _, shared = tabs._align_compare_columns(a, b)
+        assert "eye" in shared
+        assert "mixed" not in shared
+
     def test_concat_of_disjoint_frames_does_not_warn(self):
         a = _fixations("p1", "t1").assign(only_a=[1, 2, 3])
         b = _fixations("p2", "t2").assign(only_b=[4, 5, 6])

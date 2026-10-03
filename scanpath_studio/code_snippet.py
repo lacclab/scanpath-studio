@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import json
 import shlex
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 #: Where ``tabs._publish_snippet_state`` parks the :class:`FigureState` the
@@ -154,6 +154,69 @@ def _root(source: SnippetSource, fallback: str) -> str:
     return str(source.options.get("root") or fallback)
 
 
+#: The sources whose tables go through ``load_scanpath_data`` — the loader that
+#: keeps only the mapped and recognised columns unless told otherwise.
+_KEEPING_SOURCES = frozenset({SOURCE_FILES, SOURCE_UPLOAD, SOURCE_UNKNOWN})
+
+#: The figure options that name a fixation column.
+_FIXATION_COLUMN_OPTIONS = ("color_by", "x_field", "y_field", "fixation_hover_fields")
+
+
+def _loader_columns() -> frozenset:
+    """Every column ``load_scanpath_data`` hands back without being asked — the
+    canonical ones, the recognised optional ones, and the per-fixation fields
+    the builders compute — plus the two non-column ``color_by`` values."""
+    from .constants import UNIFORM_COLOR_FIELD
+    from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
+
+    return frozenset(
+        {
+            *empty_fixations_frame().columns,
+            *(entry[1] for entry in (*FIX_OPTIONAL_FIELDS, *WORD_OPTIONAL_FIELDS)),
+            "order_in_trial",
+            "pass_index",
+            "progression",
+            "is_regression",
+            "saccade_amplitude",
+            UNIFORM_COLOR_FIELD,
+            "line",
+        }
+    )
+
+
+def _kept_columns(settings: dict) -> list[str]:
+    """The dataset's own columns a figure names (a retained pupil size as
+    ``color_by``, say), which the loader has to be told to keep."""
+    named: list[str] = []
+    for option in _FIXATION_COLUMN_OPTIONS:
+        value = settings.get(option)
+        values = value if isinstance(value, (list, tuple)) else [value]
+        named += [str(v) for v in values if isinstance(v, str) and v]
+    known = _loader_columns()
+    return list(dict.fromkeys(c for c in named if c not in known))
+
+
+def _with_kept_columns(source: SnippetSource, state: FigureState) -> SnippetSource:
+    """``source`` told to keep the columns ``state``'s figure names, when its
+    loader would otherwise drop them."""
+    if source.kind not in _KEEPING_SOURCES:
+        return source
+    keep = _kept_columns(state.settings)
+    if not keep:
+        return source
+    return replace(source, options={**source.options, "keep_columns": keep})
+
+
+def _keep_python(source: SnippetSource) -> list[str]:
+    keep = source.options.get("keep_columns")
+    return [f"    keep_columns={_py(list(keep))},"] if keep else []
+
+
+def _keep_cli(source: SnippetSource) -> list[str]:
+    keep = source.options.get("keep_columns")
+    return ["--keep-columns", *[str(c) for c in keep]] if keep else []
+
+
 def _demo_python(source: SnippetSource) -> list[str]:
     return ["words, fixations = sps.load_sample_data()"]
 
@@ -173,6 +236,7 @@ def _files_python(source: SnippetSource) -> list[str]:
         "words, fixations = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words))},",
         f"    {_py(_one_or_list(fixations))},",
+        *_keep_python(source),
         ")",
     ]
 
@@ -235,6 +299,15 @@ def _benchmark_python(source: SnippetSource) -> list[str]:
 
 
 def _unknown_python(source: SnippetSource) -> list[str]:
+    if source.options.get("keep_columns"):
+        return [
+            "# Point these at your own tables — the app can't name an uploaded file.",
+            "words, fixations = sps.load_scanpath_data(",
+            '    "words.csv",',
+            '    "fixations.csv",',
+            *_keep_python(source),
+            ")",
+        ]
     return [
         "# Point these at your own tables — the app can't name an uploaded file.",
         'words, fixations = sps.load_scanpath_data("words.csv", "fixations.csv")',
@@ -251,7 +324,7 @@ def _files_cli(source: SnippetSource) -> list[str]:
     fixations = source.options.get("fixations") or ["fixations.csv"]
     argv += ["--words", *[str(p) for p in words]]
     argv += ["--fixations", *[str(p) for p in fixations]]
-    return argv
+    return argv + _keep_cli(source)
 
 
 def _author_cli(source: SnippetSource) -> list[str]:
@@ -285,7 +358,7 @@ def _benchmark_cli(source: SnippetSource) -> list[str]:
 
 
 def _unknown_cli(source: SnippetSource) -> list[str]:
-    return ["--words", "words.csv", "--fixations", "fixations.csv"]
+    return ["--words", "words.csv", "--fixations", "fixations.csv", *_keep_cli(source)]
 
 
 #: The placeholder paths an uploaded dataset's snippet loads its tables from.
@@ -417,6 +490,7 @@ def _upload_python(source: SnippetSource) -> list[str]:
             lines.append(f"    {option}={{")
             lines += [f"        {_py(k)}: {_py(v)}," for k, v in schema.items()]
             lines.append("    },")
+    lines += _keep_python(source)
     lines.append(")")
     return lines
 
@@ -432,7 +506,7 @@ def _upload_cli(source: SnippetSource) -> list[str]:
         argv += [flag, str(source.options[name])]
         if schema := source.options.get(option):
             argv += [schema_flag, json.dumps(schema, separators=(",", ":"))]
-    return argv
+    return argv + _keep_cli(source)
 
 
 def _raw_gaze_only_python(source: SnippetSource) -> list[str]:
@@ -1462,6 +1536,7 @@ def python_snippet(
     translated invocation writes the same-sized file, not just the same
     picture."""
     loader, _ = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
+    source = _with_kept_columns(source, state)
     other = second_dataset(state)
     lines = ["import scanpath_studio as sps"]
     if other is not None and other.canvas:
@@ -1570,6 +1645,7 @@ def cli_snippet(
     snippet can't quietly promise a figure the CLI won't produce.
     """
     _, source_cli = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
+    source = _with_kept_columns(source, state)
     other = second_dataset(state)
     argv: list[str] = ["scanpath-studio", "render"]
     if source_cli is None:

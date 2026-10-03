@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -585,6 +586,7 @@ def load_scanpath_data(
     trial_parts_manifest: dict | None = None,
     image_root: str | Path | None = None,
     image_pattern: str = "{text_id}.png",
+    keep_columns: Iterable[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load and normalize a words/IA table and/or a fixations table.
 
@@ -614,6 +616,13 @@ def load_scanpath_data(
     word-box centers. Columns named in ``data.INTERNAL_COLUMNS`` are the
     pipeline's bookkeeping (``data.drop_internal_columns`` removes them).
 
+    Normalization keeps the mapped fields and the recognised optional ones
+    (eye, EyeLink's interest-area measures, linguistic features …) and drops the
+    rest. ``keep_columns`` names further columns of your own to carry through
+    under their own names — a pupil size, a detection confidence — from
+    whichever table has them, so a figure can colour, hover or plot by them
+    (the app's *Keep columns*; ``render --keep-columns`` on the command line).
+
     Returns the normalized ``(words, fixations)`` frames the plotting
     functions expect. Raises ``ValueError`` if a required field can't be found —
     the message names the canonical field, the column names auto-detection
@@ -638,7 +647,13 @@ def load_scanpath_data(
         problems = _data.validate_word_schema(word_schema)
         if problems:
             raise _schema_error("words", words_df, word_schema, problems, explicit)
-        words_norm = _data.normalize_words(words_df, word_schema)
+        words_norm = _data.normalize_words(
+            words_df,
+            word_schema,
+            keep_columns=_with_optional_fields(
+                keep_columns, _data.WORD_OPTIONAL_FIELDS
+            ),
+        )
         if trial_parts_manifest is not None:
             words_norm = apply_trial_parts_manifest(
                 words_norm, words_df, trial_parts_manifest, kind="words"
@@ -660,7 +675,11 @@ def load_scanpath_data(
             raise _schema_error(
                 "fixations", fixations_df, fix_schema, problems, explicit
             )
-        fixations_norm = _data.normalize_fixations(fixations_df, fix_schema)
+        fixations_norm = _data.normalize_fixations(
+            fixations_df,
+            fix_schema,
+            keep_columns=_with_optional_fields(keep_columns, _data.FIX_OPTIONAL_FIELDS),
+        )
         if trial_parts_manifest is not None:
             fixations_norm = apply_trial_parts_manifest(
                 fixations_norm,
@@ -680,6 +699,19 @@ def load_scanpath_data(
             fixations_norm, image_root, image_pattern
         )
     return words_norm, fixations_norm
+
+
+def _with_optional_fields(
+    keep_columns: Iterable[str] | None, registry: list
+) -> set | None:
+    """``keep_columns`` as the normalizers take it: ``None`` (every recognised
+    optional field, nothing else) when none are named, else those names *plus*
+    every optional field — a non-``None`` set would otherwise limit them."""
+    if not keep_columns:
+        return None
+    if isinstance(keep_columns, str):
+        keep_columns = [keep_columns]
+    return {str(c) for c in keep_columns} | {entry[0] for entry in registry}
 
 
 def load_participant_metadata(

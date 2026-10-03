@@ -4825,8 +4825,9 @@ def _plan_replay(
     animation_settings = settings.with_overrides(
         playback_speed=playback_speed,
         # Drift correction colours the replay by assigned line, exactly as the
-        # static figure does once an algorithm is picked.
-        color_by_line=bool(settings.color_by_line or drift_corrected),
+        # static figure does once an algorithm is picked. Not the co-animation:
+        # it colours like the comparison figure, which keeps the rail's choice.
+        color_by_line=bool(settings.color_by_line or (drift_corrected and not dual)),
         # The replay has no border-overlay layer, so only the text-marking mode
         # carries a highlight column.
         highlight_column=_marked_text_column(viz_settings),

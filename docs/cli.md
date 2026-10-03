@@ -188,7 +188,7 @@ B's frames directly.
 | hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
-| color fixations | `--color-by FIELD` |
+| color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |

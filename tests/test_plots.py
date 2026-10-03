@@ -1605,11 +1605,12 @@ class TestDualScanpathAnimation:
         )
         assert len([t.name for t in fig.data if t.showlegend]) == 2
 
-    def test_dual_animation_ignores_color_by(
+    def test_dual_animation_keeps_ab_identity_under_color_by(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # In the overlay the flat A/B colours ARE the scanpath identity — a
-        # metric colorscale would make the two readings indistinguishable.
+        # The metric fills both trails on one shared scale, as in the comparison
+        # figure; the flat A/B colours — the scanpath identity — move to the
+        # marker outline, so the two readings stay distinguishable.
         from scanpath_studio.constants import COMPARISON_PALETTE
 
         fig = make_scanpath_animation(
@@ -1622,12 +1623,10 @@ class TestDualScanpathAnimation:
             color_by="duration_ms",
             fixations_b=self._second_fixations(),
         )
-        trail_colors = [
-            t.marker.color
-            for t in fig.data
-            if t.marker is not None and t.marker.color in COMPARISON_PALETTE
-        ]
-        assert set(trail_colors) >= set(COMPARISON_PALETTE)
+        trails = [t for t in fig.data if t.name in ("Scanpath A", "Scanpath B")]
+        assert [t.marker.line.color for t in trails] == list(COMPARISON_PALETTE)
+        assert all(t.marker.colorscale for t in trails)
+        assert len({(t.marker.cmin, t.marker.cmax) for t in trails}) == 1
 
     def test_dual_animation_uses_real_timestamps(self, normalized_words_df):
         # The shared clock must come from recorded timestamp_ms (rebased), NOT

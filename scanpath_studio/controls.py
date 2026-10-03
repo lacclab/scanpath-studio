@@ -3285,9 +3285,30 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
 # Field-option helpers — shared by the rail's selectors and the plot-config
 # restore path (`app._restore_plot_config`) so both agree on what's valid for
 # the current data.
+#: Numeric fixation columns 'Color fixations by' never offers on its own:
+#: identifiers and on-screen geometry, which say *which* fixation or *where* —
+#: the figure already shows both — not something about it.
+_COLOR_BY_EXCLUDED = frozenset(
+    {
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "screen_id",
+        "screen_index",
+        "fixation_id",
+        "screen_fixation_id",
+        "x",
+        "y",
+        "canvas_width",
+        "canvas_height",
+    }
+)
+
+
 def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
-    """Columns offered in the 'Color fixations by' selector — a preferred order
-    intersected with what's present, falling back to ``['duration_ms']``."""
+    """Columns offered in the 'Color fixations by' selector — the familiar fields
+    in a preferred order, then the dataset's other numeric columns, falling back
+    to ``['duration_ms']``."""
     preferred_color_fields = [
         "duration_ms",
         "pass_index",
@@ -3309,6 +3330,19 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
         "ptb_pos",
     ]
     fields = [f for f in preferred_color_fields if f in trial_fixations.columns]
+    # Then every other numeric column the dataset kept (pupil size, a detection
+    # confidence, a measure of its own), as the axis and hover pickers offer
+    # them — but no identifier, no position (the plot already *is* x/y) and no
+    # bookkeeping column (`user_columns`), and no boolean: a 0–1 colorscale over
+    # a flag reads worse than the flags' own pickers.
+    fields += [
+        col
+        for col in user_columns(trial_fixations)
+        if col not in fields
+        and col not in _COLOR_BY_EXCLUDED
+        and pd.api.types.is_numeric_dtype(trial_fixations[col])
+        and not pd.api.types.is_bool_dtype(trial_fixations[col])
+    ]
     fields = fields or ["duration_ms"]
     # `(uniform)` leads and is the default (VIZ-17): marker *size* already encodes
     # duration, so mapping duration to hue as well spends the colour channel on a
@@ -4623,10 +4657,16 @@ def _collect_viz_settings(
     if isinstance(_fr, (tuple, list)) and len(_fr) == 2:
         fix_index_range = (int(_fr[0]), int(_fr[1]))
 
-    # Highlight column only applies when Text is shown and a span style is active.
+    # The highlight column applies only while its style has something to draw on:
+    # **Mark text** recolours the word labels, so it needs Text; **Mark border**
+    # is its own outline layer (independent of Text and Word boxes, as in the
+    # builder), so it needs only the 📄 Stimulus master switch.
     critical_span_style = ss.get("global_critical_span_style", "Mark text")
+    span_drawable = (
+        show_labels if critical_span_style == "Mark text" else show_stimulus
+    ) and critical_span_style in ("Mark text", "Mark border")
     highlight_column = None
-    if show_labels and critical_span_style != "None" and highlight_options:
+    if span_drawable and highlight_options:
         candidate = ss.get("global_highlight_column")
         highlight_column = candidate if candidate in highlight_options else None
 
@@ -5472,15 +5512,12 @@ def render_plot_controls(
         ),
         _popover_rows("fix"),
     ):
-        # The metric that maps to fixation HUE — applies to the static
-        # figure, the single animated replay AND the comparison overlay (in
-        # compare it colours both scanpaths by the metric; the per-scanpath
-        # flat colour below becomes the A/B marker outline). The one path
-        # that ignores it is the DUAL animation (Animate + Compare), where
-        # the flat A/B colours are all that tells the readings apart.
-        metric_disabled, metric_reason = _mode_gate(
-            animating, comparing, in_animation=not comparing
-        )
+        # The metric that maps to fixation HUE — applies on every render path.
+        # In Compare and the co-animation (Animate + Compare) the chosen values
+        # — numeric, a category, or the text line — fill both scanpaths'
+        # markers on one shared scale / one shared category→colour mapping,
+        # and each scanpath's flat colour becomes its marker outline.
+        metric_disabled, metric_reason = _mode_gate(animating, comparing)
         # UX-158: colour, shape, size and opacity are one "Marker" group — a
         # title on the first row and a short caption per row, instead of a full
         # title each (VIZ-17 → UX-154 put the flat colour / colorscale beside
@@ -5493,10 +5530,14 @@ def render_plot_controls(
             f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
             "(the default) maps nothing — marker *size* already shows fixation "
             "duration, so colour is free for a second variable — and the box "
-            "beside it is the one colour every marker wears. Pick a column, or "
-            "'line' to tint each fixation by the text line it lands on (static "
-            "plot + single animation only), and that box becomes its colorscale. "
-            "In compare mode it colours both scanpaths by this metric.",
+            "beside it is the one colour every marker wears. Pick a column — the "
+            "familiar fields first, then any other numeric column your data "
+            "kept, under its own name — or "
+            "'line' to tint each fixation by the text line it lands on, and that "
+            "box becomes its colorscale (a categorical column or 'line' takes a "
+            "discrete palette instead). In Compare, animated or not, both "
+            "scanpaths share one scale or one category→colour mapping, and each "
+            "scanpath's own colour outlines its markers so A and B stay apart.",
             metric_reason,
         )
         by_disabled, by_help = _layer_gate(metric_disabled, by_help)
@@ -5622,8 +5663,11 @@ def render_plot_controls(
         # NOT override per scanpath.
         shape_help = (
             "Shape of the fixation markers. Unlike colour, shape still reads in "
-            "black & white. Applies on all three render paths, including both "
-            "compared scanpaths."
+            "black & white. Applies on every render path — the static plot, "
+            "the replay and Compare (animated or not), on both compared "
+            "scanpaths. ♥ is drawn as a text glyph; where Compare outlines a "
+            "marker in its scanpath's colour, a heart's outline is a slightly "
+            "larger heart behind it."
         )
         shape_dis, shape_help = _layer_gate(False, shape_help)
         _sub_row("Shape", caption_help=shape_help).selectbox(
@@ -6181,7 +6225,9 @@ def render_plot_controls(
             )
         style_help = (
             "**Mark text** colours the span's words; **Mark border** draws a thin "
-            "outline around the span. The box beside it is that colour."
+            "outline around the span. The box beside it is that colour. "
+            "**Mark text** needs **Text** on; **Mark border** is its own layer "
+            "and shows with the text and word boxes off — over a screenshot, say."
             + (
                 f"\n\n{ICONS['warning']} **Mark border** draws on the static plot only — the replay "
                 "and the comparison figure have no border layer, so the span shows "
@@ -6711,12 +6757,10 @@ def render_plot_controls(
 
         # VIZ-23: all three builders route their colour bar through
         # `_colorbar_dict`, so the styling applies wherever a colour bar is
-        # drawn. The one mode without one is the DUAL animation (Animate +
-        # Compare) — there the flat A/B colours replace metric colouring
-        # entirely, so there is no bar to style. Same gate as "Color by".
-        cb_disabled, cb_reason = _mode_gate(
-            animating, comparing, in_animation=not comparing
-        )
+        # drawn — the co-animation (Animate + Compare) included, since it
+        # colours by the metric like the comparison figure. Same gate as
+        # "Color by".
+        cb_disabled, cb_reason = _mode_gate(animating, comparing)
         show_colorbars, cb_rest = _check_row(
             "Color bar",
             key="global_show_colorbars",

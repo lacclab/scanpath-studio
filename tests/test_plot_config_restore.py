@@ -782,12 +782,12 @@ class TestConfigMigration:
         assert note is not None
         assert migrated["schema"] == 1  # couldn't advance past the gap
 
-    def test_schema_constant_is_five(self):
+    def test_schema_constant_is_six(self):
         # Pin the current version so a bump is a deliberate, reviewed change that
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 5
+        assert PLOT_CONFIG_SCHEMA == 6
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the

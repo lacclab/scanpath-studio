@@ -105,6 +105,8 @@ from .session_keys import (
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_ANIMATE,
+    SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
 )
 
@@ -1052,7 +1054,7 @@ def _apply_url_preset() -> str | None:
             # trial has that screen, as A's does with `screen=`.
             if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
                 st.session_state.setdefault(
-                    "single_compare_screen_id", str(qp[COMPARE_SCREEN_PARAM])
+                    SINGLE_COMPARE_SCREEN_ID, str(qp[COMPARE_SCREEN_PARAM])
                 )
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
@@ -1326,6 +1328,10 @@ def sanitize_session_value(key: str, value):
 #   schema 5 — the fixed duration scale (`sizing.marker_size_scale`,
 #              `marker_duration_range`, `duration_size_legend`). Older files
 #              were drawn on the relative scale and are migrated to it.
+#   schema 6 — the figure *mode* (`mode.animate` / `mode.compare`) and
+#              scanpath B (`selection.compare`: its reader, trial, dataset and
+#              screen). Older files carry neither, so they restore no
+#              comparison and leave the current mode alone.
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1334,7 +1340,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 5
+PLOT_CONFIG_SCHEMA = 6
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1440,6 +1446,23 @@ def _migrate_config_4_to_5(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_5_to_6(config: dict) -> dict:
+    """Schema 6 *added* the figure mode and scanpath B; nothing to translate.
+
+    A schema-5 file never recorded whether it was saved in Animate or Compare,
+    nor which reading B was — so it gets no ``mode`` section here, and the
+    reader leaves the current mode alone rather than guessing a comparison the
+    file cannot name. Only a schema-6 file's explicit ``mode`` (including an
+    explicit static one) moves the switches.
+    """
+    migrated = dict(config)
+    migrated.pop("mode", None)
+    selection = migrated.get("selection")
+    if isinstance(selection, dict) and "compare" in selection:
+        migrated["selection"] = {k: v for k, v in selection.items() if k != "compare"}
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -1447,6 +1470,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     2: _migrate_config_2_to_3,
     3: _migrate_config_3_to_4,
     4: _migrate_config_4_to_5,
+    5: _migrate_config_5_to_6,
 }
 
 
@@ -2462,7 +2486,87 @@ def _restore_plot_config(
             _row, reason = _match_selection(selection, combos)
             skipped.append(f"trial selection ({reason})")
 
+    _restore_figure_mode(config, selection, combos, put, skipped)
+
     return restore.applied, skipped
+
+
+def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | None, str]:
+    """``(B's dataset or None, "")`` when a saved scanpath B can be requested,
+    else ``(None, reason)``.
+
+    B in the open dataset is checked against the pool now, by the same exact
+    reader-and-trial rule as A. B in another dataset can only be checked once
+    that dataset is loaded — Compare's picker reports it then (see
+    `tabs` → the pending-compare consumer) — so here it is enough that the
+    dataset is one this app can draw B from.
+    """
+    from .compare_source import secondary_dataset_options
+
+    if not isinstance(compare, dict) or compare.get("trial_id") in (None, ""):
+        return None, "the file names no second reading"
+    if compare.get("participant_id") in (None, ""):
+        return None, "the file's second reading names no reader"
+    source = compare.get("source")
+    if source in (None, "") or source == st.session_state.get("data_source_choice"):
+        _row, reason = _match_selection(compare, combos)
+        return None, reason
+    offered = {
+        name: (ready, why)
+        for name, ready, why in secondary_dataset_options(
+            exclude=st.session_state.get("data_source_choice")
+        )
+    }
+    if source not in offered:
+        return None, f"its dataset {source} is not available here"
+    ready, why = offered[source]
+    if not ready:
+        return None, f"its dataset {source} is not ready — {why or 'not found'}"
+    return str(source), ""
+
+
+def _restore_figure_mode(
+    config: dict, selection: dict, combos: pd.DataFrame, put, skipped: list
+) -> None:
+    """Schema 6: put the figure back in the mode it was saved in.
+
+    ``mode`` is explicit both ways — a static file switches a running Animate
+    or Compare *off*, so restoring a figure gives that figure. A comparison
+    restores only with the B it names (requested through the same pending
+    selection a ``?compare=`` link uses, so B's picker resolves it); when B
+    cannot be named here, Compare stays off and the file's restore notice says
+    why, rather than pairing A with whichever reading B's picker defaults to.
+    """
+    mode = config.get("mode")
+    if not isinstance(mode, dict):
+        return  # an older file: it never said, so nothing is guessed
+    if isinstance(mode.get("animate"), bool):
+        put(SINGLE_ANIMATE, mode["animate"])
+    if not isinstance(mode.get("compare"), bool):
+        return
+    if not mode["compare"]:
+        put(SINGLE_COMPARE_TOGGLE, False)
+        st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
+        return
+    compare = selection.get("compare") if isinstance(selection, dict) else None
+    source, reason = _compare_b_problem(compare, combos)
+    if reason:
+        put(SINGLE_COMPARE_TOGGLE, False)
+        st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
+        skipped.append(f"comparison ({reason})")
+        return
+    put(SINGLE_COMPARE_TOGGLE, True)
+    from .compare_source import THIS_DATASET
+
+    put(COMPARE_SOURCE_STATE_KEY, source or THIS_DATASET)
+    st.session_state[PENDING_COMPARE_STATE_KEY] = {
+        "participant_id": str(compare["participant_id"]),
+        "trial_id": str(compare["trial_id"]),
+    }
+    if compare.get("screen_id") not in (None, ""):
+        put(SINGLE_COMPARE_SCREEN_ID, str(compare["screen_id"]))
+    else:
+        st.session_state.pop(SINGLE_COMPARE_SCREEN_ID, None)
 
 
 def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:

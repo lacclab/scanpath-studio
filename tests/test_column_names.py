@@ -758,3 +758,31 @@ class TestFigureText:
         assert plots._hover_label("total_fixation_duration_ms") == "Total fixation"
         assert plots._hover_label("my_measure_ms") == "My Measure"
         assert plots._column_title("my_measure_ms") == "My Measure (ms)"
+
+
+def test_the_trial_sort_offers_an_alias_of_the_same_column_once():
+    """`text_id` and `unique_text_id` read from one column sort alike."""
+    from scanpath_studio.utils import trial_sort_keys
+
+    combos = pd.DataFrame(
+        {
+            "participant_id": ["p", "p"],
+            "trial_id": ["t1", "t2"],
+            "text_id": ["a", "b"],
+            "unique_text_id": ["a", "b"],
+            "line_idx": [1, 1],
+        }
+    )
+    names = ColumnNames(
+        {
+            "text_id": SourceName(("PARAGRAPH",)),
+            "unique_text_id": SourceName(("PARAGRAPH",)),
+            "line_idx": SourceName((), cn.GENERATED),
+        }
+    )
+    keys = list(trial_sort_keys(combos, "trial_id", label_of=names.label))
+    assert keys.count("PARAGRAPH") == 1
+    assert not any(k.startswith("PARAGRAPH (") for k in keys)
+    # A column the app made sorts after the dataset's own.
+    if "Line (computed)" in keys:
+        assert keys.index("Line (computed)") > keys.index("PARAGRAPH")

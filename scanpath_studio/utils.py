@@ -11,7 +11,7 @@ import streamlit as st
 
 from . import progress
 from .annotations import get_entry, store_for_prefix
-from .column_names import active_all
+from .column_names import COMPUTED_SUFFIX, active_all
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
 from .data import frame_fingerprint, stable_id
 from .fields import labeled
@@ -647,12 +647,17 @@ def trial_sort_keys(
         ordered_cols.extend(
             sorted(set(discovered) - set(ordered_cols), key=str.casefold)
         )
-        for col in ordered_cols:
-            if col == trial_field:
-                continue
-            label = label_of(col)
-            # Two columns can share a name (an alias read from one column).
-            keys[label if label not in keys else f"{label} ({col})"] = discovered[col]
+        labelled = [(col, label_of(col)) for col in ordered_cols if col != trial_field]
+        # The dataset's own columns first, then the ones the app made.
+        labelled.sort(key=lambda pair: pair[1].endswith(COMPUTED_SUFFIX))
+        for col, label in labelled:
+            series = discovered[col]
+            if label in keys:
+                # An alias read from the same column sorts the same way: once.
+                if keys[label].equals(series):
+                    continue
+                label = f"{label} ({col})"
+            keys[label] = series
     picker_ids = (
         set(combos[trial_field].dropna().astype(str).unique()) if has_combos else set()
     )

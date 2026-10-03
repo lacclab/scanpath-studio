@@ -2545,14 +2545,7 @@ def _render_compare_selector(
     composite_b = (
         filter_source.composite_trial_columns if filter_source is not None else ()
     )
-    id_display, id_part_names = trial_id_layout(
-        combos,
-        composite_cols=composite_b,
-        columns=next(
-            (f.columns for f in (fixations_filtered, words_filtered) if f is not None),
-            (),
-        ),
-    )
+    id_display, id_part_names = trial_id_layout(combos, composite_cols=composite_b)
     label_to_id = {opt[2]: id_display.get(str(opt[1]), str(opt[1])) for opt in options}
     label_display = {
         opt[2]: _compare_label_display(opt[2], str(opt[1]), opt[3], id_display)

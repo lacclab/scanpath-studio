@@ -866,8 +866,10 @@ class TestRound3App(TestScanpathView):
         words, fixations = _words_and_samples_without_fixations(raw_gaze)
         at = self._open(raw_gaze, words=words, fixations=fixations, demo_first=False)
         _, tid = _key(raw_gaze)
-        options = [str(o) for o in at.selectbox(key="single_trial_id").options]
-        assert any(tid in option for option in options)
+        from tests.conftest import picker_trial_id
+
+        options = at.selectbox(key="single_trial_id").options
+        assert tid in {picker_trial_id(option) for option in options}
 
     def test_the_no_fixations_note_is_said_once_per_popover(self, raw_gaze):
         at = self._open(raw_gaze, demo_first=False)

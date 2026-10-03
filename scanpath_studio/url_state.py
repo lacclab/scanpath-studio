@@ -3000,9 +3000,10 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=AUTHOR_CHOICE,
             options={"path": "scanpath.json"},
             note=(
-                "An authored scanpath lives in this session — export it from "
-                "the ✍️ authoring panel first, then point the snippet at that "
-                "JSON file."
+                "An authored scanpath lives in this session — save it with "
+                "**Download authoring file** on the ✍️ authoring screen first "
+                "(it downloads as `scanpath.json`, the name the snippet reads), "
+                "then run the snippet beside it."
             ),
         )
 

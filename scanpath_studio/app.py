@@ -4523,6 +4523,9 @@ _AUTHOR_STALE_TARGETS_KEY = "_author_stale_targets"
 #: removed, moved or retimed fixations (`authoring.destructive_change`). One
 #: step, swapped with the current draft by **Restore previous draft**.
 _AUTHOR_PREVIOUS_DRAFT_KEY = "_author_previous_drafts"
+#: What the downloaded authoring file is called — the name Share → Code's
+#: snippet reads it by (`url_state._snippet_source`).
+AUTHORING_FILE_NAME = "scanpath.json"
 
 
 def _load_author_draft(source: str, draft: tuple) -> None:
@@ -7539,6 +7542,21 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         disabled=not can_save,
         on_click=_save_authored_dataset,
         args=(name_key,),
+    )
+    actions.download_button(
+        "Download authoring file",
+        data=authoring_json(text, effective_events, layout=layout),
+        file_name=AUTHORING_FILE_NAME,
+        mime="application/json",
+        icon=ICONS["download"],
+        key=f"author_download_{source}",
+        on_click="ignore",
+        disabled=not events_valid,
+        help=(
+            "The editable draft — text, layout and every fixation with its id, "
+            "position, order and duration. Load it again with **Restore "
+            "authoring file**, or from a script with `load_authored_scanpath`."
+        ),
     )
     previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
     actions.button(

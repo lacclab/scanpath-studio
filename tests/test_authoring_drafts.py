@@ -11,12 +11,16 @@ loads back on the screen and through the API.
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
+from scanpath_studio import api, cli
 from scanpath_studio.authoring import (
     destructive_change,
     layout_text,
+    parse_authoring_document,
     stale_target_words,
     unresolved_targets,
 )
@@ -139,3 +143,28 @@ def test_stale_targets_ignore_punctuation_and_case():
     assert stale == {2: (2, "cat"), 3: (3, "sat")}
     assert unresolved_targets(stale, layout_text("The dog"), events) == {2: 2, 3: 3}
     assert unresolved_targets(stale, old, events) == {}
+
+
+def test_the_downloaded_file_round_trips(tmp_path):
+    at = _custom_draft()
+    download = next(
+        element
+        for element in at.get("download_button")
+        if "Download authoring file" in str(element.proto.label)
+    )
+    payload = at.session_state["_author_save_payload"]["authoring"]
+    assert download.proto.label == "Download authoring file"
+    document = parse_authoring_document(payload)
+    assert document.text == at.text_area(key="author_text").value
+    events = document.events
+    assert list(events["fixation_id"]) == [1, 2]
+    assert events.loc[0, "x"] == 777.0 and events.loc[0, "duration_ms"] == 987.0
+    path = tmp_path / "scanpath.json"
+    path.write_text(payload, encoding="utf-8")
+    _words, fixations = api.load_authored_scanpath(path)
+    assert fixations[["x", "duration_ms"]].iloc[0].tolist() == [777.0, 987.0]
+    assert json.loads(payload)["schema"] == 2
+    # …and Share → Code's CLI line renders it.
+    out = tmp_path / "authored.html"
+    cli.main(["render", "--authoring", str(path), "-o", str(out)])
+    assert out.stat().st_size > 0

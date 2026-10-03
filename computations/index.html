@@ -1847,15 +1847,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#statistical-aggregation-test" class="md-nav__link">
+  <a href="#statistical-aggregation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Statistical aggregation / test
+        Statistical aggregation
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Statistical aggregation / test">
+    <nav class="md-nav" aria-label="Statistical aggregation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1906,7 +1906,7 @@
   <a href="#agg-effect-size" class="md-nav__link">
     <span class="md-ellipsis">
       
-        agg.effect_size — Group comparison and effect size
+        agg.effect_size — Group means and difference
       
     </span>
   </a>
@@ -2980,15 +2980,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#statistical-aggregation-test" class="md-nav__link">
+  <a href="#statistical-aggregation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Statistical aggregation / test
+        Statistical aggregation
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Statistical aggregation / test">
+    <nav class="md-nav" aria-label="Statistical aggregation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3039,7 +3039,7 @@
   <a href="#agg-effect-size" class="md-nav__link">
     <span class="md-ellipsis">
       
-        agg.effect_size — Group comparison and effect size
+        agg.effect_size — Group means and difference
       
     </span>
   </a>
@@ -3750,91 +3750,91 @@
 <tr>
 <td><a href="#agg-measure-values"><code>agg.measure_values</code></a></td>
 <td>Measure value extraction</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-aggregate-value"><code>agg.aggregate_value</code></a></td>
 <td>Central tendency</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Verified</td>
 </tr>
 <tr>
 <td><a href="#agg-spread"><code>agg.spread</code></a></td>
 <td>Spread band</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Verified</td>
 </tr>
 <tr>
 <td><a href="#agg-bootstrap-ci"><code>agg.bootstrap_ci</code></a></td>
 <td>Bootstrap confidence interval</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>same as the measure</td>
 <td>Verified</td>
 </tr>
 <tr>
 <td><a href="#agg-effect-size"><code>agg.effect_size</code></a></td>
-<td>Group comparison and effect size</td>
-<td>Statistical aggregation / test</td>
+<td>Group means and difference</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-group-mask"><code>agg.group_mask</code></a></td>
 <td>Group definition</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Verified</td>
 </tr>
 <tr>
 <td><a href="#agg-word-profile"><code>agg.word_profile</code></a></td>
 <td>Per-word cohort profile</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-word-rates"><code>agg.word_rates</code></a></td>
 <td>Skip / regression rate profile</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>proportion</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-reader-summary"><code>agg.reader_summary</code></a></td>
 <td>Per-reader summary</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>ms, px, counts, proportions</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-trial-summary"><code>agg.trial_summary</code></a></td>
 <td>Per-trial summary</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>ms, counts</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-normalize"><code>agg.normalize</code></a></td>
 <td>Normalized measure column</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-landing-curve"><code>agg.landing_curve</code></a></td>
 <td>Landing-position curve</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>fraction of the interest area (0–1 for a landing inside the box), or px with <code>as_fraction=False</code></td>
 <td>Partially verified</td>
 </tr>
 <tr>
 <td><a href="#agg-over-time"><code>agg.over_time</code></a></td>
 <td>Trend over time</td>
-<td>Statistical aggregation / test</td>
+<td>Statistical aggregation</td>
 <td>—</td>
 <td>Partially verified</td>
 </tr>
@@ -4112,7 +4112,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>NaN → False.</td>
+<td>NaN → False for an operational flag (blink, excluded). A supplied reading-measure flag (skip, regression in / out) keeps it missing instead — <code>''</code>, <code>'.'</code>, <code>'na'</code>, <code>'nan'</code>, <code>'-'</code> and NaN read as NA (<code>coerce_measure_flag</code>, a nullable boolean).</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -5533,7 +5533,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="statistical-aggregation-test">Statistical aggregation / test<a class="headerlink" href="#statistical-aggregation-test" title="Permanent link">&para;</a></h2>
+<h2 id="statistical-aggregation">Statistical aggregation<a class="headerlink" href="#statistical-aggregation" title="Permanent link">&para;</a></h2>
 <h3 id="agg-measure-values"><code>agg.measure_values</code> — Measure value extraction<a class="headerlink" href="#agg-measure-values" title="Permanent link">&para;</a></h3>
 <p>Pull one registered measure's values out of a frame.</p>
 <p><strong>Formula.</strong> The <code>aggregation.MEASURES</code> entry names the frame (words or fixations), the column and the unit; values are coerced numeric and NaNs dropped.</p>
@@ -5678,9 +5678,9 @@
 </tr>
 </tbody>
 </table>
-<h3 id="agg-effect-size"><code>agg.effect_size</code> — Group comparison and effect size<a class="headerlink" href="#agg-effect-size" title="Permanent link">&para;</a></h3>
-<p>Mean difference, Cohen's d, and a significance test (AN-21).</p>
-<p><strong>Formula.</strong> <code>mean_diff = mean(A) − mean(B)</code>. Cohen's <em>d</em> uses the pooled SD <code>sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))</code> with ddof=1. The test is Mann–Whitney U (two-sided) or Welch's t-test.</p>
+<h3 id="agg-effect-size"><code>agg.effect_size</code> — Group means and difference<a class="headerlink" href="#agg-effect-size" title="Permanent link">&para;</a></h3>
+<p>Two groups' means, their difference and Cohen's d (AN-21).</p>
+<p><strong>Formula.</strong> Each value is one reader's mean of the measure (pooled observations when the data names no readers). <code>mean_diff = mean(A) − mean(B)</code>. Cohen's <em>d</em> uses the pooled SD <code>sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))</code> with ddof=1, and is shown only when the groups share no reader.</p>
 <table>
 <thead>
 <tr>
@@ -5691,19 +5691,23 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>mean_a, mean_b, mean_diff, cohen_d, statistic, p_value, n_a, n_b</td>
+<td>mean_a, mean_b, mean_diff, cohen_d, n_a, n_b</td>
+</tr>
+<tr>
+<td><strong>Grouping / ordering</strong></td>
+<td>one value per reader in each group</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>n &lt; 2 in either group ⇒ NaN statistics. A zero pooled SD gives <strong>NaN</strong>, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference.</td>
+<td>n &lt; 2 in either group ⇒ NaN <em>d</em>. A zero pooled SD gives <strong>NaN</strong>, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
-<td><strong>Exploratory, not pre-registered.</strong> No multiple-comparison correction is applied; the p-value is descriptive.</td>
+<td><strong>Descriptive only</strong> — no significance test. A reader in both groups contributes to both means, so the groups are not independent samples.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
-<td><code>scanpath_studio/aggregation.py:group_effect_size</code></td>
+<td><code>scanpath_studio/aggregation.py:group_mean_difference</code></td>
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
@@ -5787,7 +5791,7 @@
 </table>
 <h3 id="agg-word-rates"><code>agg.word_rates</code> — Skip / regression rate profile<a class="headerlink" href="#agg-word-rates" title="Permanent link">&para;</a></h3>
 <p>Rate measures per word.</p>
-<p><strong>Formula.</strong> Mean of the 0/1 flag over readers — a proportion in [0, 1].</p>
+<p><strong>Formula.</strong> Mean of the 0/1 flag over the readers who reported it — a proportion in [0, 1]. Each rate has its own reader count (<code>n_skip</code>, <code>n_regression_in</code>) and its own minimum-readers verdict.</p>
 <table>
 <thead>
 <tr>
@@ -5802,7 +5806,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Words with no reader are omitted, not shown as 0.</td>
+<td>A missing flag is no observation: it is left out of that rate and its reader count, never read as 0. A rate below the minimum readers is hidden; the word stays while its other rate stands.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5861,7 +5865,7 @@
 </table>
 <h3 id="agg-trial-summary"><code>agg.trial_summary</code> — Per-trial summary<a class="headerlink" href="#agg-trial-summary" title="Permanent link">&para;</a></h3>
 <p>One row per trial: reading time, counts, rates.</p>
-<p><strong>Formula.</strong> Counts and sums over the trial's fixations and word measures.</p>
+<p><strong>Formula.</strong> Counts and sums over the trial's fixations and word measures. <code>reading_time_ms</code> is last fixation end − first fixation start; without recorded fixation onsets it is the summed fixation durations, and <code>reading_time_source</code> says it is an estimate. <code>wpm</code> = words ÷ reading time.</p>
 <table>
 <thead>
 <tr>
@@ -5877,6 +5881,10 @@
 <tr>
 <td><strong>Unit</strong></td>
 <td>ms, counts</td>
+</tr>
+<tr>
+<td><strong>Missing &amp; edge cases</strong></td>
+<td>No onset column ⇒ reading time and wpm are duration-based estimates, labelled as such — never the 0, 1, 2, … order numbers.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6336,8 +6344,8 @@
 </table>
 <h2 id="display-export-transformation">Display / export transformation<a class="headerlink" href="#display-export-transformation" title="Permanent link">&para;</a></h2>
 <h3 id="disp-marker-sizes"><code>disp.marker_sizes</code> — Fixation marker sizing<a class="headerlink" href="#disp-marker-sizes" title="Permanent link">&para;</a></h3>
-<p>Dot area encodes fixation duration.</p>
-<p><strong>Formula.</strong> Durations are scaled between a minimum and maximum marker size across the drawn set. <strong>Display only</strong> — never a recorded value.</p>
+<p>Marker size encodes fixation duration on one fixed scale.</p>
+<p><strong>Formula.</strong> Fixed scales (<code>marker_size_scale</code> = <code>sqrt</code>, the default; <code>linear</code>; <code>log</code>): <code>size = s_min + (s_max − s_min) · (f(d) − f(lo)) / (f(hi) − f(lo))</code>, with <code>d</code> clamped to the duration bounds <code>[lo, hi]</code> (<code>marker_duration_range</code>, default 50–600 ms) and <code>f</code> = √, identity or ln. <code>relative</code>: linear between the drawn set's own shortest and longest duration (the scale before the fixed one; older saved configs and Share links keep it). <strong>Display only</strong> — never a recorded value.</p>
 <table>
 <thead>
 <tr>
@@ -6351,8 +6359,12 @@
 <td>px (marker diameter)</td>
 </tr>
 <tr>
+<td><strong>Missing &amp; edge cases</strong></td>
+<td>A missing duration is treated as 0 ms: the smallest marker.</td>
+</tr>
+<tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>Shared by single-trial, comparison and export builders so the same trial renders identically everywhere.</td>
+<td>One scale for single-trial figures, both comparison sides, replays and bulk exports, so a duration draws at one size in all of them; only the px range is per scanpath in Compare.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6364,7 +6376,7 @@
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
-<td><code>tests/test_plots.py</code>, <code>tests/test_builder_parity.py</code></td>
+<td><code>tests/test_duration_scale.py</code>, <code>tests/test_plots.py</code>, <code>tests/test_builder_parity.py</code></td>
 </tr>
 <tr>
 <td><strong>Verification</strong></td>
@@ -6524,7 +6536,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 04:32:52 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 09:07:55 UTC">October 3, 2026</span>
   </span>
 
     

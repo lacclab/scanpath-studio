@@ -62,19 +62,19 @@ Comparing against an independent implementation is [VAL-4](https://github.com/la
 | [`pre.rtl`](#pre-rtl)                                     | Right-to-left detection                  | Preprocessing                   | —                                                                                                | Verified               |
 | [`pre.sensitivity`](#pre-sensitivity)                     | Measure sensitivity                      | Preprocessing                   | —                                                                                                | Partially verified     |
 | [`align.algorithms`](#align-algorithms)                   | Vertical drift correction                | Preprocessing                   | —                                                                                                | Partially verified     |
-| [`agg.measure_values`](#agg-measure-values)               | Measure value extraction                 | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.aggregate_value`](#agg-aggregate-value)             | Central tendency                         | Statistical aggregation / test  | —                                                                                                | Verified               |
-| [`agg.spread`](#agg-spread)                               | Spread band                              | Statistical aggregation / test  | —                                                                                                | Verified               |
-| [`agg.bootstrap_ci`](#agg-bootstrap-ci)                   | Bootstrap confidence interval            | Statistical aggregation / test  | same as the measure                                                                              | Verified               |
-| [`agg.effect_size`](#agg-effect-size)                     | Group comparison and effect size         | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.group_mask`](#agg-group-mask)                       | Group definition                         | Statistical aggregation / test  | —                                                                                                | Verified               |
-| [`agg.word_profile`](#agg-word-profile)                   | Per-word cohort profile                  | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.word_rates`](#agg-word-rates)                       | Skip / regression rate profile           | Statistical aggregation / test  | proportion                                                                                       | Partially verified     |
-| [`agg.reader_summary`](#agg-reader-summary)               | Per-reader summary                       | Statistical aggregation / test  | ms, px, counts, proportions                                                                      | Partially verified     |
-| [`agg.trial_summary`](#agg-trial-summary)                 | Per-trial summary                        | Statistical aggregation / test  | ms, counts                                                                                       | Partially verified     |
-| [`agg.normalize`](#agg-normalize)                         | Normalized measure column                | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.landing_curve`](#agg-landing-curve)                 | Landing-position curve                   | Statistical aggregation / test  | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified     |
-| [`agg.over_time`](#agg-over-time)                         | Trend over time                          | Statistical aggregation / test  | —                                                                                                | Partially verified     |
+| [`agg.measure_values`](#agg-measure-values)               | Measure value extraction                 | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.aggregate_value`](#agg-aggregate-value)             | Central tendency                         | Statistical aggregation         | —                                                                                                | Verified               |
+| [`agg.spread`](#agg-spread)                               | Spread band                              | Statistical aggregation         | —                                                                                                | Verified               |
+| [`agg.bootstrap_ci`](#agg-bootstrap-ci)                   | Bootstrap confidence interval            | Statistical aggregation         | same as the measure                                                                              | Verified               |
+| [`agg.effect_size`](#agg-effect-size)                     | Group means and difference               | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.group_mask`](#agg-group-mask)                       | Group definition                         | Statistical aggregation         | —                                                                                                | Verified               |
+| [`agg.word_profile`](#agg-word-profile)                   | Per-word cohort profile                  | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.word_rates`](#agg-word-rates)                       | Skip / regression rate profile           | Statistical aggregation         | proportion                                                                                       | Partially verified     |
+| [`agg.reader_summary`](#agg-reader-summary)               | Per-reader summary                       | Statistical aggregation         | ms, px, counts, proportions                                                                      | Partially verified     |
+| [`agg.trial_summary`](#agg-trial-summary)                 | Per-trial summary                        | Statistical aggregation         | ms, counts                                                                                       | Partially verified     |
+| [`agg.normalize`](#agg-normalize)                         | Normalized measure column                | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.landing_curve`](#agg-landing-curve)                 | Landing-position curve                   | Statistical aggregation         | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified     |
+| [`agg.over_time`](#agg-over-time)                         | Trend over time                          | Statistical aggregation         | —                                                                                                | Partially verified     |
 | [`sim.nld`](#sim-nld)                                     | Normalized Levenshtein distance          | Similarity                      | dimensionless (0–1)                                                                              | Verified               |
 | [`sim.aoi_sequence`](#sim-aoi-sequence)                   | AoI sequence                             | Similarity                      | —                                                                                                | Verified               |
 | [`sim.windowed`](#sim-windowed)                           | NLD by fixation index / time             | Similarity                      | —                                                                                                | Partially verified     |
@@ -160,15 +160,15 @@ Read EyeLink's string booleans as booleans (BUG-7).
 
 **Formula.** Numbers go by `!= 0`. Strings are matched case-insensitively against `{'', '.', '0', '0.0', 'false', 'f', 'no', 'n', 'na', 'nan', '-'}` → False; anything else → True.
 
-|                          |                                                               |
-| ------------------------ | ------------------------------------------------------------- |
-| **Output**               | bool                                                          |
-| **Missing & edge cases** | NaN → False.                                                  |
-| **Reference**            | Guards the `'.'`-as-missing convention in EyeLink IA reports. |
-| **Code**                 | `scanpath_studio/data.py:coerce_flag`                         |
-| **Consumers**            | UI, API, CLI, Export                                          |
-| **Tests**                | `tests/test_data.py`                                          |
-| **Verification**         | tier A, C — **Verified**                                      |
+|                          |                                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | bool                                                                                                                                                                                                                                              |
+| **Missing & edge cases** | NaN → False for an operational flag (blink, excluded). A supplied reading-measure flag (skip, regression in / out) keeps it missing instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA (`coerce_measure_flag`, a nullable boolean). |
+| **Reference**            | Guards the `'.'`-as-missing convention in EyeLink IA reports.                                                                                                                                                                                     |
+| **Code**                 | `scanpath_studio/data.py:coerce_flag`                                                                                                                                                                                                             |
+| **Consumers**            | UI, API, CLI, Export                                                                                                                                                                                                                              |
+| **Tests**                | `tests/test_data.py`                                                                                                                                                                                                                              |
+| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                          |
 
 ### `norm.stimulus_broadcast` — Stimulus-level word broadcast
 
@@ -720,7 +720,7 @@ Trial-relative onset times for animation and time series.
 | **Tests**                | `tests/test_measures.py`                                 |
 | **Verification**         | tier A, C — **Partially verified**                       |
 
-## Statistical aggregation / test
+## Statistical aggregation
 
 ### `agg.measure_values` — Measure value extraction
 
@@ -781,21 +781,22 @@ Percentile bootstrap CI of the chosen aggregate.
 | **Tests**                | `tests/test_aggregation.py`                                |
 | **Verification**         | tier A, C — **Verified**                                   |
 
-### `agg.effect_size` — Group comparison and effect size
+### `agg.effect_size` — Group means and difference
 
-Mean difference, Cohen's d, and a significance test (AN-21).
+Two groups' means, their difference and Cohen's d (AN-21).
 
-**Formula.** `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1. The test is Mann–Whitney U (two-sided) or Welch's t-test.
+**Formula.** Each value is one reader's mean of the measure (pooled observations when the data names no readers). `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and is shown only when the groups share no reader.
 
-|                          |                                                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | mean_a, mean_b, mean_diff, cohen_d, statistic, p_value, n_a, n_b                                                                                     |
-| **Missing & edge cases** | n < 2 in either group ⇒ NaN statistics. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
-| **Reference**            | **Exploratory, not pre-registered.** No multiple-comparison correction is applied; the p-value is descriptive.                                       |
-| **Code**                 | `scanpath_studio/aggregation.py:group_effect_size`                                                                                                   |
-| **Consumers**            | Corpus Analysis, API                                                                                                                                 |
-| **Tests**                | `tests/test_aggregation.py`                                                                                                                          |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                   |
+|                          |                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | mean_a, mean_b, mean_diff, cohen_d, n_a, n_b                                                                                                  |
+| **Grouping / ordering**  | one value per reader in each group                                                                                                            |
+| **Missing & edge cases** | n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
+| **Reference**            | **Descriptive only** — no significance test. A reader in both groups contributes to both means, so the groups are not independent samples.    |
+| **Code**                 | `scanpath_studio/aggregation.py:group_mean_difference`                                                                                        |
+| **Consumers**            | Corpus Analysis, API                                                                                                                          |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                                   |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                            |
 
 ### `agg.group_mask` — Group definition
 
@@ -829,16 +830,16 @@ A measure per word position, aggregated across readers.
 
 Rate measures per word.
 
-**Formula.** Mean of the 0/1 flag over readers — a proportion in [0, 1].
+**Formula.** Mean of the 0/1 flag over the readers who reported it — a proportion in [0, 1]. Each rate has its own reader count (`n_skip`, `n_regression_in`) and its own minimum-readers verdict.
 
-|                          |                                                    |
-| ------------------------ | -------------------------------------------------- |
-| **Unit**                 | proportion                                         |
-| **Missing & edge cases** | Words with no reader are omitted, not shown as 0.  |
-| **Code**                 | `scanpath_studio/aggregation.py:word_rate_profile` |
-| **Consumers**            | Corpus Analysis, API                               |
-| **Tests**                | `tests/test_aggregation.py`                        |
-| **Verification**         | tier A, C — **Partially verified**                 |
+|                          |                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | proportion                                                                                                                                                                                   |
+| **Missing & edge cases** | A missing flag is no observation: it is left out of that rate and its reader count, never read as 0. A rate below the minimum readers is hidden; the word stays while its other rate stands. |
+| **Code**                 | `scanpath_studio/aggregation.py:word_rate_profile`                                                                                                                                           |
+| **Consumers**            | Corpus Analysis, API                                                                                                                                                                         |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                                                                                  |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                           |
 
 ### `agg.reader_summary` — Per-reader summary
 
@@ -859,16 +860,17 @@ One row per reader: totals, means and rates.
 
 One row per trial: reading time, counts, rates.
 
-**Formula.** Counts and sums over the trial's fixations and word measures.
+**Formula.** Counts and sums over the trial's fixations and word measures. `reading_time_ms` is last fixation end − first fixation start; without recorded fixation onsets it is the summed fixation durations, and `reading_time_source` says it is an estimate. `wpm` = words ÷ reading time.
 
-|                  |                                                      |
-| ---------------- | ---------------------------------------------------- |
-| **Output**       | Trials table                                         |
-| **Unit**         | ms, counts                                           |
-| **Code**         | `scanpath_studio/aggregation.py:trial_summary_table` |
-| **Consumers**    | Corpus Analysis, Export, Data Inspection, API        |
-| **Tests**        | `tests/test_aggregation.py`                          |
-| **Verification** | tier C, D — **Partially verified**                   |
+|                          |                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | Trials table                                                                                                                |
+| **Unit**                 | ms, counts                                                                                                                  |
+| **Missing & edge cases** | No onset column ⇒ reading time and wpm are duration-based estimates, labelled as such — never the 0, 1, 2, … order numbers. |
+| **Code**                 | `scanpath_studio/aggregation.py:trial_summary_table`                                                                        |
+| **Consumers**            | Corpus Analysis, Export, Data Inspection, API                                                                               |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                 |
+| **Verification**         | tier C, D — **Partially verified**                                                                                          |
 
 ### `agg.normalize` — Normalized measure column
 
@@ -1056,18 +1058,19 @@ The glyph run inside a word's box — where its letters are.
 
 ### `disp.marker_sizes` — Fixation marker sizing
 
-Dot area encodes fixation duration.
+Marker size encodes fixation duration on one fixed scale.
 
-**Formula.** Durations are scaled between a minimum and maximum marker size across the drawn set. **Display only** — never a recorded value.
+**Formula.** Fixed scales (`marker_size_scale` = `sqrt`, the default; `linear`; `log`): `size = s_min + (s_max − s_min) · (f(d) − f(lo)) / (f(hi) − f(lo))`, with `d` clamped to the duration bounds `[lo, hi]` (`marker_duration_range`, default 50–600 ms) and `f` = √, identity or ln. `relative`: linear between the drawn set's own shortest and longest duration (the scale before the fixed one; older saved configs and Share links keep it). **Display only** — never a recorded value.
 
-|                          |                                                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px (marker diameter)                                                                                     |
-| **Precedence & caveats** | Shared by single-trial, comparison and export builders so the same trial renders identically everywhere. |
-| **Code**                 | `scanpath_studio/plots.py:_compute_marker_sizes`                                                         |
-| **Consumers**            | UI, API, CLI, Export                                                                                     |
-| **Tests**                | `tests/test_plots.py`, `tests/test_builder_parity.py`                                                    |
-| **Verification**         | tier C, D — **Intentional convention**                                                                   |
+|                          |                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | px (marker diameter)                                                                                                                                                               |
+| **Missing & edge cases** | A missing duration is treated as 0 ms: the smallest marker.                                                                                                                        |
+| **Precedence & caveats** | One scale for single-trial figures, both comparison sides, replays and bulk exports, so a duration draws at one size in all of them; only the px range is per scanpath in Compare. |
+| **Code**                 | `scanpath_studio/plots.py:_compute_marker_sizes`                                                                                                                                   |
+| **Consumers**            | UI, API, CLI, Export                                                                                                                                                               |
+| **Tests**                | `tests/test_duration_scale.py`, `tests/test_plots.py`, `tests/test_builder_parity.py`                                                                                              |
+| **Verification**         | tier C, D — **Intentional convention**                                                                                                                                             |
 
 ### `disp.axis_ranges` — Axis ranges and inversion
 

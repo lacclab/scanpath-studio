@@ -29,6 +29,8 @@ The **Plot controls** rail starts with **Animate**, **Compare**, four design pre
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials, so they stay comparable.
 
+Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the smallest to the largest marker in every trial, both sides of a comparison, the replay and every export, so one duration is always one size. Shorter fixations take the smallest marker and longer ones the largest. Under **Fixations ▾**, **Scale** picks the curve: **√ duration** (the default) grows marker area with duration, **Linear** grows the diameter with it, **Log** compresses long fixations. **Durations** sets the two bounds, and **Size key** draws reference circles labelled in ms in the figure's corner (in Compare, only while both scanpaths use the same marker size range). **Relative to this figure** stretches each figure from its own shortest to longest fixation instead, so its sizes compare only within that figure. Share links, settings files, saved designs and restored sessions from before the fixed scale reopen on the relative one, as they were drawn.
+
 ## Filter what is drawn
 
 **Filter** thins the reading on screen (the funnel above the plot chooses *which* readings you can pick). For fixations, **Highlight** or **Discard** short, long, out-of-bounds or blink fixations, or show only an index range. *Out of bounds* means outside every word box, not off the screen; *blink* needs a blink column in your fixations (`is_blink`, `blink`, `blink_before`, `blink_after`), and without one nothing is flagged. For saccades, choose which reading types are drawn: hide everything but regressions, for example. Filtering changes only the figure, never your data.

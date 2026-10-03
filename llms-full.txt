@@ -98,7 +98,7 @@ For a word profile, set a minimum number of readers per word so isolated observa
 
 ## 4. Read the result with its denominator
 
-Check how many readers, trials, or observations contribute to the chart. In **Groups**, turn on comparison only after one cohort looks correct; then define the second cohort and inspect the difference/effect-size output. It compares the two cohorts' per-reader means, so a reader in both cohorts counts on both sides; the test is exploratory, with no correction for many comparisons — see [how it is computed](https://lacclab.github.io/scanpath-studio/computations/#agg-effect-size).
+Check how many readers, trials, or observations contribute to the chart. In **Groups**, turn on comparison only after one cohort looks correct; then define the second cohort and read **Group means & difference**. It compares the two cohorts' per-reader means and is descriptive: there is no significance test. The caption says how many readers are in each cohort and how many are in both; a reader in both contributes to both means, and then the standardized difference is not shown — see [how it is computed](https://lacclab.github.io/scanpath-studio/computations/#agg-effect-size).
 
 Use a scanpath view to investigate surprising cases.
 
@@ -144,7 +144,7 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open **Data Management → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it.
+Open **Data Management → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it. To return to a trial from its note, select **Open** on its row there; a screen annotation opens that screen.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and saved the review. For a formal retained/excluded pool, continue with [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
 
@@ -171,7 +171,9 @@ Use **Fixation index range** in the same place to show only part of the trial.
 
 In **Annotations**, apply a consistent tag vocabulary—for example `exclude`, `review`, `poor-calibration`, or `skimming`—and add a brief reason. Star trials that are useful examples or approved for a figure.
 
-Return to the trial filters and, under **By annotation**, put `exclude` in **Excluding tags** — not in **With any of these tags**, which would keep only the rejected trials. This turns the review decisions into the active pool without deleting the source data. Before you narrow the pool, save the full record with **Data → Annotations → Export**: it lists every trial you tagged, including the ones the filter now hides.
+Return to the trial filters and, under **By trial annotation**, put `exclude` in **Excluding tags** — not in **With any of these tags**, which would keep only the rejected trials. This turns the review decisions into the active pool without deleting the source data. Before you narrow the pool, save the full record with **Data → Annotations → Export**: it lists every trial you tagged, including the ones the filter now hides.
+
+These filters read the trial's own star and tags. On a dataset with several screens per trial, a star or tag on a single screen does not keep or hide its trial, and its tags are not offered in the pickers; find those on **Data → Annotations**.
 
 ## 4. Verify the retained pool
 
@@ -266,9 +268,9 @@ Corpus Analysis shows the reading measures your interest-area report provides (f
 | **Per reader** | How does this reader behave across trials?            |
 | **Groups**     | How do conditions or populations differ?              |
 
-Choose a measure, how to aggregate it, and the spread to show. Set a **minimum number of readers** per word so sparse words don't look like stable estimates.
+Choose a measure, how to aggregate it, and the spread to show. A line under the measure says what it is, its unit, and what each plotted value is (one word, one reader's mean, …), with a link to its definition; a line under the spread says whether it shows how values vary (SD, IQR) or how precisely the centre is known (SEM, bootstrap CI). Set a **minimum number of readers** per word so sparse words don't look like stable estimates.
 
-**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare** for a second cohort, with the difference and effect size. Fields from attached participant, trial or text tables appear here too.
+**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare** for a second cohort, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too.
 
 ## From summary to evidence
 
@@ -302,7 +304,7 @@ Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of these
 The import screen has three parts:
 
 1. **Name** — and an optional one-line description.
-1. **Tables** — upload fixations, AOIs and, optionally, raw gaze. The app guesses which column is which; check its guesses. The trial count under each ID picker is a quick sanity check. Reading measures from an EyeLink interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and are what Corpus Analysis shows. Optional tables, one row per reader, trial or text, add fields to filter and group by.
+1. **Tables** — upload fixations, AOIs and, optionally, raw gaze. The app guesses which column is which; check its guesses. The trial count under each ID picker is a quick sanity check, and hovering the icon beside a mapped field shows its first few values and how they are read, for example `0.12 → 120 ms` for a column in seconds. On a guess you have not confirmed yet, the same values are on the confirm button's tooltip. Reading measures from an EyeLink interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and are what Corpus Analysis shows. Optional tables, one row per reader, trial or text, add fields to filter and group by.
 1. **Recording setup** — the screen the data was recorded on (below).
 
 Then click **Add dataset**. Anything the app cannot use is listed above the button before you confirm.
@@ -315,7 +317,7 @@ Describe the screen the data was **recorded** on, not the one you are using now.
 
 ## The Data Management page
 
-**Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
+**Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing; its mapped fields show the same value preview. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
 
 Columns are named as they are in your files: in the tables, the plot controls, the trial chips, filters and sort, Corpus Analysis, the figure's hover and colour bar, and the setup screens, a column you uploaded as `CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one Scanpath Studio made, such as a reading measure your data did not bring.
 
@@ -383,6 +385,8 @@ The **Plot controls** rail starts with **Animate**, **Compare**, four design pre
 | Figure & canvas | screen framing, axes and grid, title and labels         |
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials, so they stay comparable.
+
+Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the smallest to the largest marker in every trial, both sides of a comparison, the replay and every export, so one duration is always one size. Shorter fixations take the smallest marker and longer ones the largest. Under **Fixations ▾**, **Scale** picks the curve: **√ duration** (the default) grows marker area with duration, **Linear** grows the diameter with it, **Log** compresses long fixations. **Durations** sets the two bounds, and **Size key** draws reference circles labelled in ms in the figure's corner (in Compare, only while both scanpaths use the same marker size range). **Relative to this figure** stretches each figure from its own shortest to longest fixation instead, so its sizes compare only within that figure. Share links, settings files, saved designs and restored sessions from before the fixed scale reopen on the relative one, as they were drawn.
 
 ## Filter what is drawn
 
@@ -502,7 +506,7 @@ The [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) lists t
 
 ## From the app to a script
 
-Tune the figure in the app, open **Share → Code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. The same recipe is available without the app:
+Tune the figure in the app, open **Share → Code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. For a dataset you added in the app, the snippet loads your files with the column mapping you set up (`word_schema` / `fix_schema`, or `--word-schema` / `--fix-schema`), and only the tables the dataset has; the file paths are placeholders to replace. A step the loader cannot repeat, such as joining character boxes into words or columns made from the file names, is named in a note beside the snippet. The same recipe is available without the app:
 
 ```
 # translate a render invocation you already have into Python
@@ -1028,6 +1032,7 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `coordinate_grid_spacing`   | `None`                                         | `--coordinate-grid-spacing`                               | all three        |
 | `critical_span_style`       | `'Mark text'`                                  | `--critical-span-style`                                   | plot, compare    |
 | `duration_mass_sigma_chars` | `1.0`                                          | `--duration-mass-sigma`                                   | plot, compare    |
+| `duration_size_legend`      | `True`                                         | `--no-duration-size-legend`                               | all three        |
 | `fit_to_monitor`            | `True`                                         | `--no-full-monitor`                                       | all three        |
 | `fixation_color`            | `'#0072B2'`                                    | `--fixation-color`                                        | all three        |
 | `fixation_color_range`      | `None`                                         | `--fixation-color-range`                                  | all three        |
@@ -1051,7 +1056,9 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `label_a`                   | `'Scanpath A'`                                 | `--label-a`                                               | animate          |
 | `label_b`                   | `'Scanpath B'`                                 | `--label-b`                                               | animate          |
 | `line_spacing`              | `3.0`                                          | `--line-spacing`                                          | all three        |
+| `marker_duration_range`     | `(50, 600)`                                    | `--marker-duration-range`                                 | all three        |
 | `marker_size_range`         | `(8, 24)`                                      | `--marker-size-range`                                     | all three        |
+| `marker_size_scale`         | `'sqrt'`                                       | `--marker-size-scale`                                     | all three        |
 | `order_font_color`          | `'#111111'`                                    | `--order-font-color`                                      | all three        |
 | `order_font_size`           | `10`                                           | `--order-font-size`                                       | all three        |
 | `raw_gaze_color`            | `'#888888'`                                    | `--raw-gaze-color`                                        | all three        |
@@ -1281,6 +1288,7 @@ A second dataset is loaded from **files only**. Any corpus reachable from Python
 | animate                              | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning                                   |
 | set display geometry                 | `--canvas WIDTHxHEIGHT`                                                                                                                                                                                        |
 | color fixations                      | `--color-by FIELD`                                                                                                                                                                                             |
+| size fixations by duration           | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend`                    |
 | draw only part of a trial            | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too)                                                                                                      |
 | add the stimulus image               | `--stimulus-image PATH`                                                                                                                                                                                        |
 | resolve per-trial images             | `--image-root DIR --image-pattern '{text_id}.png'`                                                                                                                                                             |
@@ -1485,6 +1493,9 @@ SCANPATH_LOCAL_FS=1.
 | `--heatmap-norm`               | `{linear,log}`                                                   | —       | Heatmap colour scaling: linear (default) or log — log compresses heavy-tailed dwell times so a few hot words don't wash out the rest.                                                                                                                                                                                                                                                                                                 |
 | `--fixation-colorscale`        | `NAME`                                                           | —       | Fixation-marker colorscale, e.g. Blues (default: the app's default).                                                                                                                                                                                                                                                                                                                                                                  |
 | `--marker-size-range`          | `MIN MAX`                                                        | —       | Min/max fixation marker size in px, e.g. 4 12 (default: 8 24). Smaller ranges suit small thumbnails.                                                                                                                                                                                                                                                                                                                                  |
+| `--marker-size-scale`          | `{sqrt,linear,log,relative}`                                     | —       | How duration sets marker size (default: sqrt). sqrt / linear / log map `--marker-duration-range` onto `--marker-size-range` the same way for every figure, so one duration is one size across trials, comparisons and replays; sqrt makes marker area grow with duration. relative stretches each figure from its own shortest to longest fixation.                                                                                   |
+| `--marker-duration-range`      | `LO HI`                                                          | —       | Durations in ms given the smallest and largest marker on a fixed scale (default: 50 600). Shorter and longer fixations clamp to them.                                                                                                                                                                                                                                                                                                 |
+| `--no-duration-size-legend`    | switch                                                           | —       | Hide the duration-size key (reference circles labelled in ms) drawn on a fixed `--marker-size-scale`.                                                                                                                                                                                                                                                                                                                                 |
 | `--canvas`                     | `WxH`                                                            | —       | Monitor size in px, e.g. 2560x1440 (default: estimated from data; the bundled sample uses 2560x1440 automatically).                                                                                                                                                                                                                                                                                                                   |
 | `--coordinate-grid`            | switch                                                           | —       | Overlay a monitor-pixel X/Y grid on the scanpath.                                                                                                                                                                                                                                                                                                                                                                                     |
 | `--coordinate-grid-spacing`    | `PX`                                                             | —       | Pin the major coordinate-grid interval in pixels. Implies `--coordinate-grid`; omit for automatic 1/2/5×10ⁿ spacing.                                                                                                                                                                                                                                                                                                                  |
@@ -1620,20 +1631,20 @@ Pre-aggregated EyeLink IA measures (`IA_FIRST_FIXATION_DURATION` → `first_fixa
 
 **Fixations** — after `load_scanpath_data`:
 
-| Column                                                   | Meaning                                                                                                                                                                                                                                                                                              |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `participant_id`                                         | Reader id. Optional in the source (a dataset without one becomes a single anonymous reader).                                                                                                                                                                                                         |
-| `trial_id`                                               | Must match the words table. **Required.**                                                                                                                                                                                                                                                            |
-| `screen_id`, `screen_index`                              | Optional child screen and 1-based order; scientific operations never join across it.                                                                                                                                                                                                                 |
-| `text_id`                                                | Text/passage id, when present.                                                                                                                                                                                                                                                                       |
-| `x`, `y`                                                 | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers.                                                                                                                                                                            |
-| `duration_ms`                                            | Fixation duration. **Required.**                                                                                                                                                                                                                                                                     |
-| `timestamp_ms`                                           | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case.                                                                                                     |
-| `screen_timestamp_ms`, `screen_fixation_id`              | Optional local clock/id that resets per screen; retained alongside the parent-global columns.                                                                                                                                                                                                        |
-| `word_id`                                                | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
-| `order_in_trial`                                         | 1-based fixation index, added during normalization.                                                                                                                                                                                                                                                  |
-| `fixation_id`                                            | Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …).                                                                                                                                                                            |
-| `saccade_type`, `saccade_amplitude`, `eye`, `pass_index` | Passed through when the source has them.                                                                                                                                                                                                                                                             |
+| Column                                                   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `participant_id`                                         | Reader id. Optional in the source (a dataset without one becomes a single anonymous reader).                                                                                                                                                                                                                                                                                                                          |
+| `trial_id`                                               | Must match the words table. **Required.**                                                                                                                                                                                                                                                                                                                                                                             |
+| `screen_id`, `screen_index`                              | Optional child screen and 1-based order; scientific operations never join across it.                                                                                                                                                                                                                                                                                                                                  |
+| `text_id`                                                | Text/passage id, when present.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `x`, `y`                                                 | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers.                                                                                                                                                                                                                                                                                             |
+| `duration_ms`                                            | Fixation duration. **Required.**                                                                                                                                                                                                                                                                                                                                                                                      |
+| `timestamp_ms`                                           | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the summaries' `reading_time_ms` / `wpm` then sum fixation durations, with `reading_time_source` saying it is an estimate. |
+| `screen_timestamp_ms`, `screen_fixation_id`              | Optional local clock/id that resets per screen; retained alongside the parent-global columns.                                                                                                                                                                                                                                                                                                                         |
+| `word_id`                                                | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it.                                                                                                                  |
+| `order_in_trial`                                         | 1-based fixation index, added during normalization.                                                                                                                                                                                                                                                                                                                                                                   |
+| `fixation_id`                                            | Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …).                                                                                                                                                                                                                                                                                             |
+| `saccade_type`, `saccade_amplitude`, `eye`, `pass_index` | Passed through when the source has them.                                                                                                                                                                                                                                                                                                                                                                              |
 
 Column matching is case- and separator-insensitive: `IA_LEFT`, `ia_left` and `Ia Left` are the same name.
 
@@ -1835,6 +1846,8 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**, **fi
 | **Trial metadata** *(optional)*       | one row per trial                                        | trial id, plus anything you know about that trial                                                                                                         |
 | **Text metadata** *(optional)*        | one row per text                                         | text id, plus anything you know about that text                                                                                                           |
 
+**Without timestamps.** A fixations table with no timestamp column still loads: its rows are taken to be in reading order. Reading time and reading speed are then an estimate — the fixations laid end to end by their durations, leaving out the time between them — and the summaries label them so (`reading_time_source`). The replay uses the same clock.
+
 **Units.** Durations and timestamps are read in milliseconds. A column whose header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon write — is converted, and so are the vendor columns documented in seconds (Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core `norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since the load does not know the screen size — multiply them by the screen width and height in pixels first. Pupil Labs Core measures *y* upward from the bottom edge, so its row is `(1 − y) × height`. Its `norm_pos` is relative to the world-camera image, not the screen: map the gaze onto the stimulus screen first (Pupil's Surface Tracker), whose coordinates have the same bottom-left origin.
 
 Either main table may be omitted — the missing layer is skipped, and a words-only table still draws a heatmap from its pre-aggregated reading measures.
@@ -1903,7 +1916,7 @@ A logical `(participant_id, trial_id)` may contain several ordered screens. Thes
 
 `timestamp_ms`, `fixation_id`, and `order_in_trial` remain parent-global. The screen-local clock/id are retained alongside them; neither overwrites the other. Screen id and order must map one-to-one within a parent, and the words and fixations reports must contain the same set of screens. These validations reject orphan screens instead of silently joining the wrong coordinate spaces.
 
-All geometry-dependent operations group by screen: fixation-to-word assignment, saccades, passes, regressions, and word measures never cross a screen boundary. The main view shows one screen with previous/next navigation; annotations can be stored on the parent trial or the current screen. Bulk output uses deterministic `screens/screen-001-<id>/` folders.
+All geometry-dependent operations group by screen: fixation-to-word assignment, saccades, passes, regressions, and word measures never cross a screen boundary. The main view shows one screen with previous/next navigation; annotations can be stored on the parent trial or the current screen. The trial filters' *Favorites only* and tag pickers read the parent trial's annotation only. Bulk output uses deterministic `screens/screen-001-<id>/` folders.
 
 If source reports have arbitrary page markers instead of mappable screen columns, pass a nested manifest (`trial_parts_manifest=` in `load_scanpath_data`, `--trial-parts-manifest` on the CLI). Selectors are exact and must cover every row in the declared parent:
 
@@ -1996,19 +2009,19 @@ Comparing against an independent implementation is [VAL-4](https://github.com/la
 | [`pre.rtl`](#pre-rtl)                                     | Right-to-left detection                  | Preprocessing                   | —                                                                                                | Verified               |
 | [`pre.sensitivity`](#pre-sensitivity)                     | Measure sensitivity                      | Preprocessing                   | —                                                                                                | Partially verified     |
 | [`align.algorithms`](#align-algorithms)                   | Vertical drift correction                | Preprocessing                   | —                                                                                                | Partially verified     |
-| [`agg.measure_values`](#agg-measure-values)               | Measure value extraction                 | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.aggregate_value`](#agg-aggregate-value)             | Central tendency                         | Statistical aggregation / test  | —                                                                                                | Verified               |
-| [`agg.spread`](#agg-spread)                               | Spread band                              | Statistical aggregation / test  | —                                                                                                | Verified               |
-| [`agg.bootstrap_ci`](#agg-bootstrap-ci)                   | Bootstrap confidence interval            | Statistical aggregation / test  | same as the measure                                                                              | Verified               |
-| [`agg.effect_size`](#agg-effect-size)                     | Group comparison and effect size         | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.group_mask`](#agg-group-mask)                       | Group definition                         | Statistical aggregation / test  | —                                                                                                | Verified               |
-| [`agg.word_profile`](#agg-word-profile)                   | Per-word cohort profile                  | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.word_rates`](#agg-word-rates)                       | Skip / regression rate profile           | Statistical aggregation / test  | proportion                                                                                       | Partially verified     |
-| [`agg.reader_summary`](#agg-reader-summary)               | Per-reader summary                       | Statistical aggregation / test  | ms, px, counts, proportions                                                                      | Partially verified     |
-| [`agg.trial_summary`](#agg-trial-summary)                 | Per-trial summary                        | Statistical aggregation / test  | ms, counts                                                                                       | Partially verified     |
-| [`agg.normalize`](#agg-normalize)                         | Normalized measure column                | Statistical aggregation / test  | —                                                                                                | Partially verified     |
-| [`agg.landing_curve`](#agg-landing-curve)                 | Landing-position curve                   | Statistical aggregation / test  | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified     |
-| [`agg.over_time`](#agg-over-time)                         | Trend over time                          | Statistical aggregation / test  | —                                                                                                | Partially verified     |
+| [`agg.measure_values`](#agg-measure-values)               | Measure value extraction                 | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.aggregate_value`](#agg-aggregate-value)             | Central tendency                         | Statistical aggregation         | —                                                                                                | Verified               |
+| [`agg.spread`](#agg-spread)                               | Spread band                              | Statistical aggregation         | —                                                                                                | Verified               |
+| [`agg.bootstrap_ci`](#agg-bootstrap-ci)                   | Bootstrap confidence interval            | Statistical aggregation         | same as the measure                                                                              | Verified               |
+| [`agg.effect_size`](#agg-effect-size)                     | Group means and difference               | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.group_mask`](#agg-group-mask)                       | Group definition                         | Statistical aggregation         | —                                                                                                | Verified               |
+| [`agg.word_profile`](#agg-word-profile)                   | Per-word cohort profile                  | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.word_rates`](#agg-word-rates)                       | Skip / regression rate profile           | Statistical aggregation         | proportion                                                                                       | Partially verified     |
+| [`agg.reader_summary`](#agg-reader-summary)               | Per-reader summary                       | Statistical aggregation         | ms, px, counts, proportions                                                                      | Partially verified     |
+| [`agg.trial_summary`](#agg-trial-summary)                 | Per-trial summary                        | Statistical aggregation         | ms, counts                                                                                       | Partially verified     |
+| [`agg.normalize`](#agg-normalize)                         | Normalized measure column                | Statistical aggregation         | —                                                                                                | Partially verified     |
+| [`agg.landing_curve`](#agg-landing-curve)                 | Landing-position curve                   | Statistical aggregation         | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified     |
+| [`agg.over_time`](#agg-over-time)                         | Trend over time                          | Statistical aggregation         | —                                                                                                | Partially verified     |
 | [`sim.nld`](#sim-nld)                                     | Normalized Levenshtein distance          | Similarity                      | dimensionless (0–1)                                                                              | Verified               |
 | [`sim.aoi_sequence`](#sim-aoi-sequence)                   | AoI sequence                             | Similarity                      | —                                                                                                | Verified               |
 | [`sim.windowed`](#sim-windowed)                           | NLD by fixation index / time             | Similarity                      | —                                                                                                | Partially verified     |
@@ -2094,15 +2107,15 @@ Read EyeLink's string booleans as booleans (BUG-7).
 
 **Formula.** Numbers go by `!= 0`. Strings are matched case-insensitively against `{'', '.', '0', '0.0', 'false', 'f', 'no', 'n', 'na', 'nan', '-'}` → False; anything else → True.
 
-|                          |                                                               |
-| ------------------------ | ------------------------------------------------------------- |
-| **Output**               | bool                                                          |
-| **Missing & edge cases** | NaN → False.                                                  |
-| **Reference**            | Guards the `'.'`-as-missing convention in EyeLink IA reports. |
-| **Code**                 | `scanpath_studio/data.py:coerce_flag`                         |
-| **Consumers**            | UI, API, CLI, Export                                          |
-| **Tests**                | `tests/test_data.py`                                          |
-| **Verification**         | tier A, C — **Verified**                                      |
+|                          |                                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | bool                                                                                                                                                                                                                                              |
+| **Missing & edge cases** | NaN → False for an operational flag (blink, excluded). A supplied reading-measure flag (skip, regression in / out) keeps it missing instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA (`coerce_measure_flag`, a nullable boolean). |
+| **Reference**            | Guards the `'.'`-as-missing convention in EyeLink IA reports.                                                                                                                                                                                     |
+| **Code**                 | `scanpath_studio/data.py:coerce_flag`                                                                                                                                                                                                             |
+| **Consumers**            | UI, API, CLI, Export                                                                                                                                                                                                                              |
+| **Tests**                | `tests/test_data.py`                                                                                                                                                                                                                              |
+| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                          |
 
 ### `norm.stimulus_broadcast` — Stimulus-level word broadcast
 
@@ -2654,7 +2667,7 @@ Trial-relative onset times for animation and time series.
 | **Tests**                | `tests/test_measures.py`                                 |
 | **Verification**         | tier A, C — **Partially verified**                       |
 
-## Statistical aggregation / test
+## Statistical aggregation
 
 ### `agg.measure_values` — Measure value extraction
 
@@ -2715,21 +2728,22 @@ Percentile bootstrap CI of the chosen aggregate.
 | **Tests**                | `tests/test_aggregation.py`                                |
 | **Verification**         | tier A, C — **Verified**                                   |
 
-### `agg.effect_size` — Group comparison and effect size
+### `agg.effect_size` — Group means and difference
 
-Mean difference, Cohen's d, and a significance test (AN-21).
+Two groups' means, their difference and Cohen's d (AN-21).
 
-**Formula.** `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1. The test is Mann–Whitney U (two-sided) or Welch's t-test.
+**Formula.** Each value is one reader's mean of the measure (pooled observations when the data names no readers). `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and is shown only when the groups share no reader.
 
-|                          |                                                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | mean_a, mean_b, mean_diff, cohen_d, statistic, p_value, n_a, n_b                                                                                     |
-| **Missing & edge cases** | n < 2 in either group ⇒ NaN statistics. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
-| **Reference**            | **Exploratory, not pre-registered.** No multiple-comparison correction is applied; the p-value is descriptive.                                       |
-| **Code**                 | `scanpath_studio/aggregation.py:group_effect_size`                                                                                                   |
-| **Consumers**            | Corpus Analysis, API                                                                                                                                 |
-| **Tests**                | `tests/test_aggregation.py`                                                                                                                          |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                   |
+|                          |                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | mean_a, mean_b, mean_diff, cohen_d, n_a, n_b                                                                                                  |
+| **Grouping / ordering**  | one value per reader in each group                                                                                                            |
+| **Missing & edge cases** | n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
+| **Reference**            | **Descriptive only** — no significance test. A reader in both groups contributes to both means, so the groups are not independent samples.    |
+| **Code**                 | `scanpath_studio/aggregation.py:group_mean_difference`                                                                                        |
+| **Consumers**            | Corpus Analysis, API                                                                                                                          |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                                   |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                            |
 
 ### `agg.group_mask` — Group definition
 
@@ -2763,16 +2777,16 @@ A measure per word position, aggregated across readers.
 
 Rate measures per word.
 
-**Formula.** Mean of the 0/1 flag over readers — a proportion in [0, 1].
+**Formula.** Mean of the 0/1 flag over the readers who reported it — a proportion in [0, 1]. Each rate has its own reader count (`n_skip`, `n_regression_in`) and its own minimum-readers verdict.
 
-|                          |                                                    |
-| ------------------------ | -------------------------------------------------- |
-| **Unit**                 | proportion                                         |
-| **Missing & edge cases** | Words with no reader are omitted, not shown as 0.  |
-| **Code**                 | `scanpath_studio/aggregation.py:word_rate_profile` |
-| **Consumers**            | Corpus Analysis, API                               |
-| **Tests**                | `tests/test_aggregation.py`                        |
-| **Verification**         | tier A, C — **Partially verified**                 |
+|                          |                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | proportion                                                                                                                                                                                   |
+| **Missing & edge cases** | A missing flag is no observation: it is left out of that rate and its reader count, never read as 0. A rate below the minimum readers is hidden; the word stays while its other rate stands. |
+| **Code**                 | `scanpath_studio/aggregation.py:word_rate_profile`                                                                                                                                           |
+| **Consumers**            | Corpus Analysis, API                                                                                                                                                                         |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                                                                                  |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                           |
 
 ### `agg.reader_summary` — Per-reader summary
 
@@ -2793,16 +2807,17 @@ One row per reader: totals, means and rates.
 
 One row per trial: reading time, counts, rates.
 
-**Formula.** Counts and sums over the trial's fixations and word measures.
+**Formula.** Counts and sums over the trial's fixations and word measures. `reading_time_ms` is last fixation end − first fixation start; without recorded fixation onsets it is the summed fixation durations, and `reading_time_source` says it is an estimate. `wpm` = words ÷ reading time.
 
-|                  |                                                      |
-| ---------------- | ---------------------------------------------------- |
-| **Output**       | Trials table                                         |
-| **Unit**         | ms, counts                                           |
-| **Code**         | `scanpath_studio/aggregation.py:trial_summary_table` |
-| **Consumers**    | Corpus Analysis, Export, Data Inspection, API        |
-| **Tests**        | `tests/test_aggregation.py`                          |
-| **Verification** | tier C, D — **Partially verified**                   |
+|                          |                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | Trials table                                                                                                                |
+| **Unit**                 | ms, counts                                                                                                                  |
+| **Missing & edge cases** | No onset column ⇒ reading time and wpm are duration-based estimates, labelled as such — never the 0, 1, 2, … order numbers. |
+| **Code**                 | `scanpath_studio/aggregation.py:trial_summary_table`                                                                        |
+| **Consumers**            | Corpus Analysis, Export, Data Inspection, API                                                                               |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                 |
+| **Verification**         | tier C, D — **Partially verified**                                                                                          |
 
 ### `agg.normalize` — Normalized measure column
 
@@ -2990,18 +3005,19 @@ The glyph run inside a word's box — where its letters are.
 
 ### `disp.marker_sizes` — Fixation marker sizing
 
-Dot area encodes fixation duration.
+Marker size encodes fixation duration on one fixed scale.
 
-**Formula.** Durations are scaled between a minimum and maximum marker size across the drawn set. **Display only** — never a recorded value.
+**Formula.** Fixed scales (`marker_size_scale` = `sqrt`, the default; `linear`; `log`): `size = s_min + (s_max − s_min) · (f(d) − f(lo)) / (f(hi) − f(lo))`, with `d` clamped to the duration bounds `[lo, hi]` (`marker_duration_range`, default 50–600 ms) and `f` = √, identity or ln. `relative`: linear between the drawn set's own shortest and longest duration (the scale before the fixed one; older saved configs and Share links keep it). **Display only** — never a recorded value.
 
-|                          |                                                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px (marker diameter)                                                                                     |
-| **Precedence & caveats** | Shared by single-trial, comparison and export builders so the same trial renders identically everywhere. |
-| **Code**                 | `scanpath_studio/plots.py:_compute_marker_sizes`                                                         |
-| **Consumers**            | UI, API, CLI, Export                                                                                     |
-| **Tests**                | `tests/test_plots.py`, `tests/test_builder_parity.py`                                                    |
-| **Verification**         | tier C, D — **Intentional convention**                                                                   |
+|                          |                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | px (marker diameter)                                                                                                                                                               |
+| **Missing & edge cases** | A missing duration is treated as 0 ms: the smallest marker.                                                                                                                        |
+| **Precedence & caveats** | One scale for single-trial figures, both comparison sides, replays and bulk exports, so a duration draws at one size in all of them; only the px range is per scanpath in Compare. |
+| **Code**                 | `scanpath_studio/plots.py:_compute_marker_sizes`                                                                                                                                   |
+| **Consumers**            | UI, API, CLI, Export                                                                                                                                                               |
+| **Tests**                | `tests/test_duration_scale.py`, `tests/test_plots.py`, `tests/test_builder_parity.py`                                                                                              |
+| **Verification**         | tier C, D — **Intentional convention**                                                                                                                                             |
 
 ### `disp.axis_ranges` — Axis ranges and inversion
 
@@ -3065,7 +3081,7 @@ The terms the app and these docs use. A measure links to its entry in [Computati
 
 ## Eye movements
 
-Fixation : A pause of the eyes on one spot. Each row of the fixation table is one; the figure draws it as a marker sized by duration.
+Fixation : A pause of the eyes on one spot. Each row of the fixation table is one; the figure draws it as a marker sized by duration, on one scale shared by every figure.
 
 Saccade : The jump from one fixation to the next, drawn as a line between them. The app classes each one by its role in reading — forward, skip, refixation, return sweep or regression ([`assign.saccade_class`](https://lacclab.github.io/scanpath-studio/computations/#assign-saccade-class)).
 

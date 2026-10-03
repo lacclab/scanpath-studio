@@ -37,7 +37,7 @@ The [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) lists t
 
 ## From the app to a script
 
-Tune the figure in the app, open **Share → Code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. The same recipe is available without the app:
+Tune the figure in the app, open **Share → Code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. For a dataset you added in the app, the snippet loads your files with the column mapping you set up (`word_schema` / `fix_schema`, or `--word-schema` / `--fix-schema`), and only the tables the dataset has; the file paths are placeholders to replace. A step the loader cannot repeat, such as joining character boxes into words or columns made from the file names, is named in a note beside the snippet. The same recipe is available without the app:
 
 ```
 # translate a render invocation you already have into Python

@@ -1799,7 +1799,13 @@ loops or analysis pipelines.</p>
 <h2 id="from-the-app-to-a-script">From the app to a script<a class="headerlink" href="#from-the-app-to-a-script" title="Permanent link">&para;</a></h2>
 <p>Tune the figure in the app, open <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share → Code</strong>,
 and copy the snippet (Python or CLI); it writes only the options that differ
-from the defaults. The same recipe is available without the app:</p>
+from the defaults. For a dataset you added in the app, the snippet loads your
+files with the column mapping you set up (<code>word_schema</code> / <code>fix_schema</code>, or
+<code>--word-schema</code> / <code>--fix-schema</code>), and only the tables the dataset has; the
+file paths are placeholders to replace. A step the loader cannot repeat, such
+as joining character boxes into words or columns made from the file names, is
+named in a note beside the snippet. The same recipe is available without the
+app:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># translate a render invocation you already have into Python</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--no-heatmap<span class="w"> </span>--print-code<span class="w"> </span>python<span class="w"> </span>-o<span class="w"> </span>out.png
 </code></pre></div>
@@ -1857,7 +1863,7 @@ CLI's <code>--animate</code> writes interactive HTML only.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 2, 2026 05:23:54 UTC">October 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 09:07:55 UTC">October 3, 2026</span>
   </span>
 
     

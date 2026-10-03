@@ -1863,6 +1863,11 @@ any guess.</p>
 </tr>
 </tbody>
 </table>
+<p><strong>Without timestamps.</strong> A fixations table with no timestamp column still
+loads: its rows are taken to be in reading order. Reading time and reading
+speed are then an estimate — the fixations laid end to end by their durations,
+leaving out the time between them — and the summaries label them so
+(<code>reading_time_source</code>). The replay uses the same clock.</p>
 <p><strong>Units.</strong> Durations and timestamps are read in milliseconds. A column whose
 header names another unit — <code>[s]</code>, <code>[μs]</code>, <code>[ns]</code>, as Tobii and Pupil Labs Neon
 write — is converted, and so are the vendor columns documented in seconds
@@ -2018,7 +2023,8 @@ orphan screens instead of silently joining the wrong coordinate spaces.</p>
 <p>All geometry-dependent operations group by screen: fixation-to-word assignment,
 saccades, passes, regressions, and word measures never cross a screen boundary.
 The main view shows one screen with previous/next navigation; annotations can be
-stored on the parent trial or the current screen. Bulk output uses deterministic
+stored on the parent trial or the current screen. The trial filters' <em>Favorites
+only</em> and tag pickers read the parent trial's annotation only. Bulk output uses deterministic
 <code>screens/screen-001-&lt;id&gt;/</code> folders.</p>
 <p>If source reports have arbitrary page markers instead of mappable screen
 columns, pass a nested manifest (<code>trial_parts_manifest=</code> in
@@ -2076,7 +2082,7 @@ in <a href="../computations/">Computations &amp; methodology</a>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 2, 2026 21:22:54 UTC">October 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 09:07:55 UTC">October 3, 2026</span>
   </span>
 
     

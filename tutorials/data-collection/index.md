@@ -34,6 +34,6 @@ Move through the participant's trials with the trial picker.
 
 ## 5. Save the review
 
-Open **Data Management → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it.
+Open **Data Management → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it. To return to a trial from its note, select **Open** on its row there; a screen annotation opens that screen.
 
 **Done:** you have checked geometry and timing, marked suspicious trials, and saved the review. For a formal retained/excluded pool, continue with [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).

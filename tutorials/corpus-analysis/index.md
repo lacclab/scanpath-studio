@@ -26,7 +26,7 @@ For a word profile, set a minimum number of readers per word so isolated observa
 
 ## 4. Read the result with its denominator
 
-Check how many readers, trials, or observations contribute to the chart. In **Groups**, turn on comparison only after one cohort looks correct; then define the second cohort and inspect the difference/effect-size output. It compares the two cohorts' per-reader means, so a reader in both cohorts counts on both sides; the test is exploratory, with no correction for many comparisons — see [how it is computed](https://lacclab.github.io/scanpath-studio/computations/#agg-effect-size).
+Check how many readers, trials, or observations contribute to the chart. In **Groups**, turn on comparison only after one cohort looks correct; then define the second cohort and read **Group means & difference**. It compares the two cohorts' per-reader means and is descriptive: there is no significance test. The caption says how many readers are in each cohort and how many are in both; a reader in both contributes to both means, and then the standardized difference is not shown — see [how it is computed](https://lacclab.github.io/scanpath-studio/computations/#agg-effect-size).
 
 Use a scanpath view to investigate surprising cases.
 

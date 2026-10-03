@@ -2125,6 +2125,10 @@ B's frames directly.</p>
 <td><code>--color-by FIELD</code></td>
 </tr>
 <tr>
+<td>size fixations by duration</td>
+<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--no-duration-size-legend</code></td>
+</tr>
+<tr>
 <td>draw only part of a trial</td>
 <td><code>--fix-index-range START:END</code> (1-based, both inclusive; honoured by <code>--animate</code> and <code>--compare-with</code> too)</td>
 </tr>
@@ -2807,6 +2811,24 @@ with the default and help <code>--help</code> prints.</p>
 <td>Min/max fixation marker size in px, e.g. 4 12 (default: 8 24). Smaller ranges suit small thumbnails.</td>
 </tr>
 <tr>
+<td><code>--marker-size-scale</code></td>
+<td><code>{sqrt,linear,log,relative}</code></td>
+<td>—</td>
+<td>How duration sets marker size (default: sqrt). sqrt / linear / log map <code>--marker-duration-range</code> onto <code>--marker-size-range</code> the same way for every figure, so one duration is one size across trials, comparisons and replays; sqrt makes marker area grow with duration. relative stretches each figure from its own shortest to longest fixation.</td>
+</tr>
+<tr>
+<td><code>--marker-duration-range</code></td>
+<td><code>LO HI</code></td>
+<td>—</td>
+<td>Durations in ms given the smallest and largest marker on a fixed scale (default: 50 600). Shorter and longer fixations clamp to them.</td>
+</tr>
+<tr>
+<td><code>--no-duration-size-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the duration-size key (reference circles labelled in ms) drawn on a fixed <code>--marker-size-scale</code>.</td>
+</tr>
+<tr>
 <td><code>--canvas</code></td>
 <td><code>WxH</code></td>
 <td>—</td>
@@ -3297,7 +3319,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 2, 2026 18:53:54 UTC">October 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 09:07:55 UTC">October 3, 2026</span>
   </span>
 
     

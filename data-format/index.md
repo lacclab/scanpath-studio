@@ -13,6 +13,8 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**, **fi
 | **Trial metadata** *(optional)*       | one row per trial                                        | trial id, plus anything you know about that trial                                                                                                         |
 | **Text metadata** *(optional)*        | one row per text                                         | text id, plus anything you know about that text                                                                                                           |
 
+**Without timestamps.** A fixations table with no timestamp column still loads: its rows are taken to be in reading order. Reading time and reading speed are then an estimate — the fixations laid end to end by their durations, leaving out the time between them — and the summaries label them so (`reading_time_source`). The replay uses the same clock.
+
 **Units.** Durations and timestamps are read in milliseconds. A column whose header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon write — is converted, and so are the vendor columns documented in seconds (Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core `norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since the load does not know the screen size — multiply them by the screen width and height in pixels first. Pupil Labs Core measures *y* upward from the bottom edge, so its row is `(1 − y) × height`. Its `norm_pos` is relative to the world-camera image, not the screen: map the gaze onto the stimulus screen first (Pupil's Surface Tracker), whose coordinates have the same bottom-left origin.
 
 Either main table may be omitted — the missing layer is skipped, and a words-only table still draws a heatmap from its pre-aggregated reading measures.
@@ -81,7 +83,7 @@ A logical `(participant_id, trial_id)` may contain several ordered screens. Thes
 
 `timestamp_ms`, `fixation_id`, and `order_in_trial` remain parent-global. The screen-local clock/id are retained alongside them; neither overwrites the other. Screen id and order must map one-to-one within a parent, and the words and fixations reports must contain the same set of screens. These validations reject orphan screens instead of silently joining the wrong coordinate spaces.
 
-All geometry-dependent operations group by screen: fixation-to-word assignment, saccades, passes, regressions, and word measures never cross a screen boundary. The main view shows one screen with previous/next navigation; annotations can be stored on the parent trial or the current screen. Bulk output uses deterministic `screens/screen-001-<id>/` folders.
+All geometry-dependent operations group by screen: fixation-to-word assignment, saccades, passes, regressions, and word measures never cross a screen boundary. The main view shows one screen with previous/next navigation; annotations can be stored on the parent trial or the current screen. The trial filters' *Favorites only* and tag pickers read the parent trial's annotation only. Bulk output uses deterministic `screens/screen-001-<id>/` folders.
 
 If source reports have arbitrary page markers instead of mappable screen columns, pass a nested manifest (`trial_parts_manifest=` in `load_scanpath_data`, `--trial-parts-manifest` on the CLI). Selectors are exact and must cover every row in the declared parent:
 

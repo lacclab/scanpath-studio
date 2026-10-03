@@ -14,9 +14,9 @@ Corpus Analysis shows the reading measures your interest-area report provides (f
 | **Per reader** | How does this reader behave across trials?            |
 | **Groups**     | How do conditions or populations differ?              |
 
-Choose a measure, how to aggregate it, and the spread to show. Set a **minimum number of readers** per word so sparse words don't look like stable estimates.
+Choose a measure, how to aggregate it, and the spread to show. A line under the measure says what it is, its unit, and what each plotted value is (one word, one reader's mean, …), with a link to its definition; a line under the spread says whether it shows how values vary (SD, IQR) or how precisely the centre is known (SEM, bootstrap CI). Set a **minimum number of readers** per word so sparse words don't look like stable estimates.
 
-**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare** for a second cohort, with the difference and effect size. Fields from attached participant, trial or text tables appear here too.
+**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare** for a second cohort, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too.
 
 ## From summary to evidence
 

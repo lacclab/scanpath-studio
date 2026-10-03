@@ -26,7 +26,7 @@ Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of these
 The import screen has three parts:
 
 1. **Name** — and an optional one-line description.
-1. **Tables** — upload fixations, AOIs and, optionally, raw gaze. The app guesses which column is which; check its guesses. The trial count under each ID picker is a quick sanity check. Reading measures from an EyeLink interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and are what Corpus Analysis shows. Optional tables, one row per reader, trial or text, add fields to filter and group by.
+1. **Tables** — upload fixations, AOIs and, optionally, raw gaze. The app guesses which column is which; check its guesses. The trial count under each ID picker is a quick sanity check, and hovering the icon beside a mapped field shows its first few values and how they are read, for example `0.12 → 120 ms` for a column in seconds. On a guess you have not confirmed yet, the same values are on the confirm button's tooltip. Reading measures from an EyeLink interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and are what Corpus Analysis shows. Optional tables, one row per reader, trial or text, add fields to filter and group by.
 1. **Recording setup** — the screen the data was recorded on (below).
 
 Then click **Add dataset**. Anything the app cannot use is listed above the button before you confirm.
@@ -39,6 +39,6 @@ Describe the screen the data was **recorded** on, not the one you are using now.
 
 ## The Data Management page
 
-**Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
+**Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing; its mapped fields show the same value preview. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
 
 Columns are named as they are in your files: in the tables, the plot controls, the trial chips, filters and sort, Corpus Analysis, the figure's hover and colour bar, and the setup screens, a column you uploaded as `CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one Scanpath Studio made, such as a reading measure your data did not bring.

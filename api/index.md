@@ -477,6 +477,7 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `coordinate_grid_spacing`   | `None`                                         | `--coordinate-grid-spacing`                               | all three        |
 | `critical_span_style`       | `'Mark text'`                                  | `--critical-span-style`                                   | plot, compare    |
 | `duration_mass_sigma_chars` | `1.0`                                          | `--duration-mass-sigma`                                   | plot, compare    |
+| `duration_size_legend`      | `True`                                         | `--no-duration-size-legend`                               | all three        |
 | `fit_to_monitor`            | `True`                                         | `--no-full-monitor`                                       | all three        |
 | `fixation_color`            | `'#0072B2'`                                    | `--fixation-color`                                        | all three        |
 | `fixation_color_range`      | `None`                                         | `--fixation-color-range`                                  | all three        |
@@ -500,7 +501,9 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `label_a`                   | `'Scanpath A'`                                 | `--label-a`                                               | animate          |
 | `label_b`                   | `'Scanpath B'`                                 | `--label-b`                                               | animate          |
 | `line_spacing`              | `3.0`                                          | `--line-spacing`                                          | all three        |
+| `marker_duration_range`     | `(50, 600)`                                    | `--marker-duration-range`                                 | all three        |
 | `marker_size_range`         | `(8, 24)`                                      | `--marker-size-range`                                     | all three        |
+| `marker_size_scale`         | `'sqrt'`                                       | `--marker-size-scale`                                     | all three        |
 | `order_font_color`          | `'#111111'`                                    | `--order-font-color`                                      | all three        |
 | `order_font_size`           | `10`                                           | `--order-font-size`                                       | all three        |
 | `raw_gaze_color`            | `'#888888'`                                    | `--raw-gaze-color`                                        | all three        |

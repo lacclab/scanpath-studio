@@ -4,7 +4,7 @@ The terms the app and these docs use. A measure links to its entry in [Computati
 
 ## Eye movements
 
-Fixation : A pause of the eyes on one spot. Each row of the fixation table is one; the figure draws it as a marker sized by duration.
+Fixation : A pause of the eyes on one spot. Each row of the fixation table is one; the figure draws it as a marker sized by duration, on one scale shared by every figure.
 
 Saccade : The jump from one fixation to the next, drawn as a line between them. The app classes each one by its role in reading — forward, skip, refixation, return sweep or regression ([`assign.saccade_class`](https://lacclab.github.io/scanpath-studio/computations/#assign-saccade-class)).
 

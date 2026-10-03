@@ -2026,7 +2026,7 @@ def _popover_selectbox(label: str, options: list, state_key: str, host=None, **k
 # Help text for the (multi-capable) Trial ID mapping, shared by all tables.
 _TRIAL_MAPPING_HELP = (
     "Pick the column holding your unique trial ID — or pick SEVERAL columns "
-    "to build one on the fly (values joined with '_'), e.g. participant + "
+    "to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + "
     "paragraph + repeated-reading when no single column identifies a trial. "
     "Use the same columns for every uploaded table so trials line up."
 )
@@ -6183,7 +6183,10 @@ def render_plot_controls(
             caption_help="A screenshot of the reading screen, as the background "
             "for any dataset. An upload **overrides** a dataset's built-in image "
             "and is stretched to fill the monitor; the offset and scale below "
-            "line it up. Not carried by Share links (upload it on the other end).",
+            "line it up. In Compare it is the first reading's page, so the "
+            "second shows it only when it reads the same text on the same "
+            "screen; otherwise the second shows its own page, or none. Not "
+            "carried by Share links (upload it on the other end).",
         ).file_uploader(
             "Upload a stimulus image",
             type=["png", "jpg", "jpeg", "gif", "webp"],

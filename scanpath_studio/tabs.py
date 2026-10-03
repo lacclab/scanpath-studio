@@ -158,6 +158,7 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
+    TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
     _check_row,
     _collect_compare_styles,
@@ -189,8 +190,10 @@ from scanpath_studio.controls import (
     render_viz_reset,
 )
 from scanpath_studio.data import (
+    IDENTITY_SCHEMA_FIELDS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    ReadPlan,
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
@@ -205,31 +208,43 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames,
     has_explicit_trial_index,
+    identity_text_plan,
     normalize_fixations,
+    normalize_raw_gaze,
     normalize_words,
     propose_fix_schema,
+    propose_raw_gaze_schema,
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
     repeat_bases,
+    respell_reading,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
+    trial_id_series,
     trial_keys,
     trial_mapping_columns,
     user_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+    verbatim_text_plan,
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
+    HTML_SELF_CONTAINED_KEY,
     ComparisonSide,
     ExportOptions,
     annotate_figure,
+    apply_export_scope,
     bulk_export,
+    count_export_units,
+    describe_plan,
+    html_plotlyjs,
     pair_export,
     pattern_fields,
+    plan_from_counts,
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
@@ -1221,7 +1236,11 @@ def _render_save_plot_button(
     st.download_button(
         f"⬇ Download {fmt}",
         data=_figure_download_data(
-            fig, fmt, canvas_width=canvas_width, canvas_height=canvas_height
+            fig,
+            fmt,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            self_contained=_html_self_contained(),
         ),
         file_name=f"{file_stem}.{fmt.lower()}",
         mime=_MIME_FOR_FORMAT[fmt],
@@ -1237,14 +1256,45 @@ def _render_save_plot_button(
     )
 
 
+def _html_self_contained() -> bool:
+    """The Export subtab's *HTML files* choice (`_render_html_files_choice`)."""
+    return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
+
+
+def _render_html_files_choice() -> None:
+    """One choice for every HTML file the Export subtab writes — the figure,
+    the replay and the bundles: embed the Plotly library, or load it from
+    cdn.plot.ly when the file is opened. The scripted surfaces (`save_figure`,
+    `render -o figure.html`) always embed it."""
+    panel_field(
+        st,
+        "checkbox",
+        "Self-contained HTML (opens offline, larger file)",
+        display="HTML files",
+        value=False,
+        key=HTML_SELF_CONTAINED_KEY,
+        persist_state="session",
+        help="On: each HTML file carries the Plotly library, so it opens "
+        "offline and contacts no other host; it is about 4.8 MB larger. Off: "
+        "the file loads the library from cdn.plot.ly when opened, which needs "
+        "an internet connection. Applies to the figure, the replay and the "
+        "bundles' HTML.",
+    )
+
+
 def _figure_download_data(
-    fig, fmt: str, *, canvas_width: int, canvas_height: int
+    fig,
+    fmt: str,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    self_contained: bool = False,
 ) -> Callable[[], str | bytes]:
     """The zero-argument callable `st.download_button` runs on click (UX-150)."""
     if fmt == "HTML":
         return partial(
             fig.to_html,
-            include_plotlyjs="cdn",
+            include_plotlyjs=html_plotlyjs(self_contained),
             full_html=True,
             config={**PLOTLY_CONFIG},
         )
@@ -1269,7 +1319,7 @@ _ANIM_RENDER_S_PER_FRAME = 0.18
 _ANIM_RENDER_COLD_START_S = 3.0
 
 
-def _animation_html(fig) -> str:
+def _animation_html(fig, *, self_contained: bool = False) -> str:
     """The animation as a standalone HTML page, as `api.save_figure` writes it.
 
     It replays on the same wall-clock player as the live embed (BUG-93), which
@@ -1277,9 +1327,11 @@ def _animation_html(fig) -> str:
     ``auto_play`` stays off, since it ignores ``frame_duration``. The frames
     travel packed and are rebuilt in the browser (PERF-17). ``fig`` may also be a
     figure's ``to_dict()`` (a replay's cached view), serialized as is.
+    ``self_contained`` embeds the Plotly library ahead of the player's script,
+    as `api.save_figure` does, so the page replays offline.
     """
     options = dict(
-        include_plotlyjs="cdn",
+        include_plotlyjs=html_plotlyjs(self_contained),
         full_html=True,
         auto_play=False,
         config={**PLOTLY_CONFIG},
@@ -1329,16 +1381,19 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         # megabytes and about a second to serialize.
         st.download_button(
             "⬇ Download HTML",
-            data=partial(_replay_page_html, replay),
+            data=partial(
+                _replay_page_html, replay, self_contained=_html_self_contained()
+            ),
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
             on_click="ignore",
-            # ENG-64: not self-contained — a saved file has no app server to
-            # load plotly.js from, so it keeps the CDN (see docs/privacy.md).
+            # ENG-64: a saved file has no app server to load plotly.js from,
+            # so it embeds it or loads it from the CDN — the *HTML files*
+            # choice above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
-            "interactivity. It loads the Plotly library from cdn.plot.ly, so "
-            "opening it needs an internet connection.",
+            "interactivity. *HTML files* above decides whether it opens "
+            "offline or loads the Plotly library from cdn.plot.ly.",
         )
         return
 
@@ -2018,12 +2073,12 @@ def _cached_replay_view(
     )
 
 
-def _replay_page_html(replay: _ReplayView) -> str:
+def _replay_page_html(replay: _ReplayView, *, self_contained: bool = False) -> str:
     """The replay's standalone HTML page: `st.download_button` calls this on click.
 
     Written from the view's dict, so the click never builds a figure.
     """
-    return _animation_html(replay.figure_dict())
+    return _animation_html(replay.figure_dict(), self_contained=self_contained)
 
 
 _CMP_SORT_DEFAULT = "Same text, then same participant"
@@ -2644,6 +2699,8 @@ def _render_compare_selector(
     pending = st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
     if isinstance(pending, dict):
         wanted = (str(pending.get("participant_id")), str(pending.get("trial_id")))
+        # A link from before composite ids escaped a `_` in a part.
+        wanted = respell_reading(*wanted, identity_to_label)
         if wanted in identity_to_label:
             st.session_state[sel_key] = identity_to_label[wanted]
 
@@ -3197,7 +3254,33 @@ def _first_str(df: pd.DataFrame, col: str) -> str | None:
     return None
 
 
-def _servable_image_path(path: str | None) -> str | None:
+def _reading_stimulus_image(
+    words: pd.DataFrame, fixations: pd.DataFrame, source: str | None = None
+) -> tuple[str, tuple[int, int], tuple[float, float]] | None:
+    """One reading's own stimulus page: ``(path, size, origin)``, or ``None``.
+
+    The per-trial (per-screen) ``image_path`` lives on the reading's rows; the
+    image is offered only when it exists and its pixel size is readable. Its
+    origin (``image_x`` / ``image_y``, where the centred stimulus sat on the
+    monitor) places it to align with the fixations, which carry the same offset.
+    ``source`` names the dataset the rows come from, for `_servable_image_path`
+    (``None``: the active one).
+    """
+    path = _servable_image_path(
+        _first_str(words, "image_path") or _first_str(fixations, "image_path"),
+        source=source,
+    )
+    size = _png_pixel_size(path) if path and os.path.exists(path) else None
+    if size is None:
+        return None
+    origin = (
+        _first_num(words, "image_x") or _first_num(fixations, "image_x") or 0.0,
+        _first_num(words, "image_y") or _first_num(fixations, "image_y") or 0.0,
+    )
+    return path, size, origin
+
+
+def _servable_image_path(path: str | None, source: str | None = None) -> str | None:
     """``path`` if the server may read it into a figure, else ``None`` (ENG-57).
 
     The stimulus layer reads the file off the *server's* disk and sends it to the
@@ -3207,6 +3290,8 @@ def _servable_image_path(path: str | None) -> str | None:
     typed — the image-folder step that fills it legitimately needs local access —
     so honouring it let an upload read any PNG on the server. Paths the app
     resolved itself (the bundled demo, a server-side corpus) are unaffected.
+    ``source`` is the dataset the path came from (``None``: the active one) —
+    a comparison's B can come from another.
     """
     if not path:
         return None
@@ -3216,7 +3301,8 @@ def _servable_image_path(path: str | None) -> str | None:
         return path
     from scanpath_studio.constants import UPLOAD_CHOICE
 
-    source = st.session_state.get("data_source_choice")
+    if source is None:
+        source = st.session_state.get("data_source_choice")
     if source == UPLOAD_CHOICE or source in (st.session_state.get("_datasets") or {}):
         return None
     return path
@@ -4047,8 +4133,11 @@ def _compare_setups(
 ) -> tuple[bool, str]:
     """CMP-11: may A and B be drawn in one coordinate space? Plus the reason.
 
-    ``(True, "")`` for every *same-dataset* pair — one corpus is one screen, and
-    that case must stay exactly as it was before CMP-11.
+    A *same-dataset* pair is ``(True, "")`` while B's screen (``compare_meta``'s
+    ``"canvas"``, its selected screen's own canvas) matches the one A is drawn
+    on; one dataset can hold screens of different sizes, so two that differ
+    are refused with the same reason as two datasets' would be. Its
+    provenance is one corpus's either way, so there is no caveat to add.
 
     For a cross-dataset pair both snapshots go through
     `compare_source.snapshot_for`, deliberately: A's live ``global_*`` canvas
@@ -4062,10 +4151,21 @@ def _compare_setups(
     rail's 🖥️ Screen & geometry panel can override it, and the gate has to test
     the figure that is drawn, not the one the corpus declares.
     """
-    from scanpath_studio.experimental_setup import setups_comparable
+    from scanpath_studio.experimental_setup import SetupSnapshot, setups_comparable
 
-    if not compare_meta or not compare_meta.get("dataset"):
+    if not compare_meta:
         return True, ""
+    if not compare_meta.get("dataset"):
+        canvas_b = compare_meta.get("canvas")
+        canvas_a = (int(canvas_width), int(canvas_height))
+        if canvas_b is None or tuple(canvas_b) == canvas_a:
+            return True, ""
+        return setups_comparable(
+            SetupSnapshot(canvas_width=canvas_a[0], canvas_height=canvas_a[1]),
+            SetupSnapshot(
+                canvas_width=int(canvas_b[0]), canvas_height=int(canvas_b[1])
+            ),
+        )
     setup_b = compare_meta.get("setup")
     if setup_b is None:
         # BUG-85: why, not what happens next — like `setups_comparable`'s reason.
@@ -4104,9 +4204,17 @@ def _build_compare_meta(
     primary_dataset: str | None = None,
     raw_gaze: pd.DataFrame | None = None,
     include_raw_gaze: bool = True,
+    dataset_canvas: tuple[int, int] | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
+
+    ``"canvas"`` in the result is B's own screen: the selected screen's canvas
+    when B's rows carry one, else its dataset's — ``source.setup`` for a second
+    dataset, ``dataset_canvas`` (A's dataset canvas, before any per-screen
+    override) for this one. One dataset can hold screens of different sizes, so
+    dataset identity alone never makes B's screen A's. A second dataset's
+    ``"setup"`` carries the same canvas.
 
     ``primary_dataset`` is A's own corpus name (CMP-15): a cross-dataset
     comparison names *both* sides above their chip strips, since naming only B
@@ -4192,6 +4300,17 @@ def _build_compare_meta(
     else:
         label_primary = str(selected_trial)
         label_compare = str(compare_trial)
+    # B's screen, read before the participant ids are namespaced (they don't
+    # touch the canvas columns, but this is B's data as its corpus has it).
+    setup_b = source.setup if source is not None else None
+    canvas_b = screen_canvas_size(compare_words) or screen_canvas_size(compare_fix)
+    if canvas_b is not None and setup_b is not None:
+        setup_b = replace(setup_b, canvas_width=canvas_b[0], canvas_height=canvas_b[1])
+    if canvas_b is None:
+        if setup_b is not None:
+            canvas_b = setup_b.canvas
+        elif source is None and dataset_canvas is not None:
+            canvas_b = (int(dataset_canvas[0]), int(dataset_canvas[1]))
     figure_participant = compare_participant
     if source is not None:
         compare_words = _qualify_for_compare(compare_words, source.name)
@@ -4211,7 +4330,8 @@ def _build_compare_meta(
         "raw_participant": compare_participant,
         "trial": compare_trial,
         "dataset": source.name if source is not None else None,
-        "setup": source.setup if source is not None else None,
+        "setup": setup_b,
+        "canvas": canvas_b,
         "text_id": _first_text_id(compare_words) if source is not None else None,
     }
 
@@ -4902,6 +5022,7 @@ def _render_pair_export(
             include_fixations=True,
             include_measures=True,
             table_format=table_fmt,
+            html_self_contained=_html_self_contained(),
         )
         settings = _build_figure_settings(viz_settings, False)
         settings["line_spacing"] = line_spacing
@@ -4976,6 +5097,7 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
+    _render_html_files_choice()
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
     elif animate or displayed_fig is None:
@@ -5580,6 +5702,9 @@ def render_single_trial_tab(
         words_all = words_filtered
     if fixations_all is None:
         fixations_all = fixations_filtered
+    # The dataset's canvas, before a multipart screen's own replaces it below —
+    # a same-dataset B on a screen with no canvas of its own is drawn on this.
+    dataset_canvas = (int(canvas_width), int(canvas_height))
 
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
@@ -5733,28 +5858,13 @@ def render_single_trial_tab(
     trial_has_fixations = not trial_fixations.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Stimulus-page background image (MultiplEYE): the per-trial image path lives
-    # on the trial's rows. The image is offered only when it exists and its pixel
-    # size is readable. Its origin (image_x/image_y, where the centered stimulus
-    # sits on the monitor) places it to align with the fixations, which carry the
-    # same offset.
-    trial_image_path = _servable_image_path(
-        _first_str(trial_words, "image_path")
-        or _first_str(trial_fixations, "image_path")
-    )
-    trial_image_size = (
-        _png_pixel_size(trial_image_path)
-        if trial_image_path and os.path.exists(trial_image_path)
-        else None
-    )
-    has_stimulus_image = trial_image_size is not None
-    trial_image_origin = (
-        _first_num(trial_words, "image_x")
-        or _first_num(trial_fixations, "image_x")
-        or 0.0,
-        _first_num(trial_words, "image_y")
-        or _first_num(trial_fixations, "image_y")
-        or 0.0,
+    # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.
+    trial_image = _reading_stimulus_image(trial_words, trial_fixations)
+    has_stimulus_image = trial_image is not None
+    trial_image_path, trial_image_size, trial_image_origin = trial_image or (
+        None,
+        None,
+        None,
     )
 
     # Condition chips above the plot are filled later (into chips_slot), once the
@@ -6439,6 +6549,7 @@ def render_single_trial_tab(
             else None
         ),
         include_raw_gaze=draw_compare_raw_gaze,
+        dataset_canvas=dataset_canvas,
     )
     comparing = compare_meta is not None
     # VIZ-48: Compare draws raw gaze too — each reading's own samples, so the
@@ -6465,6 +6576,8 @@ def render_single_trial_tab(
                 "participant_id": compare_meta["raw_participant"],
                 "trial_id": compare_meta["trial"],
                 "source": compare_meta.get("dataset"),
+                # B's own screen (`cmp_screen=`), from its own navigator.
+                "screen_id": selected_compare_screen,
             }
         else:
             share_selection.pop("compare", None)
@@ -6834,10 +6947,7 @@ def render_single_trial_tab(
     # overlay layout asks. CMP-11 therefore gates it on the same predicate
     # instead of refusing every cross-dataset pair outright (CMP-8 §5.3).
     dual_anim = (
-        animate
-        and comparing
-        and not fig_compare_fix.empty
-        and (not cross_dataset or compare_comparable)
+        animate and comparing and not fig_compare_fix.empty and compare_comparable
     )
 
     # EXP-7: publish the state the 🔗 Share subtab writes its reproduction
@@ -6915,6 +7025,8 @@ def render_single_trial_tab(
                 # Share link does two blocks above.
                 participant=str(compare_meta["raw_participant"]),
                 trial=str(compare_meta["trial"]),
+                # B's own screen, from its own navigator (`screen_b=`).
+                screen=selected_compare_screen,
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
                 dataset=str(compare_meta.get("dataset") or ""),
@@ -7067,7 +7179,7 @@ def render_single_trial_tab(
                     dataset_name_b=dataset_name_b,
                 )
             _release_animation_task(anim_task)
-            if comparing and cross_dataset and not compare_comparable:
+            if comparing and not compare_comparable:
                 # UX-144: the replay has no split layout and shows A alone, so
                 # that is what it says. BUG-85 took the static figure's "shown
                 # side by side instead" out of the gate's reason, which is what
@@ -7324,6 +7436,58 @@ def render_single_trial_tab(
             st.caption("Sharing is unavailable in this context.")
 
 
+#: Set by Stop on a running bundle build, read (and dropped) by the next run
+#: of the Export panel, which says the build was stopped. Internal: never on
+#: the wire, never in the recovery cache.
+_BULK_EXPORT_STOPPED = "_bulk_export_stopped"
+
+
+def _bulk_export_task_key() -> tuple:
+    """The bundle build's progress task — one per session."""
+    return ("bulk_export", loading.session_id())
+
+
+def _stop_bulk_export(task_key: tuple) -> None:
+    """Stop on a running bundle build: it ends before its next screen, and no
+    bundle is offered. Session state and annotations are left as they were."""
+    progress.cancel(task_key)
+    st.session_state[_BULK_EXPORT_STOPPED] = True
+    st.session_state.pop("_bulk_export_cache", None)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_export_unit_count(
+    _combos: pd.DataFrame,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    frame_keys: tuple,
+    scope: tuple,
+) -> tuple[int, int] | None:
+    """``(trials, screen units)`` the bundle will export, for the plan line
+    above Build export. Cached on the four frames' fingerprints
+    (``frame_keys``) and the scope choice, since it walks every trial.
+
+    ``None`` when screens contradict each other (Build export reports it) —
+    returned, not raised, so that answer is cached too rather than re-walked
+    on every rerun."""
+    scope_name, participant, trial, text = scope
+    scoped = apply_export_scope(
+        _combos,
+        ExportOptions(
+            scope=scope_name,
+            scope_participant=participant,
+            scope_trial=trial,
+            scope_text=text,
+        ),
+    )
+    try:
+        units = count_export_units(scoped, _words, _fixations, _raw_gaze)
+    except ValueError:
+        return None
+    return len(scoped), units
+
+
 def _render_bulk_export(
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -7355,6 +7519,8 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
+    # The subtab's *HTML files* choice, in `options` so it is in the cache key.
+    options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
     if options.export_unfiltered:
@@ -7369,6 +7535,12 @@ def _render_bulk_export(
             words_filtered,
             fixations_filtered,
         )
+    frame_keys = (
+        frame_fingerprint(active_combos),
+        frame_fingerprint(active_words),
+        frame_fingerprint(active_fix),
+        frame_fingerprint(active_raw_gaze),
+    )
     run_col, info_col = st.columns([1, 3])
     with run_col:
         run = st.button(
@@ -7383,6 +7555,35 @@ def _render_bulk_export(
                     or options.any_table()
                 )
             ),
+        )
+        stop_slot = st.empty()
+    task_key = _bulk_export_task_key()
+    if not run and progress.running(task_key):
+        # A build an earlier run left going — the user clicked something else
+        # mid-build. That run can no longer hand its bundle over, so stop it.
+        progress.cancel(task_key)
+    if not active_combos.empty:
+        # What Build export is about to write: a parent trial can hold many
+        # screens, and each screen one file per format (and per layer).
+        counts = _c_export_unit_count(
+            active_combos,
+            active_words,
+            active_fix,
+            active_raw_gaze,
+            frame_keys,
+            (
+                options.scope,
+                options.scope_participant,
+                options.scope_trial,
+                options.scope_text,
+            ),
+        )
+        if counts is not None:
+            info_col.caption(describe_plan(plan_from_counts(*counts, options)))
+    if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
+        info_col.warning(
+            "Export stopped — no bundle was built. Build export starts again.",
+            icon=ICONS["warning"],
         )
     # UX-179: the session's annotations, only when the bundle asks for them —
     # and in the cache key then, so a note edited after a build is not served
@@ -7401,10 +7602,7 @@ def _render_bulk_export(
 
         annotation_dataset = _dataset_display_name(annotation_owner)
     sig = (
-        frame_fingerprint(active_combos),
-        frame_fingerprint(active_words),
-        frame_fingerprint(active_fix),
-        frame_fingerprint(active_raw_gaze),
+        *frame_keys,
         int(canvas_width),
         int(canvas_height),
         int(base_font_size),
@@ -7447,39 +7645,49 @@ def _render_bulk_export(
                 else:
                     progress_bar.progress(status.fraction, text=text)
 
+        stop_slot.button(
+            "Stop",
+            key="bulk_export_stop",
+            on_click=_stop_bulk_export,
+            args=(task_key,),
+            help="Stop after the screen being written. No bundle is offered.",
+        )
         try:
-            zip_bytes, progress = bulk_export(
-                active_combos,
-                active_words,
-                active_fix,
-                # EXP-22: each trial's metadata rows, for `{table.field}`.
-                metadata_rows_for=_metadata_mod.pattern_rows,
-                annotation_records=annotation_records,
-                annotation_dataset=annotation_dataset,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                x_field=x_field,
-                y_field=y_field,
-                settings=figure_settings,
-                options=options,
-                raw_gaze=active_raw_gaze,
-                status_callback=on_status,
-            )
+            with progress.task(task_key, title="Building the export bundle"):
+                zip_bytes, built_progress = bulk_export(
+                    active_combos,
+                    active_words,
+                    active_fix,
+                    # EXP-22: each trial's metadata rows, for `{table.field}`.
+                    metadata_rows_for=_metadata_mod.pattern_rows,
+                    annotation_records=annotation_records,
+                    annotation_dataset=annotation_dataset,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    x_field=x_field,
+                    y_field=y_field,
+                    settings=figure_settings,
+                    options=options,
+                    raw_gaze=active_raw_gaze,
+                    status_callback=on_status,
+                )
         except Exception as exc:
+            stop_slot.empty()
             progress_slot.empty()
             status_box.update(label=f"Export failed: {exc}", state="error")
             st.session_state.pop("_bulk_export_cache", None)
             st.warning(f"Could not build export: {exc}")
             cache = None
         else:
+            stop_slot.empty()
             progress_slot.empty()
-            cache = {"sig": sig, "data": zip_bytes, "progress": progress}
+            cache = {"sig": sig, "data": zip_bytes, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
             # EXP-24: the status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
-            built = summarize_export(progress, len(zip_bytes))
+            built = summarize_export(built_progress, len(zip_bytes))
             status_box.update(
                 label=built.message,
                 state="error" if built.level == "error" else "complete",
@@ -7488,16 +7696,16 @@ def _render_bulk_export(
 
     if cache and cache.get("sig") == sig:
         zip_bytes = cache["data"]
-        progress = cache["progress"]
+        built_progress = cache["progress"]
         # EXP-24: what was made and what failed; a partial zip still downloads.
-        built = summarize_export(progress, len(zip_bytes))
+        built = summarize_export(built_progress, len(zip_bytes))
         getattr(info_col, built.level)(built.message, icon=ICONS[built.level])
-        if progress.errors:
+        if built_progress.errors:
             with st.expander(
-                f"Export errors ({len(progress.errors):,})",
+                f"Export errors ({len(built_progress.errors):,})",
                 expanded=built.expand_errors,
             ):
-                for err in progress.errors:
+                for err in built_progress.errors:
                     st.write(err)
         st.download_button(
             "Download zip",
@@ -7506,6 +7714,68 @@ def _render_bulk_export(
             mime="application/zip",
             type="primary",
         )
+
+
+def _comparison_image_b(
+    settings: FigureSettings,
+    viz_settings: dict,
+    compare_meta: dict | None,
+    *,
+    same_page: bool,
+) -> dict:
+    """B's own stimulus page for a split comparison's B panel.
+
+    Resolved from B's own trial and screen — never inherited from A because the
+    two readings share a dataset, which says nothing about whether they share a
+    page. A B without an image of its own gets none, so its panel stays blank
+    rather than showing A's page.
+
+    The one shared image is an **uploaded** one, and only on ``same_page`` — B
+    reads the same text on the same screen of the same dataset as A. An upload
+    stands in for A's page (it is stretched over A's screen), so it is B's page
+    exactly then. Otherwise B shows its own dataset image, or none.
+
+    The manual nudge (offset / scale) corrects one dataset's coordinate frame
+    against its images, so it applies to a same-dataset B and not to another
+    dataset's.
+    """
+    none = {
+        "background_image_b": None,
+        "background_image_size_b": None,
+        "background_image_origin_b": None,
+    }
+    layer_on = bool(viz_settings.get("show_stimulus_image")) or (
+        settings.background_image is not None
+    )
+    if not compare_meta or not layer_on:
+        return none
+    if viz_settings.get("stimulus_image_upload_uri") and same_page:
+        if settings.background_image is None:
+            return none
+        return {
+            "background_image_b": settings.background_image,
+            "background_image_size_b": settings.background_image_size,
+            "background_image_origin_b": settings.background_image_origin,
+        }
+    dataset = compare_meta.get("dataset")
+    own = _reading_stimulus_image(
+        compare_meta.get("words", pd.DataFrame()),
+        compare_meta.get("fixations", pd.DataFrame()),
+        source=dataset,
+    )
+    if own is None:
+        return none
+    path, (width, height), (ox, oy) = own
+    if not dataset:
+        scale = float(viz_settings.get("stimulus_image_scale", 1.0)) or 1.0
+        width, height = width * scale, height * scale
+        ox += float(viz_settings.get("stimulus_image_offset_x", 0.0))
+        oy += float(viz_settings.get("stimulus_image_offset_y", 0.0))
+    return {
+        "background_image_b": path,
+        "background_image_size_b": (float(width), float(height)),
+        "background_image_origin_b": (float(ox), float(oy)),
+    }
 
 
 def _render_comparison_figure(
@@ -7644,13 +7914,37 @@ def _render_comparison_figure(
         highlight_column=_marked_text_column(viz_settings),
     )
     dropped_metric = None
+    canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
+    # §4: B's panel is drawn to B's own screen — its selected screen's canvas,
+    # else its dataset's (`_build_compare_meta`). Only the split layouts read
+    # it; an overlay of two different screens never gets here (§5.3 resolves
+    # it away), and that holds within one dataset as much as across two.
+    canvas_b = (compare_meta or {}).get("canvas")
+    canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
+    # Always stated, as `api.compare_scanpaths` states it: with no `canvas_b`
+    # the builder hands B's panel A's stimulus image, and dataset identity is
+    # no reason to think B read A's page. B's own image is resolved next.
+    overrides["canvas_b"] = canvas_b or canvas_a
+    overrides.update(
+        _comparison_image_b(
+            settings,
+            viz_settings,
+            compare_meta,
+            same_page=(
+                not cross_dataset
+                and primary_text_id is not None
+                and primary_text_id == compare_text_id
+                and _first_str(
+                    extract_trial(words_filtered, selected_participant, selected_trial),
+                    SCREEN_ID,
+                )
+                == _first_str(
+                    (compare_meta or {}).get("words", pd.DataFrame()), SCREEN_ID
+                )
+            ),
+        )
+    )
     if cross_dataset:
-        # §4: B's panel is drawn to B's own monitor. Only the split layouts read
-        # this; overlay never gets here (§5.3 resolves it away).
-        setup_b = compare_meta.get("setup")
-        if setup_b is not None:
-            overrides["canvas_b"] = setup_b.canvas
-
         # §5.4: a metric only one corpus ships would colour one panel and blank
         # the other. Fall back for *this render* — the stored choice is left
         # alone, so a same-dataset pair gets it straight back — and name what
@@ -7713,9 +8007,8 @@ def _render_comparison_figure(
         # monitor, so a box twice the size of the one beside it may be the same
         # physical size — naming both screens is what keeps that readable.
         active = st.session_state.get("data_source_choice") or "this dataset"
-        setup_b = compare_meta.get("setup")
-        canvas_a = (settings.canvas_width, settings.canvas_height)
-        canvas_b = setup_b.canvas if setup_b is not None else canvas_a
+        if canvas_b is None:
+            canvas_b = canvas_a
         if layout == "overlay":
             # CMP-11: a cross-dataset pair only reaches the overlay on equal
             # canvases, so the caption states the ground it stands on. When
@@ -7747,6 +8040,15 @@ def _render_comparison_figure(
                 f"{canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
+    elif canvas_b is not None and canvas_b != canvas_a:
+        # One dataset, two screen sizes: each panel is drawn to its own screen,
+        # and `setup_note` says why an Overlay could not be drawn.
+        st.caption(
+            "Panels are drawn to each reading's own screen — "
+            f"A {canvas_a[0]}×{canvas_a[1]}, B {canvas_b[0]}×{canvas_b[1]}. "
+            "Sizes are not comparable across panels."
+            + (f" {setup_note}" if setup_note else "")
+        )
     if dropped_metric:
         st.caption(
             f"{ICONS['warning']} **{active_all(st.session_state).label(dropped_metric)}** "
@@ -12226,7 +12528,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         key_host,
         "Trial ID column *",
         "Pick the column holding this table's trial id — or pick SEVERAL "
-        "columns to build one on the fly (values joined with '_'), the same "
+        "columns to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), the same "
         "way the uploaded data's own Trial ID mapping does. Required — it is "
         "the only thing that makes the join possible.",
     )
@@ -12435,7 +12737,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         key_host,
         "Text ID column *",
         "Pick the column holding this table's text id — or pick SEVERAL "
-        "columns to build one on the fly (values joined with '_'), the same "
+        "columns to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), the same "
         "way the uploaded data's own Text ID mapping does. Required — it is "
         "the only thing that makes the join possible.",
     )
@@ -12731,6 +13033,59 @@ def _harmonize_noting_join(
     return result
 
 
+def _reading_keys(frame, columns) -> set:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return set()
+    if not set(columns) <= set(frame.columns):
+        return set()
+    # Deduplicated before the text conversion: a raw-gaze table is samples.
+    rows = frame[list(columns)].drop_duplicates().dropna().astype(str)
+    return set(map(tuple, rows.to_numpy()))
+
+
+def raw_gaze_identity_problem(raw_gaze: pd.DataFrame, entry: dict) -> str | None:
+    """Why a raw-gaze table cannot join this dataset, or ``None`` if it can.
+
+    Samples are drawn under the scanpath of the reading — participant + trial,
+    and the screen on a multipart dataset — they share, so a table that shares
+    none with the dataset's fixations (else its word boxes) would attach and
+    then never appear. Said before Save commits it, naming the fields to check.
+    """
+    parent = ["participant_id", "trial_id"]
+    for table_key in ("fixations", "words"):
+        frame = entry.get(table_key)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            break
+    else:
+        return None
+    if not _reading_keys(raw_gaze, parent) & _reading_keys(frame, parent):
+        return (
+            "None of its readings match this dataset's: no sample has a "
+            "participant and trial the dataset's "
+            f"{_TABLE_LABELS[table_key].lower()} table has. Check that "
+            "**Participant ID** and **Trial ID** name the same readers and "
+            "trials, spelled the same way."
+        )
+    gaze_screens = (
+        "screen_id" in raw_gaze.columns and raw_gaze["screen_id"].notna().any()
+    )
+    data_screens = "screen_id" in frame.columns and frame["screen_id"].notna().any()
+    if gaze_screens and not data_screens:
+        return (
+            "It maps a **Screen ID**, but this dataset has no screens. Clear "
+            "Screen ID, or add the dataset again with its screens mapped."
+        )
+    if gaze_screens and not (
+        _reading_keys(raw_gaze, [*parent, "screen_id"])
+        & _reading_keys(frame, [*parent, "screen_id"])
+    ):
+        return (
+            "Its readings match, but none of its screens do. Check that "
+            "**Screen ID** names the same screens as the dataset's."
+        )
+    return None
+
+
 def _apply_remap() -> None:
     """Re-derive the active stored dataset's frames under the edited mapping and
     overwrite the entry in place (the "Apply remapping" button's ``on_click``).
@@ -12792,9 +13147,23 @@ def _apply_remap() -> None:
         if frame is None or frame.empty or table_key not in pending:
             continue
         schema = pending[table_key]
-        new_entry[table_key] = remap_normalized_frame(
-            frame, schema, kind=table_key, repeat_of=repeat_of
-        )
+        try:
+            new_entry[table_key] = remap_normalized_frame(
+                frame, schema, kind=table_key, repeat_of=repeat_of
+            )
+        except Exception as exc:
+            # A complete mapping the data does not fit (a Screen ID that maps
+            # to two screen orders in one trial, say). Reported on the screen
+            # like the added tables' failures below, never raised from this
+            # `on_click`; nothing is saved — `new_entry` is only written back
+            # at the end, so the tables remapped before this one stay as they
+            # were too — and the draft stays open to be corrected.
+            from scanpath_studio.app import mapping_failure_problem
+
+            st.session_state["_remap_problems"] = {
+                table_key: [mapping_failure_problem(exc)]
+            }
+            return
         new_schemas[table_key] = schema
         earlier = ColumnNames.from_payload(new_names.get(table_key))
         recipe_schemas[table_key], missing = source_schema(schema, earlier)
@@ -12813,13 +13182,21 @@ def _apply_remap() -> None:
     # uploaded today line up with a half uploaded weeks ago. Both halves are
     # written back, because harmonizing can change either.
     harmonized = False
-    for table_key in added:
+    # Raw gaze last, so it is matched against the fixations and boxes this save
+    # ends with, including a table added beside it.
+    for table_key in sorted(added, key=lambda key: key == "raw_gaze"):
         raw = st.session_state.get(_added_raw_key(name, table_key))
         if raw is None or raw.empty or table_key not in pending:
             continue
         schema = pending[table_key]
         try:
-            if table_key == "words":
+            if table_key == "raw_gaze":
+                fresh = normalize_raw_gaze(raw, schema)
+                if problem := raw_gaze_identity_problem(fresh, new_entry):
+                    st.session_state["_remap_problems"] = {"raw_gaze": [problem]}
+                    return
+                new_entry["raw_gaze"] = fresh
+            elif table_key == "words":
                 # UX-106 — the add screen's aggregation, on the add-a-table
                 # path. Runs on the RAW frame before normalization, which is the
                 # only point it can: `normalize_words` expects one row per box.
@@ -12839,7 +13216,7 @@ def _apply_remap() -> None:
                     other = empty_words_frame()
                 other, fresh = _harmonize_noting_join(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
-            harmonized = True
+            harmonized = harmonized or table_key != "raw_gaze"
         except Exception as exc:
             # The mapping is complete but the pipeline rejects the combination
             # (`app.mapping_failure_problem` names the usual causes). Reported
@@ -12939,6 +13316,11 @@ def _apply_remap() -> None:
             }
         )
     st.session_state["_datasets"][name] = new_entry
+    # Improvement A — the description and the metadata tables are part of the
+    # same save; committed under the old name, which the rename below carries.
+    from scanpath_studio.app import commit_editor_staging
+
+    commit_editor_staging(name)
     # UX-178 — and the name typed at the top of the screen. Applied last, after
     # the entry is saved under the name its widgets were keyed by: every editor
     # key carries the dataset's name, so renaming mid-edit would orphan them.
@@ -12965,6 +13347,7 @@ def _apply_remap() -> None:
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         if key != "_remap_applied":
             st.session_state.pop(key, None)
+    discard_editor_widgets()
     st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46 — and the "use the current estimate" choice, which belongs to it.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
@@ -13072,7 +13455,7 @@ _EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
 _TABLE_LABELS = {"fixations": "Fixations", "words": "AOI", "raw_gaze": "Raw gaze"}
 
 
-#: UX-104 — the two tables a stored dataset can be *missing* and later gain.
+#: UX-104 — the tables a stored dataset can be *missing* and later gain.
 #: A dataset added from fixations alone is a complete dataset (the app draws a
 #: scanpath with no text), and so is one added from word boxes alone (it draws a
 #: heatmap from pre-aggregated measures) — but until now the only way to give
@@ -13086,7 +13469,19 @@ _ADDABLE_TABLES = (
         propose_fix_schema,
     ),
     ("words", "Add an AOI (word box) table", "Word AOI CSVs", propose_word_schema),
+    # Round 6, improvement C — the samples, for a dataset added from its
+    # fixation / AOI reports before they were exported.
+    (
+        "raw_gaze",
+        "Add a raw gaze table",
+        "Raw gaze sample CSVs",
+        propose_raw_gaze_schema,
+    ),
 )
+
+
+#: Each addable table's auto-detect, by table.
+_ADDABLE_PROPOSERS = {key: propose for key, _h, _p, propose in _ADDABLE_TABLES}
 
 
 def _added_raw_key(name: str, table_key: str) -> str:
@@ -13133,15 +13528,38 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             st.session_state.pop(raw_key, None)
             st.session_state.pop(signature_key, None)
             continue
-        signature = tuple(
+        # The files, and the columns read as literal text: a new Trial or text
+        # pick can change those, and a value pandas has already turned into a
+        # number or a missing cell cannot be recovered by a later mapping — so
+        # the file is read again then, and only then (not when a pick names a
+        # column that is already read as text, nor when the fields first seed
+        # themselves with what auto-detection proposed).
+        files = tuple(
             getattr(upload, "file_id", None)
             or (upload.name, getattr(upload, "size", None))
             for upload in uploads
         )
-        if st.session_state.get(signature_key) != signature:
+        held = st.session_state.get(signature_key)
+        current = st.session_state.get(raw_key)
+        stale = not (
+            isinstance(held, tuple)
+            and held[0] == files
+            and isinstance(current, pd.DataFrame)
+            and held[1] == _literal_columns(name, table_key, current.columns)
+        )
+        if stale:
             try:
-                st.session_state[raw_key] = read_tables(list(uploads))
-                st.session_state[signature_key] = signature
+                fresh = read_tables(
+                    list(uploads),
+                    plan_for=lambda header, table_key=table_key: _added_table_plan(
+                        name, table_key, header
+                    ),
+                )
+                st.session_state[raw_key] = fresh
+                st.session_state[signature_key] = (
+                    files,
+                    _literal_columns(name, table_key, fresh.columns),
+                )
             except Exception as exc:  # unreadable file — say so, keep the page
                 st.session_state.pop(raw_key, None)
                 box.error(f"Could not read that file: {exc}")
@@ -13151,6 +13569,50 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             box.caption(f"{len(raw):,} rows · {len(raw.columns)} columns.")
             added[table_key] = raw
     return added
+
+
+#: The mapping fields whose source columns are read as literal text: the ids
+#: (BUG-59 — `007` stays `007`) and the word text (BUG-53 — `NA` stays a word).
+_LITERAL_READ_FIELDS = (*IDENTITY_SCHEMA_FIELDS, "text")
+
+
+def _added_table_picks(name: str, table_key: str) -> tuple:
+    """What the user has picked so far for the literal-text fields of a table
+    being added — the part of its mapping the file's read depends on."""
+    prefix = f"remap_{name}_{table_key}_add"
+    picks = []
+    for field in _LITERAL_READ_FIELDS:
+        key = f"{prefix}_{field}"
+        if key in st.session_state:
+            value = st.session_state[key]
+            if isinstance(value, (list, tuple)):
+                value = tuple(str(item) for item in value)
+            picks.append((field, value))
+    return tuple(picks)
+
+
+def _added_table_plan(name: str, table_key: str, header) -> ReadPlan:
+    """How to read a table being added on ✏️ Edit dataset — as the add screen does.
+
+    The ids as text and the word text verbatim, decided before pandas infers
+    anything (`data.verbatim_text_plan` / `identity_text_plan`): the columns
+    the user has picked for those fields, else the ones auto-detection would
+    propose from the header. Every column is still read — the editor decides
+    what to keep only once the table is mapped.
+    """
+    names = [str(column) for column in header]
+    schema = dict(_ADDABLE_PROPOSERS[table_key](pd.DataFrame(columns=names)))
+    for field, value in _added_table_picks(name, table_key):
+        schema[field] = list(value) if isinstance(value, tuple) else value
+    if table_key == "words":
+        return verbatim_text_plan(names, schema)
+    return identity_text_plan(names, schema, kind=table_key)
+
+
+def _literal_columns(name: str, table_key: str, header) -> tuple:
+    """The columns `_added_table_plan` reads as literal text, for ``header``."""
+    plan = _added_table_plan(name, table_key, header)
+    return (tuple(sorted(plan.verbatim)), tuple(sorted(plan.identity)))
 
 
 def aggregate_key(name: str) -> str:
@@ -13245,7 +13707,10 @@ def _render_remap_fields(
             state_key_prefix=prefixes[table_key],
             field_specs=specs_by_table[table_key],
             proposed=proposals[table_key],
-            problems=problems.get(table_key),
+            # What blocked the last Save is listed once per table above
+            # ✅ Save changes (`render_dataset_editor_footer`); handed to every
+            # one-field cell here, it printed the same warning in each of them.
+            problems=None,
             container=host,
             use_expander=False,
             only_keys=[field],
@@ -13340,6 +13805,409 @@ def _render_remap_fields(
     return pending
 
 
+def _pending_canvas_estimate(
+    stored: dict, pending: dict, added: dict
+) -> tuple[int, int]:
+    """*Estimate from my data* on ✏️ Edit dataset: the screen the data **as it
+    will be saved** needs — the pending mapping over the stored frames, and a
+    table being added in place of the one the dataset lacks.
+
+    The stored frames' own ``x``/``y`` are the *old* mapping's; estimating from
+    them and saving a new coordinate column beside it stored a screen that did
+    not hold the data saved with it. A dataset can only add a table it has
+    none of, so each table comes from exactly one place. Reuses the add
+    screen's cached estimate (`wizard._c_estimate_canvas`), which projects just
+    the mapped geometry columns rather than normalizing anything.
+    """
+    from scanpath_studio.wizard import (
+        _FIX_GEOMETRY_FIELDS,
+        _WORD_GEOMETRY_FIELDS,
+        _c_estimate_canvas,
+        _geometry_key,
+    )
+
+    frames: dict = {}
+    for table in ("words", "fixations"):
+        frame = added.get(table)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            frame = stored.get(table)
+        if isinstance(frame, pd.DataFrame) and not frame.empty and pending.get(table):
+            frames[table] = frame
+    words, fixations = frames.get("words"), frames.get("fixations")
+    word_schema = pending.get("words") if words is not None else None
+    fix_schema = pending.get("fixations") if fixations is not None else None
+    return _c_estimate_canvas(
+        words,
+        word_schema,
+        fixations,
+        fix_schema,
+        (frame_fingerprint(words), frame_fingerprint(fixations)),
+        (
+            _geometry_key(word_schema, _WORD_GEOMETRY_FIELDS),
+            _geometry_key(fix_schema, _FIX_GEOMETRY_FIELDS),
+        ),
+    )
+
+
+#: The fields the pending-change preview spells out: schema key → the stored
+#: frame's canonical column, and whether the field is an id (else a coordinate).
+_PREVIEW_CHANGE_FIELDS = (
+    ("participant", "participant_id", True),
+    ("trial", "trial_id", True),
+    ("screen_id", "screen_id", True),
+    ("text_id", "text_id", True),
+    ("x", "x", False),
+    ("y", "y", False),
+)
+_PREVIEW_FIELD_LABELS = {
+    "participant": "Participant ID",
+    "trial": "Trial ID",
+    "screen_id": "Screen ID",
+    "text_id": "Text ID",
+    "x": "X",
+    "y": "Y",
+}
+#: The rows the preview reads: enough to find a few distinct values.
+_PREVIEW_HEAD = 200
+
+
+def _pending_field_values(
+    frame: pd.DataFrame, key: str, column, is_id: bool
+) -> pd.Series:
+    """What ``column`` gives field ``key`` on ``frame``'s rows, as text."""
+    if not column:
+        if key == "participant":
+            return pd.Series("(one reader)", index=frame.index)
+        if key == "text_id":
+            # Normalization falls back to the trial id (`from_schema`).
+            return pd.Series("(the trial id)", index=frame.index)
+        return pd.Series("(none)", index=frame.index)
+    columns = [str(c) for c in trial_mapping_columns(column)]
+    if any(c not in frame.columns for c in columns):
+        return pd.Series("(none)", index=frame.index)
+    if is_id:
+        return trial_id_series(frame, column).astype(str)
+    values = pd.to_numeric(frame[columns[0]], errors="coerce")
+    return values.map(lambda v: "—" if pd.isna(v) else f"{v:,.6g}")
+
+
+def pending_value_changes(
+    frame: pd.DataFrame, schema: dict, *, limit: int = 3
+) -> list[dict]:
+    """A few rows of what a pending remap does to ``frame``'s ids and
+    coordinates — ``{"field", "now", "after"}`` per changed field, the values
+    paired row by row (``now[i]`` becomes ``after[i]``).
+
+    Pure, and cheap: it reads the head of the stored frame, whose canonical
+    columns are what the dataset says now, through the pending mapping's
+    columns (the same composition normalization uses, `data.trial_id_series`).
+    A field whose pending column is its own canonical one is unchanged and
+    left out, so an untouched editor previews nothing.
+    """
+    head = frame.head(_PREVIEW_HEAD)
+    rows: list[dict] = []
+    for key, canonical, is_id in _PREVIEW_CHANGE_FIELDS:
+        if key not in schema:
+            continue
+        pending = schema.get(key)
+        parts = [str(c) for c in trial_mapping_columns(pending)] if pending else []
+        present = canonical in frame.columns
+        if parts == ([canonical] if present else []):
+            continue
+        if key == "text_id" and not parts and not present:
+            continue
+        now = (
+            _pending_field_values(head, key, canonical, is_id)
+            if present
+            else _pending_field_values(head, key, None, is_id)
+        )
+        after = _pending_field_values(head, key, pending, is_id)
+        if now.equals(after):
+            # Another spelling of the same values — a composite Trial ID the
+            # editor seeds as its parts, say — changes nothing.
+            continue
+        pairs = pd.DataFrame({"now": now, "after": after}).drop_duplicates().head(limit)
+        rows.append(
+            {
+                "field": key,
+                "now": pairs["now"].tolist(),
+                "after": pairs["after"].tolist(),
+            }
+        )
+    return rows
+
+
+def _pending_keys(frame: pd.DataFrame, schema: dict, fields: tuple) -> pd.DataFrame:
+    """``frame``'s id columns as the pending mapping would build them."""
+    return pd.DataFrame(
+        {
+            key: _pending_field_values(frame, key, schema.get(key), True)
+            for key in fields
+        }
+    )
+
+
+def _current_keys(frame: pd.DataFrame, fields: tuple) -> pd.DataFrame:
+    canon = {key: column for key, column, _ in _PREVIEW_CHANGE_FIELDS}
+    return pd.DataFrame(
+        {
+            key: (
+                frame[canon[key]].astype(str)
+                if canon[key] in frame.columns
+                else pd.Series("(one reader)", index=frame.index)
+            )
+            for key in fields
+        }
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_pending_census(
+    _frames: dict,
+    _metadata: dict,
+    pending_json: str,
+    fingerprints: tuple,
+) -> list[dict]:
+    """``pending_census``, cached on the frames' fingerprints and the mapping."""
+    return pending_census(_frames, json.loads(pending_json), _metadata)
+
+
+def pending_census(frames: dict, pending: dict, metadata: dict) -> list[dict]:
+    """Counts before and after a pending remap — ``{"what", "now", "after"}``.
+
+    Trials (and screens, where the data has them) as the mapping would split
+    them, and whether what hangs off those ids still finds them: the word boxes
+    the fixations' trials point at, and an attached participant or trial table.
+    Reads every row, which is why the editor runs it only on request.
+    """
+    rows: list[dict] = []
+    fix = frames.get("fixations")
+    words = frames.get("words")
+    reading = fix if isinstance(fix, pd.DataFrame) and not fix.empty else words
+    if not isinstance(reading, pd.DataFrame) or reading.empty:
+        return rows
+    table = "fixations" if reading is fix else "words"
+    schema = pending.get(table) or {}
+    trial_fields = ("participant", "trial")
+    now = _current_keys(reading, trial_fields)
+    after = _pending_keys(reading, schema, trial_fields)
+    rows.append(
+        {
+            "what": "Trials",
+            "now": len(now.drop_duplicates()),
+            "after": len(after.drop_duplicates()),
+        }
+    )
+    if "screen_id" in reading.columns or schema.get("screen_id"):
+        screen_fields = (*trial_fields, "screen_id")
+        rows.append(
+            {
+                "what": "Screens",
+                "now": len(_current_keys(reading, screen_fields).drop_duplicates())
+                if "screen_id" in reading.columns
+                else len(now.drop_duplicates()),
+                "after": len(
+                    _pending_keys(reading, schema, screen_fields).drop_duplicates()
+                ),
+            }
+        )
+    if (
+        table == "fixations"
+        and isinstance(words, pd.DataFrame)
+        and not words.empty
+        and "trial_id" in words.columns
+    ):
+        word_schema = pending.get("words") or {}
+        trials_now = set(now["trial"])
+        boxes_now = set(words["trial_id"].astype(str))
+        trials_after = set(after["trial"])
+        boxes_after = (
+            set(_pending_keys(words, word_schema, ("trial",))["trial"])
+            if word_schema
+            else boxes_now
+        )
+        rows.append(
+            {
+                "what": "Trials with word boxes",
+                "now": f"{len(trials_now & boxes_now)} of {len(trials_now)}",
+                "after": f"{len(trials_after & boxes_after)} of {len(trials_after)}",
+            }
+        )
+    readers = metadata.get("participants")
+    if isinstance(readers, pd.DataFrame) and "participant_id" in readers.columns:
+        known = set(readers["participant_id"].astype(str))
+        before, later = set(now["participant"]), set(after["participant"])
+        rows.append(
+            {
+                "what": "Readers in the participant table",
+                "now": f"{len(before & known)} of {len(before)}",
+                "after": f"{len(later & known)} of {len(later)}",
+            }
+        )
+    trials = metadata.get("trials")
+    if isinstance(trials, pd.DataFrame) and "trial_id" in trials.columns:
+        by_reader = "participant_id" in trials.columns
+        cols = ["participant", "trial"] if by_reader else ["trial"]
+        table_cols = ["participant_id", "trial_id"] if by_reader else ["trial_id"]
+        known = set(map(tuple, trials[table_cols].astype(str).to_numpy()))
+        before = set(map(tuple, now[cols].to_numpy()))
+        later = set(map(tuple, after[cols].to_numpy()))
+        rows.append(
+            {
+                "what": "Trials in the trial table",
+                "now": f"{len(before & known)} of {len(before)}",
+                "after": f"{len(later & known)} of {len(later)}",
+            }
+        )
+    return rows
+
+
+#: The editor asked for the pending-change census (a `_remap_*` key, so it ends
+#: with the edit).
+_PREVIEW_CENSUS_KEY = "_remap_preview_census"
+
+
+def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> None:
+    """What ✅ Save changes would do to the ids and coordinates — before it does.
+
+    A changed pick is otherwise only a different column name in its select,
+    and its effect (readings merged by a coarser Trial ID, a metadata table
+    that no longer finds its readers) shows after the save. Shown only once a
+    stored table's id or coordinate mapping differs from what is saved: a few
+    rows of now → after (`pending_value_changes`), and on request the counts and
+    joins (`pending_census`), which read every row.
+    """
+    names_by_table = stored.get("column_names") or {}
+    changes = []
+    for table in ("fixations", "words", "raw_gaze"):
+        frame = stored.get(table)
+        schema = pending.get(table)
+        if not isinstance(frame, pd.DataFrame) or frame.empty or not schema:
+            continue
+        for row in pending_value_changes(frame, schema):
+            changes.append((table, row))
+    if not changes:
+        st.session_state.pop(_PREVIEW_CENSUS_KEY, None)
+        return
+    box = st.container(border=True, key=f"remap_preview_{name}")
+    box.markdown(f"**{ICONS['preview']} What Save changes will do**")
+    lines = []
+    for table, row in changes:
+        names = ColumnNames.from_payload(names_by_table.get(table))
+        column = (pending.get(table) or {}).get(row["field"])
+        source = (
+            " + ".join(names.display(c) for c in trial_mapping_columns(column))
+            if column
+            else "made by the app"
+        )
+        pairs = ", ".join(
+            f"`{a}` → `{b}`" if a != b else f"`{a}`"
+            for a, b in zip(row["now"], row["after"], strict=True)
+        )
+        lines.append(
+            f"- **{_TABLE_LABELS[table]} · {_PREVIEW_FIELD_LABELS[row['field']]}** "
+            f"from {source}: {pairs}"
+        )
+    box.markdown("\n".join(lines))
+    signature = _editor_signature(pending, {})
+    if st.session_state.get(_PREVIEW_CENSUS_KEY) != signature:
+        box.button(
+            f"{ICONS['search']} Count trials and check joins",
+            key=f"remap_preview_census_{name}",
+            on_click=lambda: st.session_state.__setitem__(
+                _PREVIEW_CENSUS_KEY, signature
+            ),
+            help="Count the trials and screens this mapping makes, and check "
+            "that the word boxes and any attached participant or trial table "
+            "still find them. Reads every row.",
+        )
+        return
+    from scanpath_studio import metadata as md
+
+    frames = {
+        table: stored.get(table)
+        for table in ("words", "fixations")
+        if isinstance(stored.get(table), pd.DataFrame)
+    }
+    participant_table = st.session_state.get(md.SESSION_KEY)
+    trial_table = st.session_state.get(md.TRIAL_SESSION_KEY)
+    metadata = {
+        "participants": getattr(participant_table, "frame", None),
+        "trials": getattr(trial_table, "frame", None),
+    }
+    census = _c_pending_census(
+        frames,
+        metadata,
+        json.dumps(pending, sort_keys=True, default=str),
+        (
+            *(frame_fingerprint(f) for f in frames.values()),
+            *(
+                frame_fingerprint(f) if isinstance(f, pd.DataFrame) else None
+                for f in metadata.values()
+            ),
+        ),
+    )
+    box.dataframe(
+        pd.DataFrame(
+            [
+                {"": r["what"], "Now": str(r["now"]), "After saving": str(r["after"])}
+                for r in census
+            ]
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    if any(r["what"] == "Trials" and int(r["after"]) < int(r["now"]) for r in census):
+        box.warning(
+            "This mapping makes fewer trials: some readings would be joined into "
+            "one scanpath.",
+            icon=ICONS["warning"],
+        )
+
+
+#: ✏️ Edit dataset's own widget namespace — ``remap_<dataset>_…``: every
+#: mapping select, coordinate-format radio, aggregation toggle and table
+#: uploader on the screen. Its mapping widgets persist across runs
+#: (``persist_state="session"``, so a draft survives a visit to another view),
+#: which is exactly why a finished edit has to clear them.
+EDITOR_WIDGET_PREFIX = "remap_"
+
+
+def discard_editor_widgets() -> None:
+    """Forget every answer the editor's widgets hold.
+
+    Run when an edit ends (✕ Cancel, ✅ Save changes) and when a fresh one
+    opens: a mapping widget seeds itself from the saved dataset only when its
+    key is absent, so a key left behind by a cancelled edit would reopen the
+    editor on the abandoned pick — and the dirty baseline, captured from those
+    picks, would then call it unchanged. The field-touch marks and the
+    column-universe markers that go with those keys go too, and so does the
+    Recording setup form's ``edit_*_setup_*`` keys. The add screen's
+    ``col_map_*`` keys are a different namespace and are not touched.
+    """
+    session = st.session_state
+    marker = f"_mapped_columns_{EDITOR_WIDGET_PREFIX}"
+    for key in [
+        k
+        for k in list(session)
+        if isinstance(k, str)
+        and (
+            k.startswith((EDITOR_WIDGET_PREFIX, marker))
+            # The Recording setup form (`wizard._wizard_setup_step` under
+            # ``edit_<dataset>`` / ``edit_src_<token>``) persists its widgets
+            # too and seeds them with `setdefault`, so a cancelled setup edit
+            # would come back the same way.
+            or (k.startswith("edit_") and "_setup_" in k)
+        )
+    ]:
+        del session[key]
+    touched = session.get(TOUCHED_FIELDS_KEY)
+    if touched:
+        session[TOUCHED_FIELDS_KEY] = {
+            key for key in touched if not str(key).startswith(EDITOR_WIDGET_PREFIX)
+        }
+
+
 def _render_remap_editor(
     name: str, stored: dict, uploads_host=None, setup_host=None
 ) -> None:
@@ -13356,6 +14224,11 @@ def _render_remap_editor(
     setup** renders into ``setup_host``, the editor's own numbered part, so this
     function draws mapping and nothing else. Without a host it stays where it
     was, under a ``##### `` heading after a rule."""
+    if _REMAP_BASELINE_KEY not in st.session_state:
+        # A fresh edit (the baseline is captured at the end of its first
+        # render): start every field from the saved dataset, whatever an
+        # earlier edit left in the widgets.
+        discard_editor_widgets()
     # UX-54: the dataset table's ✏️ Edit both opened this dataset and sent the
     # user here, so say so — otherwise the page has silently changed under them
     # and the mapping form is several screens down.
@@ -13381,6 +14254,7 @@ def _render_remap_editor(
     )
     pending: dict = _render_remap_fields(name, stored, problems, composite, added)
     st.session_state["_remap_pending_schemas"] = pending
+    _render_pending_change_preview(name, stored, pending)
 
     # The add and edit flows now share the same three-column Recording setup
     # renderer. Editing starts from the saved values and publishes only when
@@ -13418,6 +14292,7 @@ def _render_remap_editor(
         key_prefix=f"edit_{name}",
         initial=initial_setup,
         publish=False,
+        estimate=partial(_pending_canvas_estimate, stored, pending, added or {}),
     )
     st.session_state["_remap_pending_setup"] = setup.to_dict()
     # UX-107 — is there anything to lose by leaving? A table uploaded here is
@@ -13493,7 +14368,164 @@ def dataset_editor_is_dirty() -> bool:
     signature that cannot be built) counts as changed, because a wrong "clean"
     discards work in silence while a wrong "dirty" costs one extra click.
     """
-    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True))
+    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True)) or bool(
+        st.session_state.get(_BUILTIN_SETUP_DIRTY_KEY)
+    )
+
+
+#: A built-in or public dataset's **Recording setup** on ✏️ Edit dataset — the
+#: same form an upload gets, saved as the user's own setup for that dataset
+#: (`app.save_dataset_setup_override`) rather than over the corpus' declared
+#: one. ``_remap_*`` keys, so ✕ Cancel and ✅ Save changes sweep them with the
+#: rest of the edit: which dataset's form is open (its widgets are forgotten
+#: when a new edit opens, so a cancelled answer never comes back), what it
+#: holds, what it held when it opened, a pending *Reset to source setup*, and
+#: whether it differs.
+_BUILTIN_SETUP_OPEN_KEY = "_remap_builtin_setup_open"
+_BUILTIN_SETUP_PENDING_KEY = "_remap_builtin_setup_pending"
+_BUILTIN_SETUP_BASELINE_KEY = "_remap_builtin_setup_baseline"
+_BUILTIN_SETUP_RESET_KEY = "_remap_builtin_setup_reset"
+_BUILTIN_SETUP_DIRTY_KEY = "_remap_builtin_setup_dirty"
+
+
+def _builtin_setup_prefix(token: str) -> str:
+    """The form's widget-key prefix — not ``edit_<name>``, an upload's."""
+    return f"edit_src_{token}"
+
+
+def _forget_builtin_setup_widgets(token: str) -> None:
+    prefix = f"{_builtin_setup_prefix(token)}_setup_"
+    for key in [k for k in st.session_state if str(k).startswith(prefix)]:
+        st.session_state.pop(key, None)
+
+
+def _reset_builtin_setup(token: str) -> None:
+    """*Reset to source setup*: redraw the form at the corpus' own values.
+    Nothing is dropped until ✅ Save changes (`commit_builtin_setup`)."""
+    _forget_builtin_setup_widgets(token)
+    st.session_state[_BUILTIN_SETUP_RESET_KEY] = token
+    st.session_state.pop(_BUILTIN_SETUP_BASELINE_KEY, None)
+
+
+def _setup_groups_differing(a, b) -> list[str]:
+    """The setup groups whose values or provenance differ between two
+    snapshots, by their on-screen names."""
+    fields = {
+        "screen": ("canvas_width", "canvas_height"),
+        "geometry": ("monitor_width_mm", "viewing_distance_mm"),
+        "text": (
+            "base_font_size",
+            "font_family",
+            "line_spacing",
+            "scale_text_to_boxes",
+        ),
+    }
+    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+    return [
+        labels[group]
+        for group, names in fields.items()
+        if a.provenance[group] != b.provenance[group]
+        or any(getattr(a, n) != getattr(b, n) for n in names)
+    ]
+
+
+def render_builtin_setup_editor(
+    token: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    host,
+) -> None:
+    """Recording setup for a built-in or public dataset, editable.
+
+    The upload's form (`wizard._wizard_setup_step`), started from the setup
+    this dataset has now — the user's own, if they saved one, else what the
+    corpus declares. ✅ Save changes keeps a changed form as this dataset's own
+    setup (`commit_builtin_setup`); ✕ Cancel discards it. The corpus' declared
+    values are never rewritten, so *Reset to source setup* can always go back.
+    """
+    from scanpath_studio.app import (
+        cached_canvas_size,
+        dataset_setup_override,
+        source_setup_snapshot,
+    )
+    from scanpath_studio.wizard import _wizard_setup_step
+
+    if st.session_state.get(_BUILTIN_SETUP_OPEN_KEY) != token:
+        # A new edit: whatever an earlier, cancelled one typed is not this one.
+        _forget_builtin_setup_widgets(token)
+        st.session_state.pop(_BUILTIN_SETUP_BASELINE_KEY, None)
+        st.session_state.pop(_BUILTIN_SETUP_RESET_KEY, None)
+        st.session_state[_BUILTIN_SETUP_OPEN_KEY] = token
+    resetting = st.session_state.get(_BUILTIN_SETUP_RESET_KEY) == token
+    words = words if isinstance(words, pd.DataFrame) else pd.DataFrame()
+    fixations = fixations if isinstance(fixations, pd.DataFrame) else pd.DataFrame()
+    source = source_setup_snapshot(token, words, fixations)
+    override = None if resetting else dataset_setup_override(token)
+    note, action = host.columns([0.78, 0.22], vertical_alignment="center")
+    if override is not None:
+        changed = _setup_groups_differing(override, source)
+        note.caption(
+            f"{ICONS['edit']} **Your own setup** for this dataset"
+            + (f" — set by you: {', '.join(changed)}" if changed else "")
+            + ". The corpus' declared setup is kept; reset to go back to it."
+        )
+        action.button(
+            f"{ICONS['reset']} Reset to source setup",
+            key=f"{_builtin_setup_prefix(token)}_reset",
+            on_click=_reset_builtin_setup,
+            args=(token,),
+            width="stretch",
+            help="Show the setup this corpus declares. Nothing changes until you save.",
+        )
+    elif resetting:
+        note.caption(
+            "Back to the setup this corpus declares — **Save changes** to drop "
+            "your own."
+        )
+    else:
+        note.caption(
+            "The setup this corpus declares. Change anything to save your own "
+            "for this dataset; the corpus' values are kept."
+        )
+    setup = _wizard_setup_step(
+        host,
+        words,
+        fixations,
+        not words.empty,
+        key_prefix=_builtin_setup_prefix(token),
+        initial=override or source,
+        publish=False,
+        estimate=partial(cached_canvas_size, words, fixations),
+    )
+    payload = setup.to_dict()
+    st.session_state[_BUILTIN_SETUP_PENDING_KEY] = {"token": token, "setup": payload}
+    signature = _editor_signature({}, payload)
+    baseline = st.session_state.get(_BUILTIN_SETUP_BASELINE_KEY)
+    if baseline is None:
+        st.session_state[_BUILTIN_SETUP_BASELINE_KEY] = baseline = signature
+    st.session_state[_BUILTIN_SETUP_DIRTY_KEY] = resetting or signature != baseline
+
+
+def commit_builtin_setup() -> None:
+    """✅ Save changes' half for a built-in dataset's Recording setup.
+
+    A form the user changed becomes the dataset's own setup; a *Reset to source
+    setup* left as it was drops it; an untouched form changes nothing — saving
+    the mapping must not turn the corpus' declared setup into an override.
+    """
+    from scanpath_studio.app import save_dataset_setup_override
+
+    pending = st.session_state.get(_BUILTIN_SETUP_PENDING_KEY)
+    if not isinstance(pending, dict) or not pending.get("token"):
+        return
+    token, payload = str(pending["token"]), pending.get("setup")
+    changed = _editor_signature({}, payload) != st.session_state.get(
+        _BUILTIN_SETUP_BASELINE_KEY
+    )
+    if changed and isinstance(payload, dict):
+        save_dataset_setup_override(token, payload)
+    elif st.session_state.get(_BUILTIN_SETUP_RESET_KEY) == token:
+        save_dataset_setup_override(token, None)
 
 
 #: The editor's own widget namespace → the add screen's. The two screens run the
@@ -13515,38 +14547,139 @@ _EDITOR_TO_WIZARD_PREFIX = {
 _EDITOR_KEY_NOISE = ("_cell", "_upload", "_header")
 
 
+#: Each table's name in a setup-file note.
+_SETUP_TABLE_NAMES = {"words": "AOI", "fixations": "Fixations", "raw_gaze": "Raw gaze"}
+_BOX_EDGE_KEYS = ("left", "right", "top", "bottom")
+_BOX_ORIGIN_KEYS = ("x", "y", "width", "height")
+
+
+def _setup_file_mapping(
+    pending: dict,
+    stored: dict,
+    *,
+    added=(),
+    box_formats: dict | None = None,
+) -> tuple[dict, list[str]]:
+    """The editor's pending mapping as the add screen's ``col_map_*`` keys, in
+    the **dataset's own files'** column names, plus what the file cannot carry.
+
+    A table already in the dataset is mapped onto the stored frame's canonical
+    columns (``x``, ``duration_ms``); restated through its column-name map
+    (`column_names.source_schema`) each becomes the file column it was read
+    from — a seconds column by its own name (the add screen converts it again),
+    a composite id as its parts, a box stored as x/y/width/height but read from
+    edges as those edges. A column the app *made* (a text id from the trial id)
+    is written unmapped, so the add screen makes it again. A field that cannot
+    be traced back is left out — the add screen then detects it — and named in
+    the notes. A table being *added* is raw, so its mapping already speaks the
+    file's names; only its widget namespace (``…_add``) differs, and the file
+    uses the add screen's.
+    """
+    from scanpath_studio.controls import (
+        _HIDDEN_MAPPING_KEYS,
+        BOX_FORMAT_EDGES,
+        BOX_FORMAT_ORIGIN,
+    )
+
+    box_formats = box_formats or {}
+    names_by_table = stored.get("column_names") or {}
+    recipe = stored.get("source_recipe") or {}
+    derived = {str(c) for c in recipe.get("derived") or ()}
+    specs = {table: spec for table, _label, spec, _canon in _REMAP_TABLES}
+    mapping: dict = {}
+    notes: list[str] = []
+    for table, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
+        schema = pending.get(table)
+        if not isinstance(schema, dict):
+            continue
+        label = _SETUP_TABLE_NAMES[table]
+        if table in added:
+            source: dict = dict(schema)
+        else:
+            names = ColumnNames.from_payload(names_by_table.get(table))
+            if not names.entries:
+                notes.append(
+                    f"{label}: this dataset was added before the app kept its "
+                    "files' column names, so the file names the app's own "
+                    "columns. Check them after restoring."
+                )
+            restated, unresolved = source_schema(schema, names)
+            source = dict(restated or {})
+            for key in unresolved:
+                source.pop(key, None)
+            if unresolved:
+                notes.append(
+                    f"{label}: {', '.join(unresolved)} could not be traced back "
+                    "to your files and is left out; map it after restoring."
+                )
+        multi = {spec["key"] for spec in specs[table] if spec.get("multi")}
+        if table == "words":
+            if any(source.get(k) for k in _BOX_EDGE_KEYS):
+                box = BOX_FORMAT_EDGES
+            elif any(source.get(k) for k in _BOX_ORIGIN_KEYS):
+                box = BOX_FORMAT_ORIGIN
+            else:
+                box = box_formats.get(table)
+            other = _BOX_ORIGIN_KEYS if box == BOX_FORMAT_EDGES else _BOX_EDGE_KEYS
+            for key in other:
+                source.pop(key, None)
+            if box:
+                mapping[f"{wizard_prefix}_box_format"] = box
+        from_file_names: set = set()
+        for key, value in source.items():
+            if key in _HIDDEN_MAPPING_KEYS:
+                continue  # never a widget: the add screen detects them
+            if isinstance(value, (list, tuple)):
+                value = [str(item) for item in value]
+            elif value is not None:
+                value = str(value)
+            if key in multi and isinstance(value, str):
+                value = [value]
+            mapping[f"{wizard_prefix}_{key}"] = value
+            for column in value if isinstance(value, list) else [value]:
+                if column in derived:
+                    from_file_names.add(column)
+        if from_file_names:
+            notes.append(
+                f"{label}: {', '.join(sorted(from_file_names))} came from the "
+                "file names, not a column; set up *Derive columns from the "
+                "filename* again after restoring."
+            )
+    if "aggregate_char_boxes" in (recipe.get("steps") or ()):
+        notes.append(
+            "AOI: character boxes were combined into word boxes; turn "
+            "*Aggregate character AOIs into word boxes* on again after restoring."
+        )
+    return mapping, notes
+
+
 def _editor_setup_config(name: str) -> dict:
     """The open editor's mapping + recording setup, in the add screen's setup
     format (``wizard._wizard_setup_config``).
 
     So ⬇️ Save setup means the same thing on both screens, and a file saved from
-    either is restored by the same *Restore a saved setup* uploader. The mapping
-    is swept out of session state rather than rebuilt from
-    ``_remap_pending_schemas`` because the coordinate-format radio
-    (``*_box_format``) is a widget answer, not a schema field, and a restored
-    file without it opens the wizard on the wrong box format.
+    either is restored by the same *Restore a saved setup* uploader — over the
+    **original files**, which is why the mapping is written in their column
+    names rather than the stored frame's (`_setup_file_mapping`). What a
+    restore cannot reproduce is listed under ``column_mapping_notes``, and the
+    footer says it beside the button.
     """
     from datetime import datetime
 
     from scanpath_studio import __version__
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-    mapping: dict = {}
-    for table_key, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
-        prefix = f"remap_{name}_{table_key}_"
-        for key in sorted(k for k in st.session_state if isinstance(k, str)):
-            if not key.startswith(prefix) or any(
-                noise in key for noise in _EDITOR_KEY_NOISE
-            ):
-                continue
-            value = st.session_state[key]
-            if value is None or isinstance(value, (str, int, float, bool)):
-                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = value
-            elif isinstance(value, (list, tuple)):
-                # The composite trial id — a list of component columns.
-                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = [
-                    str(item) for item in value
-                ]
+    stored = (st.session_state.get("_datasets") or {}).get(name) or {}
+    added = set(st.session_state.get("_remap_added_tables") or ())
+    mapping, notes = _setup_file_mapping(
+        st.session_state.get("_remap_pending_schemas") or {},
+        stored,
+        added=added,
+        box_formats={
+            table: st.session_state.get(f"remap_{name}_{table}_add_box_format")
+            for table in added
+        },
+    )
     setup = st.session_state.get("_remap_pending_setup")
     return {
         "schema": PLOT_CONFIG_SCHEMA,
@@ -13554,6 +14687,7 @@ def _editor_setup_config(name: str) -> dict:
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": name,
         "column_mapping": mapping,
+        "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
     }
 
@@ -13598,9 +14732,10 @@ def render_dataset_editor_footer(host) -> None:
     save_col, apply_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
+    config = _editor_setup_config(name)
     save_col.download_button(
         f"{ICONS['download']} Save setup",
-        data=json.dumps(_editor_setup_config(name), indent=2),
+        data=json.dumps(config, indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
         key=f"remap_setup_download_{name}",
@@ -13619,6 +14754,13 @@ def render_dataset_editor_footer(host) -> None:
         width="stretch",
         help="Save the mapping and recording setup, then re-derive the dataset.",
     )
+    # What a restore over the original files will not reproduce on its own —
+    # said before the file is sent, not discovered by whoever restores it.
+    if config["column_mapping_notes"]:
+        box.caption(
+            "**The saved setup needs a hand after restoring.** "
+            + " ".join(config["column_mapping_notes"])
+        )
 
 
 def _request_full_identity_scan() -> None:
@@ -13732,7 +14874,12 @@ def render_trial_identity_section() -> None:
 
 
 def _render_column_mapping_section(
-    *, editor_rendered: bool = False, uploads_host=None, setup_host=None
+    *,
+    editor_rendered: bool = False,
+    uploads_host=None,
+    setup_host=None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
 ) -> None:
     """The body of the Data page's **Column mapping** section (DATA-26).
 
@@ -13761,12 +14908,26 @@ def _render_column_mapping_section(
     callee with no host renders inline under its own heading, as before, and
     normalizing it to ``st`` here would silently drop that heading for every
     caller.
+
+    In mode A the Recording setup is editable too while ✏️ Edit dataset is
+    open (`render_builtin_setup_editor`, which reads ``words`` / ``fixations``
+    for *Estimate from my data*): the demo and the public corpora have the
+    editor's ✅ Save changes, and a declared setup can still be wrong for how
+    someone uses the data — an assumed physical size, most often.
     """
     if editor_rendered:
         # The editable built-in mapping now uses the same compact field grid as
         # Add dataset; widen its option menus just as the wizard does.
         st.markdown(mapping_menu_css(), unsafe_allow_html=True)
-        _render_setup_provenance_note(host=setup_host)
+        token = str(st.session_state.get("data_source_choice") or "")
+        if (
+            setup_host is not None
+            and token
+            and st.session_state.get(DATASET_EDITOR_OPEN_KEY)
+        ):
+            render_builtin_setup_editor(token, words, fixations, setup_host)
+        else:
+            _render_setup_provenance_note(host=setup_host)
         return
     active = _active_stored_dataset()
     if active is not None:

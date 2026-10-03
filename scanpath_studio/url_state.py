@@ -67,6 +67,7 @@ from .constants import (
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -84,11 +85,13 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
+from .data import respell_reading
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
+    COMPARE_SCREEN_PARAM,
     COMPARE_SOURCE_PARAM,
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
@@ -679,7 +682,9 @@ _URL_BOUNDED = {
 #: EXP-19 — the settings a source's own declared monitor or typeface overwrites
 #: the first time that source is seeded (`app.seed_canvas_state`: the canvas
 #: pair, and `app._FONT_SNAP_KEYS`). A link that carries one names it under
-#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value.
+#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value. A recording
+#: setup the recipient saved for that dataset (`app._apply_setup_override`) is
+#: applied on the same first seeding, and keeps a linked value the same way.
 _SOURCE_SNAPPED_KEYS = frozenset(
     {
         "global_canvas_width",
@@ -687,6 +692,7 @@ _SOURCE_SNAPPED_KEYS = frozenset(
         "global_base_font_size",
         "global_font_family",
         "global_scale_text_to_boxes",
+        *SETUP_OVERRIDE_SESSION_KEYS,
     }
 )
 
@@ -1041,6 +1047,12 @@ def _apply_url_preset() -> str | None:
             source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
             if source_b is not None:
                 st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
+            # B's own screen, for B's navigator — which keeps it only when B's
+            # trial has that screen, as A's does with `screen=`.
+            if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
+                st.session_state.setdefault(
+                    "single_compare_screen_id", str(qp[COMPARE_SCREEN_PARAM])
+                )
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
     # the deep link too, seeded before the loader's widgets render. Validate each
@@ -1490,6 +1502,11 @@ def _restore_selection(
     if tid in (None, "") or combos.empty:
         return False
     pid, tid = str(pid), str(tid)
+    # A link or config saved before composite ids escaped a `_` inside a part
+    # names the trial by its old spelling (`data.composite_respelling_map`).
+    pid, tid = respell_reading(
+        pid, tid, zip(combos["participant_id"], combos["trial_id"], strict=True)
+    )
     match = combos[
         (combos["participant_id"].astype(str) == pid)
         & (combos["trial_id"].astype(str) == tid)
@@ -2586,6 +2603,8 @@ def _build_share_query(
                     f"The compared scanpath comes from **{source_b}**, which "
                     "can't be rebuilt from a link — it isn't included."
                 )
+        if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
+            params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 
     # Visualization toggles — emit an explicit 0/1 so a layer the user turned
     # *off* is shared as off (the URL coercion reads "0" as False).
@@ -2797,7 +2816,11 @@ def _link_defaults(data_choice: str) -> dict:
         # snaps the base font to *that* — a sender who chose the factory 16
         # there has to say so, or the recipient gets the corpus' size.
         defaults.pop("global_base_font_size")
-    width, height, authoritative = resolve_source_monitor(data_choice, None, None)
+    # What the source itself declares: the recipient has none of this
+    # session's own saved setup for it, so a canvas the sender saved travels.
+    width, height, authoritative = resolve_source_monitor(
+        data_choice, None, None, own_setup=False
+    )
     if authoritative:
         lo, hi = _CANVAS_BOUNDS
         defaults["global_canvas_width"] = min(max(int(width), lo), hi)
@@ -2994,9 +3017,10 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=AUTHOR_CHOICE,
             options={"path": "scanpath.json"},
             note=(
-                "An authored scanpath lives in this session — export it from "
-                "the ✍️ authoring panel first, then point the snippet at that "
-                "JSON file."
+                "An authored scanpath lives in this session — save it with "
+                "**Download authoring file** on the ✍️ authoring screen first "
+                "(it downloads as `scanpath.json`, the name the snippet reads), "
+                "then run the snippet beside it."
             ),
         )
 

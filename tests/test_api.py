@@ -221,9 +221,10 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     words, _fixations = sps.load_scanpath_data(
         words=words_raw, fixations=fix_raw, word_schema=schema
     )
-    assert (
-        words["trial_id"].iloc[0].startswith(str(words_raw["participant_id"].iloc[0]))
-    )
+    # The demo's reader ids hold a `_` ("l37_1129"), escaped inside the
+    # composite so it cannot be mistaken for the separator (`data.compose_id`).
+    first = str(words_raw["participant_id"].iloc[0])
+    assert words["trial_id"].iloc[0].startswith(first.replace("_", "\\_") + "_")
     schema["trial"] = ["participant_id", "TRIAL_NUMBER"]
     with pytest.raises(ValueError) as excinfo:
         sps.load_scanpath_data(words=words_raw, word_schema=schema)

@@ -145,15 +145,15 @@ Convert EyeLink IA edges to origin+size.
 
 Build one unique trial id from several columns.
 
-**Formula.** The mapped Trial ID columns are joined in the order given, separated by `_`, after casting each to string.
+**Formula.** The mapped Trial ID columns are joined in the order given, separated by `_`, after casting each to string. A `_` or `\` inside a part is escaped with a `\` first, so two different tuples never give the same id; parts with neither compose as a plain join.
 
 | | |
 | --- | --- |
 | **Output** | trial_id |
 | **Missing & edge cases** | A row missing any component keeps the literal string of that part. |
-| **Code** | `scanpath_studio/data.py:normalize_fixations` |
+| **Code** | `scanpath_studio/data.py:trial_id_series` |
 | **Consumers** | UI, API, CLI |
-| **Tests** | `tests/test_trial_identity.py` |
+| **Tests** | `tests/test_trial_identity.py`, `tests/test_composite_ids.py` |
 | **Verification** | tier C, D — **Partially verified** |
 
 ### `norm.flags` — Flag coercion { #norm-flags }

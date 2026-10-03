@@ -43,9 +43,13 @@ from . import progress
 from .constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    DATASET_SETUP_OVERRIDES_KEY,
     DOWNLOAD_DIR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    SETUP_OVERRIDE_FOR_KEY,
+    SETUP_OVERRIDE_RESTORE_KEY,
+    SETUP_OVERRIDE_SESSION_KEYS,
 )
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
@@ -131,6 +135,12 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # like the design library: a restart must not send the next download back
     # to the default folder.
     DOWNLOAD_DIR_KEY,
+    # The recording setup the user saved for a built-in or public dataset, and
+    # which one the `global_*` keys hold now with what they held before — all
+    # three, or a relaunch would stash the override as the "before" it restores.
+    DATASET_SETUP_OVERRIDES_KEY,
+    SETUP_OVERRIDE_FOR_KEY,
+    SETUP_OVERRIDE_RESTORE_KEY,
 }
 
 
@@ -618,6 +628,40 @@ def _restorable_session(stored: Any) -> dict:
             # UX-184 — a path seeds a text box: only a string may.
             if isinstance(value, str):
                 clean[key] = value
+            continue
+        if key == DATASET_SETUP_OVERRIDES_KEY:
+            # ``{dataset: setup}``, each read back through `SetupSnapshot`,
+            # which degrades a bad field rather than the whole setup.
+            if isinstance(value, dict):
+                from .experimental_setup import SetupSnapshot
+
+                clean[key] = {
+                    str(name): SetupSnapshot.from_dict(setup).to_dict()
+                    for name, setup in value.items()
+                    if isinstance(setup, dict)
+                }
+            continue
+        if key == SETUP_OVERRIDE_FOR_KEY:
+            if isinstance(value, str):
+                clean[key] = value
+            continue
+        if key == SETUP_OVERRIDE_RESTORE_KEY:
+            # ``{global_* key: value or None}`` — each value held to its own
+            # control's rules, and a key that is not a setup key dropped.
+            if isinstance(value, dict):
+                restore = {}
+                for name, saved in value.items():
+                    if name not in SETUP_OVERRIDE_SESSION_KEYS:
+                        continue
+                    try:
+                        restore[name] = (
+                            None
+                            if saved is None
+                            else sanitize_session_value(name, saved)
+                        )
+                    except (TypeError, ValueError, OverflowError):
+                        continue
+                clean[key] = restore
             continue
         if key == DESIGN_PRESETS:
             # The design library is the user's own work: keep every well-formed

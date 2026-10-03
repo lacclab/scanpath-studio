@@ -30,6 +30,7 @@ import pandas as pd
 import streamlit as st
 
 from .constants import ICONS, upload_limit_mb
+from .data import respell_reading
 from .fields import PANEL_LABEL_W, panel_field, row_label
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 
@@ -236,6 +237,18 @@ def merge_records(
     """
     keep = _trial_set(trials)
     incoming = records_to_store(records)
+    # A file saved before composite ids escaped a `_` inside a part names those
+    # trials by their old spelling; read it the dataset's way when that is
+    # unambiguous (`data.respell_reading`).
+    if any(_trial_of(key) not in keep for key in incoming):
+        incoming = {
+            (
+                key
+                if _trial_of(key) in keep
+                else (*respell_reading(key[0], key[1], keep), *key[2:])
+            ): entry
+            for key, entry in incoming.items()
+        }
     applied = {key: entry for key, entry in incoming.items() if _trial_of(key) in keep}
     store.update(applied)
     return len(applied), len(incoming) - len(applied)

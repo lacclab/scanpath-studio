@@ -1055,9 +1055,11 @@ class TestDatasetTable:
         # ✅ Save changes applying it is `tests/test_remap.py`'s — this
         # fixture's upload has no saved mapping for Save to validate.
 
-    def test_a_built_in_datasets_name_is_an_alias_set_at_once(self):
-        from scanpath_studio.app import DATASET_ALIASES_KEY
-        from scanpath_studio.constants import DEMO_CHOICE
+    def test_a_built_in_datasets_name_is_an_alias_set_by_save(self):
+        """Its name and description wait for ✅ Save changes like the rest of
+        the edit (round 6, improvement A)."""
+        from scanpath_studio.app import DATASET_ALIASES_KEY, _description_field_key
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY, DEMO_CHOICE
         from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
 
         at = AppTest.from_file(APP_SCRIPT)
@@ -1067,10 +1069,24 @@ class TestDatasetTable:
         self._click(at, "dataset_edit_btn")
         field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
         field.input("Demo, renamed")
+        text = next(
+            t for t in at.text_area if t.key == _description_field_key(DEMO_CHOICE)
+        )
+        text.input("My own words.")
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Not yet — and an unsaved change.
+        for key in (DATASET_ALIASES_KEY, DATASET_DESCRIPTIONS_KEY):
+            assert key not in at.session_state or DEMO_CHOICE not in (
+                at.session_state[key] or {}
+            )
+        self._click(at, "builtin_mapping_save")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_ALIASES_KEY][DEMO_CHOICE] == "Demo, renamed"
+        assert at.session_state[DATASET_DESCRIPTIONS_KEY][DEMO_CHOICE] == (
+            "My own words."
+        )
         # The source's token — its load path and share-link identity — stays.
         assert at.session_state["data_source_choice"] == DEMO_CHOICE
 
@@ -1098,11 +1114,13 @@ class TestDatasetTable:
 
         assert [t for t in at.text_area if t.key == _description_field_key(self.NAME)]
 
-    def test_a_description_written_on_the_editor_is_the_datasets_own(self):
-        """Typed on ✏️ Edit dataset and stored in the descriptions dict the
-        recovery cache persists — not on the upload's entry, whose every
-        non-frame field is part of the cache's dataset identity."""
+    def test_a_description_written_on_the_editor_waits_for_save(self):
+        """Typed on ✏️ Edit dataset, it is an unsaved change until ✅ Save
+        changes (round 6, improvement A), which stores it in the descriptions
+        dict the recovery cache persists — not on the upload's entry, whose
+        every non-frame field is part of the cache's dataset identity."""
         from scanpath_studio.app import _description_field_key
+        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
 
         at = self._at()
         self._click(at, "dataset_edit_btn")
@@ -1113,10 +1131,9 @@ class TestDatasetTable:
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
-
-        own = at.session_state[DATASET_DESCRIPTIONS_KEY]
-        assert own[self.NAME] == "Twelve readers, two texts. A pilot."
+        assert DATASET_DESCRIPTIONS_KEY not in at.session_state or self.NAME not in (
+            at.session_state[DATASET_DESCRIPTIONS_KEY] or {}
+        )
         assert "description" not in at.session_state["_datasets"][self.NAME]
 
     def test_the_annotations_tab_flags_entries_on_trials_it_has_not_loaded(self):
@@ -1585,6 +1602,99 @@ class TestDatasetRename:
         assert not [b.key for b in at.button if "rename" in str(b.key)]
 
 
+@pytest.mark.timeout(300)
+class TestBuiltInRecordingSetupOverride:
+    """A built-in dataset's Recording setup is editable on ✏️ Edit dataset —
+    the upload's form, saved as the user's own setup for that dataset behind
+    ✅ Save changes, never rewriting what the corpus declares, and put back
+    when another dataset is opened."""
+
+    PREFIX = "edit_src_Bundled Demo_setup"
+
+    @staticmethod
+    def _run(at):
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+    def _open(self, at):
+        at.button(key="dataset_edit_btn").click()
+        self._run(at)
+
+    def _overrides(self, at) -> dict:
+        from scanpath_studio.constants import DATASET_SETUP_OVERRIDES_KEY
+
+        try:
+            return dict(at.session_state[DATASET_SETUP_OVERRIDES_KEY] or {})
+        except KeyError:
+            return {}
+
+    def test_save_cancel_switch_and_reset(self):
+        from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
+        from scanpath_studio.wizard import _GEOM_KNOW
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        self._run(at)
+        self._open(at)
+        # The upload's form, not a read-only summary.
+        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        # An untouched Save saves no setup of the user's.
+        at.button(key="builtin_mapping_save").click()
+        self._run(at)
+        assert DEMO_CHOICE not in self._overrides(at)
+
+        # A change that is cancelled is gone, and gone from the next edit too.
+        self._open(at)
+        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        self._run(at)
+        assert at.session_state["_remap_builtin_setup_dirty"] is True
+        for key in [k for k in at.session_state if str(k).startswith("_remap_")]:
+            del at.session_state[key]  # what ✕ Cancel's close does
+        del at.session_state["_dataset_editor_open"]
+        self._run(at)
+        self._open(at)
+        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert DEMO_CHOICE not in self._overrides(at)
+
+        # A saved change is this dataset's own setup, on the figure at once.
+        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        self._run(at)
+        at.number_input(key=f"{self.PREFIX}_monitor_mm").set_value(400.0)
+        self._run(at)
+        at.number_input(key=f"{self.PREFIX}_screen_w").set_value(1920)
+        self._run(at)
+        at.button(key="builtin_mapping_save").click()
+        self._run(at)
+        saved = self._overrides(at)[DEMO_CHOICE]
+        assert saved["monitor_width_mm"] == 400.0
+        assert saved["provenance"]["geometry"] == "measured"
+        assert at.session_state["global_monitor_width_mm"] == 400.0
+        assert at.session_state["global_canvas_width"] == 1920
+
+        # Another dataset does not inherit it; coming back brings it back.
+        at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
+        self._run(at)
+        assert at.session_state["global_monitor_width_mm"] == 597.0
+        # The synthetic trial declares no screen, so nothing snaps it: what it
+        # shows is what the figure held before the demo's own setup.
+        assert at.session_state["global_canvas_width"] == 2560
+        assert list(self._overrides(at)) == [DEMO_CHOICE]
+        at.session_state["data_source_choice"] = DEMO_CHOICE
+        self._run(at)
+        assert at.session_state["global_monitor_width_mm"] == 400.0
+
+        # Reset to source setup, saved: the corpus' declared setup again.
+        self._open(at)
+        at.button(key="edit_src_Bundled Demo_reset").click()
+        self._run(at)
+        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        at.button(key="builtin_mapping_save").click()
+        self._run(at)
+        assert DEMO_CHOICE not in self._overrides(at)
+        assert at.session_state["global_monitor_width_mm"] == 597.0
+
+
 @pytest.mark.timeout(240)
 class TestBuiltInEditorSavesItsMapping:
     """DATA-62: a built-in dataset's ✏️ Edit dataset screen ends in ✅ Save
@@ -1632,7 +1742,7 @@ class TestBuiltInEditorSavesItsMapping:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert self._applied(at) == other
         assert "_dataset_editor_open" not in at.session_state
-        assert any("column mapping is saved" in str(s.value) for s in at.success)
+        assert any("your changes are saved" in str(s.value) for s in at.success)
 
     def test_cancel_puts_the_mapping_keys_back(self, monkeypatch):
         """✕ Cancel's restore, driven directly: the Leave button sits in a
@@ -4222,6 +4332,126 @@ class TestGenericFilenamePowers:
         ]
         assert fixation_rows, "the Fixations row rendered no field pickers"
         assert keys.index("wizard_filename_split") < fixation_rows[0]
+
+    def test_raw_gaze_columns_can_be_derived_from_its_filename(self, monkeypatch):
+        """The derive step ran before the raw-gaze upload, so its Table picker
+        could never offer Raw gaze. Now it can, and Share → Code still tells
+        the file's own columns from the ones made from its name."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        gaze = pd.DataFrame(
+            {
+                "gx": [100.0, 110.0, 120.0],
+                "gy": [50.0, 50.0, 51.0],
+                "time": [0, 2, 4],
+                "source_file": ["p1_t1_gaze"] * 3,
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                gaze if kw["state_prefix"] == "col_map_raw_gaze" else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.session_state["wizard_dataset_name"] = "Gaze only"
+        at.session_state["wizard_filename_split"] = True
+        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_regex"] = (
+            r"(?P<reader>p\d+)_(?P<item>t\d+)_gaze"
+        )
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = "Estimate from my data"
+        at.session_state[_SETUP_MODE_KEYS["geometry"]] = (
+            "Skip — I don't need visual-angle units"
+        )
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        table = next(s for s in at.selectbox if s.key == "wizard_filename_table")
+        assert table.options == ["Raw gaze"]
+        next(b for b in at.button if b.key == "wizard_filename_apply").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        trial = next(m for m in at.multiselect if m.key == "col_map_raw_gaze_trial")
+        assert "item" in trial.options
+        trial.set_value(["item"])
+        at.selectbox(key="col_map_raw_gaze_participant").set_value("reader")
+        at.selectbox(key="col_map_raw_gaze_x").set_value("gx")
+        at.selectbox(key="col_map_raw_gaze_y").set_value("gy")
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_finalize").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        entry = at.session_state["_datasets"]["Gaze only"]
+        assert entry["raw_gaze"]["trial_id"].astype(str).unique().tolist() == ["t1"]
+        # Made from the file name, so a script reading the file has to be told.
+        assert entry["source_recipe"]["derived"] == ["item", "reader"]
+
+    def test_a_filename_derivation_is_made_once_not_on_every_rerun(self, monkeypatch):
+        """The add screen reruns on every click; deriving columns from a
+        multi-million-row raw-gaze table again each time is what made it slow.
+        The derived table is reused until the table or the settings change."""
+        import pandas as pd
+
+        from scanpath_studio import app, wizard
+
+        gaze = pd.DataFrame(
+            {
+                "gx": [100.0, 110.0, 120.0],
+                "gy": [50.0, 50.0, 51.0],
+                "time": [0, 2, 4],
+                "source_file": ["p1_t1_gaze"] * 3,
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                gaze if kw["state_prefix"] == "col_map_raw_gaze" else pd.DataFrame()
+            ),
+        )
+        calls = []
+        real = wizard.extract_columns_from_source_file
+
+        def counting(*args, **kwargs):
+            calls.append(kwargs.get("column"))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(wizard, "extract_columns_from_source_file", counting)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.session_state["wizard_filename_split"] = True
+        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_regex"] = (
+            r"(?P<reader>p\d+)_(?P<item>t\d+)_gaze"
+        )
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_filename_apply").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert len(calls) == 1
+        at.run(timeout=60)
+        at.run(timeout=60)
+        assert len(calls) == 1, "a rerun derived the columns again"
+        trial = next(m for m in at.multiselect if m.key == "col_map_raw_gaze_trial")
+        assert "item" in trial.options
+        # New settings derive afresh.
+        at.session_state["wizard_filename_regex"] = r"(?P<reader>p\d+)_.*"
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_filename_apply").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert len(calls) == 2
 
     def test_aggregate_toggle_finalizes_word_boxes(self, monkeypatch):
         # End-to-end: a char-level words upload + the aggregate toggle → the

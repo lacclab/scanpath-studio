@@ -817,6 +817,31 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 
+#: ``{dataset token: SetupSnapshot.to_dict()}`` — the recording setup the user
+#: saved on ✏️ Edit dataset for a **built-in or public** dataset, in place of
+#: the one the corpus declares (which is never rewritten). An upload keeps its
+#: setup on its own ``_datasets`` entry instead. A recovery-cache session key,
+#: like the descriptions, for the same reason.
+DATASET_SETUP_OVERRIDES_KEY = "_dataset_setup_overrides"
+#: Which dataset's override the ``global_*`` setup keys hold now, and what they
+#: held before it was applied — put back when that dataset is left or its
+#: override is reset (the shape of BUG-50's font snap). Both persisted, so a
+#: relaunch onto the dataset does not stash the override as its own "before".
+SETUP_OVERRIDE_FOR_KEY = "_setup_override_for"
+SETUP_OVERRIDE_RESTORE_KEY = "_setup_override_restore"
+#: The ``global_*`` keys an override writes (and its restore puts back).
+SETUP_OVERRIDE_SESSION_KEYS = (
+    "global_canvas_width",
+    "global_canvas_height",
+    "global_monitor_width_mm",
+    "global_viewing_distance_mm",
+    "global_display_dpi",
+    "global_base_font_size",
+    "global_font_family",
+    "global_line_spacing",
+    "global_scale_text_to_boxes",
+)
+
 #: UX-184 — the folder every public corpus downloads into, each in a subfolder
 #: (``<folder>/PoTeC``), set on the 🗂️ Data page. A recovery-cache session key
 #: so the choice survives a restart; never in a link, since it is a local path

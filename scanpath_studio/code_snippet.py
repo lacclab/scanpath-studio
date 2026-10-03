@@ -488,6 +488,9 @@ class CompareTarget:
     canvas: tuple[int, int] | None = None
     words: tuple[str, ...] = ()
     fixations: tuple[str, ...] = ()
+    #: B's own screen of a multipart trial (``screen_b=`` / ``--compare-screen``),
+    #: picked in B's trial independently of A's. ``None``: B is single-screen.
+    screen: str | None = None
     #: VIZ-48 — only beside a ``dataset``: B's own raw gaze. ``None`` when B has
     #: none; the paths it was read from (``render --print-code``), or ``()``
     #: when it has samples but no path to name (an upload — a placeholder).
@@ -1177,6 +1180,16 @@ def _one_or_list(paths) -> Any:
     return items[0] if len(items) == 1 else items
 
 
+def _names_screen_b(state: FigureState) -> bool:
+    """Whether the recipe names B's screen: only beside a B it draws."""
+    return (
+        state.kind in ("comparison", "animation")
+        and state.compare is not None
+        and bool(state.compare.screen)
+        and bool(state.compare.trial)
+    )
+
+
 def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]:
     """The named (non-figure-keyword) arguments the API call carries.
 
@@ -1186,12 +1199,12 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     something, which is the same "only the non-defaults" rule by another route.
     """
     out: list[tuple[str, Any]] = []
-    # `compare_scanpaths` has no `screen` parameter — the app pre-extracts each
-    # side's screen before handing over the frames — so emitting one there would
-    # be rejected as an unknown figure keyword. Reported by `state_caveats`
-    # instead of quietly producing a snippet that raises on the first run.
-    if state.screen and state.kind != "comparison":
+    # Each scanpath of a comparison or co-animation names its own screen, as the
+    # app's two screen navigators pick them.
+    if state.screen:
         out.append(("screen", str(state.screen)))
+    if _names_screen_b(state):
+        out.append(("screen_b", str(state.compare.screen)))
     if state.canvas:
         out.append(("canvas_size", (int(state.canvas[0]), int(state.canvas[1]))))
     if explicit or state.base_font_size != 16:
@@ -1555,8 +1568,10 @@ def cli_snippet(
         argv += ["-p", str(state.participant)]
     if state.trial:
         argv += ["-t", str(state.trial)]
-    if state.screen and state.kind != "comparison":
+    if state.screen:
         argv += ["--screen", str(state.screen)]
+    if _names_screen_b(state):
+        argv += ["--compare-screen", str(state.compare.screen)]
     if state.canvas:
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
     if explicit or state.base_font_size != 16:
@@ -1777,22 +1792,6 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
         notes.append(
             "The stimulus image was uploaded into the app, so the snippet "
             f"names `{_IMAGE_PLACEHOLDER}` instead — point it at your own file."
-        )
-    if state.kind == "comparison" and state.screen:
-        notes.append(
-            f"This is screen `{state.screen}` of a multipart trial. "
-            "`compare_scanpaths` compares whole trials, so slice each side to "
-            "its screen first (`multipart.extract_part`) and pass those frames."
-        )
-    # BUG-85: B has its own screen navigator in the app, which a `FigureState`
-    # does not carry, and `animate_scanpath` draws B at its first screen.
-    if state.kind == "animation" and state.compare is not None and state.screen:
-        notes.append(
-            f"This is screen `{state.screen}` of a multipart trial, and "
-            "`animate_scanpath` draws B at its first screen — as `render` does, "
-            "which has no flag for B's. To replay the screen shown for B, cut "
-            "its frames with `multipart.extract_part` and pass them as "
-            "`words_b=` / `fixations_b=`."
         )
     # CMP-8 / EXP-21: scanpath B can come from a *second* dataset, and its
     # participant id is that corpus's own. Both halves load B's tables and name

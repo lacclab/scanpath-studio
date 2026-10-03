@@ -960,6 +960,30 @@ def _next_available_names(existing: set, base: str, count: int) -> list:
     return names
 
 
+#: The last derivation each Apply line made, per table: what it was made from
+#: and the frame it gave. A derivation is a pure function of its input frame and
+#: its settings, and the add screen reruns on every click — so without this a
+#: multi-million-row raw-gaze table was split (or regex-matched) again on each
+#: one. One slot per (table, line), replaced when its input or settings change.
+_FILENAME_DERIVE_MEMO_KEY = "_wizard_filename_derive_memo"
+
+
+def _memo_derive(slot: tuple, key: tuple, compute):
+    """``compute()``'s result for ``key``, reused while ``key`` is unchanged.
+
+    ``key`` holds the input frame's fingerprint (`data.frame_fingerprint`, an
+    assigned ID for an uploaded table, so looking it up hashes nothing) and the
+    settings, so new data or a new pattern always derives afresh.
+    """
+    memo = st.session_state.setdefault(_FILENAME_DERIVE_MEMO_KEY, {})
+    hit = memo.get(slot)
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    result = compute()
+    memo[slot] = (key, result)
+    return result
+
+
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     """Optional step: derive columns from an uploaded column's own text — the
     captured ``source_file`` by default, or any other column — so identity
@@ -1174,7 +1198,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     # than reusing (and silently overwriting) the first split's own columns.
     existing_by_table = {label: set(fr.columns) for label, fr in frames.items()}
 
-    for config in applied_configs:
+    for line, config in enumerate(applied_configs):
         # Older sessions' applied state predates the column picker (UX-113) —
         # `source_file` was the only option then, so that's the correct
         # fallback.
@@ -1197,26 +1221,45 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         existing = existing_by_table.setdefault(target_table, set())
         parent = target
 
+        slot = (target_table, line)
         if config["mode"] == "Split on a delimiter":
-            split = split_source_file(
-                target, delimiter=config["delimiter"], column=applied_column
+
+            def _split(
+                parent=parent,
+                existing=frozenset(existing),
+                delimiter=config["delimiter"],
+                column=applied_column,
+            ):
+                split = split_source_file(parent, delimiter=delimiter, column=column)
+                # UX-129: `split_source_file` always names positionally
+                # (`file_part_N`) — rename to `<source column>_<n>` here, using
+                # the next names not already claimed in this table, rather than
+                # letting a second split of the same (or another) column
+                # collide with the first's `file_part_1`/`_2`/….
+                temp_cols = [c for c in split.columns if c not in parent.columns]
+                new_names = _next_available_names(set(existing), column, len(temp_cols))
+                derived = split.rename(columns=dict(zip(temp_cols, new_names)))
+                # BUG-103: named by what made it, so it is not re-hashed each rerun.
+                assign_derived(
+                    derived,
+                    "split_source_file",
+                    parent,
+                    (delimiter, column, tuple(new_names)),
+                )
+                return derived, new_names
+
+            target, new_cols = _memo_derive(
+                slot,
+                (
+                    "split",
+                    frame_fingerprint(parent),
+                    config["delimiter"],
+                    applied_column,
+                    tuple(sorted(existing)),
+                ),
+                _split,
             )
-            # UX-129: `split_source_file` always names positionally
-            # (`file_part_N`) — rename to `<source column>_<n>` here, using
-            # the next names not already claimed in this table, rather than
-            # letting a second split of the same (or another) column collide
-            # with the first's `file_part_1`/`_2`/….
-            temp_cols = [c for c in split.columns if c not in target.columns]
-            new_names = _next_available_names(existing, applied_column, len(temp_cols))
-            target = split.rename(columns=dict(zip(temp_cols, new_names)))
-            new_cols = new_names
-            # BUG-103: named by what made it, so it is not re-hashed each rerun.
-            assign_derived(
-                target,
-                "split_source_file",
-                parent,
-                (config["delimiter"], applied_column, tuple(new_names)),
-            )
+            existing.update(new_cols)
         else:
             applied_pattern = config.get("pattern")
             if not applied_pattern:
@@ -1233,17 +1276,34 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                     f"untouched: {', '.join(sorted(collisions))}. Rename the "
                     "group(s) and Apply again to extract them."
                 )
-            target = extract_columns_from_source_file(
-                target,
-                applied_pattern,
+
+            def _extract(
+                parent=parent,
+                pattern=applied_pattern,
                 column=applied_column,
-                lowercase=config["lower"],
-            )
-            assign_derived(
-                target,
-                "extract_columns_from_source_file",
-                parent,
-                (applied_pattern, applied_column, bool(config["lower"])),
+                lower=bool(config["lower"]),
+            ):
+                derived = extract_columns_from_source_file(
+                    parent, pattern, column=column, lowercase=lower
+                )
+                assign_derived(
+                    derived,
+                    "extract_columns_from_source_file",
+                    parent,
+                    (pattern, column, lower),
+                )
+                return derived
+
+            target = _memo_derive(
+                slot,
+                (
+                    "regex",
+                    frame_fingerprint(parent),
+                    applied_pattern,
+                    applied_column,
+                    bool(config["lower"]),
+                ),
+                _extract,
             )
             new_cols = [
                 c for c in re.compile(applied_pattern).groupindex if c in target.columns
@@ -1313,7 +1373,7 @@ def _wizard_trial_step(
         "trial",
         "Trial ID *",
         "The column holding your unique trial ID — or several to build one on "
-        "the fly (values joined with '_'), e.g. participant + text.",
+        "the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + text.",
         cells if cells is not None else [body] * 2,
         raw_words,
         raw_fix,
@@ -2058,6 +2118,7 @@ def _setup_mode(
     label=None,
     *,
     key_prefix: str = "wizard",
+    persist: dict | None = None,
 ):
     """One setup group's radio, namespaced for add or edit.
 
@@ -2082,6 +2143,7 @@ def _setup_mode(
         index=None,
         key=f"{key_prefix}_setup_{group}_mode",
         help=help_text,
+        **(persist or {}),
     )
 
 
@@ -2109,6 +2171,11 @@ def _wizard_setup_step(
     returns before the rail renders, so no widget on a ``global_*`` key exists
     this run.
     """
+    # ✏️ Edit dataset lives on the Data page, which runs only while it is the
+    # open view: without this a trip to the Scanpath view mid-edit dropped the
+    # setup draft (Streamlit forgets an unrendered widget's key) while the
+    # mapping fields beside it — `persist_state` since DATA-26 — kept theirs.
+    persist = {"persist_state": "session"} if initial is not None else {}
     # UX-58: three columns, one per group, so their headings sit at the same
     # line height. Each column starts with its own radio, which is what keeps
     # them level even though what follows differs per answer (two number inputs,
@@ -2156,6 +2223,7 @@ def _wizard_setup_step(
         "these coordinates.",
         label="Screen",
         key_prefix=key_prefix,
+        persist=persist,
     )
     canvas_w = (
         initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
@@ -2173,6 +2241,7 @@ def _wizard_setup_step(
             10000,
             int(canvas_w),
             key=f"{key_prefix}_setup_screen_w",
+            **persist,
         )
         canvas_h = h_col.number_input(
             "Height (px)",
@@ -2180,6 +2249,7 @@ def _wizard_setup_step(
             10000,
             int(canvas_h),
             key=f"{key_prefix}_setup_screen_h",
+            **persist,
         )
     elif screen_mode == _SCREEN_ESTIMATE:
         est_w, est_h = (
@@ -2210,8 +2280,8 @@ def _wizard_setup_step(
                     f"↻ Use the current estimate ({est_w} × {est_h} px)",
                     key=f"{key_prefix}_setup_reestimate_btn",
                     on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
-                    help="Re-estimate the screen from this dataset's data as it "
-                    "is stored now. Nothing changes until you save.",
+                    help="Re-estimate the screen from this dataset's data as "
+                    "mapped above. Nothing changes until you save.",
                 )
         else:
             canvas_w, canvas_h = est_w, est_h
@@ -2233,6 +2303,7 @@ def _wizard_setup_step(
         "a real answer — the app then hides the numbers it cannot honestly derive.",
         label="Physical size",
         key_prefix=key_prefix,
+        persist=persist,
     )
     mon_mm = float(
         initial.monitor_width_mm
@@ -2251,6 +2322,7 @@ def _wizard_setup_step(
             2000.0,
             mon_mm,
             key=f"{key_prefix}_setup_monitor_mm",
+            **persist,
         )
         dist_mm = geom_host.number_input(
             "Viewing distance (mm)",
@@ -2258,6 +2330,7 @@ def _wizard_setup_step(
             5000.0,
             dist_mm,
             key=f"{key_prefix}_setup_distance_mm",
+            **persist,
         )
         if canvas_w and mon_mm > 0 and dist_mm > 0:
             geom_host.caption(
@@ -2287,6 +2360,7 @@ def _wizard_setup_step(
         "so the figure matches what the participant saw.",
         label="Text size",
         key_prefix=key_prefix,
+        persist=persist,
     )
     scale_to_boxes = True
     base_font = int(
@@ -2316,9 +2390,13 @@ def _wizard_setup_step(
             96.0,
             initial_font_pt,
             key=f"{key_prefix}_setup_font_pt",
+            **persist,
         )
         font_family = text_host.text_input(
-            "Font family", value=font_family, key=f"{key_prefix}_setup_font_family"
+            "Font family",
+            value=font_family,
+            key=f"{key_prefix}_setup_font_family",
+            **persist,
         )
         # pt→px needs a DPI, which needs the physical width. Under a skipped
         # geometry group there is no honest DPI, so the conversion is withheld
@@ -3442,6 +3520,52 @@ def _render_data_setup(active: bool) -> _UploadResult:
         extra_rows["words"] = words_block.container()
         keep_rows["words"] = words_block.container()
 
+    # The raw-gaze block's upload, here rather than further down where its
+    # pickers are drawn: *Derive columns from the filename* runs before those
+    # pickers and has to see this table too, or its Table picker could never
+    # offer Raw gaze. `s3` is still created after `s2`, so it still draws below
+    # the Fixations and AOI blocks.
+    # UX-104 — the raw-gaze block. UX-113: same "name column + evenly split
+    # pickers" grid as the Fixations/AOI blocks above (a single generic
+    # `column_mapping_ui` grid read as a cramped, differently-shaped block
+    # beside them). UX-122: its own uploader replaces the "Raw gaze" label
+    # in row 1's name column, so — like Fixations/AOI above — row 1 always
+    # renders (there is nowhere else to upload); row 2 and everything below
+    # only once there is something to map.
+    # UX-125: keyed like `fix_block`/`words_block` above — the raw-gaze
+    # uploader centers against this whole block's height too.
+    s3 = sections_host.container(key="wiz_map_block_col_map_raw_gaze")
+    # UX-127: reserved here, right after `s3` (raw gaze) — a sibling of `s2`/
+    # `s3` in `sections_host`, so whatever `_render_metadata_uploads` fills
+    # into it later lands after all three main tables' rows in the DOM,
+    # regardless of how late in the script it actually runs.
+    meta_host = sections_host.container()
+    # UX-129: unconditional now — UX-125/127's `min-height` fix means the
+    # Fixations/AOI blocks above always render a visible block even with
+    # nothing uploaded, so raw gaze is never actually "the first block" any
+    # more (the `has_words or has_fix` guard this used to carry was stale;
+    # without it, AOI and Raw gaze had no line between them when both were
+    # still empty).
+    s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
+    # Word text/label — same six-cell grid, same field order, as the
+    # Fixations/AOI row above.
+    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    raw_gaze = upload_box(
+        rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
+        label="Raw gaze table (optional)",
+        short_label="Raw gaze",
+        # VIZ-45: raw gaze can be the dataset's only table, not just an
+        # overlay — and nothing is derived from it, which is worth saying
+        # before someone uploads samples expecting fixations back.
+        help_text="Sample-level gaze (one file), drawn as recorded — under the "
+        "fixations, or on its own as the dataset's only table. No fixations "
+        "are detected from it. " + _upload_types_note,
+        prefix="col_map_raw_gaze",
+        multi=False,
+        noun="gaze points",
+    )
+
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
     # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
     # guard below already tolerates all three being empty (the same guards the
@@ -3471,13 +3595,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # either row so screen order puts it first regardless of fill order.
     # What the files themselves held — a mapped column outside it was made from
     # the file names, which Share → Code has to name (its loader has no such
-    # step). Read before the derive step below adds its columns. Raw gaze
-    # uploads further down, after that step, so its entry is filled in there.
+    # step). Read before the derive step below adds its columns.
     uploaded_columns = {
         "words": set(map(str, raw_words.columns)),
         "fixations": set(map(str, raw_fix.columns)),
+        "raw_gaze": set(map(str, raw_gaze.columns)),
     }
-    if has_words or has_fix:
+    if has_words or has_fix or not raw_gaze.empty:
         # UX-129: the same nudge the top of the stage shows before anything
         # is uploaded, repeated here above "Derive columns from the
         # filename" — once one table is in, this is the next thing on
@@ -3498,6 +3622,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
 
+    if has_words or has_fix:
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
         def _cells_for(index: int) -> list:
             return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
@@ -3719,49 +3844,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     )
                 )
 
-    # UX-104 — the raw-gaze block. UX-113: same "name column + evenly split
-    # pickers" grid as the Fixations/AOI blocks above (a single generic
-    # `column_mapping_ui` grid read as a cramped, differently-shaped block
-    # beside them). UX-122: its own uploader replaces the "Raw gaze" label
-    # in row 1's name column, so — like Fixations/AOI above — row 1 always
-    # renders (there is nowhere else to upload); row 2 and everything below
-    # only once there is something to map.
-    # UX-125: keyed like `fix_block`/`words_block` above — the raw-gaze
-    # uploader centers against this whole block's height too.
-    s3 = sections_host.container(key="wiz_map_block_col_map_raw_gaze")
-    # UX-127: reserved here, right after `s3` (raw gaze) — a sibling of `s2`/
-    # `s3` in `sections_host`, so whatever `_render_metadata_uploads` fills
-    # into it later lands after all three main tables' rows in the DOM,
-    # regardless of how late in the script it actually runs.
-    meta_host = sections_host.container()
-    # UX-129: unconditional now — UX-125/127's `min-height` fix means the
-    # Fixations/AOI blocks above always render a visible block even with
-    # nothing uploaded, so raw gaze is never actually "the first block" any
-    # more (the `has_words or has_fix` guard this used to carry was stale;
-    # without it, AOI and Raw gaze had no line between them when both were
-    # still empty).
-    s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
-    # Word text/label — same six-cell grid, same field order, as the
-    # Fixations/AOI row above.
-    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
-    raw_gaze = upload_box(
-        rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
-        label="Raw gaze table (optional)",
-        short_label="Raw gaze",
-        # VIZ-45: raw gaze can be the dataset's only table, not just an
-        # overlay — and nothing is derived from it, which is worth saying
-        # before someone uploads samples expecting fixations back.
-        help_text="Sample-level gaze (one file), drawn as recorded — under the "
-        "fixations, or on its own as the dataset's only table. No fixations "
-        "are detected from it. " + _upload_types_note,
-        prefix="col_map_raw_gaze",
-        multi=False,
-        noun="gaze points",
-    )
-    # The derive step above ran before this upload existed, so nothing here was
-    # made from the file names: every column is the file's own.
-    uploaded_columns["raw_gaze"] = set(map(str, raw_gaze.columns))
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
     # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
     # guard below already tolerates all three being empty (the same guards the

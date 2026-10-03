@@ -1295,6 +1295,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "name a second one.",
     )
     cmp_group.add_argument(
+        "--compare-screen",
+        metavar="SCREEN_ID",
+        help="Screen of the second scanpath's multipart trial (default: its first "
+        "screen), looked up in its own trial. --screen picks the first "
+        "scanpath's. Each scanpath is drawn from one screen.",
+    )
+    cmp_group.add_argument(
         "--compare-layout",
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
@@ -1593,11 +1600,16 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     data (CMP-21). This used to check only when ``--compare-canvas`` was given,
     and co-animated without looking otherwise.
     """
+    from .data import respell_reading, trial_keys
     from .utils import extract_trial
 
     participant_b, trial_b = _parse_compare_with(args.compare_with)
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
         api, args, words, fixations
+    )
+    # An id spelled before composite ids escaped a `_` in a part still finds B.
+    participant_b, trial_b = respell_reading(
+        participant_b, trial_b, trial_keys(fixations_b)
     )
     trial_words_b = extract_trial(words_b, participant_b, trial_b)
     trial_fix_b = extract_trial(fixations_b, participant_b, trial_b)
@@ -1607,6 +1619,8 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
     frames = {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+    if args.compare_screen is not None:
+        frames["screen_b"] = args.compare_screen
     if cross_dataset:
         frames.update(
             dataset_b=args.compare_dataset_name,
@@ -1891,6 +1905,7 @@ def _print_reproduction_code(
         compare = cs.CompareTarget(
             participant=compare_participant,
             trial=compare_trial,
+            screen=args.compare_screen,
             layout=args.compare_layout,
             compare_stimulus=args.compare_stimulus,
             labels=_compare_labels(args),
@@ -2205,6 +2220,7 @@ def render(argv: list[str]) -> None:
             ("--compare-fixation-flag", args.compare_fixation_flags),
             ("--compare-saccade-classes", args.compare_saccade_classes),
             ("--compare-fix-index-range", args.compare_fix_index_range),
+            ("--compare-screen", args.compare_screen),
         )
         if given
     ]
@@ -2286,6 +2302,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(str(exc)) from exc
         canvas = canvas or source_canvas(SOURCE_AUTHOR)
     elif args.potec:
+        from .data import split_composite_id
         from .datasets import load_potec
 
         try:
@@ -2296,7 +2313,7 @@ def render(argv: list[str]) -> None:
                 # ids always need the full reader list for --list-trials so
                 # only narrow with an explicit -p.
                 readers=[args.participant] if args.participant else None,
-                texts=[str(args.trial).rsplit("_", 1)[-1]] if args.trial else None,
+                texts=[split_composite_id(args.trial)[-1]] if args.trial else None,
                 download=True,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
@@ -2997,6 +3014,9 @@ def render(argv: list[str]) -> None:
                     fixations,
                     (participant, trial),
                     (compare_participant, compare_trial),
+                    # One screen per scanpath, each picked in its own trial.
+                    screen=args.screen,
+                    screen_b=args.compare_screen,
                     words_b=words_b,
                     fixations_b=fixations_b,
                     dataset_b=args.compare_dataset_name,

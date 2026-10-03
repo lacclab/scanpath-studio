@@ -13,17 +13,24 @@ Open the **Export** subtab in the Scanpath view.
   more tables. Tables are written per trial, or combined into one file each.
   Word tables carry the reading measures your data brought; the export computes
   none.
+  Each bundle has an `index.csv` listing every file with its participant,
+  trial and screen, and any requested file that failed.
 
 <figure class="sps-screenshot" markdown>
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)
 </figure>
 
-HTML, and the current figure's PNG and SVG, always work. An HTML file loads
-the Plotly library from the internet when opened; one written by the Python API
-or the CLI embeds it and opens offline. PDF, GIF, MP4 and the bundle's images
+HTML, and the current figure's PNG and SVG, always work. An HTML file from the
+app loads the Plotly library from the internet when opened, unless you tick
+**HTML files → Self-contained HTML**: then it carries the library (about 4.8 MB
+more) and opens offline. One written by the Python API or the CLI always
+embeds it. PDF, GIF, MP4 and the bundle's images
 need Chrome, Chromium or Edge installed ([FAQ](../faq.md#export-fails)); the
-bundle says so when none is found. After a build it reports how many files and
-figures it made and how many failed, and a partly built bundle still downloads.
+bundle says so when none is found. Before a build it says how many trials,
+screens and figure files it will write; **Stop** ends a long build before the
+next screen, and a stopped build offers no bundle. After a build it reports how
+many files and figures it made and how many failed, and a partly built bundle
+still downloads.
 
 ## Share
 
@@ -47,9 +54,12 @@ The **Share** subtab passes a view on in three ways:
 | favorites, tags and notes | **:material/database: Data → Annotations → Export** |
 | column mapping and recording setup | **:material/edit: Edit dataset → Save setup** |
 | saved figure designs | **:material/palette: My designs → Export** |
+| an authored scanpath (text, layout and fixations) | **:material/draw: Author a scanpath → Download authoring file** |
 
 None of these files contain your data rows; load the same data before restoring
-one. Notes may contain participant information, so check them before sharing.
+one. The authoring file is the exception: it is the whole authored scanpath, and
+**Restore authoring file** on the same screen loads it back, as do
+`load_authored_scanpath` and `scanpath-studio render --authoring`. Notes may contain participant information, so check them before sharing.
 
 On a local or desktop install, the app also keeps a recovery copy of your
 datasets and work, restored after a refresh or restart.

@@ -41,7 +41,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -91,6 +91,7 @@ from scanpath_studio.constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
+    DATASET_SETUP_OVERRIDES_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
@@ -115,6 +116,9 @@ from scanpath_studio.constants import (
     RAW_GAZE_LINK_FOR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    SETUP_OVERRIDE_FOR_KEY,
+    SETUP_OVERRIDE_RESTORE_KEY,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -266,8 +270,10 @@ from scanpath_studio.tabs import (
     STIMULUS_JOIN_NOTICE_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
+    commit_builtin_setup,
     data_scope_text,
     dataset_editor_is_dirty,
+    discard_editor_widgets,
     render_analysis_pool_bar,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
@@ -3336,12 +3342,16 @@ def restore_builtin_mapping(source_key) -> None:
         st.session_state[key] = value
 
 
-def _save_builtin_mapping() -> None:
-    """✅ Save changes for a built-in source: adopt the draft mapping.
+def _save_builtin_mapping(mapping: bool = True) -> None:
+    """✅ Save changes for a built-in source: adopt the draft mapping, name,
+    description and metadata tables.
 
     A draft that leaves a required field empty is refused here, with the
-    reasons shown above the button, rather than applied and then failing."""
-    pending = st.session_state.get(BUILTIN_MAPPING_PENDING_KEY) or {}
+    reasons shown above the button, rather than applied and then failing.
+    ``mapping=False`` is a source with no mapping panels to adopt."""
+    pending = (
+        (st.session_state.get(BUILTIN_MAPPING_PENDING_KEY) or {}) if mapping else {}
+    )
     problems: dict = {}
     for table_key, validate in (
         ("words", validate_word_schema),
@@ -3355,17 +3365,22 @@ def _save_builtin_mapping() -> None:
         return
     # Dropped first, so closing the editor does not restore the held keys.
     st.session_state.pop(BUILTIN_MAPPING_HELD_KEY, None)
+    # …and the Recording setup, before closing sweeps the form's state away.
+    commit_builtin_setup()
     saved = str(st.session_state.get("data_source_choice") or "")
+    commit_editor_staging(saved)
     _close_dataset_editor()
     st.session_state[BUILTIN_MAPPING_SAVED_KEY] = saved
 
 
-def _render_builtin_editor_footer(host) -> None:
+def _render_builtin_editor_footer(host, *, mapping: bool = True) -> None:
     """✅ Save changes at the foot of a built-in source's ✏️ Edit dataset screen.
 
     `tabs.render_dataset_editor_footer`'s row, for a dataset with no stored
     entry: the same divider, the same blockers, the button in the same column.
     There is no ⬇️ Save setup beside it — the corpus' own loader is the setup.
+    ``mapping=False``: a source with no mapping panels, whose Save holds the
+    name, description and metadata tables.
     """
     from scanpath_studio.wizard import _FOOTER_ROW_W
 
@@ -3384,8 +3399,12 @@ def _render_builtin_editor_footer(host) -> None:
         type="primary",
         key="builtin_mapping_save",
         on_click=_save_builtin_mapping,
+        args=(mapping,),
         width="stretch",
-        help="Apply the column mapping above to this dataset.",
+        help="Save the name, description, column mapping, recording setup and "
+        "metadata tables above."
+        if mapping
+        else "Save the name, description and metadata tables above.",
     )
 
 
@@ -4517,6 +4536,66 @@ def _cancel_authoring() -> None:
     st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
+#: ``{source: {fixation_id: (word_id, word)}}`` — target words a stimulus edit
+#: left out of date (`authoring.stale_target_words`). Flagged on the editor,
+#: never rewritten.
+_AUTHOR_STALE_TARGETS_KEY = "_author_stale_targets"
+#: ``{source: (text, layout, events)}`` — the draft before the last change that
+#: removed, moved or retimed fixations (`authoring.destructive_change`). One
+#: step, swapped with the current draft by **Restore previous draft**.
+_AUTHOR_PREVIOUS_DRAFT_KEY = "_author_previous_drafts"
+#: What the downloaded authoring file is called — the name Share → Code's
+#: snippet reads it by (`url_state._snippet_source`).
+AUTHORING_FILE_NAME = "scanpath.json"
+
+
+def _load_author_draft(source: str, draft: tuple) -> None:
+    """Put ``draft`` — ``(text, layout, events)`` — on the authoring screen.
+
+    Written before the widgets render (a callback), and the table remounts from
+    the new events rather than replaying its old edits over them (BUG-19)."""
+    text, layout, events = draft
+    st.session_state["author_text"] = text
+    st.session_state["_author_layout"] = dict(layout)
+    st.session_state["_authored_events_frame"] = events.copy()
+    st.session_state["_author_text_for_events"] = text
+    st.session_state["_author_selected_fixation"] = None
+    st.session_state["_author_events_editor_revision"] = (
+        int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+    )
+    st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).pop(source, None)
+
+
+def _restore_previous_author_draft(source: str) -> None:
+    """Swap the current draft with the one before the last destructive edit.
+
+    Pressing it again swaps back, so a restore is never itself a loss."""
+    previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
+    drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
+    if previous is None:
+        return
+    current = drafts.get(source)
+    _load_author_draft(source, previous)
+    drafts[source] = previous
+    if current is not None:
+        st.session_state[_AUTHOR_PREVIOUS_DRAFT_KEY][source] = current
+
+
+def _reset_author_fixations(source: str, words: pd.DataFrame) -> None:
+    """Replace the fixations with one per word — the explicit regeneration.
+
+    The draft it replaces becomes the previous draft at the end of the run
+    (a destructive change), so **Restore previous draft** brings it back."""
+    from scanpath_studio.authoring import default_events
+
+    st.session_state["_authored_events_frame"] = default_events(words)
+    st.session_state["_author_selected_fixation"] = None
+    st.session_state["_author_events_editor_revision"] = (
+        int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+    )
+    st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).pop(source, None)
+
+
 def _save_authored_dataset(name_key: str) -> None:
     from scanpath_studio.wizard import _safe_dataset_name
 
@@ -5162,15 +5241,22 @@ def _description_field_key(token: str) -> str:
     return f"dataset_description_{_dataset_row_slug(token)}"
 
 
-def _save_description_field(token: str) -> None:
-    set_dataset_description(token, st.session_state.get(_description_field_key(token)))
+def _description_draft(token: str) -> str | None:
+    """The description typed on the open editor, if it differs from the saved
+    one (``None`` when it does not, or the field has not drawn)."""
+    key = _description_field_key(token)
+    if key not in st.session_state:
+        return None
+    text = str(st.session_state.get(key) or "").strip()
+    return None if text == dataset_description(token)[0].strip() else text
 
 
 def render_description_field(host, token: str) -> None:
     """✏️ Edit dataset's **Description** — the sentence under its name.
 
-    Saved as it changes, not by ✅ Save changes: a description re-derives
-    nothing, and a built-in dataset has no Save button to wait for.
+    Held, like everything else on the screen, until ✅ Save changes
+    (`commit_editor_staging`); ✕ Cancel drops it with the rest of the edit.
+    The catalogue's own text is only adopted as the user's when they change it.
     """
     key = _description_field_key(token)
     if key not in st.session_state:
@@ -5178,11 +5264,12 @@ def render_description_field(host, token: str) -> None:
     host.text_area(
         "Description",
         key=key,
-        on_change=_save_description_field,
-        args=(token,),
         placeholder="What this dataset is — the readers, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
+        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
         height=80,
+        # A draft outlives a visit to another view while the editor is open.
+        persist_state="session",
     )
 
 
@@ -5275,22 +5362,30 @@ def render_dataset_inspection_head(token: str) -> None:
     _render_dataset_overview(token, registry=public_dataset_registry())
 
 
-def _rename_builtin_from_field(token: str) -> None:
-    """``on_change`` of **Name** for a dataset that is not an upload.
-
-    A built-in or public source's token is a load-path identifier (deep links,
-    loader dispatch), so its name is a display alias — nothing to re-key, and
-    no ✅ Save changes on its editor to wait for.
-    """
+def _builtin_name_draft(token: str) -> str | None:
+    """The name typed for a dataset that is not an upload, if it is a new one."""
+    if EDITOR_NAME_FIELD_KEY not in st.session_state:
+        return None
     requested = str(st.session_state.get(EDITOR_NAME_FIELD_KEY) or "").strip()
     if not requested or requested == _dataset_display_name(token):
+        return None
+    return requested
+
+
+def _apply_builtin_name(token: str) -> None:
+    """✅ Save changes' rename of a dataset that is not an upload.
+
+    A built-in or public source's token is a load-path identifier (deep links,
+    loader dispatch), so its name is a display alias — nothing to re-key.
+    """
+    requested = _builtin_name_draft(token)
+    if requested is None:
         return
     tokens = list(st.session_state.get("_data_source_entries") or [])
     final = _unique_dataset_alias(requested, token, tokens)
     aliases = dict(st.session_state.get(DATASET_ALIASES_KEY) or {})
     aliases[token] = final
     st.session_state[DATASET_ALIASES_KEY] = aliases
-    st.session_state[EDITOR_NAME_FIELD_KEY] = final
 
 
 def _stage_upload_name() -> None:
@@ -5308,10 +5403,10 @@ def _stage_upload_name() -> None:
 def render_name_field(host, token: str) -> None:
     """✏️ Edit dataset's **Name** (UX-178; renaming used to be a dialog).
 
-    An upload's name is the key its every editor widget is filed under, so it
-    is applied by ✅ Save changes with the rest of the edit (`tabs._apply_remap`)
-    and counts as an unsaved change until then. Any other dataset's name is a
-    display alias, applied as soon as the field changes.
+    Applied by ✅ Save changes with the rest of the edit, and an unsaved change
+    until then. An upload's name is the key its every editor widget is filed
+    under, so `tabs._apply_remap` re-keys it last; any other dataset's name is
+    a display alias (`_apply_builtin_name`).
     """
     uploaded = token in (st.session_state.get("_datasets") or {})
     if EDITOR_NAME_FIELD_KEY not in st.session_state:
@@ -5321,11 +5416,11 @@ def render_name_field(host, token: str) -> None:
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
-        on_change=_stage_upload_name if uploaded else _rename_builtin_from_field,
-        args=() if uploaded else (token,),
-        help=f"Saved with **{ICONS['confirm']} Save changes**."
-        if uploaded
-        else "Shown in the list of datasets and the dataset picker.",
+        on_change=_stage_upload_name if uploaded else None,
+        help="Shown in the list of datasets and the dataset picker. Saved with "
+        f"**{ICONS['confirm']} Save changes**.",
+        # A draft outlives a visit to another view while the editor is open.
+        persist_state="session",
     )
 
 
@@ -5432,6 +5527,151 @@ _SCROLL_TO_EDITOR_SCRIPT = """<script>
 </script>"""
 
 
+#: ✏️ Edit dataset's record of the metadata tables as the edit found them.
+#: The three metadata sections are the add screen's, and attach a table as its
+#: file is read — so rather than stage them, the editor notes what was attached
+#: when it opened, ✕ Cancel puts that back, and ✅ Save changes keeps what is
+#: there. Taken by `hold_editor_staging` on the editor's first run.
+_EDITOR_SNAPSHOT_KEY = "_dataset_editor_snapshot"
+#: ✕ Cancel's metadata restore, parked for the next run to apply before the
+#: metadata sections draw (`apply_editor_restore`) — the Leave confirmation is
+#: a dialog, whose click runs after the page's widgets.
+_EDITOR_RESTORE_KEY = "_dataset_editor_restore"
+
+
+def _metadata_grain_state(grain: str) -> dict:
+    """One metadata grain's attached table and the read behind it."""
+    key, raw, file = metadata_mod.grain_keys(grain)
+    table = st.session_state.get(key)
+    frame = getattr(table, "frame", None)
+    # Its content, not its identity: the sections rebuild the table every run.
+    # Small (one row per reader, trial or text), so hashing it is cheap.
+    digest = None
+    if isinstance(frame, pd.DataFrame):
+        try:
+            cells = pd.util.hash_pandas_object(frame, index=False).to_numpy().tobytes()
+        except (TypeError, ValueError):  # unhashable cells — hash their text
+            cells = frame.to_csv(index=False).encode("utf-8")
+        digest = (tuple(map(str, frame.columns)), hashlib.sha256(cells).hexdigest())
+    return {
+        "table": table,
+        "raw": st.session_state.get(raw),
+        "file": st.session_state.get(file),
+        "name": st.session_state.get(f"_{grain}_metadata_name"),
+        "content": digest,
+    }
+
+
+def _metadata_grains_changed(snapshot: dict) -> list[str]:
+    """The grains whose attached table differs from the editor's snapshot."""
+    changed = []
+    for grain, before in (snapshot.get("grains") or {}).items():
+        now = _metadata_grain_state(grain)
+        if (
+            (now["table"] is None) != (before["table"] is None)
+            or now["raw"] is not before["raw"]
+            or now["file"] != before["file"]
+            or now["content"] != before["content"]
+        ):
+            changed.append(grain)
+    return changed
+
+
+def hold_editor_staging(token: str) -> None:
+    """Note the metadata tables as this edit finds them (once per edit)."""
+    held = st.session_state.get(_EDITOR_SNAPSHOT_KEY)
+    if isinstance(held, dict) and held.get("token") == token:
+        return
+    st.session_state[_EDITOR_SNAPSHOT_KEY] = {
+        "token": token,
+        "owner": st.session_state.get(metadata_mod.OWNER_KEY),
+        "grains": {
+            grain: _metadata_grain_state(grain)
+            for grain in (metadata_mod.GRAIN_PARTICIPANT, "trial", "text")
+        },
+    }
+
+
+def editor_staging_dirty() -> bool:
+    """Whether the open editor's name, description or metadata tables differ
+    from what it opened on — the part of an edit `tabs.dataset_editor_is_dirty`
+    does not see."""
+    snapshot = st.session_state.get(_EDITOR_SNAPSHOT_KEY)
+    if not isinstance(snapshot, dict):
+        return False
+    token = str(snapshot.get("token") or "")
+    return bool(
+        _description_draft(token) is not None
+        or _builtin_name_draft(token) is not None
+        or _metadata_grains_changed(snapshot)
+    )
+
+
+def _editor_is_dirty() -> bool:
+    """Whether ✕ Cancel would lose anything (UX-107): the mapping, setup and
+    uploads (`tabs.dataset_editor_is_dirty`), or the name, description and
+    metadata tables."""
+    return dataset_editor_is_dirty() or editor_staging_dirty()
+
+
+def commit_editor_staging(token: str) -> None:
+    """✅ Save changes' share of the edit: the description, a built-in's name,
+    and the metadata tables as they now stand.
+
+    Called by both Saves — an upload's (`tabs._apply_remap`, before it re-keys
+    the dataset under a new name) and a built-in's — once they know the save
+    goes ahead.
+    """
+    if (text := _description_draft(token)) is not None:
+        set_dataset_description(token, text)
+    if token not in (st.session_state.get("_datasets") or {}):
+        _apply_builtin_name(token)
+    _drop_description_drafts()
+    # Kept, not restored: what is attached now is what was saved.
+    st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
+
+
+def _drop_description_drafts() -> None:
+    for key in [
+        k
+        for k in list(st.session_state)
+        if isinstance(k, str) and k.startswith("dataset_description_")
+    ]:
+        st.session_state.pop(key, None)
+
+
+def apply_editor_restore() -> None:
+    """Put back the metadata tables a cancelled edit changed (`_EDITOR_RESTORE_KEY`).
+
+    Runs before `metadata.activate_dataset` and before the sections draw, so
+    the tables go back to the dataset they were taken from. A table the edit
+    replaced or detached returns as a *restored* one — its file is no longer in
+    the uploader, so it is re-attached the way the recovery cache re-attaches
+    a table (`metadata.mark_restored`) rather than read again.
+    """
+    snapshot = st.session_state.pop(_EDITOR_RESTORE_KEY, None)
+    if not isinstance(snapshot, dict):
+        return
+    if snapshot.get("owner") != st.session_state.get(metadata_mod.OWNER_KEY):
+        return
+    for grain in _metadata_grains_changed(snapshot):
+        before = snapshot["grains"][grain]
+        key, raw, file = metadata_mod.grain_keys(grain)
+        for name in (
+            f"{grain}_metadata_upload",
+            f"{grain}_metadata_id_column",
+            f"{grain}_metadata_keep_fields",
+        ):
+            st.session_state.pop(name, None)
+        if before["table"] is None:
+            for name in (key, raw, file, f"_{grain}_metadata_name"):
+                st.session_state.pop(name, None)
+            continue
+        metadata_mod.mark_restored(st.session_state, grain, before["table"])
+        if before["name"] is not None:
+            st.session_state[f"_{grain}_metadata_name"] = before["name"]
+
+
 def _close_dataset_editor() -> None:
     """``on_click`` for the editor's way out — back to 📂 Available datasets."""
     st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
@@ -5443,6 +5683,8 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    # …and the mapping widgets' own answers, which outlive the screen.
+    discard_editor_widgets()
     st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46: "use the current estimate" is a choice for one editing session.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
@@ -5450,6 +5692,18 @@ def _close_dataset_editor() -> None:
     # A built-in source's unsaved mapping goes too (✅ Save changes has already
     # dropped what it would restore).
     _discard_builtin_mapping_edit()
+    # The name and description typed into it, and the metadata tables it
+    # changed (✅ Save changes has already dropped the snapshot it would
+    # restore them from).
+    _discard_editor_staging()
+
+
+def _discard_editor_staging() -> None:
+    """Drop the editor's description drafts; park its metadata restore."""
+    _drop_description_drafts()
+    snapshot = st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
+    if isinstance(snapshot, dict) and _metadata_grains_changed(snapshot):
+        st.session_state[_EDITOR_RESTORE_KEY] = snapshot
 
 
 def _ask_leave_dataset_editor() -> None:
@@ -5461,7 +5715,7 @@ def _ask_leave_dataset_editor() -> None:
     towards *dirty*, so the confirmation is skipped only when the mapping, the
     recording setup and the uploads are all exactly as the editor opened.
     """
-    if not dataset_editor_is_dirty():
+    if not _editor_is_dirty():
         _close_dataset_editor()
         return
     st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
@@ -5492,8 +5746,8 @@ def _leave_dataset_editor_dialog() -> None:
     """
     st.caption(
         "Changes you have already saved are kept. Anything edited since — the "
-        "mapping, the recording setup, and any table uploaded to fill a "
-        "missing half — is discarded."
+        "name and description, the mapping, the recording setup, the metadata "
+        "tables, and any table uploaded to fill a missing one — is discarded."
     )
     leave, stay = st.columns(2, gap="small")
     if leave.button(
@@ -5716,7 +5970,7 @@ def _open_dataset_row(token: str) -> None:
         return
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
     if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
-        if dataset_editor_is_dirty():
+        if _editor_is_dirty():
             st.session_state[_EDITOR_LEAVE_PENDING_KEY] = True
             st.session_state[_EDITOR_LEAVE_TARGET_KEY] = token
             return
@@ -5736,10 +5990,13 @@ def _edit_open_dataset(token: str) -> None:
     if token == MANUAL_SAMPLE_CHOICE:
         _edit_manual_sample()
         return
-    # UX-178 — the Name field is seeded on open; whatever an editor left behind
-    # without Cancel or Save (a switch of dataset, say) is not this one's name.
-    st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
-    st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
+    if not st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+        # UX-178 — the Name and Description fields are seeded on open; whatever
+        # an editor left behind without Cancel or Save (a switch of dataset,
+        # say) is not this edit's. An edit already open keeps its drafts.
+        st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
+        st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
+        _drop_description_drafts()
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
@@ -6125,6 +6382,8 @@ def resolve_source_monitor(
     data_choice: str | None,
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,
+    *,
+    own_setup: bool = True,
 ) -> tuple[int, int, bool]:
     """The presentation monitor for a data source: ``(width, height, authoritative)``.
 
@@ -6143,7 +6402,18 @@ def resolve_source_monitor(
     ``None`` for both to say "don't estimate": the answer degrades to
     `DEFAULT_FIGURE_SIZE`, still non-authoritative, and the row scan is skipped.
     Only a caller that will discard a non-authoritative size may do that.
+
+    A built-in or public dataset whose recording setup the user saved on
+    ✏️ Edit dataset answers with that screen, authoritatively — it is this
+    dataset's setup now (`dataset_setup_override`). ``own_setup=False`` asks
+    for what the source itself declares instead: the share link's elision
+    (`url_state._link_defaults`) needs what a *recipient* resolves, and the
+    recipient has no override.
     """
+    if own_setup and (
+        override := dataset_setup_override(setup_override_token(data_choice))
+    ):
+        return override.canvas_width, override.canvas_height, True
     # OneStop server bundle + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440) — cited once in
     # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
@@ -6226,15 +6496,207 @@ def capture_setup_snapshot(
     )
 
 
+def setup_override_token(data_choice: str | None) -> str | None:
+    """The dataset a recording-setup override is filed under: the public
+    corpus' label behind ``PUBLIC_DATASETS_CHOICE``, else the choice itself."""
+    if data_choice == PUBLIC_DATASETS_CHOICE:
+        return st.session_state.get("public_dataset_choice") or None
+    return data_choice
+
+
+def dataset_setup_override(token: str | None) -> SetupSnapshot | None:
+    """The recording setup the user saved for a built-in or public dataset, or
+    ``None`` when they saved none (the corpus' own declaration stands).
+
+    An upload's setup lives on its own ``_datasets`` entry, so a name that is an
+    upload never answers here, even if an override was once filed under it.
+    """
+    if not token or token in (st.session_state.get("_datasets") or {}):
+        return None
+    payload = (st.session_state.get(DATASET_SETUP_OVERRIDES_KEY) or {}).get(token)
+    if not isinstance(payload, dict):
+        return None
+    return SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
+
+
+def setup_override_session_values(snapshot: SetupSnapshot) -> dict:
+    """The ``global_*`` values a saved setup puts on the figure — the keys the
+    add flow publishes, plus the DPI those imply."""
+    return {
+        "global_canvas_width": int(snapshot.canvas_width),
+        "global_canvas_height": int(snapshot.canvas_height),
+        "global_monitor_width_mm": float(snapshot.monitor_width_mm),
+        "global_viewing_distance_mm": float(snapshot.viewing_distance_mm),
+        "global_display_dpi": round(
+            float(snapshot.canvas_width) / (float(snapshot.monitor_width_mm) / 25.4),
+            2,
+        ),
+        "global_base_font_size": int(snapshot.base_font_size),
+        "global_font_family": str(snapshot.font_family),
+        "global_line_spacing": float(snapshot.line_spacing),
+        "global_scale_text_to_boxes": bool(snapshot.scale_text_to_boxes),
+    }
+
+
+def _restore_setup_override_stash() -> None:
+    """Put back what the ``global_*`` keys held before an override was applied."""
+    st.session_state.pop(SETUP_OVERRIDE_FOR_KEY, None)
+    stashed = st.session_state.pop(SETUP_OVERRIDE_RESTORE_KEY, None)
+    for key, value in (stashed or {}).items():
+        if value is None:
+            st.session_state.pop(key, None)
+        else:
+            st.session_state[key] = value
+
+
+def _apply_setup_override(
+    token: str, snapshot: SetupSnapshot, skip: frozenset = frozenset()
+) -> None:
+    """Write ``snapshot`` onto the figure as ``token``'s setup, remembering what
+    it replaced. ``skip`` — keys a share link just seeded, which win."""
+    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != token:
+        # The first override of a run of them keeps the pre-override state.
+        st.session_state.setdefault(
+            SETUP_OVERRIDE_RESTORE_KEY,
+            {
+                key: None if key in skip else st.session_state.get(key)
+                for key in SETUP_OVERRIDE_SESSION_KEYS
+            },
+        )
+    for key, value in setup_override_session_values(snapshot).items():
+        if key not in skip:
+            st.session_state[key] = value
+    st.session_state[SETUP_OVERRIDE_FOR_KEY] = token
+
+
+def save_dataset_setup_override(token: str, payload: dict | None) -> None:
+    """✅ Save changes for a built-in or public dataset's Recording setup.
+
+    ``payload`` (a ``SetupSnapshot.to_dict()``) becomes the dataset's own setup
+    and applies to the figure at once, as an upload's saved setup does;
+    ``None`` drops it — *Reset to source setup* — and puts back what the figure
+    showed before it, so the corpus' declared screen snaps in again. Only this
+    dataset's entry changes: another dataset's override is never touched.
+    """
+    overrides = dict(st.session_state.get(DATASET_SETUP_OVERRIDES_KEY) or {})
+    if payload is None:
+        overrides.pop(token, None)
+        st.session_state[DATASET_SETUP_OVERRIDES_KEY] = overrides
+        if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == token:
+            _restore_setup_override_stash()
+        # Re-snap the canvas to what the source itself declares.
+        st.session_state.pop("_canvas_seeded_for", None)
+        return
+    snapshot = SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
+    overrides[token] = snapshot.to_dict()
+    st.session_state[DATASET_SETUP_OVERRIDES_KEY] = overrides
+    _apply_setup_override(token, snapshot)
+
+
+def _declared_setup_snapshot(choice: str | None) -> SetupSnapshot | None:
+    """What a built-in source itself declares (``active_setup_snapshot``'s
+    answer before overrides existed), or ``None`` when it declares nothing."""
+    declared = (
+        choice in (ONESTOP_CHOICE, DEMO_CHOICE, MULTIPLEYE_BUNDLE_CHOICE)
+        or _public_dataset_monitor(choice) is not None
+        # A public corpus reached by its own label (the DATA-3 OneStop source)
+        # rather than through the `Public datasets` picker still declares a
+        # monitor in the registry.
+        or bool((public_dataset_registry().get(choice) or {}).get("monitor"))
+    )
+    if not declared:
+        return None
+    snapshot = capture_setup_snapshot(
+        {
+            # The corpus declares its presentation monitor, so the screen is
+            # measured. The physical size / viewing distance are *not* — no
+            # registry entry records them, so they stay honestly "assumed".
+            "screen": Provenance.MEASURED,
+            "geometry": Provenance.ASSUMED,
+            "text": Provenance.MEASURED,
+        }
+    )
+    token = setup_override_token(choice)
+    if token and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == token:
+        # The live keys hold this dataset's override: the source's own values
+        # are the ones it replaced, and its screen the one it declares.
+        stashed = st.session_state.get(SETUP_OVERRIDE_RESTORE_KEY) or {}
+        width, height, _ = resolve_source_monitor(choice, None, None, own_setup=False)
+        fields = {"canvas_width": int(width), "canvas_height": int(height)}
+        for key, name, cast in (
+            ("global_monitor_width_mm", "monitor_width_mm", float),
+            ("global_viewing_distance_mm", "viewing_distance_mm", float),
+            ("global_base_font_size", "base_font_size", int),
+            ("global_font_family", "font_family", str),
+            ("global_line_spacing", "line_spacing", float),
+            ("global_scale_text_to_boxes", "scale_text_to_boxes", bool),
+        ):
+            value = stashed.get(key)
+            fields[name] = (
+                cast(value) if value is not None else getattr(SetupSnapshot(), name)
+            )
+        snapshot = replace(snapshot, **fields)
+    return snapshot
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_canvas_size(_words, _fixations, fingerprints: tuple) -> tuple[int, int]:
+    """`compute_canvas_size`, cached on the frames' fingerprints."""
+    return compute_canvas_size(_words, _fixations)
+
+
+def cached_canvas_size(
+    words: pd.DataFrame | None, fixations: pd.DataFrame | None
+) -> tuple[int, int]:
+    """The data-extent screen estimate, without rescanning every row per rerun
+    — ✏️ Edit dataset asks it on every render while its form is open."""
+    return _c_canvas_size(
+        words, fixations, (frame_fingerprint(words), frame_fingerprint(fixations))
+    )
+
+
+def source_setup_snapshot(
+    data_choice: str | None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+) -> SetupSnapshot:
+    """A built-in or public dataset's setup **as its source states it** — what
+    ✏️ Edit dataset's *Reset to source setup* returns to.
+
+    A corpus that declares its monitor reports it as measured; one that does
+    not (a prepared benchmark corpus whose manifest invents its screen) gets
+    the extent of its data, estimated, as `compare_source.snapshot_for` does.
+    """
+    declared = _declared_setup_snapshot(data_choice)
+    if declared is not None:
+        return declared
+    width, height, authoritative = resolve_source_monitor(
+        data_choice, None, None, own_setup=False
+    )
+    if not authoritative and (words is not None or fixations is not None):
+        width, height = cached_canvas_size(words, fixations)
+    return SetupSnapshot(
+        canvas_width=int(width),
+        canvas_height=int(height),
+        screen_provenance=(
+            Provenance.MEASURED if authoritative else Provenance.ESTIMATED
+        ),
+        geometry_provenance=Provenance.ASSUMED,
+        text_provenance=Provenance.ASSUMED,
+    )
+
+
 def active_setup_snapshot(
     data_choice: str | None = None,
 ) -> SetupSnapshot | None:
     """A source's recorded setup, or ``None`` when it has none.
 
-    A stored upload carries the snapshot the wizard captured; a built-in corpus
-    that declares a monitor reports it as ``MEASURED``; anything else has nothing
-    to say, and saying nothing is the honest answer (a caller must not print
-    "assumed 2560x1440" for a corpus that never claimed one).
+    A stored upload carries the snapshot the wizard captured; a built-in or
+    public dataset whose setup the user saved on ✏️ Edit dataset reports that
+    (`dataset_setup_override`); a built-in corpus that declares a monitor
+    reports it as ``MEASURED``; anything else has nothing to say, and saying
+    nothing is the honest answer (a caller must not print "assumed 2560x1440"
+    for a corpus that never claimed one).
 
     ``data_choice`` defaults to the active source, but callers that already know
     which source they are describing — `_build_share_query` is handed one —
@@ -6248,25 +6710,10 @@ def active_setup_snapshot(
     stored = (st.session_state.get("_datasets") or {}).get(choice)
     if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
         return SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
-    declared = (
-        choice in (ONESTOP_CHOICE, DEMO_CHOICE, MULTIPLEYE_BUNDLE_CHOICE)
-        or _public_dataset_monitor(choice) is not None
-        # A public corpus reached by its own label (the DATA-3 OneStop source)
-        # rather than through the `Public datasets` picker still declares a
-        # monitor in the registry.
-        or bool((public_dataset_registry().get(choice) or {}).get("monitor"))
-    )
-    if declared:
-        return capture_setup_snapshot(
-            {
-                # The corpus declares its presentation monitor, so the screen is
-                # measured. The physical size / viewing distance are *not* — no
-                # registry entry records them, so they stay honestly "assumed".
-                "screen": Provenance.MEASURED,
-                "geometry": Provenance.ASSUMED,
-                "text": Provenance.MEASURED,
-            }
-        )
+    if (override := dataset_setup_override(setup_override_token(choice))) is not None:
+        return override
+    if (declared := _declared_setup_snapshot(choice)) is not None:
+        return declared
     payload = st.session_state.get("_wizard_setup_snapshot")
     if isinstance(payload, dict):
         return SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
@@ -6319,11 +6766,15 @@ def seed_canvas_state(
     canvas_seeded = {"global_canvas_width", "global_canvas_height"} <= set(
         st.session_state
     )
+    # The source's own screen: a recording setup the user saved for it is
+    # applied after these snaps (below), so what it replaces — and puts back on
+    # leaving — is the source's canvas, not its own.
     default_canvas_w, default_canvas_h, monitor_is_authoritative = (
         resolve_source_monitor(
             data_choice,
             None if canvas_seeded else words_filtered,
             None if canvas_seeded else fixations_filtered,
+            own_setup=False,
         )
     )
     canvas_width = min(max(default_canvas_w, 100), 10000)
@@ -6357,6 +6808,13 @@ def seed_canvas_state(
     # next source opened without its own monitor.
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     from_link = link_setup_keys_for(source_key)
+    # A recording setup the user saved for a built-in or public dataset is that
+    # dataset's alone: leaving it puts back what the figure held before — first,
+    # so the snaps below then answer for the next source as they always have.
+    override_token = setup_override_token(data_choice)
+    applied_for = st.session_state.get(SETUP_OVERRIDE_FOR_KEY)
+    if applied_for is not None and applied_for != override_token:
+        _restore_setup_override_stash()
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
     ):
@@ -6438,6 +6896,16 @@ def seed_canvas_state(
         # deep link or a restored config may have set these keys deliberately,
         # and nothing has overwritten them, so there is nothing to undo.
         st.session_state["_font_seeded_for"] = source_key
+
+    # …and entering a dataset with a saved setup applies it, after the canvas
+    # and font snaps so it is what the figure shows. Once per visit: a value
+    # tuned on the rail afterwards stays until the dataset is left.
+    if (
+        override_token
+        and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != override_token
+        and (override := dataset_setup_override(override_token)) is not None
+    ):
+        _apply_setup_override(override_token, override, frozenset(from_link))
 
     # The remaining widget defaults. Each of these used to be `setdefault`ed
     # inline, immediately above its own widget; seeding them here is what lets a
@@ -7180,11 +7648,14 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         authored_fixations,
         authoring_json,
         default_events,
+        destructive_change,
         event_problems,
         layout_problems,
         layout_text,
         parse_authoring_document,
         reconcile_event_table,
+        stale_target_words,
+        unresolved_targets,
         unusable_event_rows,
     )
     from scanpath_studio.authoring_component import render_authoring_canvas
@@ -7249,13 +7720,10 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             except (ValueError, UnicodeDecodeError) as exc:
                 st.error(str(exc))
             else:
-                st.session_state["author_text"] = document.text
-                st.session_state["_author_layout"] = document.layout
-                st.session_state["_authored_events_frame"] = document.events
-                st.session_state["_author_text_for_events"] = document.text
-                st.session_state["_author_selected_fixation"] = None
-                st.session_state["_author_events_editor_revision"] = (
-                    int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+                # The draft it replaces becomes the previous draft at the end
+                # of this run, so Restore previous draft brings it back.
+                _load_author_draft(
+                    source, (document.text, document.layout, document.events)
                 )
                 st.session_state["_author_restore_identity"] = identity
 
@@ -7292,13 +7760,28 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     ):
         st.warning(problem)
 
-    if st.session_state.get("_author_text_for_events") != text:
-        st.session_state["_authored_events_frame"] = default_events(words)
-        st.session_state["_author_events_editor_revision"] = (
-            int(st.session_state.get("_author_events_editor_revision", 0)) + 1
-        )
+    events_text = st.session_state.get("_author_text_for_events")
+    if events_text is None:
+        # A fresh editor: one fixation per word to start from.
+        st.session_state.setdefault("_authored_events_frame", default_events(words))
+        st.session_state.setdefault("_author_events_editor_revision", 0)
         st.session_state["_author_text_for_events"] = text
-        st.session_state["_author_selected_fixation"] = None
+    elif events_text != text:
+        # Editing the text keeps every authored fixation — id, X/Y, order and
+        # duration. Only a target word can go out of date, and that is flagged
+        # below rather than regenerated. The current table is the base for the
+        # flag: `_authored_events_frame` lags behind the table's own edits.
+        previous_draft = drafts.get(source)
+        current = previous_draft[2] if previous_draft else None
+        stale = st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).setdefault(
+            source, {}
+        )
+        found = stale_target_words(layout_text(events_text, **layout), words, current)
+        # An entry already flagged keeps the word it named first, so undoing
+        # the edit (or fixing it in two steps) resolves it.
+        for fixation_id, entry in found.items():
+            stale.setdefault(fixation_id, entry)
+        st.session_state["_author_text_for_events"] = text
     seed = st.session_state.get("_authored_events_frame", default_events(words))
     last_word = int(words["word_id"].max()) if not words.empty else 1
     canvas_panel = st.container()
@@ -7377,6 +7860,35 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         st.caption(
             "Rows without finite X/Y or a valid target are not drawn until corrected."
         )
+    stale_entries = st.session_state.get(_AUTHOR_STALE_TARGETS_KEY, {}).get(source, {})
+    stale = unresolved_targets(stale_entries, words, effective_events)
+    if stale_entries and len(stale) < len(stale_entries):
+        # Resolved ones (target changed, fixation deleted, text put back) go.
+        st.session_state[_AUTHOR_STALE_TARGETS_KEY][source] = {
+            fixation_id: stale_entries[fixation_id] for fixation_id in stale
+        }
+    if stale:
+        listed = ", ".join(
+            f"fixation {fixation_id} → word {word_id}"
+            for fixation_id, word_id in sorted(stale.items())[:8]
+        )
+        more = f" (+{len(stale) - 8} more)" if len(stale) > 8 else ""
+        st.warning(
+            f"The text edit changed or removed the target word of "
+            f"{len(stale)} {'fixation' if len(stale) == 1 else 'fixations'}: "
+            f"{listed}{more}. Their position, timing and order are unchanged. "
+            "Set each **Target word** in the Fixation table, or clear them.",
+            icon=ICONS["warning"],
+        )
+        if st.button("Clear those target words", key=f"author_clear_stale_{source}"):
+            cleared = effective_events.copy()
+            mask = cleared["fixation_id"].map(int).isin(stale)
+            cleared["word_id"] = cleared["word_id"].astype(object)
+            cleared.loc[mask, "word_id"] = None
+            st.session_state["_authored_events_frame"] = cleared
+            st.session_state["_author_events_editor_revision"] = editor_revision + 1
+            st.session_state[_AUTHOR_STALE_TARGETS_KEY].pop(source, None)
+            st.rerun()
 
     canvas_height = max(
         480,
@@ -7431,7 +7943,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         }
     else:
         st.session_state.pop("_author_save_payload", None)
-    st.button(
+    actions = st.container(horizontal=True, vertical_alignment="center")
+    actions.button(
         "Save dataset",
         icon=ICONS["save"],
         key="save_authored_dataset",
@@ -7440,7 +7953,50 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         on_click=_save_authored_dataset,
         args=(name_key,),
     )
-    drafts[source] = (text, dict(layout), effective_events.copy())
+    actions.download_button(
+        "Download authoring file",
+        data=authoring_json(text, effective_events, layout=layout),
+        file_name=AUTHORING_FILE_NAME,
+        mime="application/json",
+        icon=ICONS["download"],
+        key=f"author_download_{source}",
+        on_click="ignore",
+        disabled=not events_valid,
+        help=(
+            "The editable draft — text, layout and every fixation with its id, "
+            "position, order and duration. Load it again with **Restore "
+            "authoring file**, or from a script with `load_authored_scanpath`."
+        ),
+    )
+    previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
+    actions.button(
+        "Restore previous draft",
+        icon=ICONS["undo"],
+        key=f"author_restore_previous_{source}",
+        disabled=previous is None,
+        on_click=_restore_previous_author_draft,
+        args=(source,),
+        help=(
+            "Go back to the draft before the last change that removed, moved or "
+            "retimed fixations — one step. Press again to return."
+        ),
+    )
+    actions.button(
+        "Reset fixations to the text",
+        key=f"author_reset_fixations_{source}",
+        disabled=words.empty,
+        on_click=_reset_author_fixations,
+        args=(source, words),
+        help=(
+            "Replace every fixation with one per word, 220 ms each. "
+            "**Restore previous draft** brings the current ones back."
+        ),
+    )
+    draft = (text, dict(layout), effective_events.copy())
+    last = drafts.get(source)
+    if events_valid and last is not None and destructive_change(last[2], draft[2]):
+        st.session_state.setdefault(_AUTHOR_PREVIOUS_DRAFT_KEY, {})[source] = last
+    drafts[source] = draft
     return words, fixations
 
 
@@ -8360,6 +8916,9 @@ def _run_app() -> None:
         if data_choice == UPLOAD_CHOICE
         else str(st.session_state.get("data_source_choice") or data_choice)
     )
+    # A cancelled edit's metadata tables go back first, to the dataset they
+    # were taken from, before the swap below files them away.
+    apply_editor_restore()
     _metadata.activate_dataset(st.session_state, _dataset_owner)
     # Adoption of an old cache's unassigned entries waits for the load, which
     # says what is really shown (`_file_annotations_under_shown_dataset`).
@@ -8443,6 +9002,7 @@ def _run_app() -> None:
         # dataset, at the top of part 1 (the add screen asks for it beside the
         # name). The public loader's own caption lands under it, in this slot.
         editing_token = str(st.session_state.get("data_source_choice") or data_choice)
+        hold_editor_staging(editing_token)
         render_name_field(editor_name_body, editing_token)
         render_description_field(editor_name_body, editing_token)
     # PRE-22: the section is held back from this release — heading, caption and
@@ -8503,8 +9063,8 @@ def _run_app() -> None:
         builtin_saved = st.session_state.pop(BUILTIN_MAPPING_SAVED_KEY, None)
         if builtin_saved is not None:
             dataset_table_slot.success(
-                f"**{_dataset_display_name(str(builtin_saved))}** updated — its "
-                "column mapping is saved.",
+                f"**{_dataset_display_name(str(builtin_saved))}** updated — "
+                "your changes are saved.",
                 icon=ICONS["success"],
             )
         if saved:
@@ -9268,6 +9828,8 @@ def _run_app() -> None:
                 editor_rendered=mapping_editor_rendered,
                 uploads_host=editor_uploads_slot,
                 setup_host=recording_body,
+                words=words_all,
+                fixations=fixations_all,
             )
         with _editor_part(setup_identity_slot, "edit_identity"):
             render_trial_identity_section()
@@ -9336,6 +9898,13 @@ def _run_app() -> None:
         render_dataset_editor_footer(editor_footer_slot)
         if mapping_editor_rendered:
             _render_builtin_editor_footer(editor_footer_slot)
+        elif str(st.session_state.get("data_source_choice") or "") not in (
+            st.session_state.get("_datasets") or {}
+        ) and data_choice not in (UPLOAD_CHOICE, AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+            # A source with no mapping panels (the synthetic trial, a server
+            # bundle) still has a name, a description and metadata tables to
+            # save — and they wait for Save like everything else.
+            _render_builtin_editor_footer(editor_footer_slot, mapping=False)
         with setup_body_slot:
             st.divider()
             active_token = str(

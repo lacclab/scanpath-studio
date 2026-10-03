@@ -189,15 +189,18 @@ REGISTER: tuple[Computation, ...] = (
         summary="Build one unique trial id from several columns.",
         formula=(
             "The mapped Trial ID columns are joined in the order given, "
-            "separated by `_`, after casting each to string."
+            "separated by `_`, after casting each to string. A `_` or `\\` "
+            "inside a part is escaped with a `\\` first, so two different "
+            "tuples never give the same id; parts with neither compose as a "
+            "plain join."
         ),
-        code="scanpath_studio/data.py:normalize_fixations",
+        code="scanpath_studio/data.py:trial_id_series",
         output="trial_id",
         missing="A row missing any component keeps the literal string of that part.",
         tiers="C, D",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _CLI),
-        tests=("tests/test_trial_identity.py",),
+        tests=("tests/test_trial_identity.py", "tests/test_composite_ids.py"),
     ),
     Computation(
         id="norm.flags",

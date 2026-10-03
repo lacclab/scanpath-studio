@@ -144,3 +144,24 @@ class TestKnownInconsistenciesAreRecorded:
         assert "word_char_advance" in bounds.precedence
         assert "word_glyph_span" in bounds.precedence
         assert "BUG-83" in bounds.precedence
+
+
+class TestMeasureEntry:
+    """The Corpus Analysis measure note quotes the register, not a second list."""
+
+    def test_every_measure_but_recorded_duration_has_its_entry(self):
+        from scanpath_studio.aggregation import MEASURES
+
+        for key, measure in MEASURES.items():
+            entry = reg.measure_entry(measure.column)
+            if key == "fix_dur":
+                assert entry is None  # a recorded value, not a derived one
+            else:
+                assert entry is not None, key
+                assert entry.id.startswith(("measure.", "fix."))
+
+    def test_first_and_total_duration_read_apart(self):
+        ffd = reg.measure_entry("first_fixation_ms")
+        tfd = reg.measure_entry("total_fixation_duration_ms")
+        assert (ffd.id, tfd.id) == ("measure.ffd", "measure.tfd")
+        assert ffd.summary != tfd.summary

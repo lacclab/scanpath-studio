@@ -3689,6 +3689,9 @@ class TestCorpusAnalysisTab:
             ("pgrp_view", "Reader summary table"),
             ("cmp_view", "Difference word profile"),
             ("cmp_view", "Paired summary bars"),
+            ("cmp_view", "Group means & difference"),
+            # The view's name before its significance tests were removed: a
+            # session still holding it opens the replacement.
             ("cmp_view", "Effect size + test"),
             ("cmp_view", "Two-group word heatmap"),
         ],
@@ -3756,6 +3759,43 @@ class TestCorpusAnalysisTab:
         at = opened("Fixation duration over time", prdr_measure="Fixation duration")
         x_axis = [s for s in at.selectbox if s.key == "prdr9_x"]
         assert x_axis and x_axis[0].options == ["order in trial"]
+
+    def test_group_means_view_is_descriptive_and_names_shared_readers(self):
+        """The Groups summary runs no significance test, and when the same
+        readers are in both groups (the demo's default Difficulty split) it
+        says so and withholds the standardized difference."""
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Groups"
+        at.session_state["groups_compare"] = True
+        at.session_state["cmp_view"] = "Group means & difference"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert "cmp21_test" not in {s.key for s in at.selectbox}
+        captions = " ".join(c.value for c in at.caption)
+        assert "in both" in captions
+        assert "standardized difference is not shown" in captions
+        text = " ".join(m.value for m in at.markdown) + captions
+        assert "p =" not in text and "Mann" not in text and "Welch" not in text
+        d = next(m for m in at.metric if m.label == "Standardized difference")
+        assert d.value == "—"
+
+    def test_the_measure_and_error_bars_are_explained_in_place(self):
+        """The Measure picker carries the register's definition, unit, link and
+        what one plotted value is; the error-bar choice says what it shows."""
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["ptext_view"] = "Cohort profile"
+        at.session_state["ptext3_spread"] = "SEM"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        captions = [c.value for c in at.caption]
+        note = next(c for c in captions if "computations/#measure-tfd" in c)
+        assert "All time spent on a word" in note and "Unit: ms." in note
+        assert "Each word's value is the mean across its readers." in note
+        assert any(
+            c.startswith("SEM: how precisely the mean is known") for c in captions
+        )
 
     def test_group_filter_set_mode_renders(self):
         # The 'Independent filter sets' group-definition mode (the second of the

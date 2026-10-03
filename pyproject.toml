@@ -38,9 +38,8 @@ dependencies = [
     "pandas>=3.0",
     "plotly>=7.1",
     "numpy>=2.4",
-    # Effect-size + significance tests for the group-comparison analysis views
-    # (AN-21: Welch t-test, Mann–Whitney U). BSD-3, MIT-compatible — see the
-    # PRE-0 ADR, which also earmarks scipy for the PRE-3 drift-correction port.
+    # The PRE-3 drift-correction port (`alignment.py`). BSD-3, MIT-compatible —
+    # see the PRE-0 ADR.
     "scipy>=1.17",
     "pyarrow>=25.0",
     "kaleido>=1.4",

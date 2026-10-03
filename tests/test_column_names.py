@@ -505,3 +505,15 @@ def test_the_rail_shows_the_demos_own_column_names(demo_raw):
     assert metric.options == [duration, "Fixation count"]
     # The values are still canonical: links and saved configs are unchanged.
     assert at.session_state["global_heatmap_metric"] == "duration_ms"
+
+
+def test_a_table_header_shows_the_users_name():
+    from scanpath_studio import tabs
+
+    names = ColumnNames({"duration_ms": SourceName(("CURRENT_FIX_DURATION",))})
+    config = tabs.column_label_config(
+        ["duration_ms", "is_regression", "my_extra"], names
+    )
+    assert config["duration_ms"]["label"] == "CURRENT_FIX_DURATION"
+    assert config["is_regression"]["label"].endswith(cn.COMPUTED_SUFFIX)
+    assert "my_extra" not in config  # already shown by its own name

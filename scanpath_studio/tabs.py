@@ -13882,7 +13882,11 @@ def render_builtin_setup_editor(
     setup (`commit_builtin_setup`); ✕ Cancel discards it. The corpus' declared
     values are never rewritten, so *Reset to source setup* can always go back.
     """
-    from scanpath_studio.app import dataset_setup_override, source_setup_snapshot
+    from scanpath_studio.app import (
+        cached_canvas_size,
+        dataset_setup_override,
+        source_setup_snapshot,
+    )
     from scanpath_studio.wizard import _wizard_setup_step
 
     if st.session_state.get(_BUILTIN_SETUP_OPEN_KEY) != token:
@@ -13930,6 +13934,7 @@ def render_builtin_setup_editor(
         key_prefix=_builtin_setup_prefix(token),
         initial=override or source,
         publish=False,
+        estimate=partial(cached_canvas_size, words, fixations),
     )
     payload = setup.to_dict()
     st.session_state[_BUILTIN_SETUP_PENDING_KEY] = {"token": token, "setup": payload}

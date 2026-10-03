@@ -6387,6 +6387,22 @@ def _declared_setup_snapshot(choice: str | None) -> SetupSnapshot | None:
     return snapshot
 
 
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_canvas_size(_words, _fixations, fingerprints: tuple) -> tuple[int, int]:
+    """`compute_canvas_size`, cached on the frames' fingerprints."""
+    return compute_canvas_size(_words, _fixations)
+
+
+def cached_canvas_size(
+    words: pd.DataFrame | None, fixations: pd.DataFrame | None
+) -> tuple[int, int]:
+    """The data-extent screen estimate, without rescanning every row per rerun
+    — ✏️ Edit dataset asks it on every render while its form is open."""
+    return _c_canvas_size(
+        words, fixations, (frame_fingerprint(words), frame_fingerprint(fixations))
+    )
+
+
 def source_setup_snapshot(
     data_choice: str | None,
     words: pd.DataFrame | None = None,
@@ -6403,8 +6419,10 @@ def source_setup_snapshot(
     if declared is not None:
         return declared
     width, height, authoritative = resolve_source_monitor(
-        data_choice, words, fixations, own_setup=False
+        data_choice, None, None, own_setup=False
     )
+    if not authoritative and (words is not None or fixations is not None):
+        width, height = cached_canvas_size(words, fixations)
     return SetupSnapshot(
         canvas_width=int(width),
         canvas_height=int(height),
@@ -6496,11 +6514,15 @@ def seed_canvas_state(
     canvas_seeded = {"global_canvas_width", "global_canvas_height"} <= set(
         st.session_state
     )
+    # The source's own screen: a recording setup the user saved for it is
+    # applied after these snaps (below), so what it replaces — and puts back on
+    # leaving — is the source's canvas, not its own.
     default_canvas_w, default_canvas_h, monitor_is_authoritative = (
         resolve_source_monitor(
             data_choice,
             None if canvas_seeded else words_filtered,
             None if canvas_seeded else fixations_filtered,
+            own_setup=False,
         )
     )
     canvas_width = min(max(default_canvas_w, 100), 10000)

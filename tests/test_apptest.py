@@ -1645,17 +1645,23 @@ class TestBuiltInRecordingSetupOverride:
         self._run(at)
         at.number_input(key=f"{self.PREFIX}_monitor_mm").set_value(400.0)
         self._run(at)
+        at.number_input(key=f"{self.PREFIX}_screen_w").set_value(1920)
+        self._run(at)
         at.button(key="builtin_mapping_save").click()
         self._run(at)
         saved = self._overrides(at)[DEMO_CHOICE]
         assert saved["monitor_width_mm"] == 400.0
         assert saved["provenance"]["geometry"] == "measured"
         assert at.session_state["global_monitor_width_mm"] == 400.0
+        assert at.session_state["global_canvas_width"] == 1920
 
         # Another dataset does not inherit it; coming back brings it back.
         at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
         self._run(at)
         assert at.session_state["global_monitor_width_mm"] == 597.0
+        # The synthetic trial declares no screen, so nothing snaps it: what it
+        # shows is what the figure held before the demo's own setup.
+        assert at.session_state["global_canvas_width"] == 2560
         assert list(self._overrides(at)) == [DEMO_CHOICE]
         at.session_state["data_source_choice"] = DEMO_CHOICE
         self._run(at)

@@ -12,6 +12,8 @@ inputs rather than from the figure's JSON.
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 import pytest
 
@@ -156,6 +158,15 @@ class TestTheExportReadsTheView:
         assert "cdn.plot.ly" in page_html
         assert "plotly_buttonclicked" in page_html  # the replay player
         assert '"scanpath_playback_speed":2.0' in page_html
+
+    def test_a_self_contained_replay_page_keeps_its_player(self, page):
+        """Embedded, the library is written ahead of the player's script, so
+        the page replays offline exactly as the CDN one does."""
+        page_html = tabs._replay_page_html(_render(), self_contained=True)
+        assert not re.search(r'<script[^>]*\ssrc="https?://', page_html)
+        library = page_html.index("plotly.js v")
+        player = page_html.index("plotly_buttonclicked")
+        assert library < player
 
     def test_the_signature_follows_the_clip_not_autoplay(self, page):
         base = _render().signature

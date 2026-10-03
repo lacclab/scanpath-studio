@@ -1269,3 +1269,33 @@ class TestExportPlan:
                 progress_callback=cancel_after_first,
             )
         assert seen == [1]
+
+
+@pytest.mark.parametrize("self_contained", [False, True])
+def test_bundle_html_follows_the_self_contained_choice(
+    self_contained, minimal_combos, minimal_words, minimal_fixations, base_settings
+):
+    import re
+
+    data, _ = bulk_export(
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=True,
+            html_self_contained=self_contained,
+        ),
+    )
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        page = zf.read("per_trial/p1__t1/figure.html").decode("utf-8")
+    loads_from_a_host = bool(re.search(r'<script[^>]*\ssrc="https?://', page))
+    assert loads_from_a_host is not self_contained

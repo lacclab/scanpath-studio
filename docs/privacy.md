@@ -77,11 +77,13 @@ yet. The scanpath, animation and comparison figures load the Plotly
 charting library from the app's own server — the copy installed with the app —
 so drawing a figure contacts no other host and works without an internet
 connection, the desktop app included. A figure you download as **HTML** is
-different: a saved file has no app server behind it, so it loads the library
-from **cdn.plot.ly** when you open it, which needs an internet connection and
-tells that host the file was opened (no data travels with the request). HTML
-written headlessly (`save_figure`, `scanpath-studio render -o figure.html`)
-embeds the library instead and makes no request.
+different: a saved file has no app server behind it. By default it loads the
+library from **cdn.plot.ly** when you open it, which needs an internet
+connection and tells that host the file was opened (no data travels with the
+request). Tick **Export → HTML files → Self-contained HTML** and the figure,
+replay and bundle HTML embed the library instead (about 4.8 MB more per file),
+open offline and make no request. HTML written headlessly (`save_figure`,
+`scanpath-studio render -o figure.html`) always embeds it.
 Streamlit's own usage statistics are switched off on every launch path
 (`scanpath-studio run`, the desktop app and the repository's
 `.streamlit/config.toml`). The application adds no analytics service of its own.

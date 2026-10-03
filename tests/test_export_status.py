@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from contextlib import contextmanager
 
@@ -532,6 +533,18 @@ def test_html_download_data_is_a_standalone_page():
     )()
     assert html.lstrip().lower().startswith("<!doctype html>")
     assert "cdn.plot.ly" in html
+
+
+def test_self_contained_html_embeds_the_library_and_requests_no_host():
+    from scanpath_studio import tabs
+
+    html = tabs._figure_download_data(
+        _figure(), "HTML", canvas_width=640, canvas_height=480, self_contained=True
+    )()
+    # No script loaded from a host (the library's own text names one, for
+    # geo maps a scanpath never draws).
+    assert not re.search(r'<script[^>]*\ssrc="https?://', html)
+    assert "plotly.js v" in html  # the library's own banner, inline
 
 
 def test_pdf_without_a_browser_warns_once_and_disables_download(monkeypatch):

@@ -644,6 +644,29 @@ class TestBulkExportFlow:
         assert at.radio(key="bulk_export_scope").value == "This trial"
         assert list(at.pills(key="bulk_export_figfmts").value) == ["HTML", "SVG"]
 
+    def test_the_html_files_choice_reaches_the_bundle(self, monkeypatch):
+        from scanpath_studio import tabs
+
+        calls: list = []
+        real_bulk_export = tabs.bulk_export
+
+        def capturing(*args, **kwargs):
+            calls.append(kwargs["options"])
+            return real_bulk_export(*args, **kwargs)
+
+        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        at = _boot(subtab=SUBTAB_EXPORT)
+        choice = at.checkbox(key="export_html_self_contained")
+        assert choice.value is False
+        choice.set_value(True)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["HTML"])
+        at.run(timeout=60)
+        next(b for b in at.button if b.label == "Build export").click()
+        at.run(timeout=120)
+        _clean(at, "after a self-contained HTML build:")
+        assert calls and calls[-1].html_self_contained is True
+
     def test_a_missing_browser_is_said_and_a_partial_build_counts_its_failures(
         self, monkeypatch
     ):

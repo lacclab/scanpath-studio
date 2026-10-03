@@ -163,6 +163,10 @@ class ExportOptions:
     # And the same opt-out for the attached *text* table, written to
     # `metadata/texts.*` — the third grain, same reasoning again.
     text_metadata_fields: tuple[str, ...] | None = None
+    # HTML figures embed the Plotly library (opens offline, ~4.8 MB more per
+    # file) instead of loading it from cdn.plot.ly when opened. Off by default:
+    # the app's Export subtab sets it from its *HTML files* choice.
+    html_self_contained: bool = False
     # When True, export operates on the whole loaded dataset, ignoring the
     # trial-filter funnel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
@@ -243,6 +247,17 @@ class ExportSummary:
     level: str
     message: str
     expand_errors: bool
+
+
+#: Session key of the Export subtab's *HTML files* choice — every HTML file
+#: the subtab writes (the figure, the replay, the bundles) follows it.
+HTML_SELF_CONTAINED_KEY = "export_html_self_contained"
+
+
+def html_plotlyjs(self_contained: bool) -> bool | str:
+    """``to_html``'s ``include_plotlyjs`` for a downloaded HTML file: the
+    library embedded (opens offline), or loaded from cdn.plot.ly when opened."""
+    return True if self_contained else "cdn"
 
 
 def missing_browser_note(static_formats: bool) -> str:
@@ -1650,7 +1665,9 @@ def pair_export(
             height = int(getattr(fig.layout, "height", None) or canvas_height)
             if fmt == "html":
                 data = fig.to_html(
-                    include_plotlyjs="cdn", full_html=True, config={**PLOTLY_CONFIG}
+                    include_plotlyjs=html_plotlyjs(options.html_self_contained),
+                    full_html=True,
+                    config={**PLOTLY_CONFIG},
                 ).encode("utf-8")
             else:
                 data = render_static_figure_bytes(
@@ -2438,7 +2455,9 @@ def bulk_export(
                             if fmt == "html":
                                 # Browser-free + interactive; no Kaleido needed.
                                 data = fig.to_html(
-                                    include_plotlyjs="cdn",
+                                    include_plotlyjs=html_plotlyjs(
+                                        options.html_self_contained
+                                    ),
                                     full_html=True,
                                     config={**PLOTLY_CONFIG},
                                 ).encode("utf-8")

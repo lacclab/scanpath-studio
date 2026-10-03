@@ -222,6 +222,7 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
+    HTML_SELF_CONTAINED_KEY,
     ComparisonSide,
     ExportOptions,
     annotate_figure,
@@ -229,6 +230,7 @@ from scanpath_studio.export import (
     bulk_export,
     count_export_units,
     describe_plan,
+    html_plotlyjs,
     pair_export,
     pattern_fields,
     plan_from_counts,
@@ -1223,7 +1225,11 @@ def _render_save_plot_button(
     st.download_button(
         f"⬇ Download {fmt}",
         data=_figure_download_data(
-            fig, fmt, canvas_width=canvas_width, canvas_height=canvas_height
+            fig,
+            fmt,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            self_contained=_html_self_contained(),
         ),
         file_name=f"{file_stem}.{fmt.lower()}",
         mime=_MIME_FOR_FORMAT[fmt],
@@ -1239,14 +1245,45 @@ def _render_save_plot_button(
     )
 
 
+def _html_self_contained() -> bool:
+    """The Export subtab's *HTML files* choice (`_render_html_files_choice`)."""
+    return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
+
+
+def _render_html_files_choice() -> None:
+    """One choice for every HTML file the Export subtab writes — the figure,
+    the replay and the bundles: embed the Plotly library, or load it from
+    cdn.plot.ly when the file is opened. The scripted surfaces (`save_figure`,
+    `render -o figure.html`) always embed it."""
+    panel_field(
+        st,
+        "checkbox",
+        "Self-contained HTML (opens offline, larger file)",
+        display="HTML files",
+        value=False,
+        key=HTML_SELF_CONTAINED_KEY,
+        persist_state="session",
+        help="On: each HTML file carries the Plotly library, so it opens "
+        "offline and contacts no other host; it is about 4.8 MB larger. Off: "
+        "the file loads the library from cdn.plot.ly when opened, which needs "
+        "an internet connection. Applies to the figure, the replay and the "
+        "bundles' HTML.",
+    )
+
+
 def _figure_download_data(
-    fig, fmt: str, *, canvas_width: int, canvas_height: int
+    fig,
+    fmt: str,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    self_contained: bool = False,
 ) -> Callable[[], str | bytes]:
     """The zero-argument callable `st.download_button` runs on click (UX-150)."""
     if fmt == "HTML":
         return partial(
             fig.to_html,
-            include_plotlyjs="cdn",
+            include_plotlyjs=html_plotlyjs(self_contained),
             full_html=True,
             config={**PLOTLY_CONFIG},
         )
@@ -1271,7 +1308,7 @@ _ANIM_RENDER_S_PER_FRAME = 0.18
 _ANIM_RENDER_COLD_START_S = 3.0
 
 
-def _animation_html(fig) -> str:
+def _animation_html(fig, *, self_contained: bool = False) -> str:
     """The animation as a standalone HTML page, as `api.save_figure` writes it.
 
     It replays on the same wall-clock player as the live embed (BUG-93), which
@@ -1279,9 +1316,11 @@ def _animation_html(fig) -> str:
     ``auto_play`` stays off, since it ignores ``frame_duration``. The frames
     travel packed and are rebuilt in the browser (PERF-17). ``fig`` may also be a
     figure's ``to_dict()`` (a replay's cached view), serialized as is.
+    ``self_contained`` embeds the Plotly library ahead of the player's script,
+    as `api.save_figure` does, so the page replays offline.
     """
     options = dict(
-        include_plotlyjs="cdn",
+        include_plotlyjs=html_plotlyjs(self_contained),
         full_html=True,
         auto_play=False,
         config={**PLOTLY_CONFIG},
@@ -1331,16 +1370,19 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         # megabytes and about a second to serialize.
         st.download_button(
             "⬇ Download HTML",
-            data=partial(_replay_page_html, replay),
+            data=partial(
+                _replay_page_html, replay, self_contained=_html_self_contained()
+            ),
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
             on_click="ignore",
-            # ENG-64: not self-contained — a saved file has no app server to
-            # load plotly.js from, so it keeps the CDN (see docs/privacy.md).
+            # ENG-64: a saved file has no app server to load plotly.js from,
+            # so it embeds it or loads it from the CDN — the *HTML files*
+            # choice above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
-            "interactivity. It loads the Plotly library from cdn.plot.ly, so "
-            "opening it needs an internet connection.",
+            "interactivity. *HTML files* above decides whether it opens "
+            "offline or loads the Plotly library from cdn.plot.ly.",
         )
         return
 
@@ -2020,12 +2062,12 @@ def _cached_replay_view(
     )
 
 
-def _replay_page_html(replay: _ReplayView) -> str:
+def _replay_page_html(replay: _ReplayView, *, self_contained: bool = False) -> str:
     """The replay's standalone HTML page: `st.download_button` calls this on click.
 
     Written from the view's dict, so the click never builds a figure.
     """
-    return _animation_html(replay.figure_dict())
+    return _animation_html(replay.figure_dict(), self_contained=self_contained)
 
 
 _CMP_SORT_DEFAULT = "Same text, then same participant"
@@ -4899,6 +4941,7 @@ def _render_pair_export(
             include_fixations=True,
             include_measures=True,
             table_format=table_fmt,
+            html_self_contained=_html_self_contained(),
         )
         settings = _build_figure_settings(viz_settings, False)
         settings["line_spacing"] = line_spacing
@@ -4973,6 +5016,7 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
+    _render_html_files_choice()
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
     elif animate or displayed_fig is None:
@@ -7389,6 +7433,8 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
+    # The subtab's *HTML files* choice, in `options` so it is in the cache key.
+    options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
     if options.export_unfiltered:

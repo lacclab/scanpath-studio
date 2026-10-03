@@ -242,9 +242,11 @@ the linear-reading schematic.
 dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
 `fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the
-metric's own units. Left at `None` each trial is scaled to its own values, and
-a comparison shares one scale across A and B. Pass a range to put every trial on
-the same scale.
+metric's own units — for the word-box heatmap, dwell time per word in ms. Left
+at `None` each trial is scaled to its own values, and a comparison shares one
+scale across A and B. Pass a range to put every trial on the same scale. The
+`"Interpolated"` and `"Duration mass"` styles scale their density to their own
+peak and ignore `heatmap_range`.
 
 `highlight_column` is a boolean words column (OneStop's critical span by
 default); the default is skipped when absent, a column you name must exist.

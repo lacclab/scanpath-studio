@@ -659,6 +659,65 @@ def _colorbar_dict(
     return cb
 
 
+def _colorbar_owners(fig: go.Figure) -> list:
+    """Every object drawing a colour bar on ``fig``, in trace order: a trace
+    with its own scale (``go.Heatmap``) or a trace's marker."""
+    owners = []
+    for trace in fig.data:
+        if getattr(trace, "showscale", None):
+            owners.append(trace)
+            continue
+        marker = getattr(trace, "marker", None)
+        if marker is not None and getattr(marker, "showscale", None):
+            owners.append(marker)
+    return owners
+
+
+def _arrange_colorbars(fig: go.Figure) -> None:
+    """Give each of several colour bars its own place (round-7 review, finding 16).
+
+    `_colorbar_dict` puts every bar at one spot, so a heatmap's scale and the
+    fixations' were drawn over each other. With two or more, vertical bars stand
+    side by side to the right of the plot and horizontal ones stack below it,
+    the figure growing by the room they take — the plot region, and so the
+    true-to-scale text, keep their size. One bar keeps its geometry exactly.
+    Each bar is its own mapping (variable, units, palette, range): none is
+    merged into another, so every scale stays readable.
+    """
+    owners = _colorbar_owners(fig)
+    if len(owners) < 2:
+        return
+    layout = fig.layout
+    margin = layout.margin
+    left, right = float(margin.l or 0), float(margin.r or 0)
+    top, bottom = float(margin.t or 0), float(margin.b or 0)
+    # Every spatial builder sizes its figure; Plotly's own default otherwise.
+    width = float(layout.width or 700)
+    height = float(layout.height or 450)
+    first = owners[0].colorbar
+    tick_px = float(first.tickfont.size or 12)
+    rotated = abs(float(first.tickangle or 0)) > 30
+    extra_slots = len(owners) - 1
+    if first.orientation == "h":
+        # Title above the bar, the bar, its tick labels below.
+        row_px = 56.0 + 2.0 * tick_px + (2.0 * tick_px if rotated else 0.0)
+        plot_h = max(height - top - bottom, 1.0)
+        base_y = float(first.y if first.y is not None else -0.04)
+        for i, owner in enumerate(owners):
+            owner.colorbar.y = base_y - i * row_px / plot_h
+        grow = extra_slots * row_px
+        fig.update_layout(height=height + grow, margin=dict(b=bottom + grow))
+    else:
+        # The bar, its tick labels, then its title read sideways.
+        step_px = 70.0 + 3.0 * tick_px
+        plot_w = max(width - left - right, 1.0)
+        base_x = float(first.x if first.x is not None else 1.02)
+        for i, owner in enumerate(owners):
+            owner.colorbar.x = base_x + i * step_px / plot_w
+        new_right = max(right, float(_COLORBAR_RESERVE_PX)) + extra_slots * step_px
+        fig.update_layout(width=width + (new_right - right), margin=dict(r=new_right))
+
+
 # Text in Plotly is sized in screen pixels with no native "data unit" mode, so
 # to keep word labels true-to-scale we convert a real (monitor-pixel) font size
 # into the figure's screen pixels using the same scale the boxes/fixations use.
@@ -7293,6 +7352,7 @@ def make_scanpath_figure(
             settings=resolved,
             raw_gaze=raw_gaze,
         )
+    _arrange_colorbars(fig)
     if resolved.show_fixations:
         _maybe_add_duration_key(fig, resolved, resolved.marker_size_range, fixations)
     return fig
@@ -7432,6 +7492,7 @@ def make_comparison_figure(
             settings=resolved,
             raw_gaze=raw_gaze,
         )
+    _arrange_colorbars(fig)
     # One key serves both scanpaths only while they share a size range; with
     # per-scanpath ranges (Compare's own Size) one duration is two sizes.
     ranges = {

@@ -3571,6 +3571,52 @@ def heatmap_value_bounds(
     return None
 
 
+def _heatmap_bounds_for_rail(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None
+) -> tuple[float, float] | None:
+    """:func:`heatmap_value_bounds`, cached on the frames it actually reads.
+
+    The words table is read only when the fixations carry no durations (the
+    words-only fallback), so only then does it — and its fingerprint — enter
+    the cache key; otherwise a change to the words cannot change the answer.
+    """
+    from scanpath_studio.data import frame_fingerprint
+
+    words_used = (
+        fixations is None or fixations.empty or "duration_ms" not in fixations.columns
+    )
+    if not words_used:
+        words = None
+    return _heatmap_value_bounds_cached(
+        fixations,
+        words,
+        (
+            frame_fingerprint(fixations),
+            None if words is None else frame_fingerprint(words),
+        ),
+    )
+
+
+def _cheap_heatmap_bounds(fixations: pd.DataFrame | None) -> tuple[float, float] | None:
+    """Placeholder bounds for the greyed range while the heatmap is off.
+
+    The shortest and longest single fixation — one vectorised pass and no
+    groupby — or ``None`` when there is none (the range is then not drawn,
+    as before). The heatmap's own bounds (:func:`_heatmap_bounds_for_rail`)
+    replace them once it is shown.
+    """
+    if (
+        fixations is not None
+        and not fixations.empty
+        and "duration_ms" in fixations.columns
+    ):
+        duration = pd.to_numeric(fixations["duration_ms"], errors="coerce")
+        duration = duration[duration > 0]
+        if not duration.empty:
+            return float(duration.min()), float(duration.max())
+    return None
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _heatmap_value_bounds_cached(
     _fixations: pd.DataFrame | None, _words: pd.DataFrame | None, cache_key
@@ -6553,14 +6599,13 @@ def render_plot_controls(
         )
         # Finding 11: bounded by what a word box maps — its summed dwell —
         # not by the longest single fixation, which refixations exceed.
+        # The dwell groupby runs only while the heatmap is shown; switched off,
+        # the greyed range is drawn from the single-fixation span instead.
         heat_bounds = (
-            _heatmap_value_bounds_cached(
-                trial_fixations,
-                words,
-                (
-                    frame_fingerprint(trial_fixations),
-                    None if words is None else frame_fingerprint(words),
-                ),
+            (
+                _heatmap_bounds_for_rail(trial_fixations, words)
+                if show_heatmap
+                else _cheap_heatmap_bounds(trial_fixations)
             )
             if heatmap_metric == "duration_ms"
             else None

@@ -319,3 +319,52 @@ class TestASmoothedHeatmapOffersNoRange:
         smoothed = {**settings, "heatmap_style": "Interpolated"}
         assert "heatmap_range" not in figure_kwargs(smoothed)
         assert "heatmap_range" in figure_kwargs(smoothed, "comparison")
+
+
+class TestHeatmapBoundsOnlyWhenShown:
+    """The dwell groupby behind the heatmap range runs only while the heatmap
+    is shown; switched off, the greyed range is drawn from the single
+    fixations, and words reach the cache key only when they are read."""
+
+    def _counting(self, monkeypatch):
+        from scanpath_studio import controls
+
+        calls = []
+        real = controls.heatmap_value_bounds
+
+        def counting(*args, **kwargs):
+            calls.append(args)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(controls, "heatmap_value_bounds", counting)
+        controls._heatmap_value_bounds_cached.clear()
+        return calls
+
+    def test_off_draws_the_range_without_the_groupby(self, monkeypatch):
+        calls = self._counting(monkeypatch)
+        at = _rail(**{**WORD_HEAT, "global_show_heatmap": False})
+        assert calls == []
+        slider = at.slider(key=HEAT_VIEW)
+        assert (slider.proto.min, slider.proto.max) == (100, 300)
+
+    def test_on_bounds_it_by_dwell(self, monkeypatch):
+        calls = self._counting(monkeypatch)
+        at = _rail(**WORD_HEAT)
+        assert len(calls) == 1
+        slider = at.slider(key=HEAT_VIEW)
+        assert (slider.proto.min, slider.proto.max) == (300, 600)
+
+    def test_words_key_the_cache_only_on_the_words_only_fallback(self, monkeypatch):
+        from scanpath_studio import controls
+
+        seen = []
+        monkeypatch.setattr(
+            controls,
+            "_heatmap_value_bounds_cached",
+            lambda fix, words, key: seen.append((words, key)),
+        )
+        words, fixations = _frames()
+        controls._heatmap_bounds_for_rail(fixations, words)
+        assert seen[-1][0] is None and seen[-1][1][1] is None
+        controls._heatmap_bounds_for_rail(pd.DataFrame(), words)
+        assert seen[-1][0] is words and seen[-1][1][1] is not None

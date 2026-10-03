@@ -4542,10 +4542,16 @@ def _collect_viz_settings(
     if isinstance(_fr, (tuple, list)) and len(_fr) == 2:
         fix_index_range = (int(_fr[0]), int(_fr[1]))
 
-    # Highlight column only applies when Text is shown and a span style is active.
+    # The highlight column applies only while its style has something to draw on:
+    # **Mark text** recolours the word labels, so it needs Text; **Mark border**
+    # is its own outline layer (independent of Text and Word boxes, as in the
+    # builder), so it needs only the 📄 Stimulus master switch.
     critical_span_style = ss.get("global_critical_span_style", "Mark text")
+    span_drawable = (
+        show_labels if critical_span_style == "Mark text" else show_stimulus
+    ) and critical_span_style in ("Mark text", "Mark border")
     highlight_column = None
-    if show_labels and critical_span_style != "None" and highlight_options:
+    if span_drawable and highlight_options:
         candidate = ss.get("global_highlight_column")
         highlight_column = candidate if candidate in highlight_options else None
 
@@ -6100,7 +6106,9 @@ def render_plot_controls(
             )
         style_help = (
             "**Mark text** colours the span's words; **Mark border** draws a thin "
-            "outline around the span. The box beside it is that colour."
+            "outline around the span. The box beside it is that colour. "
+            "**Mark text** needs **Text** on; **Mark border** is its own layer "
+            "and shows with the text and word boxes off — over a screenshot, say."
             + (
                 f"\n\n{ICONS['warning']} **Mark border** draws on the static plot only — the replay "
                 "and the comparison figure have no border layer, so the span shows "

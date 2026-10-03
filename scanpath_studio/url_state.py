@@ -74,6 +74,7 @@ from .constants import (
     drift_correction_enabled,
     onestop_regime_for_choice,
     plural,
+    preprocessing_enabled,
     upload_identity,
 )
 from .controls import (
@@ -1631,6 +1632,20 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
 #: Where an in-app "open this trial" request waits for `combos` to exist.
 PENDING_TRIAL_KEY = "_pending_trial_selection"
 
+#: Preprocessing keys a settings file restored this run, applied by
+#: :func:`apply_pending_preprocessing` before those widgets render next run.
+PENDING_PREPROC_RESTORE_KEY = "_pending_preproc_restore"
+PREPROC_KEY_PREFIX = "global_preproc_"
+
+
+def apply_pending_preprocessing() -> None:
+    """Write the preprocessing values a settings file restored on the last run.
+
+    Call before the 🧹 Preprocessing widgets render."""
+    pending = st.session_state.pop(PENDING_PREPROC_RESTORE_KEY, None)
+    if isinstance(pending, dict):
+        st.session_state.update(pending)
+
 
 def request_trial(
     participant: str | None, trial_id: str | None, *, screen_id: str | None = None
@@ -1755,7 +1770,13 @@ class _RestoreContext:
             return None
 
     def put(self, key: str, value) -> None:
-        st.session_state[key] = value
+        if key.startswith(PREPROC_KEY_PREFIX) and preprocessing_enabled():
+            # The 🧹 Preprocessing widgets render before the restore runs, so
+            # their keys can't be written now; they're held for the next run, where `app._preprocessing_settings` applies them
+            # ahead of the widgets.
+            st.session_state.setdefault(PENDING_PREPROC_RESTORE_KEY, {})[key] = value
+        else:
+            st.session_state[key] = value
         self.applied += 1
 
     def put_valid(self, valid: bool, key: str, value, skip_label: str) -> None:
@@ -2583,6 +2604,9 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     file, or the same one again — applies. Clearing the uploader forgets the
     marker. Call right after the trial combos are built, before the
     canvas/visualization controls."""
+    replay = st.session_state.pop(_PLOT_CONFIG_TOAST_KEY, None)
+    if replay is not None:
+        _toast_restored(*replay)
     uploaded = st.session_state.get("plot_config_upload")
     if uploaded is None:
         st.session_state.pop("_plot_config_last_import", None)
@@ -2606,12 +2630,27 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
         st.toast(f"Couldn't apply plot config: {exc}", icon=ICONS["warning"])
         return
     st.session_state["_plot_config_skipped"] = skipped
+    staged = st.session_state.get(PENDING_PREPROC_RESTORE_KEY) or {}
+    if any(st.session_state.get(k) != v for k, v in staged.items()):
+        # Preprocessing reshapes the frames this run already filtered and drew,
+        # so run again with the restored values in place (the toast is replayed
+        # by the next run's `_apply_uploaded_plot_config`).
+        st.session_state[_PLOT_CONFIG_TOAST_KEY] = (applied, bool(skipped))
+        st.rerun()
+    st.session_state.pop(PENDING_PREPROC_RESTORE_KEY, None)
+    _toast_restored(applied, bool(skipped))
+
+
+_PLOT_CONFIG_TOAST_KEY = "_plot_config_restored_toast"
+
+
+def _toast_restored(applied: int, any_skipped: bool) -> None:
     if applied:
         st.toast(
             f"Restored {plural(applied, 'setting')} from plot config.",
             icon=ICONS["success"],
         )
-    elif not skipped:
+    elif not any_skipped:
         st.toast("Plot config had no recognized settings.", icon=ICONS["warning"])
 
 

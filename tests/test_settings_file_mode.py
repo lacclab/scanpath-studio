@@ -128,10 +128,8 @@ def _b(at: AppTest) -> tuple[str, str] | None:
 
 
 @pytest.mark.timeout(300)
-# The default build: with `SCANPATH_EXPERIMENTAL=1` the preprocessing panel's
-# widgets render before the settings restore runs, and the whole restore is
-# refused ("cannot be modified after the widget … is instantiated") — a
-# separate, gated-feature problem this file does not test.
+# The default build; the experimental Preprocessing panel has its own test at
+# the end of this file.
 @pytest.mark.usefixtures("experimental_off")
 class TestSettingsFileMode:
     @pytest.mark.parametrize(
@@ -236,3 +234,23 @@ class TestSettingsFileMode:
             and "reader-not-there" in str(w.value)
             for w in at.warning
         ), [w.value for w in at.warning]
+
+
+@pytest.mark.timeout(300)
+def test_a_settings_file_restores_with_the_preprocessing_panel_shown(monkeypatch):
+    """With `SCANPATH_EXPERIMENTAL=1` the 🧹 Preprocessing widgets render before
+    the settings restore runs. Writing their keys then raised "cannot be
+    modified after the widget … is instantiated" and the whole file was refused;
+    they are now staged and applied before those widgets on the next run."""
+    monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
+    config = _save(monkeypatch, animate=False, compare=False)
+    config["preprocessing"] = {
+        **config.get("preprocessing", {}),
+        "enabled": True,
+        "short_policy": "Merge",
+    }
+    at = _restore(config, settle=False)
+    assert any("Restored" in t.value for t in at.toast), [t.value for t in at.toast]
+    assert at.session_state["global_preproc_enabled"] is True
+    assert at.session_state["global_preproc_short_policy"] == "Merge"
+    assert not any("Couldn't apply" in t.value for t in at.toast)

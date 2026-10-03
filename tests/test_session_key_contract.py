@@ -433,7 +433,11 @@ def _restore_config_app():
 
     from scanpath_studio.constants import SACCADE_CLASS_EDITABLE
     from scanpath_studio.controls import color_field_options, numeric_field_options
-    from scanpath_studio.url_state import _PLOT_CONFIG_LAYER_KEYS, _restore_plot_config
+    from scanpath_studio.url_state import (
+        _PLOT_CONFIG_LAYER_KEYS,
+        _restore_plot_config,
+        apply_pending_preprocessing,
+    )
     from scanpath_studio.utils import build_combo_options
 
     fixations = pd.DataFrame(st.session_state["_fix"])
@@ -566,6 +570,9 @@ def _restore_config_app():
     }
     before = set(st.session_state.keys())
     applied, skipped = _restore_plot_config(config, combos, fixations)
+    # With the Preprocessing panel shown its keys are staged for the next run,
+    # which applies them before those widgets render; do that step here too.
+    apply_pending_preprocessing()
     st.session_state["_written"] = sorted(
         set(st.session_state.keys()) - before - {"_written", "_applied", "_skipped"}
     )

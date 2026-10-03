@@ -313,6 +313,7 @@ from scanpath_studio.url_state import (
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _render_share_body,
+    apply_pending_preprocessing,
     corpus_choice_for_slug,
     link_sets,
     link_setup_keys_for,
@@ -8180,6 +8181,7 @@ def _preprocessing_settings(host=None) -> dict:
     """
     if not preprocessing_enabled():
         return dict(_PREPROC_SETTINGS_OFF)
+    apply_pending_preprocessing()
     for key, default in _PREPROC_DEFAULTS.items():
         st.session_state.setdefault(key, default)
     with host if host is not None else st.container():

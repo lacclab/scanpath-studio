@@ -267,6 +267,7 @@ from scanpath_studio.tabs import (
     _render_column_mapping_section,
     data_scope_text,
     dataset_editor_is_dirty,
+    discard_editor_widgets,
     render_analysis_pool_bar,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
@@ -5441,6 +5442,8 @@ def _close_dataset_editor() -> None:
     # until ✅ Save changes runs.
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         st.session_state.pop(key, None)
+    # …and the mapping widgets' own answers, which outlive the screen.
+    discard_editor_widgets()
     st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46: "use the current estimate" is a choice for one editing session.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:

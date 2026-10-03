@@ -157,6 +157,7 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
+    TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
     _check_row,
     _collect_compare_styles,
@@ -12916,6 +12917,7 @@ def _apply_remap() -> None:
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         if key != "_remap_applied":
             st.session_state.pop(key, None)
+    discard_editor_widgets()
     st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46 — and the "use the current estimate" choice, which belongs to it.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
@@ -13291,6 +13293,40 @@ def _render_remap_fields(
     return pending
 
 
+#: ✏️ Edit dataset's own widget namespace — ``remap_<dataset>_…``: every
+#: mapping select, coordinate-format radio, aggregation toggle and table
+#: uploader on the screen. Its mapping widgets persist across runs
+#: (``persist_state="session"``, so a draft survives a visit to another view),
+#: which is exactly why a finished edit has to clear them.
+EDITOR_WIDGET_PREFIX = "remap_"
+
+
+def discard_editor_widgets() -> None:
+    """Forget every answer the editor's widgets hold.
+
+    Run when an edit ends (✕ Cancel, ✅ Save changes) and when a fresh one
+    opens: a mapping widget seeds itself from the saved dataset only when its
+    key is absent, so a key left behind by a cancelled edit would reopen the
+    editor on the abandoned pick — and the dirty baseline, captured from those
+    picks, would then call it unchanged. The field-touch marks and the
+    column-universe markers that go with those keys go too. The add screen's
+    ``col_map_*`` keys are a different namespace and are not touched.
+    """
+    session = st.session_state
+    marker = f"_mapped_columns_{EDITOR_WIDGET_PREFIX}"
+    for key in [
+        k
+        for k in list(session)
+        if isinstance(k, str) and k.startswith((EDITOR_WIDGET_PREFIX, marker))
+    ]:
+        del session[key]
+    touched = session.get(TOUCHED_FIELDS_KEY)
+    if touched:
+        session[TOUCHED_FIELDS_KEY] = {
+            key for key in touched if not str(key).startswith(EDITOR_WIDGET_PREFIX)
+        }
+
+
 def _render_remap_editor(
     name: str, stored: dict, uploads_host=None, setup_host=None
 ) -> None:
@@ -13307,6 +13343,11 @@ def _render_remap_editor(
     setup** renders into ``setup_host``, the editor's own numbered part, so this
     function draws mapping and nothing else. Without a host it stays where it
     was, under a ``##### `` heading after a rule."""
+    if _REMAP_BASELINE_KEY not in st.session_state:
+        # A fresh edit (the baseline is captured at the end of its first
+        # render): start every field from the saved dataset, whatever an
+        # earlier edit left in the widgets.
+        discard_editor_widgets()
     # UX-54: the dataset table's ✏️ Edit both opened this dataset and sent the
     # user here, so say so — otherwise the page has silently changed under them
     # and the mapping form is several screens down.

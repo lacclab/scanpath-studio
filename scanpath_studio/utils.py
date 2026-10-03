@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 import numpy as np
@@ -12,7 +13,6 @@ from . import progress
 from .annotations import get_entry, store_for_prefix
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint, stable_id
-from .datasets import _ONESTOP_PARAGRAPH_ID_PARTS
 from .fields import labeled
 
 # Annotation markers shown beside a trial in the pickers (UX-6). Independent of
@@ -718,37 +718,27 @@ def _trial_display_label(trial_id) -> str:
 
 # --- UX-187: a trial id spelled out part by part ------------------------------
 # A trial id is usually several ids joined with "_" — OneStop's
-# `l37_1129_2_2_1_Adv_r0` is reader `l37_1129`, batch 2, article 2, paragraph 1,
-# level Adv, first reading. The pickers show it with " · " between the parts so
-# you can tell where one ends, which a plain split on "_" cannot do: the reader
-# id has an underscore of its own. So the parts are found from the ids the trial
-# is known to be made of — its participant, its text, a composite mapping's
-# columns — and an id that matches none of them is shown exactly as it is. Only
-# the display changes: the selection, the deep link and every export keep the
-# id itself.
+# `l37_1129_2_2_1_Adv_r0` is reader `l37_1129`, text `2_2_1_Adv`, first reading.
+# The pickers show it with " · " between the parts so you can tell where one
+# ends, which a plain split on "_" cannot do: the reader id has an underscore of
+# its own. So the parts are found from the ids the trial is known to be made of —
+# its participant, its text, a composite mapping's columns — and an id that
+# matches none of them is shown exactly as it is. Only the display changes: the
+# selection, the deep link and every export keep the id itself.
+#
+# UX-202: the text id is one part, as it is everywhere else in the app (it was
+# split into OneStop's batch · article · paragraph · level), and a first reading
+# (`r0`) is not shown — only a repeated one says which reading it is.
 
 #: What the pickers put between the parts of a trial id.
 TRIAL_ID_PART_SEPARATOR = " · "
 
-#: Text ids composed from columns of their own: the columns that mark the
-#: composition, and what to call each part. OneStop's `unique_paragraph_id` is
-#: joined from `_ONESTOP_PARAGRAPH_ID_PARTS`; `paragraph_id` is left out of its
-#: marker because normalization takes it as the text id, so it is gone by then.
-_KNOWN_TEXT_ID_PARTS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
-    (
-        tuple(c for c in _ONESTOP_PARAGRAPH_ID_PARTS if c != "paragraph_id"),
-        ("batch", "article", "paragraph", "level"),
-    ),
-)
+#: UX-202 — the reading number a first reading carries, which the display leaves
+#: out. OneStop composes `_r0` / `_r1`; `data._disambiguate_repeated_readings`
+#: leaves a first reading unsuffixed and numbers the next `_r2`.
+FIRST_READING = "r0"
 
-
-def text_id_part_names(columns: Iterable[str]) -> tuple[str, ...] | None:
-    """The names of a text id's parts, when ``columns`` carry a known composition."""
-    present = set(columns)
-    for marker_cols, names in _KNOWN_TEXT_ID_PARTS:
-        if set(marker_cols) <= present:
-            return names
-    return None
+_READING_SUFFIX = re.compile(r"_(r\d+)$")
 
 
 def trial_id_parts(
@@ -756,15 +746,13 @@ def trial_id_parts(
     *,
     participant_id=None,
     text_id=None,
-    text_part_names: tuple[str, ...] | None = None,
     components: list[tuple[str, str]] | None = None,
 ) -> list[tuple[str, str]]:
     """``(name, value)`` for each part of ``trial_id``, in the order it is written.
 
     ``components`` (a composite trial mapping's ``(column, value)`` pairs) are the
-    answer outright. Otherwise the id is read as ``[<participant>_]<text>[_rN]``,
-    with the text split further by ``text_part_names`` when it has that many
-    ``_`` pieces. An id that shape does not account for entirely is one part,
+    answer outright. Otherwise the id is read as ``[<participant>_]<text>[_rN]``.
+    An id that shape does not account for entirely is one part,
     ``("trial id", trial_id)``.
     """
     if components:
@@ -779,11 +767,7 @@ def trial_id_parts(
         parts.append(("participant", pid))
         rest = rest[len(pid) + 1 :]
     if text and text != tid and (rest == text or rest.startswith(f"{text}_")):
-        pieces = text.split("_")
-        if text_part_names and len(pieces) == len(text_part_names):
-            parts.extend(zip(text_part_names, pieces, strict=True))
-        else:
-            parts.append(("text", text))
+        parts.append(("text", text))
         rest = rest[len(text) + 1 :]
     # Split only an id its parts account for entirely: the text must be in it,
     # and anything after the text a reading number. `synthetic_2line_demo`
@@ -797,10 +781,25 @@ def trial_id_parts(
     return parts
 
 
+def shown_parts(parts: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """The parts the display writes: all but a first reading (UX-202)."""
+    return [
+        (name, value)
+        for name, value in parts
+        if not (name == "reading" and value == FIRST_READING)
+    ]
+
+
 def trial_id_display(parts: list[tuple[str, str]]) -> str:
-    """A trial id as the pickers show it: its parts, `TRIAL_ID_PART_SEPARATOR`-joined."""
+    """A trial id as the pickers show it: its parts, `TRIAL_ID_PART_SEPARATOR`-joined.
+
+    A first reading is left out (UX-202), and an id that does not split still
+    has a trailing reading number set off by the separator, not an underscore.
+    """
+    parts = shown_parts(parts)
     if len(parts) == 1:
-        return _trial_display_label(parts[0][1])
+        label = _trial_display_label(parts[0][1])
+        return _READING_SUFFIX.sub(rf"{TRIAL_ID_PART_SEPARATOR}\1", label)
     return TRIAL_ID_PART_SEPARATOR.join(value for _, value in parts)
 
 
@@ -809,15 +808,13 @@ def trial_id_layout(
     trial_field: str = "trial_id",
     *,
     composite_cols: Iterable[str] = (),
-    columns: Iterable[str] = (),
 ) -> tuple[dict[str, str], tuple[str, ...]]:
     """Display string per trial id in ``combos``, plus the part names they share.
 
     ``composite_cols`` are the composite trial mapping's columns (carried on
-    ``combos``); ``columns`` are the source frame's, which say whether the text
-    id has a known composition (`text_id_part_names`). The part names are the
-    most common layout's — what the picker's help names — and empty when no id
-    splits.
+    ``combos``). The part names are the most common shown layout's — what the
+    picker's help names — with ``"reading"`` added when any trial shows one, and
+    empty when no id splits.
     """
     if combos.empty or trial_field not in combos.columns:
         return {}, ()
@@ -825,7 +822,6 @@ def trial_id_layout(
     text_field = next(
         (c for c in ("unique_text_id", "text_id") if c in combos.columns), None
     )
-    text_names = text_id_part_names(columns)
     rows = combos.drop_duplicates(subset=[trial_field])
     trial_ids = rows[trial_field].astype(str).to_numpy()
     pids = rows["participant_id"].to_numpy() if "participant_id" in rows else None
@@ -835,12 +831,12 @@ def trial_id_layout(
     )
     display: dict[str, str] = {}
     layouts: dict[tuple[str, ...], int] = {}
+    any_reading = False
     for i, tid in enumerate(trial_ids):
         parts = trial_id_parts(
             tid,
             participant_id=None if pids is None else pids[i],
             text_id=None if texts is None else texts[i],
-            text_part_names=text_names,
             components=(
                 None
                 if comp_values is None
@@ -848,10 +844,14 @@ def trial_id_layout(
             ),
         )
         display[tid] = trial_id_display(parts)
-        if len(parts) > 1:
-            names = tuple(name for name, _ in parts)
+        shown = shown_parts(parts)
+        if len(shown) > 1:
+            names = tuple(name for name, _ in shown if name != "reading")
             layouts[names] = layouts.get(names, 0) + 1
+            any_reading = any_reading or any(name == "reading" for name, _ in shown)
     names = max(layouts, key=layouts.__getitem__) if layouts else ()
+    if names and any_reading:
+        names = (*names, "reading")
     return display, names
 
 
@@ -871,9 +871,7 @@ def trial_id_shown(
     row["trial_id"] = str(trial_id)
     if participant_id is not None:
         row["participant_id"] = participant_id
-    display, _ = trial_id_layout(
-        row, composite_cols=composite_cols, columns=frame.columns
-    )
+    display, _ = trial_id_layout(row, composite_cols=composite_cols)
     return display.get(str(trial_id), str(trial_id))
 
 
@@ -886,7 +884,10 @@ def trial_id_help(part_names: tuple[str, ...]) -> str:
         f"**{TRIAL_ID_PART_SEPARATOR.join(part_names)}**."
     )
     if "reading" in part_names:
-        sentence += " `r0` is a first reading; a higher number is a repeated one."
+        sentence += (
+            " A repeated reading ends in its number (`r1`, `r2` …); a first"
+            " reading has none."
+        )
     return sentence
 
 
@@ -1095,7 +1096,6 @@ def _select_trial_none_mode(
         available_trials,
         trial_field,
         composite_cols=st.session_state.get("_composite_trial_columns") or (),
-        columns=next((f.columns for f in (fixations, words) if f is not None), ()),
     )
 
     def _option_label(value: str) -> str:

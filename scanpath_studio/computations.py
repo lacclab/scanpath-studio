@@ -211,7 +211,12 @@ REGISTER: tuple[Computation, ...] = (
         ),
         code="scanpath_studio/data.py:coerce_flag",
         output="bool",
-        missing="NaN → False.",
+        missing=(
+            "NaN → False for an operational flag (blink, excluded). A supplied "
+            "reading-measure flag (skip, regression in / out) keeps it missing "
+            "instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA "
+            "(`coerce_measure_flag`, a nullable boolean)."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         reference="Guards the `'.'`-as-missing convention in EyeLink IA reports.",
@@ -1072,10 +1077,18 @@ REGISTER: tuple[Computation, ...] = (
         name="Skip / regression rate profile",
         category=CATEGORY_AGGREGATION,
         summary="Rate measures per word.",
-        formula="Mean of the 0/1 flag over readers — a proportion in [0, 1].",
+        formula=(
+            "Mean of the 0/1 flag over the readers who reported it — a "
+            "proportion in [0, 1]. Each rate has its own reader count "
+            "(`n_skip`, `n_regression_in`) and its own minimum-readers verdict."
+        ),
         code="scanpath_studio/aggregation.py:word_rate_profile",
         unit="proportion",
-        missing="Words with no reader are omitted, not shown as 0.",
+        missing=(
+            "A missing flag is no observation: it is left out of that rate and "
+            "its reader count, never read as 0. A rate below the minimum "
+            "readers is hidden; the word stays while its other rate stands."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS, _API),

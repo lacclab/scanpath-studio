@@ -607,6 +607,22 @@ def word_measure_vs_feature(
     return out.dropna(subset=["value"]).reset_index(drop=True)
 
 
+#: ``(rate, readers behind it, min-readers verdict)`` for each series
+#: :func:`word_rate_profile` returns.
+RATE_SERIES = (
+    ("skip_rate", "n_skip", "enough_skip"),
+    ("regression_in_rate", "n_regression_in", "enough_regression_in"),
+)
+RATE_SERIES_COLUMNS = (
+    "skip_rate",
+    "regression_in_rate",
+    "n_skip",
+    "n_regression_in",
+    "enough_skip",
+    "enough_regression_in",
+)
+
+
 def word_rate_profile(
     words: pd.DataFrame,
     text_col: str,
@@ -617,10 +633,15 @@ def word_rate_profile(
 ) -> pd.DataFrame:
     """Per-word skip / regression-in rates across readers (AN-6).
 
-    Returns ``[word_id, skip_rate, regression_in_rate, n, enough, word_text]``.
+    Returns ``[word_id, skip_rate, regression_in_rate, n_skip, n_regression_in,
+    enough_skip, enough_regression_in, word_text]``. Each rate has its own
+    denominator: ``n_*`` counts the readers who *reported* that flag for the
+    word — a missing flag is no observation, not a "no" — and ``enough_*``
+    applies ``min_readers`` to that count alone, since a dataset can record
+    skips for every word and regressions only for the ones read in first pass.
     """
     sub = _text_subset(words, text_col, text_id, screen_id)
-    cols = ["word_id", "skip_rate", "regression_in_rate", "n", "enough", "word_text"]
+    cols = ["word_id", *RATE_SERIES_COLUMNS, "word_text"]
     if sub.empty or "word_id" not in sub.columns:
         return pd.DataFrame(columns=cols)
     work = sub[["word_id"]].copy()
@@ -656,10 +677,13 @@ def word_rate_profile(
         if text_by_word is not None:
             work["word_text"] = work["word_id"].map(text_by_word)
     grouped = work.groupby("word_id")
+    # `count` is the readers with a value: the per-reader mean is NaN only for
+    # a reader who reported nothing for that word.
     out = grouped.agg(
         skip_rate=("skip_rate", "mean"),
         regression_in_rate=("regression_in_rate", "mean"),
-        n=("skip_rate", "size"),
+        n_skip=("skip_rate", "count"),
+        n_regression_in=("regression_in_rate", "count"),
     ).reset_index()
     if "word_text" in work.columns:
         out = out.merge(
@@ -667,7 +691,8 @@ def word_rate_profile(
         )
     else:
         out["word_text"] = ""
-    out["enough"] = out["n"] >= min_readers
+    for _rate, n, enough in RATE_SERIES:
+        out[enough] = out[n] >= max(int(min_readers), 1)
     return out[cols].sort_values("word_id").reset_index(drop=True)
 
 

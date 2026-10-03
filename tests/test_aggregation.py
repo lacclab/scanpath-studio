@@ -619,12 +619,14 @@ class TestWordRateProfile:
         assert list(out["word_id"]) == [0, 1, 2]
         assert list(out["skip_rate"]) == [0.0, 0.0, 0.5]  # p1 skipped word 2
         assert list(out["regression_in_rate"]) == [0.0, 1.0, 0.0]
-        assert list(out["n"]) == [2, 2, 2]
-        assert list(out["enough"]) == [True, True, True]
+        assert list(out["n_skip"]) == [2, 2, 2]
+        assert list(out["n_regression_in"]) == [2, 2, 2]
+        assert list(out["enough_skip"]) == [True, True, True]
+        assert list(out["enough_regression_in"]) == [True, True, True]
         assert list(out["word_text"]) == ["the", "cat", "sat"]
-        assert list(
-            word_rate_profile(_tidy_words(), "text_id", "A", min_readers=3)["enough"]
-        ) == [False, False, False]
+        strict = word_rate_profile(_tidy_words(), "text_id", "A", min_readers=3)
+        assert not strict["enough_skip"].any()
+        assert not strict["enough_regression_in"].any()
 
     def test_min_readers_guard_counts_readers_not_rows(self):
         # p1 reads text A a second time: word 0 now has three rows but still
@@ -635,14 +637,18 @@ class TestWordRateProfile:
         )
         assert list(reference["n"]) == [2, 2, 1]  # the per-reader collapse
         assert not reference["enough"].any()
-        assert not word_rate_profile(w, "text_id", "A", min_readers=3)["enough"].any()
+        out = word_rate_profile(w, "text_id", "A", min_readers=3)
+        assert not out["enough_skip"].any()
+        assert not out["enough_regression_in"].any()
 
     def test_missing_flag_columns_yield_nan_rates(self):
         w = _tidy_words().drop(columns=["skip_flag", "regression_in_flag"])
         out = word_rate_profile(w, "text_id", "A")
         assert out["skip_rate"].isna().all()
         assert out["regression_in_rate"].isna().all()
-        assert list(out["n"]) == [2, 2, 2]  # the row count still stands
+        # Nobody reported either flag: no reader stands behind either rate.
+        assert list(out["n_skip"]) == [0, 0, 0]
+        assert not out["enough_skip"].any()
 
     def test_empty_returns_typed_columns(self):
         out = word_rate_profile(_tidy_words(), "text_id", "nope")
@@ -651,10 +657,99 @@ class TestWordRateProfile:
             "word_id",
             "skip_rate",
             "regression_in_rate",
-            "n",
-            "enough",
+            "n_skip",
+            "n_regression_in",
+            "enough_skip",
+            "enough_regression_in",
             "word_text",
         ]
+
+
+class TestMissingIsNotFalse:
+    """A supplied reading-measure flag left empty is no observation: it must
+    not count as "no", nor as a reader behind the rate."""
+
+    @staticmethod
+    def _words():
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["t", "t"],
+                "text_id": ["text", "text"],
+                "word_id": [1, 1],
+                "text": ["test", "test"],
+                "skip_flag": [0, np.nan],
+                "regression_in_flag": [1, np.nan],
+            }
+        )
+
+    def test_the_rate_counts_only_reporting_readers(self):
+        out = word_rate_profile(self._words(), "text_id", "text", min_readers=2)
+        row = out.iloc[0]
+        assert row["skip_rate"] == 0.0 and row["regression_in_rate"] == 1.0
+        assert row["n_skip"] == 1 and row["n_regression_in"] == 1
+        assert not row["enough_skip"] and not row["enough_regression_in"]
+
+    def test_normalization_keeps_the_missing_flags(self):
+        from scanpath_studio import data
+
+        raw = self._words().assign(x=100, y=100, width=50, height=20)
+        words = data.normalize_words(raw, data.propose_word_schema(raw))
+        assert words["skip_flag"].isna().tolist() == [False, True]
+        assert words["regression_in_flag"].isna().tolist() == [False, True]
+        out = word_rate_profile(words, "text_id", "text", min_readers=2)
+        row = out.iloc[0]
+        # 1.0 among the readers who reported it — not 0.5 with p2 as a "no".
+        assert row["regression_in_rate"] == 1.0
+        assert row["n_regression_in"] == 1 and not row["enough_regression_in"]
+
+    def test_eyelink_dot_is_missing_and_zero_is_false(self):
+        from scanpath_studio import data
+
+        flags = data.coerce_measure_flag(pd.Series(["0", "1", ".", "", None, "nan"]))
+        assert flags.tolist()[:2] == [False, True]
+        assert flags.isna().tolist() == [False, False, True, True, True, True]
+
+    def test_operational_flags_still_read_missing_as_false(self):
+        from scanpath_studio import data
+
+        assert data.coerce_flag(pd.Series([1, np.nan])).tolist() == [True, False]
+
+    def test_each_series_has_its_own_guard(self):
+        # Two readers report skips for both words; only one reports
+        # regressions for word 2 (no first pass).
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p2"],
+                "text_id": "text",
+                "word_id": [1, 2, 1, 2],
+                "skip_flag": pd.array([False, True, False, False], dtype="boolean"),
+                "regression_in_flag": pd.array(
+                    [False, pd.NA, True, False], dtype="boolean"
+                ),
+            }
+        )
+        out = word_rate_profile(words, "text_id", "text", min_readers=2)
+        assert out["enough_skip"].tolist() == [True, True]
+        assert out["enough_regression_in"].tolist() == [True, False]
+
+        # The page blanks the under-supported rate, keeps the word for the
+        # other, and says which series lost what.
+        from scanpath_studio import tabs
+
+        class Host:
+            captions: list = []
+
+            def caption(self, text):
+                self.captions.append(text)
+
+        host = Host()
+        shown = tabs._apply_rate_min_readers(host, out, 2, key="k")
+        assert shown["word_id"].tolist() == [1, 2]
+        assert shown["skip_rate"].tolist() == [0.0, 0.5]
+        assert shown["regression_in_rate"].isna().tolist() == [False, True]
+        assert "regression-in rate for 1 word" in host.captions[0]
+        assert "skip rate" not in host.captions[0]
 
 
 # -----------------------------------------------------------------------------

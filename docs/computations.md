@@ -165,7 +165,7 @@ Read EyeLink's string booleans as booleans (BUG-7).
 | | |
 | --- | --- |
 | **Output** | bool |
-| **Missing & edge cases** | NaN → False. |
+| **Missing & edge cases** | NaN → False for an operational flag (blink, excluded). A supplied reading-measure flag (skip, regression in / out) keeps it missing instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA (`coerce_measure_flag`, a nullable boolean). |
 | **Reference** | Guards the `'.'`-as-missing convention in EyeLink IA reports. |
 | **Code** | `scanpath_studio/data.py:coerce_flag` |
 | **Consumers** | UI, API, CLI, Export |
@@ -831,12 +831,12 @@ A measure per word position, aggregated across readers.
 
 Rate measures per word.
 
-**Formula.** Mean of the 0/1 flag over readers — a proportion in [0, 1].
+**Formula.** Mean of the 0/1 flag over the readers who reported it — a proportion in [0, 1]. Each rate has its own reader count (`n_skip`, `n_regression_in`) and its own minimum-readers verdict.
 
 | | |
 | --- | --- |
 | **Unit** | proportion |
-| **Missing & edge cases** | Words with no reader are omitted, not shown as 0. |
+| **Missing & edge cases** | A missing flag is no observation: it is left out of that rate and its reader count, never read as 0. A rate below the minimum readers is hidden; the word stays while its other rate stands. |
 | **Code** | `scanpath_studio/aggregation.py:word_rate_profile` |
 | **Consumers** | Corpus Analysis, API |
 | **Tests** | `tests/test_aggregation.py` |

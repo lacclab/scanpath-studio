@@ -1463,7 +1463,7 @@ def _apply_reading_measures(
         if column and column in source.columns:
             values = source[column]
             df[canonical] = (
-                coerce_flag(values) if kind == "boolean" else _to_number(values)
+                coerce_measure_flag(values) if kind == "boolean" else _to_number(values)
             )
         elif canonical in df.columns:
             del df[canonical]
@@ -4564,6 +4564,30 @@ def coerce_flag(col: pd.Series) -> pd.Series:
     ).astype(bool)
 
 
+#: What a supplied reading-measure flag writes for "not recorded" — EyeLink's
+#: `.` for a word with no first pass, an empty cell, a spelled-out NA.
+_MISSING_FLAG_STRINGS = {"", ".", "na", "nan", "n/a", "-", "none", "null", "<na>"}
+
+
+def coerce_measure_flag(col: pd.Series) -> pd.Series:
+    """A supplied reading-measure flag (skip, regression in/out) as a nullable
+    boolean: true, false, or missing.
+
+    :func:`coerce_flag` reads a missing cell as ``False``, which is right for an
+    operational flag (blink, excluded) and wrong for a measure: EyeLink writes
+    ``.`` in ``IA_REGRESSION_IN`` for a word with no first pass, where the
+    measure is undefined, not "no regression". As ``False`` those rows lowered
+    every rate and counted as readers behind it."""
+    flags = coerce_flag(col).astype("boolean")
+    if pd.api.types.is_bool_dtype(col) and not col.isna().any():
+        return flags
+    missing = col.isna() | col.astype(str).str.strip().str.lower().isin(
+        _MISSING_FLAG_STRINGS
+    )
+    flags[missing.to_numpy()] = pd.NA
+    return flags
+
+
 def _apply_optional_fields(
     df: pd.DataFrame, source: pd.DataFrame, registry: list, keep: set | None
 ) -> set:
@@ -4572,7 +4596,7 @@ def _apply_optional_fields(
     backward-compatible default) or a set of *source* column names to limit to.
     Returns the set of source columns actually emitted."""
     emitted: set = set()
-    for src, dest, kind, _category in registry:
+    for src, dest, kind, category in registry:
         if src not in source.columns:
             continue
         if keep is not None and src not in keep:
@@ -4583,6 +4607,9 @@ def _apply_optional_fields(
             df[dest] = _to_number(col)
         elif kind == "string":
             df[dest] = col.astype(str)
+        elif kind == "boolean" and category == "measure":
+            # A reading measure keeps "not recorded" apart from "false".
+            df[dest] = coerce_measure_flag(col)
         elif kind == "boolean":
             df[dest] = coerce_flag(col)
         else:

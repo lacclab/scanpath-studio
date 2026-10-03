@@ -26,8 +26,9 @@ import streamlit as st
 from scanpath_studio import alignment, loading, progress
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
-    READING_TIME_ESTIMATED,
     MEASURES,
+    RATE_SERIES,
+    READING_TIME_ESTIMATED,
     Measure,
     apply_group,
     available_features,
@@ -198,9 +199,9 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
-    timestamps_synthesized,
     repeat_bases,
     text_ids,
+    timestamps_synthesized,
     trial_keys,
     trial_mapping_columns,
     user_columns,
@@ -8036,6 +8037,37 @@ def _apply_min_readers(host, df, min_readers, *, key):
     return out
 
 
+_RATE_NAMES = {"skip_rate": "skip rate", "regression_in_rate": "regression-in rate"}
+
+
+def _apply_rate_min_readers(host, df, min_readers, *, key):
+    """The min-readers guard for the per-word rates, one series at a time.
+
+    Each rate has its own readers (`aggregation.word_rate_profile`): a word can
+    have a well-supported skip rate and a regression-in rate from one reader.
+    A rate below the guard is blanked, not the word, and a word is dropped only
+    when neither rate is left; the caption counts each series."""
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    notes = []
+    for rate, _n, enough in RATE_SERIES:
+        if rate not in out.columns or enough not in out.columns:
+            continue
+        hidden = ~out[enough] & out[rate].notna()
+        out[rate] = out[rate].where(out[enough])
+        if min_readers > 1 and hidden.any():
+            notes.append(f"{_RATE_NAMES[rate]} for {plural(int(hidden.sum()), 'word')}")
+    out = out[out[[r for r, _n, _e in RATE_SERIES]].notna().any(axis=1)]
+    if notes:
+        host.caption(
+            f"{ICONS['warning']} Hidden, backed by < "
+            f"{plural(min_readers, 'reader')}: {'; '.join(notes)}. Each rate counts "
+            "only the readers who reported it."
+        )
+    return out
+
+
 # --- Group definition (AN-14 … AN-22) ----------------------------------------
 # Two modes (the user asked for both): *split a field* — pick one categorical
 # column and assign its values to A vs B — and *independent filter sets* — a full
@@ -9070,7 +9102,7 @@ def render_per_text_tab(
         rate = _c_word_rate(
             words_filtered, text_col, text_id, min_readers, fkey, screen_id
         )
-        rate = _apply_min_readers(st, rate, min_readers, key="ptext6_min_note")
+        rate = _apply_rate_min_readers(st, rate, min_readers, key="ptext6_min_note")
         _chart(make_word_rate_figure(rate, **fw))
         _download_tidy(
             st,

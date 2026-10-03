@@ -1,0 +1,1 @@
+Skip and regression-in rates count only the readers who reported each flag: a missing flag in the data stays missing instead of counting as a no, each rate shows its own reader count, and the minimum-readers guard applies to each rate separately.

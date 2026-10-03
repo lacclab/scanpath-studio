@@ -33,6 +33,7 @@ from .constants import (
     WIZARD_LEAVE_KEY,
     multipleye_upload_enabled,
     plural,
+    upload_identity,
     upload_limit_label,
     upload_limit_mb,
 )
@@ -1673,8 +1674,12 @@ def _wizard_restore_config(host) -> None:
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
+        # Cleared: forget the last file, so choosing it again re-applies it.
+        st.session_state.pop("_wizard_config_last", None)
         return
-    signature = (uploaded.name, uploaded.size)
+    # Once per upload, not per name + size — a revised file of the same length
+    # is a different file (`upload_identity`).
+    signature = upload_identity(uploaded)
     if st.session_state.get("_wizard_config_last") == signature:
         return
     st.session_state["_wizard_config_last"] = signature

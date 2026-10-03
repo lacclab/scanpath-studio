@@ -17,7 +17,7 @@ from streamlit_sortables import sort_items
 
 from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
-from .annotations import known_tags
+from .annotations import has_screen_annotations, known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
@@ -8291,7 +8291,10 @@ def render_trial_filters(
     _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
-    host.markdown("**By annotation**")
+    # The annotation filters are trial level: they read the trial's own star
+    # and tags, never a screen's (`annotations.select_keys`), so the picker
+    # offers trial-level tags only and the panel says where screen ones are.
+    host.markdown("**By trial annotation**")
     if f"{prefix}filter_favorites" not in st.session_state:
         st.session_state[f"{prefix}filter_favorites"] = bool(
             st.session_state.get(f"{prefix}_trial_filters_raw", {}).get(
@@ -8304,10 +8307,11 @@ def render_trial_filters(
         f"{ICONS['favorite']} Favorites only",
         key=f"{prefix}filter_favorites",
         on_change=_apply,
+        help="Keep trials starred as a whole. A star on one screen does not count.",
     )
     # DATA-48: the tags of the dataset this pool comes from — compare mode's B
     # (the `cmp` prefix) may be another dataset, with tags of its own.
-    tags = known_tags(prefix)
+    tags = known_tags(prefix, trial_level=True)
     if tags:
         _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
         _labeled(
@@ -8317,6 +8321,7 @@ def render_trial_filters(
             options=tags,
             key=f"{prefix}filter_req_tags",
             on_change=_apply,
+            help="Keep trials tagged as a whole with any of these.",
         )
         _seed_filter_widget(f"{prefix}filter_exc_tags", tags, [], prefix=prefix)
         _labeled(
@@ -8326,7 +8331,12 @@ def render_trial_filters(
             options=tags,
             key=f"{prefix}filter_exc_tags",
             on_change=_apply,
-            help="e.g. hide everything tagged 'To exclude'.",
+            help="Hide trials tagged as a whole with any of these, e.g. 'To exclude'.",
+        )
+    if has_screen_annotations(prefix):
+        host.caption(
+            "Screen annotations are not used by these filters. They are listed "
+            f"on {ICONS['view_data']} **Data Management → Annotations**."
         )
 
     # UX-26: the filter reset used to appear only in the empty-result diagnostic

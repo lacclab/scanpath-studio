@@ -181,7 +181,8 @@ orphan screens instead of silently joining the wrong coordinate spaces.
 All geometry-dependent operations group by screen: fixation-to-word assignment,
 saccades, passes, regressions, and word measures never cross a screen boundary.
 The main view shows one screen with previous/next navigation; annotations can be
-stored on the parent trial or the current screen. Bulk output uses deterministic
+stored on the parent trial or the current screen. The trial filters' *Favorites
+only* and tag pickers read the parent trial's annotation only. Bulk output uses deterministic
 `screens/screen-001-<id>/` folders.
 
 If source reports have arbitrary page markers instead of mappable screen

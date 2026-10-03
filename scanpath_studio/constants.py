@@ -558,6 +558,23 @@ def upload_limit_label() -> str:
     return f"{mb // 1000}GB" if mb >= 1000 and mb % 1000 == 0 else f"{mb}MB"
 
 
+def upload_identity(uploaded) -> tuple[str | None, str]:
+    """Which upload this is: ``(file_id, sha256 of the bytes)``.
+
+    An import that applies a file once — a settings or setup file — compares
+    this with the identity it last applied, so an ordinary rerun is a no-op
+    while a *fresh* upload applies again. The ``file_id`` Streamlit gives each
+    upload event makes re-uploading the very same file count as fresh; the
+    content hash makes a different file count as fresh even where no
+    ``file_id`` exists. Name and size alone did neither: two files can share
+    both.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(uploaded.getvalue()).hexdigest()
+    return getattr(uploaded, "file_id", None), digest
+
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "

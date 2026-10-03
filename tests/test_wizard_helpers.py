@@ -297,3 +297,69 @@ class TestRemoveDataset:
         assert "DS1" not in at.session_state["_datasets"]
         assert "DS2" in at.session_state["_datasets"]
         assert at.session_state["_pending_source_choice"] == app.DEMO_CHOICE
+
+
+def _setup_restore_app():
+    """Drive ``_wizard_restore_config`` through a host whose uploader returns
+    the seeded file (``_setup`` = None is a cleared uploader)."""
+    import streamlit as st
+
+    from scanpath_studio.wizard import _wizard_restore_config
+
+    class _Upload:
+        name = "setup.json"
+
+        def __init__(self, data: bytes, file_id: str):
+            self._data = data
+            self.size = len(data)
+            self.file_id = file_id
+
+        def getvalue(self) -> bytes:
+            return self._data
+
+    class _Host:
+        def file_uploader(self, *args, **kwargs):
+            data = st.session_state["_setup"]
+            if data is None:
+                return None
+            return _Upload(data.encode(), st.session_state["_file_id"])
+
+        def warning(self, *args, **kwargs):
+            st.warning(*args, **kwargs)
+
+    _wizard_restore_config(_Host())
+
+
+class TestRestoreSetupOncePerUpload:
+    def test_a_same_size_replacement_applies(self):
+        import json
+
+        at = AppTest.from_function(_setup_restore_app)
+        at.session_state["_setup"] = json.dumps({"data_source": "Lab A"})
+        at.session_state["_file_id"] = "upload-1"
+        at.run()
+        assert at.session_state["_wizard_restored_meta"]["data_source"] == "Lab A"
+        # Same name and byte count, different content: a different file.
+        at.session_state["_setup"] = json.dumps({"data_source": "Lab B"})
+        at.session_state["_file_id"] = "upload-2"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["_wizard_restored_meta"]["data_source"] == "Lab B"
+
+    def test_clearing_the_uploader_lets_the_same_file_apply_again(self):
+        import json
+
+        at = AppTest.from_function(_setup_restore_app)
+        at.session_state["_setup"] = json.dumps({"data_source": "Lab A"})
+        at.session_state["_file_id"] = "upload-1"
+        at.run()
+        # An ordinary rerun does not re-apply over the session's later state.
+        at.session_state["_wizard_restored_meta"] = {"data_source": "edited"}
+        at.run()
+        assert at.session_state["_wizard_restored_meta"]["data_source"] == "edited"
+        at.session_state["_setup"] = None
+        at.run()
+        assert "_wizard_config_last" not in at.session_state
+        at.session_state["_setup"] = json.dumps({"data_source": "Lab A"})
+        at.run()  # same file_id and bytes as before, but after a clear
+        assert at.session_state["_wizard_restored_meta"]["data_source"] == "Lab A"

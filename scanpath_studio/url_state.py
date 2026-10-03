@@ -68,6 +68,7 @@ from .constants import (
     drift_correction_enabled,
     onestop_regime_for_choice,
     plural,
+    upload_identity,
 )
 from .controls import (
     _ALIGN_OPTIONS,
@@ -1500,8 +1501,13 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
 PENDING_TRIAL_KEY = "_pending_trial_selection"
 
 
-def request_trial(participant: str | None, trial_id: str | None) -> None:
+def request_trial(
+    participant: str | None, trial_id: str | None, *, screen_id: str | None = None
+) -> None:
     """Ask the app to open ``trial_id`` in the Scanpath view (ENG-36).
+
+    ``screen_id`` also opens that screen of a multipart trial — Data
+    Management → Annotations' **Open** on a screen annotation.
 
     Called from a *callback* — the reader/trial tables in Corpus Analysis have a
     "go to this trial" button — which runs before the script, so the trial pool
@@ -1515,6 +1521,7 @@ def request_trial(participant: str | None, trial_id: str | None) -> None:
     st.session_state[PENDING_TRIAL_KEY] = {
         "participant_id": str(participant) if participant else None,
         "trial_id": str(trial_id),
+        "screen_id": str(screen_id) if screen_id not in (None, "") else None,
     }
     _go_scanpath()
 
@@ -2328,13 +2335,17 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     Reads the file captured by 🔗 Share → File's ``plot_config_upload``
     uploader (persisted in session_state across reruns) and writes the saved
     settings into session_state *before* the widgets render — the same mechanism
-    as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made
-    after a restore aren't clobbered on every rerun. Call right after the trial
-    combos are built, before the canvas/visualization controls."""
+    as ``_apply_url_preset``. Deduped by upload identity (``upload_identity``:
+    the upload's ``file_id`` + a content hash) so manual tweaks made after a
+    restore aren't clobbered on every rerun, while a fresh upload — another
+    file, or the same one again — applies. Clearing the uploader forgets the
+    marker. Call right after the trial combos are built, before the
+    canvas/visualization controls."""
     uploaded = st.session_state.get("plot_config_upload")
     if uploaded is None:
+        st.session_state.pop("_plot_config_last_import", None)
         return
-    signature = (uploaded.name, uploaded.size)
+    signature = upload_identity(uploaded)
     if st.session_state.get("_plot_config_last_import") == signature:
         return
     # Stamp the signature up front so a malformed file isn't retried every rerun.

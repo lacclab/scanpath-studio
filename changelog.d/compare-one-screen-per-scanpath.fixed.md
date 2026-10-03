@@ -1,0 +1,1 @@
+Comparing multipart trials draws one screen per scanpath, never every page joined together; pick each one with `screen=` / `screen_b=` in Python or `--screen` / `--compare-screen` on the command line.

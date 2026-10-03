@@ -3254,7 +3254,33 @@ def _first_str(df: pd.DataFrame, col: str) -> str | None:
     return None
 
 
-def _servable_image_path(path: str | None) -> str | None:
+def _reading_stimulus_image(
+    words: pd.DataFrame, fixations: pd.DataFrame, source: str | None = None
+) -> tuple[str, tuple[int, int], tuple[float, float]] | None:
+    """One reading's own stimulus page: ``(path, size, origin)``, or ``None``.
+
+    The per-trial (per-screen) ``image_path`` lives on the reading's rows; the
+    image is offered only when it exists and its pixel size is readable. Its
+    origin (``image_x`` / ``image_y``, where the centred stimulus sat on the
+    monitor) places it to align with the fixations, which carry the same offset.
+    ``source`` names the dataset the rows come from, for `_servable_image_path`
+    (``None``: the active one).
+    """
+    path = _servable_image_path(
+        _first_str(words, "image_path") or _first_str(fixations, "image_path"),
+        source=source,
+    )
+    size = _png_pixel_size(path) if path and os.path.exists(path) else None
+    if size is None:
+        return None
+    origin = (
+        _first_num(words, "image_x") or _first_num(fixations, "image_x") or 0.0,
+        _first_num(words, "image_y") or _first_num(fixations, "image_y") or 0.0,
+    )
+    return path, size, origin
+
+
+def _servable_image_path(path: str | None, source: str | None = None) -> str | None:
     """``path`` if the server may read it into a figure, else ``None`` (ENG-57).
 
     The stimulus layer reads the file off the *server's* disk and sends it to the
@@ -3264,6 +3290,8 @@ def _servable_image_path(path: str | None) -> str | None:
     typed — the image-folder step that fills it legitimately needs local access —
     so honouring it let an upload read any PNG on the server. Paths the app
     resolved itself (the bundled demo, a server-side corpus) are unaffected.
+    ``source`` is the dataset the path came from (``None``: the active one) —
+    a comparison's B can come from another.
     """
     if not path:
         return None
@@ -3273,7 +3301,8 @@ def _servable_image_path(path: str | None) -> str | None:
         return path
     from scanpath_studio.constants import UPLOAD_CHOICE
 
-    source = st.session_state.get("data_source_choice")
+    if source is None:
+        source = st.session_state.get("data_source_choice")
     if source == UPLOAD_CHOICE or source in (st.session_state.get("_datasets") or {}):
         return None
     return path
@@ -4104,8 +4133,11 @@ def _compare_setups(
 ) -> tuple[bool, str]:
     """CMP-11: may A and B be drawn in one coordinate space? Plus the reason.
 
-    ``(True, "")`` for every *same-dataset* pair — one corpus is one screen, and
-    that case must stay exactly as it was before CMP-11.
+    A *same-dataset* pair is ``(True, "")`` while B's screen (``compare_meta``'s
+    ``"canvas"``, its selected screen's own canvas) matches the one A is drawn
+    on; one dataset can hold screens of different sizes, so two that differ
+    are refused with the same reason as two datasets' would be. Its
+    provenance is one corpus's either way, so there is no caveat to add.
 
     For a cross-dataset pair both snapshots go through
     `compare_source.snapshot_for`, deliberately: A's live ``global_*`` canvas
@@ -4119,10 +4151,21 @@ def _compare_setups(
     rail's 🖥️ Screen & geometry panel can override it, and the gate has to test
     the figure that is drawn, not the one the corpus declares.
     """
-    from scanpath_studio.experimental_setup import setups_comparable
+    from scanpath_studio.experimental_setup import SetupSnapshot, setups_comparable
 
-    if not compare_meta or not compare_meta.get("dataset"):
+    if not compare_meta:
         return True, ""
+    if not compare_meta.get("dataset"):
+        canvas_b = compare_meta.get("canvas")
+        canvas_a = (int(canvas_width), int(canvas_height))
+        if canvas_b is None or tuple(canvas_b) == canvas_a:
+            return True, ""
+        return setups_comparable(
+            SetupSnapshot(canvas_width=canvas_a[0], canvas_height=canvas_a[1]),
+            SetupSnapshot(
+                canvas_width=int(canvas_b[0]), canvas_height=int(canvas_b[1])
+            ),
+        )
     setup_b = compare_meta.get("setup")
     if setup_b is None:
         # BUG-85: why, not what happens next — like `setups_comparable`'s reason.
@@ -4161,9 +4204,17 @@ def _build_compare_meta(
     primary_dataset: str | None = None,
     raw_gaze: pd.DataFrame | None = None,
     include_raw_gaze: bool = True,
+    dataset_canvas: tuple[int, int] | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
+
+    ``"canvas"`` in the result is B's own screen: the selected screen's canvas
+    when B's rows carry one, else its dataset's — ``source.setup`` for a second
+    dataset, ``dataset_canvas`` (A's dataset canvas, before any per-screen
+    override) for this one. One dataset can hold screens of different sizes, so
+    dataset identity alone never makes B's screen A's. A second dataset's
+    ``"setup"`` carries the same canvas.
 
     ``primary_dataset`` is A's own corpus name (CMP-15): a cross-dataset
     comparison names *both* sides above their chip strips, since naming only B
@@ -4249,6 +4300,17 @@ def _build_compare_meta(
     else:
         label_primary = str(selected_trial)
         label_compare = str(compare_trial)
+    # B's screen, read before the participant ids are namespaced (they don't
+    # touch the canvas columns, but this is B's data as its corpus has it).
+    setup_b = source.setup if source is not None else None
+    canvas_b = screen_canvas_size(compare_words) or screen_canvas_size(compare_fix)
+    if canvas_b is not None and setup_b is not None:
+        setup_b = replace(setup_b, canvas_width=canvas_b[0], canvas_height=canvas_b[1])
+    if canvas_b is None:
+        if setup_b is not None:
+            canvas_b = setup_b.canvas
+        elif source is None and dataset_canvas is not None:
+            canvas_b = (int(dataset_canvas[0]), int(dataset_canvas[1]))
     figure_participant = compare_participant
     if source is not None:
         compare_words = _qualify_for_compare(compare_words, source.name)
@@ -4268,7 +4330,8 @@ def _build_compare_meta(
         "raw_participant": compare_participant,
         "trial": compare_trial,
         "dataset": source.name if source is not None else None,
-        "setup": source.setup if source is not None else None,
+        "setup": setup_b,
+        "canvas": canvas_b,
         "text_id": _first_text_id(compare_words) if source is not None else None,
     }
 
@@ -5639,6 +5702,9 @@ def render_single_trial_tab(
         words_all = words_filtered
     if fixations_all is None:
         fixations_all = fixations_filtered
+    # The dataset's canvas, before a multipart screen's own replaces it below —
+    # a same-dataset B on a screen with no canvas of its own is drawn on this.
+    dataset_canvas = (int(canvas_width), int(canvas_height))
 
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
@@ -5792,28 +5858,13 @@ def render_single_trial_tab(
     trial_has_fixations = not trial_fixations.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Stimulus-page background image (MultiplEYE): the per-trial image path lives
-    # on the trial's rows. The image is offered only when it exists and its pixel
-    # size is readable. Its origin (image_x/image_y, where the centered stimulus
-    # sits on the monitor) places it to align with the fixations, which carry the
-    # same offset.
-    trial_image_path = _servable_image_path(
-        _first_str(trial_words, "image_path")
-        or _first_str(trial_fixations, "image_path")
-    )
-    trial_image_size = (
-        _png_pixel_size(trial_image_path)
-        if trial_image_path and os.path.exists(trial_image_path)
-        else None
-    )
-    has_stimulus_image = trial_image_size is not None
-    trial_image_origin = (
-        _first_num(trial_words, "image_x")
-        or _first_num(trial_fixations, "image_x")
-        or 0.0,
-        _first_num(trial_words, "image_y")
-        or _first_num(trial_fixations, "image_y")
-        or 0.0,
+    # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.
+    trial_image = _reading_stimulus_image(trial_words, trial_fixations)
+    has_stimulus_image = trial_image is not None
+    trial_image_path, trial_image_size, trial_image_origin = trial_image or (
+        None,
+        None,
+        None,
     )
 
     # Condition chips above the plot are filled later (into chips_slot), once the
@@ -6498,6 +6549,7 @@ def render_single_trial_tab(
             else None
         ),
         include_raw_gaze=draw_compare_raw_gaze,
+        dataset_canvas=dataset_canvas,
     )
     comparing = compare_meta is not None
     # VIZ-48: Compare draws raw gaze too — each reading's own samples, so the
@@ -6524,6 +6576,8 @@ def render_single_trial_tab(
                 "participant_id": compare_meta["raw_participant"],
                 "trial_id": compare_meta["trial"],
                 "source": compare_meta.get("dataset"),
+                # B's own screen (`cmp_screen=`), from its own navigator.
+                "screen_id": selected_compare_screen,
             }
         else:
             share_selection.pop("compare", None)
@@ -6893,10 +6947,7 @@ def render_single_trial_tab(
     # overlay layout asks. CMP-11 therefore gates it on the same predicate
     # instead of refusing every cross-dataset pair outright (CMP-8 §5.3).
     dual_anim = (
-        animate
-        and comparing
-        and not fig_compare_fix.empty
-        and (not cross_dataset or compare_comparable)
+        animate and comparing and not fig_compare_fix.empty and compare_comparable
     )
 
     # EXP-7: publish the state the 🔗 Share subtab writes its reproduction
@@ -6974,6 +7025,8 @@ def render_single_trial_tab(
                 # Share link does two blocks above.
                 participant=str(compare_meta["raw_participant"]),
                 trial=str(compare_meta["trial"]),
+                # B's own screen, from its own navigator (`screen_b=`).
+                screen=selected_compare_screen,
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
                 dataset=str(compare_meta.get("dataset") or ""),
@@ -7126,7 +7179,7 @@ def render_single_trial_tab(
                     dataset_name_b=dataset_name_b,
                 )
             _release_animation_task(anim_task)
-            if comparing and cross_dataset and not compare_comparable:
+            if comparing and not compare_comparable:
                 # UX-144: the replay has no split layout and shows A alone, so
                 # that is what it says. BUG-85 took the static figure's "shown
                 # side by side instead" out of the gate's reason, which is what
@@ -7663,6 +7716,68 @@ def _render_bulk_export(
         )
 
 
+def _comparison_image_b(
+    settings: FigureSettings,
+    viz_settings: dict,
+    compare_meta: dict | None,
+    *,
+    same_page: bool,
+) -> dict:
+    """B's own stimulus page for a split comparison's B panel.
+
+    Resolved from B's own trial and screen — never inherited from A because the
+    two readings share a dataset, which says nothing about whether they share a
+    page. A B without an image of its own gets none, so its panel stays blank
+    rather than showing A's page.
+
+    The one shared image is an **uploaded** one, and only on ``same_page`` — B
+    reads the same text on the same screen of the same dataset as A. An upload
+    stands in for A's page (it is stretched over A's screen), so it is B's page
+    exactly then. Otherwise B shows its own dataset image, or none.
+
+    The manual nudge (offset / scale) corrects one dataset's coordinate frame
+    against its images, so it applies to a same-dataset B and not to another
+    dataset's.
+    """
+    none = {
+        "background_image_b": None,
+        "background_image_size_b": None,
+        "background_image_origin_b": None,
+    }
+    layer_on = bool(viz_settings.get("show_stimulus_image")) or (
+        settings.background_image is not None
+    )
+    if not compare_meta or not layer_on:
+        return none
+    if viz_settings.get("stimulus_image_upload_uri") and same_page:
+        if settings.background_image is None:
+            return none
+        return {
+            "background_image_b": settings.background_image,
+            "background_image_size_b": settings.background_image_size,
+            "background_image_origin_b": settings.background_image_origin,
+        }
+    dataset = compare_meta.get("dataset")
+    own = _reading_stimulus_image(
+        compare_meta.get("words", pd.DataFrame()),
+        compare_meta.get("fixations", pd.DataFrame()),
+        source=dataset,
+    )
+    if own is None:
+        return none
+    path, (width, height), (ox, oy) = own
+    if not dataset:
+        scale = float(viz_settings.get("stimulus_image_scale", 1.0)) or 1.0
+        width, height = width * scale, height * scale
+        ox += float(viz_settings.get("stimulus_image_offset_x", 0.0))
+        oy += float(viz_settings.get("stimulus_image_offset_y", 0.0))
+    return {
+        "background_image_b": path,
+        "background_image_size_b": (float(width), float(height)),
+        "background_image_origin_b": (float(ox), float(oy)),
+    }
+
+
 def _render_comparison_figure(
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -7799,13 +7914,37 @@ def _render_comparison_figure(
         highlight_column=_marked_text_column(viz_settings),
     )
     dropped_metric = None
+    canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
+    # §4: B's panel is drawn to B's own screen — its selected screen's canvas,
+    # else its dataset's (`_build_compare_meta`). Only the split layouts read
+    # it; an overlay of two different screens never gets here (§5.3 resolves
+    # it away), and that holds within one dataset as much as across two.
+    canvas_b = (compare_meta or {}).get("canvas")
+    canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
+    # Always stated, as `api.compare_scanpaths` states it: with no `canvas_b`
+    # the builder hands B's panel A's stimulus image, and dataset identity is
+    # no reason to think B read A's page. B's own image is resolved next.
+    overrides["canvas_b"] = canvas_b or canvas_a
+    overrides.update(
+        _comparison_image_b(
+            settings,
+            viz_settings,
+            compare_meta,
+            same_page=(
+                not cross_dataset
+                and primary_text_id is not None
+                and primary_text_id == compare_text_id
+                and _first_str(
+                    extract_trial(words_filtered, selected_participant, selected_trial),
+                    SCREEN_ID,
+                )
+                == _first_str(
+                    (compare_meta or {}).get("words", pd.DataFrame()), SCREEN_ID
+                )
+            ),
+        )
+    )
     if cross_dataset:
-        # §4: B's panel is drawn to B's own monitor. Only the split layouts read
-        # this; overlay never gets here (§5.3 resolves it away).
-        setup_b = compare_meta.get("setup")
-        if setup_b is not None:
-            overrides["canvas_b"] = setup_b.canvas
-
         # §5.4: a metric only one corpus ships would colour one panel and blank
         # the other. Fall back for *this render* — the stored choice is left
         # alone, so a same-dataset pair gets it straight back — and name what
@@ -7868,9 +8007,8 @@ def _render_comparison_figure(
         # monitor, so a box twice the size of the one beside it may be the same
         # physical size — naming both screens is what keeps that readable.
         active = st.session_state.get("data_source_choice") or "this dataset"
-        setup_b = compare_meta.get("setup")
-        canvas_a = (settings.canvas_width, settings.canvas_height)
-        canvas_b = setup_b.canvas if setup_b is not None else canvas_a
+        if canvas_b is None:
+            canvas_b = canvas_a
         if layout == "overlay":
             # CMP-11: a cross-dataset pair only reaches the overlay on equal
             # canvases, so the caption states the ground it stands on. When
@@ -7902,6 +8040,15 @@ def _render_comparison_figure(
                 f"{canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
+    elif canvas_b is not None and canvas_b != canvas_a:
+        # One dataset, two screen sizes: each panel is drawn to its own screen,
+        # and `setup_note` says why an Overlay could not be drawn.
+        st.caption(
+            "Panels are drawn to each reading's own screen — "
+            f"A {canvas_a[0]}×{canvas_a[1]}, B {canvas_b[0]}×{canvas_b[1]}. "
+            "Sizes are not comparable across panels."
+            + (f" {setup_note}" if setup_note else "")
+        )
     if dropped_metric:
         st.caption(
             f"{ICONS['warning']} **{active_all(st.session_state).label(dropped_metric)}** "

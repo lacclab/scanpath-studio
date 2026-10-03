@@ -55,6 +55,7 @@ from .constants import (
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
+from .multipart import SCREEN_ID
 
 COLORBAR_LEN_FRACTION = 0.33
 
@@ -7357,6 +7358,39 @@ def build_scanpath_replay(
     return fig, frame_step_ms
 
 
+def _require_one_screen_per_reading(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    readings: Sequence[tuple[str, str]],
+) -> None:
+    """Refuse a comparison reading that spans several screens.
+
+    Every screen of a multipart trial is its own coordinate space, so one
+    scanpath drawn from two of them joins its last fixation on one page to the
+    first on the next — a saccade nobody made. Callers cut each reading to one
+    screen first (`multipart.extract_part`); this is the guard that keeps a new
+    caller from forgetting to.
+    """
+    for label, (participant, trial) in zip(("A", "B"), readings, strict=False):
+        for frame in (fixations, words):
+            if frame is None or frame.empty or SCREEN_ID not in frame.columns:
+                continue
+            rows = frame[
+                (frame["participant_id"] == participant) & (frame["trial_id"] == trial)
+            ]
+            screens = rows[SCREEN_ID].dropna().astype(str).unique()
+            if len(screens) > 1:
+                shown = ", ".join(repr(value) for value in screens[:5])
+                raise ValueError(
+                    f"Scanpath {label} (participant={participant!r}, "
+                    f"trial={trial!r}) spans {len(screens)} screens ({shown}). "
+                    "Each screen is its own coordinate space, so a comparison "
+                    "draws one screen per scanpath: cut each reading to one "
+                    "screen first (multipart.extract_part, or "
+                    "compare_scanpaths' screen= / screen_b=)."
+                )
+
+
 def make_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -7371,7 +7405,12 @@ def make_comparison_figure(
 
     ``raw_gaze`` (VIZ-48) holds either reading's samples, keyed like ``words``
     and ``fixations``; with ``show_raw_gaze`` each reading's are drawn under its
-    scanpath, in its colour."""
+    scanpath, in its colour.
+
+    Each scanpath must be one screen: a frame holding several screens of one
+    multipart reading raises ``ValueError`` rather than pooling coordinate
+    spaces (and drawing saccades across page boundaries)."""
+    _require_one_screen_per_reading(words, fixations, (trial_a, trial_b))
     resolved = _resolve_figure_settings(
         settings,
         overrides,

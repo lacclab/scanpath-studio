@@ -1295,6 +1295,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "name a second one.",
     )
     cmp_group.add_argument(
+        "--compare-screen",
+        metavar="SCREEN_ID",
+        help="Screen of the second scanpath's multipart trial (default: its first "
+        "screen), looked up in its own trial. --screen picks the first "
+        "scanpath's. Each scanpath is drawn from one screen.",
+    )
+    cmp_group.add_argument(
         "--compare-layout",
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
@@ -1612,6 +1619,8 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
             f"trial={trial_b!r}. Use --list-trials to see the available pairs."
         )
     frames = {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+    if args.compare_screen is not None:
+        frames["screen_b"] = args.compare_screen
     if cross_dataset:
         frames.update(
             dataset_b=args.compare_dataset_name,
@@ -1896,6 +1905,7 @@ def _print_reproduction_code(
         compare = cs.CompareTarget(
             participant=compare_participant,
             trial=compare_trial,
+            screen=args.compare_screen,
             layout=args.compare_layout,
             compare_stimulus=args.compare_stimulus,
             labels=_compare_labels(args),
@@ -2210,6 +2220,7 @@ def render(argv: list[str]) -> None:
             ("--compare-fixation-flag", args.compare_fixation_flags),
             ("--compare-saccade-classes", args.compare_saccade_classes),
             ("--compare-fix-index-range", args.compare_fix_index_range),
+            ("--compare-screen", args.compare_screen),
         )
         if given
     ]
@@ -3003,6 +3014,9 @@ def render(argv: list[str]) -> None:
                     fixations,
                     (participant, trial),
                     (compare_participant, compare_trial),
+                    # One screen per scanpath, each picked in its own trial.
+                    screen=args.screen,
+                    screen_b=args.compare_screen,
                     words_b=words_b,
                     fixations_b=fixations_b,
                     dataset_b=args.compare_dataset_name,

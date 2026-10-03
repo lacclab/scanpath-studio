@@ -471,10 +471,10 @@ def _emitted_keywords(snippet: str) -> set[str]:
 def test_every_keyword_a_snippet_emits_is_one_its_builder_accepts(kind):
     """The failure this catches is a snippet that raises on its first line.
 
-    `compare_scanpaths` takes neither `screen` nor `drift_connectors` — the app
-    pre-slices each side's screen, and the connector layer is the static
-    builder's alone — so a state carrying both used to emit a call that
-    `_reject_unknown_options` refuses."""
+    `compare_scanpaths` takes no `drift_connectors` — the connector layer is
+    the static builder's alone — so a state carrying it used to emit a call
+    that `_reject_unknown_options` refuses. Both builders that draw a B take
+    its `screen_b`."""
     state = _state(
         kind,
         screen="page_1",
@@ -488,7 +488,7 @@ def test_every_keyword_a_snippet_emits_is_one_its_builder_accepts(kind):
         drift_connectors=True,
         playback_speed=2.0,
         autoplay=False,
-        compare=cs.CompareTarget(participant="p2", trial="t2"),
+        compare=cs.CompareTarget(participant="p2", trial="t2", screen="page_2"),
     )
     builder = getattr(api, cs._API_FUNCTION[kind])
     accepted = set(inspect.signature(builder).parameters) | set(
@@ -1204,18 +1204,32 @@ def test_the_animation_frame_budget_reaches_the_command():
 
 
 def test_a_comparison_command_omits_the_flags_its_render_path_ignores():
-    """`render`'s compare branch passes neither to `compare_scanpaths`, and the
-    Python form correctly omits both — so emitting them would be the two
+    """`render`'s compare branch does not pass it to `compare_scanpaths`, and
+    the Python form correctly omits it — so emitting it would be the two
     flavours of one recipe contradicting each other."""
     state = _state(
         kind="comparison",
-        screen="s2",
         illustration_label="hide",
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
     command = cs.reproduction_code(DEMO, state).cli
     assert "--illustration-label" not in command
-    assert "--screen" not in command
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_each_scanpaths_screen_is_named_in_both_forms(kind):
+    """A multipart comparison draws one screen per scanpath, each from its own
+    navigator, so the recipe names both — never a caveat to slice by hand."""
+    state = _state(
+        kind=kind,
+        screen="s2",
+        compare=cs.CompareTarget(participant="p2", trial="t2", screen="q1"),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert "screen='s2'" in code.python and "screen_b='q1'" in code.python
+    command = _one_line(code.cli)
+    assert "--screen s2" in command and "--compare-screen q1" in command
+    assert not any("extract_part" in note for note in code.caveats)
 
 
 def test_the_raster_geometry_reaches_both_flavours():
@@ -1443,17 +1457,20 @@ def test_figure_code_takes_bs_screen():
     assert "--compare-canvas 1680x1050" in _one_line(out)
 
 
-def test_a_multipart_dual_animation_says_which_screen_b_is_drawn_at():
-    """`animate_scanpath` draws B at its first recorded screen, and the snippet
-    cannot know which one the app's own B navigator shows — so it says how to
-    pick another rather than quietly drawing a different page."""
-    state = _state(
-        kind="animation",
-        screen="question",
-        compare=cs.CompareTarget(participant="p2", trial="t2"),
+def test_figure_code_takes_bs_screen_of_a_multipart_trial():
+    out = _one_line(
+        api.figure_code(
+            kind="comparison",
+            participant="p1",
+            trial="t1",
+            screen="page_2",
+            compare=("p2", "t2"),
+            compare_screen="page_3",
+            flavor="both",
+        )
     )
-    notes = " ".join(cs.reproduction_code(DEMO, state).caveats)
-    assert "first screen" in notes and "extract_part" in notes
+    assert "screen='page_2'" in out and "screen_b='page_3'" in out
+    assert "--screen page_2" in out and "--compare-screen page_3" in out
 
 
 def test_a_dual_animation_snippet_rebuilds_the_two_reading_replay(demo_trial):

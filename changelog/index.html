@@ -1885,73 +1885,75 @@ behind each line, and the releases before 0.28.0, are in
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>
 <ul>
-<li>Every Corpus Analysis table download now has a JSON recipe beside it, recording the dataset, trial filters, analysis choices and counts that produced the table. (AN-34)</li>
-<li>OneStop is now four datasets, one per reading regime; a trial is one reading, and its title, passage and question screens are its screens. (DATA-63)</li>
-<li>Add dataset offers Download example tables, a tiny <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> and fixation table that map without manual picks, with a README on each column's unit and the IDs; and each dataset's What's in section opens with what it supports: scanpaths, supplied reading measures, raw gaze and screens. (DATA-67)</li>
-<li>Public datasets download into one Download folder you choose on the Data page (also <code>scanpath-studio run --download-dir</code> or <code>SCANPATH_STUDIO_DOWNLOAD_DIR</code>), each in its own subfolder, and the page names the full folder, so a download into the per-user data folder (on Windows, AppData\Local\scanpath-studio) is no longer hard to find. (UX-184)</li>
-<li>The Compare to trial picker has a ? that explains its 📄 same-text and 👤 same-participant markers. (UX-189)</li>
-<li>Hovering a dropdown label that is cut off with an ellipsis — in the open list or the closed box — shows the full text as a tooltip. (UX-196)</li>
-<li>Corpus Analysis now shows how many trials and readers the trial filters keep, names each active filter, and lets you edit or clear them without going back to the Scanpath view. (UX-198)</li>
-<li>Compare mode draws raw gaze: each reading's samples sit under its scanpath in that scanpath's colour, in all three layouts, from the app, <code>render --compare-with</code> (plus <code>--compare-raw-gaze</code> for a second dataset) and <code>compare_scanpaths(raw_gaze=…, raw_gaze_b=…)</code>. (VIZ-48)</li>
+<li>Public datasets download into one Download folder you choose on the Data page (also <code>scanpath-studio run --download-dir</code> or <code>SCANPATH_STUDIO_DOWNLOAD_DIR</code>), each in its own subfolder, and the page names the full folder, so a download into the per-user data folder (on Windows, AppData\Local\scanpath-studio) is no longer hard to find. (<a href="https://github.com/lacclab/scanpath-studio/issues/288">#288</a>)</li>
+<li>OneStop is now four datasets, one per reading regime; a trial is one reading, and its title, passage and question screens are its screens. (<a href="https://github.com/lacclab/scanpath-studio/issues/295">#295</a>)</li>
+<li>The Compare to trial picker has a ? that explains its 📄 same-text and 👤 same-participant markers. (<a href="https://github.com/lacclab/scanpath-studio/issues/303">#303</a>)</li>
+<li>Compare mode draws raw gaze: each reading's samples sit under its scanpath in that scanpath's colour, in all three layouts, from the app, <code>render --compare-with</code> (plus <code>--compare-raw-gaze</code> for a second dataset) and <code>compare_scanpaths(raw_gaze=…, raw_gaze_b=…)</code>. (<a href="https://github.com/lacclab/scanpath-studio/issues/311">#311</a>)</li>
+<li>Hovering a dropdown label that is cut off with an ellipsis — in the open list or the closed box — shows the full text as a tooltip. (<a href="https://github.com/lacclab/scanpath-studio/issues/315">#315</a>)</li>
+<li>Every Corpus Analysis table download now has a JSON recipe beside it, recording the dataset, trial filters, analysis choices and counts that produced the table. (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
+<li>Add dataset offers Download example tables, a tiny <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> and fixation table that map without manual picks, with a README on each column's unit and the IDs; and each dataset's What's in section opens with what it supports: scanpaths, supplied reading measures, raw gaze and screens. (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
+<li>Corpus Analysis now shows how many trials and readers the trial filters keep, names each active filter, and lets you edit or clear them without going back to the Scanpath view. (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
-<li>Corpus Analysis → Per sentence is held back until it is built on the dataset's own reading measures; until then it is behind SCANPATH_EXPERIMENTAL=1, with plain-language measure names. (AN-33)</li>
-<li>Public corpora now download at a fixed version (OneStop's and PoTeC's OSF files, PoTeC's word boxes), checked by size, and the four OneStop datasets show their counts before they are opened. (DATA-65)</li>
-<li>Shortened the user docs: desktop install steps now sit in Getting started, export troubleshooting is folded into the FAQ, and the feature guides, tutorials index and FAQ are rewritten to be brief. (ENG-88)</li>
-<li>The docs show the app's own Material icons instead of emoji, and every screenshot is re-captured from the current app. (ENG-89)</li>
-<li>On Windows, the desktop app's terminal now says that starting can take a few minutes and to keep it open. (ENG-90)</li>
-<li>The app no longer loads scipy at startup; only line assignment and the group-comparison tests use it, so starting is lighter and the Windows desktop app loads fewer native files that Windows can block. (ENG-91)</li>
-<li>The export bundle warns when its PNG, SVG or PDF figures cannot be drawn because no browser is installed on the server, reports how many files and figures each build made and how many failed, and keeps a trial's HTML figure when its image formats fail. (EXP-24)</li>
-<li>The header no longer shows Streamlit's Deploy button. (UX-183)</li>
-<li>The Annotations hint captions name the Data and Scanpath views with their app icons instead of emoji. (UX-185)</li>
-<li>Hints, tooltips and the tour name the app's views and actions with their icons instead of emoji. (UX-186)</li>
-<li>The trial pickers show a trial id part by part, separated by · (for OneStop: participant · batch · article · paragraph · level · reading), and the Select Trial help says what the parts are. (UX-187)</li>
-<li>Compare mode shows both readings' chips as one two-row A/B table, writing a value they share once, instead of a chip strip per reading. (UX-190)</li>
-<li>The plot controls' block titles (Screen &amp; framing, Axes &amp; grid, Title &amp; labels, and the Filter's Fixations / Saccades) are larger. (UX-191)</li>
-<li>The dataset picker's help icon sits above the + button instead of beside the Select Dataset label. (UX-192)</li>
-<li>The design preset buttons keep their names on an ordinary laptop screen; they shrink to icons only in a window under about 1220 pixels wide. (UX-194)</li>
-<li>A single trial's chips are now a one-row table, a column per field, in the same format as Compare mode's A/B table. (UX-195)</li>
-<li>Edit dataset now opens below the dataset list and the open dataset's counts and tables, instead of replacing them. (UX-197)</li>
-<li>Share → File now says what the settings file includes and leaves out, and after the first upload on a deployment that saves nothing, a dismissible reminder says what to download to keep your work. (UX-199)</li>
-<li>The Data tab is now called Data Management, matching the page's own title. (UX-201)</li>
-<li>The trial pickers show a trial's text id as one part (2_2_1_Adv, not 2 · 2 · 1 · Adv) and leave a first reading's r0 out; a repeated reading still ends in · r1. (UX-202)</li>
-<li>The demo's synthesized raw gaze is labelled beside the figure whenever it is drawn and recorded in the exported settings, and switching Raw gaze on for a trial or screen without samples now says why nothing is drawn. (VIZ-50)</li>
+<li>Shortened the user docs: desktop install steps now sit in Getting started, export troubleshooting is folded into the FAQ, and the feature guides, tutorials index and FAQ are rewritten to be brief. (<a href="https://github.com/lacclab/scanpath-studio/issues/285">#285</a>)</li>
+<li>The docs show the app's own Material icons instead of emoji, and every screenshot is re-captured from the current app. (<a href="https://github.com/lacclab/scanpath-studio/issues/285">#285</a>)</li>
+<li>On Windows, the desktop app's terminal now says that starting can take a few minutes and to keep it open. (<a href="https://github.com/lacclab/scanpath-studio/issues/286">#286</a>)</li>
+<li>The header no longer shows Streamlit's Deploy button. (<a href="https://github.com/lacclab/scanpath-studio/issues/287">#287</a>)</li>
+<li>The app no longer loads scipy at startup; only line assignment and the group-comparison tests use it, so starting is lighter and the Windows desktop app loads fewer native files that Windows can block. (<a href="https://github.com/lacclab/scanpath-studio/issues/290">#290</a>)</li>
+<li>The Annotations hint captions name the Data and Scanpath views with their app icons instead of emoji. (<a href="https://github.com/lacclab/scanpath-studio/issues/302">#302</a>)</li>
+<li>Hints, tooltips and the tour name the app's views and actions with their icons instead of emoji. (<a href="https://github.com/lacclab/scanpath-studio/issues/302">#302</a>)</li>
+<li>The trial pickers show a trial id part by part, separated by · (for OneStop: participant · batch · article · paragraph · level · reading), and the Select Trial help says what the parts are. (<a href="https://github.com/lacclab/scanpath-studio/issues/303">#303</a>)</li>
+<li>Compare mode shows both readings' chips as one two-row A/B table, writing a value they share once, instead of a chip strip per reading. (<a href="https://github.com/lacclab/scanpath-studio/issues/305">#305</a>)</li>
+<li>The plot controls' block titles (Screen &amp; framing, Axes &amp; grid, Title &amp; labels, and the Filter's Fixations / Saccades) are larger. (<a href="https://github.com/lacclab/scanpath-studio/issues/306">#306</a>)</li>
+<li>The dataset picker's help icon sits above the + button instead of beside the Select Dataset label. (<a href="https://github.com/lacclab/scanpath-studio/issues/308">#308</a>)</li>
+<li>The design preset buttons keep their names on an ordinary laptop screen; they shrink to icons only in a window under about 1220 pixels wide. (<a href="https://github.com/lacclab/scanpath-studio/issues/310">#310</a>)</li>
+<li>A single trial's chips are now a one-row table, a column per field, in the same format as Compare mode's A/B table. (<a href="https://github.com/lacclab/scanpath-studio/issues/313">#313</a>)</li>
+<li>Edit dataset now opens below the dataset list and the open dataset's counts and tables, instead of replacing them. (<a href="https://github.com/lacclab/scanpath-studio/issues/319">#319</a>)</li>
+<li>The Data tab is now called Data Management, matching the page's own title. (<a href="https://github.com/lacclab/scanpath-studio/issues/319">#319</a>)</li>
+<li>Public corpora now download at a fixed version (OneStop's and PoTeC's OSF files, PoTeC's word boxes), checked by size, and the four OneStop datasets show their counts before they are opened. (<a href="https://github.com/lacclab/scanpath-studio/issues/321">#321</a>)</li>
+<li>Corpus Analysis → Per sentence is held back until it is built on the dataset's own reading measures; until then it is behind SCANPATH_EXPERIMENTAL=1, with plain-language measure names. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>The trial pickers show a trial's text id as one part (2_2_1_Adv, not 2 · 2 · 1 · Adv) and leave a first reading's r0 out; a repeated reading still ends in · r1. (<a href="https://github.com/lacclab/scanpath-studio/issues/326">#326</a>)</li>
+<li>The export bundle warns when its PNG, SVG or PDF figures cannot be drawn because no browser is installed on the server, reports how many files and figures each build made and how many failed, and keeps a trial's HTML figure when its image formats fail. (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
+<li>Share → File now says what the settings file includes and leaves out, and after the first upload on a deployment that saves nothing, a dismissible reminder says what to download to keep your work. (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
+<li>The demo's synthesized raw gaze is labelled beside the figure whenever it is drawn and recorded in the exported settings, and switching Raw gaze on for a trial or screen without samples now says why nothing is drawn. (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
+<li>Changelog entries and issues are cited by their GitHub #number; the [PREFIX-N] tracker IDs are retired for new work, and an entry with no issue links the pull request that merged it. (<a href="https://github.com/lacclab/scanpath-studio/issues/331">#331</a>)</li>
+<li>The plot controls, the Data Management tables and the dataset setup screens now name each column as it is in your files, and mark the columns Scanpath Studio computed. (<a href="https://github.com/lacclab/scanpath-studio/issues/333">#333</a>)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
-<li>Word labels sit in the middle of their word boxes, and the OneStop demo's stimulus images are placed where the experiment drew them (368, 186), so the image text, the drawn labels and the boxes line up. (BUG-97)</li>
-<li>The 📁 folder button no longer crashes the app on macOS, and it opens the system's own folder dialog, including in the desktop app, where it never opened before. (BUG-98)</li>
-<li>Loading a OneStop report no longer warns that its <code>TOP_LEFT</code> column isn't numbers, and the column mapping no longer proposes that text column for the word box's X and Y. (BUG-99)</li>
-<li>A public dataset whose tables load but fail to normalize now says so on the Data page, naming the dataset and the reason, with Edit dataset and Load the bundled demo beside it; the error and its traceback also reach the server terminal. (BUG-100)</li>
-<li>The Line index field's help now says what it does: the plot infers lines from the word boxes, not from this column. (BUG-102)</li>
-<li>Loading a corrected version of a large table (over 200,000 rows) no longer brings back the old version's values. Before, if the change fell in a row the app did not check, it kept the old normalized tables, stored them as the new dataset and kept showing the old results. (BUG-103)</li>
-<li>A multipart export's plot config records each screen's own canvas, not the dataset's. (BUG-104)</li>
-<li>A multipart trial recorded as raw gaze alone exports one folder per screen, instead of drawing every screen's samples in one figure. (BUG-105)</li>
-<li>Comparing with another dataset, the gaze-sample chip counts scanpath B's own samples instead of showing a dash. (BUG-106)</li>
-<li>Comparing with another dataset no longer warns that the default uniform colour isn't in both datasets. (BUG-107)</li>
-<li>The settings buttons beside each plot control, and beside Animate and Compare, have names a screen reader can announce, such as "Fixation settings". (BUG-108)</li>
-<li>Corpus Analysis → Per sentence keeps each screen's sentences apart, instead of averaging sentence 1 of every screen together. (BUG-109)</li>
-<li>Opening a trial whose ids join like another's (a__b / c and a / b__c), or a screen named "parent", no longer copies the other's star, tags or note into it. (BUG-110)</li>
-<li>Two Groups cohorts with the same name are shown as "Name (A)" and "Name (B)" instead of one replacing the other in every chart. (BUG-111)</li>
-<li>Groups counts a cohort's readers on its word measures when the dataset has no fixations, instead of reporting 0 readers. (BUG-112)</li>
-<li>The dataset list's Status column now says whether each dataset can be opened (Ready, Needs download, Needs setup), the same way whichever dataset is open. (BUG-113)</li>
-<li>Groups' difference profile and two-group word heatmap compare both cohorts on one screen, chosen with a Screen picker, instead of each cohort's own first screen. (BUG-114)</li>
-<li>PoTeC's trial ID is now the reader and the text together (<code>0_b0</code>), not the text name every reader shares, in the app, the CLI (<code>render --potec -t 0_b0</code>) and <code>load_potec</code>. (DATA-61)</li>
-<li>A built-in dataset's Edit dataset screen (the demo, PoTeC, OneStop) now ends in Save changes: mapping edits wait for it, and Cancel discards them. (DATA-62)</li>
-<li>The OneStop datasets no longer load the QA part, which is the question and answers screens again as one period, so its fixations are no longer counted twice or shown as an extra screen. (DATA-64)</li>
-<li>The docs Gallery's figures draw after you arrive from another page or a heading link, and the site's llms.txt and llms-full.txt list every page again. (ENG-92)</li>
-<li>The docs are corrected where a careful review found them wrong or vague: Pupil Labs coordinates, which measures are computed where, excluding trials by tag, which counts follow the filters, offline HTML, and what a setup file holds. (ENG-93)</li>
-<li>The docs site is published only from a build that passed, and is rebuilt when the scripts and changelog it is generated from change. (ENG-94)</li>
-<li>The security policy now lists the settings a shared deployment should use, instead of linking to a docs page that led straight back to it. (ENG-95)</li>
-<li>Switching back to the dataset you had open just before no longer normalizes it again: going PoTeC → OneStop → PoTeC is instant on the way back. (PERF-18)</li>
-<li>The plot no longer shows a scrollbar with nothing to scroll. (UX-188)</li>
-<li>Clicking the plot, or any other embedded frame, now closes an open plot-control popover. (UX-193)</li>
-<li>Every button and menu drawn as an icon or arrow alone, such as the trial and screen steps, the sorts, the folder pickers and the + menu, now has a name a screen reader announces; the rail's settings buttons and the tour's close button show a keyboard focus ring again; and counts read "1 trial", not "1 trial(s)". (UX-200)</li>
+<li>Switching back to the dataset you had open just before no longer normalizes it again: going PoTeC → OneStop → PoTeC is instant on the way back. (<a href="https://github.com/lacclab/scanpath-studio/issues/289">#289</a>)</li>
+<li>PoTeC's trial ID is now the reader and the text together (<code>0_b0</code>), not the text name every reader shares, in the app, the CLI (<code>render --potec -t 0_b0</code>) and <code>load_potec</code>. (<a href="https://github.com/lacclab/scanpath-studio/issues/291">#291</a>)</li>
+<li>A built-in dataset's Edit dataset screen (the demo, PoTeC, OneStop) now ends in Save changes: mapping edits wait for it, and Cancel discards them. (<a href="https://github.com/lacclab/scanpath-studio/issues/291">#291</a>)</li>
+<li>Word labels sit in the middle of their word boxes, and the OneStop demo's stimulus images are placed where the experiment drew them (368, 186), so the image text, the drawn labels and the boxes line up. (<a href="https://github.com/lacclab/scanpath-studio/issues/294">#294</a>)</li>
+<li>The docs Gallery's figures draw after you arrive from another page or a heading link, and the site's llms.txt and llms-full.txt list every page again. (<a href="https://github.com/lacclab/scanpath-studio/issues/297">#297</a>)</li>
+<li>The docs are corrected where a careful review found them wrong or vague: Pupil Labs coordinates, which measures are computed where, excluding trials by tag, which counts follow the filters, offline HTML, and what a setup file holds. (<a href="https://github.com/lacclab/scanpath-studio/issues/297">#297</a>)</li>
+<li>The 📁 folder button no longer crashes the app on macOS, and it opens the system's own folder dialog, including in the desktop app, where it never opened before. (<a href="https://github.com/lacclab/scanpath-studio/issues/298">#298</a>)</li>
+<li>Loading a OneStop report no longer warns that its <code>TOP_LEFT</code> column isn't numbers, and the column mapping no longer proposes that text column for the word box's X and Y. (<a href="https://github.com/lacclab/scanpath-studio/issues/299">#299</a>)</li>
+<li>A public dataset whose tables load but fail to normalize now says so on the Data page, naming the dataset and the reason, with Edit dataset and Load the bundled demo beside it; the error and its traceback also reach the server terminal. (<a href="https://github.com/lacclab/scanpath-studio/issues/300">#300</a>)</li>
+<li>The plot no longer shows a scrollbar with nothing to scroll. (<a href="https://github.com/lacclab/scanpath-studio/issues/303">#303</a>)</li>
+<li>Clicking the plot, or any other embedded frame, now closes an open plot-control popover. (<a href="https://github.com/lacclab/scanpath-studio/issues/307">#307</a>)</li>
+<li>The Line index field's help now says what it does: the plot infers lines from the word boxes, not from this column. (<a href="https://github.com/lacclab/scanpath-studio/issues/310">#310</a>)</li>
+<li>The docs site is published only from a build that passed, and is rebuilt when the scripts and changelog it is generated from change. (<a href="https://github.com/lacclab/scanpath-studio/issues/310">#310</a>)</li>
+<li>Loading a corrected version of a large table (over 200,000 rows) no longer brings back the old version's values. Before, if the change fell in a row the app did not check, it kept the old normalized tables, stored them as the new dataset and kept showing the old results. (<a href="https://github.com/lacclab/scanpath-studio/issues/314">#314</a>)</li>
+<li>The dataset list's Status column now says whether each dataset can be opened (Ready, Needs download, Needs setup), the same way whichever dataset is open. (<a href="https://github.com/lacclab/scanpath-studio/issues/319">#319</a>)</li>
+<li>A multipart export's plot config records each screen's own canvas, not the dataset's. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>A multipart trial recorded as raw gaze alone exports one folder per screen, instead of drawing every screen's samples in one figure. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Comparing with another dataset, the gaze-sample chip counts scanpath B's own samples instead of showing a dash. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Comparing with another dataset no longer warns that the default uniform colour isn't in both datasets. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>The settings buttons beside each plot control, and beside Animate and Compare, have names a screen reader can announce, such as "Fixation settings". (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Corpus Analysis → Per sentence keeps each screen's sentences apart, instead of averaging sentence 1 of every screen together. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Opening a trial whose ids join like another's (a__b / c and a / b__c), or a screen named "parent", no longer copies the other's star, tags or note into it. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Two Groups cohorts with the same name are shown as "Name (A)" and "Name (B)" instead of one replacing the other in every chart. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Groups counts a cohort's readers on its word measures when the dataset has no fixations, instead of reporting 0 readers. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Groups' difference profile and two-group word heatmap compare both cohorts on one screen, chosen with a Screen picker, instead of each cohort's own first screen. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>The OneStop datasets no longer load the QA part, which is the question and answers screens again as one period, so its fixations are no longer counted twice or shown as an extra screen. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>The security policy now lists the settings a shared deployment should use, instead of linking to a docs page that led straight back to it. (<a href="https://github.com/lacclab/scanpath-studio/issues/324">#324</a>)</li>
+<li>Every button and menu drawn as an icon or arrow alone, such as the trial and screen steps, the sorts, the folder pickers and the + menu, now has a name a screen reader announces; the rail's settings buttons and the tour's close button show a keyboard focus ring again; and counts read "1 trial", not "1 trial(s)". (<a href="https://github.com/lacclab/scanpath-studio/issues/328">#328</a>)</li>
 </ul>
 <p><strong>Security</strong></p>
 <ul>
-<li>Figures no longer offer Plotly's "Share chart…" button, which uploaded the figure and its data to Plotly Cloud — in the app, in saved HTML and on the docs site. (BUG-101)</li>
+<li>Figures no longer offer Plotly's "Share chart…" button, which uploaded the figure and its data to Plotly Cloud — in the app, in saved HTML and on the docs site. (<a href="https://github.com/lacclab/scanpath-studio/issues/310">#310</a>)</li>
 </ul>
 <h2 id="0321-2026-10-01">0.32.1 — 2026-10-01<a class="headerlink" href="#0321-2026-10-01" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

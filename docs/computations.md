@@ -64,19 +64,19 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 | [`pre.rtl`](#pre-rtl) | Right-to-left detection | Preprocessing | — | Verified |
 | [`pre.sensitivity`](#pre-sensitivity) | Measure sensitivity | Preprocessing | — | Partially verified |
 | [`align.algorithms`](#align-algorithms) | Vertical drift correction | Preprocessing | — | Partially verified |
-| [`agg.measure_values`](#agg-measure-values) | Measure value extraction | Statistical aggregation / test | — | Partially verified |
-| [`agg.aggregate_value`](#agg-aggregate-value) | Central tendency | Statistical aggregation / test | — | Verified |
-| [`agg.spread`](#agg-spread) | Spread band | Statistical aggregation / test | — | Verified |
-| [`agg.bootstrap_ci`](#agg-bootstrap-ci) | Bootstrap confidence interval | Statistical aggregation / test | same as the measure | Verified |
-| [`agg.effect_size`](#agg-effect-size) | Group comparison and effect size | Statistical aggregation / test | — | Partially verified |
-| [`agg.group_mask`](#agg-group-mask) | Group definition | Statistical aggregation / test | — | Verified |
-| [`agg.word_profile`](#agg-word-profile) | Per-word cohort profile | Statistical aggregation / test | — | Partially verified |
-| [`agg.word_rates`](#agg-word-rates) | Skip / regression rate profile | Statistical aggregation / test | proportion | Partially verified |
-| [`agg.reader_summary`](#agg-reader-summary) | Per-reader summary | Statistical aggregation / test | ms, px, counts, proportions | Partially verified |
-| [`agg.trial_summary`](#agg-trial-summary) | Per-trial summary | Statistical aggregation / test | ms, counts | Partially verified |
-| [`agg.normalize`](#agg-normalize) | Normalized measure column | Statistical aggregation / test | — | Partially verified |
-| [`agg.landing_curve`](#agg-landing-curve) | Landing-position curve | Statistical aggregation / test | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified |
-| [`agg.over_time`](#agg-over-time) | Trend over time | Statistical aggregation / test | — | Partially verified |
+| [`agg.measure_values`](#agg-measure-values) | Measure value extraction | Statistical aggregation | — | Partially verified |
+| [`agg.aggregate_value`](#agg-aggregate-value) | Central tendency | Statistical aggregation | — | Verified |
+| [`agg.spread`](#agg-spread) | Spread band | Statistical aggregation | — | Verified |
+| [`agg.bootstrap_ci`](#agg-bootstrap-ci) | Bootstrap confidence interval | Statistical aggregation | same as the measure | Verified |
+| [`agg.effect_size`](#agg-effect-size) | Group means and difference | Statistical aggregation | — | Partially verified |
+| [`agg.group_mask`](#agg-group-mask) | Group definition | Statistical aggregation | — | Verified |
+| [`agg.word_profile`](#agg-word-profile) | Per-word cohort profile | Statistical aggregation | — | Partially verified |
+| [`agg.word_rates`](#agg-word-rates) | Skip / regression rate profile | Statistical aggregation | proportion | Partially verified |
+| [`agg.reader_summary`](#agg-reader-summary) | Per-reader summary | Statistical aggregation | ms, px, counts, proportions | Partially verified |
+| [`agg.trial_summary`](#agg-trial-summary) | Per-trial summary | Statistical aggregation | ms, counts | Partially verified |
+| [`agg.normalize`](#agg-normalize) | Normalized measure column | Statistical aggregation | — | Partially verified |
+| [`agg.landing_curve`](#agg-landing-curve) | Landing-position curve | Statistical aggregation | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified |
+| [`agg.over_time`](#agg-over-time) | Trend over time | Statistical aggregation | — | Partially verified |
 | [`sim.nld`](#sim-nld) | Normalized Levenshtein distance | Similarity | dimensionless (0–1) | Verified |
 | [`sim.aoi_sequence`](#sim-aoi-sequence) | AoI sequence | Similarity | — | Verified |
 | [`sim.windowed`](#sim-windowed) | NLD by fixation index / time | Similarity | — | Partially verified |
@@ -722,7 +722,7 @@ Trial-relative onset times for animation and time series.
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-## Statistical aggregation / test
+## Statistical aggregation
 
 ### `agg.measure_values` — Measure value extraction { #agg-measure-values }
 
@@ -783,18 +783,19 @@ Percentile bootstrap CI of the chosen aggregate.
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Verified** |
 
-### `agg.effect_size` — Group comparison and effect size { #agg-effect-size }
+### `agg.effect_size` — Group means and difference { #agg-effect-size }
 
-Mean difference, Cohen's d, and a significance test (AN-21).
+Two groups' means, their difference and Cohen's d (AN-21).
 
-**Formula.** `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1. The test is Mann–Whitney U (two-sided) or Welch's t-test.
+**Formula.** Each value is one reader's mean of the measure (pooled observations when the data names no readers). `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and is shown only when the groups share no reader.
 
 | | |
 | --- | --- |
-| **Output** | mean_a, mean_b, mean_diff, cohen_d, statistic, p_value, n_a, n_b |
-| **Missing & edge cases** | n < 2 in either group ⇒ NaN statistics. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
-| **Reference** | **Exploratory, not pre-registered.** No multiple-comparison correction is applied; the p-value is descriptive. |
-| **Code** | `scanpath_studio/aggregation.py:group_effect_size` |
+| **Output** | mean_a, mean_b, mean_diff, cohen_d, n_a, n_b |
+| **Grouping / ordering** | one value per reader in each group |
+| **Missing & edge cases** | n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
+| **Reference** | **Descriptive only** — no significance test. A reader in both groups contributes to both means, so the groups are not independent samples. |
+| **Code** | `scanpath_studio/aggregation.py:group_mean_difference` |
 | **Consumers** | Corpus Analysis, API |
 | **Tests** | `tests/test_aggregation.py` |
 | **Verification** | tier A, C — **Partially verified** |

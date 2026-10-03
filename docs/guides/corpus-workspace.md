@@ -30,7 +30,8 @@ Choose a measure, how to aggregate it, and the spread to show. Set a **minimum
 number of readers** per word so sparse words don't look like stable estimates.
 
 **Groups** defines a cohort by splitting on a field, or with its own filters.
-Turn on **Compare** for a second cohort, with the difference and effect size.
+Turn on **Compare** for a second cohort, with the two group means and their
+difference — descriptive, with no significance test.
 Fields from attached participant, trial or text tables appear here too.
 
 ## From summary to evidence

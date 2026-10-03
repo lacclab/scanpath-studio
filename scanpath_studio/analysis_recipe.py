@@ -104,7 +104,6 @@ def analysis_choices(
     min_readers: int | None = None,
     feature: str | None = None,
     x_axis: str | None = None,
-    test: str | None = None,
     groups: Sequence[dict] | None = None,
 ) -> dict:
     """The choices that made one table, with what does not apply left out.
@@ -144,8 +143,6 @@ def analysis_choices(
         out["feature"] = feature
     if x_axis:
         out["x_axis"] = x_axis
-    if test:
-        out["test"] = test
     if groups:
         out["groups"] = list(groups)
     return out

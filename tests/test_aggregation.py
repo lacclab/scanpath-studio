@@ -31,8 +31,8 @@ from scanpath_studio.aggregation import (
     cohort_summary_table,
     cohort_word_profile,
     ensure_fixation_enrichment,
-    group_effect_size,
     group_mask,
+    group_mean_difference,
     group_word_difference,
     landing_positions,
     measure_values,
@@ -1252,38 +1252,39 @@ class TestGroupComparison:
         )
         assert (out["err_lo"] >= 0).all() and (out["err_hi"] >= 0).all()
 
-    def test_group_effect_size(self):
+    def test_group_mean_difference(self):
         a = np.array([1.0, 2, 3, 4, 5])
         b = np.array([3.0, 4, 5, 6, 7])
-        res = group_effect_size(a, b, test="t-test")
+        res = group_mean_difference(a, b)
         assert res["mean_a"] == 3.0 and res["mean_b"] == 5.0
         assert res["mean_diff"] == pytest.approx(-2.0)
         assert res["n_a"] == 5 and res["n_b"] == 5
         # Both groups have sd = sqrt(2.5) → pooled sd = sqrt(2.5), d = -2/1.5811.
         assert res["cohen_d"] == pytest.approx(-2.0 / np.sqrt(2.5))
-        assert 0 <= res["p_value"] <= 1
-        res_mw = group_effect_size(a, b, test="Mann–Whitney")
-        assert res_mw["test"] == "Mann–Whitney"
-        assert 0 <= res_mw["p_value"] <= 1
 
-    def test_group_effect_size_ignores_nans(self):
-        res = group_effect_size(
+    def test_group_mean_difference_runs_no_significance_test(self):
+        """The group comparison is descriptive: no test, no p-value."""
+        res = group_mean_difference(np.arange(5.0), np.arange(5.0) + 1)
+        assert set(res) == {"mean_a", "mean_b", "n_a", "n_b", "mean_diff", "cohen_d"}
+
+    def test_group_mean_difference_ignores_nans(self):
+        res = group_mean_difference(
             np.array([1.0, 2, 3, 4, 5, np.nan]), np.array([3.0, 4, 5, 6, 7])
         )
         assert res["n_a"] == 5 and res["mean_a"] == 3.0
 
-    def test_group_effect_size_tiny_and_empty_groups(self):
-        res = group_effect_size(np.array([1.0]), np.array([2.0]))
-        assert np.isnan(res["cohen_d"]) and np.isnan(res["p_value"])
+    def test_group_mean_difference_tiny_and_empty_groups(self):
+        res = group_mean_difference(np.array([1.0]), np.array([2.0]))
+        assert np.isnan(res["cohen_d"])
         assert res["mean_diff"] == pytest.approx(-1.0)
-        empty = group_effect_size(np.array([]), np.array([]))
+        empty = group_mean_difference(np.array([]), np.array([]))
         assert empty["n_a"] == 0 and empty["n_b"] == 0
         assert np.isnan(empty["mean_a"]) and np.isnan(empty["mean_diff"])
 
     def test_cohen_d_nan_when_pooled_sd_zero(self):
         # Both groups internally constant but means differ → d is undefined;
         # 0.0 would falsely read as "no effect" next to a non-zero mean diff.
-        res = group_effect_size(np.array([1.0, 1, 1]), np.array([2.0, 2, 2]))
+        res = group_mean_difference(np.array([1.0, 1, 1]), np.array([2.0, 2, 2]))
         assert res["mean_diff"] == -1.0
         assert np.isnan(res["cohen_d"])
 
@@ -1481,7 +1482,10 @@ def test_aoi_only_cohorts_count_their_readers():
 
     at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
     assert not at.exception, at.exception
-    assert "**Adv**: 2 readers · **Ele**: 2 readers." in [c.value for c in at.caption]
+    assert any(
+        c.value.startswith("**Adv**: 2 readers · **Ele**: 2 readers · **2 in both**")
+        for c in at.caption
+    )
 
 
 def test_cohort_word_comparisons_share_one_screen():

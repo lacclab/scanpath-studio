@@ -45,7 +45,7 @@ CATEGORY_NORMALIZATION = "Normalization / inference"
 CATEGORY_ASSIGNMENT = "Assignment / classification"
 CATEGORY_PREPROCESSING = "Preprocessing"
 CATEGORY_MEASURE = "Scientific measure"
-CATEGORY_AGGREGATION = "Statistical aggregation / test"
+CATEGORY_AGGREGATION = "Statistical aggregation"
 CATEGORY_SIMILARITY = "Similarity"
 CATEGORY_GEOMETRY = "Unit / coordinate conversion"
 CATEGORY_DISPLAY = "Display / export transformation"
@@ -1005,26 +1005,30 @@ REGISTER: tuple[Computation, ...] = (
     ),
     Computation(
         id="agg.effect_size",
-        name="Group comparison and effect size",
+        name="Group means and difference",
         category=CATEGORY_AGGREGATION,
-        summary="Mean difference, Cohen's d, and a significance test (AN-21).",
+        summary="Two groups' means, their difference and Cohen's d (AN-21).",
         formula=(
+            "Each value is one reader's mean of the measure (pooled "
+            "observations when the data names no readers). "
             "`mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD "
-            "`sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1. The "
-            "test is Mann–Whitney U (two-sided) or Welch's t-test."
+            "`sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and "
+            "is shown only when the groups share no reader."
         ),
-        code="scanpath_studio/aggregation.py:group_effect_size",
-        output="mean_a, mean_b, mean_diff, cohen_d, statistic, p_value, n_a, n_b",
+        code="scanpath_studio/aggregation.py:group_mean_difference",
+        output="mean_a, mean_b, mean_diff, cohen_d, n_a, n_b",
+        grouping="one value per reader in each group",
         missing=(
-            "n < 2 in either group ⇒ NaN statistics. A zero pooled SD gives "
+            "n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives "
             "**NaN**, not 0.0, so it cannot read as 'no effect' beside a "
             "non-zero mean difference."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference=(
-            "**Exploratory, not pre-registered.** No multiple-comparison "
-            "correction is applied; the p-value is descriptive."
+            "**Descriptive only** — no significance test. A reader in both "
+            "groups contributes to both means, so the groups are not "
+            "independent samples."
         ),
         consumers=(_CORPUS, _API),
         tests=("tests/test_aggregation.py",),

@@ -690,11 +690,11 @@ def measure_values(
 def reader_means(frame: pd.DataFrame, measure: Measure) -> np.ndarray | None:
     """One value per reader — the mean of their observations (AN-21, BUG-82).
 
-    The unit a group test may treat as independent. Every word or fixation of
-    one reader is correlated with that reader's others, so testing the pooled
-    observations (``measure_values``) counts one reader's 1 307 words as 1 307
-    subjects and returns p ≈ 0 for two readers. ``None`` when the frame names
-    no readers, so the caller can say it is falling back to observations.
+    The unit the Groups summary compares. Every word or fixation of one reader
+    is correlated with that reader's others, so pooling the observations
+    (``measure_values``) would let one reader's 1 307 words outweigh another
+    reader's 200. ``None`` when the frame names no readers, so the caller can
+    say it is falling back to observations.
     """
     if frame is None or frame.empty or measure.column not in frame.columns:
         return np.array([], dtype="float64")
@@ -1566,17 +1566,17 @@ def paired_group_summary(
     )
 
 
-def group_effect_size(
+def group_mean_difference(
     values_a: np.ndarray,
     values_b: np.ndarray,
-    *,
-    test: str = "Mann–Whitney",
 ) -> dict[str, object]:
-    """Mean difference, Cohen's *d*, and a significance test (AN-21).
+    """Descriptive two-group summary: the means, their difference, and Cohen's *d*.
 
-    ``test`` is ``"Mann–Whitney"`` (rank-sum) or ``"t-test"`` (Welch). Returns a
-    dict with the means, ``mean_diff``, ``cohen_d``, ``test``, ``statistic``,
-    ``p_value`` and the group sizes. Exploratory — *not* pre-registered.
+    Returns ``mean_a``, ``mean_b``, ``n_a``, ``n_b``, ``mean_diff`` and
+    ``cohen_d`` (pooled-SD standardized difference). Purely descriptive — no
+    significance test. ``cohen_d`` assumes two separate sets of values; the
+    caller decides whether to show it (the Groups view does not when the same
+    readers are in both groups).
     """
     a = np.asarray(values_a, dtype="float64")
     a = a[~np.isnan(a)]
@@ -1587,9 +1587,6 @@ def group_effect_size(
         "mean_b": float(np.mean(b)) if b.size else float("nan"),
         "n_a": int(a.size),
         "n_b": int(b.size),
-        "test": test,
-        "statistic": float("nan"),
-        "p_value": float("nan"),
         "cohen_d": float("nan"),
     }
     out["mean_diff"] = out["mean_a"] - out["mean_b"]
@@ -1604,15 +1601,4 @@ def group_effect_size(
     out["cohen_d"] = (
         float((np.mean(a) - np.mean(b)) / pooled) if pooled > 0 else float("nan")
     )
-    try:
-        from scipy import stats  # BSD-3; added for AN-21 (see PRE-0 ADR).
-
-        if test == "t-test":
-            res = stats.ttest_ind(a, b, equal_var=False)
-        else:
-            res = stats.mannwhitneyu(a, b, alternative="two-sided")
-        out["statistic"] = float(res.statistic)
-        out["p_value"] = float(res.pvalue)
-    except Exception:  # pragma: no cover - scipy always present once added
-        pass
     return out

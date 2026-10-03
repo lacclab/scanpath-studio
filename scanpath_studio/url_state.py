@@ -21,6 +21,7 @@ import streamlit as st
 
 from scanpath_studio.html_embed import embed_html_iframe
 
+from .authoring import event_records_frame
 from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
@@ -1072,16 +1073,16 @@ def _apply_url_preset() -> str | None:
         if "author_text" in qp:
             st.session_state.setdefault("author_text", str(qp["author_text"]))
         if "author_events" in qp:
+            # The whole build — parse, shape check, table, normalization — sits
+            # inside the boundary: a hand-edited `[{"x":100},1]` used to pass
+            # the list check and raise from `pd.DataFrame` before the app drew
+            # anything. The text is kept either way.
             try:
-                events = json.loads(str(qp["author_events"]))
-                if not isinstance(events, list):
-                    raise ValueError
-            except (ValueError, TypeError, json.JSONDecodeError):
+                events = event_records_frame(json.loads(str(qp["author_events"])))
+            except (ValueError, TypeError, RecursionError):
                 st.warning("Ignored malformed authored-fixation data in the URL.")
             else:
-                st.session_state.setdefault(
-                    "_authored_events_frame", pd.DataFrame(events)
-                )
+                st.session_state.setdefault("_authored_events_frame", events)
                 # Prevent the authoring widget's text-change initializer from
                 # replacing the just-restored events on its first render.
                 st.session_state.setdefault(

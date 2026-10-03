@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pandas as pd
+import pytest
 
 import scanpath_studio as sps
 from scanpath_studio.authoring import (
@@ -188,3 +189,14 @@ def test_a_restored_file_comes_back_range_indexed():
     events = default_events(words).drop(index=1)
     restored = parse_authoring_document(authoring_json("alpha beta gamma", events))
     assert list(restored.events.index) == [0, 1]
+
+
+def test_an_authoring_file_with_a_malformed_event_list_is_refused_cleanly():
+    """The file reader shares the link's shape check: a mixed list is a
+    `ValueError` with a reason, never a `TypeError` from inside pandas."""
+    for fixations in ([{"x": 100}, 1], [[1, 2]], [{"x": [1]}], [{"note": "x"}]):
+        payload = json.dumps({"schema": 2, "text": "alpha", "fixations": fixations})
+        with pytest.raises(ValueError, match="Authored fixation"):
+            parse_authoring_document(payload)
+    with pytest.raises(ValueError, match="Not a Scanpath Studio authoring file"):
+        parse_authoring_document("[1, 2]")

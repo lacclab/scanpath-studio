@@ -201,9 +201,10 @@ class _FakeSt:
     def __init__(self):
         self.session_state = {}
         self.query_params = {}
+        self.warnings: list[str] = []
 
-    def warning(self, *args, **kwargs):  # no-op stand-in
-        pass
+    def warning(self, *args, **kwargs):  # recorded, so a test can assert on it
+        self.warnings.append(" ".join(str(arg) for arg in args))
 
 
 @pytest.fixture
@@ -451,7 +452,38 @@ class TestBuildShareQuery:
         ss = fake_st.session_state
         assert ss["author_text"] == "alpha beta"
         assert ss["_author_text_for_events"] == "alpha beta"
-        assert ss["_authored_events_frame"].to_dict("records") == events
+        restored = ss["_authored_events_frame"]
+        assert restored[list(events[0])].to_dict("records") == events
+        # Normalized on the way in: the stable id/order a link may omit.
+        assert restored[["fixation_id", "order_in_trial"]].to_dict("records") == [
+            {"fixation_id": 1, "order_in_trial": 1}
+        ]
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            '[{"x":100},1]',  # mixed list
+            "[1, 2]",  # scalars
+            "42",  # a scalar, not a list
+            '{"x": 100}',  # an object, not a list
+            "[{",  # malformed JSON
+            '[{"x": [1, 2]}]',  # non-scalar value
+            '[{"x": {"a": 1}}]',  # nested object
+            '[{"colour": "red"}]',  # an object that names no event field
+        ],
+    )
+    def test_malformed_authored_events_warn_and_keep_text(self, fake_st, raw):
+        fake_st.query_params = {
+            "source": "author",
+            "author_text": "alpha beta",
+            "author_events": raw,
+        }
+        assert _apply_url_preset() == "author"
+        ss = fake_st.session_state
+        assert ss["author_text"] == "alpha beta"
+        assert "_authored_events_frame" not in ss
+        assert "_author_text_for_events" not in ss
+        assert any("malformed authored-fixation" in str(w) for w in fake_st.warnings)
 
 
 class TestApplyUrlTrialSelection:

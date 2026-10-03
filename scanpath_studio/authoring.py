@@ -181,6 +181,42 @@ def normalize_event_table(events: pd.DataFrame | None) -> pd.DataFrame:
     return frame
 
 
+def _is_scalar_cell(value: Any) -> bool:
+    return value is None or (
+        isinstance(value, (str, int, float)) and not isinstance(value, bool)
+    )
+
+
+def event_records_frame(records: Any) -> pd.DataFrame:
+    """Build the normalized event table from untrusted JSON records.
+
+    ``records`` comes from a link or a file, so its shape is checked before
+    pandas sees it: a list of objects, each naming at least one event column,
+    with plain number/text/null values. Anything else raises ``ValueError``
+    with a reason, rather than a ``TypeError`` from deep inside pandas.
+    """
+    if not isinstance(records, list):
+        raise ValueError("Authored fixations must be a list of objects.")
+    for number, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            raise ValueError(f"Authored fixation {number} is not an object.")
+        if not any(column in record for column in EVENT_COLUMNS):
+            raise ValueError(
+                f"Authored fixation {number} has none of: {', '.join(EVENT_COLUMNS)}."
+            )
+        bad = sorted(
+            str(key)
+            for key in EVENT_COLUMNS
+            if key in record and not _is_scalar_cell(record[key])
+        )
+        if bad:
+            raise ValueError(
+                f"Authored fixation {number} has a non-scalar {', '.join(bad)}."
+            )
+    frame, _ = reconcile_event_table(pd.DataFrame(records).reset_index(drop=True))
+    return frame
+
+
 def event_problems(words: pd.DataFrame, events: pd.DataFrame | None) -> list[str]:
     """Return actionable structural problems without silently renumbering rows."""
     frame = normalize_event_table(events)
@@ -505,12 +541,15 @@ def authoring_json(
 def parse_authoring_document(payload: str) -> AuthoringDocument:
     """Restore schema 2 or migrate a VIZ-20 schema-1 authoring document."""
     value = json.loads(payload)
+    if not isinstance(value, dict):
+        raise ValueError("Not a Scanpath Studio authoring file (schema 1 or 2).")
     schema = value.get("schema")
     if schema not in {1, AUTHORING_SCHEMA} or not isinstance(value.get("text"), str):
         raise ValueError("Not a Scanpath Studio authoring file (schema 1 or 2).")
     events = value.get("fixations", [])
     if not isinstance(events, list):
         raise ValueError("The authoring file's fixations must be a list.")
+    frame = event_records_frame(events)
     layout = value.get("layout", {}) if schema == AUTHORING_SCHEMA else {}
     if not isinstance(layout, dict):
         raise ValueError("The authoring file's layout must be an object.")
@@ -523,5 +562,4 @@ def parse_authoring_document(payload: str) -> AuthoringDocument:
         }
     except (TypeError, ValueError) as exc:
         raise ValueError("Authoring layout values must be whole numbers.") from exc
-    frame, _ = reconcile_event_table(pd.DataFrame(events).reset_index(drop=True))
     return AuthoringDocument(value["text"], frame, normalized_layout)

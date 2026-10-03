@@ -1054,6 +1054,29 @@ class TestAuthoringEditorFlow:
         )
         assert "Row 2" in warnings
 
+    def _linked(self, events: str) -> AppTest:
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params["source"] = "author"
+        at.query_params["author_text"] = "alpha beta"
+        at.query_params["author_events"] = events
+        return at.run(timeout=60)
+
+    def test_a_malformed_authored_link_warns_and_keeps_the_text(self):
+        """A mixed event list used to raise from `pd.DataFrame` before the app
+        drew its navigation — now it is ignored with the existing warning."""
+        at = self._linked('[{"x":100},1]')
+        _clean(at, "with a malformed authored link:")
+        assert any("malformed authored-fixation" in str(w.value) for w in at.warning)
+        assert at.session_state["author_text"] == "alpha beta"
+
+    def test_valid_authored_link_events_survive_the_first_render(self):
+        at = self._linked('[{"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}]')
+        _clean(at, "with a valid authored link:")
+        events = at.session_state["_authored_events_frame"]
+        assert events[["word_id", "x", "y", "duration_ms"]].to_dict("records") == [
+            {"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}
+        ]
+
 
 @pytest.mark.timeout(180)
 class TestCrossDatasetCompareFlow:

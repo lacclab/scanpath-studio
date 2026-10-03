@@ -150,7 +150,10 @@ class TestControlsAndRoundTrip:
         )
         # t2 is in the table but not in the data, so it offers nothing.
         assert metadata.trial_options_for(built, "difficulty") == ["easy"]
-        assert metadata.trial_bounds_for(built, "word_count") == (120.0, 120.0)
+        # One loaded trial is one value: no range, so no slider.
+        assert metadata.trial_bounds_for(built, "word_count") is None
+        both = metadata.build_trial_metadata(_table(), "trial", keys=KEYS)
+        assert metadata.trial_bounds_for(both, "word_count") == (120.0, 240.0)
 
     def test_the_table_round_trips_through_save_and_restore(self):
         frame = pd.DataFrame({"reader": ["p1"], "trial": ["t1"], "score": [0.9]})

@@ -718,13 +718,24 @@ def trial_options_for(metadata: TrialMetadata | None, name: str) -> list[str]:
 def trial_bounds_for(
     metadata: TrialMetadata | None, name: str
 ) -> tuple[float, float] | None:
-    """``(min, max)`` of a numeric trial field over the loaded trials."""
+    """``(min, max)`` of a numeric trial field over the loaded trials, or
+    ``None`` when it has no range.
+
+    A field with one value over the loaded trials — a one-row table, or a pilot
+    whose trials all share it — has no range, the rule :func:`bounds_for` and
+    :func:`text_bounds_for` already follow. Returning ``(20.0, 20.0)`` handed
+    the filter panel a slider Streamlit refuses to draw, which stopped the
+    whole Scanpath view.
+    """
     if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
         return None
     numeric = pd.to_numeric(metadata.joined_frame[name], errors="coerce").dropna()
     if numeric.empty:
         return None
-    return float(numeric.min()), float(numeric.max())
+    low, high = float(numeric.min()), float(numeric.max())
+    if low == high:
+        return None
+    return low, high
 
 
 def trial_to_payload(metadata: TrialMetadata | None) -> dict | None:

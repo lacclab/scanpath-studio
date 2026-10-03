@@ -65,6 +65,7 @@ from .multipart import (
     screen_canvas_size,
 )
 from .plots import (
+    SCANPATH_LAYER_ORDER,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     make_scanpath_figure,
@@ -76,6 +77,7 @@ from .preprocessing import (
     saccade_table,
     sentence_measures,
 )
+from .progress import report as report_progress
 from .utils import extract_trial
 
 # --- EXP-1 · customizable export paths ---------------------------------------
@@ -1891,6 +1893,119 @@ def _write_inventory(zf: zipfile.ZipFile, inventory: list[dict]) -> None:
     zf.writestr("index.csv", frame.to_csv(index=False))
 
 
+def export_units(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """One row per **screen export unit**: each trial in ``combos``, or each of
+    its screens when it is a multipart reading. ``combos`` is already scoped.
+    """
+    rows: list[dict] = []
+    for combo in combos.to_dict("records"):
+        participant, trial = combo["participant_id"], combo["trial_id"]
+        parent_words = extract_trial(words, participant, trial)
+        parent_fixations = extract_trial(fixations, participant, trial)
+        screens = part_catalog(parent_words, parent_fixations)
+        if (
+            screens.empty
+            and parent_words.empty
+            and parent_fixations.empty
+            and raw_gaze is not None
+            and SCREEN_ID in raw_gaze.columns
+        ):
+            # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
+            # gaze alone takes its screens from its samples, so each screen's
+            # coordinate space is exported on its own instead of pooled.
+            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
+        if screens.empty:
+            rows.append(combo)
+        else:
+            for screen in screens.to_dict("records"):
+                rows.append({**combo, **screen})
+    return pd.DataFrame(rows)
+
+
+@dataclass(frozen=True)
+class ExportPlan:
+    """What a bundle will hold, worked out before it is built.
+
+    ``layer_files`` is a ceiling: a screen writes one file per layer it
+    actually draws, which is only known once its figure is built.
+    """
+
+    trials: int
+    units: int
+    figure_files: int
+    layer_files: int
+
+
+def apply_export_scope(combos: pd.DataFrame, options: ExportOptions) -> pd.DataFrame:
+    """``combos`` narrowed to ``options``' scope, as :func:`bulk_export` does."""
+    return _apply_scope(combos, options)
+
+
+def plan_export(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    options: ExportOptions,
+    raw_gaze: pd.DataFrame | None = None,
+) -> ExportPlan:
+    """The trial, screen and figure-file counts :func:`bulk_export` will
+    produce for these inputs and ``options``."""
+    scoped = _apply_scope(combos, options)
+    units = count_export_units(scoped, words, fixations, raw_gaze)
+    return plan_from_counts(len(scoped), units, options)
+
+
+def count_export_units(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+) -> int:
+    """``len(export_units(...))`` — without walking every trial when no frame
+    carries screens, the common case, where each trial is one unit."""
+    if not any(
+        frame is not None and SCREEN_ID in frame.columns
+        for frame in (words, fixations, raw_gaze)
+    ):
+        return len(combos)
+    return len(export_units(combos, words, fixations, raw_gaze))
+
+
+def plan_from_counts(trials: int, units: int, options: ExportOptions) -> ExportPlan:
+    """:class:`ExportPlan` for known trial and unit counts — the formats'
+    multiplication, apart from the (slower) unit expansion."""
+    return ExportPlan(
+        trials=trials,
+        units=units,
+        figure_files=units * len(options.figure_formats()),
+        layer_files=units * len(SCANPATH_LAYER_ORDER) * len(options.layer_formats()),
+    )
+
+
+def describe_plan(plan: ExportPlan) -> str:
+    """One line for the panel: what Build export is about to write."""
+
+    def plural(n: int, word: str) -> str:
+        return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+    readings = plural(plan.trials, "trial")
+    if plan.units != plan.trials:
+        readings += f" ({plural(plan.units, 'screen')})"
+    parts = []
+    if plan.figure_files:
+        parts.append(plural(plan.figure_files, "figure file"))
+    if plan.layer_files:
+        parts.append(f"up to {plural(plan.layer_files, 'layer file')}")
+    if not parts:
+        return f"Exports {readings}."
+    return f"Exports {readings}: {' and '.join(parts)}."
+
+
 def _package_version() -> str:
     from scanpath_studio import __version__
 
@@ -1961,29 +2076,7 @@ def bulk_export(
     trial so the UI can update a progress bar.
     """
     combos = _apply_scope(combos, options)
-    export_units: list[dict] = []
-    for combo in combos.to_dict("records"):
-        participant, trial = combo["participant_id"], combo["trial_id"]
-        parent_words = extract_trial(words, participant, trial)
-        parent_fixations = extract_trial(fixations, participant, trial)
-        screens = part_catalog(parent_words, parent_fixations)
-        if (
-            screens.empty
-            and parent_words.empty
-            and parent_fixations.empty
-            and raw_gaze is not None
-            and SCREEN_ID in raw_gaze.columns
-        ):
-            # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
-            # gaze alone takes its screens from its samples, so each screen's
-            # coordinate space is exported on its own instead of pooled.
-            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
-        if screens.empty:
-            export_units.append(combo)
-        else:
-            for screen in screens.to_dict("records"):
-                export_units.append({**combo, **screen})
-    units = pd.DataFrame(export_units)
+    units = export_units(combos, words, fixations, raw_gaze)
     progress = ExportProgress(total_trials=len(units))
     started = perf_counter()
     emit_status(
@@ -2143,6 +2236,15 @@ def bulk_export(
     )
     with _figure_renderer(options.needs_kaleido()) as render_figure:
         for combo in units.itertuples(index=False):
+            # The cancel checkpoint (`progress.Cancelled`), between units so a
+            # stopped build never leaves one half-written; a no-op headlessly.
+            try:
+                report_progress(
+                    progress.finished_trials, progress.total_trials, unit="screens"
+                )
+            except BaseException:  # `progress.Cancelled`: close the zip, go
+                zf.close()
+                raise
             participant = combo.participant_id
             trial = combo.trial_id
             screen_id = getattr(combo, SCREEN_ID, None)

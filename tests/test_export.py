@@ -1177,3 +1177,95 @@ class TestInventory:
         assert f"Version: {__version__}" in readme
         assert "one trial (participant p1, trial t2)" in readme
         assert "1 trial(s), 1 screen export unit(s)" in readme
+
+
+class TestExportPlan:
+    """What Build export will write, said before it runs — and Stop."""
+
+    @staticmethod
+    def _multipart(words, fixations):
+        """t1 read over two screens; t2 on one."""
+        screens = {"screen_id": ["s1", "s2", "s1", "s1"]}
+        return words.assign(**screens), fixations.assign(**screens)
+
+    def test_screens_and_formats_multiply(
+        self, minimal_combos, minimal_words, minimal_fixations
+    ):
+        from scanpath_studio.export import describe_plan, plan_export
+        from scanpath_studio.plots import SCANPATH_LAYER_ORDER
+
+        words, fixations = self._multipart(minimal_words, minimal_fixations)
+        options = ExportOptions(include_png=True, include_svg=True)
+        plan = plan_export(minimal_combos, words, fixations, options)
+        assert (plan.trials, plan.units, plan.figure_files) == (2, 3, 6)
+        assert plan.layer_files == 0
+        assert describe_plan(plan) == "Exports 2 trials (3 screens): 6 figure files."
+
+        layered = ExportOptions(include_svg=False, separable_layers=True)
+        plan = plan_export(minimal_combos, words, fixations, layered)
+        assert plan.layer_files == 3 * len(SCANPATH_LAYER_ORDER)
+        assert "up to" in describe_plan(plan)
+
+    def test_the_plan_matches_what_the_build_writes(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio.export import plan_export
+
+        words, fixations = self._multipart(minimal_words, minimal_fixations)
+        options = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=True,
+            scope="trial",
+            scope_participant="p1",
+            scope_trial="t1",
+        )
+        plan = plan_export(minimal_combos, words, fixations, options)
+        _, progress = bulk_export(
+            minimal_combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=options,
+        )
+        assert plan.units == progress.total_trials == 2
+        assert plan.figure_files == progress.figures_written == 2
+
+    def test_a_cancelled_build_stops_between_screens(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio import progress
+
+        seen: list[int] = []
+
+        def cancel_after_first(state):
+            seen.append(state.finished_trials)
+            progress.cancel("export-test")
+
+        with (
+            progress.task("export-test", title="Export"),
+            pytest.raises(progress.Cancelled),
+        ):
+            bulk_export(
+                minimal_combos,
+                minimal_words,
+                minimal_fixations,
+                canvas_width=800,
+                canvas_height=400,
+                base_font_size=14,
+                font_family="monospace",
+                x_field="x",
+                y_field="y",
+                settings=base_settings,
+                options=ExportOptions(
+                    include_png=False, include_svg=False, include_fixations=True
+                ),
+                progress_callback=cancel_after_first,
+            )
+        assert seen == [1]

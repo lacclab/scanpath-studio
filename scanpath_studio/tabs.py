@@ -225,9 +225,13 @@ from scanpath_studio.export import (
     ComparisonSide,
     ExportOptions,
     annotate_figure,
+    apply_export_scope,
     bulk_export,
+    count_export_units,
+    describe_plan,
     pair_export,
     pattern_fields,
+    plan_from_counts,
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
@@ -7310,6 +7314,50 @@ def render_single_trial_tab(
             st.caption("Sharing is unavailable in this context.")
 
 
+#: Set by Stop on a running bundle build, read (and dropped) by the next run
+#: of the Export panel, which says the build was stopped. Internal: never on
+#: the wire, never in the recovery cache.
+_BULK_EXPORT_STOPPED = "_bulk_export_stopped"
+
+
+def _bulk_export_task_key() -> tuple:
+    """The bundle build's progress task — one per session."""
+    return ("bulk_export", loading.session_id())
+
+
+def _stop_bulk_export(task_key: tuple) -> None:
+    """Stop on a running bundle build: it ends before its next screen, and no
+    bundle is offered. Session state and annotations are left as they were."""
+    progress.cancel(task_key)
+    st.session_state[_BULK_EXPORT_STOPPED] = True
+    st.session_state.pop("_bulk_export_cache", None)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_export_unit_count(
+    _combos: pd.DataFrame,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    frame_keys: tuple,
+    scope: tuple,
+) -> tuple[int, int]:
+    """``(trials, screen units)`` the bundle will export, for the plan line
+    above Build export. Cached on the four frames' fingerprints
+    (``frame_keys``) and the scope choice, since it walks every trial."""
+    scope_name, participant, trial, text = scope
+    scoped = apply_export_scope(
+        _combos,
+        ExportOptions(
+            scope=scope_name,
+            scope_participant=participant,
+            scope_trial=trial,
+            scope_text=text,
+        ),
+    )
+    return len(scoped), count_export_units(scoped, _words, _fixations, _raw_gaze)
+
+
 def _render_bulk_export(
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -7355,6 +7403,12 @@ def _render_bulk_export(
             words_filtered,
             fixations_filtered,
         )
+    frame_keys = (
+        frame_fingerprint(active_combos),
+        frame_fingerprint(active_words),
+        frame_fingerprint(active_fix),
+        frame_fingerprint(active_raw_gaze),
+    )
     run_col, info_col = st.columns([1, 3])
     with run_col:
         run = st.button(
@@ -7369,6 +7423,39 @@ def _render_bulk_export(
                     or options.any_table()
                 )
             ),
+        )
+        stop_slot = st.empty()
+    task_key = _bulk_export_task_key()
+    if not run and progress.running(task_key):
+        # A build an earlier run left going — the user clicked something else
+        # mid-build. That run can no longer hand its bundle over, so stop it.
+        progress.cancel(task_key)
+    if not active_combos.empty:
+        # What Build export is about to write: a parent trial can hold many
+        # screens, and each screen one file per format (and per layer).
+        try:
+            trials, units = _c_export_unit_count(
+                active_combos,
+                active_words,
+                active_fix,
+                active_raw_gaze,
+                frame_keys,
+                (
+                    options.scope,
+                    options.scope_participant,
+                    options.scope_trial,
+                    options.scope_text,
+                ),
+            )
+        except ValueError:
+            # Screens that contradict each other: Build export reports it.
+            pass
+        else:
+            info_col.caption(describe_plan(plan_from_counts(trials, units, options)))
+    if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
+        info_col.warning(
+            "Export stopped — no bundle was built. Build export starts again.",
+            icon=ICONS["warning"],
         )
     # UX-179: the session's annotations, only when the bundle asks for them —
     # and in the cache key then, so a note edited after a build is not served
@@ -7387,10 +7474,7 @@ def _render_bulk_export(
 
         annotation_dataset = _dataset_display_name(annotation_owner)
     sig = (
-        frame_fingerprint(active_combos),
-        frame_fingerprint(active_words),
-        frame_fingerprint(active_fix),
-        frame_fingerprint(active_raw_gaze),
+        *frame_keys,
         int(canvas_width),
         int(canvas_height),
         int(base_font_size),
@@ -7433,39 +7517,49 @@ def _render_bulk_export(
                 else:
                     progress_bar.progress(status.fraction, text=text)
 
+        stop_slot.button(
+            "Stop",
+            key="bulk_export_stop",
+            on_click=_stop_bulk_export,
+            args=(task_key,),
+            help="Stop after the screen being written. No bundle is offered.",
+        )
         try:
-            zip_bytes, progress = bulk_export(
-                active_combos,
-                active_words,
-                active_fix,
-                # EXP-22: each trial's metadata rows, for `{table.field}`.
-                metadata_rows_for=_metadata_mod.pattern_rows,
-                annotation_records=annotation_records,
-                annotation_dataset=annotation_dataset,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                x_field=x_field,
-                y_field=y_field,
-                settings=figure_settings,
-                options=options,
-                raw_gaze=active_raw_gaze,
-                status_callback=on_status,
-            )
+            with progress.task(task_key, title="Building the export bundle"):
+                zip_bytes, built_progress = bulk_export(
+                    active_combos,
+                    active_words,
+                    active_fix,
+                    # EXP-22: each trial's metadata rows, for `{table.field}`.
+                    metadata_rows_for=_metadata_mod.pattern_rows,
+                    annotation_records=annotation_records,
+                    annotation_dataset=annotation_dataset,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    x_field=x_field,
+                    y_field=y_field,
+                    settings=figure_settings,
+                    options=options,
+                    raw_gaze=active_raw_gaze,
+                    status_callback=on_status,
+                )
         except Exception as exc:
+            stop_slot.empty()
             progress_slot.empty()
             status_box.update(label=f"Export failed: {exc}", state="error")
             st.session_state.pop("_bulk_export_cache", None)
             st.warning(f"Could not build export: {exc}")
             cache = None
         else:
+            stop_slot.empty()
             progress_slot.empty()
-            cache = {"sig": sig, "data": zip_bytes, "progress": progress}
+            cache = {"sig": sig, "data": zip_bytes, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
             # EXP-24: the status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
-            built = summarize_export(progress, len(zip_bytes))
+            built = summarize_export(built_progress, len(zip_bytes))
             status_box.update(
                 label=built.message,
                 state="error" if built.level == "error" else "complete",
@@ -7474,16 +7568,16 @@ def _render_bulk_export(
 
     if cache and cache.get("sig") == sig:
         zip_bytes = cache["data"]
-        progress = cache["progress"]
+        built_progress = cache["progress"]
         # EXP-24: what was made and what failed; a partial zip still downloads.
-        built = summarize_export(progress, len(zip_bytes))
+        built = summarize_export(built_progress, len(zip_bytes))
         getattr(info_col, built.level)(built.message, icon=ICONS[built.level])
-        if progress.errors:
+        if built_progress.errors:
             with st.expander(
-                f"Export errors ({len(progress.errors):,})",
+                f"Export errors ({len(built_progress.errors):,})",
                 expanded=built.expand_errors,
             ):
-                for err in progress.errors:
+                for err in built_progress.errors:
                     st.write(err)
         st.download_button(
             "Download zip",

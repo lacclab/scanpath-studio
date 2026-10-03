@@ -3190,7 +3190,33 @@ def _first_str(df: pd.DataFrame, col: str) -> str | None:
     return None
 
 
-def _servable_image_path(path: str | None) -> str | None:
+def _reading_stimulus_image(
+    words: pd.DataFrame, fixations: pd.DataFrame, source: str | None = None
+) -> tuple[str, tuple[int, int], tuple[float, float]] | None:
+    """One reading's own stimulus page: ``(path, size, origin)``, or ``None``.
+
+    The per-trial (per-screen) ``image_path`` lives on the reading's rows; the
+    image is offered only when it exists and its pixel size is readable. Its
+    origin (``image_x`` / ``image_y``, where the centred stimulus sat on the
+    monitor) places it to align with the fixations, which carry the same offset.
+    ``source`` names the dataset the rows come from, for `_servable_image_path`
+    (``None``: the active one).
+    """
+    path = _servable_image_path(
+        _first_str(words, "image_path") or _first_str(fixations, "image_path"),
+        source=source,
+    )
+    size = _png_pixel_size(path) if path and os.path.exists(path) else None
+    if size is None:
+        return None
+    origin = (
+        _first_num(words, "image_x") or _first_num(fixations, "image_x") or 0.0,
+        _first_num(words, "image_y") or _first_num(fixations, "image_y") or 0.0,
+    )
+    return path, size, origin
+
+
+def _servable_image_path(path: str | None, source: str | None = None) -> str | None:
     """``path`` if the server may read it into a figure, else ``None`` (ENG-57).
 
     The stimulus layer reads the file off the *server's* disk and sends it to the
@@ -3200,6 +3226,8 @@ def _servable_image_path(path: str | None) -> str | None:
     typed — the image-folder step that fills it legitimately needs local access —
     so honouring it let an upload read any PNG on the server. Paths the app
     resolved itself (the bundled demo, a server-side corpus) are unaffected.
+    ``source`` is the dataset the path came from (``None``: the active one) —
+    a comparison's B can come from another.
     """
     if not path:
         return None
@@ -3209,7 +3237,8 @@ def _servable_image_path(path: str | None) -> str | None:
         return path
     from scanpath_studio.constants import UPLOAD_CHOICE
 
-    source = st.session_state.get("data_source_choice")
+    if source is None:
+        source = st.session_state.get("data_source_choice")
     if source == UPLOAD_CHOICE or source in (st.session_state.get("_datasets") or {}):
         return None
     return path
@@ -5768,28 +5797,13 @@ def render_single_trial_tab(
     trial_has_fixations = not trial_fixations.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Stimulus-page background image (MultiplEYE): the per-trial image path lives
-    # on the trial's rows. The image is offered only when it exists and its pixel
-    # size is readable. Its origin (image_x/image_y, where the centered stimulus
-    # sits on the monitor) places it to align with the fixations, which carry the
-    # same offset.
-    trial_image_path = _servable_image_path(
-        _first_str(trial_words, "image_path")
-        or _first_str(trial_fixations, "image_path")
-    )
-    trial_image_size = (
-        _png_pixel_size(trial_image_path)
-        if trial_image_path and os.path.exists(trial_image_path)
-        else None
-    )
-    has_stimulus_image = trial_image_size is not None
-    trial_image_origin = (
-        _first_num(trial_words, "image_x")
-        or _first_num(trial_fixations, "image_x")
-        or 0.0,
-        _first_num(trial_words, "image_y")
-        or _first_num(trial_fixations, "image_y")
-        or 0.0,
+    # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.
+    trial_image = _reading_stimulus_image(trial_words, trial_fixations)
+    has_stimulus_image = trial_image is not None
+    trial_image_path, trial_image_size, trial_image_origin = trial_image or (
+        None,
+        None,
+        None,
     )
 
     # Condition chips above the plot are filled later (into chips_slot), once the
@@ -7531,6 +7545,68 @@ def _render_bulk_export(
         )
 
 
+def _comparison_image_b(
+    settings: FigureSettings,
+    viz_settings: dict,
+    compare_meta: dict | None,
+    *,
+    same_page: bool,
+) -> dict:
+    """B's own stimulus page for a split comparison's B panel.
+
+    Resolved from B's own trial and screen — never inherited from A because the
+    two readings share a dataset, which says nothing about whether they share a
+    page. A B without an image of its own gets none, so its panel stays blank
+    rather than showing A's page.
+
+    The one shared image is an **uploaded** one, and only on ``same_page`` — B
+    reads the same text on the same screen of the same dataset as A. An upload
+    stands in for A's page (it is stretched over A's screen), so it is B's page
+    exactly then. Otherwise B shows its own dataset image, or none.
+
+    The manual nudge (offset / scale) corrects one dataset's coordinate frame
+    against its images, so it applies to a same-dataset B and not to another
+    dataset's.
+    """
+    none = {
+        "background_image_b": None,
+        "background_image_size_b": None,
+        "background_image_origin_b": None,
+    }
+    layer_on = bool(viz_settings.get("show_stimulus_image")) or (
+        settings.background_image is not None
+    )
+    if not compare_meta or not layer_on:
+        return none
+    if viz_settings.get("stimulus_image_upload_uri") and same_page:
+        if settings.background_image is None:
+            return none
+        return {
+            "background_image_b": settings.background_image,
+            "background_image_size_b": settings.background_image_size,
+            "background_image_origin_b": settings.background_image_origin,
+        }
+    dataset = compare_meta.get("dataset")
+    own = _reading_stimulus_image(
+        compare_meta.get("words", pd.DataFrame()),
+        compare_meta.get("fixations", pd.DataFrame()),
+        source=dataset,
+    )
+    if own is None:
+        return none
+    path, (width, height), (ox, oy) = own
+    if not dataset:
+        scale = float(viz_settings.get("stimulus_image_scale", 1.0)) or 1.0
+        width, height = width * scale, height * scale
+        ox += float(viz_settings.get("stimulus_image_offset_x", 0.0))
+        oy += float(viz_settings.get("stimulus_image_offset_y", 0.0))
+    return {
+        "background_image_b": path,
+        "background_image_size_b": (float(width), float(height)),
+        "background_image_origin_b": (float(ox), float(oy)),
+    }
+
+
 def _render_comparison_figure(
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -7674,8 +7750,29 @@ def _render_comparison_figure(
     # it away), and that holds within one dataset as much as across two.
     canvas_b = (compare_meta or {}).get("canvas")
     canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
-    if canvas_b is not None and (cross_dataset or canvas_b != canvas_a):
-        overrides["canvas_b"] = canvas_b
+    # Always stated, as `api.compare_scanpaths` states it: with no `canvas_b`
+    # the builder hands B's panel A's stimulus image, and dataset identity is
+    # no reason to think B read A's page. B's own image is resolved next.
+    overrides["canvas_b"] = canvas_b or canvas_a
+    overrides.update(
+        _comparison_image_b(
+            settings,
+            viz_settings,
+            compare_meta,
+            same_page=(
+                not cross_dataset
+                and primary_text_id is not None
+                and primary_text_id == compare_text_id
+                and _first_str(
+                    extract_trial(words_filtered, selected_participant, selected_trial),
+                    SCREEN_ID,
+                )
+                == _first_str(
+                    (compare_meta or {}).get("words", pd.DataFrame()), SCREEN_ID
+                )
+            ),
+        )
+    )
     if cross_dataset:
         # §5.4: a metric only one corpus ships would colour one panel and blank
         # the other. Fall back for *this render* — the stored choice is left

@@ -2377,6 +2377,11 @@ def compare_scanpaths(
     values — what the gate reads. ``canvas_size`` covers A when you only have a
     resolution; omit both and the canvas is read off the data.
 
+    **Stimulus images.** ``background_image`` is A's page. A split layout draws
+    B's panel over ``background_image_b`` (with ``background_image_size_b`` /
+    ``background_image_origin_b``) and over nothing without it — never A's,
+    since sharing a dataset says nothing about sharing a page.
+
     ``compare_stimulus`` picks whose word boxes and text an **overlay** draws —
     ``"both"`` (default), ``"a"`` or ``"b"``. Two datasets' AOIs coincide only
     when the text is identical. Split layouts ignore it; each panel owns its own

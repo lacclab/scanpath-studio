@@ -71,6 +71,11 @@ regressions, for example. Filtering changes only the figure, never your data.
 - **Comparisons** lists other trials that match this one on a field you
   choose: other readings of the same text, or the same reader's other trials.
 
+Side by side, each panel shows its own reading's stimulus image, or none when
+that reading has no image. An uploaded image stands for the first reading's
+page, so the second shows it only when it reads the same text on the same
+screen.
+
 Two readings can be overlaid only when they were shown on the same screen size,
 including two screens of one dataset whose sizes differ; otherwise they are
 drawn side by side, each on its own screen. Nothing is rescaled to force an

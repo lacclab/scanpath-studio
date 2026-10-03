@@ -6185,7 +6185,10 @@ def render_plot_controls(
             caption_help="A screenshot of the reading screen, as the background "
             "for any dataset. An upload **overrides** a dataset's built-in image "
             "and is stretched to fill the monitor; the offset and scale below "
-            "line it up. Not carried by Share links (upload it on the other end).",
+            "line it up. In Compare it is the first reading's page, so the "
+            "second shows it only when it reads the same text on the same "
+            "screen; otherwise the second shows its own page, or none. Not "
+            "carried by Share links (upload it on the other end).",
         ).file_uploader(
             "Upload a stimulus image",
             type=["png", "jpg", "jpeg", "gif", "webp"],

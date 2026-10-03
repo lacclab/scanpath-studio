@@ -2116,6 +2116,100 @@ def _to_number(values: pd.Series) -> pd.Series:
     return parsed
 
 
+#: How a mapped field's values are read, for :func:`mapping_value_preview`.
+_PREVIEW_ID_FIELDS = frozenset(
+    {
+        "participant",
+        "trial",
+        "text_id",
+        "word_id",
+        "fixation_id",
+        "screen_id",
+        "screen_fixation_id",
+        "block",
+    }
+)
+_PREVIEW_TIME_FIELDS = frozenset({"duration", "timestamp", "screen_timestamp"})
+_PREVIEW_PIXEL_FIELDS = frozenset(
+    {
+        "x",
+        "y",
+        "width",
+        "height",
+        "left",
+        "right",
+        "top",
+        "bottom",
+        "canvas_width",
+        "canvas_height",
+    }
+)
+_PREVIEW_NUMBER_FIELDS = frozenset({"line", "screen_index"}) | {
+    key for key, *_ in READING_MEASURE_FIELDS
+}
+#: Rows looked at — the first few values are all a preview shows, and reading
+#: the head keeps it free on a table of millions of rows.
+_PREVIEW_ROWS = 200
+
+
+def mapping_value_preview(
+    df: pd.DataFrame | None, field_key: str, column, *, limit: int = 3
+) -> str:
+    """A few of ``column``'s values and what the app reads them as.
+
+    The mapping editor's value preview: a plausible column name can still hold
+    the wrong thing — trial ids picked as a condition, an onset as a duration,
+    seconds read as milliseconds — and its first values show it before saving.
+    Reads the head of the frame the editor already holds, through the same
+    conversions normalization applies (:func:`stable_id`, :func:`_to_number`,
+    :func:`time_unit_ms`). ``""`` when there is nothing to show.
+    """
+    if df is None or not column:
+        return ""
+    columns = [str(c) for c in trial_mapping_columns(column)]
+    if not columns or any(c not in df.columns for c in columns):
+        return ""
+    head = df.head(_PREVIEW_ROWS)[columns].dropna(how="all")
+    if head.empty:
+        return "No values in the first rows"
+
+    def number(value: float) -> str:
+        return f"{value:,.6g}"
+
+    if len(columns) > 1 or field_key in _PREVIEW_ID_FIELDS:
+        ids = trial_id_series(head, column).drop_duplicates().head(limit)
+        shown = []
+        for index, value in ids.items():
+            source = " + ".join(str(head.at[index, c]) for c in columns)
+            shown.append(value if source == value else f"{source} → {value}")
+        return "Read as IDs: " + ", ".join(shown)
+    values = head[columns[0]].dropna().head(limit)
+    if (
+        field_key in _PREVIEW_TIME_FIELDS
+        or field_key in _PREVIEW_PIXEL_FIELDS
+        or field_key in _PREVIEW_NUMBER_FIELDS
+    ):
+        parsed = _to_number(values)
+        if parsed.isna().all():
+            return "Not numbers: " + ", ".join(str(v) for v in values)
+        factor = 1.0
+        unit = ""
+        if field_key in _PREVIEW_TIME_FIELDS:
+            factor, unit = time_unit_ms(columns[0]), " ms"
+        elif field_key in _PREVIEW_PIXEL_FIELDS:
+            unit = " px"
+        shown = []
+        for source, value in zip(values, parsed):
+            if pd.isna(value):
+                shown.append(f"{source} (not a number)")
+            elif factor != 1.0:
+                shown.append(f"{source} → {number(value * factor)}{unit}")
+            else:
+                shown.append(f"{number(value)}{unit}")
+        return ", ".join(shown)
+    return ", ".join(f"“{value}”" for value in values.astype(str))
+
+
 #: What becomes of a fixation or word whose mapped numeric cell is unreadable —
 #: said in the warning, because "left empty" means something different per field.
 _UNPARSED_CONSEQUENCE = {

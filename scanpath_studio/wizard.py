@@ -49,6 +49,7 @@ from .controls import (
     inline_field_label,
     mark_cells,
     multi_field_flag,
+    value_preview_tip,
 )
 from .data import (
     FIX_OPTIONAL_FIELDS,
@@ -891,6 +892,7 @@ def _render_identity_field(
             chosen=list(chosen),
             default=[c for c in default_cols if c in options],
             required=required,
+            preview=value_preview_tip(raw, field_key, list(chosen)),
         )
         if state:
             tinted.setdefault(state, []).append(cell_key)

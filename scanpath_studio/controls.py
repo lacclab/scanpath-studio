@@ -63,6 +63,7 @@ from .data import (
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
     frame_fingerprint,
+    mapping_value_preview,
     user_columns,
 )
 from .export import (
@@ -2874,39 +2875,27 @@ def column_mapping_ui(
             hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
-        if state == "auto":
-            # UX-92 — the ✨ is a **button** while the row is amber, and pressing
-            # it is the approval the select cannot report.
-            #
-            # Re-picking the value a select already holds fires no `on_change`:
-            # Streamlit dedupes it in the frontend and does not even rerun
-            # (verified in a browser, not inferred). Since UX-53 r10 the value
-            # lives in the widget key with `index=None` — which is what makes
-            # the ✕ clear work — so the detected column *is* the widget's value,
-            # and confirming it by hand is invisible to Python by construction.
-            # A one-click confirm in the space the flag already occupies is the
-            # only honest way to say "I chose this" for that case.
-            note_col.button(
-                # UX-200: named for screen readers; only the ✨ shows.
-                f"{ICONS['auto_detected']} "
-                + spoken(f"Confirm the detected {field_label} column"),
-                wrap=True,
-                key=f"{cell_key}_confirm",
-                help=f"{hover} — click to confirm this column and clear the mark.",
-                on_click=_mark_field_touched,
-                args=(state_key,),
-            )
-        elif hover:
-            # Icon only. The sentence — which column was detected, and whether it
-            # was overridden or left unused — is on the icon's tooltip, reusing
-            # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
-            # browser's ~1s native one.
-            note_col.markdown(
-                f'<span class="sps-map-flag sps-fhelp" '
-                f'data-tip="{html.escape(hover, quote=True)}">'
-                f"{icon_html('auto_detected')}</span>",
-                unsafe_allow_html=True,
-            )
+        # UX-92 — the ✨ is a **button** while the row is amber, and pressing it
+        # is the approval the select cannot report.
+        #
+        # Re-picking the value a select already holds fires no `on_change`:
+        # Streamlit dedupes it in the frontend and does not even rerun (verified
+        # in a browser, not inferred). Since UX-53 r10 the value lives in the
+        # widget key with `index=None` — which is what makes the ✕ clear work —
+        # so the detected column *is* the widget's value, and confirming it by
+        # hand is invisible to Python by construction. A one-click confirm in
+        # the space the flag already occupies is the only honest way to say "I
+        # chose this" for that case.
+        _render_field_flag(
+            note_col,
+            state=state,
+            hover=hover,
+            preview=value_preview_tip(df, field_key, chosen),
+            confirm_label=f"Confirm the detected {field_label} column",
+            confirm_help=f"{hover} — click to confirm this column and clear the mark.",
+            cell_key=cell_key,
+            state_key=state_key,
+        )
         # `NONE_OPTION` is still tolerated on the way out: a config restored
         # before this run could have seeded it.
         return None if chosen in (None, NONE_OPTION) else chosen
@@ -3085,6 +3074,7 @@ def column_mapping_ui(
                 default=proposed_default,
                 required=spec["key"] in required_keys,
                 detected_label=detected_label,
+                preview=value_preview_tip(df, spec["key"], list(chosen_cols)),
             )
             if state:
                 tint_cells.setdefault(state, []).append(cell_key)
@@ -3112,6 +3102,7 @@ def multi_field_flag(
     default: list,
     required: bool,
     detected_label: str = "auto-detected",
+    preview: str = "",
 ) -> str:
     """The ✨ flag of a *multi-column* picker, and its tint state (UX-176).
 
@@ -3121,7 +3112,8 @@ def multi_field_flag(
     same rule for them: the columns detection proposed, untouched, are amber
     with a ✨ **button** that approves them; picking goes green; clearing goes
     neutral (or red once an add is attempted, for a required one). Returns the
-    `_FIELD_TINT` state for the caller to paint (`mark_cells`)."""
+    `_FIELD_TINT` state for the caller to paint (`mark_cells`). ``preview``
+    is the picked columns' value preview (`value_preview_tip`)."""
     joined = " + ".join(chosen) if chosen else None
     proposed = " + ".join(default) if default else None
     state, hover = _field_state(
@@ -3132,24 +3124,75 @@ def multi_field_flag(
         touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
         detected_label=detected_label,
     )
+    _render_field_flag(
+        flag_host,
+        state=state,
+        hover=hover,
+        preview=preview,
+        confirm_label="Confirm the detected columns",
+        confirm_help=f"{hover} — click to confirm and clear the mark.",
+        cell_key=cell_key,
+        state_key=state_key,
+    )
+    return state
+
+
+def value_preview_tip(df, field_key: str, column) -> str:
+    """`data.mapping_value_preview` for a picked column, as a tooltip line."""
+    if column in (None, NONE_OPTION, "", []):
+        return ""
+    preview = mapping_value_preview(df, field_key, column)
+    return f"Values: {preview}" if preview else ""
+
+
+def _render_field_flag(
+    host,
+    *,
+    state: str,
+    hover: str,
+    preview: str,
+    confirm_label: str,
+    confirm_help: str,
+    cell_key: str,
+    state_key: str,
+) -> None:
+    """A mapping row's ✨ flag and its value preview, in the slot beside it.
+
+    The ✨ is a **button** while the row is amber (UX-92) and an icon whose
+    tooltip says what detection found otherwise. The preview — a few of the
+    mapped column's values and what the app reads them as — is an icon of its
+    own with a hover tooltip, like every other note on this form; on an amber
+    row it rides on the confirm button's tooltip instead, which is where the
+    eye already is, and keeps the slot one line tall.
+    """
     if state == "auto":
-        flag_host.button(
+        host.button(
             # UX-200: named for screen readers; only the ✨ shows.
-            f"{ICONS['auto_detected']} {spoken('Confirm the detected columns')}",
+            f"{ICONS['auto_detected']} {spoken(confirm_label)}",
             wrap=True,
             key=f"{cell_key}_confirm",
-            help=f"{hover} — click to confirm and clear the mark.",
+            help=confirm_help + (f"\n\n{preview}" if preview else ""),
             on_click=_mark_field_touched,
             args=(state_key,),
         )
-    elif hover:
-        flag_host.markdown(
+        return
+    # Icons only, on the rail's CSS hover (`.sps-fhelp`, 120 ms) rather than
+    # the browser's ~1 s native one.
+    spans = []
+    if hover:
+        spans.append(
             f'<span class="sps-map-flag sps-fhelp" '
             f'data-tip="{html.escape(hover, quote=True)}">'
-            f"{icon_html('auto_detected')}</span>",
-            unsafe_allow_html=True,
+            f"{icon_html('auto_detected')}</span>"
         )
-    return state
+    if preview:
+        tip = html.escape(preview, quote=True)
+        spans.append(
+            f'<span class="sps-map-flag sps-map-preview sps-fhelp" tabindex="0" '
+            f'data-tip="{tip}" aria-label="{tip}">{icon_html("preview")}</span>'
+        )
+    if spans:
+        host.markdown("".join(spans), unsafe_allow_html=True)
 
 
 def mark_cells(cells_by_state: dict) -> None:

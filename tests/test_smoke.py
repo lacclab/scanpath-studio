@@ -284,6 +284,73 @@ class TestStimuliTable:
         assert row["Text"].strip() != ""
         assert row["# Words"] > 0
 
+    @staticmethod
+    def _paged_words(readers=("p1",), **extra):
+        import pandas as pd
+
+        # Page 2 is listed first and its id sorts after page 10's would: only
+        # `screen_index` says which page comes first. Word ids and lines start
+        # again on every page.
+        one = pd.DataFrame(
+            {
+                "trial_id": ["t1"] * 4,
+                "text_id": ["text-1"] * 4,
+                "screen_id": ["page-2", "page-2", "page-10", "page-10"],
+                "screen_index": [2, 2, 1, 1],
+                "word_id": [1, 2, 1, 2],
+                "line_idx": [0, 0, 0, 0],
+                "text": ["Second", "page", "First", "page"],
+                **extra,
+            }
+        )
+        return pd.concat(
+            [one.assign(participant_id=reader) for reader in readers],
+            ignore_index=True,
+        )
+
+    def test_pages_whose_word_ids_restart_are_all_kept_in_screen_order(self):
+        table = self._build(self._paged_words())
+        assert len(table) == 1
+        row = table.iloc[0]
+        assert row["# Words"] == 4
+        assert row["# Screens"] == 2
+        assert row["Text"] == "[page-10] First page [page-2] Second page"
+
+    def test_repeated_readers_do_not_repeat_the_text(self):
+        table = self._build(self._paged_words(readers=("p1", "p2", "p3")))
+        row = table.iloc[0]
+        assert row["# Words"] == 4
+        assert row["Text"] == "[page-10] First page [page-2] Second page"
+
+    def test_each_reader_s_earliest_screen_position_orders_the_pages(self):
+        import pandas as pd
+
+        # A second reader saw the pages the other way round (MultiplEYE
+        # shuffles question screens per reader): the earliest position wins.
+        base = self._paged_words()
+        # p1: page-10 at 2, page-2 at 3; p2: page-2 at 1, page-10 at 2.
+        words = base.assign(screen_index=base["screen_index"].map({1: 2, 2: 3}))
+        other = base.assign(
+            participant_id="p2", screen_index=base["screen_index"].map({1: 2, 2: 1})
+        )
+        table = self._build(pd.concat([words, other], ignore_index=True))
+        assert table.iloc[0]["Text"] == "[page-2] Second page [page-10] First page"
+
+    def test_a_question_screen_is_marked_as_one(self):
+        words = self._paged_words(
+            screen_kind=["question", "question", "reading", "reading"]
+        )
+        text = self._build(words).iloc[0]["Text"]
+        assert text == "[page-10 · reading] First page [page-2 · question] Second page"
+
+    def test_single_screen_texts_have_no_markers_or_screen_column(
+        self, normalized_demo
+    ):
+        words, _ = normalized_demo
+        table = self._build(words)
+        assert "# Screens" not in table.columns
+        assert not table["Text"].str.startswith("[").any()
+
     def test_empty_words_returns_empty_table(self):
         import pandas as pd
 

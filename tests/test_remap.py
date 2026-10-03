@@ -291,6 +291,15 @@ class TestStimulusLevelWordsRemap:
         """The frames a finished upload stores: normalized, then harmonized."""
         from scanpath_studio.data import harmonize_frames
 
+        raw_w, raw_f = self._raw()
+        return harmonize_frames(
+            normalize_words(raw_w, self._WORD_SCHEMA),
+            normalize_fixations(raw_f, self._FIX_SCHEMA),
+        )
+
+    @staticmethod
+    def _raw():
+        """The two files that upload was read from."""
         raw_w = pd.DataFrame(
             {
                 "tr": ["t1", "t1", "t2"],
@@ -311,10 +320,7 @@ class TestStimulusLevelWordsRemap:
                 "dur": [100, 150, 90, 120],
             }
         )
-        return harmonize_frames(
-            normalize_words(raw_w, self._WORD_SCHEMA),
-            normalize_fixations(raw_f, self._FIX_SCHEMA),
-        )
+        return raw_w, raw_f
 
     def _save(self, words, fixations):
         """What ✅ Save changes does to an untouched mapping."""
@@ -423,6 +429,34 @@ class TestStimulusLevelWordsRemap:
         problems, saved = self._apply(entry, pending)
         assert not problems
         assert self._boxes(saved["words"]) == self._boxes(words)
+
+    def test_save_changes_keeps_a_mapping_the_files_can_be_loaded_with(self):
+        """Share → Code loads the dataset's own files. ✅ Save changes stores
+        a mapping onto the canonical columns, so the snippet's record of the
+        mapping is restated in the files' names — and still loads them."""
+        from scanpath_studio import api
+        from scanpath_studio.column_names import for_tables
+
+        raw_w, raw_f = self._raw()
+        words, fixations = self._stored()
+        entry, pending = self._entry_and_pending(words, fixations)
+        entry["column_names"] = for_tables(
+            entry["schemas"], {"words": raw_w, "fixations": raw_f}
+        )
+        problems, saved = self._apply(entry, pending)
+        assert not problems
+        recipe = saved["source_recipe"]
+        assert not recipe.get("unresolved")
+        schemas = recipe["schemas"]
+        assert schemas["fixations"]["duration"] == "dur"
+        assert schemas["words"]["left"] == "L" and schemas["words"]["right"] == "R"
+        reloaded, _fix = api.load_scanpath_data(
+            raw_w,
+            raw_f,
+            word_schema=schemas["words"],
+            fix_schema=schemas["fixations"],
+        )
+        assert self._boxes(reloaded) == self._boxes(saved["words"])
 
     def test_save_changes_applies_the_name_typed_on_the_editor(self):
         """UX-178 — the editor's **Name** is applied by ✅ Save changes, after

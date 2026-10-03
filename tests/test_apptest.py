@@ -2863,6 +2863,27 @@ class TestSpotlightTour:
             sel.startswith(".st-key-") or "data-testid" in sel for sel in selectors
         )
 
+    def test_spotlight_welcome_skip_tour(self):
+        """The welcome offers a labelled Skip tour (not a disabled Back);
+        it closes the tour like ✕, and Back returns from step 2 on."""
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        buttons = self._sp_buttons(at)
+        assert {"tour_sp_skip", "tour_sp_next"} <= buttons
+        assert "tour_sp_back" not in buttons
+        assert at.button(key="tour_sp_skip").label == "Skip tour"
+        at.button(key="tour_sp_next").click()
+        at.run(timeout=30)
+        assert "tour_sp_back" in self._sp_buttons(at)
+        assert "tour_sp_skip" not in self._sp_buttons(at)
+        at.session_state["tour_step"] = 0
+        at.run(timeout=30)
+        at.button(key="tour_sp_skip").click()
+        at.run(timeout=30)
+        assert at.session_state["tour_mode"] is None
+        assert self._sp_buttons(at) == set()
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
     def test_spotlight_done_on_last_step(self):
         from scanpath_studio.tour import _SPOTLIGHT_STEPS
 

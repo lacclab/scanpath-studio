@@ -32,7 +32,11 @@ The import screen has three parts:
 1. **Name** — and an optional one-line description.
 2. **Tables** — upload fixations, AOIs and, optionally, raw gaze. The app
    guesses which column is which; check its guesses. The trial count under each
-   ID picker is a quick sanity check. Reading measures from an EyeLink
+   ID picker is a quick sanity check, and hovering the :material/visibility:
+   icon beside a mapped field shows its first few values and how they are read,
+   for example `0.12 → 120 ms` for a column in seconds. On a guess you have not
+   confirmed yet, the same values are on the :material/auto_awesome: confirm
+   button's tooltip. Reading measures from an EyeLink
    interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and
    are what Corpus Analysis shows. Optional tables, one row per reader, trial or
    text, add fields to filter and group by.
@@ -59,7 +63,8 @@ values from assumed ones.
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 **Edit dataset** opens under the list, below the open dataset's counts and
 tables, and changes its name, column mapping and recording setup, or adds a
-table it is missing. Changes apply when you click **Save changes**;
+table it is missing; its mapped fields show the same value preview. Changes
+apply when you click **Save changes**;
 **Cancel** discards them. The page also holds each dataset's tables and its
 annotations, and at the foot, what is saved on this computer.
 

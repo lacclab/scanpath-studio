@@ -733,7 +733,7 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['app']} Welcome to Scanpath Studio",
         "body": "Visualize **eye movements in reading** — scanpaths drawn "
         "true-to-scale over the text. A demo dataset is loaded; **Next** for a "
-        "quick tour.",
+        "quick tour, or **Skip tour** to start exploring.",
     },
     {
         "selector": ".st-key-tour_grp_plot",
@@ -916,7 +916,7 @@ def _exit_spotlight() -> None:
 
 def _dismiss_listener_script(
     selector: str | None,
-    exit_keys: tuple[str, ...] = ("tour_sp_done", "tour_sp_close"),
+    exit_keys: tuple[str, ...] = ("tour_sp_done", "tour_sp_close", "tour_sp_skip"),
 ) -> str:
     """JS that lets Done / ✕ close the tour *instantly*, even mid-load.
 
@@ -1200,16 +1200,29 @@ def render_spotlight_tour() -> None:
         # the card's tight vertical rhythm.
         if step_idx in (0, n - 1):
             _render_tour_optout()
-        # No separate "Exit tour" button (UX-2a) — the ✕ in the corner closes the
-        # tour, so the footer is just Back / Next (or Done on the last step).
+        # The ✕ in the corner closes the tour from any step, so the footer is
+        # Back / Next (Skip tour / Next on the welcome, Back / Done on the last).
         back_col, next_col = st.columns(2)
-        back_col.button(
-            "← Back",
-            key="tour_sp_back",
-            width="stretch",
-            disabled=step_idx == 0,
-            on_click=_step_back,
-        )
+        if step_idx == 0:
+            # The welcome has nothing to go back to, so its left slot is a
+            # plainly labelled way out instead of a disabled Back — a first-time
+            # reader should not have to read the ✕ glyph to start exploring.
+            # Same exit as ✕ / Done; Help → Tutorials replays it.
+            back_col.button(
+                "Skip tour",
+                key="tour_sp_skip",
+                width="stretch",
+                on_click=_exit_spotlight,
+                help="Close the tour and start exploring. Replay it any time "
+                "from Help → Tutorials.",
+            )
+        else:
+            back_col.button(
+                "← Back",
+                key="tour_sp_back",
+                width="stretch",
+                on_click=_step_back,
+            )
         if step_idx < n - 1:
             next_col.button(
                 "Next →",

@@ -37,6 +37,7 @@ from .code_snippet import (
     FigureState,
     SnippetSource,
     reproduction_code,
+    upload_source,
 )
 from .constants import (
     _VIEW_DATA,
@@ -3020,11 +3021,24 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=data_choice,
             note=UNKNOWN_SOURCE_NOTE,
         )
+    if isinstance(stored, dict):
+        from scanpath_studio.column_names import stored_source_recipe
+
+        return upload_source(
+            data_choice,
+            stored_source_recipe(stored),
+            words=_has_rows(stored.get("words")),
+            fixations=_has_rows(stored.get("fixations")),
+        )
     return SnippetSource(
         kind=SOURCE_UNKNOWN,
         label=data_choice,
         note=UNKNOWN_SOURCE_NOTE,
     )
+
+
+def _has_rows(frame) -> bool:
+    return frame is not None and not getattr(frame, "empty", True)
 
 
 def _samples_only(stored: dict) -> bool:

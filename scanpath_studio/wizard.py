@@ -50,6 +50,7 @@ from .controls import (
     inline_field_label,
     mark_cells,
     multi_field_flag,
+    value_preview_tip,
 )
 from .data import (
     FIX_OPTIONAL_FIELDS,
@@ -275,6 +276,31 @@ def _wizard_finalize_metadata_pools(payload: dict) -> tuple:
         else []
     )
     return participants, combos, texts
+
+
+def _source_recipe(
+    schemas: dict, uploaded_columns: dict, *, aggregated: bool = False
+) -> dict:
+    """A new dataset's ``source_recipe``, read by Share → Code
+    (`code_snippet.upload_source`): each table's mapping, in the uploaded
+    files' own column names; the steps the loader cannot replay; and the mapped
+    columns the files did not hold (made from the file names)."""
+    derived = sorted(
+        {
+            str(column)
+            for table, schema in schemas.items()
+            if schema
+            for value in schema.values()
+            if value
+            for column in trial_mapping_columns(value)
+            if str(column) not in uploaded_columns.get(table, set())
+        }
+    )
+    return {
+        "schemas": {t: dict(s) if s else None for t, s in schemas.items()},
+        "steps": ["aggregate_char_boxes"] if aggregated else [],
+        "derived": derived,
+    }
 
 
 def _finalize_wizard_dataset() -> None:
@@ -867,6 +893,7 @@ def _render_identity_field(
             chosen=list(chosen),
             default=[c for c in default_cols if c in options],
             required=required,
+            preview=value_preview_tip(raw, field_key, list(chosen)),
         )
         if state:
             tinted.setdefault(state, []).append(cell_key)
@@ -2698,6 +2725,9 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             "filter_fields": filter_fields,
             "composite_trial_columns": [],
             "schemas": schemas,
+            # Share → Code: these schemas map the loader-built frames, not the
+            # files the user picked, so the snippet names the preset instead.
+            "source_recipe": {"schemas": {}, "steps": ["multipleye_preset"]},
             # DATA-66 — the loader-built frames' names (MultiplEYE's own files
             # carry no identity columns; see the plan's settled defaults).
             "column_names": for_tables(
@@ -3439,6 +3469,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # exist, which by this point in the script they do — but it still
     # *renders* above them, into `derive_host`/`derive_gap`, reserved before
     # either row so screen order puts it first regardless of fill order.
+    # What the files themselves held — a mapped column outside it was made from
+    # the file names, which Share → Code has to name (its loader has no such
+    # step).
+    uploaded_columns = {
+        "words": set(map(str, raw_words.columns)),
+        "fixations": set(map(str, raw_fix.columns)),
+        "raw_gaze": set(map(str, raw_gaze.columns)),
+    }
     if has_words or has_fix:
         # UX-129: the same nudge the top of the stage shows before anything
         # is uploaded, repeated here above "Derive columns from the
@@ -4109,6 +4147,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # Persist the column mapping so reselecting this stored dataset can
             # repopulate the Data Inspection tab's mapping table.
             "schemas": wizard_schemas,
+            # Share → Code: how a script loads these files — the mapping as
+            # chosen here, in the files' own names, and what this screen did
+            # that `load_scanpath_data` cannot replay.
+            "source_recipe": _source_recipe(
+                wizard_schemas,
+                uploaded_columns,
+                aggregated=has_words
+                and bool(st.session_state.get("wizard_aggregate_char_boxes")),
+            ),
             # Source columns discarded at normalization — surfaced as a note in
             # the Data Inspection remap editor (they can't be remapped without a
             # re-upload). set(raw.columns) - keep is exactly the dropped set.

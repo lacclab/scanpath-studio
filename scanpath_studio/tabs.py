@@ -89,7 +89,12 @@ from scanpath_studio.code_snippet import (
     FigureState,
 )
 from scanpath_studio.column_names import EMPTY as EMPTY_NAMES
-from scanpath_studio.column_names import ColumnNames, from_schema
+from scanpath_studio.column_names import (
+    ColumnNames,
+    from_schema,
+    source_schema,
+    stored_source_recipe,
+)
 from scanpath_studio.column_names import active as active_column_names
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
@@ -12693,6 +12698,12 @@ def _apply_remap() -> None:
     # stored before the join recorded provenance folds a repeat's copy of the
     # boxes back into the trial it copied (`data.repeat_bases`).
     repeat_of = repeat_bases(stored.get("fixations"))
+    # Share → Code's record of how a script loads this dataset's files: a
+    # remap is restated in the files' own names, an added table is its own.
+    recipe = stored_source_recipe(stored)
+    recipe_schemas = dict(recipe.get("schemas") or {})
+    unresolved = dict(recipe.get("unresolved") or {})
+    steps = list(recipe.get("steps") or [])
     for table_key in ("words", "fixations", "raw_gaze"):
         frame = stored.get(table_key)
         if frame is None or frame.empty or table_key not in pending:
@@ -12703,6 +12714,8 @@ def _apply_remap() -> None:
         )
         new_schemas[table_key] = schema
         earlier = ColumnNames.from_payload(new_names.get(table_key))
+        recipe_schemas[table_key], missing = source_schema(schema, earlier)
+        unresolved[table_key] = list(missing)
         new_names[table_key] = (
             from_schema(table_key, schema, frame.columns)
             .through(earlier)
@@ -12729,6 +12742,7 @@ def _apply_remap() -> None:
                 # only point it can: `normalize_words` expects one row per box.
                 if st.session_state.get(aggregate_key(name)):
                     raw = aggregate_char_boxes(raw, schema)
+                    steps.append("aggregate_char_boxes")
                 fresh = normalize_words(raw, schema)
                 other = new_entry.get("fixations")
                 if not isinstance(other, pd.DataFrame) or other.empty:
@@ -12755,6 +12769,8 @@ def _apply_remap() -> None:
             }
             return
         new_schemas[table_key] = schema
+        recipe_schemas[table_key] = dict(schema)
+        unresolved.pop(table_key, None)
         # An added table is raw: its names are its own.
         new_names[table_key] = from_schema(table_key, schema, raw.columns).to_payload()
     # DATA-39 — the same cross-frame fixups for the tables this save *remapped*,
@@ -12801,6 +12817,12 @@ def _apply_remap() -> None:
             new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
     new_entry["column_names"] = new_names
+    new_entry["source_recipe"] = {
+        **recipe,
+        "schemas": recipe_schemas,
+        "steps": list(dict.fromkeys(steps)),
+        "unresolved": {t: f for t, f in unresolved.items() if f},
+    }
     # Recompute the composite trial components from the new trial mapping so the
     # cascading trial picker stays in sync (mirrors the wizard finalize).
     trial_schema = next(

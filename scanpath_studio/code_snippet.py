@@ -78,6 +78,10 @@ SOURCE_BENCHMARK = "benchmark"
 #: so its data half is the samples (``options["raw_gaze"]``, the paths) and the
 #: builder is handed ``None`` for the other two.
 SOURCE_RAW_GAZE = "raw_gaze"
+#: A dataset added through the app: its files are placeholders, but the column
+#: mapping it was added with is written out, table by table (see
+#: :func:`upload_source`).
+SOURCE_UPLOAD = "upload"
 SOURCE_UNKNOWN = "unknown"
 
 #: What a snippet says when it cannot name the data. An uploaded table lives in
@@ -284,6 +288,153 @@ def _unknown_cli(source: SnippetSource) -> list[str]:
     return ["--words", "words.csv", "--fixations", "fixations.csv"]
 
 
+#: The placeholder paths an uploaded dataset's snippet loads its tables from.
+UPLOAD_WORDS_PLACEHOLDER = "words.csv"
+UPLOAD_FIXATIONS_PLACEHOLDER = "fixations.csv"
+
+#: What an added dataset did on its way in that ``load_scanpath_data`` cannot
+#: replay — step code (``source_recipe["steps"]``) → the caveat naming it.
+UPLOAD_STEP_NOTES = {
+    "aggregate_char_boxes": (
+        "Its AOIs were character boxes, which the app joined into word boxes; "
+        "the loader in the snippet does not, so join them in your words table "
+        "first."
+    ),
+    "multipleye_preset": (
+        "It was added with the MultiplEYE files preset, which builds its tables "
+        "from the corpus's own files; the loader in the snippet cannot replay "
+        "that, so its mapping is not written out."
+    ),
+}
+
+
+def upload_source(
+    label: str,
+    recipe: dict | None,
+    *,
+    words: bool,
+    fixations: bool,
+) -> SnippetSource:
+    """The data half for a dataset added through the app (Share → Code).
+
+    ``recipe`` is the dataset's ``source_recipe`` — ``schemas`` (each table's
+    mapping in its own files' column names), ``steps`` (what the add did that
+    the loader cannot, :data:`UPLOAD_STEP_NOTES`), ``derived`` (columns made
+    from the file names) and ``unresolved`` (fields an edit left untraceable).
+    ``words`` / ``fixations`` say which tables the dataset has, so an AOI-only
+    or fixation-only dataset loads only that one. The files themselves stay
+    placeholders: an upload has no path the server could quote.
+    """
+    recipe = recipe if isinstance(recipe, dict) else {}
+    schemas = recipe.get("schemas") if isinstance(recipe.get("schemas"), dict) else {}
+    steps = [str(s) for s in recipe.get("steps") or ()]
+    notes = [
+        "This dataset was added in the app, so the snippet can't name its files: "
+        "replace "
+        + " and ".join(
+            f"`{p}`"
+            for p, present in (
+                (UPLOAD_WORDS_PLACEHOLDER, words),
+                (UPLOAD_FIXATIONS_PLACEHOLDER, fixations),
+            )
+            if present
+        )
+        + " with them (a list of files works for one added from several). "
+        + (
+            "The column mapping it was added with is written out."
+            if "multipleye_preset" not in steps
+            else ""
+        )
+    ]
+    notes += [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
+    if derived := [str(c) for c in recipe.get("derived") or ()]:
+        notes.append(
+            "It maps "
+            + ", ".join(f"`{c}`" for c in derived)
+            + ", made from the file names when it was added; the loader has no "
+            "such step, so add "
+            + ("those columns" if len(derived) > 1 else "that column")
+            + " to your tables first."
+        )
+    tables = {"words": "AOI", "fixations": "fixations", "raw_gaze": "raw gaze"}
+    unresolved = [
+        f"`{field}` ({tables.get(table, table)} table)"
+        for table, fields in dict(recipe.get("unresolved") or {}).items()
+        for field in fields or ()
+    ]
+    if unresolved:
+        notes.append(
+            "Its mapping was edited after it was added, and "
+            + ", ".join(unresolved)
+            + " could not be traced back to your files' columns — check "
+            + ("those fields" if len(unresolved) > 1 else "that field")
+            + " before running it."
+        )
+    if "multipleye_preset" in steps:
+        schemas = {}
+    options: dict = {
+        "words": UPLOAD_WORDS_PLACEHOLDER if words else None,
+        "fixations": UPLOAD_FIXATIONS_PLACEHOLDER if fixations else None,
+    }
+    for table, option in (
+        ("words", "word_schema"),
+        ("fixations", "fix_schema"),
+        ("raw_gaze", "raw_gaze_schema"),
+    ):
+        schema = schemas.get(table)
+        if isinstance(schema, dict) and schema:
+            options[option] = _compact_schema(schema)
+    return SnippetSource(
+        kind=SOURCE_UPLOAD,
+        label=label,
+        options=options,
+        note=" ".join(n.strip() for n in notes if n.strip()),
+    )
+
+
+def _compact_schema(schema: dict) -> dict:
+    """A mapping without its unmapped fields, so the snippet stays readable.
+
+    An absent field and an unmapped one load the same — except a reading
+    measure, where naming the key with nothing in it means *absent* while
+    leaving it out lets a column under its usual name through (AN-32), so a
+    cleared measure is kept."""
+    return {
+        str(key): value
+        for key, value in schema.items()
+        if value or str(key).startswith("measure_")
+    }
+
+
+def _upload_python(source: SnippetSource) -> list[str]:
+    lines = ["words, fixations = sps.load_scanpath_data("]
+    for name in ("words", "fixations"):
+        if source.options.get(name):
+            lines.append(f"    {name}={_py(source.options[name])},")
+    for option in ("word_schema", "fix_schema"):
+        schema = source.options.get(option)
+        if schema:
+            lines.append(f"    {option}={{")
+            lines += [f"        {_py(k)}: {_py(v)}," for k, v in schema.items()]
+            lines.append("    },")
+    lines.append(")")
+    return lines
+
+
+def _upload_cli(source: SnippetSource) -> list[str]:
+    argv: list[str] = []
+    for name, flag, option, schema_flag in (
+        ("words", "--words", "word_schema", "--word-schema"),
+        ("fixations", "--fixations", "fix_schema", "--fix-schema"),
+    ):
+        if not source.options.get(name):
+            continue
+        argv += [flag, str(source.options[name])]
+        if schema := source.options.get(option):
+            argv += [schema_flag, json.dumps(schema, separators=(",", ":"))]
+    return argv
+
+
 def _raw_gaze_only_python(source: SnippetSource) -> list[str]:
     return [_raw_gaze_python(source), "words, fixations = None, None"]
 
@@ -305,6 +456,7 @@ _SOURCE_WRITERS: dict[str, tuple[Any, Any]] = {
     SOURCE_MULTIPLEYE: (_multipleye_python, _multipleye_cli),
     SOURCE_BENCHMARK: (_benchmark_python, _benchmark_cli),
     SOURCE_RAW_GAZE: (_raw_gaze_only_python, _raw_gaze_only_cli),
+    SOURCE_UPLOAD: (_upload_python, _upload_cli),
     SOURCE_UNKNOWN: (_unknown_python, _unknown_cli),
 }
 

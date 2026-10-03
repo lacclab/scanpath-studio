@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,7 @@ import streamlit as st
 
 from . import progress
 from .annotations import get_entry, store_for_prefix
+from .column_names import COMPUTED_SUFFIX, active_all
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
 from .data import frame_fingerprint, stable_id
 from .fields import labeled
@@ -298,12 +299,14 @@ TRIAL_SORT_DEFAULT = "Trial ID"
 TRIAL_SORT_DATA_ORDER = "Data order"
 # Computed stat label → (frame it needs, how to aggregate it per trial).
 # "fixations" / "words" name which frame the aggregation runs on.
+# DATA-66: these are the app's, not columns of the dataset, so they say so and
+# are listed after the dataset's own columns.
 _TRIAL_SORT_STATS = {
-    "Min timestamp in trial": ("fixations", "timestamp_min"),
-    "Fixations (n)": ("fixations", "size"),
-    "Reading time (s)": ("fixations", "duration_sum_s"),
-    "Mean fixation (ms)": ("fixations", "duration_mean"),
-    "Words (n)": ("words", "size"),
+    "Fixation count (computed)": ("fixations", "size"),
+    "Reading time, s (computed)": ("fixations", "duration_sum_s"),
+    "Mean fixation, ms (computed)": ("fixations", "duration_mean"),
+    "Word count (computed)": ("words", "size"),
+    "First timestamp (computed)": ("fixations", "timestamp_min"),
 }
 # Columns worth offering as a sort key when the dataset carries them, in the
 # order they're shown. Reader properties first, then text, then behaviour.
@@ -609,8 +612,13 @@ def trial_sort_keys(
     *,
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
+    label_of: Callable[[str], str] = str,
 ) -> dict[str, pd.Series]:
     """Available sort keys (UX-10): label → Series indexed by trial id.
+
+    The dataset's own trial-level columns come first, each under ``label_of``
+    (the dataset's own name, DATA-66 — `ColumnNames.label`), then the statistics
+    Scanpath Studio computes per trial, marked as computed.
 
     Offers a computed stat only when the frame it needs is present, and a column
     only when it is actually trial-level in the active participant-scoped words,
@@ -630,26 +638,38 @@ def trial_sort_keys(
             deduped["_data_order"].to_numpy(),
             index=deduped[trial_field].astype(str).to_numpy(),
         )
+    has_combos = (
+        combos is not None and not combos.empty and trial_field in combos.columns
+    )
+    if has_combos:
+        discovered = _trial_level_sort_columns(combos, trial_field, words, fixations)
+        ordered_cols = [c for c in _TRIAL_SORT_PREFERRED_COLS if c in discovered]
+        ordered_cols.extend(
+            sorted(set(discovered) - set(ordered_cols), key=str.casefold)
+        )
+        labelled = [(col, label_of(col)) for col in ordered_cols if col != trial_field]
+        # The dataset's own columns first, then the ones the app made.
+        labelled.sort(key=lambda pair: pair[1].endswith(COMPUTED_SUFFIX))
+        for col, label in labelled:
+            series = discovered[col]
+            if label in keys:
+                # An alias read from the same column sorts the same way: once.
+                if keys[label].equals(series):
+                    continue
+                label = f"{label} ({col})"
+            elif label in (TRIAL_SORT_DEFAULT, TRIAL_SORT_DATA_ORDER):
+                # A column the dataset itself calls "Trial ID" is not the menu's.
+                label = f"{label} ({col})"
+            keys[label] = series
+    picker_ids = (
+        set(combos[trial_field].dropna().astype(str).unique()) if has_combos else set()
+    )
     for label, (which, how) in _TRIAL_SORT_STATS.items():
         frame = fixations if which == "fixations" else words
-        picker_ids = (
-            set(combos[trial_field].dropna().astype(str).unique())
-            if combos is not None and not combos.empty and trial_field in combos.columns
-            else set()
-        )
         field = _effective_trial_field(frame, trial_field, picker_ids)
         series = _per_trial_stat(frame, field or trial_field, how)
         if not series.empty:
             keys[label] = series
-    if combos is None or combos.empty or trial_field not in combos.columns:
-        return keys
-    discovered = _trial_level_sort_columns(combos, trial_field, words, fixations)
-    ordered_cols = [c for c in _TRIAL_SORT_PREFERRED_COLS if c in discovered]
-    ordered_cols.extend(sorted(set(discovered) - set(ordered_cols), key=str.casefold))
-    for col in ordered_cols:
-        if col == trial_field:
-            continue
-        keys[col.replace("_", " ").capitalize()] = discovered[col]
     return keys
 
 
@@ -909,7 +929,13 @@ def _render_trial_sort_popover(
     default id order. The chosen key's *name* comes back too, because the picker
     labels the ordering it's showing.
     """
-    keys = trial_sort_keys(combos, trial_field, words=words, fixations=fixations)
+    keys = trial_sort_keys(
+        combos,
+        trial_field,
+        words=words,
+        fixations=fixations,
+        label_of=active_all(st.session_state).label,
+    )
     if not keys:
         return None, False, TRIAL_SORT_DEFAULT
     # UX-171: data order leads and is the default; Trial ID follows it.

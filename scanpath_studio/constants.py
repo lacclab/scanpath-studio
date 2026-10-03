@@ -186,6 +186,30 @@ DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
+# How fixation duration maps onto that size range. The three *fixed* scales map
+# one duration range (ms, below) onto it for every figure, so a 200 ms fixation
+# is the same size in any trial, comparison side, replay or export — EyeLink
+# Data Viewer's convention. "relative" is the original behaviour: each figure
+# spans its own shortest-to-longest duration, so sizes only compare within it.
+# √ is the default because a marker's size is its diameter: √duration makes the
+# marker's area grow in step with duration.
+MARKER_SIZE_SCALES = {
+    "sqrt": "√ duration (area)",
+    "linear": "Linear (diameter)",
+    "log": "Log duration",
+    "relative": "Relative to this figure",
+}
+DEFAULT_MARKER_SIZE_SCALE = "sqrt"
+#: What a figure saved before the fixed scale existed was drawn with — the
+#: migration target for old saved configs and Share links.
+LEGACY_MARKER_SIZE_SCALE = "relative"
+# 50–600 ms covers 99% of the bundled OneStop fixations (1st percentile 51 ms,
+# 99th 448 ms), sits below the 80 ms short-fixation flag, and leaves the long
+# tail distinguishable before it clamps. Durations outside it clamp to the
+# smallest / largest marker.
+DEFAULT_MARKER_DURATION_RANGE = (50, 600)
+#: The duration-bounds widget's own limits (ms).
+MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
@@ -558,6 +582,23 @@ def upload_limit_label() -> str:
     return f"{mb // 1000}GB" if mb >= 1000 and mb % 1000 == 0 else f"{mb}MB"
 
 
+def upload_identity(uploaded) -> tuple[str | None, str]:
+    """Which upload this is: ``(file_id, sha256 of the bytes)``.
+
+    An import that applies a file once — a settings or setup file — compares
+    this with the identity it last applied, so an ordinary rerun is a no-op
+    while a *fresh* upload applies again. The ``file_id`` Streamlit gives each
+    upload event makes re-uploading the very same file count as fresh; the
+    content hash makes a different file count as fresh even where no
+    ``file_id`` exists. Name and size alone did neither: two files can share
+    both.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(uploaded.getvalue()).hexdigest()
+    return getattr(uploaded, "file_id", None), digest
+
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "
@@ -775,6 +816,31 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: cache's dataset identity, so editing one sentence would rewrite every
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
+
+#: ``{dataset token: SetupSnapshot.to_dict()}`` — the recording setup the user
+#: saved on ✏️ Edit dataset for a **built-in or public** dataset, in place of
+#: the one the corpus declares (which is never rewritten). An upload keeps its
+#: setup on its own ``_datasets`` entry instead. A recovery-cache session key,
+#: like the descriptions, for the same reason.
+DATASET_SETUP_OVERRIDES_KEY = "_dataset_setup_overrides"
+#: Which dataset's override the ``global_*`` setup keys hold now, and what they
+#: held before it was applied — put back when that dataset is left or its
+#: override is reset (the shape of BUG-50's font snap). Both persisted, so a
+#: relaunch onto the dataset does not stash the override as its own "before".
+SETUP_OVERRIDE_FOR_KEY = "_setup_override_for"
+SETUP_OVERRIDE_RESTORE_KEY = "_setup_override_restore"
+#: The ``global_*`` keys an override writes (and its restore puts back).
+SETUP_OVERRIDE_SESSION_KEYS = (
+    "global_canvas_width",
+    "global_canvas_height",
+    "global_monitor_width_mm",
+    "global_viewing_distance_mm",
+    "global_display_dpi",
+    "global_base_font_size",
+    "global_font_family",
+    "global_line_spacing",
+    "global_scale_text_to_boxes",
+)
 
 #: UX-184 — the folder every public corpus downloads into, each in a subfolder
 #: (``<folder>/PoTeC``), set on the 🗂️ Data page. A recovery-cache session key

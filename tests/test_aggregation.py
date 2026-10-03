@@ -31,8 +31,8 @@ from scanpath_studio.aggregation import (
     cohort_summary_table,
     cohort_word_profile,
     ensure_fixation_enrichment,
-    group_effect_size,
     group_mask,
+    group_mean_difference,
     group_word_difference,
     landing_positions,
     measure_values,
@@ -619,12 +619,14 @@ class TestWordRateProfile:
         assert list(out["word_id"]) == [0, 1, 2]
         assert list(out["skip_rate"]) == [0.0, 0.0, 0.5]  # p1 skipped word 2
         assert list(out["regression_in_rate"]) == [0.0, 1.0, 0.0]
-        assert list(out["n"]) == [2, 2, 2]
-        assert list(out["enough"]) == [True, True, True]
+        assert list(out["n_skip"]) == [2, 2, 2]
+        assert list(out["n_regression_in"]) == [2, 2, 2]
+        assert list(out["enough_skip"]) == [True, True, True]
+        assert list(out["enough_regression_in"]) == [True, True, True]
         assert list(out["word_text"]) == ["the", "cat", "sat"]
-        assert list(
-            word_rate_profile(_tidy_words(), "text_id", "A", min_readers=3)["enough"]
-        ) == [False, False, False]
+        strict = word_rate_profile(_tidy_words(), "text_id", "A", min_readers=3)
+        assert not strict["enough_skip"].any()
+        assert not strict["enough_regression_in"].any()
 
     def test_min_readers_guard_counts_readers_not_rows(self):
         # p1 reads text A a second time: word 0 now has three rows but still
@@ -635,14 +637,18 @@ class TestWordRateProfile:
         )
         assert list(reference["n"]) == [2, 2, 1]  # the per-reader collapse
         assert not reference["enough"].any()
-        assert not word_rate_profile(w, "text_id", "A", min_readers=3)["enough"].any()
+        out = word_rate_profile(w, "text_id", "A", min_readers=3)
+        assert not out["enough_skip"].any()
+        assert not out["enough_regression_in"].any()
 
     def test_missing_flag_columns_yield_nan_rates(self):
         w = _tidy_words().drop(columns=["skip_flag", "regression_in_flag"])
         out = word_rate_profile(w, "text_id", "A")
         assert out["skip_rate"].isna().all()
         assert out["regression_in_rate"].isna().all()
-        assert list(out["n"]) == [2, 2, 2]  # the row count still stands
+        # Nobody reported either flag: no reader stands behind either rate.
+        assert list(out["n_skip"]) == [0, 0, 0]
+        assert not out["enough_skip"].any()
 
     def test_empty_returns_typed_columns(self):
         out = word_rate_profile(_tidy_words(), "text_id", "nope")
@@ -651,10 +657,99 @@ class TestWordRateProfile:
             "word_id",
             "skip_rate",
             "regression_in_rate",
-            "n",
-            "enough",
+            "n_skip",
+            "n_regression_in",
+            "enough_skip",
+            "enough_regression_in",
             "word_text",
         ]
+
+
+class TestMissingIsNotFalse:
+    """A supplied reading-measure flag left empty is no observation: it must
+    not count as "no", nor as a reader behind the rate."""
+
+    @staticmethod
+    def _words():
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["t", "t"],
+                "text_id": ["text", "text"],
+                "word_id": [1, 1],
+                "text": ["test", "test"],
+                "skip_flag": [0, np.nan],
+                "regression_in_flag": [1, np.nan],
+            }
+        )
+
+    def test_the_rate_counts_only_reporting_readers(self):
+        out = word_rate_profile(self._words(), "text_id", "text", min_readers=2)
+        row = out.iloc[0]
+        assert row["skip_rate"] == 0.0 and row["regression_in_rate"] == 1.0
+        assert row["n_skip"] == 1 and row["n_regression_in"] == 1
+        assert not row["enough_skip"] and not row["enough_regression_in"]
+
+    def test_normalization_keeps_the_missing_flags(self):
+        from scanpath_studio import data
+
+        raw = self._words().assign(x=100, y=100, width=50, height=20)
+        words = data.normalize_words(raw, data.propose_word_schema(raw))
+        assert words["skip_flag"].isna().tolist() == [False, True]
+        assert words["regression_in_flag"].isna().tolist() == [False, True]
+        out = word_rate_profile(words, "text_id", "text", min_readers=2)
+        row = out.iloc[0]
+        # 1.0 among the readers who reported it — not 0.5 with p2 as a "no".
+        assert row["regression_in_rate"] == 1.0
+        assert row["n_regression_in"] == 1 and not row["enough_regression_in"]
+
+    def test_eyelink_dot_is_missing_and_zero_is_false(self):
+        from scanpath_studio import data
+
+        flags = data.coerce_measure_flag(pd.Series(["0", "1", ".", "", None, "nan"]))
+        assert flags.tolist()[:2] == [False, True]
+        assert flags.isna().tolist() == [False, False, True, True, True, True]
+
+    def test_operational_flags_still_read_missing_as_false(self):
+        from scanpath_studio import data
+
+        assert data.coerce_flag(pd.Series([1, np.nan])).tolist() == [True, False]
+
+    def test_each_series_has_its_own_guard(self):
+        # Two readers report skips for both words; only one reports
+        # regressions for word 2 (no first pass).
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p2"],
+                "text_id": "text",
+                "word_id": [1, 2, 1, 2],
+                "skip_flag": pd.array([False, True, False, False], dtype="boolean"),
+                "regression_in_flag": pd.array(
+                    [False, pd.NA, True, False], dtype="boolean"
+                ),
+            }
+        )
+        out = word_rate_profile(words, "text_id", "text", min_readers=2)
+        assert out["enough_skip"].tolist() == [True, True]
+        assert out["enough_regression_in"].tolist() == [True, False]
+
+        # The page blanks the under-supported rate, keeps the word for the
+        # other, and says which series lost what.
+        from scanpath_studio import tabs
+
+        class Host:
+            captions: list = []
+
+            def caption(self, text):
+                self.captions.append(text)
+
+        host = Host()
+        shown = tabs._apply_rate_min_readers(host, out, 2, key="k")
+        assert shown["word_id"].tolist() == [1, 2]
+        assert shown["skip_rate"].tolist() == [0.0, 0.5]
+        assert shown["regression_in_rate"].isna().tolist() == [False, True]
+        assert "regression-in rate for 1 word" in host.captions[0]
+        assert "skip rate" not in host.captions[0]
 
 
 # -----------------------------------------------------------------------------
@@ -835,6 +930,7 @@ class TestReaderViews:
         fx = _tidy_fixations().drop(columns=["timestamp_ms"])
         s = reader_summary(_tidy_words(), fx, "p1")
         assert s["wpm"] == pytest.approx(3 / (380 / 60000.0))  # 100+150+130 = 380
+        assert s["reading_time_source"] == agg.READING_TIME_ESTIMATED
 
     def test_cohort_summary_table_one_row_per_reader(self):
         t = cohort_summary_table(_tidy_words(), _tidy_fixations())
@@ -1252,38 +1348,39 @@ class TestGroupComparison:
         )
         assert (out["err_lo"] >= 0).all() and (out["err_hi"] >= 0).all()
 
-    def test_group_effect_size(self):
+    def test_group_mean_difference(self):
         a = np.array([1.0, 2, 3, 4, 5])
         b = np.array([3.0, 4, 5, 6, 7])
-        res = group_effect_size(a, b, test="t-test")
+        res = group_mean_difference(a, b)
         assert res["mean_a"] == 3.0 and res["mean_b"] == 5.0
         assert res["mean_diff"] == pytest.approx(-2.0)
         assert res["n_a"] == 5 and res["n_b"] == 5
         # Both groups have sd = sqrt(2.5) → pooled sd = sqrt(2.5), d = -2/1.5811.
         assert res["cohen_d"] == pytest.approx(-2.0 / np.sqrt(2.5))
-        assert 0 <= res["p_value"] <= 1
-        res_mw = group_effect_size(a, b, test="Mann–Whitney")
-        assert res_mw["test"] == "Mann–Whitney"
-        assert 0 <= res_mw["p_value"] <= 1
 
-    def test_group_effect_size_ignores_nans(self):
-        res = group_effect_size(
+    def test_group_mean_difference_runs_no_significance_test(self):
+        """The group comparison is descriptive: no test, no p-value."""
+        res = group_mean_difference(np.arange(5.0), np.arange(5.0) + 1)
+        assert set(res) == {"mean_a", "mean_b", "n_a", "n_b", "mean_diff", "cohen_d"}
+
+    def test_group_mean_difference_ignores_nans(self):
+        res = group_mean_difference(
             np.array([1.0, 2, 3, 4, 5, np.nan]), np.array([3.0, 4, 5, 6, 7])
         )
         assert res["n_a"] == 5 and res["mean_a"] == 3.0
 
-    def test_group_effect_size_tiny_and_empty_groups(self):
-        res = group_effect_size(np.array([1.0]), np.array([2.0]))
-        assert np.isnan(res["cohen_d"]) and np.isnan(res["p_value"])
+    def test_group_mean_difference_tiny_and_empty_groups(self):
+        res = group_mean_difference(np.array([1.0]), np.array([2.0]))
+        assert np.isnan(res["cohen_d"])
         assert res["mean_diff"] == pytest.approx(-1.0)
-        empty = group_effect_size(np.array([]), np.array([]))
+        empty = group_mean_difference(np.array([]), np.array([]))
         assert empty["n_a"] == 0 and empty["n_b"] == 0
         assert np.isnan(empty["mean_a"]) and np.isnan(empty["mean_diff"])
 
     def test_cohen_d_nan_when_pooled_sd_zero(self):
         # Both groups internally constant but means differ → d is undefined;
         # 0.0 would falsely read as "no effect" next to a non-zero mean diff.
-        res = group_effect_size(np.array([1.0, 1, 1]), np.array([2.0, 2, 2]))
+        res = group_mean_difference(np.array([1.0, 1, 1]), np.array([2.0, 2, 2]))
         assert res["mean_diff"] == -1.0
         assert np.isnan(res["cohen_d"])
 
@@ -1481,7 +1578,10 @@ def test_aoi_only_cohorts_count_their_readers():
 
     at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
     assert not at.exception, at.exception
-    assert "**Adv**: 2 readers · **Ele**: 2 readers." in [c.value for c in at.caption]
+    assert any(
+        c.value.startswith("**Adv**: 2 readers · **Ele**: 2 readers · **2 in both**")
+        for c in at.caption
+    )
 
 
 def test_cohort_word_comparisons_share_one_screen():
@@ -1514,3 +1614,166 @@ def test_cohort_word_comparisons_share_one_screen():
         words, "text_id", "text", tfd, a, b, screen_id="page2"
     )
     assert profiles[["group", "value"]].values.tolist() == [["Group B", 700.0]]
+
+
+class TestTimestampFreeReadingTime:
+    """A fixation table with no onset column: normalization numbers the
+    fixations 0, 1, 2, … so they still sort. Those are not milliseconds — the
+    summaries lay the fixations end to end by duration and say it is an
+    estimate, as the replay clock does."""
+
+    @staticmethod
+    def _load(drop_timestamps: bool = True):
+        from scanpath_studio import api
+        from tests.synthetic_data import (
+            make_synthetic_fixations,
+            make_synthetic_words,
+        )
+
+        fixations = make_synthetic_fixations()
+        if drop_timestamps:
+            fixations = fixations.drop(columns=["timestamp_ms"])
+        return api.load_scanpath_data(make_synthetic_words(), fixations)
+
+    def test_normalization_marks_the_made_up_timestamps(self):
+        from scanpath_studio import data
+
+        _, fixations = self._load()
+        assert data.timestamps_synthesized(fixations)
+        assert fixations["timestamp_ms"].tolist() == list(range(len(fixations)))
+
+    def test_trial_summary_is_a_labelled_duration_estimate(self):
+        words, fixations = self._load()
+        row = agg.trial_summary_table(words, fixations).iloc[0]
+        # 9 fixations totalling 960 ms over 6 words: not 205 ms / 1,756 wpm.
+        assert row["reading_time_ms"] == pytest.approx(960.0)
+        assert row["wpm"] == pytest.approx(6 / (960 / 60000.0))
+        assert row["reading_time_source"] == agg.READING_TIME_ESTIMATED
+
+    def test_reader_summary_says_so_too(self):
+        words, fixations = self._load()
+        row = agg.reader_summary_table(words, fixations).iloc[0]
+        assert row["wpm"] == pytest.approx(375.0)
+        assert row["reading_time_source"] == agg.READING_TIME_ESTIMATED
+
+    def test_recorded_timestamps_are_the_recorded_span(self):
+        from scanpath_studio import data
+
+        words, fixations = self._load(drop_timestamps=False)
+        assert not data.timestamps_synthesized(fixations)
+        row = agg.trial_summary_table(words, fixations).iloc[0]
+        assert row["reading_time_source"] == agg.READING_TIME_RECORDED
+
+    def test_the_replay_clock_is_the_same_estimate(self):
+        from scanpath_studio import measures
+
+        _, fixations = self._load()
+        ordered = fixations.sort_values("timestamp_ms")
+        onsets = measures.rebased_fixation_onsets(ordered)
+        durations = ordered["duration_ms"].to_numpy()
+        assert onsets[-1] + durations[-1] == pytest.approx(960.0)
+
+    def test_each_screen_is_its_own_estimate(self):
+        from scanpath_studio import data
+
+        fixations = pd.DataFrame(
+            {
+                "participant_id": "p",
+                "trial_id": "t",
+                "screen_id": ["a", "a", "b"],
+                "screen_index": [1, 1, 2],
+                "duration_ms": [100.0, 200.0, 400.0],
+                "timestamp_ms": [0, 1, 2],
+                data.TIMESTAMP_SYNTHESIZED: True,
+            }
+        )
+        reading = agg._trial_reading_time_ms(fixations)
+        assert reading.set_index("screen_id")["reading_time_ms"].to_dict() == {
+            "a": 300.0,
+            "b": 400.0,
+        }
+        assert set(reading["reading_time_source"]) == {agg.READING_TIME_ESTIMATED}
+
+    def test_a_remap_that_keeps_the_stored_clock_keeps_the_mark(self):
+        from scanpath_studio import data
+
+        _, fixations = self._load()
+        schema = data.propose_fix_schema(fixations)
+        assert schema["timestamp"] == "timestamp_ms"
+        remapped = data.remap_normalized_frame(fixations, schema, kind="fixations")
+        assert data.timestamps_synthesized(remapped)
+
+
+class TestReaderPercentileAmongOthers:
+    """Reading summary says "vs the other readers", so the selected reader is
+    not part of the population it is ranked in."""
+
+    cohort = pd.DataFrame(
+        {"participant_id": ["p1", "p2", "p3"], "wpm": [100.0, 200.0, np.nan]}
+    )
+
+    def test_the_selected_reader_is_left_out(self):
+        from scanpath_studio.tabs import _percentile_among_others
+
+        # p2 against p1 alone: everyone else is lower → 100th, out of 1.
+        assert _percentile_among_others(self.cohort, "p2", "wpm", 200.0) == (100.0, 1)
+        assert _percentile_among_others(self.cohort, "p1", "wpm", 100.0) == (0.0, 1)
+
+    def test_no_other_reader_with_a_value_means_no_percentile(self):
+        from scanpath_studio.tabs import _percentile_among_others
+
+        alone = self.cohort[self.cohort["participant_id"] == "p1"]
+        assert _percentile_among_others(alone, "p1", "wpm", 100.0) == (None, 0)
+        # p3 is in scope but has no value for this measure, so it is not counted.
+        no_value = self.cohort[self.cohort["participant_id"] != "p2"]
+        assert _percentile_among_others(no_value, "p1", "wpm", 100.0) == (None, 0)
+
+    def test_ordinals(self):
+        from scanpath_studio.tabs import _ordinal
+
+        numbers = (0, 1, 2, 3, 11, 12, 13, 21, 22, 100)
+        assert [_ordinal(n) for n in numbers] == [
+            "0th",
+            "1st",
+            "2nd",
+            "3rd",
+            "11th",
+            "12th",
+            "13th",
+            "21st",
+            "22nd",
+            "100th",
+        ]
+
+
+class TestMadeUpTimestampsStayInside:
+    """The 0, 1, 2, … that stand in for a missing onset never leave the app
+    under ``timestamp_ms``: read back, they would be recorded milliseconds."""
+
+    def test_the_export_and_analyze_tables_drop_them(self):
+        import io
+        import zipfile
+
+        from scanpath_studio import api, export
+        from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+        _, fixations = api.load_scanpath_data(
+            make_synthetic_words(),
+            make_synthetic_fixations().drop(columns=["timestamp_ms"]),
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            export._write_table(zf, "fixations.csv", fixations, "csv")
+        with zipfile.ZipFile(buf) as zf:
+            header = zf.read("fixations.csv").decode().splitlines()[0].split(",")
+        assert "timestamp_ms" not in header
+        assert "duration_ms" in header
+
+    def test_recorded_timestamps_are_kept(self):
+        from scanpath_studio import api, data
+        from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+        _, fixations = api.load_scanpath_data(
+            make_synthetic_words(), make_synthetic_fixations()
+        )
+        assert "timestamp_ms" in data.shareable_frame(fixations).columns

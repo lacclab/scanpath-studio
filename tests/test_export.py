@@ -1066,3 +1066,236 @@ class TestMissingBrowserNote:
         assert missing_browser_note(False) == ""
         monkeypatch.setattr(anim, "chrome_available", lambda: True)
         assert missing_browser_note(True) == ""
+
+
+class TestInventory:
+    """`index.csv` names every file in the bundle at its actual path."""
+
+    @staticmethod
+    def _build(combos, words, fixations, settings, **options):
+        data, progress = bulk_export(
+            combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=settings,
+            options=ExportOptions(include_png=False, include_svg=False, **options),
+        )
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = zf.namelist()
+            index = pd.read_csv(
+                io.BytesIO(zf.read("index.csv")), dtype=str, keep_default_na=False
+            )
+            readme = zf.read("README.md").decode("utf-8")
+        return names, index, readme, progress
+
+    def test_every_file_is_listed_with_its_reading(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        names, index, _, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_html=True,
+            include_fixations=True,
+        )
+        written = index[index["status"] == "written"]
+        assert set(written["path"]) == set(names) - {"index.csv"}
+        figure = written[written["path"] == "per_trial/p1__t2/figure.html"].iloc[0]
+        assert (figure["artifact"], figure["format"]) == ("figure", "html")
+        assert (figure["participant_id"], figure["trial_id"]) == ("p1", "t2")
+
+    def test_a_collision_suffix_is_the_path_listed(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """A pattern without the trial id puts both trials at one name."""
+        names, index, _, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_fixations=True,
+            include_plot_config=False,
+            path_pattern="{participant_id}/{artifact}.{ext}",
+        )
+        assert {"p1/fixations.csv", "p1/fixations-2.csv"} <= set(names)
+        rows = index.set_index("path")
+        assert rows.loc["p1/fixations.csv", "trial_id"] == "t1"
+        assert rows.loc["p1/fixations-2.csv", "trial_id"] == "t2"
+
+    def test_a_failed_figure_is_listed_as_failed(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        import scanpath_studio.export as export_module
+
+        def broken(*_args, **_kwargs):
+            raise RuntimeError("no figure")
+
+        monkeypatch.setattr(export_module, "make_scanpath_figure", broken)
+        names, index, _, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_html=True,
+            include_plot_config=False,
+        )
+        failed = index[index["status"] == "failed"]
+        assert sorted(failed["path"]) == [
+            "per_trial/p1__t1/figure.html",
+            "per_trial/p1__t2/figure.html",
+        ]
+        assert not any(name.endswith(".html") for name in names)
+        assert "no figure" in failed["note"].iloc[0]
+
+    def test_the_readme_names_the_version_and_scope(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio import __version__
+
+        _, _, readme, _ = self._build(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            base_settings,
+            include_fixations=True,
+            scope="trial",
+            scope_participant="p1",
+            scope_trial="t2",
+        )
+        assert f"Version: {__version__}" in readme
+        assert "one trial (participant p1, trial t2)" in readme
+        assert "1 trial(s), 1 screen export unit(s)" in readme
+
+
+class TestExportPlan:
+    """What Build export will write, said before it runs — and Stop."""
+
+    @staticmethod
+    def _multipart(words, fixations):
+        """t1 read over two screens; t2 on one."""
+        screens = {"screen_id": ["s1", "s2", "s1", "s1"]}
+        return words.assign(**screens), fixations.assign(**screens)
+
+    def test_screens_and_formats_multiply(
+        self, minimal_combos, minimal_words, minimal_fixations
+    ):
+        from scanpath_studio.export import describe_plan, plan_export
+        from scanpath_studio.plots import SCANPATH_LAYER_ORDER
+
+        words, fixations = self._multipart(minimal_words, minimal_fixations)
+        options = ExportOptions(include_png=True, include_svg=True)
+        plan = plan_export(minimal_combos, words, fixations, options)
+        assert (plan.trials, plan.units, plan.figure_files) == (2, 3, 6)
+        assert plan.layer_files == 0
+        assert describe_plan(plan) == "Exports 2 trials (3 screens): 6 figure files."
+
+        layered = ExportOptions(include_svg=False, separable_layers=True)
+        plan = plan_export(minimal_combos, words, fixations, layered)
+        assert plan.layer_files == 3 * len(SCANPATH_LAYER_ORDER)
+        assert "up to" in describe_plan(plan)
+
+    def test_the_plan_matches_what_the_build_writes(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio.export import plan_export
+
+        words, fixations = self._multipart(minimal_words, minimal_fixations)
+        options = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=True,
+            scope="trial",
+            scope_participant="p1",
+            scope_trial="t1",
+        )
+        plan = plan_export(minimal_combos, words, fixations, options)
+        _, progress = bulk_export(
+            minimal_combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=options,
+        )
+        assert plan.units == progress.total_trials == 2
+        assert plan.figure_files == progress.figures_written == 2
+
+    def test_a_cancelled_build_stops_between_screens(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        from scanpath_studio import progress
+
+        seen: list[int] = []
+
+        def cancel_after_first(state):
+            seen.append(state.finished_trials)
+            progress.cancel("export-test")
+
+        with (
+            progress.task("export-test", title="Export"),
+            pytest.raises(progress.Cancelled),
+        ):
+            bulk_export(
+                minimal_combos,
+                minimal_words,
+                minimal_fixations,
+                canvas_width=800,
+                canvas_height=400,
+                base_font_size=14,
+                font_family="monospace",
+                x_field="x",
+                y_field="y",
+                settings=base_settings,
+                options=ExportOptions(
+                    include_png=False, include_svg=False, include_fixations=True
+                ),
+                progress_callback=cancel_after_first,
+            )
+        assert seen == [1]
+
+
+@pytest.mark.parametrize("self_contained", [False, True])
+def test_bundle_html_follows_the_self_contained_choice(
+    self_contained, minimal_combos, minimal_words, minimal_fixations, base_settings
+):
+    import re
+
+    data, _ = bulk_export(
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=True,
+            html_self_contained=self_contained,
+        ),
+    )
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        page = zf.read("per_trial/p1__t1/figure.html").decode("utf-8")
+    loads_from_a_host = bool(re.search(r'<script[^>]*\ssrc="https?://', page))
+    assert loads_from_a_host is not self_contained

@@ -1,0 +1,1 @@
+Corpus Analysis → Groups no longer runs significance tests: the Welch and Mann–Whitney choices and their p-values are gone, and "Effect size + test" is now "Group means & difference", which says how many readers are in both groups and shows Cohen's d only when the groups share no reader.

@@ -1333,7 +1333,10 @@ class TestCoerceFlag:
         )
         schema = propose_word_schema(raw)
         out = normalize_words(raw, schema)
-        assert list(out["regression_in_flag"]) == [False, True, False, False]
+        flags = out["regression_in_flag"]
+        # EyeLink's `.` (no first pass) is not recorded — missing, not False.
+        assert flags.isna().tolist() == [False, False, True, False]
+        assert flags.dropna().tolist() == [False, True, False]
 
     def test_the_bundled_demo_no_longer_flags_every_row(self):
         """Regression guard for the reported repro (2026-07-03): the demo's

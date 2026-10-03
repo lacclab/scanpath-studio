@@ -1,0 +1,1 @@
+Each row of Data Management → Annotations has an Open button that shows that reading, and for a screen annotation that screen, in the Scanpath view; a trial the trial filters hide is explained instead of opened.

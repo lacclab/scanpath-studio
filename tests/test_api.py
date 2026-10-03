@@ -221,9 +221,10 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     words, _fixations = sps.load_scanpath_data(
         words=words_raw, fixations=fix_raw, word_schema=schema
     )
-    assert (
-        words["trial_id"].iloc[0].startswith(str(words_raw["participant_id"].iloc[0]))
-    )
+    # The demo's reader ids hold a `_` ("l37_1129"), escaped inside the
+    # composite so it cannot be mistaken for the separator (`data.compose_id`).
+    first = str(words_raw["participant_id"].iloc[0])
+    assert words["trial_id"].iloc[0].startswith(first.replace("_", "\\_") + "_")
     schema["trial"] = ["participant_id", "TRIAL_NUMBER"]
     with pytest.raises(ValueError) as excinfo:
         sps.load_scanpath_data(words=words_raw, word_schema=schema)
@@ -314,8 +315,10 @@ def test_plot_scanpath_returns_figure(sample):
         words, fixations, pid, tid, canvas_size=(2560, 1440), show_heatmap=False
     )
     assert isinstance(fig, go.Figure)
-    # One box shape per word of the trial, plus the plot-border rect.
-    assert len(fig.layout.shapes) == len(trial_words) + 1
+    # One box shape per word of the trial, plus the plot-border rect — and the
+    # duration-size key's reference circles, one per labelled duration.
+    key = [a for a in fig.layout.annotations if a.name == "duration_size_key"]
+    assert len(fig.layout.shapes) == len(trial_words) + 1 + len(key)
     # One marker per fixation, drawn at the fixation coordinates.
     markers = [t for t in fig.data if t.mode and "markers" in t.mode]
     assert len(markers) == 1

@@ -62,8 +62,8 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
 - [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
 - [ ] `ruff check .` + `ruff format .`
-- [ ] A changelog fragment, `changelog.d/<ID>.<group>.md`, one line of plain
-      text — never an edit to `CHANGELOG.md` (`changelog.d/README.md`)
+- [ ] A changelog fragment, `changelog.d/<issue>.<group>.md` (or
+      `<slug>.<group>.md` with no issue), one line of plain text — never an edit to `CHANGELOG.md` (`changelog.d/README.md`)
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
 - [ ] Tracker item updated → `Review` (use the `track` skill)
 

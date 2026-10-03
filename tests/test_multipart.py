@@ -524,10 +524,26 @@ def test_a_co_animation_draws_one_screen_of_a_multipart_second_reading():
         (trace,) = [trace for trace in fig.data if trace.name == "Scanpath B"]
         return trace
 
-    first = api.animate_scanpath(
-        words, fixations, pid, tid, screen="question", trial_b=(pid, tid)
-    )
+    first = api.animate_scanpath(words, fixations, pid, tid, trial_b=(pid, tid))
     assert len(trace_b(first).x) == MULTIPART_EXPECTED["fixations_per_screen"][0]
+    # The two screens differ in size, so A's question screen cannot co-animate
+    # with B's first page in one coordinate space.
+    from scanpath_studio.experimental_setup import IncomparableScreensError
+
+    with pytest.raises(IncomparableScreensError):
+        api.animate_scanpath(
+            words, fixations, pid, tid, screen="question", trial_b=(pid, tid)
+        )
+    picked = api.animate_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        screen="question",
+        trial_b=(pid, tid),
+        screen_b="question",
+    )
+    assert len(trace_b(picked).x) == MULTIPART_EXPECTED["fixations_per_screen"][1]
 
     chosen = api.animate_scanpath(
         words,

@@ -493,9 +493,11 @@ def profile(
     )
     if groups:
         profiler.run(
-            "group_effect_size",
+            "group_mean_difference",
             ["agg.effect_size"],
-            lambda: aggregation.group_effect_size(groups["Group A"], groups["Group B"]),
+            lambda: aggregation.group_mean_difference(
+                groups["Group A"], groups["Group B"]
+            ),
             rows_in=len(groups["Group A"]) + len(groups["Group B"]),
         )
     # Both of these take the *fixation* frame, not the measured word frame —

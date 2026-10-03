@@ -56,6 +56,7 @@ import pandas as pd
 
 from . import data as _data
 from .data import (
+    composite_respelling_map,
     stable_id,
     trial_id_series,
     trial_mapping_columns,
@@ -490,7 +491,7 @@ def build_trial_metadata(
     # blank cell anywhere else in *this* file's trial-id column is enough to
     # read it as floats ("101.0") against the data's "101", and the join below
     # would silently match nothing (DATA-29's "no reading matched" is exactly
-    # this) — and a composite id is built the identical way (joined with "_",
+    # this) — and a composite id is built the identical way (`compose_id`,
     # each part through `stable_id` first).
     work["trial_id"] = trial_id_series(work, trial_column)
     if participant_column:
@@ -574,6 +575,17 @@ def rejoin_trials(metadata: TrialMetadata, keys: Iterable) -> TrialMetadata:
     data_keys = {tuple(str(part) for part in key) for key in keys}
     if not metadata.keyed_by_participant:
         data_keys = {key[1] for key in data_keys if len(key) > 1}
+    if not metadata.frame.empty:
+        data_trials = {
+            key[1] if isinstance(key, tuple) else key
+            for key in data_keys
+            if not isinstance(key, tuple) or len(key) > 1
+        }
+        respelled = _respell_ids(metadata.frame["trial_id"], data_trials)
+        if not respelled.equals(metadata.frame["trial_id"]):
+            metadata = replace(
+                metadata, frame=metadata.frame.assign(trial_id=respelled)
+            )
     table_keys = set(metadata.key_series()) | set(metadata.report.conflicting)
     usable = set(metadata.key_series())
     return TrialMetadata(
@@ -823,6 +835,9 @@ def build_text_metadata(
     # See the matching comment in `build_trial_metadata` — the same "one
     # blank cell spells the id two ways" hazard applies to a text id.
     work["text_id"] = trial_id_series(work, text_column)
+    if keys is not None:
+        keys = list(keys)
+        work["text_id"] = _respell_ids(work["text_id"], {str(tid) for tid in keys})
     reserved = {*text_cols, "text_id", *_BOOKKEEPING_COLUMNS}
     value_columns = [
         str(column) for column in frame.columns if str(column) not in reserved
@@ -1075,14 +1090,15 @@ def _coerce(series: pd.Series, dtype: str) -> pd.Series:
 
 
 def field_label(name: str) -> str:
-    """Human-readable label for a raw column name (``native_language`` → …).
+    """The label for a metadata field: its column name, as the table spelled it.
 
-    Public because it is the *only* labeller for a metadata field: the picker in
-    ``tabs._pretty_col`` has to name a field the same way whether or not it can
-    reach the attached table at that moment.
+    DATA-66: a field the user attached is shown under the name it has in their
+    file (``native_language``, not "Native language"). Public because it is the
+    *only* labeller for a metadata field: the picker in ``tabs._pretty_col`` has
+    to name a field the same way whether or not it can reach the attached table
+    at that moment.
     """
-    text = str(name).replace("_", " ").replace("-", " ").strip()
-    return text[:1].upper() + text[1:] if text else str(name)
+    return str(name)
 
 
 def build_participant_metadata(
@@ -1179,7 +1195,19 @@ def _match_padding(ids: pd.Series, participants: Iterable) -> pd.Series:
     "007", and the table then joined to no one; ``data.zero_padding_map``
     decides, and refuses whenever the match is not unambiguous.
     """
-    mapping = zero_padding_map(ids.unique(), {str(pid) for pid in participants})
+    return _respell_ids(ids, {str(pid) for pid in participants})
+
+
+def _respell_ids(ids: pd.Series, reference: set) -> pd.Series:
+    """``ids`` spelled the way ``reference`` spells them, when the two differ
+    only by zero-padding (BUG-59) or by the escaping composite ids gained
+    (``data.composite_respelling_map``: a dataset restored from the recovery
+    cache keeps the ids it was stored with, a table attached today composes
+    them anew). Both maps refuse anything ambiguous."""
+    unique = ids.unique()
+    mapping = zero_padding_map(unique, reference) or composite_respelling_map(
+        unique, reference
+    )
     return ids.replace(mapping) if mapping else ids
 
 

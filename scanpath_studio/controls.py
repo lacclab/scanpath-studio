@@ -15,8 +15,9 @@ import streamlit as st
 from streamlit.errors import StreamlitAPIException
 from streamlit_sortables import sort_items
 
+from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
-from .annotations import known_tags
+from .annotations import has_screen_annotations, known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
@@ -27,12 +28,16 @@ from .constants import (
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    MARKER_DURATION_BOUNDS,
+    MARKER_SIZE_SCALES,
     OUT_OF_TEXT_COLOR,
     PALETTES,
     RAW_GAZE_LINK_FOR_KEY,
@@ -62,6 +67,7 @@ from .data import (
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
     frame_fingerprint,
+    mapping_value_preview,
     user_columns,
 )
 from .export import (
@@ -87,6 +93,7 @@ from .session_keys import (
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
     compare_state_keys,
+    keep_legacy_marker_scale,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 
@@ -237,6 +244,15 @@ def _labeled(host, kind: str, label: str, **kwargs):
         bool(kwargs.get("disabled", False)), kwargs.get("help")
     )
     return labeled(host, kind, label, **kwargs)
+
+
+def _rail_names() -> cn.ColumnNames:
+    """DATA-66: the open dataset's names, for the rail's column pickers.
+
+    The fixations table's, then the words table's for the word-level fields
+    (surprisal, frequency …) carried onto fixations. The pickers' values stay
+    canonical — only what they show changes."""
+    return cn.active_all(st.session_state)
 
 
 def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
@@ -669,6 +685,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # VIZ-8: show the saccade-type colour key on the plot (default on). Optional,
     # like the other legends.
     "global_saccade_type_legend": True,
+    # The fixed duration scale: one mapping of duration to marker size for every
+    # figure (√ by default — area grows with duration). Old configs and links
+    # that predate it are migrated to "relative" so they still draw as saved.
+    "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
+    "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
+    "global_duration_size_legend": True,
     "global_saccade_class_color_forward": SACCADE_CLASS_COLORS["forward"],
     "global_saccade_class_color_skip": SACCADE_CLASS_COLORS["skip"],
     "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
@@ -1150,7 +1172,9 @@ def delete_design_preset(name: str) -> None:
 #: The retired 💾 Session backup was the only portable copy of the library; this
 #: is its own file now, written by *Export* and read by *Import* in My designs.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
-DESIGNS_FILE_SCHEMA = 1
+#: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
+#: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
+DESIGNS_FILE_SCHEMA = 2
 _DESIGN_IMPORT_KEY = "design_import_upload"
 _DESIGN_IMPORT_NOTE_KEY = "_design_import_note"
 
@@ -1184,6 +1208,10 @@ def designs_from_json(text: str) -> dict[str, dict]:
     raw = data.get("designs")
     if not isinstance(raw, dict):
         raise ValueError("the file holds no designs")
+    try:
+        schema = int(data.get("schema", 1))
+    except (TypeError, ValueError):
+        schema = 1
     designs: dict[str, dict] = {}
     for name, values in raw.items():
         clean = " ".join(str(name).split())[:60]
@@ -1191,9 +1219,10 @@ def designs_from_json(text: str) -> dict[str, dict]:
             continue
         if clean in _VIEW_PRESETS:
             clean = f"{clean} (mine)"
-        designs[clean] = {
+        design = {
             str(key): value for key, value in values.items() if _is_design_key(key)
         }
+        designs[clean] = keep_legacy_marker_scale(design) if schema < 2 else design
     return designs
 
 
@@ -1997,7 +2026,7 @@ def _popover_selectbox(label: str, options: list, state_key: str, host=None, **k
 # Help text for the (multi-capable) Trial ID mapping, shared by all tables.
 _TRIAL_MAPPING_HELP = (
     "Pick the column holding your unique trial ID — or pick SEVERAL columns "
-    "to build one on the fly (values joined with '_'), e.g. participant + "
+    "to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + "
     "paragraph + repeated-reading when no single column identifies a trial. "
     "Use the same columns for every uploaded table so trials line up."
 )
@@ -2634,6 +2663,7 @@ def column_mapping_ui(
     columns_per_row: int = 1,
     stack_labels: bool | None = None,
     dataset: object = None,
+    option_labels: dict | None = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -2684,6 +2714,12 @@ def column_mapping_ui(
     # original import by design) — fall back to the parsed frame there.
     full_header = st.session_state.get(f"{state_key_prefix}_header")
     options = list(full_header) if full_header else user_columns(df)
+
+    # DATA-66: ✏️ Edit dataset offers the stored *canonical* columns; the caller
+    # passes the dataset's own names for them. The values stay canonical.
+    def _option_label(column) -> str:
+        return (option_labels or {}).get(column, column)
+
     expanded = bool(expand_on_problem and problems)
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
@@ -2820,6 +2856,7 @@ def column_mapping_ui(
         chosen = field_col.selectbox(
             field_label,
             options=options,
+            format_func=_option_label,
             index=None,
             placeholder=_UNMAPPED_PLACEHOLDER,
             key=state_key,
@@ -2849,41 +2886,32 @@ def column_mapping_ui(
             touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
             detected_label=detected_label,
         )
+        if option_labels and default and hover:
+            # DATA-66: "currently mapped `duration_ms`" names the user's column.
+            hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
-        if state == "auto":
-            # UX-92 — the ✨ is a **button** while the row is amber, and pressing
-            # it is the approval the select cannot report.
-            #
-            # Re-picking the value a select already holds fires no `on_change`:
-            # Streamlit dedupes it in the frontend and does not even rerun
-            # (verified in a browser, not inferred). Since UX-53 r10 the value
-            # lives in the widget key with `index=None` — which is what makes
-            # the ✕ clear work — so the detected column *is* the widget's value,
-            # and confirming it by hand is invisible to Python by construction.
-            # A one-click confirm in the space the flag already occupies is the
-            # only honest way to say "I chose this" for that case.
-            note_col.button(
-                # UX-200: named for screen readers; only the ✨ shows.
-                f"{ICONS['auto_detected']} "
-                + spoken(f"Confirm the detected {field_label} column"),
-                wrap=True,
-                key=f"{cell_key}_confirm",
-                help=f"{hover} — click to confirm this column and clear the mark.",
-                on_click=_mark_field_touched,
-                args=(state_key,),
-            )
-        elif hover:
-            # Icon only. The sentence — which column was detected, and whether it
-            # was overridden or left unused — is on the icon's tooltip, reusing
-            # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
-            # browser's ~1s native one.
-            note_col.markdown(
-                f'<span class="sps-map-flag sps-fhelp" '
-                f'data-tip="{html.escape(hover, quote=True)}">'
-                f"{icon_html('auto_detected')}</span>",
-                unsafe_allow_html=True,
-            )
+        # UX-92 — the ✨ is a **button** while the row is amber, and pressing it
+        # is the approval the select cannot report.
+        #
+        # Re-picking the value a select already holds fires no `on_change`:
+        # Streamlit dedupes it in the frontend and does not even rerun (verified
+        # in a browser, not inferred). Since UX-53 r10 the value lives in the
+        # widget key with `index=None` — which is what makes the ✕ clear work —
+        # so the detected column *is* the widget's value, and confirming it by
+        # hand is invisible to Python by construction. A one-click confirm in
+        # the space the flag already occupies is the only honest way to say "I
+        # chose this" for that case.
+        _render_field_flag(
+            note_col,
+            state=state,
+            hover=hover,
+            preview=value_preview_tip(df, field_key, chosen),
+            confirm_label=f"Confirm the detected {field_label} column",
+            confirm_help=f"{hover} — click to confirm this column and clear the mark.",
+            cell_key=cell_key,
+            state_key=state_key,
+        )
         # `NONE_OPTION` is still tolerated on the way out: a config restored
         # before this run could have seeded it.
         return None if chosen in (None, NONE_OPTION) else chosen
@@ -3044,6 +3072,7 @@ def column_mapping_ui(
                 # joined into one id — the composable columns are exactly the
                 # ones a narrowed parse is most likely to have left out.
                 options=options,
+                format_func=_option_label,
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",
@@ -3061,6 +3090,7 @@ def column_mapping_ui(
                 default=proposed_default,
                 required=spec["key"] in required_keys,
                 detected_label=detected_label,
+                preview=value_preview_tip(df, spec["key"], list(chosen_cols)),
             )
             if state:
                 tint_cells.setdefault(state, []).append(cell_key)
@@ -3088,6 +3118,7 @@ def multi_field_flag(
     default: list,
     required: bool,
     detected_label: str = "auto-detected",
+    preview: str = "",
 ) -> str:
     """The ✨ flag of a *multi-column* picker, and its tint state (UX-176).
 
@@ -3097,7 +3128,8 @@ def multi_field_flag(
     same rule for them: the columns detection proposed, untouched, are amber
     with a ✨ **button** that approves them; picking goes green; clearing goes
     neutral (or red once an add is attempted, for a required one). Returns the
-    `_FIELD_TINT` state for the caller to paint (`mark_cells`)."""
+    `_FIELD_TINT` state for the caller to paint (`mark_cells`). ``preview``
+    is the picked columns' value preview (`value_preview_tip`)."""
     joined = " + ".join(chosen) if chosen else None
     proposed = " + ".join(default) if default else None
     state, hover = _field_state(
@@ -3108,24 +3140,75 @@ def multi_field_flag(
         touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
         detected_label=detected_label,
     )
+    _render_field_flag(
+        flag_host,
+        state=state,
+        hover=hover,
+        preview=preview,
+        confirm_label="Confirm the detected columns",
+        confirm_help=f"{hover} — click to confirm and clear the mark.",
+        cell_key=cell_key,
+        state_key=state_key,
+    )
+    return state
+
+
+def value_preview_tip(df, field_key: str, column) -> str:
+    """`data.mapping_value_preview` for a picked column, as a tooltip line."""
+    if column in (None, NONE_OPTION, "", []):
+        return ""
+    preview = mapping_value_preview(df, field_key, column)
+    return f"Values: {preview}" if preview else ""
+
+
+def _render_field_flag(
+    host,
+    *,
+    state: str,
+    hover: str,
+    preview: str,
+    confirm_label: str,
+    confirm_help: str,
+    cell_key: str,
+    state_key: str,
+) -> None:
+    """A mapping row's ✨ flag and its value preview, in the slot beside it.
+
+    The ✨ is a **button** while the row is amber (UX-92) and an icon whose
+    tooltip says what detection found otherwise. The preview — a few of the
+    mapped column's values and what the app reads them as — is an icon of its
+    own with a hover tooltip, like every other note on this form; on an amber
+    row it rides on the confirm button's tooltip instead, which is where the
+    eye already is, and keeps the slot one line tall.
+    """
     if state == "auto":
-        flag_host.button(
+        host.button(
             # UX-200: named for screen readers; only the ✨ shows.
-            f"{ICONS['auto_detected']} {spoken('Confirm the detected columns')}",
+            f"{ICONS['auto_detected']} {spoken(confirm_label)}",
             wrap=True,
             key=f"{cell_key}_confirm",
-            help=f"{hover} — click to confirm and clear the mark.",
+            help=confirm_help + (f"\n\n{preview}" if preview else ""),
             on_click=_mark_field_touched,
             args=(state_key,),
         )
-    elif hover:
-        flag_host.markdown(
+        return
+    # Icons only, on the rail's CSS hover (`.sps-fhelp`, 120 ms) rather than
+    # the browser's ~1 s native one.
+    spans = []
+    if hover:
+        spans.append(
             f'<span class="sps-map-flag sps-fhelp" '
             f'data-tip="{html.escape(hover, quote=True)}">'
-            f"{icon_html('auto_detected')}</span>",
-            unsafe_allow_html=True,
+            f"{icon_html('auto_detected')}</span>"
         )
-    return state
+    if preview:
+        tip = html.escape(preview, quote=True)
+        spans.append(
+            f'<span class="sps-map-flag sps-map-preview sps-fhelp" tabindex="0" '
+            f'data-tip="{tip}" aria-label="{tip}">{icon_html("preview")}</span>'
+        )
+    if spans:
+        host.markdown("".join(spans), unsafe_allow_html=True)
 
 
 def mark_cells(cells_by_state: dict) -> None:
@@ -3273,7 +3356,7 @@ def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
     """Numeric columns offered as X/Y axis fields."""
     return [
         col
-        for col in trial_fixations.columns
+        for col in user_columns(trial_fixations)
         if pd.api.types.is_numeric_dtype(trial_fixations[col])
     ]
 
@@ -3292,7 +3375,7 @@ def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     if words is None or words.empty:
         return []
     cols = [c for c in _PREFERRED_HIGHLIGHT_FIELDS if c in words.columns]
-    for col in words.columns:
+    for col in user_columns(words):
         if col not in cols and pd.api.types.is_bool_dtype(words[col]):
             cols.append(col)
     return cols
@@ -3541,6 +3624,75 @@ def _check_row(
             persist_state=persist_state,
         ),
         rest_col,
+    )
+
+
+#: The help on the duration-scale rows — shared with nothing else, but long
+#: enough that the row code reads better without it inline.
+_SCALE_HELP = (
+    "How fixation duration sets marker size. The fixed scales (√, linear, log) "
+    "use the same duration bounds for every trial, comparison side, replay and "
+    "export, so one duration is always one size. √ makes marker area grow with "
+    "duration. Relative to this figure stretches each figure from its own "
+    "shortest to longest fixation, so sizes only compare within it."
+)
+_DURATION_BOUNDS_HELP = (
+    "Durations (ms) given the smallest and the largest marker. Shorter "
+    "fixations get the smallest marker and longer ones the largest. Unused on "
+    "the relative scale."
+)
+_SIZE_KEY_HELP = (
+    "Reference circles labelled in ms, in the figure's bottom-right corner, "
+    "on screen and in exports. Drawn only on a fixed scale. In Compare it is "
+    "not drawn when the two scanpaths use different marker size ranges, "
+    "since one duration is then two sizes."
+)
+
+
+def _render_duration_scale_rows() -> None:
+    """The fixed duration scale: curve, duration bounds and the size key.
+
+    One scale for both scanpaths of a comparison too (only the size *range* is
+    per scanpath there), so none of the three carries Compare's gate. The bounds
+    and the key are greyed, never hidden, on the relative scale.
+    """
+    scale_dis, scale_help = _layer_gate(False, _SCALE_HELP)
+    # Keyless, like the colorscale picker: a keyed selectbox first painted in a
+    # closed popover shows its first option rather than the seeded value — and a
+    # link or settings file that predates the fixed scale seeds "relative".
+    options = list(MARKER_SIZE_SCALES)
+    current = st.session_state.get("global_marker_size_scale")
+    st.session_state["global_marker_size_scale"] = _sub_row(
+        "Scale", caption_help=scale_help
+    ).selectbox(
+        "Duration scale",
+        options=options,
+        index=options.index(current) if current in options else 0,
+        format_func=lambda s: MARKER_SIZE_SCALES[s],
+        disabled=scale_dis,
+        help=scale_help,
+        label_visibility="collapsed",
+    )
+    relative = st.session_state["global_marker_size_scale"] == "relative"
+    _, bounds_help = _layer_gate(relative, _DURATION_BOUNDS_HELP)
+    _range_slider(
+        st,
+        "Durations (ms)",
+        key="global_marker_duration_range",
+        persist_state="session",
+        min_value=MARKER_DURATION_BOUNDS[0],
+        max_value=MARKER_DURATION_BOUNDS[1],
+        step=10,
+        disabled=relative,
+        help=_DURATION_BOUNDS_HELP,
+        field_host=_sub_row("Durations", caption_help=bounds_help),
+    )
+    key_dis, key_help = _layer_gate(relative, _SIZE_KEY_HELP)
+    _sub_row("Size key", caption_help=key_help).checkbox(
+        "Show",
+        key="global_duration_size_legend",
+        persist_state="session",
+        disabled=key_dis,
     )
 
 
@@ -4445,6 +4597,13 @@ def _collect_viz_settings(
         x_field=ss.get("global_x_field"),
         y_field=ss.get("global_y_field"),
         marker_size_range=tuple(ss.get("global_marker_size_range", (8, 24))),
+        marker_size_scale=(
+            ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE
+        ),
+        marker_duration_range=tuple(
+            ss.get("global_marker_duration_range") or DEFAULT_MARKER_DURATION_RANGE
+        ),
+        duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
         show_colorbars=bool(ss.get("global_show_colorbars")),
@@ -5270,9 +5429,24 @@ def render_plot_controls(
         by_col, style_col = field.columns(
             [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
         )
+        # DATA-66: the dataset's own names, its columns before the app's.
+        rail_names = _rail_names()
+        color_labels = rail_names.option_labels(
+            color_fields,
+            {
+                UNIFORM_COLOR_FIELD: UNIFORM_COLOR_FIELD,
+                "line": "Line" + cn.COMPUTED_SUFFIX,
+            },
+        )
         color_by = by_col.selectbox(
             "Color fixations by",
-            options=color_fields,
+            # "line" is no column of either table, so it is placed by hand,
+            # after the app's own fields like the computed field it is.
+            options=rail_names.sort_options(
+                [f for f in color_fields if f != "line"], first=(UNIFORM_COLOR_FIELD,)
+            )
+            + (["line"] if "line" in color_fields else []),
+            format_func=color_labels.__getitem__,
             key="global_color_by",
             persist_state="session",
             # VIZ-46: a chosen colour range is in the units of the column it was
@@ -5384,14 +5558,13 @@ def render_plot_controls(
         # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
         # / `cmp*_opacity` override these there), so they carry its gate.
         _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-        _, size_help = _layer_gate(
-            _dis,
-            _gated_help(
-                "Marker size range in px: the shortest fixation's marker, then "
-                "the longest's.",
-                _reason,
-            ),
+        size_text = (
+            "Marker diameter range in px: the smallest marker, then the "
+            "largest. On a fixed scale they belong to the two duration bounds "
+            "below; on the relative scale, to this figure's shortest and "
+            "longest fixation."
         )
+        _, size_help = _layer_gate(_dis, _gated_help(size_text, _reason))
         _range_slider(
             st,
             "Size",
@@ -5400,13 +5573,10 @@ def render_plot_controls(
             min_value=4,
             max_value=40,
             disabled=_dis,
-            help=_gated_help(
-                "Marker size range in px: the shortest fixation's marker, then "
-                "the longest's.",
-                _reason,
-            ),
+            help=_gated_help(size_text, _reason),
             field_host=_sub_row("Size", caption_help=size_help),
         )
+        _render_duration_scale_rows()
         _, opac_help = _layer_gate(
             _dis,
             _gated_help(
@@ -5545,11 +5715,15 @@ def render_plot_controls(
         # Honoured by all three render paths (static, animation, and — since the
         # comparison builders now take `fixation_hover_fields` too — Compare),
         # so this one carries no `_mode_gate`.
+        hover_names = _rail_names()
+        fix_hover = hover_names.sort_options(hover_field_options(trial_fixations))
+        fix_hover_labels = hover_names.option_labels(fix_hover)
         _labeled(
             st,
             "multiselect",
             "Hover fields",
-            options=hover_field_options(trial_fixations),
+            options=fix_hover,
+            format_func=fix_hover_labels.__getitem__,
             key="global_fixation_hover_fields",
             persist_state="session",
             help="Fields shown when hovering a fixation. Choose any retained "
@@ -5912,9 +6086,13 @@ def render_plot_controls(
         )
         span_off_disabled, _ = _layer_gate(not span_on, None)
         if highlight_options:
+            highlight_labels = cn.active(st.session_state, "words").option_labels(
+                highlight_options
+            )
             span_rest.selectbox(
                 "Highlight words by",
                 options=highlight_options,
+                format_func=highlight_labels.__getitem__,
                 key="global_highlight_column",
                 persist_state="session",
                 disabled=span_off_disabled,
@@ -6005,7 +6183,10 @@ def render_plot_controls(
             caption_help="A screenshot of the reading screen, as the background "
             "for any dataset. An upload **overrides** a dataset's built-in image "
             "and is stretched to fill the monitor; the offset and scale below "
-            "line it up. Not carried by Share links (upload it on the other end).",
+            "line it up. In Compare it is the first reading's page, so the "
+            "second shows it only when it reads the same text on the same "
+            "screen; otherwise the second shows its own page, or none. Not "
+            "carried by Share links (upload it on the other end).",
         ).file_uploader(
             "Upload a stimulus image",
             type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -6087,11 +6268,15 @@ def render_plot_controls(
         # Honoured by all three render paths (static, animation, and — since
         # the comparison builders take `word_hover_fields` too — Compare), so
         # this one carries no `_mode_gate`.
+        word_names = cn.active(st.session_state, "words")
+        word_hover = word_names.sort_options(hover_field_options(words, words=True))
+        word_hover_labels = word_names.option_labels(word_hover)
         _labeled(
             st,
             "multiselect",
             "Hover fields",
-            options=hover_field_options(words, words=True),
+            options=word_hover,
+            format_func=word_hover_labels.__getitem__,
             key="global_word_hover_fields",
             persist_state="session",
             help="Fields shown when hovering a word: identity, any reading "
@@ -6192,9 +6377,13 @@ def render_plot_controls(
         metric_col, scale_col = field.columns(
             [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
         )
+        metric_labels = _rail_names().option_labels(
+            ["duration_ms", "counts"], {"counts": "Fixation count"}
+        )
         heatmap_metric = metric_col.selectbox(
             "Metric",
             options=["duration_ms", "counts"],
+            format_func=metric_labels.__getitem__,
             key="global_heatmap_metric",
             persist_state="session",
             disabled=metric_disabled_h,
@@ -6486,8 +6675,8 @@ def render_plot_controls(
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
             _gated_help(
-                "The fixation columns plotted on the X and Y axes (default `x` "
-                "and `y`).",
+                "The fixation columns plotted on the X and Y axes (by default, "
+                "the fixation's position on the screen).",
                 axis_reason,
             ),
         )
@@ -6500,9 +6689,11 @@ def render_plot_controls(
         )
         _row_label(axes_cols[0], "Axes", axis_help)
         _sub_caption(axes_cols[1], "X")
+        axis_labels = _rail_names().option_labels(numeric_fields)
         axes_cols[2].selectbox(
             "X axis field",
             options=numeric_fields,
+            format_func=axis_labels.__getitem__,
             key="global_x_field",
             persist_state="session",
             disabled=axis_disabled,
@@ -6512,6 +6703,7 @@ def render_plot_controls(
         axes_cols[4].selectbox(
             "Y axis field",
             options=numeric_fields,
+            format_func=axis_labels.__getitem__,
             key="global_y_field",
             persist_state="session",
             disabled=axis_disabled,
@@ -6757,21 +6949,13 @@ def _bool_filter_narrowing(
     return vals or None
 
 
-# Friendly labels for well-known trial-level condition columns. Any other field
-# the user picks as a filter just uses its column name + raw values.
+# What the two values of a well-known boolean condition column mean. A filter's
+# *title* is the dataset's own name for its column (DATA-66, `trial_filter_labels`);
+# these name its values, and any other boolean column reads Yes / No.
 _FILTER_FIELD_LABELS = {
-    "question_preview": {
-        "label": "Reading regime",
-        "true": "Hunting",
-        "false": "Gathering",
-    },
-    "repeated_reading_trial": {
-        "label": "Reading number",
-        "true": "Repeated",
-        "false": "First",
-    },
-    "is_correct": {"label": "Answer", "true": "Correct", "false": "Incorrect"},
-    "difficulty_level": {"label": "Difficulty"},
+    "question_preview": {"true": "Hunting", "false": "Gathering"},
+    "repeated_reading_trial": {"true": "Repeated", "false": "First"},
+    "is_correct": {"true": "Correct", "false": "Incorrect"},
 }
 
 # Built-in sources (no wizard) auto-offer these known trial-level conditions when
@@ -7082,7 +7266,8 @@ def active_filter_items(
         return []
     values = dict(st.session_state.get(f"{prefix}_trial_filters_raw") or {})
     values.update({k: st.session_state[k] for k in keys if k in st.session_state})
-    labels = trial_filter_labels(words, fixations)
+    names = _rail_names()
+    labels = trial_filter_labels(words, fixations, names=names)
 
     def label_for(key: str) -> str:
         from scanpath_studio import metadata as md
@@ -7096,7 +7281,7 @@ def active_filter_items(
         col = bare.removeprefix("filter_")
         if col.endswith("_range") and col.removesuffix("_range") in labels:
             col = col.removesuffix("_range")
-        return labels.get(col) or _trial_filter_label(col)
+        return labels.get(col) or names.label(col)
 
     return describe_filter_keys(keys, values, label_for, prefix)
 
@@ -7235,45 +7420,12 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     return cols
 
 
-#: Friendly labels for chip fields whose column name does not humanize into
-#: anything a reader can act on. Lives here, beside `SUMMARY_CHIP_FIELDS`,
-#: because **two** surfaces name these fields — the ✏️ Edit chips picker below
-#: and the chip strip itself (`tabs._chip_field_label`, which imports this) —
-#: and they used to keep separate maps, so the same field read "Age" on a chip
-#: and "Pp age" in the picker that offers it.
-CHIP_FIELD_LABELS = {
-    "participant_id": "Participant",
-    "unique_text_id": "Text",
-    "text_id": "Text",
-    "unique_paragraph_id": "Text",
-    "paragraph_id": "Text",
-    # The stimulus-image placement columns (`data.resolve_stimulus_image_paths`
-    # and the corpora that stamp their own). They humanize to "Image x" /
-    # "Image y", which reads like an image *identifier* rather than where on
-    # the monitor the page was drawn — so they say so.
-    "image_path": "Stimulus image",
-    "image_x": "Stimulus image left (px)",
-    "image_y": "Stimulus image top (px)",
-    # MultiplEYE facets + reader metadata.
-    "genre": "Genre",
-    "session": "Session",
-    "is_practice": "Practice",
-    "trial_num": "Trial #",
-    "pp_age": "Age",
-    "pp_gender": "Gender",
-    "pp_native_language": "Native language",
-    "pp_years_education": "Years of education",
-    "pp_education_level": "Education",
-}
-
-
 def unique_field_labels(columns, label_of) -> dict[str, str]:
     """``{column: label}`` with every label distinct, in ``columns``' order.
 
-    Two columns can humanize to the same text — two text-id columns both read
-    "Text", OneStop's ``TRIAL_INDEX`` and ``trial_index`` both "Trial index" —
-    so the first keeps its label and each later one adds its column name:
-    "Trial index (trial_index)". The ✏️ chip editor needs this to stay
+    Two columns can share a label — `text_id` and `unique_text_id` read from
+    one column of the user's file — so the first keeps its label and each later
+    one adds its column name: "PARAGRAPH (unique_text_id)". The ✏️ chip editor needs this to stay
     invertible; the trial filters use it (UX-149) so two sliders over different
     columns never carry the same title.
     """
@@ -7289,15 +7441,16 @@ def unique_field_labels(columns, label_of) -> dict[str, str]:
     return labels
 
 
-def _chip_option_label(col: str) -> str:
-    """Display label for a chip-field option (identity / virtual / humanized)."""
+def chip_field_label(col: str, names: cn.ColumnNames | None = None) -> str:
+    """What a chip field is called, on the chip and in ✏️ Edit chips alike.
+
+    A summary statistic keeps the app's name (`SUMMARY_CHIP_FIELDS`); a data
+    column is shown under the dataset's own name (DATA-66). ``names`` is the
+    map to read, the open dataset's by default (Compare's B passes its own).
+    """
     if col in SUMMARY_CHIP_FIELDS:
         return SUMMARY_CHIP_FIELDS[col]
-    if col in CHIP_FIELD_LABELS:
-        return CHIP_FIELD_LABELS[col]
-    if col in _CHIP_TEXT_ID_COLS:
-        return "Text"
-    return col.replace("_", " ").strip().capitalize()
+    return (names if names is not None else _rail_names()).label(col)
 
 
 def _default_chip_fields(available: list[str]) -> list[str]:
@@ -7350,9 +7503,12 @@ def render_trial_chip_picker(
     if not available:
         return
 
-    # Display labels must be unique to stay invertible: some fields humanize to the
-    # same text (e.g. two text-id columns both read "Text"), so disambiguate.
-    key_to_label = unique_field_labels(available, _chip_option_label)
+    # Display labels must be unique to stay invertible: two fields can share a
+    # name (`text_id` and `unique_text_id` read from one column), so disambiguate.
+    names = _rail_names()
+    key_to_label = unique_field_labels(
+        available, lambda col: chip_field_label(col, names)
+    )
     label_to_key = {label: key for key, label in key_to_label.items()}
 
     # Current selection/order, pruned to what's available + seeded once.
@@ -7378,12 +7534,15 @@ def render_trial_chip_picker(
     ]
     with host:
         # Key varies with the field universe so the component re-mounts (rather than
-        # keeping a stale drag order) when the dataset / columns change.
+        # keeping a stale drag order) when the dataset / columns change. DATA-66:
+        # and with the labels — the component hands back the labels it holds, so
+        # one renamed by ✏️ Edit dataset → Save would otherwise drop its chip.
         result = sort_items(
             buckets,
             multi_containers=True,
             direction="vertical",
-            key=f"trial_chip_sort_{abs(hash(signature))}",
+            key="trial_chip_sort_"
+            f"{abs(hash((signature, tuple(key_to_label.items()))))}",
         )
     shown_labels = result[0]["items"] if result else []
     st.session_state["trial_chip_fields"] = [
@@ -8136,32 +8295,39 @@ def render_narrow_by(
         )
 
 
-def _trial_filter_label(col: str) -> str:
-    """A trial filter's title before `unique_field_labels` disambiguates it."""
-    spec = _FILTER_FIELD_LABELS.get(col, {})
-    return spec.get("label", col.replace("_", " ").strip().title())
-
-
 def trial_filter_labels(
-    words: pd.DataFrame, fixations: pd.DataFrame, numeric_fields: dict | None = None
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    numeric_fields: dict | None = None,
+    *,
+    names: cn.ColumnNames | None = None,
 ) -> dict[str, str]:
     """``{column: title}`` for the trial-filter panel's data-column filters.
 
+    DATA-66: a filter is titled by the dataset's own name for its column
+    (``names``, the open dataset's map by default; Compare's B passes its own).
     UX-149: one label namespace across the range sliders and the multiselects,
-    so the demo's `TRIAL_INDEX` and `trial_index` don't render two sliders both
-    titled "Trial Index" — the ✏️ chip editor's rule (`unique_field_labels`).
+    so two filters over different columns never share a title — the ✏️ chip
+    editor's rule (`unique_field_labels`).
     """
     if numeric_fields is None:
         numeric_fields = _numeric_filter_fields(words, fixations)
+    if names is None:
+        names = _rail_names()
     columns = [
         *numeric_fields,
         *(c for c in _filter_fields_for(words, fixations) if c not in numeric_fields),
     ]
-    return unique_field_labels(columns, _trial_filter_label)
+    return unique_field_labels(columns, names.label)
 
 
 def render_trial_filters(
-    words: pd.DataFrame, fixations: pd.DataFrame, *, host, prefix: str = ""
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    host,
+    prefix: str = "",
+    names: cn.ColumnNames | None = None,
 ) -> dict:
     """Render the trial-filter controls into ``host`` and persist the selections.
 
@@ -8191,7 +8357,7 @@ def render_trial_filters(
     # of a multiselect over its distinct floats. Rendered first, as extra rows
     # among the categorical ones rather than in a section of their own.
     numeric_fields = _numeric_filter_fields(words, fixations)
-    labels = trial_filter_labels(words, fixations, numeric_fields)
+    labels = trial_filter_labels(words, fixations, numeric_fields, names=names)
     for col, (frame, lo, hi) in numeric_fields.items():
         label = labels[col]
         _seed_range_widget(col, lo, hi, prefix=prefix)
@@ -8253,7 +8419,10 @@ def render_trial_filters(
     _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
-    host.markdown("**By annotation**")
+    # The annotation filters are trial level: they read the trial's own star
+    # and tags, never a screen's (`annotations.select_keys`), so the picker
+    # offers trial-level tags only and the panel says where screen ones are.
+    host.markdown("**By trial annotation**")
     if f"{prefix}filter_favorites" not in st.session_state:
         st.session_state[f"{prefix}filter_favorites"] = bool(
             st.session_state.get(f"{prefix}_trial_filters_raw", {}).get(
@@ -8266,10 +8435,11 @@ def render_trial_filters(
         f"{ICONS['favorite']} Favorites only",
         key=f"{prefix}filter_favorites",
         on_change=_apply,
+        help="Keep trials starred as a whole. A star on one screen does not count.",
     )
     # DATA-48: the tags of the dataset this pool comes from — compare mode's B
     # (the `cmp` prefix) may be another dataset, with tags of its own.
-    tags = known_tags(prefix)
+    tags = known_tags(prefix, trial_level=True)
     if tags:
         _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
         _labeled(
@@ -8279,6 +8449,7 @@ def render_trial_filters(
             options=tags,
             key=f"{prefix}filter_req_tags",
             on_change=_apply,
+            help="Keep trials tagged as a whole with any of these.",
         )
         _seed_filter_widget(f"{prefix}filter_exc_tags", tags, [], prefix=prefix)
         _labeled(
@@ -8288,7 +8459,12 @@ def render_trial_filters(
             options=tags,
             key=f"{prefix}filter_exc_tags",
             on_change=_apply,
-            help="e.g. hide everything tagged 'To exclude'.",
+            help="Hide trials tagged as a whole with any of these, e.g. 'To exclude'.",
+        )
+    if has_screen_annotations(prefix):
+        host.caption(
+            "Screen annotations are not used by these filters. They are listed "
+            f"on {ICONS['view_data']} **Data Management → Annotations**."
         )
 
     # UX-26: the filter reset used to appear only in the empty-result diagnostic

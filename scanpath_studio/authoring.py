@@ -299,6 +299,97 @@ def apply_authoring_event(
     return reconcile_event_table(frame, selected)
 
 
+def _word_key(text: Any) -> str:
+    """A word as a target names it: letters and digits, case folded — so a
+    punctuation or capitalisation fix leaves the target where it was."""
+    return "".join(char for char in str(text).casefold() if char.isalnum())
+
+
+def _target_keys(words: pd.DataFrame) -> dict[int, str]:
+    if words.empty:
+        return {}
+    return {
+        int(word_id): _word_key(text)
+        for word_id, text in zip(words["word_id"], words["text"], strict=True)
+    }
+
+
+def stale_target_words(
+    old_words: pd.DataFrame, new_words: pd.DataFrame, events: pd.DataFrame | None
+) -> dict[int, tuple[int, str]]:
+    """The fixations whose target word a text edit removed or replaced, as
+    ``{fixation_id: (word_id, the word it named)}``.
+
+    Editing the stimulus keeps every authored fixation as it is — X/Y, order,
+    duration and id. Only the optional target word can go out of date: its id
+    may no longer exist, or now name a different word. Those are reported, not
+    changed; a punctuation or capitalisation fix to the word is not a change.
+    :func:`unresolved_targets` says which are still out of date later on.
+    """
+    if events is None or events.empty:
+        return {}
+    before, after = _target_keys(old_words), _target_keys(new_words)
+    stale: dict[int, tuple[int, str]] = {}
+    for event in normalize_event_table(events).to_dict("records"):
+        word_id = event_target_word(event)
+        fixation_id = _positive_int(event.get("fixation_id"))
+        if word_id is None or fixation_id is None or word_id not in before:
+            continue
+        if after.get(word_id) != before[word_id]:
+            stale[fixation_id] = (word_id, before[word_id])
+    return stale
+
+
+def unresolved_targets(
+    stale: Mapping[int, tuple[int, str]], words: pd.DataFrame, events: pd.DataFrame
+) -> dict[int, int]:
+    """``{fixation_id: word_id}`` for the entries of :func:`stale_target_words`
+    that are still out of date: the fixation exists, still targets that word id,
+    and the text there is still not the word it named. Changing or clearing the
+    target, deleting the fixation or undoing the text edit resolves one."""
+    if not stale or events is None or events.empty:
+        return {}
+    current = _target_keys(words)
+    targets = {
+        _positive_int(event.get("fixation_id")): event_target_word(event)
+        for event in normalize_event_table(events).to_dict("records")
+    }
+    return {
+        fixation_id: word_id
+        for fixation_id, (word_id, named) in stale.items()
+        if targets.get(fixation_id) == word_id and current.get(word_id) != named
+    }
+
+
+def destructive_change(before: pd.DataFrame | None, after: pd.DataFrame | None) -> bool:
+    """Whether going from ``before`` to ``after`` lost authored work: a fixation
+    removed, or one that is still there moved, retimed, reordered or retargeted.
+
+    Adding a fixation loses nothing, so it is not one. This is what decides when
+    the authoring screen keeps the previous draft for **Restore previous draft**.
+    """
+    old = normalize_event_table(before)
+    new = normalize_event_table(after)
+    if old.empty:
+        return False
+
+    def keyed(frame: pd.DataFrame) -> dict[int, tuple]:
+        rows = {}
+        for event in frame.to_dict("records"):
+            fixation_id = _positive_int(event.get("fixation_id"))
+            rows[fixation_id] = (
+                _number(event.get("x")),
+                _number(event.get("y")),
+                _number(event.get("duration_ms")),
+                _positive_int(event.get("order_in_trial")),
+                event_target_word(event),
+            )
+        return rows
+
+    old_rows, new_rows = keyed(old), keyed(new)
+    return any(new_rows.get(key) != value for key, value in old_rows.items())
+
+
 def unusable_event_rows(words: pd.DataFrame, events: pd.DataFrame) -> list[int]:
     """Return rows that have neither usable X/Y nor a valid word fallback."""
     if events is None or events.empty:

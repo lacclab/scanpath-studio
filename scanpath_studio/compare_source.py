@@ -302,6 +302,31 @@ def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return api.load_scanpath_data(raw[0], raw[1])
 
 
+@st.cache_data(show_spinner=False)
+def _builtin_column_names(name: str) -> dict[str, dict]:
+    """DATA-66: the demo's / synthetic trial's own column names, for a B drawn
+    from them — read from the same raw frames and auto-detected schemas
+    `_load_builtin_frames` normalizes, as payloads."""
+    from scanpath_studio.column_names import for_tables
+    from scanpath_studio.data import (
+        load_sample_data,
+        propose_fix_schema,
+        propose_word_schema,
+    )
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = (
+        load_sample_data() if name == DEMO_CHOICE else load_synthetic_data()
+    )
+    return for_tables(
+        {
+            "words": propose_word_schema(words),
+            "fixations": propose_fix_schema(fixations),
+        },
+        {"words": words, "fixations": fixations},
+    )
+
+
 def source_has_raw_gaze(name: str | None) -> bool:
     """Whether comparison source ``name`` carries raw gaze, without loading it.
 
@@ -351,6 +376,9 @@ def snapshot_for(
     stored = (st.session_state.get("_datasets") or {}).get(name)
     if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
         return SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
+    # A built-in or public dataset whose setup the user saved is that setup.
+    if (override := app.dataset_setup_override(name)) is not None:
+        return override
     width, height, authoritative = app.resolve_source_monitor(name, words, fixations)
     return SetupSnapshot(
         canvas_width=int(width),
@@ -405,6 +433,10 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
             adopt_source(words, fixations)
         elif name in (DEMO_CHOICE, SYNTHETIC_CHOICE):
             words, fixations = _load_builtin_frames(name)
+            column_names = {
+                table: ColumnNames.from_payload(payload)
+                for table, payload in _builtin_column_names(name).items()
+            }
             if name == DEMO_CHOICE:
                 raw_gaze = _load_demo_raw_gaze()
         else:

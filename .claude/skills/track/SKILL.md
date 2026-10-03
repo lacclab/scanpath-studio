@@ -1,6 +1,6 @@
 ---
 name: track
-description: Add or update a work item in GitHub Issues and on the Scanpath Studio project board, following the house conventions — stable [PREFIX-N] IDs, the board's Status and Priority columns, native issue types, the four-section body, and the approval gate. Use whenever work is started, finished (→ Review), or signed off (→ closed).
+description: Add or update a work item in GitHub Issues and on the Scanpath Studio project board, following the house conventions — plain titles cited by their #N, the board's Status and Priority columns, native issue types, the four-section body, and the approval gate. Use whenever work is started, finished (→ Review), or signed off (→ closed).
 ---
 
 # Tracking work
@@ -16,37 +16,27 @@ native fields, so they are deliberately *not* also labels — two vocabularies f
 one fact is how they drift. Only `area:*` and `waiting-on-you` are labels, because
 GitHub has no field for either.
 
-Arguments: free-form — e.g. `CMP "chips reset on rerun"` (new issue),
-`update VIZ-37`, `approve 117` (sign-off), `close 117 <reason>` (close without
-implementing).
+Arguments: free-form — e.g. `"chips reset on rerun" compare` (new issue),
+`update 117`, `approve 117` (sign-off), `close 117 <reason>` (close without
+implementing). An old ID (`update VIZ-37`) is found with
+`gh issue list --state all --search VIZ-37`.
 
 ## Conventions (non-negotiable)
 
-- **IDs are stable, never renumbered.** Every issue is titled
-  `[PREFIX-N] <title>`. The IDs are cited across `AGENTS.md`, `CLAUDE.md`, the
-  `plans/` notes and the git history, so they outlive GitHub's numbering — cite
-  the tracker ID in prose and commits, with `#N` alongside when a link helps.
-  Prefixes: `AN` (analysis), `BUG`, `CMP` (compare mode), `DATA`, `ENG`, `EXP`
-  (export), `PERF`, `PRE` (preprocessing), `UX`, `VAL`, `VIZ`. A new item takes
-  the next free number in its prefix, and most IDs live in only **one** place, so
-  check all three (the procedure in `CLAUDE.md` → *Tracking work*):
-  the changelog — `CHANGELOG.md` plus the fragment names in `changelog.d/`
-  (where most IDs are allocated — not every ID gets an issue) — the issues, and
-  **the open PRs**, whose unmerged fragments are invisible to the other two:
-
-  ```bash
-  { grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md docs/*.md scanpath_studio/*.py; ls changelog.d; } \
-    | grep -oE "\bDATA-[0-9]+\b" | sort -u -V | tail -3
-  gh issue list --state all --limit 200 --search "[DATA-" --json title
-  gh pr list --state open --json number,headRefName,title
-  gh pr diff <n> --name-only | grep '^changelog.d/' | grep -oE "\b[A-Z]+-[0-9]+\b"
-  ```
-
-  A PR's IDs are the names of the fragments it adds (ENG-86). Run the last line
-  for each open PR.
-
-  When another session or person is working right now, ask which IDs they have
-  allocated — that settles it faster than any search.
+- **GitHub's `#N` is the ID** (since 2026-10-03). New issues get a plain
+  title — no `[PREFIX-N]` — and commits, PRs, changelog fragments and prose cite
+  `#N`. Nothing is allocated by hand, so parallel sessions cannot collide.
+  The `[VIZ-37]`-style IDs of the old tracker are retired: **never mint one.**
+  Those already written down stay — in the changelog, docs, `plans/`, code
+  comments, git history and the titles of the issues that carry one — and
+  `gh issue list --state all --search VIZ-37` still finds them. Leave old
+  citations alone; write `#N` in new text.
+- **Not every change gets an issue.** One finished inside a session is cited by
+  its PR: its changelog fragment takes a slug name
+  (`changelog.d/trial-picker-ids.changed.md`) and the release reads the PR
+  number from the squash-merge subject. Open an issue when the item reaches
+  *Review*, is blocked on the user, or is carried across sessions — and then
+  name the fragment by it (`changelog.d/341.fixed.md`).
 
 - **Status** is the board's `Status` column: `Backlog · Planned · In progress ·
   On hold · Review`. Closing the issue is the sixth state. Drag the card in the
@@ -69,7 +59,7 @@ implementing).
   gh api -X PATCH repos/lacclab/scanpath-studio/issues/117 -f type=Task
   ```
 
-- **`area:*` labels** mirror the old groups and decide the prefix: `area:ux`,
+- **`area:*` labels** mirror the old groups: `area:ux`,
   `area:compare`, `area:viz`, `area:data`, `area:perf`, `area:analysis`,
   `area:preprocessing`, `area:export`, `area:validation`, `area:bug`,
   `area:engineering`.
@@ -96,7 +86,7 @@ carrying the status / "update as of ⟨date⟩" line:
 ## Request
 
 The 🗂️ Data page reads as one long divider-separated scroll — give it the same
-hierarchy pass VIZ-31 (#88) gave the plot rail.
+hierarchy pass #88 gave the plot rail.
 
 ## What was done
 …
@@ -112,7 +102,7 @@ hierarchy pass VIZ-31 (#88) gave the plot rail.
    are the developer, so this is your own to-do, not a message to the user. When
    the code is finished it says "Nothing." — including on an issue you are moving
    to *Review*, because the review is not developer work.
-4. `## Background` — anchors, design calls, gotchas, related IDs.
+4. `## Background` — anchors, design calls, gotchas, related issues.
 
 A backlog issue has only *Request* (+ *Background*). *What was done* / *What's
 left* are **required** once it reaches *In progress* or *Review*.
@@ -126,8 +116,8 @@ plus the `waiting-on-you` label — both the design calls that block the work
 
 - **Omit the section** when nothing is open, and remove the label with it.
 - **Ask, don't hedge.** A decision is a question with options, not "TBD".
-- **One self-contained line per entry** — markdown inline renders; `[VIZ-37](…)`
-  and `#117` link.
+- **One self-contained line per entry** — markdown inline renders; `#117`
+  links.
 - **An issue in *Review* always has at least one entry** — the review ask
   itself. Name what to look at: the judgement calls you made, the surfaces to
   click, the things worth disagreeing with.
@@ -142,8 +132,8 @@ plus the `waiting-on-you` label — both the design calls that block the work
 - **Claim it and move it to *In progress* when you pick it up**, before writing
   code, so a parallel session doesn't start the same work:
   `gh issue edit <n> --add-assignee @me`, plus the board move.
-- **Commit early and often** — one commit per feature or fix, with the tracker ID
-  in the subject: `fix(viz): keep the fullscreen control in sync (VIZ-37)`.
+- **Commit early and often** — one commit per feature or fix, with the issue
+  in the subject: `fix(viz): keep the fullscreen control in sync (#117)`.
 - **Land in *Review***, and put the ask to review in the *Waiting on you*
   checklist — *What's left* is your own remainder, not a message to the user.
 
@@ -152,7 +142,7 @@ plus the `waiting-on-you` label — both the design calls that block the work
 ```bash
 # New issue. Read a couple of neighbours in the same area first and match their
 # tone and level of detail.
-gh issue create --title "[VIZ-38] <title>" --label area:viz --body-file body.md
+gh issue create --title "<title>" --label area:viz --body-file body.md
 gh api -X PATCH repos/lacclab/scanpath-studio/issues/<n> -f type=Feature
 gh project item-add 5 --owner lacclab --url <issue-url> --format json --jq .id
 # then set its Status (and Priority) with `gh project item-edit` — see Conventions

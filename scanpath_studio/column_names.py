@@ -79,6 +79,74 @@ COMPUTED_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
+#: What marks a column the app made, wherever a column is named on screen.
+#: Text, not an icon: option labels cannot carry a Material icon, and literal
+#: emoji are kept out of chrome (`tests/test_icons.py`).
+COMPUTED_SUFFIX = " (computed)"
+
+#: Where the open dataset's map lives in session state (stashed by
+#: `app._stash_active_mapping`), one payload per table.
+ACTIVE_COLUMN_NAMES_KEY = "_active_column_names"
+
+#: Curated labels for columns the app makes. A reading measure's comes from
+#: `data.READING_MEASURE_FIELDS` (its full name) — see `canonical_label`.
+_CANONICAL_LABELS: dict[str, str] = {
+    "order_in_trial": "Fixation order",
+    "order_in_screen": "Fixation order on screen",
+    "fixation_id": "Fixation #",
+    "timestamp_ms": "Time (ms)",
+    "participant_id": "Participant",
+    "text_id": "Text",
+    "line_idx": "Line",
+    "text": "Word",
+    "word_id": "Word #",
+    "x": "X",
+    "y": "Y",
+    "saccade_amplitude": "Saccade amplitude (px)",
+    "angle_incoming": "Incoming angle",
+    "angle_outgoing": "Outgoing angle",
+    "progression": "Progression",
+    "is_regression": "Regression",
+    "right_to_left": "Right to left",
+    "first_fix_x": "First fixation X",
+    "first_fix_y": "First fixation Y",
+    "gaze_duration_ms": "Gaze duration (ms)",
+    "run": "Run",
+    "linerun": "Line run",
+    "word_runid": "Word run id",
+    "word_run": "Word run",
+    "word_run_fix": "Fixation in word run",
+    "nrun": "Runs on word",
+    "reread": "Reread",
+    "excluded": "Excluded",
+    "excluded_reason": "Excluded because",
+    "blink_before": "Blink before",
+    "blink_after": "Blink after",
+    "original_duration_ms": "Original duration (ms)",
+    "y_original": "Y before correction",
+    "y_correction": "Y correction",
+    "alignment_agreement": "Line agreement",
+}
+
+
+#: Canonical columns that can carry a copy of a partner's values — see
+#: `ColumnNames.aliases`.
+_ALIAS_PAIRS = (("trial_id", "unique_trial_id"), ("text_id", "unique_text_id"))
+
+
+def canonical_label(column) -> str:
+    """A readable label for a column the app made (a measure, a run, an angle …)."""
+    from .data import READING_MEASURE_FIELDS
+
+    column = str(column)
+    for _key, canonical, _short, full, *_ in READING_MEASURE_FIELDS:
+        if canonical == column:
+            return str(full)
+    if column in _CANONICAL_LABELS:
+        return _CANONICAL_LABELS[column]
+    text = column.replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+
 
 @dataclass(frozen=True)
 class SourceName:
@@ -147,6 +215,115 @@ class ColumnNames:
             out.setdefault(column, entry)
         return ColumnNames(out)
 
+    def label(self, column) -> str:
+        """What a person is shown for ``column`` (DATA-66 phase 2).
+
+        The user's own name when the column was read from their files; a
+        curated label marked :data:`COMPUTED_SUFFIX` when the app made it; else
+        the column's own name.
+        """
+        entry = self.source(column)
+        kind = self.kind_of(column)
+        if (
+            entry is not None
+            and entry.sources
+            and kind in (MAPPED, COMPOSITE, CONVERTED)
+        ):
+            # A converted column says what it holds now: a box width is the
+            # difference of two edges, not their sum, and a duration read in
+            # seconds is in ms.
+            if kind == CONVERTED and entry.note:
+                return entry.note
+            return entry.display
+        if kind in (COMPUTED, GENERATED):
+            return canonical_label(column) + COMPUTED_SUFFIX
+        return str(column)
+
+    def figure_labels(self, columns: Iterable) -> dict[str, str]:
+        """``{column: label}`` for a figure's text (`FigureSettings.column_labels`).
+
+        Every column the dataset brought, under its own name; the columns the
+        app made are left out, so a figure keeps its short labels for them
+        ("Fixation #", "FFD") rather than writing "(computed)" into a hover.
+        Bookkeeping columns (`data.INTERNAL_COLUMNS`) are no figure's text. A
+        column converted from one source (a duration read in seconds) is named
+        by that source: the figure writes its unit after the value, and the
+        note's "…, in ms" would say it twice.
+        """
+        from .data import INTERNAL_COLUMNS
+
+        out: dict[str, str] = {}
+        for column in columns:
+            if column in INTERNAL_COLUMNS or self.kind_of(column) in (
+                COMPUTED,
+                GENERATED,
+            ):
+                continue
+            entry = self.source(column)
+            single_conversion = (
+                entry is not None
+                and entry.kind == CONVERTED
+                and len(entry.sources) == 1
+            )
+            out[str(column)] = (
+                entry.sources[0] if single_conversion else self.label(column)
+            )
+        return out
+
+    def merged(self, other: ColumnNames) -> ColumnNames:
+        """Both tables' entries, this map's winning where both name a column."""
+        return ColumnNames({**dict(other.entries), **dict(self.entries)})
+
+    def option_labels(self, options, extra: Mapping | None = None) -> dict[str, str]:
+        """``{option: label}`` for a picker; ``extra`` labels synthetic options
+        (``"(uniform)"``, ``"line"``). A label two options share gets the
+        internal name added, so a picker never shows two identical rows."""
+        extra = dict(extra or {})
+        labels = {o: extra.get(o) or self.label(o) for o in options}
+        counts: dict[str, int] = {}
+        for value in labels.values():
+            counts[value] = counts.get(value, 0) + 1
+        return {
+            o: f"{label} · {o}" if counts[label] > 1 and label != str(o) else label
+            for o, label in labels.items()
+        }
+
+    def sort_options(self, options, first=()) -> list:
+        """The user's columns first, the app's last; ``first`` stays in front.
+
+        Stable within each group, so a curated order survives."""
+        options = list(options)
+        head = [o for o in options if o in first]
+        rest = [o for o in options if o not in first]
+        made = (COMPUTED, GENERATED)
+        return (
+            head
+            + [o for o in rest if self.kind_of(o) not in made]
+            + [o for o in rest if self.kind_of(o) in made]
+        )
+
+    def aliases(self, columns: Iterable[str]) -> set[str]:
+        """Columns in ``columns`` that only repeat a partner from the same source.
+
+        `unique_trial_id` mirrors `trial_id` (BUG-58) and `unique_text_id`
+        usually mirrors `text_id`; when both of a pair were read from one column
+        of the user's file, a table needs to show it once.
+        """
+        present = {str(c) for c in columns}
+        hidden: set[str] = set()
+        for main, alias in _ALIAS_PAIRS:
+            first, second = self.source(main), self.source(alias)
+            if (
+                main in present
+                and alias in present
+                and first is not None
+                and second is not None
+                and first.sources
+                and first.sources == second.sources
+            ):
+                hidden.add(alias)
+        return hidden
+
     def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
         """Only the entries for ``columns`` — a frame's actual columns.
 
@@ -185,6 +362,40 @@ class ColumnNames:
 
 
 EMPTY = ColumnNames({})
+
+
+def active(session: Mapping, table: str) -> ColumnNames:
+    """The open dataset's map for ``table``, read from a session mapping.
+
+    Takes the session as an argument so this module stays free of Streamlit;
+    callers pass ``st.session_state``.
+    """
+    stash = session.get(ACTIVE_COLUMN_NAMES_KEY) or {}
+    return ColumnNames.from_payload(stash.get(table))
+
+
+def active_all(session: Mapping) -> ColumnNames:
+    """The open dataset's map over all its tables, for a label any table can own.
+
+    The fixations table's entries win, then the words table's (word-level
+    fields such as surprisal are carried onto fixations), then raw gaze's.
+    """
+    return across_tables({table: active(session, table) for table in _TABLES})
+
+
+#: The tables a dataset's map covers, in the order their entries win.
+_TABLES = ("fixations", "words", "raw_gaze")
+
+
+def across_tables(maps: Mapping[str, ColumnNames]) -> ColumnNames:
+    """One map from a dataset's per-table maps (fixations', then words', then
+    raw gaze's entries win) — what :func:`active_all` reads from the session,
+    for a dataset held elsewhere (Compare's B, `SecondaryDataset.column_names`)."""
+    out = EMPTY
+    for table in _TABLES:
+        if table in maps:
+            out = out.merged(maps[table])
+    return out
 
 
 #: Mapped screen fields: schema key → canonical column (`data._copy_screen_fields`).
@@ -347,3 +558,99 @@ def for_tables(
             table, schema, columns, keep_columns=keeps.get(table)
         ).to_payload()
     return out
+
+
+def source_schema(
+    schema: Mapping | None, names: ColumnNames
+) -> tuple[dict | None, tuple[str, ...]]:
+    """``schema`` restated in the dataset's own files' column names.
+
+    ✏️ Edit dataset maps fields onto the stored frame's *canonical* columns
+    (``{"trial": "trial_id", "x": "x"}``), which say nothing to a script that
+    reads the original files. Read through ``names`` — the map from before
+    that edit — each becomes the column(s) it was read from, so the result can
+    be handed to ``api.load_scanpath_data`` over those files (Share → Code). A
+    column the app *made* (a generated stand-in, a computed value) maps to
+    nothing, which makes the loader make it again; a box stored as
+    ``x/y/width/height`` but read from edges is restated as those edges.
+
+    Returns ``(schema, unresolved)``: the fields that could not be traced back,
+    left as they were, for the caller to name.
+    """
+    from .data import trial_mapping_columns
+
+    if schema is None:
+        return None, ()
+    out: dict = {}
+    unresolved: list[str] = []
+    for key, value in schema.items():
+        if not value:
+            out[key] = value
+            continue
+        columns: list[str] = []
+        made = traced = False
+        for column in trial_mapping_columns(value):
+            entry = names.source(column)
+            if entry is None:
+                columns.append(str(column))
+            elif entry.kind in (GENERATED, COMPUTED) or not entry.sources:
+                made = True
+            elif entry.kind == CONVERTED and len(entry.sources) != 1:
+                traced = True  # right − left: only the edges say it
+            else:
+                columns.extend(entry.sources)
+        if traced:
+            out[key] = value
+            unresolved.append(str(key))
+        elif made:
+            out[key] = None
+        elif isinstance(value, str) and len(columns) == 1:
+            out[key] = columns[0]
+        else:
+            out[key] = columns
+    # A box read from edges is stored as x/y/width/height, its width and height
+    # computed as right − left: restate it as the edges it came from.
+    sizes = [names.source(schema.get(side) or "") for side in ("width", "height")]
+    if (
+        {"width", "height"} <= set(unresolved)
+        and all(e is not None and len(e.sources) == 2 for e in sizes)
+        and isinstance(out.get("x"), str)
+        and isinstance(out.get("y"), str)
+    ):
+        out.update(
+            left=out["x"],
+            top=out["y"],
+            right=sizes[0].sources[0],
+            bottom=sizes[1].sources[0],
+            x=None,
+            y=None,
+            width=None,
+            height=None,
+        )
+        unresolved = [k for k in unresolved if k not in ("width", "height")]
+    return out, tuple(unresolved)
+
+
+def stored_source_recipe(stored: Mapping) -> dict:
+    """A stored dataset's ``source_recipe`` — how a script loads its files.
+
+    Written when the dataset is added (`wizard._source_recipe`) and kept
+    current by ✏️ Edit dataset; read by Share → Code
+    (`code_snippet.upload_source`). A dataset stored before the recipe existed
+    gets one read off its stored mapping through its column-name map, which is
+    right unless one of its files used a canonical column name for a different
+    field.
+    """
+    recipe = stored.get("source_recipe")
+    if isinstance(recipe, Mapping):
+        return dict(recipe)
+    names = stored.get("column_names") or {}
+    schemas: dict = {}
+    unresolved: dict = {}
+    for table, schema in (stored.get("schemas") or {}).items():
+        schemas[table], missing = source_schema(
+            schema, ColumnNames.from_payload(names.get(table))
+        )
+        if missing:
+            unresolved[table] = list(missing)
+    return {"schemas": schemas, "unresolved": unresolved}

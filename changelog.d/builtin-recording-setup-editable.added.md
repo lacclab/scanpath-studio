@@ -1,0 +1,1 @@
+Edit dataset's Recording setup is now editable for the demo and the public corpora too: what you save is your own setup for that dataset, used by its figures, exports and share links, while the corpus' declared setup is kept and Reset to source setup goes back to it.

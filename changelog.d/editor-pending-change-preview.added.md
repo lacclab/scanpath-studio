@@ -1,0 +1,1 @@
+Edit dataset previews a changed ID or coordinate mapping before you save: a few values now and after, and on request the trial and screen counts and whether the word boxes and attached metadata tables still match.

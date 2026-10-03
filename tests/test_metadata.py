@@ -53,7 +53,7 @@ class TestIngestion:
     def test_fields_are_registered_with_grain_and_dtype(self, meta):
         assert meta.names == ("native_language", "age")
         assert meta.field("native_language").dtype == "categorical"
-        assert meta.field("native_language").label == "Native language"
+        assert meta.field("native_language").label == "native_language"
         assert meta.field("age").is_numeric
         assert all(field.grain == md.GRAIN_PARTICIPANT for field in meta.fields)
         assert all(field.source == "readers.csv" for field in meta.fields)
@@ -340,7 +340,7 @@ class TestTheAppSurfaces:
 
         # And it is drawn in the chip table above the plot, with the reader's value.
         table = " ".join(m.value for m in at.markdown)
-        assert ">Native language</th>" in table and ">Hebrew</td>" in table, table[:400]
+        assert ">native_language</th>" in table and ">Hebrew</td>" in table, table[:400]
 
         # Projection: the per-trial frame carries the value for each reader.
         combos = pd.DataFrame({"participant_id": readers, "trial_id": list(readers)})
@@ -622,7 +622,7 @@ class TestCorpusGroupingByAReaderAttribute:
 
         monkeypatch.setattr(md, "active", lambda: self._attached())
         assert tabs._metadata_group_fields() == ["meta:native_language"]
-        assert tabs._pretty_col("meta:native_language") == "👤 Native language"
+        assert tabs._pretty_col("meta:native_language") == "👤 native_language"
 
     def test_a_single_valued_field_is_not_offered(self, monkeypatch):
         """Nothing to split — and a one-group comparison is not a comparison."""
@@ -807,8 +807,8 @@ class TestCorpusGroupingByTrialAndTextAttributes:
             "trialmeta:qa_condition",
             "textmeta:genre",
         ]
-        assert tabs._pretty_col("trialmeta:qa_condition") == "📋 Qa condition"
-        assert tabs._pretty_col("textmeta:genre") == "📄 Genre"
+        assert tabs._pretty_col("trialmeta:qa_condition") == "📋 qa_condition"
+        assert tabs._pretty_col("textmeta:genre") == "📄 genre"
         assert tabs._both_frame_values(None, None, "textmeta:genre") == [
             "fiction",
             "news",
@@ -836,7 +836,7 @@ class TestCorpusGroupingByTrialAndTextAttributes:
         tabs._warn_word_only_group_fields(
             host, self.FIX.drop(columns="trial_id"), pairs
         )
-        assert host.warned and "Participant × Trial Id" in host.warned[0]
+        assert host.warned and "participant_id × trial_id" in host.warned[0]
 
 
 class TestTheExportOptOut:
@@ -917,7 +917,13 @@ class TestTheExportOptOut:
                     include_fixations=True,
                     metadata_fields=fields,
                 ),
-                settings={"participant_metadata": self._frame()},
+                # The exported reader's row, beside one the bundle must not
+                # carry: metadata is scoped to the readers exported.
+                settings={
+                    "participant_metadata": self._frame().assign(
+                        participant_id=[str(keep.participant_id), "elsewhere"]
+                    )
+                },
             )
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
                 members = zf.namelist()
@@ -930,6 +936,7 @@ class TestTheExportOptOut:
 
         _, full = _names(None)
         assert list(full.columns) == ["participant_id", "native_language", "age"]
+        assert len(full) == 1
 
         _, narrowed = _names(("age",))
         assert list(narrowed.columns) == ["participant_id", "age"]
@@ -969,11 +976,11 @@ class TestGroupingEndToEnd:
         # which is the half that matters here: the picker has to say the field
         # describes a reader, not this trial.
         offered = {option for picker in fields for option in picker.options}
-        assert "👤 Native language" in offered, sorted(offered)
+        assert "👤 native_language" in offered, sorted(offered)
 
         # Its own picker is unchanged: a real frame column is still offered
         # under its plain name, so the two provenances sit side by side.
-        assert "Difficulty" in offered, sorted(offered)
+        assert "difficulty_level" in offered, sorted(offered)
         # (Selecting it and reading back the value multiselect is not asserted
         # here: `pin_view` is a one-shot request, and re-pinning it to stay on
         # the Corpus view discards a pending `set_value`. What the selection

@@ -12,7 +12,8 @@ its edge cases, and how far it has been verified.
 
 Fixation
 :   A pause of the eyes on one spot. Each row of the fixation table is one; the
-    figure draws it as a marker sized by duration.
+    figure draws it as a marker sized by duration, on one scale shared by
+    every figure.
 
 Saccade
 :   The jump from one fixation to the next, drawn as a line between them. The

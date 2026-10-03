@@ -38,6 +38,20 @@ and a **▾** with its settings.
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it
 fixed as you step through trials, so they stay comparable.
 
+Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the
+smallest to the largest marker in every trial, both sides of a comparison, the
+replay and every export, so one duration is always one size. Shorter fixations
+take the smallest marker and longer ones the largest. Under
+**:material/blur_on: Fixations ▾**, **Scale** picks the curve: **√ duration** (the
+default) grows marker area with duration, **Linear** grows the diameter with it,
+**Log** compresses long fixations. **Durations** sets the two bounds, and
+**Size key** draws reference circles labelled in ms in the figure's corner
+(in Compare, only while both scanpaths use the same marker size range).
+**Relative to this figure** stretches each figure from its own shortest to
+longest fixation instead, so its sizes compare only within that figure. Share
+links, settings files, saved designs and restored sessions from before the fixed
+scale reopen on the relative one, as they were drawn.
+
 ## Filter what is drawn
 
 **:material/cleaning_services: Filter** thins the reading on screen (the funnel above the plot chooses
@@ -57,8 +71,15 @@ regressions, for example. Filtering changes only the figure, never your data.
 - **Comparisons** lists other trials that match this one on a field you
   choose: other readings of the same text, or the same reader's other trials.
 
-Two readings can be overlaid only when they were shown on the same screen size;
-otherwise they are drawn side by side. Nothing is rescaled to force an overlay.
+Side by side, each panel shows its own reading's stimulus image, or none when
+that reading has no image. An uploaded image stands for the first reading's
+page, so the second shows it only when it reads the same text on the same
+screen.
+
+Two readings can be overlaid only when they were shown on the same screen size,
+including two screens of one dataset whose sizes differ; otherwise they are
+drawn side by side, each on its own screen. Nothing is rescaled to force an
+overlay.
 
 Compare is also available from Python
 ([`compare_scanpaths`](../api.md#scanpath_studio.api.compare_scanpaths)) and the

@@ -84,6 +84,12 @@ datasets and settings (when it listens only on this computer, as
 so export your annotations and settings before you leave
 ([what to back up](guides/outputs-sharing.md#back-up-your-work)).
 
+If one saved dataset's files go missing or are damaged, the rest of the
+session still comes back. The app names the dataset that didn't, keeps its
+saved copy as it is, and offers **Retry** and **Remove from cache**. If the
+whole recovery copy can't be read, the app opens without it and stops saving
+over it until you retry or clear it.
+
 ### How do I turn the recovery copy off, or delete it?
 
 Start the app with `scanpath-studio run --no-persist` to save nothing. To

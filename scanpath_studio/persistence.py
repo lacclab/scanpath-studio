@@ -15,9 +15,16 @@ in-app 🗂️ Data → *Saved on this computer* section
 (``app._render_saved_here_section``, UX-179), the ``scanpath-studio cache`` CLI
 subcommand and ``api.cache_status``. The stored files are deleted from outside
 the app — ``scanpath-studio cache --clear`` / ``api.clear_cache``, both
-:func:`clear_local_state`. Saving is paused for a session only by BUG-71's breaker
-(:func:`persistence_paused`); opting out is a launch choice
+:func:`clear_local_state`. Saving is paused for a session by BUG-71's breaker
+and when a manifest exists but cannot be read (:func:`persistence_paused`,
+:func:`cache_failure`); opting out is a launch choice
 (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``).
+
+Each stored dataset restores on its own. One whose files are missing or
+unreadable is held back (:func:`failed_datasets`) — the others, the settings,
+the annotations and the metadata tables restore regardless — and its manifest
+entry and files are written back unchanged by every save until the user retries
+it (:func:`retry_failed_datasets`) or removes it (:func:`discard_failed_dataset`).
 """
 
 from __future__ import annotations
@@ -87,6 +94,17 @@ _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
 RESTORE_MARKER_NAME = "restore-in-progress"
 _RESTORE_PENDING_KEY = "_local_persistence_restore_pending"
 _RESTORE_SKIPPED_KEY = "_local_persistence_restore_skipped"
+#: Stored datasets this session could not read back, ``{name: {"entry": the
+#: manifest entry, verbatim, "reason": why}}``. Each dataset restores on its own:
+#: one with a missing or unreadable file stays out of the session, and its entry
+#: and files stay in the cache — every save writes the entry back unchanged —
+#: until the user retries it or removes it (:func:`retry_failed_datasets`,
+#: :func:`discard_failed_dataset`).
+_FAILED_DATASETS_KEY = "_local_persistence_failed_datasets"
+#: Why the manifest itself could not be read, when it could not. A cache that
+#: exists but cannot be read pauses saving, so this session cannot replace it;
+#: an absent or cleared cache saves normally.
+_CACHE_FAILURE_KEY = "_local_persistence_cache_failure"
 _FRAME_KEYS = ("words", "fixations", "raw_gaze")
 #: DATA-38 — the attached metadata tables live beside the manifest, not in it,
 #: and are rewritten only when their content changes: the manifest is rewritten
@@ -287,7 +305,7 @@ def _state_fingerprint(
     # DATA-48: the live store by content, every other dataset's by revision.
     annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
-        [datasets, values, annotations, metadata_signature],
+        [datasets, values, annotations, metadata_signature, sorted(_failed(session))],
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -390,6 +408,13 @@ def _manifest_for(
                 "rows": frame_rows,
             }
 
+    # A stored dataset this session could not read goes back exactly as it was
+    # found — entry and files untouched — so a save never costs the cache a
+    # dataset it merely failed to open. A dataset of the same name added since
+    # is the user's newer work and takes the name (see `save_state`).
+    for name, record in _failed(session).items():
+        datasets.setdefault(name, record["entry"])
+
     values = {key: _json_safe(session[key]) for key in _SESSION_KEYS if key in session}
     values.update(
         {
@@ -456,6 +481,13 @@ def _save_metadata(
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     """Atomically save local datasets and durable session preferences."""
     with _STATE_LOCK:
+        failed = _failed(session)
+        live_names = {str(name) for name in dict(session.get("_datasets", {}))}
+        if failed.keys() & live_names:
+            # Re-added under the same name: the new dataset is the one to keep.
+            _set_failed(
+                session, {k: v for k, v in failed.items() if k not in live_names}
+            )
         metadata_signature = _metadata_signature(session)
         fingerprint = _state_fingerprint(session, metadata_signature)
         if session.get(_LAST_FINGERPRINT_KEY) == fingerprint:
@@ -485,7 +517,15 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
         _atomic_text(encoded, root / "manifest.json")
         session[_LAST_FINGERPRINT_KEY] = fingerprint
         session[_LAST_DATASET_IDENTITY_KEY] = dataset_identity
-        session[_LAST_DATASET_ENTRIES_KEY] = dict(manifest["datasets"])
+        # The live datasets' entries only: a held-back one is merged in by
+        # `_manifest_for` from its own record on every save, and must leave the
+        # manifest the moment that record is removed.
+        held_back = _failed(session)
+        session[_LAST_DATASET_ENTRIES_KEY] = {
+            name: entry
+            for name, entry in manifest["datasets"].items()
+            if name not in held_back
+        }
         return True
 
 
@@ -503,87 +543,272 @@ def restore_state(
         return False
     session[_RESTORED_KEY] = True
     with _STATE_LOCK:
-        path = root / "manifest.json"
-        if not path.exists():
-            return False
+        return _restore_manifest(session, root, skip_session_keys)
+
+
+def _restore_manifest(
+    session: MutableMapping[str, Any], root: Path, skip_session_keys
+) -> bool:
+    """The body of :func:`restore_state`, under its lock."""
+    path = root / "manifest.json"
+    if not path.exists():
+        return False
+    try:
+        # BUG-71: read and check the manifest's *shape* before touching the
+        # session. It is a file on disk, so any JSON value can be in it —
+        # `[]`, `null`, a dataset entry that is a string — and each of those
+        # used to escape as an AttributeError on every launch.
+        manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
+        schema = int(manifest.get("schema", 0))
+        if schema != SCHEMA_VERSION:
+            raise ValueError(
+                f"it is in cache format {schema}, and this version reads "
+                f"format {SCHEMA_VERSION}"
+            )
+        stored_datasets = _as_mapping(manifest.get("datasets", {}))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        # The cache is there but cannot be read as a whole. Opening without
+        # it is right — a damaged cache must never stop the app — but
+        # overwriting it is not: the next save would replace whatever is
+        # still recoverable with this session's empty state. So saving
+        # pauses and the app says why (`cache_failure`), with a way to try
+        # again or to clear it.
+        session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
+        session[_PAUSED_KEY] = True
+        _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
+        return False
+
+    # Each dataset restores on its own: one with a missing or damaged file
+    # costs that dataset — held back, entry and files kept — never the
+    # others, the settings, the annotations or the metadata tables.
+    restored_datasets = {}
+    stored_entries = {}
+    failed = {}
+    for index, (name, entry) in enumerate(stored_datasets.items(), start=1):
         try:
-            # BUG-71: read and check the whole manifest *before* touching the
-            # session. It is a file on disk, so any JSON value can be in it —
-            # `[]`, `null`, a dataset entry that is a string — and each of those
-            # used to escape as an AttributeError the handler below did not
-            # catch, on every launch. A wrong shape now abandons the restore
-            # with nothing half-applied.
-            manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
-            if int(manifest.get("schema", 0)) != SCHEMA_VERSION:
-                return False
-            restored_datasets = {}
-            stored_entries = {}
-            stored_datasets = _as_mapping(manifest.get("datasets", {}))
-            for index, (name, entry) in enumerate(stored_datasets.items(), start=1):
-                entry = _as_mapping(entry)
-                payload = dict(_as_mapping(entry.get("metadata", {})))
-                for frame_key, relative in _as_mapping(entry.get("frames", {})).items():
-                    frame_path = root / str(relative)
-                    payload[frame_key] = pd.read_parquet(frame_path)
-                for frame_key in _FRAME_KEYS:
-                    payload.setdefault(frame_key, pd.DataFrame())
-                restored_datasets[str(name)] = payload
-                stored_entries[str(name)] = entry
-                progress.report(index, len(stored_datasets), unit="datasets")
-            stored_session = _restorable_session(manifest.get("session", {}))
-            existing = dict(session.get("_datasets", {}))
-            if restored_datasets:
-                session["_datasets"] = {**restored_datasets, **existing}
-            # Only the names that were not already open actually *landed* — an
-            # in-memory dataset of the same name shadows the stored one above.
-            summary = {"datasets": len(set(restored_datasets) - set(existing))}
-            skip = set(skip_session_keys)
-            # Counted before the loop below writes it: `setdefault` means a
-            # design library already in this session keeps its own, so the stored
-            # one restored nothing.
-            summary["designs"] = (
-                len(stored_session.get(DESIGN_PRESETS) or {})
-                if DESIGN_PRESETS not in skip and DESIGN_PRESETS not in session
-                else 0
+            restored_datasets[str(name)] = _read_dataset(root, entry)
+            stored_entries[str(name)] = entry
+        except Exception as exc:  # any failure costs this dataset, nothing more
+            failed[str(name)] = {
+                "entry": _json_safe(entry),
+                "reason": _failure_reason(exc),
+            }
+            _LOGGER.warning(
+                "Could not restore the cached dataset %r: %s", str(name), exc
             )
-            for key, value in stored_session.items():
-                if key not in skip:
-                    session.setdefault(key, value)
-            # DATA-48 — per dataset, `{"datasets": {name: [records]}}`. A
-            # manifest from before that holds one flat list naming no dataset;
-            # `restore_payload` hands it to the dataset this session opens on
-            # (the one the manifest had selected), once — see its docstring.
-            summary["annotations"] = annotations_mod.restore_payload(
-                session, manifest.get("annotations")
-            )
-            # DATA-38 — the attached metadata tables. Counted, because a user
-            # recognises their participant table coming back (UX-136's test for
-            # what is worth announcing), unlike a restored canvas width.
-            summary["metadata"] = _restore_metadata(
-                session, root, manifest.get("metadata")
-            )
-            # A clean restore can reuse the Parquet files on the first rendered
-            # settings change. Pre-existing in-memory datasets still need a save.
-            if not existing:
+        progress.report(index, len(stored_datasets), unit="datasets")
+    try:
+        stored_session = _restorable_session(manifest.get("session", {}))
+    except (ValueError, TypeError, AttributeError) as exc:
+        # Settings are rewritten from this session on the next save; a block
+        # that is not even an object has nothing in it worth keeping.
+        _LOGGER.warning("Ignored the recovery cache's settings: %s", exc)
+        stored_session = {}
+    existing = dict(session.get("_datasets", {}))
+    if restored_datasets:
+        session["_datasets"] = {**restored_datasets, **existing}
+    _set_failed(session, {k: v for k, v in failed.items() if k not in existing})
+    # Only the names that were not already open actually *landed* — an
+    # in-memory dataset of the same name shadows the stored one above.
+    summary = {"datasets": len(set(restored_datasets) - set(existing))}
+    skip = set(skip_session_keys)
+    # Counted before the loop below writes it: `setdefault` means a
+    # design library already in this session keeps its own, so the stored
+    # one restored nothing.
+    summary["designs"] = (
+        len(stored_session.get(DESIGN_PRESETS) or {})
+        if DESIGN_PRESETS not in skip and DESIGN_PRESETS not in session
+        else 0
+    )
+    for key, value in stored_session.items():
+        if key not in skip:
+            session.setdefault(key, value)
+    # DATA-48 — per dataset, `{"datasets": {name: [records]}}`. A
+    # manifest from before that holds one flat list naming no dataset;
+    # `restore_payload` hands it to the dataset this session opens on
+    # (the one the manifest had selected), once — see its docstring. A
+    # held-back dataset's annotations restore too: they are filed under
+    # its name and written back with it.
+    try:
+        summary["annotations"] = annotations_mod.restore_payload(
+            session, manifest.get("annotations")
+        )
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        _LOGGER.warning("Could not restore the cached annotations: %s", exc)
+        summary["annotations"] = 0
+    # DATA-38 — the attached metadata tables. Counted, because a user
+    # recognises their participant table coming back (UX-136's test for
+    # what is worth announcing), unlike a restored canvas width.
+    summary["metadata"] = _restore_metadata(session, root, manifest.get("metadata"))
+    # A clean restore can reuse the Parquet files on the first rendered
+    # settings change. Pre-existing in-memory datasets still need a save.
+    if not existing:
+        session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
+        session[_LAST_DATASET_ENTRIES_KEY] = stored_entries
+    counts = manifest.get("dataset_counts")
+    if isinstance(counts, dict):
+        # DATA-32 — a manifest written before this existed simply has
+        # none, and the table recounts what it can, as it always did.
+        session[DATASET_COUNTS_STORE_KEY] = dict(counts)
+    # Separate from _RESTORED_KEY, which only records that a restore was
+    # *attempted* this session. The app reads this one to tell the user
+    # their previous session came back (restored_from_cache), so it holds
+    # the summary rather than a bare flag — see the docstring.
+    session[_RESTORED_PAYLOAD_KEY] = summary
+    return True
+
+
+def _failure_reason(exc: BaseException) -> str:
+    """A short, user-facing reason for a part of the cache that would not read."""
+    if isinstance(exc, FileNotFoundError):
+        name = Path(str(exc.filename or "")).name
+        return f"a stored file is missing ({name})" if name else "a file is missing"
+    if isinstance(exc, PermissionError):
+        return "a stored file can't be opened (permission denied)"
+    if isinstance(exc, json.JSONDecodeError):
+        return "its manifest is not valid JSON"
+    message = str(exc).strip()
+    if isinstance(exc, ValueError) and message.startswith("it "):
+        return message
+    return f"it can't be read ({type(exc).__name__}: {message[:120]})"
+
+
+def _frame_path(root: Path, relative: Any) -> Path:
+    """Where a manifest entry's frame lives — only ever inside the cache folder."""
+    base = (root / "datasets").resolve()
+    path = (root / str(relative)).resolve()
+    if path.parent != base:
+        raise ValueError(f"it names a file outside the cache folder ({relative})")
+    return path
+
+
+def _read_dataset(root: Path, entry: Any) -> dict:
+    """One stored dataset's payload, frames read — or the exception that stopped it."""
+    entry = _as_mapping(entry)
+    payload = dict(_as_mapping(entry.get("metadata", {})))
+    for frame_key, relative in _as_mapping(entry.get("frames", {})).items():
+        payload[frame_key] = pd.read_parquet(_frame_path(root, relative))
+    for frame_key in _FRAME_KEYS:
+        payload.setdefault(frame_key, pd.DataFrame())
+    return payload
+
+
+def _failed(session: MutableMapping[str, Any]) -> dict:
+    value = session.get(_FAILED_DATASETS_KEY)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _set_failed(session: MutableMapping[str, Any], failed: dict) -> None:
+    if failed:
+        session[_FAILED_DATASETS_KEY] = dict(failed)
+    else:
+        session.pop(_FAILED_DATASETS_KEY, None)
+
+
+def failed_datasets(session) -> dict[str, str]:
+    """The cached datasets this session could not read back: ``{name: reason}``.
+
+    Their entries and files stay in the cache — every save writes them back as
+    they were — until :func:`retry_failed_datasets` reads them or
+    :func:`discard_failed_dataset` removes them.
+    """
+    return {
+        name: str(record.get("reason", "")) for name, record in _failed(session).items()
+    }
+
+
+def cache_failure(session) -> str | None:
+    """Why this session could not read the cache at all, or ``None``.
+
+    Set only when a manifest *exists* and failed to read; saving is paused for
+    the session then, so the stored copy is not replaced. An absent cache — never
+    written, or cleared on purpose — is not a failure and saves normally.
+    """
+    reason = session.get(_CACHE_FAILURE_KEY)
+    return str(reason) if reason else None
+
+
+def retry_failed_datasets(session, root: Path | None = None) -> dict[str, str]:
+    """Try the held-back datasets again; returns those that still fail.
+
+    One that now reads joins the session's datasets (a dataset of the same name
+    opened since keeps its place, and the stored copy is dropped from the
+    held-back list).
+    """
+    directory = state_directory() if root is None else root
+    failed = _failed(session)
+    if not failed:
+        return {}
+    with _STATE_LOCK:
+        live = dict(session.get("_datasets", {}))
+        entries = session.get(_LAST_DATASET_ENTRIES_KEY)
+        # The reuse bookkeeping stays valid only if it described the session
+        # before these were added; extend it rather than force a full rewrite.
+        reusable = isinstance(entries, dict) and session.get(
+            _LAST_DATASET_IDENTITY_KEY
+        ) == _dataset_identity(session)
+        recovered = {}
+        for name, record in list(failed.items()):
+            if name in live:
+                failed.pop(name)
+                continue
+            try:
+                payload = _read_dataset(directory, record.get("entry"))
+            except Exception as exc:  # still unreadable: it stays held back
+                failed[name] = {**record, "reason": _failure_reason(exc)}
+                continue
+            live[name] = payload
+            recovered[name] = record.get("entry")
+            failed.pop(name)
+        if recovered:
+            session["_datasets"] = live
+            if reusable:
+                session[_LAST_DATASET_ENTRIES_KEY] = {**entries, **recovered}
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
-                session[_LAST_DATASET_ENTRIES_KEY] = stored_entries
-            counts = manifest.get("dataset_counts")
-            if isinstance(counts, dict):
-                # DATA-32 — a manifest written before this existed simply has
-                # none, and the table recounts what it can, as it always did.
-                session[DATASET_COUNTS_STORE_KEY] = dict(counts)
-            # Separate from _RESTORED_KEY, which only records that a restore was
-            # *attempted* this session. The app reads this one to tell the user
-            # their previous session came back (restored_from_cache), so it holds
-            # the summary rather than a bare flag — see the docstring.
-            session[_RESTORED_PAYLOAD_KEY] = summary
-            return True
-        except (OSError, ValueError, TypeError, KeyError, AttributeError):
-            # A partial/corrupt cache must never prevent the app from opening. The
-            # user can simply work normally; the next successful save replaces it.
-            # AttributeError is the backstop for a shape `_as_mapping` did not
-            # anticipate (BUG-71) — it is what every wrong shape used to raise.
-            return False
+        _set_failed(session, failed)
+    return failed_datasets(session)
+
+
+def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool:
+    """Remove one held-back dataset from the cache: its entry and its files.
+
+    The next save writes the manifest without it. Its annotations and metadata
+    tables are kept — they are filed by name, like every dataset's, and are the
+    user's own work — so a dataset added again under that name finds them.
+    """
+    directory = state_directory() if root is None else root
+    failed = _failed(session)
+    record = failed.pop(str(name), None)
+    if record is None:
+        return False
+    with _STATE_LOCK:
+        entry = record.get("entry")
+        frames = entry.get("frames") if isinstance(entry, dict) else None
+        paths = {
+            directory / "datasets" / f"{_dataset_slug(str(name))}-{key}.parquet"
+            for key in _FRAME_KEYS
+        }
+        for relative in (frames or {}).values() if isinstance(frames, dict) else ():
+            try:
+                paths.add(_frame_path(directory, relative))
+            except ValueError:
+                continue  # never delete outside the cache folder
+        for path in paths:
+            _unlink_quietly(path)
+        _set_failed(session, failed)
+    return True
+
+
+def retry_cache_restore(session, url: str) -> bool:
+    """Try a cache that could not be read again, from scratch, this session.
+
+    Clears the failure and the pause it set, and restores as at launch — what a
+    reload would do, without losing what the session already holds.
+    """
+    session.pop(_CACHE_FAILURE_KEY, None)
+    session.pop(_PAUSED_KEY, None)
+    session.pop(_RESTORED_KEY, None)
+    return restore_local_state(session, url)
 
 
 def _as_mapping(value: Any) -> dict:
@@ -918,9 +1143,11 @@ def restored_from_cache(session) -> bool:
 def persistence_paused(session) -> bool:
     """Whether saving is paused for this session.
 
-    Only :func:`restore_local_state`'s BUG-71 breaker sets it, after a launch
-    that never finished opening with the cache: this session then leaves the
-    stored copy untouched, and a reload tries it again.
+    Set by :func:`restore_local_state`'s BUG-71 breaker, after a launch that
+    never finished opening with the cache, and by a manifest that exists but
+    cannot be read (:func:`cache_failure`): this session then leaves the stored
+    copy untouched, and a reload — or :func:`retry_cache_restore` — tries it
+    again. :func:`clear_local_state` lifts it.
     """
     return bool(session.get(_PAUSED_KEY))
 
@@ -953,6 +1180,11 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             # DATA-32: the remembered counts are part of what "forget this
             # session" means — the ask named clearing the cache explicitly.
             DATASET_COUNTS_STORE_KEY,
+            # Nothing is left to protect or to retry: a cleared cache saves
+            # normally, like one that never existed.
+            _FAILED_DATASETS_KEY,
+            _CACHE_FAILURE_KEY,
+            _PAUSED_KEY,
         ):
             session.pop(key, None)
     return removed
@@ -1018,6 +1250,8 @@ def cache_status(
         "settings": 0,
         "bytes": 0,
         "saved_at": None,
+        # Stored datasets the app cannot restore: ``[{"name", "reason"}]``.
+        "damaged": [],
     }
     if not directory.is_dir():
         # The common hosted case: one stat, then out — no glob over a folder
@@ -1034,16 +1268,29 @@ def cache_status(
         schema = int(manifest.get("schema", 0))
         status["schema"] = schema
         datasets = dict(manifest.get("datasets", {}))
-        status["datasets"] = [
-            {
-                "name": str(name),
-                "rows": {
-                    key: int(value)
-                    for key, value in dict(entry.get("rows", {})).items()
-                },
-            }
-            for name, entry in sorted(datasets.items())
-        ]
+        # Each stored dataset is described on its own, and one that cannot be
+        # restored — an entry of the wrong shape, a file that is gone — is
+        # listed under `damaged` with the reason, as the app's restore holds it
+        # back. A stat per file, never a Parquet read: this runs on every
+        # render of the Data page. (A file that is present but corrupt shows
+        # only when the app tries to read it.)
+        good, damaged = [], []
+        for name, entry in sorted(datasets.items()):
+            reason = _entry_problem(directory, entry)
+            if reason:
+                damaged.append({"name": str(name), "reason": reason})
+                continue
+            good.append(
+                {
+                    "name": str(name),
+                    "rows": {
+                        key: int(value)
+                        for key, value in dict(entry.get("rows") or {}).items()
+                    },
+                }
+            )
+        status["datasets"] = good
+        status["damaged"] = damaged
         status["rows"] = (
             sum(sum(entry["rows"].values()) for entry in status["datasets"])
             if all(entry["rows"] for entry in status["datasets"])
@@ -1064,6 +1311,23 @@ def cache_status(
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         status["readable"] = False
     return status
+
+
+def _entry_problem(root: Path, entry: Any) -> str:
+    """Why a manifest dataset entry cannot restore, by its shape and files.
+
+    ``""`` when nothing is wrong that a ``stat`` can see.
+    """
+    if not isinstance(entry, dict) or not isinstance(entry.get("frames", {}), dict):
+        return "its entry in the manifest is damaged"
+    for relative in entry.get("frames", {}).values():
+        try:
+            path = _frame_path(root, relative)
+        except ValueError as exc:
+            return str(exc)
+        if not path.is_file():
+            return f"a stored file is missing ({path.name})"
+    return ""
 
 
 def save_local_state(session, url: str) -> bool:

@@ -818,6 +818,28 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
     assert "Nothing stored" in capsys.readouterr().out
 
 
+def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):
+    """A stored dataset whose file is gone is listed as damaged — the app holds
+    it back and keeps it — beside the ones that restore."""
+    import json as json_module
+
+    from scanpath_studio import persistence
+
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    _seed_cache(tmp_path)
+    slug = persistence._dataset_slug("Corpus")
+    (tmp_path / "datasets" / f"{slug}-words.parquet").unlink()
+
+    cli.main(["cache"])
+    out = capsys.readouterr().out
+    assert "Damaged: Corpus — a stored file is missing" in out
+
+    cli.main(["cache", "--json"])
+    status = json_module.loads(capsys.readouterr().out)
+    assert status["datasets"] == []
+    assert [entry["name"] for entry in status["damaged"]] == ["Corpus"]
+
+
 def test_cache_path_and_json_output(tmp_path, monkeypatch, capsys):
     import json as json_module
 

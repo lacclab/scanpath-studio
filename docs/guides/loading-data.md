@@ -84,7 +84,7 @@ raw-gaze samples whose position is missing or infinite, and word boxes with no
 width or height. Each finding gives the rows and trials affected, the columns
 they came from, a few example rows, and what the app does with them. Nothing
 is removed: the rows stay in every table and export. `check_data_health` runs
-the same checks from Python.
+the same checks from Python, and `scanpath-studio check` from the terminal.
 
 Columns are named as they are in your files: in the tables, the plot
 controls, the trial chips, filters and sort, Corpus Analysis, the figure's

@@ -30,6 +30,7 @@ from scanpath_studio import api, cli, tour  # noqa: E402
         ("render", cli._render_parser),
         ("analyze", cli._analyze_parser),
         ("corpus", cli._corpus_parser),
+        ("check", cli._check_parser),
         ("cache", cli._cache_parser),
     ],
 )

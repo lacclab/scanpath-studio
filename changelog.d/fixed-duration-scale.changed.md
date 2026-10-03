@@ -1,0 +1,1 @@
+Fixation markers are sized on one fixed duration scale by default (√ duration, 50–600 ms, set under Fixations), so a duration is the same size in every trial, comparison side, replay and export, with a size key in ms; Relative to this figure keeps the old per-figure scale, and Share links, settings files, saved designs and restored sessions from before keep it.

@@ -186,6 +186,30 @@ DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
+# How fixation duration maps onto that size range. The three *fixed* scales map
+# one duration range (ms, below) onto it for every figure, so a 200 ms fixation
+# is the same size in any trial, comparison side, replay or export — EyeLink
+# Data Viewer's convention. "relative" is the original behaviour: each figure
+# spans its own shortest-to-longest duration, so sizes only compare within it.
+# √ is the default because a marker's size is its diameter: √duration makes the
+# marker's area grow in step with duration.
+MARKER_SIZE_SCALES = {
+    "sqrt": "√ duration (area)",
+    "linear": "Linear (diameter)",
+    "log": "Log duration",
+    "relative": "Relative to this figure",
+}
+DEFAULT_MARKER_SIZE_SCALE = "sqrt"
+#: What a figure saved before the fixed scale existed was drawn with — the
+#: migration target for old saved configs and Share links.
+LEGACY_MARKER_SIZE_SCALE = "relative"
+# 50–600 ms covers 99% of the bundled OneStop fixations (1st percentile 51 ms,
+# 99th 448 ms), sits below the 80 ms short-fixation flag, and leaves the long
+# tail distinguishable before it clamps. Durations outside it clamp to the
+# smallest / largest marker.
+DEFAULT_MARKER_DURATION_RANGE = (50, 600)
+#: The duration-bounds widget's own limits (ms).
+MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
@@ -556,6 +580,23 @@ def upload_limit_label() -> str:
     """The per-file limit in force, as Streamlit writes it (``5GB``, ``200MB``)."""
     mb = upload_limit_mb() or UPLOAD_MAX_SIZE_MB
     return f"{mb // 1000}GB" if mb >= 1000 and mb % 1000 == 0 else f"{mb}MB"
+
+
+def upload_identity(uploaded) -> tuple[str | None, str]:
+    """Which upload this is: ``(file_id, sha256 of the bytes)``.
+
+    An import that applies a file once — a settings or setup file — compares
+    this with the identity it last applied, so an ordinary rerun is a no-op
+    while a *fresh* upload applies again. The ``file_id`` Streamlit gives each
+    upload event makes re-uploading the very same file count as fresh; the
+    content hash makes a different file count as fresh even where no
+    ``file_id`` exists. Name and size alone did neither: two files can share
+    both.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(uploaded.getvalue()).hexdigest()
+    return getattr(uploaded, "file_id", None), digest
 
 
 CITATION = {

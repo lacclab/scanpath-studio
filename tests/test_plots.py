@@ -1519,6 +1519,25 @@ class TestSplitScanpathLayers:
         # Fixations layer holds the markers, not saccades/labels.
         assert any("Fixation" in (tr.name or "") for tr in layers["fixations"].data)
 
+    def test_size_key_labels_ride_the_fixations_layer(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        # The key's circles are fixations-layer shapes; its ms labels must
+        # follow them rather than appear on every layer file.
+        fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
+
+        def key_labels(g):
+            return [
+                a for a in g.layout.annotations or () if a.name == "duration_size_key"
+            ]
+
+        assert key_labels(fig)
+        layers = split_scanpath_layers(fig)
+        assert len(key_labels(layers["fixations"])) == len(key_labels(fig))
+        for name, g in layers.items():
+            if name != "fixations":
+                assert not key_labels(g), name
+
     def test_no_heatmap_layer_when_off(
         self, normalized_words_df, normalized_fixations_df
     ):

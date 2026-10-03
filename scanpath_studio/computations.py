@@ -45,7 +45,7 @@ CATEGORY_NORMALIZATION = "Normalization / inference"
 CATEGORY_ASSIGNMENT = "Assignment / classification"
 CATEGORY_PREPROCESSING = "Preprocessing"
 CATEGORY_MEASURE = "Scientific measure"
-CATEGORY_AGGREGATION = "Statistical aggregation / test"
+CATEGORY_AGGREGATION = "Statistical aggregation"
 CATEGORY_SIMILARITY = "Similarity"
 CATEGORY_GEOMETRY = "Unit / coordinate conversion"
 CATEGORY_DISPLAY = "Display / export transformation"
@@ -211,7 +211,12 @@ REGISTER: tuple[Computation, ...] = (
         ),
         code="scanpath_studio/data.py:coerce_flag",
         output="bool",
-        missing="NaN → False.",
+        missing=(
+            "NaN → False for an operational flag (blink, excluded). A supplied "
+            "reading-measure flag (skip, regression in / out) keeps it missing "
+            "instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA "
+            "(`coerce_measure_flag`, a nullable boolean)."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         reference="Guards the `'.'`-as-missing convention in EyeLink IA reports.",
@@ -1005,26 +1010,30 @@ REGISTER: tuple[Computation, ...] = (
     ),
     Computation(
         id="agg.effect_size",
-        name="Group comparison and effect size",
+        name="Group means and difference",
         category=CATEGORY_AGGREGATION,
-        summary="Mean difference, Cohen's d, and a significance test (AN-21).",
+        summary="Two groups' means, their difference and Cohen's d (AN-21).",
         formula=(
+            "Each value is one reader's mean of the measure (pooled "
+            "observations when the data names no readers). "
             "`mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD "
-            "`sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1. The "
-            "test is Mann–Whitney U (two-sided) or Welch's t-test."
+            "`sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and "
+            "is shown only when the groups share no reader."
         ),
-        code="scanpath_studio/aggregation.py:group_effect_size",
-        output="mean_a, mean_b, mean_diff, cohen_d, statistic, p_value, n_a, n_b",
+        code="scanpath_studio/aggregation.py:group_mean_difference",
+        output="mean_a, mean_b, mean_diff, cohen_d, n_a, n_b",
+        grouping="one value per reader in each group",
         missing=(
-            "n < 2 in either group ⇒ NaN statistics. A zero pooled SD gives "
+            "n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives "
             "**NaN**, not 0.0, so it cannot read as 'no effect' beside a "
             "non-zero mean difference."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference=(
-            "**Exploratory, not pre-registered.** No multiple-comparison "
-            "correction is applied; the p-value is descriptive."
+            "**Descriptive only** — no significance test. A reader in both "
+            "groups contributes to both means, so the groups are not "
+            "independent samples."
         ),
         consumers=(_CORPUS, _API),
         tests=("tests/test_aggregation.py",),
@@ -1072,10 +1081,18 @@ REGISTER: tuple[Computation, ...] = (
         name="Skip / regression rate profile",
         category=CATEGORY_AGGREGATION,
         summary="Rate measures per word.",
-        formula="Mean of the 0/1 flag over readers — a proportion in [0, 1].",
+        formula=(
+            "Mean of the 0/1 flag over the readers who reported it — a "
+            "proportion in [0, 1]. Each rate has its own reader count "
+            "(`n_skip`, `n_regression_in`) and its own minimum-readers verdict."
+        ),
         code="scanpath_studio/aggregation.py:word_rate_profile",
         unit="proportion",
-        missing="Words with no reader are omitted, not shown as 0.",
+        missing=(
+            "A missing flag is no observation: it is left out of that rate and "
+            "its reader count, never read as 0. A rate below the minimum "
+            "readers is hidden; the word stays while its other rate stands."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS, _API),
@@ -1104,7 +1121,17 @@ REGISTER: tuple[Computation, ...] = (
         name="Per-trial summary",
         category=CATEGORY_AGGREGATION,
         summary="One row per trial: reading time, counts, rates.",
-        formula="Counts and sums over the trial's fixations and word measures.",
+        formula=(
+            "Counts and sums over the trial's fixations and word measures. "
+            "`reading_time_ms` is last fixation end − first fixation start; "
+            "without recorded fixation onsets it is the summed fixation "
+            "durations, and `reading_time_source` says it is an estimate. "
+            "`wpm` = words ÷ reading time."
+        ),
+        missing=(
+            "No onset column ⇒ reading time and wpm are duration-based "
+            "estimates, labelled as such — never the 0, 1, 2, … order numbers."
+        ),
         code="scanpath_studio/aggregation.py:trial_summary_table",
         output="Trials table",
         unit="ms, counts",
@@ -1371,21 +1398,33 @@ REGISTER: tuple[Computation, ...] = (
         id="disp.marker_sizes",
         name="Fixation marker sizing",
         category=CATEGORY_DISPLAY,
-        summary="Dot area encodes fixation duration.",
+        summary="Marker size encodes fixation duration on one fixed scale.",
         formula=(
-            "Durations are scaled between a minimum and maximum marker size "
-            "across the drawn set. **Display only** — never a recorded value."
+            "Fixed scales (`marker_size_scale` = `sqrt`, the default; `linear`; "
+            "`log`): `size = s_min + (s_max − s_min) · (f(d) − f(lo)) / "
+            "(f(hi) − f(lo))`, with `d` clamped to the duration bounds "
+            "`[lo, hi]` (`marker_duration_range`, default 50–600 ms) and `f` "
+            "= √, identity or ln. `relative`: linear between the drawn set's "
+            "own shortest and longest duration (the scale before the fixed one; "
+            "older saved configs and Share links keep it). **Display only** — "
+            "never a recorded value."
         ),
         code="scanpath_studio/plots.py:_compute_marker_sizes",
         unit="px (marker diameter)",
+        missing="A missing duration is treated as 0 ms: the smallest marker.",
         precedence=(
-            "Shared by single-trial, comparison and export builders so the same "
-            "trial renders identically everywhere."
+            "One scale for single-trial figures, both comparison sides, replays "
+            "and bulk exports, so a duration draws at one size in all of them; "
+            "only the px range is per scanpath in Compare."
         ),
         tiers="C, D",
         status=STATUS_CONVENTION,
         consumers=(_UI, _API, _CLI, _EXPORT),
-        tests=("tests/test_plots.py", "tests/test_builder_parity.py"),
+        tests=(
+            "tests/test_duration_scale.py",
+            "tests/test_plots.py",
+            "tests/test_builder_parity.py",
+        ),
     ),
     Computation(
         id="disp.axis_ranges",
@@ -1476,6 +1515,19 @@ BY_ID = {entry.id: entry for entry in REGISTER}
 def entries_in(category: str) -> tuple[Computation, ...]:
     """Every register entry in one category, in declaration order."""
     return tuple(entry for entry in REGISTER if entry.category == category)
+
+
+def measure_entry(column: str) -> Computation | None:
+    """The reading-measure or fixation entry that defines ``column`` — the one
+    whose ``output`` names it — or ``None`` for a value the register does not
+    derive (a fixation's recorded duration). Lets the app quote the register's
+    own summary and unit beside a measure instead of keeping a second copy."""
+    for entry in REGISTER:
+        if not entry.id.startswith(("measure.", "fix.")):
+            continue
+        if column in (part.strip() for part in entry.output.split(",")):
+            return entry
+    return None
 
 
 def anchor(entry_id: str) -> str:

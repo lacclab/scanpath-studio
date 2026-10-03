@@ -2863,6 +2863,27 @@ class TestSpotlightTour:
             sel.startswith(".st-key-") or "data-testid" in sel for sel in selectors
         )
 
+    def test_spotlight_welcome_skip_tour(self):
+        """The welcome offers a labelled Skip tour (not a disabled Back);
+        it closes the tour like ✕, and Back returns from step 2 on."""
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        buttons = self._sp_buttons(at)
+        assert {"tour_sp_skip", "tour_sp_next"} <= buttons
+        assert "tour_sp_back" not in buttons
+        assert at.button(key="tour_sp_skip").label == "Skip tour"
+        at.button(key="tour_sp_next").click()
+        at.run(timeout=30)
+        assert "tour_sp_back" in self._sp_buttons(at)
+        assert "tour_sp_skip" not in self._sp_buttons(at)
+        at.session_state["tour_step"] = 0
+        at.run(timeout=30)
+        at.button(key="tour_sp_skip").click()
+        at.run(timeout=30)
+        assert at.session_state["tour_mode"] is None
+        assert self._sp_buttons(at) == set()
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
     def test_spotlight_done_on_last_step(self):
         from scanpath_studio.tour import _SPOTLIGHT_STEPS
 
@@ -3689,6 +3710,9 @@ class TestCorpusAnalysisTab:
             ("pgrp_view", "Reader summary table"),
             ("cmp_view", "Difference word profile"),
             ("cmp_view", "Paired summary bars"),
+            ("cmp_view", "Group means & difference"),
+            # The view's name before its significance tests were removed: a
+            # session still holding it opens the replacement.
             ("cmp_view", "Effect size + test"),
             ("cmp_view", "Two-group word heatmap"),
         ],
@@ -3709,6 +3733,91 @@ class TestCorpusAnalysisTab:
         assert not at.exception, f"{view_key}={view!r}: {at.exception}"
         assert at.error == [], (
             f"{view_key}={view!r} st.error: {[e.value for e in at.error]}"
+        )
+
+    def test_reading_speed_without_timestamps_is_labelled_an_estimate(self):
+        """With no onset column the fixations are numbered 0, 1, 2, …; the
+        Reading summary's speed is then a duration estimate and says so, and
+        the over-time view offers no `timestamp_ms` axis."""
+        import pandas as pd
+
+        from scanpath_studio import api
+        from scanpath_studio.data import load_sample_data
+
+        raw_words, raw_fix = load_sample_data()
+        fix_schema = api.propose_schema(raw_fix, "fixations") | {"timestamp": None}
+        words, fixations = api.load_scanpath_data(
+            raw_words, raw_fix, fix_schema=fix_schema
+        )
+
+        def opened(view, **state):
+            # A fresh app per view: AppTest's router does not follow the
+            # app's own `st.switch_page` on a second run.
+            at = AppTest.from_file(APP_SCRIPT)
+            at.session_state["_datasets"] = {
+                "No clock": {
+                    "words": words,
+                    "fixations": fixations,
+                    "raw_gaze": pd.DataFrame(),
+                    "filter_fields": [],
+                    "composite_trial_columns": [],
+                }
+            }
+            at.session_state["data_source_choice"] = "No clock"
+            at.session_state["main_nav"] = "Corpus Analysis"
+            at.session_state["corpus_subtab"] = "Per reader"
+            at.session_state["prdr_view"] = view
+            for key, value in state.items():
+                at.session_state[key] = value
+            at.run(timeout=120)
+            assert not at.exception, f"Streamlit exceptions: {at.exception}"
+            return at
+
+        at = opened("Reading summary")
+        assert "Reading speed (estimate)" in [m.label for m in at.metric]
+        assert any("no fixation timestamps" in c.value for c in at.caption)
+
+        at = opened("Fixation duration over time", prdr_measure="Fixation duration")
+        x_axis = [s for s in at.selectbox if s.key == "prdr9_x"]
+        # Only the fixation order is offered; no `timestamp_ms` axis.
+        assert x_axis and len(x_axis[0].options) == 1
+        assert "order" in x_axis[0].options[0].lower()
+
+    def test_group_means_view_is_descriptive_and_names_shared_readers(self):
+        """The Groups summary runs no significance test, and when the same
+        readers are in both groups (the demo's default Difficulty split) it
+        says so and withholds the standardized difference."""
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Groups"
+        at.session_state["groups_compare"] = True
+        at.session_state["cmp_view"] = "Group means & difference"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert "cmp21_test" not in {s.key for s in at.selectbox}
+        captions = " ".join(c.value for c in at.caption)
+        assert "in both" in captions
+        assert "standardized difference is not shown" in captions
+        text = " ".join(m.value for m in at.markdown) + captions
+        assert "p =" not in text and "Mann" not in text and "Welch" not in text
+        d = next(m for m in at.metric if m.label == "Standardized difference")
+        assert d.value == "—"
+
+    def test_the_measure_and_error_bars_are_explained_in_place(self):
+        """The Measure picker carries the register's definition, unit, link and
+        what one plotted value is; the error-bar choice says what it shows."""
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["ptext_view"] = "Cohort profile"
+        at.session_state["ptext3_spread"] = "SEM"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        captions = [c.value for c in at.caption]
+        note = next(c for c in captions if "computations/#measure-tfd" in c)
+        assert "All time spent on a word" in note and "Unit: ms." in note
+        assert "Each word's value is the mean across its readers." in note
+        assert any(
+            c.startswith("SEM: how precisely the mean is known") for c in captions
         )
 
     def test_group_filter_set_mode_renders(self):
@@ -4437,6 +4546,56 @@ class TestOpenTrialFromCorpusTable:
         assert at.session_state["single_trial_id"] == target
         # Consumed once it lands, so it can't re-apply over later navigation.
         assert PENDING_TRIAL_KEY not in at.session_state
+
+    def test_an_annotation_row_opens_its_screen(self):
+        """Data Management → Annotations' **Open** on a screen annotation lands
+        on that screen of the trial, and the table offers the button."""
+        import pandas as pd
+
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+        from scanpath_studio.constants import _VIEW_DATA
+        from scanpath_studio.synthetic import make_multipart_synthetic_data
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        words, fixations = make_multipart_synthetic_data()
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.session_state["_datasets"] = {
+            "Two screens": {
+                "words": words,
+                "fixations": fixations,
+                "raw_gaze": pd.DataFrame(),
+                "filter_fields": [],
+                "composite_trial_columns": [],
+            }
+        }
+        at.session_state["data_source_choice"] = "Two screens"
+        at.run()
+        assert at.session_state["single_screen_id"] == "intro"
+
+        at.session_state[ANNOTATIONS_STATE_KEY] = {
+            ("synthetic", "multipart_demo", "question"): {
+                "star": True,
+                "tags": [],
+                "note": "check",
+            }
+        }
+        at.session_state["main_nav"] = _VIEW_DATA
+        at.run()
+        assert not at.exception, at.exception
+        tables = [d.value for d in at.dataframe if "Note" in d.value.columns]
+        assert tables and "Open" in tables[0].columns
+
+        # What the row's callback parks (`annotations._open_annotation`).
+        at.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "synthetic",
+            "trial_id": "multipart_demo",
+            "screen_id": "question",
+        }
+        at.session_state["main_nav"] = "Scanpath Visualization"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["single_trial_id"] == "multipart_demo"
+        assert at.session_state["single_screen_id"] == "question"
 
 
 class TestLazySubtabBodiesStillRender:

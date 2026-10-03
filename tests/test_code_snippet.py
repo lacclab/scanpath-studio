@@ -1848,3 +1848,196 @@ def test_the_running_app_publishes_the_labels_the_comparison_drew():
     # And it reaches both flavours rather than stopping at the dataclass.
     code = cs.reproduction_code(DEMO, at.session_state[cs.SNIPPET_STATE_KEY])
     assert labels[0] in code.python and labels[0] in code.cli
+
+
+# ---------------------------------------------------------------------------
+# A dataset added in the app: its mapping travels with the snippet
+# ---------------------------------------------------------------------------
+#: The review's repro: a lab export whose every column needs mapping by hand.
+_MANUAL_WORDS = {
+    "who": ["p", "p"],
+    "episode": ["t", "t"],
+    "item": [1, 2],
+    "label": ["test", "words"],
+    "horizontal": [100, 160],
+    "vertical": [100, 100],
+    "span": [50, 60],
+    "tall": [20, 20],
+}
+_MANUAL_FIXATIONS = {
+    "who": ["p", "p"],
+    "episode": ["t", "t"],
+    "horizontal": [110, 170],
+    "vertical": [110, 110],
+    "dwell": [100, 180],
+}
+_MANUAL_WORD_SCHEMA = {
+    "participant": "who",
+    "trial": "episode",
+    "word_id": "item",
+    "text": "label",
+    "x": "horizontal",
+    "y": "vertical",
+    "width": "span",
+    "height": "tall",
+}
+_MANUAL_FIX_SCHEMA = {
+    "participant": "who",
+    "trial": "episode",
+    "x": "horizontal",
+    "y": "vertical",
+    "duration": "dwell",
+}
+
+
+def _manual_files(tmp_path, monkeypatch) -> None:
+    """Write the manual tables under the snippet's placeholder names."""
+    import pandas as pd
+
+    pd.DataFrame(_MANUAL_WORDS).to_csv(tmp_path / "words.csv", index=False)
+    pd.DataFrame(_MANUAL_FIXATIONS).to_csv(tmp_path / "fixations.csv", index=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
+
+
+def _manual_store(**overrides) -> dict:
+    """A stored dataset as the add screen leaves it."""
+    import pandas as pd
+
+    from scanpath_studio.wizard import _source_recipe
+
+    words, fixations = api.load_scanpath_data(
+        pd.DataFrame(_MANUAL_WORDS),
+        pd.DataFrame(_MANUAL_FIXATIONS),
+        word_schema=_MANUAL_WORD_SCHEMA,
+        fix_schema=_MANUAL_FIX_SCHEMA,
+    )
+    schemas = {
+        "words": dict(_MANUAL_WORD_SCHEMA),
+        "fixations": dict(_MANUAL_FIX_SCHEMA),
+        "raw_gaze": None,
+    }
+    store = {
+        "words": words,
+        "fixations": fixations,
+        "raw_gaze": pd.DataFrame(),
+        "schemas": schemas,
+        "source_recipe": _source_recipe(
+            schemas,
+            {"words": set(_MANUAL_WORDS), "fixations": set(_MANUAL_FIXATIONS)},
+        ),
+    }
+    store.update(overrides)
+    return store
+
+
+def _manual_state() -> cs.FigureState:
+    return cs.FigureState(
+        kind="static",
+        settings=api.figure_options("static"),
+        participant="p",
+        trial="t",
+    )
+
+
+def test_an_added_dataset_carries_its_manual_mapping(tmp_path, monkeypatch):
+    """Share → Code wrote `load_scanpath_data("words.csv", "fixations.csv")`
+    with no mapping, so a dataset mapped by hand failed to load from its own
+    files. The snippet now carries both schemas — run against files with the
+    manual column names, it loads."""
+    _manual_files(tmp_path, monkeypatch)
+    # Without the mapping, the files cannot be read at all.
+    with pytest.raises(ValueError):
+        api.load_scanpath_data("words.csv", "fixations.csv")
+
+    source = _resolve_source("Lab", _datasets={"Lab": _manual_store()})
+    assert source.kind == cs.SOURCE_UPLOAD
+    code = cs.reproduction_code(source, _manual_state())
+    assert "word_schema={" in code.python and "fix_schema={" in code.python
+    assert "'horizontal'" in code.python and "--word-schema" in code.cli
+    assert "mapping it was added with is written out" in " ".join(code.caveats)
+    namespace: dict = {}
+    exec(compile(code.python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert len(namespace["words"]) == 2 and len(namespace["fixations"]) == 2
+
+    # …and so does the command: `render` exits on a table it cannot map.
+    saved: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **kw: saved.append(fig))
+    command = cs.cli_snippet(source, _manual_state(), output="manual.html")[0]
+    cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
+    assert len(saved) == 1
+
+
+def test_a_fixations_only_dataset_loads_only_its_fixations(tmp_path, monkeypatch):
+    import pandas as pd
+
+    _manual_files(tmp_path, monkeypatch)
+    store = _manual_store(words=pd.DataFrame())
+    store["source_recipe"]["schemas"]["words"] = None
+    source = _resolve_source("Lab", _datasets={"Lab": store})
+    code = cs.reproduction_code(source, _manual_state())
+    assert "words.csv" not in code.python and "--words" not in code.cli
+    assert "word_schema" not in code.python
+    namespace: dict = {}
+    exec(compile(code.python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["words"].empty and len(namespace["fixations"]) == 2
+
+
+def test_what_the_loader_cannot_replay_is_named():
+    from scanpath_studio.wizard import _source_recipe
+
+    recipe = _source_recipe(
+        {"words": {"trial": "session_1", "text": "label"}, "fixations": None},
+        {"words": {"label"}},
+        aggregated=True,
+    )
+    assert recipe["derived"] == ["session_1"]
+    source = cs.upload_source("Lab", recipe, words=True, fixations=False)
+    assert "character boxes" in source.note
+    assert "`session_1`" in source.note and "file names" in source.note
+    # The paths are placeholders, and the caveat says so — without implying
+    # they are all there is to change.
+    assert "`words.csv`" in source.note and "fixations.csv" not in source.note
+
+    preset = cs.upload_source(
+        "MPE", {"steps": ["multipleye_preset"]}, words=True, fixations=True
+    )
+    assert "MultiplEYE" in preset.note and "word_schema" not in preset.options
+
+
+def test_an_edited_mapping_is_restated_in_the_files_names():
+    """✏️ Edit dataset stores a mapping onto the canonical columns; the
+    snippet needs the columns of the files it reads."""
+    from scanpath_studio.column_names import from_schema, source_schema
+
+    names = from_schema(
+        "words",
+        {
+            "participant": "who",
+            "trial": ["who", "episode"],
+            "left": "L",
+            "right": "R",
+            "top": "T",
+            "bottom": "B",
+        },
+        ["who", "episode", "L", "R", "T", "B", "extra"],
+    )
+    edited = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "text_id": "text_id",  # generated: the loader makes it again
+        "word_id": "extra",  # carried through under its own name
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    restated, unresolved = source_schema(edited, names)
+    assert unresolved == ()
+    assert restated["participant"] == "who"
+    assert restated["trial"] == ["who", "episode"]
+    assert restated["text_id"] is None
+    assert restated["word_id"] == "extra"
+    assert (restated["left"], restated["right"]) == ("L", "R")
+    assert (restated["top"], restated["bottom"]) == ("T", "B")
+    assert restated["width"] is None and restated["x"] is None

@@ -568,7 +568,9 @@ def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
     recorded ``timestamp_ms`` when they look like real times — their span is at
     least ``REAL_TIMESTAMP_DWELL_FRAC`` of the summed durations — otherwise lays
     fixations back-to-back by their durations, so a synthesised 0,1,2,… index
-    doesn't crush the time axis. Shared by the similarity time-curve
+    doesn't crush the time axis. Fixations normalization numbered because the
+    table had no onset (``data.TIMESTAMP_SYNTHESIZED``) always take the
+    durations — the same estimate the reading summaries use. Shared by the similarity time-curve
     (:func:`scanpath_studio.similarity._rebased_onsets`) and the animation clock
     (:func:`scanpath_studio.plots._scanpath_anim_specs`).
     """
@@ -583,6 +585,10 @@ def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
     else:
         dur = np.zeros(len(ordered_fixations))
     contiguous = np.concatenate(([0.0], np.cumsum(dur)[:-1])) if len(dur) else dur
+    from .data import timestamps_synthesized
+
+    if timestamps_synthesized(ordered_fixations):
+        return contiguous
     if "timestamp_ms" in ordered_fixations.columns:
         ts = pd.to_numeric(ordered_fixations["timestamp_ms"], errors="coerce").to_numpy(
             dtype=float

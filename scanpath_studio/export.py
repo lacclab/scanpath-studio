@@ -53,7 +53,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
 )
-from .data import brought_reading_measures, drop_internal_columns
+from .data import brought_reading_measures, shareable_frame
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
 from .measures import assign_fixations_to_words, enrich_fixations
@@ -697,7 +697,7 @@ def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
 
 def _write_table(zf: zipfile.ZipFile, path: str, df: pd.DataFrame, fmt: str) -> int:
     # DATA-49: the pipeline's bookkeeping columns stay out of what is shared.
-    df = strip_local_paths(drop_internal_columns(df))
+    df = strip_local_paths(shareable_frame(df))
     if fmt == "parquet":
         buf = io.BytesIO()
         df.to_parquet(buf, index=False)
@@ -939,6 +939,9 @@ def _plot_config_dict(
         },
         "sizing": {
             "marker_size_range": list(settings.get("marker_size_range", [])),
+            "marker_size_scale": settings.get("marker_size_scale"),
+            "marker_duration_range": list(settings.get("marker_duration_range") or []),
+            "duration_size_legend": bool(settings.get("duration_size_legend", True)),
             "order_font_size": settings.get("order_font_size"),
         },
         # True-to-scale reading text: records how the word labels were sized so

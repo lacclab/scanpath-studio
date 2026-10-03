@@ -1463,7 +1463,7 @@ def _apply_reading_measures(
         if column and column in source.columns:
             values = source[column]
             df[canonical] = (
-                coerce_flag(values) if kind == "boolean" else _to_number(values)
+                coerce_measure_flag(values) if kind == "boolean" else _to_number(values)
             )
         elif canonical in df.columns:
             del df[canonical]
@@ -2116,6 +2116,100 @@ def _to_number(values: pd.Series) -> pd.Series:
     return parsed
 
 
+#: How a mapped field's values are read, for :func:`mapping_value_preview`.
+_PREVIEW_ID_FIELDS = frozenset(
+    {
+        "participant",
+        "trial",
+        "text_id",
+        "word_id",
+        "fixation_id",
+        "screen_id",
+        "screen_fixation_id",
+        "block",
+    }
+)
+_PREVIEW_TIME_FIELDS = frozenset({"duration", "timestamp", "screen_timestamp"})
+_PREVIEW_PIXEL_FIELDS = frozenset(
+    {
+        "x",
+        "y",
+        "width",
+        "height",
+        "left",
+        "right",
+        "top",
+        "bottom",
+        "canvas_width",
+        "canvas_height",
+    }
+)
+_PREVIEW_NUMBER_FIELDS = frozenset({"line", "screen_index"}) | {
+    key for key, *_ in READING_MEASURE_FIELDS
+}
+#: Rows looked at — the first few values are all a preview shows, and reading
+#: the head keeps it free on a table of millions of rows.
+_PREVIEW_ROWS = 200
+
+
+def mapping_value_preview(
+    df: pd.DataFrame | None, field_key: str, column, *, limit: int = 3
+) -> str:
+    """A few of ``column``'s values and what the app reads them as.
+
+    The mapping editor's value preview: a plausible column name can still hold
+    the wrong thing — trial ids picked as a condition, an onset as a duration,
+    seconds read as milliseconds — and its first values show it before saving.
+    Reads the head of the frame the editor already holds, through the same
+    conversions normalization applies (:func:`stable_id`, :func:`_to_number`,
+    :func:`time_unit_ms`). ``""`` when there is nothing to show.
+    """
+    if df is None or not column:
+        return ""
+    columns = [str(c) for c in trial_mapping_columns(column)]
+    if not columns or any(c not in df.columns for c in columns):
+        return ""
+    head = df.head(_PREVIEW_ROWS)[columns].dropna(how="all")
+    if head.empty:
+        return "No values in the first rows"
+
+    def number(value: float) -> str:
+        return f"{value:,.6g}"
+
+    if len(columns) > 1 or field_key in _PREVIEW_ID_FIELDS:
+        ids = trial_id_series(head, column).drop_duplicates().head(limit)
+        shown = []
+        for index, value in ids.items():
+            source = " + ".join(str(head.at[index, c]) for c in columns)
+            shown.append(value if source == value else f"{source} → {value}")
+        return "Read as IDs: " + ", ".join(shown)
+    values = head[columns[0]].dropna().head(limit)
+    if (
+        field_key in _PREVIEW_TIME_FIELDS
+        or field_key in _PREVIEW_PIXEL_FIELDS
+        or field_key in _PREVIEW_NUMBER_FIELDS
+    ):
+        parsed = _to_number(values)
+        if parsed.isna().all():
+            return "Not numbers: " + ", ".join(str(v) for v in values)
+        factor = 1.0
+        unit = ""
+        if field_key in _PREVIEW_TIME_FIELDS:
+            factor, unit = time_unit_ms(columns[0]), " ms"
+        elif field_key in _PREVIEW_PIXEL_FIELDS:
+            unit = " px"
+        shown = []
+        for source, value in zip(values, parsed):
+            if pd.isna(value):
+                shown.append(f"{source} (not a number)")
+            elif factor != 1.0:
+                shown.append(f"{source} → {number(value * factor)}{unit}")
+            else:
+                shown.append(f"{number(value)}{unit}")
+        return ", ".join(shown)
+    return ", ".join(f"“{value}”" for value in values.astype(str))
+
+
 #: What becomes of a fixation or word whose mapped numeric cell is unreadable —
 #: said in the warning, because "left empty" means something different per field.
 _UNPARSED_CONSEQUENCE = {
@@ -2421,17 +2515,57 @@ def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
 
 
 def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> ReadPlan:
-    """A whole-table plan that only keeps the word-text column verbatim (BUG-53).
+    """A whole-table words plan: the word text verbatim, the ids as text.
 
     For readers that parse every column (the headless API) but still must not
-    lose a word spelled "None" or "NA". ``schema`` is the caller's own word
-    mapping; without one the text column is auto-detected from the header, the
-    way the mapping itself will be.
+    lose a word spelled "None" or "NA" (BUG-53), nor merge reader ``01`` into
+    reader ``1`` by reading the ids as numbers. ``schema`` is the caller's own
+    word mapping; without one the columns are auto-detected from the header,
+    the way the mapping itself will be.
     """
     names = list(header)
     schema = schema or propose_word_schema(pd.DataFrame(columns=names))
     text = schema.get("text")
-    return ReadPlan(verbatim=(text,) if isinstance(text, str) and text in names else ())
+    verbatim = (text,) if isinstance(text, str) and text in names else ()
+    return ReadPlan(
+        verbatim=verbatim, identity=_identity_columns_in(names, schema, verbatim)
+    )
+
+
+def identity_text_plan(
+    header: Sequence[str], schema: dict | None = None, *, kind: str = "fixations"
+) -> ReadPlan:
+    """A whole-table plan that reads only the identity columns as text.
+
+    The headless counterpart of what :func:`plan_table_read` does for the app,
+    for the tables whose word text is not at stake (fixations, raw gaze): the
+    participant / trial / text / screen columns — the caller's ``schema``'s,
+    else auto-detected from the header, composite ids expanded — are read as
+    text, so ``01`` and ``1`` stay two readers. Every column is still parsed.
+    """
+    proposers = {
+        "fixations": propose_fix_schema,
+        "raw_gaze": propose_raw_gaze_schema,
+    }
+    if kind not in proposers:
+        raise ValueError(f"kind must be one of {sorted(proposers)}, not {kind!r}")
+    names = list(header)
+    schema = schema or proposers[kind](pd.DataFrame(columns=names))
+    return ReadPlan(identity=_identity_columns_in(names, schema, ()))
+
+
+def _identity_columns_in(
+    names: Sequence[str], schema: dict, verbatim: Sequence[str]
+) -> tuple[str, ...]:
+    """The schema's identity source columns that this header carries."""
+    present = set(names)
+    return tuple(
+        column
+        for column in dict.fromkeys(
+            [*_schema_identity_columns(schema), *_IDENTITY_SOURCES]
+        )
+        if column in present and column not in verbatim and column not in _ORDINALS
+    )
 
 
 def plan_table_read(
@@ -3312,13 +3446,39 @@ AOI_TRIAL_ID = "_aoi_trial_id"
 #: trial-id fallback — written by `normalize_*` from the schema, so a mapped
 #: Text ID whose values happen to equal the trial ids still counts (DATA-49).
 TEXT_ID_MAPPED = "_text_id_mapped"
+#: On a fixation: its `timestamp_ms` was made up by `normalize_fixations`
+#: because the table mapped no onset — the reading order 0, 1, 2, …, kept so
+#: fixations still sort, but not a time. Anything that needs elapsed time
+#: (the summaries' reading time and speed, the replay clock) lays the
+#: fixations end to end by their durations instead and says it is an estimate.
+TIMESTAMP_SYNTHESIZED = "_timestamp_synthesized"
 #: Bookkeeping columns the pipeline needs and the user never sees: kept in the
 #: frames and the recovery cache, dropped from exports and the Data page's
 #: tables (`drop_internal_columns`), and never offered as a field — their
 #: leading underscore is what the field listers skip.
 INTERNAL_COLUMNS = frozenset(
-    {STIMULUS_WORDS_FLAG, BASE_TRIAL_ID, AOI_TRIAL_ID, TEXT_ID_MAPPED}
+    {
+        STIMULUS_WORDS_FLAG,
+        BASE_TRIAL_ID,
+        AOI_TRIAL_ID,
+        TEXT_ID_MAPPED,
+        TIMESTAMP_SYNTHESIZED,
+    }
 )
+
+
+def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
+    """Whether any of these fixations has a made-up ``timestamp_ms``.
+
+    True when normalization had no onset column to read and numbered the
+    fixations instead (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
+    column — one built by hand, or stored before it existed — counts as
+    recorded, which is what it always did."""
+    if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
+        return False
+    return bool(fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool).any())
+
+
 #: Scratch column the stimulus broadcast merges through.
 _STIMULUS_KEY = "_stimulus_key"
 
@@ -3336,6 +3496,18 @@ def drop_internal_columns(frame: pd.DataFrame) -> pd.DataFrame:
     """``frame`` without :data:`INTERNAL_COLUMNS` (the same object if none)."""
     present = [c for c in INTERNAL_COLUMNS if c in frame.columns]
     return frame.drop(columns=present) if present else frame
+
+
+def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """``frame`` as it leaves the app: no bookkeeping, no made-up clock.
+
+    :func:`drop_internal_columns`, and also ``timestamp_ms`` when normalization
+    numbered the fixations itself (:func:`timestamps_synthesized`): those
+    numbers are a sort order, and a file that carried them under that name
+    would read back as recorded milliseconds."""
+    if timestamps_synthesized(frame) and "timestamp_ms" in frame.columns:
+        frame = frame.drop(columns="timestamp_ms")
+    return drop_internal_columns(frame)
 
 
 class StimulusJoinError(ValueError):
@@ -4498,6 +4670,30 @@ def coerce_flag(col: pd.Series) -> pd.Series:
     ).astype(bool)
 
 
+#: What a supplied reading-measure flag writes for "not recorded" — EyeLink's
+#: `.` for a word with no first pass, an empty cell, a spelled-out NA.
+_MISSING_FLAG_STRINGS = {"", ".", "na", "nan", "n/a", "-", "none", "null", "<na>"}
+
+
+def coerce_measure_flag(col: pd.Series) -> pd.Series:
+    """A supplied reading-measure flag (skip, regression in/out) as a nullable
+    boolean: true, false, or missing.
+
+    :func:`coerce_flag` reads a missing cell as ``False``, which is right for an
+    operational flag (blink, excluded) and wrong for a measure: EyeLink writes
+    ``.`` in ``IA_REGRESSION_IN`` for a word with no first pass, where the
+    measure is undefined, not "no regression". As ``False`` those rows lowered
+    every rate and counted as readers behind it."""
+    flags = coerce_flag(col).astype("boolean")
+    if pd.api.types.is_bool_dtype(col) and not col.isna().any():
+        return flags
+    missing = col.isna() | col.astype(str).str.strip().str.lower().isin(
+        _MISSING_FLAG_STRINGS
+    )
+    flags[missing.to_numpy()] = pd.NA
+    return flags
+
+
 def _apply_optional_fields(
     df: pd.DataFrame, source: pd.DataFrame, registry: list, keep: set | None
 ) -> set:
@@ -4506,7 +4702,7 @@ def _apply_optional_fields(
     backward-compatible default) or a set of *source* column names to limit to.
     Returns the set of source columns actually emitted."""
     emitted: set = set()
-    for src, dest, kind, _category in registry:
+    for src, dest, kind, category in registry:
         if src not in source.columns:
             continue
         if keep is not None and src not in keep:
@@ -4517,6 +4713,9 @@ def _apply_optional_fields(
             df[dest] = _to_number(col)
         elif kind == "string":
             df[dest] = col.astype(str)
+        elif kind == "boolean" and category == "measure":
+            # A reading measure keeps "not recorded" apart from "false".
+            df[dest] = coerce_measure_flag(col)
         elif kind == "boolean":
             df[dest] = coerce_flag(col)
         else:
@@ -4879,6 +5078,11 @@ def normalize_fixations(
         )
 
     df = _preserve_composite_columns(df, fixations, schema["trial"])
+    synthesized = _synthesized_timestamps(fixations, schema, _renormalizing)
+    if synthesized is None:
+        df = df.drop(columns=[TIMESTAMP_SYNTHESIZED], errors="ignore")
+    else:
+        df[TIMESTAMP_SYNTHESIZED] = synthesized
 
     df["order_in_trial"] = (
         df.sort_values(["timestamp_ms", "duration_ms"])
@@ -4996,6 +5200,27 @@ def _map_repeats(frame: pd.DataFrame, repeat_of: dict) -> pd.Series:
     wanted = pd.MultiIndex.from_arrays([frame["participant_id"].astype(str), ids])
     found = table.reindex(wanted).to_numpy()
     return pd.Series(np.where(pd.isna(found), ids.to_numpy(), found), index=frame.index)
+
+
+def _synthesized_timestamps(
+    fixations: pd.DataFrame, schema: dict, renormalizing: bool
+) -> pd.Series | None:
+    """The :data:`TIMESTAMP_SYNTHESIZED` flags for a normalized fixations frame.
+
+    Every row when no onset is mapped. A remap that keeps the stored
+    ``timestamp_ms`` as the onset keeps the stored flags — those numbers are
+    still the ones normalization made up. ``None`` when the timestamps are
+    the data's own."""
+    onset = schema.get("timestamp")
+    if not onset:
+        return pd.Series(True, index=fixations.index)
+    if (
+        renormalizing
+        and onset == "timestamp_ms"
+        and TIMESTAMP_SYNTHESIZED in fixations.columns
+    ):
+        return fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    return None
 
 
 def remap_normalized_frame(

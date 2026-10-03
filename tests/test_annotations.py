@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 import scanpath_studio.annotations as annotations_mod
 from scanpath_studio.annotations import (
     deserialize,
@@ -634,6 +636,68 @@ class TestAnnotationsFile:
         assert (applied, skipped) == (1, 0)
         assert annotations_mod.file_dataset("not json") is None
 
+    @pytest.mark.parametrize(
+        "document",
+        [
+            {"annotations": [1]},
+            {"annotations": None},
+            {"annotations": "x"},
+            {"something": "else"},
+            5,
+            [{"participant_id": "p", "trial_id": "t", "tags": 3}],
+            [{"participant_id": "p", "trial_id": "t", "tags": [{"a": 1}]}],
+            [{"participant_id": "p", "trial_id": "t", "star": "yes"}],
+            [{"participant_id": "p", "trial_id": "t", "note": ["n"]}],
+            [{"participant_id": {"id": 1}, "trial_id": "t", "star": True}],
+            [{"trial_id": "t", "star": True}],
+        ],
+    )
+    def test_a_wrongly_shaped_file_is_refused_not_half_read(self, document):
+        with pytest.raises(annotations_mod.AnnotationsFileError):
+            deserialize(json.dumps(document))
+
+    def test_an_empty_annotations_list_is_a_valid_file(self):
+        assert deserialize(json.dumps({"schema": 3, "annotations": []})) == {}
+
+
+def _bad_import_app():
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    class _Upload:
+        def getvalue(self) -> bytes:
+            return st.session_state["_bytes"]
+
+    st.session_state.setdefault(
+        ann.ANNOTATIONS_STATE_KEY,
+        {("p", "t"): {"star": True, "tags": ["keep"], "note": ""}},
+    )
+    st.session_state["_upload"] = _Upload()
+    ann._import_dataset_annotations("_upload", frozenset({("p", "t")}), "test")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"annotations":[1]}',
+        b'{"annotations":[{"participant_id":"p","trial_id":"t","tags":3}]}',
+        b"not json",
+    ],
+)
+def test_importing_a_malformed_file_reports_it_and_keeps_the_store(payload):
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_bad_import_app)
+    at.session_state["_bytes"] = payload
+    at.run()
+    assert not at.exception, at.exception
+    note = at.session_state["_dataset_annotations_note"]
+    assert note.startswith("error:That file is not an annotations JSON file")
+    assert at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] == {
+        ("p", "t"): {"star": True, "tags": ["keep"], "note": ""}
+    }
+
 
 def _parent_screen_app():
     import scanpath_studio.annotations as ann
@@ -686,3 +750,104 @@ class TestEditorKeysAreTheStoreKeys:
         slug = annotations_mod.widget_slug
         assert slug("a__b", "c") != slug("a", "b__c")
         assert slug("p", "t") != slug("p", "t", "parent")
+
+
+class TestTrialFiltersAreTrialLevel:
+    """The trial filters read the trial's own annotation; a screen's star or
+    tag neither keeps nor drops its trial, so the pickers do not offer a tag
+    used only on screens, and the panel says where screen annotations are."""
+
+    def _session(self, monkeypatch) -> dict:
+        from types import SimpleNamespace
+
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[KEY][("p", "t", "s1")] = {
+            "star": True,
+            "tags": ["screen only"],
+            "note": "",
+        }
+        session[KEY][("p", "u")] = {"star": False, "tags": ["trial tag"], "note": ""}
+        monkeypatch.setattr(
+            annotations_mod, "st", SimpleNamespace(session_state=session)
+        )
+        return session
+
+    def test_the_picker_offers_trial_level_tags_only(self, monkeypatch):
+        self._session(monkeypatch)
+        trial_tags = annotations_mod.known_tags(trial_level=True)
+        assert "trial tag" in trial_tags
+        assert "screen only" not in trial_tags
+        # The per-trial editor still suggests every tag in use.
+        assert "screen only" in annotations_mod.known_tags()
+
+    def test_a_screen_annotation_does_not_select_its_trial(self, monkeypatch):
+        self._session(monkeypatch)
+        keys = [("p", "t"), ("p", "u")]
+        assert annotations_mod.filter_keys(keys, favorites_only=True) == []
+        assert annotations_mod.filter_keys(keys, excluded_tags=["screen only"]) == keys
+
+    def test_screen_annotations_are_detected_for_the_note(self, monkeypatch):
+        session = self._session(monkeypatch)
+        assert annotations_mod.has_screen_annotations()
+        del session[KEY][("p", "t", "s1")]
+        assert not annotations_mod.has_screen_annotations()
+
+
+def _open_row_app():
+    """Click row ``_row`` of the Annotations table's **Open** column."""
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    records = [
+        {"participant_id": "p", "trial_id": "t", "screen_id": "s2"},
+        {"participant_id": "p", "trial_id": "hidden"},
+        {"participant_id": "p", "trial_id": "gone"},
+    ]
+    st.session_state["_click"] = {"row": st.session_state["_row"]}
+    ann._open_annotation(
+        "_click",
+        records,
+        frozenset({("p", "t"), ("p", "hidden")}),
+        frozenset({("p", "t")}),
+    )
+
+
+class TestOpenAnAnnotatedReading:
+    """Data Management → Annotations: a row's **Open** shows its reading."""
+
+    def _click(self, row: int):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_open_row_app)
+        at.session_state["_row"] = row
+        at.run()
+        assert not at.exception, at.exception
+        return at.session_state
+
+    def test_a_screen_annotation_opens_its_trial_and_screen(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        state = self._click(0)
+        assert state[PENDING_TRIAL_KEY] == {
+            "participant_id": "p",
+            "trial_id": "t",
+            "screen_id": "s2",
+        }
+        assert state["main_nav"] == "Scanpath Visualization"
+
+    def test_a_trial_the_filters_hide_is_explained_not_opened(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        state = self._click(1)
+        assert PENDING_TRIAL_KEY not in state
+        assert "main_nav" not in state
+        assert "the trial filters hide it" in state["_dataset_annotations_note"]
+
+    def test_a_trial_the_dataset_has_not_loaded_is_explained(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        state = self._click(2)
+        assert PENDING_TRIAL_KEY not in state
+        assert "hasn't loaded that trial" in state["_dataset_annotations_note"]

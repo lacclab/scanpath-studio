@@ -607,6 +607,22 @@ def word_measure_vs_feature(
     return out.dropna(subset=["value"]).reset_index(drop=True)
 
 
+#: ``(rate, readers behind it, min-readers verdict)`` for each series
+#: :func:`word_rate_profile` returns.
+RATE_SERIES = (
+    ("skip_rate", "n_skip", "enough_skip"),
+    ("regression_in_rate", "n_regression_in", "enough_regression_in"),
+)
+RATE_SERIES_COLUMNS = (
+    "skip_rate",
+    "regression_in_rate",
+    "n_skip",
+    "n_regression_in",
+    "enough_skip",
+    "enough_regression_in",
+)
+
+
 def word_rate_profile(
     words: pd.DataFrame,
     text_col: str,
@@ -617,10 +633,15 @@ def word_rate_profile(
 ) -> pd.DataFrame:
     """Per-word skip / regression-in rates across readers (AN-6).
 
-    Returns ``[word_id, skip_rate, regression_in_rate, n, enough, word_text]``.
+    Returns ``[word_id, skip_rate, regression_in_rate, n_skip, n_regression_in,
+    enough_skip, enough_regression_in, word_text]``. Each rate has its own
+    denominator: ``n_*`` counts the readers who *reported* that flag for the
+    word — a missing flag is no observation, not a "no" — and ``enough_*``
+    applies ``min_readers`` to that count alone, since a dataset can record
+    skips for every word and regressions only for the ones read in first pass.
     """
     sub = _text_subset(words, text_col, text_id, screen_id)
-    cols = ["word_id", "skip_rate", "regression_in_rate", "n", "enough", "word_text"]
+    cols = ["word_id", *RATE_SERIES_COLUMNS, "word_text"]
     if sub.empty or "word_id" not in sub.columns:
         return pd.DataFrame(columns=cols)
     work = sub[["word_id"]].copy()
@@ -656,10 +677,13 @@ def word_rate_profile(
         if text_by_word is not None:
             work["word_text"] = work["word_id"].map(text_by_word)
     grouped = work.groupby("word_id")
+    # `count` is the readers with a value: the per-reader mean is NaN only for
+    # a reader who reported nothing for that word.
     out = grouped.agg(
         skip_rate=("skip_rate", "mean"),
         regression_in_rate=("regression_in_rate", "mean"),
-        n=("skip_rate", "size"),
+        n_skip=("skip_rate", "count"),
+        n_regression_in=("regression_in_rate", "count"),
     ).reset_index()
     if "word_text" in work.columns:
         out = out.merge(
@@ -667,7 +691,8 @@ def word_rate_profile(
         )
     else:
         out["word_text"] = ""
-    out["enough"] = out["n"] >= min_readers
+    for _rate, n, enough in RATE_SERIES:
+        out[enough] = out[n] >= max(int(min_readers), 1)
     return out[cols].sort_values("word_id").reset_index(drop=True)
 
 
@@ -690,11 +715,11 @@ def measure_values(
 def reader_means(frame: pd.DataFrame, measure: Measure) -> np.ndarray | None:
     """One value per reader — the mean of their observations (AN-21, BUG-82).
 
-    The unit a group test may treat as independent. Every word or fixation of
-    one reader is correlated with that reader's others, so testing the pooled
-    observations (``measure_values``) counts one reader's 1 307 words as 1 307
-    subjects and returns p ≈ 0 for two readers. ``None`` when the frame names
-    no readers, so the caller can say it is falling back to observations.
+    The unit the Groups summary compares. Every word or fixation of one reader
+    is correlated with that reader's others, so pooling the observations
+    (``measure_values``) would let one reader's 1 307 words outweigh another
+    reader's 200. ``None`` when the frame names no readers, so the caller can
+    say it is falling back to observations.
     """
     if frame is None or frame.empty or measure.column not in frame.columns:
         return np.array([], dtype="float64")
@@ -730,25 +755,51 @@ def reader_vs_cohort_values(
     return out
 
 
-def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
-    """Per-(participant, trial) reading time in ms from the fixation span.
+#: How a summary's reading time was measured (`reading_time_source`).
+READING_TIME_RECORDED = "recorded"
+READING_TIME_ESTIMATED = "estimate (summed fixation durations; no timestamps)"
 
-    Span = last fixation end − first fixation start (falls back to the sum of
-    fixation durations when timestamps are missing)."""
+
+def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
+    """Per-reading (and per-screen) reading time in ms, and how it was measured.
+
+    Recorded timestamps give the span, last fixation end − first fixation
+    start. Without them — no timestamp column, or one normalization numbered
+    0, 1, 2, … because the table had no onset (``data.TIMESTAMP_SYNTHESIZED``)
+    — the fixations are laid end to end by their durations, the clock the
+    replay uses (``measures.rebased_fixation_onsets``): an estimate that leaves
+    out every gap between them, so ``reading_time_source`` says so."""
+    from .data import TIMESTAMP_SYNTHESIZED
+
+    columns = ["reading_time_ms", "reading_time_source"]
     if fixations.empty or not {"participant_id", "trial_id"} <= set(fixations.columns):
-        return pd.DataFrame(columns=["participant_id", "trial_id", "reading_time_ms"])
+        return pd.DataFrame(columns=["participant_id", "trial_id", *columns])
     keys = grouping_columns(fixations)
     df = fixations[keys].copy()
     dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
+    df["_d"] = dur
+    if TIMESTAMP_SYNTHESIZED in fixations.columns:
+        df["_synth"] = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    else:
+        df["_synth"] = "timestamp_ms" not in fixations.columns
     if "timestamp_ms" in fixations.columns:
         ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
         df["_start"] = ts
         df["_end"] = ts + dur.fillna(0)
-        grp = df.groupby(keys)
-        out = (grp["_end"].max() - grp["_start"].min()).rename("reading_time_ms")
     else:
-        df["_d"] = dur
-        out = df.groupby(keys)["_d"].sum().rename("reading_time_ms")
+        df["_start"] = df["_end"] = np.nan
+    grp = df.groupby(keys)
+    estimated = grp["_synth"].any()
+    span = grp["_end"].max() - grp["_start"].min()
+    summed = grp["_d"].sum()
+    out = pd.DataFrame(
+        {
+            "reading_time_ms": summed.where(estimated, span),
+            "reading_time_source": np.where(
+                estimated, READING_TIME_ESTIMATED, READING_TIME_RECORDED
+            ),
+        }
+    )
     return out.reset_index()
 
 
@@ -933,6 +984,7 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
             reading = _trial_reading_time_ms(fx)
             if not reading.empty:
                 row["reading_time_ms"] = float(reading.iloc[0]["reading_time_ms"])
+                row["reading_time_source"] = reading.iloc[0]["reading_time_source"]
             row.update(_run_summary(fx, n_words))
             if "blink_count" in fx.columns:
                 blink = pd.to_numeric(fx["blink_count"], errors="coerce").dropna()
@@ -1024,6 +1076,11 @@ def _summary_row(words, fixations, pid) -> dict[str, float]:
         )
         if total_ms > 0 and n_words:
             out["wpm"] = float(n_words / (total_ms / 60000.0))
+            out["reading_time_source"] = (
+                READING_TIME_ESTIMATED
+                if (rt["reading_time_source"] == READING_TIME_ESTIMATED).any()
+                else READING_TIME_RECORDED
+            )
         trials = trial_summary_table(wd, fx)
         if not trials.empty:
             for column in (
@@ -1566,17 +1623,17 @@ def paired_group_summary(
     )
 
 
-def group_effect_size(
+def group_mean_difference(
     values_a: np.ndarray,
     values_b: np.ndarray,
-    *,
-    test: str = "Mann–Whitney",
 ) -> dict[str, object]:
-    """Mean difference, Cohen's *d*, and a significance test (AN-21).
+    """Descriptive two-group summary: the means, their difference, and Cohen's *d*.
 
-    ``test`` is ``"Mann–Whitney"`` (rank-sum) or ``"t-test"`` (Welch). Returns a
-    dict with the means, ``mean_diff``, ``cohen_d``, ``test``, ``statistic``,
-    ``p_value`` and the group sizes. Exploratory — *not* pre-registered.
+    Returns ``mean_a``, ``mean_b``, ``n_a``, ``n_b``, ``mean_diff`` and
+    ``cohen_d`` (pooled-SD standardized difference). Purely descriptive — no
+    significance test. ``cohen_d`` assumes two separate sets of values; the
+    caller decides whether to show it (the Groups view does not when the same
+    readers are in both groups).
     """
     a = np.asarray(values_a, dtype="float64")
     a = a[~np.isnan(a)]
@@ -1587,9 +1644,6 @@ def group_effect_size(
         "mean_b": float(np.mean(b)) if b.size else float("nan"),
         "n_a": int(a.size),
         "n_b": int(b.size),
-        "test": test,
-        "statistic": float("nan"),
-        "p_value": float("nan"),
         "cohen_d": float("nan"),
     }
     out["mean_diff"] = out["mean_a"] - out["mean_b"]
@@ -1604,15 +1658,4 @@ def group_effect_size(
     out["cohen_d"] = (
         float((np.mean(a) - np.mean(b)) / pooled) if pooled > 0 else float("nan")
     )
-    try:
-        from scipy import stats  # BSD-3; added for AN-21 (see PRE-0 ADR).
-
-        if test == "t-test":
-            res = stats.ttest_ind(a, b, equal_var=False)
-        else:
-            res = stats.mannwhitneyu(a, b, alternative="two-sided")
-        out["statistic"] = float(res.statistic)
-        out["p_value"] = float(res.pvalue)
-    except Exception:  # pragma: no cover - scipy always present once added
-        pass
     return out

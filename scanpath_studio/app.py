@@ -9363,6 +9363,9 @@ def _run_app() -> None:
                     fixations_filtered,
                     raw_gaze_filtered,
                     annotation_trials=_annotation_trials(combos_all),
+                    # What the Scanpath picker can open — an annotation row's
+                    # Open explains a trial the filters hide.
+                    open_trials=_annotation_trials(combos),
                     # DATA-48: the dataset whose annotations these are — the
                     # demo's while it stands in for a missing corpus, as in
                     # the Export bundle.

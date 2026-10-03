@@ -298,6 +298,7 @@ def test_deep_link_seeds_frozen_state_keys():
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
     # EXP-18: the settings that joined the link are closed vocabularies too.
     validated["colorbar_orientation"] = "Horizontal"
+    validated["marker_size_scale"] = "linear"
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Discard"
         validated[f"fixclass_{category}_symbol"] = "x"
@@ -492,6 +493,9 @@ def _restore_config_app():
         },
         "sizing": {
             "marker_size_range": [4, 10],
+            "marker_size_scale": "log",
+            "marker_duration_range": [80, 900],
+            "duration_size_legend": False,
             "order_font_size": 12,
             "order_font_color": "#000000",
             "base_font_size": 14,

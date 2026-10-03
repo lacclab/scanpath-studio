@@ -905,6 +905,30 @@ def _render_parser() -> argparse.ArgumentParser:
         "Smaller ranges suit small thumbnails.",
     )
     viz.add_argument(
+        "--marker-size-scale",
+        choices=("sqrt", "linear", "log", "relative"),
+        help="How duration sets marker size (default: sqrt). sqrt / linear / log "
+        "map --marker-duration-range onto --marker-size-range the same way for "
+        "every figure, so one duration is one size across trials, comparisons "
+        "and replays; sqrt makes marker area grow with duration. relative "
+        "stretches each figure from its own shortest to longest fixation.",
+    )
+    viz.add_argument(
+        "--marker-duration-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        help="Durations in ms given the smallest and largest marker on a fixed "
+        "scale (default: 50 600). Shorter and longer fixations clamp to them.",
+    )
+    viz.add_argument(
+        "--no-duration-size-legend",
+        dest="duration_size_legend",
+        action="store_false",
+        help="Hide the duration-size key (reference circles labelled in ms) "
+        "drawn on a fixed --marker-size-scale.",
+    )
+    viz.add_argument(
         "--canvas",
         metavar="WxH",
         help="Monitor size in px, e.g. 2560x1440 (default: estimated from data; "
@@ -1415,6 +1439,7 @@ def _render_parser() -> argparse.ArgumentParser:
 #: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
 #: builder unchanged whenever given.
 _DIRECT_OPTION_FLAGS = (
+    "marker_size_scale",
     "fixation_opacity",
     "order_font_size",
     "order_font_color",
@@ -1449,6 +1474,7 @@ _SWITCH_OPTION_FLAGS = {
     "show_colorbars": True,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
+    "duration_size_legend": False,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.
@@ -2746,6 +2772,8 @@ def render(argv: list[str]) -> None:
     for key, flipped in _SWITCH_OPTION_FLAGS.items():
         if getattr(args, key) == flipped:
             overrides[key] = flipped
+    if args.marker_duration_range:
+        overrides["marker_duration_range"] = tuple(args.marker_duration_range)
     if args.fixation_color_range:
         overrides["fixation_color_range"] = tuple(args.fixation_color_range)
     if args.heatmap_range:
@@ -3210,12 +3238,12 @@ def analyze(argv: list[str]) -> None:
     # stands unless preprocessing actually ran.
     if not qa.empty:
         tables["cleaning_qa"] = qa
-    from .data import drop_internal_columns
+    from .data import shareable_frame
 
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
-        table = drop_internal_columns(table)
+        table = shareable_frame(table)
         table.to_csv(destination / f"{name}.csv", index=False)
     config = {
         "short_policy": policy,

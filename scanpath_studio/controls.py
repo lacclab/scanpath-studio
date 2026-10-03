@@ -17,7 +17,7 @@ from streamlit_sortables import sort_items
 
 from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
-from .annotations import known_tags
+from .annotations import has_screen_annotations, known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
@@ -28,12 +28,16 @@ from .constants import (
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    MARKER_DURATION_BOUNDS,
+    MARKER_SIZE_SCALES,
     OUT_OF_TEXT_COLOR,
     PALETTES,
     RAW_GAZE_LINK_FOR_KEY,
@@ -63,6 +67,7 @@ from .data import (
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
     frame_fingerprint,
+    mapping_value_preview,
     user_columns,
 )
 from .export import (
@@ -88,6 +93,7 @@ from .session_keys import (
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
     compare_state_keys,
+    keep_legacy_marker_scale,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 
@@ -679,6 +685,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # VIZ-8: show the saccade-type colour key on the plot (default on). Optional,
     # like the other legends.
     "global_saccade_type_legend": True,
+    # The fixed duration scale: one mapping of duration to marker size for every
+    # figure (√ by default — area grows with duration). Old configs and links
+    # that predate it are migrated to "relative" so they still draw as saved.
+    "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
+    "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
+    "global_duration_size_legend": True,
     "global_saccade_class_color_forward": SACCADE_CLASS_COLORS["forward"],
     "global_saccade_class_color_skip": SACCADE_CLASS_COLORS["skip"],
     "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
@@ -1160,7 +1172,9 @@ def delete_design_preset(name: str) -> None:
 #: The retired 💾 Session backup was the only portable copy of the library; this
 #: is its own file now, written by *Export* and read by *Import* in My designs.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
-DESIGNS_FILE_SCHEMA = 1
+#: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
+#: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
+DESIGNS_FILE_SCHEMA = 2
 _DESIGN_IMPORT_KEY = "design_import_upload"
 _DESIGN_IMPORT_NOTE_KEY = "_design_import_note"
 
@@ -1194,6 +1208,10 @@ def designs_from_json(text: str) -> dict[str, dict]:
     raw = data.get("designs")
     if not isinstance(raw, dict):
         raise ValueError("the file holds no designs")
+    try:
+        schema = int(data.get("schema", 1))
+    except (TypeError, ValueError):
+        schema = 1
     designs: dict[str, dict] = {}
     for name, values in raw.items():
         clean = " ".join(str(name).split())[:60]
@@ -1201,9 +1219,10 @@ def designs_from_json(text: str) -> dict[str, dict]:
             continue
         if clean in _VIEW_PRESETS:
             clean = f"{clean} (mine)"
-        designs[clean] = {
+        design = {
             str(key): value for key, value in values.items() if _is_design_key(key)
         }
+        designs[clean] = keep_legacy_marker_scale(design) if schema < 2 else design
     return designs
 
 
@@ -2872,39 +2891,27 @@ def column_mapping_ui(
             hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
-        if state == "auto":
-            # UX-92 — the ✨ is a **button** while the row is amber, and pressing
-            # it is the approval the select cannot report.
-            #
-            # Re-picking the value a select already holds fires no `on_change`:
-            # Streamlit dedupes it in the frontend and does not even rerun
-            # (verified in a browser, not inferred). Since UX-53 r10 the value
-            # lives in the widget key with `index=None` — which is what makes
-            # the ✕ clear work — so the detected column *is* the widget's value,
-            # and confirming it by hand is invisible to Python by construction.
-            # A one-click confirm in the space the flag already occupies is the
-            # only honest way to say "I chose this" for that case.
-            note_col.button(
-                # UX-200: named for screen readers; only the ✨ shows.
-                f"{ICONS['auto_detected']} "
-                + spoken(f"Confirm the detected {field_label} column"),
-                wrap=True,
-                key=f"{cell_key}_confirm",
-                help=f"{hover} — click to confirm this column and clear the mark.",
-                on_click=_mark_field_touched,
-                args=(state_key,),
-            )
-        elif hover:
-            # Icon only. The sentence — which column was detected, and whether it
-            # was overridden or left unused — is on the icon's tooltip, reusing
-            # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
-            # browser's ~1s native one.
-            note_col.markdown(
-                f'<span class="sps-map-flag sps-fhelp" '
-                f'data-tip="{html.escape(hover, quote=True)}">'
-                f"{icon_html('auto_detected')}</span>",
-                unsafe_allow_html=True,
-            )
+        # UX-92 — the ✨ is a **button** while the row is amber, and pressing it
+        # is the approval the select cannot report.
+        #
+        # Re-picking the value a select already holds fires no `on_change`:
+        # Streamlit dedupes it in the frontend and does not even rerun (verified
+        # in a browser, not inferred). Since UX-53 r10 the value lives in the
+        # widget key with `index=None` — which is what makes the ✕ clear work —
+        # so the detected column *is* the widget's value, and confirming it by
+        # hand is invisible to Python by construction. A one-click confirm in
+        # the space the flag already occupies is the only honest way to say "I
+        # chose this" for that case.
+        _render_field_flag(
+            note_col,
+            state=state,
+            hover=hover,
+            preview=value_preview_tip(df, field_key, chosen),
+            confirm_label=f"Confirm the detected {field_label} column",
+            confirm_help=f"{hover} — click to confirm this column and clear the mark.",
+            cell_key=cell_key,
+            state_key=state_key,
+        )
         # `NONE_OPTION` is still tolerated on the way out: a config restored
         # before this run could have seeded it.
         return None if chosen in (None, NONE_OPTION) else chosen
@@ -3083,6 +3090,7 @@ def column_mapping_ui(
                 default=proposed_default,
                 required=spec["key"] in required_keys,
                 detected_label=detected_label,
+                preview=value_preview_tip(df, spec["key"], list(chosen_cols)),
             )
             if state:
                 tint_cells.setdefault(state, []).append(cell_key)
@@ -3110,6 +3118,7 @@ def multi_field_flag(
     default: list,
     required: bool,
     detected_label: str = "auto-detected",
+    preview: str = "",
 ) -> str:
     """The ✨ flag of a *multi-column* picker, and its tint state (UX-176).
 
@@ -3119,7 +3128,8 @@ def multi_field_flag(
     same rule for them: the columns detection proposed, untouched, are amber
     with a ✨ **button** that approves them; picking goes green; clearing goes
     neutral (or red once an add is attempted, for a required one). Returns the
-    `_FIELD_TINT` state for the caller to paint (`mark_cells`)."""
+    `_FIELD_TINT` state for the caller to paint (`mark_cells`). ``preview``
+    is the picked columns' value preview (`value_preview_tip`)."""
     joined = " + ".join(chosen) if chosen else None
     proposed = " + ".join(default) if default else None
     state, hover = _field_state(
@@ -3130,24 +3140,75 @@ def multi_field_flag(
         touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
         detected_label=detected_label,
     )
+    _render_field_flag(
+        flag_host,
+        state=state,
+        hover=hover,
+        preview=preview,
+        confirm_label="Confirm the detected columns",
+        confirm_help=f"{hover} — click to confirm and clear the mark.",
+        cell_key=cell_key,
+        state_key=state_key,
+    )
+    return state
+
+
+def value_preview_tip(df, field_key: str, column) -> str:
+    """`data.mapping_value_preview` for a picked column, as a tooltip line."""
+    if column in (None, NONE_OPTION, "", []):
+        return ""
+    preview = mapping_value_preview(df, field_key, column)
+    return f"Values: {preview}" if preview else ""
+
+
+def _render_field_flag(
+    host,
+    *,
+    state: str,
+    hover: str,
+    preview: str,
+    confirm_label: str,
+    confirm_help: str,
+    cell_key: str,
+    state_key: str,
+) -> None:
+    """A mapping row's ✨ flag and its value preview, in the slot beside it.
+
+    The ✨ is a **button** while the row is amber (UX-92) and an icon whose
+    tooltip says what detection found otherwise. The preview — a few of the
+    mapped column's values and what the app reads them as — is an icon of its
+    own with a hover tooltip, like every other note on this form; on an amber
+    row it rides on the confirm button's tooltip instead, which is where the
+    eye already is, and keeps the slot one line tall.
+    """
     if state == "auto":
-        flag_host.button(
+        host.button(
             # UX-200: named for screen readers; only the ✨ shows.
-            f"{ICONS['auto_detected']} {spoken('Confirm the detected columns')}",
+            f"{ICONS['auto_detected']} {spoken(confirm_label)}",
             wrap=True,
             key=f"{cell_key}_confirm",
-            help=f"{hover} — click to confirm and clear the mark.",
+            help=confirm_help + (f"\n\n{preview}" if preview else ""),
             on_click=_mark_field_touched,
             args=(state_key,),
         )
-    elif hover:
-        flag_host.markdown(
+        return
+    # Icons only, on the rail's CSS hover (`.sps-fhelp`, 120 ms) rather than
+    # the browser's ~1 s native one.
+    spans = []
+    if hover:
+        spans.append(
             f'<span class="sps-map-flag sps-fhelp" '
             f'data-tip="{html.escape(hover, quote=True)}">'
-            f"{icon_html('auto_detected')}</span>",
-            unsafe_allow_html=True,
+            f"{icon_html('auto_detected')}</span>"
         )
-    return state
+    if preview:
+        tip = html.escape(preview, quote=True)
+        spans.append(
+            f'<span class="sps-map-flag sps-map-preview sps-fhelp" tabindex="0" '
+            f'data-tip="{tip}" aria-label="{tip}">{icon_html("preview")}</span>'
+        )
+    if spans:
+        host.markdown("".join(spans), unsafe_allow_html=True)
 
 
 def mark_cells(cells_by_state: dict) -> None:
@@ -3563,6 +3624,75 @@ def _check_row(
             persist_state=persist_state,
         ),
         rest_col,
+    )
+
+
+#: The help on the duration-scale rows — shared with nothing else, but long
+#: enough that the row code reads better without it inline.
+_SCALE_HELP = (
+    "How fixation duration sets marker size. The fixed scales (√, linear, log) "
+    "use the same duration bounds for every trial, comparison side, replay and "
+    "export, so one duration is always one size. √ makes marker area grow with "
+    "duration. Relative to this figure stretches each figure from its own "
+    "shortest to longest fixation, so sizes only compare within it."
+)
+_DURATION_BOUNDS_HELP = (
+    "Durations (ms) given the smallest and the largest marker. Shorter "
+    "fixations get the smallest marker and longer ones the largest. Unused on "
+    "the relative scale."
+)
+_SIZE_KEY_HELP = (
+    "Reference circles labelled in ms, in the figure's bottom-right corner, "
+    "on screen and in exports. Drawn only on a fixed scale. In Compare it is "
+    "not drawn when the two scanpaths use different marker size ranges, "
+    "since one duration is then two sizes."
+)
+
+
+def _render_duration_scale_rows() -> None:
+    """The fixed duration scale: curve, duration bounds and the size key.
+
+    One scale for both scanpaths of a comparison too (only the size *range* is
+    per scanpath there), so none of the three carries Compare's gate. The bounds
+    and the key are greyed, never hidden, on the relative scale.
+    """
+    scale_dis, scale_help = _layer_gate(False, _SCALE_HELP)
+    # Keyless, like the colorscale picker: a keyed selectbox first painted in a
+    # closed popover shows its first option rather than the seeded value — and a
+    # link or settings file that predates the fixed scale seeds "relative".
+    options = list(MARKER_SIZE_SCALES)
+    current = st.session_state.get("global_marker_size_scale")
+    st.session_state["global_marker_size_scale"] = _sub_row(
+        "Scale", caption_help=scale_help
+    ).selectbox(
+        "Duration scale",
+        options=options,
+        index=options.index(current) if current in options else 0,
+        format_func=lambda s: MARKER_SIZE_SCALES[s],
+        disabled=scale_dis,
+        help=scale_help,
+        label_visibility="collapsed",
+    )
+    relative = st.session_state["global_marker_size_scale"] == "relative"
+    _, bounds_help = _layer_gate(relative, _DURATION_BOUNDS_HELP)
+    _range_slider(
+        st,
+        "Durations (ms)",
+        key="global_marker_duration_range",
+        persist_state="session",
+        min_value=MARKER_DURATION_BOUNDS[0],
+        max_value=MARKER_DURATION_BOUNDS[1],
+        step=10,
+        disabled=relative,
+        help=_DURATION_BOUNDS_HELP,
+        field_host=_sub_row("Durations", caption_help=bounds_help),
+    )
+    key_dis, key_help = _layer_gate(relative, _SIZE_KEY_HELP)
+    _sub_row("Size key", caption_help=key_help).checkbox(
+        "Show",
+        key="global_duration_size_legend",
+        persist_state="session",
+        disabled=key_dis,
     )
 
 
@@ -4467,6 +4597,13 @@ def _collect_viz_settings(
         x_field=ss.get("global_x_field"),
         y_field=ss.get("global_y_field"),
         marker_size_range=tuple(ss.get("global_marker_size_range", (8, 24))),
+        marker_size_scale=(
+            ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE
+        ),
+        marker_duration_range=tuple(
+            ss.get("global_marker_duration_range") or DEFAULT_MARKER_DURATION_RANGE
+        ),
+        duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
         show_colorbars=bool(ss.get("global_show_colorbars")),
@@ -5421,14 +5558,13 @@ def render_plot_controls(
         # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
         # / `cmp*_opacity` override these there), so they carry its gate.
         _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-        _, size_help = _layer_gate(
-            _dis,
-            _gated_help(
-                "Marker size range in px: the shortest fixation's marker, then "
-                "the longest's.",
-                _reason,
-            ),
+        size_text = (
+            "Marker diameter range in px: the smallest marker, then the "
+            "largest. On a fixed scale they belong to the two duration bounds "
+            "below; on the relative scale, to this figure's shortest and "
+            "longest fixation."
         )
+        _, size_help = _layer_gate(_dis, _gated_help(size_text, _reason))
         _range_slider(
             st,
             "Size",
@@ -5437,13 +5573,10 @@ def render_plot_controls(
             min_value=4,
             max_value=40,
             disabled=_dis,
-            help=_gated_help(
-                "Marker size range in px: the shortest fixation's marker, then "
-                "the longest's.",
-                _reason,
-            ),
+            help=_gated_help(size_text, _reason),
             field_host=_sub_row("Size", caption_help=size_help),
         )
+        _render_duration_scale_rows()
         _, opac_help = _layer_gate(
             _dis,
             _gated_help(
@@ -8263,7 +8396,10 @@ def render_trial_filters(
     _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
-    host.markdown("**By annotation**")
+    # The annotation filters are trial level: they read the trial's own star
+    # and tags, never a screen's (`annotations.select_keys`), so the picker
+    # offers trial-level tags only and the panel says where screen ones are.
+    host.markdown("**By trial annotation**")
     if f"{prefix}filter_favorites" not in st.session_state:
         st.session_state[f"{prefix}filter_favorites"] = bool(
             st.session_state.get(f"{prefix}_trial_filters_raw", {}).get(
@@ -8276,10 +8412,11 @@ def render_trial_filters(
         f"{ICONS['favorite']} Favorites only",
         key=f"{prefix}filter_favorites",
         on_change=_apply,
+        help="Keep trials starred as a whole. A star on one screen does not count.",
     )
     # DATA-48: the tags of the dataset this pool comes from — compare mode's B
     # (the `cmp` prefix) may be another dataset, with tags of its own.
-    tags = known_tags(prefix)
+    tags = known_tags(prefix, trial_level=True)
     if tags:
         _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
         _labeled(
@@ -8289,6 +8426,7 @@ def render_trial_filters(
             options=tags,
             key=f"{prefix}filter_req_tags",
             on_change=_apply,
+            help="Keep trials tagged as a whole with any of these.",
         )
         _seed_filter_widget(f"{prefix}filter_exc_tags", tags, [], prefix=prefix)
         _labeled(
@@ -8298,7 +8436,12 @@ def render_trial_filters(
             options=tags,
             key=f"{prefix}filter_exc_tags",
             on_change=_apply,
-            help="e.g. hide everything tagged 'To exclude'.",
+            help="Hide trials tagged as a whole with any of these, e.g. 'To exclude'.",
+        )
+    if has_screen_annotations(prefix):
+        host.caption(
+            "Screen annotations are not used by these filters. They are listed "
+            f"on {ICONS['view_data']} **Data Management → Annotations**."
         )
 
     # UX-26: the filter reset used to appear only in the empty-result diagnostic

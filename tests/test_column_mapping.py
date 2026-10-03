@@ -370,3 +370,82 @@ class TestConfirmingAnAutoDetectedField:
         # And the mapping itself is untouched — this is a claim about who
         # decided, not a change of value.
         assert at.session_state["_m"]["left"] == "IA_LEFT"
+
+
+class TestValuePreview:
+    """A mapped column's first values, and what the app reads them as — so a
+    plausible column name that holds the wrong thing shows it before saving."""
+
+    def test_values_are_read_through_the_loaders_own_conversions(self):
+        import pandas as pd
+
+        from scanpath_studio.data import mapping_value_preview
+
+        df = pd.DataFrame(
+            {
+                "who": ["p1", "p1", "p2"],
+                "item": [1.0, 2.0, 1.0],
+                "dur [s]": [0.12, 0.3, 0.25],
+                "dwell": [120, 300, 250],
+                "left": ["100", "abc", "140"],
+                "label": ["The", "cat", "sat"],
+            }
+        )
+        assert mapping_value_preview(df, "trial", "item") == (
+            "Read as IDs: 1.0 → 1, 2.0 → 2"
+        )
+        assert mapping_value_preview(df, "trial", ["who", "item"]).startswith(
+            "Read as IDs: p1 + 1.0 → p1_1"
+        )
+        assert mapping_value_preview(df, "duration", "dur [s]") == (
+            "0.12 → 120 ms, 0.3 → 300 ms, 0.25 → 250 ms"
+        )
+        assert mapping_value_preview(df, "duration", "dwell") == (
+            "120 ms, 300 ms, 250 ms"
+        )
+        assert "abc (not a number)" in mapping_value_preview(df, "left", "left")
+        assert mapping_value_preview(df, "duration", "label").startswith("Not numbers")
+        assert mapping_value_preview(df, "text", "label") == "“The”, “cat”, “sat”"
+        assert mapping_value_preview(df, "x", "absent") == ""
+
+    @staticmethod
+    def _app():
+        import pandas as pd
+        import streamlit as st
+
+        from scanpath_studio.controls import FIX_FIELD_SPECS, column_mapping_ui
+
+        df = pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["p1", "p1"],
+                "TRIAL_INDEX": [1, 1],
+                "CURRENT_FIX_X": [10.0, 20.0],
+                "CURRENT_FIX_Y": [5.0, 5.0],
+                "dwell [s]": [0.12, 0.3],
+            }
+        )
+        st.session_state["_m"] = column_mapping_ui(
+            df,
+            table_label="Fixations",
+            state_key_prefix="col_map_fix",
+            field_specs=FIX_FIELD_SPECS,
+            proposed={"duration": "dwell [s]", "x": "CURRENT_FIX_X"},
+            only_keys=["duration", "x"],
+            columns_per_row=4,
+        )
+
+    def test_the_preview_rides_on_the_flag(self):
+        at = AppTest.from_function(self._app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        # Amber: on the ✨ confirm button's own tooltip.
+        confirm = at.button(key="col_map_fix_duration_cell_confirm")
+        assert "Values: 0.12 → 120 ms, 0.3 → 300 ms" in confirm.help
+        # Confirmed: an icon of its own beside the flag.
+        confirm.click()
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        previews = [
+            str(m.value) for m in at.markdown if "sps-map-preview" in str(m.value)
+        ]
+        assert any("0.12 → 120 ms" in p for p in previews), previews

@@ -27,6 +27,8 @@ from scanpath_studio import alignment, loading, progress
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
+    RATE_SERIES,
+    READING_TIME_ESTIMATED,
     Measure,
     apply_group,
     available_features,
@@ -34,8 +36,8 @@ from scanpath_studio.aggregation import (
     cohort_word_profile,
     distinct_group_labels,
     ensure_fixation_enrichment,
-    group_effect_size,
     group_mask,
+    group_mean_difference,
     group_word_difference,
     landing_positions,
     measure_values,
@@ -92,6 +94,8 @@ from scanpath_studio.column_names import (
     across_tables,
     active_all,
     from_schema,
+    source_schema,
+    stored_source_recipe,
 )
 from scanpath_studio.column_names import active as active_column_names
 from scanpath_studio.compare_source import (
@@ -103,13 +107,18 @@ from scanpath_studio.compare_source import (
     snapshot_for,
     source_has_raw_gaze,
 )
+from scanpath_studio.computations import anchor as computation_anchor
+from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
+    CITATION,
     DATASET_EDITOR_OPEN_KEY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
+    DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FOCUS_MAPPING_KEY,
@@ -203,7 +212,9 @@ from scanpath_studio.data import (
     read_tables,
     remap_normalized_frame,
     repeat_bases,
+    shareable_frame,
     text_ids,
+    timestamps_synthesized,
     trial_keys,
     trial_mapping_columns,
     user_columns,
@@ -246,6 +257,7 @@ from scanpath_studio.plots import (
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _discard_flagged_fixations,
+    _maybe_add_duration_key,
     _png_pixel_size,
     add_illustration_label,
     animation_clip_frame_ms,
@@ -1590,6 +1602,13 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             else None
         ),
         marker_size_range=viz_settings["marker_size_range"],
+        marker_size_scale=viz_settings.get(
+            "marker_size_scale", DEFAULT_MARKER_SIZE_SCALE
+        ),
+        marker_duration_range=tuple(
+            viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
+        ),
+        duration_size_legend=viz_settings.get("duration_size_legend", True),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
         show_colorbars=viz_settings["show_colorbars"],
@@ -3791,6 +3810,18 @@ def _build_studio_config(
         },
         "sizing": {
             "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
+            "marker_size_scale": str(
+                figure_settings.get("marker_size_scale", DEFAULT_MARKER_SIZE_SCALE)
+            ),
+            "marker_duration_range": [
+                int(s)
+                for s in figure_settings.get(
+                    "marker_duration_range", DEFAULT_MARKER_DURATION_RANGE
+                )
+            ],
+            "duration_size_legend": bool(
+                figure_settings.get("duration_size_legend", True)
+            ),
             "order_font_size": int(figure_settings["order_font_size"]),
             "order_font_color": figure_settings["order_font_color"],
             "base_font_size": int(base_font_size),
@@ -4676,6 +4707,10 @@ def _plan_replay(
         playback_speed=1.0,
         autoplay=True,
         illustration_reasons=None,
+        # The duration-size key is layout only — no frame draws it — so it is
+        # stamped onto the cached replay in `finished_figure`, and toggling it
+        # costs no frame rebuild.
+        duration_size_legend=False,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -4781,6 +4816,13 @@ def _build_and_render_animation(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
         add_illustration_label(fig, reasons)
+        _maybe_add_duration_key(
+            fig,
+            animation_settings,
+            animation_settings.marker_size_range,
+            trial_fixations,
+            anim_inputs["fixations_b"],
+        )
         _annotate_preprocessing(fig, preprocessing)
         if title or caption:
             annotate_figure(fig, title=title, caption=caption)
@@ -4795,6 +4837,7 @@ def _build_and_render_animation(
         tuple(sorted((str(k), repr(v)) for k, v in (preprocessing or {}).items())),
         title,
         caption,
+        bool(animation_settings.duration_size_legend),
     )
     view = _cached_replay_view(
         clip_inputs,
@@ -7873,6 +7916,57 @@ def _measure_picker(
     return MEASURES[labels[chosen]]
 
 
+_COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
+
+
+def _measure_note(host, measure: Measure, observation: str) -> None:
+    """One caption under the measure picker: what the measure is and its unit
+    (quoted from the computation register, VAL-5), what each plotted value
+    is, and a link to the measure's full definition."""
+    entry = measure_entry(measure.column)
+    if entry is None:
+        about, url = "As recorded in the data.", f"{CITATION['docs_url']}glossary/"
+        unit = measure.unit or "count"
+    else:
+        # The register's summaries can end in a tracker id ("(BUG-25)").
+        about = re.sub(r"\s*\([A-Z]+-\d+\)(?=\.?$)", "", entry.summary)
+        url = f"{_COMPUTATIONS_URL}#{computation_anchor(entry.id)}"
+        unit = entry.unit or measure.unit or "count"
+    host.caption(f"{about} Unit: {unit}. {observation} [Definition ↗]({url})")
+
+
+#: Appended to a measure note when the values are z-scored (AN-25).
+_Z_NOTE = " Z-scored within each reader, so in SD units rather than the unit above."
+
+
+def _observation(measure: Measure, normalize: bool = False) -> str:
+    """What one value of a raw-value view (a distribution) is."""
+    one = (
+        "Each value is one fixation."
+        if measure.frame == "fixations"
+        else "Each value is one word in one reading."
+    )
+    return one + (_Z_NOTE if normalize and not measure.is_rate else "")
+
+
+# What each error-bar choice shows, in one line: SD and IQR describe how the
+# values vary, SEM and the bootstrap CI how precisely the centre is known.
+_SPREAD_NOTES = {
+    "SD": "SD: how much the values vary (±1 standard deviation).",
+    "SEM": "SEM: how precisely the mean is known (SD ÷ √n), not how much values vary.",
+    "IQR": "IQR: the middle half of the values (25th to 75th percentile).",
+    "Bootstrap CI": "Bootstrap CI: a 95% interval for the centre, from "
+    "resampling the values — uncertainty, not variation.",
+}
+
+
+def _spread_note(host, spread: str) -> None:
+    """One caption under an error-bar selector saying what the choice shows."""
+    note = _SPREAD_NOTES.get(spread)
+    if note:
+        host.caption(f"{note} [Details ↗]({_COMPUTATIONS_URL}#agg-spread)")
+
+
 def _normalize_toggle(host, *, key, disabled=False):
     """Z-score-within-reader toggle (AN-25)."""
     return bool(
@@ -8043,6 +8137,37 @@ def _apply_min_readers(host, df, min_readers, *, key):
         host.caption(
             f"{ICONS['warning']} {plural(dropped, 'word')} backed by < "
             f"{plural(min_readers, 'reader')} hidden."
+        )
+    return out
+
+
+_RATE_NAMES = {"skip_rate": "skip rate", "regression_in_rate": "regression-in rate"}
+
+
+def _apply_rate_min_readers(host, df, min_readers, *, key):
+    """The min-readers guard for the per-word rates, one series at a time.
+
+    Each rate has its own readers (`aggregation.word_rate_profile`): a word can
+    have a well-supported skip rate and a regression-in rate from one reader.
+    A rate below the guard is blanked, not the word, and a word is dropped only
+    when neither rate is left; the caption counts each series."""
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    notes = []
+    for rate, _n, enough in RATE_SERIES:
+        if rate not in out.columns or enough not in out.columns:
+            continue
+        hidden = ~out[enough] & out[rate].notna()
+        out[rate] = out[rate].where(out[enough])
+        if min_readers > 1 and hidden.any():
+            notes.append(f"{_RATE_NAMES[rate]} for {plural(int(hidden.sum()), 'word')}")
+    out = out[out[[r for r, _n, _e in RATE_SERIES]].notna().any(axis=1)]
+    if notes:
+        host.caption(
+            f"{ICONS['warning']} Hidden, backed by < "
+            f"{plural(min_readers, 'reader')}: {'; '.join(notes)}. Each rate counts "
+            "only the readers who reported it."
         )
     return out
 
@@ -8307,12 +8432,12 @@ def _render_filter_set(words, fixations, *, key, default_label):
     return spec, (label or default_label)
 
 
-def _cohort_readers(
+def _cohort_reader_ids(
     fixations: pd.DataFrame | None, words: pd.DataFrame | None, spec=None
-) -> int:
-    """How many readers a cohort holds: counted on its fixations, or — for a
-    dataset of word measures alone — on its words (BUG-112: an AOI-only
-    dataset's cohorts read "0 readers" beside charts drawn from theirs).
+) -> set[str]:
+    """The readers a cohort holds: read from its fixations, or — for a dataset
+    of word measures alone — from its words (BUG-112: an AOI-only dataset's
+    cohorts read "0 readers" beside charts drawn from theirs).
 
     ``spec`` selects the cohort from whole frames by mask, without copying them.
     """
@@ -8321,8 +8446,15 @@ def _cohort_readers(
             ids = frame["participant_id"]
             if spec:
                 ids = ids[group_mask(frame, spec)]
-            return int(ids.nunique())
-    return 0
+            return set(ids.dropna().astype(str).unique())
+    return set()
+
+
+def _cohort_readers(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None, spec=None
+) -> int:
+    """How many readers a cohort holds (see ``_cohort_reader_ids``)."""
+    return len(_cohort_reader_ids(fixations, words, spec))
 
 
 def _n_readers(count: int) -> str:
@@ -8398,7 +8530,7 @@ def _warn_word_only_group_fields(host, fixations, *specs) -> None:
 
     ``group_mask`` filters per frame, so a word-only spec column leaves the
     fixation frame unfiltered — the *fixation-level* views (distributions for a
-    per-fixation measure, paired bars, effect size) would then silently compare
+    per-fixation measure, paired bars, group means) would then silently compare
     all-vs-all. Surfacing it beats a misleading comparison.
     """
     present = set(getattr(fixations, "columns", []))
@@ -9017,11 +9149,38 @@ def _participant_picker(words, fixations, *, key, host=None, label="Reader"):
     return None
 
 
-def _percentile(series: pd.Series, value) -> float | None:
-    s = pd.to_numeric(series, errors="coerce").dropna()
-    if s.empty or value is None or pd.isna(value):
-        return None
-    return float((s < value).mean() * 100.0)
+def _percentile_among_others(
+    cohort: pd.DataFrame, participant_id, column: str, value
+) -> tuple[float | None, int]:
+    """Where ``value`` falls among the *other* readers' values of ``column``.
+
+    Returns ``(percentile, n)``: the share (0–100) of the other readers with a
+    value for this measure whose value is lower, and how many such readers
+    there are. The selected reader is left out, so with nobody else to compare
+    against the percentile is ``None`` (``n == 0``) rather than a rank against
+    themselves.
+    """
+    if (
+        cohort is None
+        or column not in getattr(cohort, "columns", [])
+        or "participant_id" not in cohort.columns
+    ):
+        return None, 0
+    others = cohort.loc[
+        cohort["participant_id"].astype(str) != str(participant_id), column
+    ]
+    others = pd.to_numeric(others, errors="coerce").dropna()
+    if others.empty or value is None or pd.isna(value):
+        return None, int(others.size)
+    return float((others < value).mean() * 100.0), int(others.size)
+
+
+def _ordinal(number: int) -> str:
+    """``1`` → ``1st``, ``12`` → ``12th``, ``22`` → ``22nd``."""
+    if 10 <= number % 100 <= 20:
+        return f"{number}th"
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
 
 
 def render_per_text_tab(
@@ -9087,7 +9246,7 @@ def render_per_text_tab(
         rate = _c_word_rate(
             words_filtered, text_col, text_id, min_readers, fkey, screen_id
         )
-        rate = _apply_min_readers(st, rate, min_readers, key="ptext6_min_note")
+        rate = _apply_rate_min_readers(st, rate, min_readers, key="ptext6_min_note")
         _chart(make_word_rate_figure(rate, **fw))
         _download_tidy(
             st,
@@ -9126,6 +9285,17 @@ def render_per_text_tab(
         c[3],
         key="ptext_norm",
         disabled=measure.is_rate or view == "Word difficulty on stimulus",
+    )
+    _measure_note(
+        c[0],
+        measure,
+        (
+            f"Each value is one reader on one word (the {agg} of their "
+            "readings of this text)."
+            if view in ("Per-reader profiles", "Word × reader heatmap")
+            else f"Each word's value is the {agg} across its readers."
+        )
+        + (_Z_NOTE if normalize and view != "Word difficulty on stimulus" else ""),
     )
 
     if view == "Per-reader profiles":  # AN-1
@@ -9219,6 +9389,7 @@ def render_per_text_tab(
             help="Band around each word's mean across readers — SD, SEM, IQR, "
             "or a 95% bootstrap confidence interval.",
         )
+        _spread_note(st, spread)
         min_readers = _min_readers_input(st, key="ptext3_min")
         prof = _c_cohort_profile(
             words_filtered,
@@ -9434,6 +9605,7 @@ def render_per_reader_tab(
             return
         kind = c[1].selectbox("Plot", ["violin", "box"], key="prdr7_kind")
         normalize = _normalize_toggle(c[2], key="prdr7_norm", disabled=measure.is_rate)
+        _measure_note(c[0], measure, _observation(measure, normalize))
         frame = fix_e if measure.frame == "fixations" else words_filtered
         groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
         _chart(
@@ -9453,12 +9625,24 @@ def render_per_reader_tab(
             frame_fingerprint(words_filtered),
             frame_fingerprint(fix_e),
         )
+        speed_estimated = summary.get("reading_time_source") == READING_TIME_ESTIMATED
+        if speed_estimated:
+            st.caption(
+                "This data has no fixation timestamps, so reading speed is an "
+                "estimate: the fixations laid end to end by their durations, "
+                "leaving out the time between them."
+            )
         # ENG-36: `st.metric(icon=…)` (1.61). Six numbers in one row read as an
         # undifferentiated wall; the glyph is what lets you find "the speed one"
         # without reading every label. Chosen to say what the number *is*, not to
         # decorate — speed, duration, count, direction of travel.
         specs = [
-            ("wpm", "Reading speed", "{:.0f} wpm", ICONS["reading_speed"]),
+            (
+                "wpm",
+                "Reading speed (estimate)" if speed_estimated else "Reading speed",
+                "{:.0f} wpm",
+                ICONS["reading_speed"],
+            ),
             (
                 "mean_fixation_ms",
                 "Mean fixation",
@@ -9484,21 +9668,23 @@ def render_per_reader_tab(
         cols = st.columns(len(present)) if present else []
         for col, (skey, label, fmt, icon) in zip(cols, present):
             value = summary.get(skey)
-            pct = (
-                _percentile(cohort[skey], value)
-                if skey in getattr(cohort, "columns", [])
-                else None
-            )
+            pct, n_others = _percentile_among_others(cohort, pid, skey, value)
             col.metric(
                 label,
                 fmt.format(value) if value is not None else "—",
-                delta=(f"{pct:.0f}th pct" if pct is not None else None),
+                delta=(
+                    f"{_ordinal(round(pct))} pct of {n_others}"
+                    if pct is not None
+                    else None
+                ),
                 delta_color="off",
                 icon=icon,
             )
         st.caption(
-            f"Reader **{pid}** vs the {max(len(cohort) - 1, 0)} other readers "
-            "in scope (percentiles)."
+            f"Reader **{pid}** vs the other readers in scope: each percentile is "
+            "the share of the other readers with a value for that measure who "
+            "are lower, out of the number shown. None is shown when no other "
+            "reader has a value."
         )
         trials = _c_trial_summary(
             words_filtered,
@@ -9543,12 +9729,25 @@ def render_per_reader_tab(
         if measure is None or measure.frame != "fixations":
             c[0].info("Pick a per-fixation measure (duration / saccade amplitude).")
             return
+        # Numbered fixations are not a time axis: without recorded onsets
+        # `timestamp_ms` is 0, 1, 2, … and only the order is offered.
+        x_options = ["order_in_trial"]
+        if not timestamps_synthesized(fix_e):
+            x_options.append("timestamp_ms")
+        if st.session_state.get("prdr9_x") not in (None, *x_options):
+            del st.session_state["prdr9_x"]
         names = active_all(st.session_state)
         by = c[1].selectbox(
             "X axis",
-            ["order_in_trial", "timestamp_ms"],
+            x_options,
             key="prdr9_x",
             format_func=names.label,
+        )
+        _measure_note(
+            c[0],
+            measure,
+            "Each point is this reader's mean over the fixations at that "
+            "point in their trials.",
         )
         df = metric_over_time(fix_e, measure, participant_id=pid, by=by)
         _chart(
@@ -9613,6 +9812,12 @@ def render_per_reader_tab(
             key="prdr13_agg",
             help="How the measure is combined within each trial (across its words / fixations).",
         )
+        _measure_note(
+            c[0],
+            measure,
+            f"Each point is one trial: the {agg} over its "
+            f"{'fixations' if measure.frame == 'fixations' else 'words'}.",
+        )
         frame = fix_e if measure.frame == "fixations" else words_filtered
         sub = frame[frame["participant_id"].astype(str) == str(pid)].copy()
         if not has_explicit_trial_index(sub):
@@ -9668,7 +9873,7 @@ def render_groups_tab(
         value=False,
         key="groups_compare",
         help="Off: profile a single group. On: define a second group and compare "
-        "A vs B — difference profile, paired bars, effect size, and more.",
+        "A vs B — difference profile, paired bars, group means, and more.",
     )
     if compare:
         render_group_comparison_tab(
@@ -9757,6 +9962,7 @@ def render_per_group_tab(
             return
         kind = c[1].selectbox("Plot", ["violin", "box"], key="pgrp14_kind")
         normalize = _normalize_toggle(c[2], key="pgrp14_norm", disabled=measure.is_rate)
+        _measure_note(c[0], measure, _observation(measure, normalize))
         frame = fix_g if measure.frame == "fixations" else words_g
         vals = measure_values(frame, measure, normalize=normalize)
         _chart(
@@ -9786,6 +9992,12 @@ def render_per_group_tab(
             help="How each word's value is combined across the group's readers.",
         )
         spread = c[3].selectbox("Spread", _SPREAD_OPTIONS, key="pgrp15_spread")
+        _measure_note(
+            st,
+            measure,
+            f"Each point is one word: the {agg} across the group's readers.",
+        )
+        _spread_note(st, spread)
         min_readers = _min_readers_input(st, key="pgrp15_min")
         # BUG-26: same single-screen scoping as the Per text views. There is no
         # free column on this row for a picker, so the helper's default (the
@@ -9904,6 +10116,13 @@ def render_per_group_tab(
         show_readers = c[2].checkbox(
             "Per-reader behind", value=False, key="pgrp17_readers"
         )
+        _measure_note(
+            c[0],
+            measure,
+            f"Each point is the mean, over the trials at that position, of each "
+            f"trial's {agg} over its "
+            f"{'fixations' if measure.frame == 'fixations' else 'words'}.",
+        )
         frame = fix_g if measure.frame == "fixations" else words_g
         sub = frame.copy()
         sub["trial_index"] = derive_trial_index(sub)
@@ -9944,6 +10163,17 @@ def render_per_group_tab(
         )
 
 
+_GROUP_MEANS_VIEW = "Group means & difference"
+_GROUP_MEANS_VIEW_LEGACY = "Effect size + test"
+
+
+def _fmt_stat(value, digits: int = 2) -> str:
+    """A summary number, or an em dash when there is none (NaN / None)."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return "—"
+    return f"{value:.{digits}f}"
+
+
 def render_group_comparison_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -9959,8 +10189,9 @@ def render_group_comparison_tab(
     """*How do two groups differ?* — two cohorts side by side (AN-18…22)."""
     st.caption(
         "Define **two groups** and compare them: overlaid distributions, the "
-        "per-word difference profile, paired summary bars, an effect size + test, "
-        "and a stacked two-group word heatmap. Exploratory — not pre-registered."
+        "per-word difference profile, paired summary bars, the two group means "
+        "and their difference, and a stacked two-group word heatmap. "
+        "Descriptive — no significance tests."
     )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
@@ -9975,19 +10206,30 @@ def render_group_comparison_tab(
     # into B; from here on both read apart, the caption included.
     label_a, label_b = distinct_group_labels(label_a, label_b)
     _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
-    readers_a = _cohort_readers(fixations_filtered, words_filtered, spec_a)
-    readers_b = _cohort_readers(fixations_filtered, words_filtered, spec_b)
+    ids_a = _cohort_reader_ids(fixations_filtered, words_filtered, spec_a)
+    ids_b = _cohort_reader_ids(fixations_filtered, words_filtered, spec_b)
+    readers_a, readers_b = len(ids_a), len(ids_b)
+    shared = len(ids_a & ids_b)
     st.caption(
         f"**{label_a}**: {_n_readers(readers_a)} · **{label_b}**: "
-        f"{_n_readers(readers_b)}."
+        f"{_n_readers(readers_b)}"
+        + (
+            f" · **{shared} in both**, so the two groups are not independent."
+            if shared
+            else " · no reader in both."
+        )
     )
+    # The view was "Effect size + test" until its significance tests were
+    # removed; a session still holding that value opens its replacement.
+    if st.session_state.get("cmp_view") == _GROUP_MEANS_VIEW_LEGACY:
+        st.session_state["cmp_view"] = _GROUP_MEANS_VIEW
     view = st.selectbox(
         "View",
         [
             "Overlaid distributions",
             "Difference word profile",
             "Paired summary bars",
-            "Effect size + test",
+            _GROUP_MEANS_VIEW,
             "Two-group word heatmap",
         ],
         key="cmp_view",
@@ -10007,6 +10249,7 @@ def render_group_comparison_tab(
             return
         kind = c[1].selectbox("Plot", ["violin", "box"], key="cmp18_kind")
         normalize = _normalize_toggle(c[2], key="cmp18_norm", disabled=measure.is_rate)
+        _measure_note(c[0], measure, _observation(measure, normalize))
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
         groups = two_group_values(
             frame,
@@ -10050,6 +10293,12 @@ def render_group_comparison_tab(
             help="How each word's value is combined across each group's readers, before A−B.",
         )
         min_readers = _min_readers_input(c[3], key="cmp19_min", label="Min/grp")
+        _measure_note(
+            st,
+            measure,
+            f"Each point is one word: group A's {agg} across its readers minus "
+            f"group B's.",
+        )
         diff = group_word_difference(
             words_filtered,
             text_col,
@@ -10108,11 +10357,16 @@ def render_group_comparison_tab(
             "Aggregate",
             _AGG_OPTIONS,
             key="cmp20_agg",
-            help="How each measure is combined across each group's readers.",
+            help="How each measure's values are combined within each group: all its words or fixations together, across readers.",
         )
         spread = c[1].selectbox(
             "Error bars", _SPREAD_OPTIONS, index=1, key="cmp20_spread"
         )
+        c[0].caption(
+            f"Each bar is the {agg} of all the group's values for that measure — "
+            "its words or fixations, pooled across readers."
+        )
+        _spread_note(c[1], spread)
         measures = [MEASURES[labels[m]] for m in chosen]
         if not measures:
             st.info("Pick at least one measure.")
@@ -10147,58 +10401,89 @@ def render_group_comparison_tab(
                 counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
             ),
         )
-    elif view == "Effect size + test":  # AN-21
-        c = st.columns([3, 2])
-        measure = _measure_picker(
-            words_filtered, fixations_filtered, key="cmp_measure", host=c[0]
-        )
+    elif view == _GROUP_MEANS_VIEW:  # AN-21 — descriptive only
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure")
         if measure is None:
             return
-        test = c[1].selectbox("Test", ["Mann–Whitney", "t-test"], key="cmp21_test")
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
         group_a, group_b = apply_group(frame, spec_a), apply_group(frame, spec_b)
-        # BUG-82: test readers, not pooled words/fixations — one reader's
-        # observations are not independent of each other.
+        # BUG-82: summarize readers, not pooled words/fixations — one reader's
+        # many observations would otherwise outweigh another reader's few.
         a, b = reader_means(group_a, measure), reader_means(group_b, measure)
-        unit = "readers"
-        if a is None or b is None:
+        by_reader = a is not None and b is not None
+        if not by_reader:
             a, b = measure_values(group_a, measure), measure_values(group_b, measure)
-            unit = "observations"
-        res = group_effect_size(a, b, test=test)
+        _measure_note(
+            st,
+            measure,
+            "Each value is one reader's mean; a group's mean is the mean of those."
+            if by_reader
+            else _observation(measure),
+        )
+        res = group_mean_difference(a, b)
+        unit = "readers" if by_reader else "values"
         cols = st.columns(4)
         cols[0].metric(
             f"{label_a} mean",
-            f"{res['mean_a']:.2f}",
-            delta=f"n={res['n_a']}",
+            _fmt_stat(res["mean_a"]),
+            delta=f"{res['n_a']} {unit}",
             delta_color="off",
         )
         cols[1].metric(
             f"{label_b} mean",
-            f"{res['mean_b']:.2f}",
-            delta=f"n={res['n_b']}",
+            _fmt_stat(res["mean_b"]),
+            delta=f"{res['n_b']} {unit}",
             delta_color="off",
         )
-        cols[2].metric("Mean difference", f"{res['mean_diff']:.2f}")
-        cols[3].metric("Cohen's d", f"{res['cohen_d']:.3f}")
-        p = res.get("p_value")
-        p_txt = (
-            "—"
-            if p is None or (isinstance(p, float) and np.isnan(p))
-            else ("< 0.001" if p < 0.001 else f"{p:.3f}")
+        cols[2].metric("Difference (A − B)", _fmt_stat(res["mean_diff"]))
+        # Cohen's d pools the two groups' spreads as if they were separate
+        # samples, so it is shown only when no reader is in both groups.
+        show_d = by_reader and not shared
+        cols[3].metric(
+            "Standardized difference",
+            _fmt_stat(res["cohen_d"]) if show_d else "—",
+            help="Cohen's d: the difference divided by the pooled SD of the "
+            "reader means. Descriptive; shown only when the groups share no "
+            "reader.",
         )
-        st.markdown(
-            f"**{test}** — statistic = {res['statistic']:.3g}, p = {p_txt}. "
-            f"_Exploratory, not pre-registered._"
-        )
-        st.caption(
-            "n = readers: each reader contributes the mean of their values, so "
-            "the test compares readers rather than pooled words or fixations, "
-            "which are not independent of each other. Readers in both groups "
-            "(e.g. a within-reader condition) count once in each."
-            if unit == "readers"
-            else "n = observations — this dataset names no readers, so the test "
-            "pools every value; observations from one reader are not "
-            "independent, so read the p-value as descriptive only."
+        if not by_reader:
+            note = (
+                "This dataset names no readers, so n counts words or fixations "
+                "and the standardized difference is not shown."
+            )
+        else:
+            note = "n counts the readers with a value for this measure."
+            if shared:
+                note += (
+                    f" {shared} reader{'' if shared == 1 else 's'} in both "
+                    "groups contribute to each mean, so the difference is not "
+                    "between separate people and the standardized difference "
+                    "is not shown."
+                )
+        st.caption(note)
+        _download_tidy(
+            st,
+            pd.DataFrame(
+                {
+                    "group": [label_a, label_b],
+                    "mean": [res["mean_a"], res["mean_b"]],
+                    "n": [res["n_a"], res["n_b"]],
+                    "unit": [unit, unit],
+                }
+            ),
+            name=f"group_means_{measure.key}.csv",
+            key="dl_cmp21",
+            recipe=dict(
+                view=view,
+                groups=[(label_a, spec_a), (label_b, spec_b)],
+                measure=measure,
+                aggregation="mean",
+                counts={
+                    "group_a_readers": readers_a,
+                    "group_b_readers": readers_b,
+                    "readers_in_both": shared,
+                },
+            ),
         )
     elif view == "Two-group word heatmap":  # AN-22
         c = st.columns([3, 1, 1])
@@ -10222,6 +10507,12 @@ def render_group_comparison_tab(
             _AGG_OPTIONS,
             key="cmp22_agg",
             help="How each word's value is combined across each group's readers.",
+        )
+        _measure_note(
+            st,
+            measure,
+            f"Each cell is one word in one group: the {agg} across that group's "
+            "readers.",
         )
         long = two_group_word_profiles(
             words_filtered,
@@ -11041,7 +11332,7 @@ def _render_raw_table(
     single chokepoint (``export.strip_local_paths``).
     """
     # DATA-49: bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    shown = drop_internal_columns(df)
+    shown = shareable_frame(df)
     # DATA-66: headed by the dataset's own names (``table`` says whose).
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
     # A copy of a partner from the same source column is shown once — left out
@@ -12490,6 +12781,12 @@ def _apply_remap() -> None:
     # stored before the join recorded provenance folds a repeat's copy of the
     # boxes back into the trial it copied (`data.repeat_bases`).
     repeat_of = repeat_bases(stored.get("fixations"))
+    # Share → Code's record of how a script loads this dataset's files: a
+    # remap is restated in the files' own names, an added table is its own.
+    recipe = stored_source_recipe(stored)
+    recipe_schemas = dict(recipe.get("schemas") or {})
+    unresolved = dict(recipe.get("unresolved") or {})
+    steps = list(recipe.get("steps") or [])
     for table_key in ("words", "fixations", "raw_gaze"):
         frame = stored.get(table_key)
         if frame is None or frame.empty or table_key not in pending:
@@ -12500,6 +12797,8 @@ def _apply_remap() -> None:
         )
         new_schemas[table_key] = schema
         earlier = ColumnNames.from_payload(new_names.get(table_key))
+        recipe_schemas[table_key], missing = source_schema(schema, earlier)
+        unresolved[table_key] = list(missing)
         new_names[table_key] = (
             from_schema(table_key, schema, frame.columns)
             .through(earlier)
@@ -12526,6 +12825,7 @@ def _apply_remap() -> None:
                 # only point it can: `normalize_words` expects one row per box.
                 if st.session_state.get(aggregate_key(name)):
                     raw = aggregate_char_boxes(raw, schema)
+                    steps.append("aggregate_char_boxes")
                 fresh = normalize_words(raw, schema)
                 other = new_entry.get("fixations")
                 if not isinstance(other, pd.DataFrame) or other.empty:
@@ -12552,6 +12852,8 @@ def _apply_remap() -> None:
             }
             return
         new_schemas[table_key] = schema
+        recipe_schemas[table_key] = dict(schema)
+        unresolved.pop(table_key, None)
         # An added table is raw: its names are its own.
         new_names[table_key] = from_schema(table_key, schema, raw.columns).to_payload()
     # DATA-39 — the same cross-frame fixups for the tables this save *remapped*,
@@ -12598,6 +12900,12 @@ def _apply_remap() -> None:
             new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
     new_entry["column_names"] = new_names
+    new_entry["source_recipe"] = {
+        **recipe,
+        "schemas": recipe_schemas,
+        "steps": list(dict.fromkeys(steps)),
+        "unresolved": {t: f for t, f in unresolved.items() if f},
+    }
     # Recompute the composite trial components from the new trial mapping so the
     # cascading trial picker stays in sync (mirrors the wizard finalize).
     trial_schema = next(
@@ -13916,6 +14224,7 @@ def render_data_inspection_tab(
     raw_gaze_filtered: pd.DataFrame,
     *,
     annotation_trials=None,
+    open_trials=None,
     dataset_name: str = "",
     scope: str | None = None,
 ) -> None:
@@ -13927,7 +14236,8 @@ def render_data_inspection_tab(
     in their fixed order — and, UX-174 r2, **Annotations**: every annotation on
     the dataset's trials (``annotation_trials``, its ``(participant, trial)``
     pairs before any filtering), to export, import or delete. Without
-    ``annotation_trials`` the tab is left off.
+    ``annotation_trials`` the tab is left off. ``open_trials`` — the same
+    pairs after the trial filters — gives its rows an **Open** button.
 
     UX-52 gave the section one level of hierarchy and folded the bulk away —
     "the answer stays open, the appendix folds". This round unfolded the raw
@@ -13970,7 +14280,11 @@ def render_data_inspection_tab(
     if annotation_trials is not None:
         *raw_tabs, annotations_tab = raw_tabs
         with annotations_tab:
-            render_dataset_annotations(annotation_trials, dataset_name=dataset_name)
+            render_dataset_annotations(
+                annotation_trials,
+                dataset_name=dataset_name,
+                open_trials=open_trials,
+            )
     _fill_raw_data_tabs(
         raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered, scope=scope
     )

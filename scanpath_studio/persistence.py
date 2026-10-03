@@ -56,6 +56,7 @@ from .session_keys import (
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
     compare_state_keys,
+    keep_legacy_marker_scale,
 )
 
 SCHEMA_VERSION = 1
@@ -621,9 +622,10 @@ def _restorable_session(stored: Any) -> dict:
         if key == DESIGN_PRESETS:
             # The design library is the user's own work: keep every well-formed
             # design rather than all-or-nothing.
+            # One saved before the fixed duration scale keeps the relative one.
             if isinstance(value, dict):
                 clean[key] = {
-                    str(name): dict(design)
+                    str(name): keep_legacy_marker_scale(design)
                     for name, design in value.items()
                     if isinstance(design, dict)
                 }
@@ -637,7 +639,9 @@ def _restorable_session(stored: Any) -> dict:
                 key,
                 value,
             )
-    return clean
+    # A session saved before the fixed duration scale reopens on the relative
+    # one it was drawn with, as an old design or Share link does.
+    return keep_legacy_marker_scale(clean)
 
 
 def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) -> int:

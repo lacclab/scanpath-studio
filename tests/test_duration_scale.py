@@ -477,6 +477,14 @@ def test_a_link_with_the_scale_reopens_on_it():
     }
 
 
+def test_the_size_key_toggle_alone_does_not_mark_an_old_link():
+    # `duration_size_legend` came in with the scale, so it cannot mean the
+    # link predates it.
+    seen = _open_link({"trial_id": "t1", "duration_size_legend": "0"})
+    assert seen["global_marker_size_scale"] is None  # the seeded default
+    assert seen["global_duration_size_legend"] is False
+
+
 def test_a_bare_trial_link_gets_the_new_default():
     seen = _open_link({"trial_id": "t1"})
     assert seen["global_marker_size_scale"] is None  # left to the seeded default

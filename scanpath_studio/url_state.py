@@ -374,8 +374,8 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
     "saccade_render_mode": "global_saccade_render_mode",
-    # The duration scale: always emitted (it is seeded), which is what lets the
-    # reader tell a link that predates it — see `_apply_url_preset`.
+    # The duration scale: always emitted (it is seeded). A link carrying layer
+    # toggles but no scale opens on the relative one — see `_apply_url_preset`.
     "marker_size_scale": "global_marker_size_scale",
     "illustration_label": "global_illustration_label",
     # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
@@ -974,13 +974,15 @@ def _apply_url_preset() -> str | None:
             snapped_from_link.add(state_key)
         st.session_state.setdefault(state_key, value)
 
-    # The fixed duration scale is the default for a new figure, but a Share link
-    # copied before it existed was drawn on the relative scale. Every link
-    # carries the view toggles (seeded, so always emitted) and now the scale
-    # too, so toggles without a scale mark a link that predates it — reopen it
-    # as it was shared. A hand-written `?trial_id=` link carries neither and
+    # A link carrying layer toggles but no `marker_size_scale` opens on the
+    # relative scale. Share has emitted the scale since the fixed scale became
+    # the default, and the toggles always, so that is a link copied before it,
+    # drawn relative. `duration_size_legend` is left out of the check: it came
+    # in with the scale. A hand-written `?trial_id=` link carries no toggle and
     # gets the new default.
-    if "marker_size_scale" not in qp and any(k in qp for k in _SHARE_TOGGLE_PARAMS):
+    if "marker_size_scale" not in qp and any(
+        k in qp for k in _SHARE_TOGGLE_PARAMS if k != "duration_size_legend"
+    ):
         st.session_state.setdefault(
             "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
         )

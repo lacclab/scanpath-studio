@@ -213,6 +213,7 @@ from scanpath_studio.data import (
     shareable_frame,
     text_ids,
     timestamps_synthesized,
+    trial_id_series,
     trial_keys,
     trial_mapping_columns,
     user_columns,
@@ -13335,6 +13336,322 @@ def _pending_canvas_estimate(
     )
 
 
+#: The fields the pending-change preview spells out: schema key → the stored
+#: frame's canonical column, and whether the field is an id (else a coordinate).
+_PREVIEW_CHANGE_FIELDS = (
+    ("participant", "participant_id", True),
+    ("trial", "trial_id", True),
+    ("screen_id", "screen_id", True),
+    ("text_id", "text_id", True),
+    ("x", "x", False),
+    ("y", "y", False),
+)
+_PREVIEW_FIELD_LABELS = {
+    "participant": "Participant ID",
+    "trial": "Trial ID",
+    "screen_id": "Screen ID",
+    "text_id": "Text ID",
+    "x": "X",
+    "y": "Y",
+}
+#: The rows the preview reads: enough to find a few distinct values.
+_PREVIEW_HEAD = 200
+
+
+def _pending_field_values(
+    frame: pd.DataFrame, key: str, column, is_id: bool
+) -> pd.Series:
+    """What ``column`` gives field ``key`` on ``frame``'s rows, as text."""
+    if not column:
+        if key == "participant":
+            return pd.Series("(one reader)", index=frame.index)
+        if key == "text_id":
+            # Normalization falls back to the trial id (`from_schema`).
+            return pd.Series("(the trial id)", index=frame.index)
+        return pd.Series("(none)", index=frame.index)
+    columns = [str(c) for c in trial_mapping_columns(column)]
+    if any(c not in frame.columns for c in columns):
+        return pd.Series("(none)", index=frame.index)
+    if is_id:
+        return trial_id_series(frame, column).astype(str)
+    values = pd.to_numeric(frame[columns[0]], errors="coerce")
+    return values.map(lambda v: "—" if pd.isna(v) else f"{v:,.6g}")
+
+
+def pending_value_changes(
+    frame: pd.DataFrame, schema: dict, *, limit: int = 3
+) -> list[dict]:
+    """A few rows of what a pending remap does to ``frame``'s ids and
+    coordinates — ``{"field", "now", "after"}`` per changed field, the values
+    paired row by row (``now[i]`` becomes ``after[i]``).
+
+    Pure, and cheap: it reads the head of the stored frame, whose canonical
+    columns are what the dataset says now, through the pending mapping's
+    columns (the same composition normalization uses, `data.trial_id_series`).
+    A field whose pending column is its own canonical one is unchanged and
+    left out, so an untouched editor previews nothing.
+    """
+    head = frame.head(_PREVIEW_HEAD)
+    rows: list[dict] = []
+    for key, canonical, is_id in _PREVIEW_CHANGE_FIELDS:
+        if key not in schema:
+            continue
+        pending = schema.get(key)
+        parts = [str(c) for c in trial_mapping_columns(pending)] if pending else []
+        present = canonical in frame.columns
+        if parts == ([canonical] if present else []):
+            continue
+        if key == "text_id" and not parts and not present:
+            continue
+        now = (
+            _pending_field_values(head, key, canonical, is_id)
+            if present
+            else _pending_field_values(head, key, None, is_id)
+        )
+        after = _pending_field_values(head, key, pending, is_id)
+        if now.equals(after):
+            # Another spelling of the same values — a composite Trial ID the
+            # editor seeds as its parts, say — changes nothing.
+            continue
+        pairs = pd.DataFrame({"now": now, "after": after}).drop_duplicates().head(limit)
+        rows.append(
+            {
+                "field": key,
+                "now": pairs["now"].tolist(),
+                "after": pairs["after"].tolist(),
+            }
+        )
+    return rows
+
+
+def _pending_keys(frame: pd.DataFrame, schema: dict, fields: tuple) -> pd.DataFrame:
+    """``frame``'s id columns as the pending mapping would build them."""
+    return pd.DataFrame(
+        {
+            key: _pending_field_values(frame, key, schema.get(key), True)
+            for key in fields
+        }
+    )
+
+
+def _current_keys(frame: pd.DataFrame, fields: tuple) -> pd.DataFrame:
+    canon = {key: column for key, column, _ in _PREVIEW_CHANGE_FIELDS}
+    return pd.DataFrame(
+        {
+            key: (
+                frame[canon[key]].astype(str)
+                if canon[key] in frame.columns
+                else pd.Series("(one reader)", index=frame.index)
+            )
+            for key in fields
+        }
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_pending_census(
+    _frames: dict,
+    _metadata: dict,
+    pending_json: str,
+    fingerprints: tuple,
+) -> list[dict]:
+    """``pending_census``, cached on the frames' fingerprints and the mapping."""
+    return pending_census(_frames, json.loads(pending_json), _metadata)
+
+
+def pending_census(frames: dict, pending: dict, metadata: dict) -> list[dict]:
+    """Counts before and after a pending remap — ``{"what", "now", "after"}``.
+
+    Trials (and screens, where the data has them) as the mapping would split
+    them, and whether what hangs off those ids still finds them: the word boxes
+    the fixations' trials point at, and an attached participant or trial table.
+    Reads every row, which is why the editor runs it only on request.
+    """
+    rows: list[dict] = []
+    fix = frames.get("fixations")
+    words = frames.get("words")
+    reading = fix if isinstance(fix, pd.DataFrame) and not fix.empty else words
+    if not isinstance(reading, pd.DataFrame) or reading.empty:
+        return rows
+    table = "fixations" if reading is fix else "words"
+    schema = pending.get(table) or {}
+    trial_fields = ("participant", "trial")
+    now = _current_keys(reading, trial_fields)
+    after = _pending_keys(reading, schema, trial_fields)
+    rows.append(
+        {
+            "what": "Trials",
+            "now": len(now.drop_duplicates()),
+            "after": len(after.drop_duplicates()),
+        }
+    )
+    if "screen_id" in reading.columns or schema.get("screen_id"):
+        screen_fields = (*trial_fields, "screen_id")
+        rows.append(
+            {
+                "what": "Screens",
+                "now": len(_current_keys(reading, screen_fields).drop_duplicates())
+                if "screen_id" in reading.columns
+                else len(now.drop_duplicates()),
+                "after": len(
+                    _pending_keys(reading, schema, screen_fields).drop_duplicates()
+                ),
+            }
+        )
+    if (
+        table == "fixations"
+        and isinstance(words, pd.DataFrame)
+        and not words.empty
+        and "trial_id" in words.columns
+    ):
+        word_schema = pending.get("words") or {}
+        trials_now = set(now["trial"])
+        boxes_now = set(words["trial_id"].astype(str))
+        trials_after = set(after["trial"])
+        boxes_after = (
+            set(_pending_keys(words, word_schema, ("trial",))["trial"])
+            if word_schema
+            else boxes_now
+        )
+        rows.append(
+            {
+                "what": "Trials with word boxes",
+                "now": f"{len(trials_now & boxes_now)} of {len(trials_now)}",
+                "after": f"{len(trials_after & boxes_after)} of {len(trials_after)}",
+            }
+        )
+    readers = metadata.get("participants")
+    if isinstance(readers, pd.DataFrame) and "participant_id" in readers.columns:
+        known = set(readers["participant_id"].astype(str))
+        before, later = set(now["participant"]), set(after["participant"])
+        rows.append(
+            {
+                "what": "Readers in the participant table",
+                "now": f"{len(before & known)} of {len(before)}",
+                "after": f"{len(later & known)} of {len(later)}",
+            }
+        )
+    trials = metadata.get("trials")
+    if isinstance(trials, pd.DataFrame) and "trial_id" in trials.columns:
+        by_reader = "participant_id" in trials.columns
+        cols = ["participant", "trial"] if by_reader else ["trial"]
+        table_cols = ["participant_id", "trial_id"] if by_reader else ["trial_id"]
+        known = set(map(tuple, trials[table_cols].astype(str).to_numpy()))
+        before = set(map(tuple, now[cols].to_numpy()))
+        later = set(map(tuple, after[cols].to_numpy()))
+        rows.append(
+            {
+                "what": "Trials in the trial table",
+                "now": f"{len(before & known)} of {len(before)}",
+                "after": f"{len(later & known)} of {len(later)}",
+            }
+        )
+    return rows
+
+
+#: The editor asked for the pending-change census (a `_remap_*` key, so it ends
+#: with the edit).
+_PREVIEW_CENSUS_KEY = "_remap_preview_census"
+
+
+def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> None:
+    """What ✅ Save changes would do to the ids and coordinates — before it does.
+
+    A changed pick is otherwise only a different column name in its select,
+    and its effect (readings merged by a coarser Trial ID, a metadata table
+    that no longer finds its readers) shows after the save. Shown only once a
+    stored table's id or coordinate mapping differs from what is saved: a few
+    rows of now → after (`pending_value_changes`), and on request the counts and
+    joins (`pending_census`), which read every row.
+    """
+    names_by_table = stored.get("column_names") or {}
+    changes = []
+    for table in ("fixations", "words", "raw_gaze"):
+        frame = stored.get(table)
+        schema = pending.get(table)
+        if not isinstance(frame, pd.DataFrame) or frame.empty or not schema:
+            continue
+        for row in pending_value_changes(frame, schema):
+            changes.append((table, row))
+    if not changes:
+        st.session_state.pop(_PREVIEW_CENSUS_KEY, None)
+        return
+    box = st.container(border=True, key=f"remap_preview_{name}")
+    box.markdown(f"**{ICONS['preview']} What Save changes will do**")
+    lines = []
+    for table, row in changes:
+        names = ColumnNames.from_payload(names_by_table.get(table))
+        column = (pending.get(table) or {}).get(row["field"])
+        source = (
+            " + ".join(names.display(c) for c in trial_mapping_columns(column))
+            if column
+            else "made by the app"
+        )
+        pairs = ", ".join(
+            f"`{a}` → `{b}`" if a != b else f"`{a}`"
+            for a, b in zip(row["now"], row["after"], strict=True)
+        )
+        lines.append(
+            f"- **{_TABLE_LABELS[table]} · {_PREVIEW_FIELD_LABELS[row['field']]}** "
+            f"from {source}: {pairs}"
+        )
+    box.markdown("\n".join(lines))
+    signature = _editor_signature(pending, {})
+    if st.session_state.get(_PREVIEW_CENSUS_KEY) != signature:
+        box.button(
+            f"{ICONS['search']} Count trials and check joins",
+            key=f"remap_preview_census_{name}",
+            on_click=lambda: st.session_state.__setitem__(
+                _PREVIEW_CENSUS_KEY, signature
+            ),
+            help="Count the trials and screens this mapping makes, and check "
+            "that the word boxes and any attached participant or trial table "
+            "still find them. Reads every row.",
+        )
+        return
+    from scanpath_studio import metadata as md
+
+    frames = {
+        table: stored.get(table)
+        for table in ("words", "fixations")
+        if isinstance(stored.get(table), pd.DataFrame)
+    }
+    participant_table = st.session_state.get(md.SESSION_KEY)
+    trial_table = st.session_state.get(md.TRIAL_SESSION_KEY)
+    metadata = {
+        "participants": getattr(participant_table, "frame", None),
+        "trials": getattr(trial_table, "frame", None),
+    }
+    census = _c_pending_census(
+        frames,
+        metadata,
+        json.dumps(pending, sort_keys=True, default=str),
+        (
+            *(frame_fingerprint(f) for f in frames.values()),
+            *(
+                frame_fingerprint(f) if isinstance(f, pd.DataFrame) else None
+                for f in metadata.values()
+            ),
+        ),
+    )
+    box.dataframe(
+        pd.DataFrame(
+            [
+                {"": r["what"], "Now": str(r["now"]), "After saving": str(r["after"])}
+                for r in census
+            ]
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    if any(r["what"] == "Trials" and int(r["after"]) < int(r["now"]) for r in census):
+        box.warning(
+            "This mapping makes fewer trials: some readings would be joined into "
+            "one scanpath.",
+            icon=ICONS["warning"],
+        )
+
+
 def _render_remap_editor(
     name: str, stored: dict, uploads_host=None, setup_host=None
 ) -> None:
@@ -13376,6 +13693,7 @@ def _render_remap_editor(
     )
     pending: dict = _render_remap_fields(name, stored, problems, composite, added)
     st.session_state["_remap_pending_schemas"] = pending
+    _render_pending_change_preview(name, stored, pending)
 
     # The add and edit flows now share the same three-column Recording setup
     # renderer. Editing starts from the saved values and publishes only when

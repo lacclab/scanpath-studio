@@ -1405,3 +1405,122 @@ class TestEditorEstimateUsesPendingMapping:
             1500,
             1000,
         )
+
+
+def _two_readings() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Two readings of one text by one reader (trials r1/r2, both in block
+    "b1") — the case a coarser Trial ID silently merges."""
+    raw_fix = pd.DataFrame(
+        {
+            "subj": ["p1"] * 4,
+            "tr": ["r1", "r1", "r2", "r2"],
+            "block": ["b1"] * 4,
+            "fx": [10.0, 20.0, 30.0, 40.0],
+            "fy": [5.0, 5.0, 5.0, 5.0],
+            "alt_x": [110.0, 120.0, 130.0, 140.0],
+            "dur": [100, 100, 100, 100],
+        }
+    )
+    schema = {
+        "participant": "subj",
+        "trial": "tr",
+        "x": "fx",
+        "y": "fy",
+        "duration": "dur",
+    }
+    fixations = normalize_fixations(raw_fix, schema, keep_columns={"block", "alt_x"})
+    raw_words = pd.DataFrame(
+        {
+            "tr": ["r1", "r2"],
+            "wid": [1, 1],
+            "w": ["Hi", "Hi"],
+            "x": [0, 0],
+            "y": [0, 0],
+            "width": [50, 50],
+            "height": [20, 20],
+        }
+    )
+    words = normalize_words(
+        raw_words,
+        {
+            "trial": "tr",
+            "word_id": "wid",
+            "text": "w",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+        },
+    )
+    return words, fixations
+
+
+_IDENTITY_PICKS = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "text_id": "text_id",
+    "x": "x",
+    "y": "y",
+}
+
+
+class TestPendingChangePreview:
+    """✏️ Edit dataset says what ✅ Save changes will do to the ids and
+    coordinates before it does — a few rows always, the counts and joins on
+    request."""
+
+    def test_an_untouched_mapping_previews_nothing(self):
+        from scanpath_studio.tabs import pending_value_changes
+
+        _words, fixations = _two_readings()
+        assert pending_value_changes(fixations, dict(_IDENTITY_PICKS)) == []
+
+    def test_a_changed_pick_shows_rows_now_and_after(self):
+        from scanpath_studio.tabs import pending_value_changes
+
+        _words, fixations = _two_readings()
+        pending = {**_IDENTITY_PICKS, "trial": "block", "x": "alt_x"}
+        rows = {row["field"]: row for row in pending_value_changes(fixations, pending)}
+        assert set(rows) == {"trial", "x"}
+        assert rows["trial"]["now"] == ["r1", "r2"]
+        assert rows["trial"]["after"] == ["b1", "b1"]
+        assert rows["x"]["now"][:2] == ["10", "20"]
+        assert rows["x"]["after"][:2] == ["110", "120"]
+
+    def test_the_census_counts_merged_readings_and_broken_joins(self):
+        from scanpath_studio.tabs import pending_census
+
+        words, fixations = _two_readings()
+        pending = {"fixations": {**_IDENTITY_PICKS, "trial": "block"}}
+        readers = pd.DataFrame({"participant_id": ["p1"], "age": [30]})
+        trials = pd.DataFrame({"trial_id": ["r1", "r2"], "cond": ["a", "b"]})
+        census = {
+            row["what"]: (row["now"], row["after"])
+            for row in pending_census(
+                {"words": words, "fixations": fixations},
+                pending,
+                {"participants": readers, "trials": trials},
+            )
+        }
+        # Two readings become one scanpath…
+        assert census["Trials"] == (2, 1)
+        # …which no word box and no trial-table row is keyed by any more.
+        assert census["Trials with word boxes"] == ("2 of 2", "0 of 1")
+        assert census["Trials in the trial table"] == ("2 of 2", "0 of 1")
+        # The readers are untouched.
+        assert census["Readers in the participant table"] == ("1 of 1", "1 of 1")
+
+    def test_the_editor_shows_it_and_counts_on_request(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_setup_file_editor_app, default_timeout=30)
+        at.run()
+        assert not [m for m in at.markdown if "What Save changes will do" in m.value]
+        at.selectbox(key="remap_Lab_fixations_x").set_value("alt_x").run()
+        assert not at.exception, at.exception
+        preview = next(m.value for m in at.markdown if "Fixations · X" in m.value)
+        assert "`30` → `333`" in preview
+        at.button(key="remap_preview_census_Lab").click().run()
+        assert not at.exception, at.exception
+        table = at.dataframe[-1].value
+        assert table.iloc[0].tolist() == ["Trials", "1", "1"]

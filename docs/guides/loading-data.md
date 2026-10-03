@@ -63,7 +63,11 @@ values from assumed ones.
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 **Edit dataset** opens under the list, below the open dataset's counts and
 tables, and changes its name, column mapping and recording setup, or adds a
-table it is missing; its mapped fields show the same value preview. Its
+table it is missing; its mapped fields show the same value preview. On an
+added dataset, changing an ID or coordinate column shows a few values as they
+are now and as they will be after saving, and **:material/search: Count trials and check
+joins** says whether readings would merge or the word boxes or a metadata table
+would stop matching. Its
 **:material/download: Save setup** writes the mapping in your files' own column names, so
 whoever has the same files can restore it on the add screen; anything a
 restore cannot redo by itself is listed beside the button. For the demo and

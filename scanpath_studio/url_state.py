@@ -307,8 +307,9 @@ def _parse_align_algorithm(v) -> str:
 # reads/writes.
 # `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
 # so the two sides can't drift. Data-dependent fields (color ranges, highlight
-# column, axis/color-by fields) self-heal on load via the rail's _drop_stale /
-# _clamped_pair, so a link opened on a different trial degrades gracefully.
+# column, axis/color-by fields) self-heal on load via the rail's _drop_stale,
+# so a link opened on a different trial degrades gracefully; an explicit colour
+# range is the sender's endpoints and is kept as given (`_explicit_pair`).
 #
 # EXP-19's per-scanpath styles are spelled per side: `cmp_a_<field>` is the first
 # scanpath's `cmp0_<field>`, `cmp_b_<field>` the second's `cmp1_<field>`.
@@ -630,8 +631,8 @@ _MARKER_BOUNDS = (4, 40)
 # (slider / number_input). A hand-crafted link with an out-of-range value would
 # otherwise crash the widget on render — Streamlit raises when a Session-State
 # value falls outside the widget's range. Clamp on the way in. (Data-dependent
-# colour ranges aren't here — the rail's `_clamped_pair` handles those against
-# the live data.)
+# colour ranges aren't here — the rail's slider widens to hold them, and its
+# number boxes are unbounded.)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
     "global_preproc_merge_distance_chars": (0.25, 10.0),
@@ -1194,7 +1195,8 @@ _BOOL_STATE_KEYS = frozenset(
     }
 )
 #: Two-number ranges with no widget bound of their own: the colour ranges are
-#: clamped to the live data by the rail, so they only have to be numbers.
+#: drawn as given by the rail (its slider widens to hold them), so they only
+#: have to be numbers.
 _FREE_RANGE_STATE_KEYS = frozenset(
     {"global_fixation_color_range", "global_heatmap_color_range"}
 )
@@ -2010,8 +2012,8 @@ def _restore_plot_config(
             20,
             "color bar tick size",
         )
-    # Store them even when their layer is off — the rail clamps them to the
-    # current data via `controls._clamped_pair`. VIZ-46: a stored range means
+    # Store them even when their layer is off — the rail draws them as given
+    # (`controls._explicit_pair`). VIZ-46: a stored range means
     # *explicit*, so a config saved while the range was auto (`null`) restores
     # as auto rather than keeping whatever range this session happened to hold.
     # The writer records the figure's *gated* range, though, so `null` says

@@ -443,8 +443,14 @@ def _range_slider(
     display: str | None = None,
     lead=None,
     field_host=None,
+    number_bounds: tuple | None = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
+
+    ``number_bounds`` bounds the two number boxes when it differs from the
+    slider's (``None`` on either side = unbounded); a typed value outside the
+    slider's span is then the caller's to make room for on the next run, as
+    `_render_color_range` does by widening the slider to the stored range.
 
     ``lead`` (UX-157) is a callable given a column ahead of the slider, to draw
     a control of its own there. ``field_host`` (UX-158) draws the whole line
@@ -507,11 +513,14 @@ def _range_slider(
         ),
     )
     fmt = number_format if number_format is not None else slider_format
+    num_min, num_max = (
+        number_bounds if number_bounds is not None else (min_value, max_value)
+    )
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
         col.number_input(
             f"{label} ({side})",
-            min_value=min_value,
-            max_value=max_value,
+            min_value=num_min,
+            max_value=num_max,
             step=step,
             format=_number_box_format(
                 fmt, min_value, max_value, step, st.session_state.get(num_key)
@@ -3401,20 +3410,25 @@ def _drop_stale_multi(state_key: str, options: list) -> None:
         st.session_state.pop(state_key, None)
 
 
-def _clamped_pair(val, lo: float, hi: float) -> tuple | None:
-    """Clamp a stored ``(min, max)`` into ``[lo, hi]`` and return it, or ``None``
-    for a malformed/missing value — WITHOUT touching session_state. Shared by
-    the rail's colour-range slider (``_render_color_range``, for display) and
-    ``_collect_viz_settings`` (for the figure), so a range stored on
-    differently-scaled data is clamped the same way on screen and in the Corpus
-    / Save-&-restore figures, and never rewritten (VIZ-46)."""
+def _explicit_pair(val) -> tuple | None:
+    """A stored ``(min, max)`` as an ordered pair of finite floats, or ``None``
+    for a malformed/missing value — WITHOUT touching session_state.
+
+    Shared by the rail's colour-range slider (``_render_color_range``) and
+    ``_collect_viz_settings``, so the figure and the slider read one value. It
+    is deliberately **not** clamped to the loaded data: an explicit range is
+    the user's endpoints, and narrowing the trial pool must not change the
+    mapping it pins (round-7 review, finding 10). VIZ-46 clamped it to the
+    pool's span, which re-scaled a pinned figure whenever a filter removed the
+    trial holding its extreme value."""
     if not (isinstance(val, (list, tuple)) and len(val) == 2):
         return None
     try:
         a, b = float(val[0]), float(val[1])
     except (TypeError, ValueError):
         return None
-    a, b = max(lo, min(a, hi)), max(lo, min(b, hi))
+    if not (math.isfinite(a) and math.isfinite(b)):
+        return None
     return (min(a, b), max(a, b))
 
 
@@ -3487,17 +3501,23 @@ def _render_color_range(
     dataset-wide scale the app used to default to, now one click away. An
     explicit range is sticky across trials until *Auto* is ticked again.
 
-    The stored value is clamped for display only and never rewritten, so a
-    range that arrived on a link built on other data is not eroded by a
-    narrower pool here; `_collect_viz_settings` clamps it the same way for the
-    figure.
+    ``[lo, hi]`` is the span the data suggests. An explicit range is drawn —
+    and reaches the figure — exactly as stored, never clamped to it: the
+    slider's bounds widen to hold its endpoints when no remaining observation
+    reaches them (a filter removed the trial with the extreme value, or the
+    range came on a link built on other data), and the number boxes take any
+    endpoint, beyond the observed span too (round-7 review, findings 10–11).
     """
     ss = st.session_state
     view_key = _color_range_view_key(state_key)
     auto_key = _color_range_auto_key(state_key)
-    explicit = _clamped_pair(ss.get(state_key), lo, hi)
+    explicit = _explicit_pair(ss.get(state_key))
     if explicit is None:
         ss.pop(state_key, None)  # a malformed value is not a range
+    else:
+        lo = min(lo, float(math.floor(explicit[0])))
+        hi = max(hi, float(math.ceil(explicit[1])))
+        hi = hi if hi > lo else lo + 1.0
     shown = explicit if explicit is not None else (lo, hi)
     if ss.get(view_key) != shown:
         ss[view_key] = shown
@@ -3549,6 +3569,9 @@ def _render_color_range(
         help=range_help,
         lead=_auto,
         field_host=field_host,
+        # Any endpoint can be typed: the slider spans the data, but a common
+        # scale often reaches past this pool's largest value.
+        number_bounds=(None, None),
     )
 
 
@@ -4509,15 +4532,9 @@ def _collect_viz_settings(
     ):
         cmin, cmax = trial_fixations[color_by].min(), trial_fixations[color_by].max()
         if pd.notna(cmin) and pd.notna(cmax):
-            # Clamp to the same [floor(min), ceil(max)] bounds the rendered slider
-            # uses, so the non-rendering reader can't leak a stale out-of-bounds
-            # range (cmax_eff mirrors the slider's `cmax if cmax > cmin else +1`).
-            lo = float(math.floor(cmin))
-            hi = float(math.ceil(cmax))
-            hi = hi if hi > lo else lo + 1.0
-            fixation_color_range = _clamped_pair(
-                ss.get("global_fixation_color_range"), lo, hi
-            )
+            # Passed through as stored, not clamped to this pool's span: a
+            # pinned scale must not move when a filter narrows the pool.
+            fixation_color_range = _explicit_pair(ss.get("global_fixation_color_range"))
 
     # Heatmap colour range only applies for the duration-weighted heatmap.
     heatmap_range = None
@@ -4528,10 +4545,7 @@ def _collect_viz_settings(
     ):
         heat = trial_fixations["duration_ms"]
         if len(heat) > 0 and pd.notna(heat.min()) and pd.notna(heat.max()):
-            lo = float(math.floor(heat.min()))
-            hi = float(math.ceil(heat.max()))
-            hi = hi if hi > lo else lo + 1.0
-            heatmap_range = _clamped_pair(ss.get("global_heatmap_color_range"), lo, hi)
+            heatmap_range = _explicit_pair(ss.get("global_heatmap_color_range"))
 
     # Fixation-index window (VIZ-7): a (start, end) tuple over `order_in_trial`,
     # or None for the full trial. Read straight from the slider's session key;

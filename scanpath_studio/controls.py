@@ -3283,7 +3283,7 @@ def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
     """Numeric columns offered as X/Y axis fields."""
     return [
         col
-        for col in trial_fixations.columns
+        for col in user_columns(trial_fixations)
         if pd.api.types.is_numeric_dtype(trial_fixations[col])
     ]
 
@@ -3302,7 +3302,7 @@ def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     if words is None or words.empty:
         return []
     cols = [c for c in _PREFERRED_HIGHLIGHT_FIELDS if c in words.columns]
-    for col in words.columns:
+    for col in user_columns(words):
         if col not in cols and pd.api.types.is_bool_dtype(words[col]):
             cols.append(col)
     return cols
@@ -5275,7 +5275,12 @@ def render_plot_controls(
         )
         color_by = by_col.selectbox(
             "Color fixations by",
-            options=rail_names.sort_options(color_fields, first=(UNIFORM_COLOR_FIELD,)),
+            # "line" is no column of either table, so it is placed by hand,
+            # after the app's own fields like the computed field it is.
+            options=rail_names.sort_options(
+                [f for f in color_fields if f != "line"], first=(UNIFORM_COLOR_FIELD,)
+            )
+            + (["line"] if "line" in color_fields else []),
             format_func=color_labels.__getitem__,
             key="global_color_by",
             persist_state="session",

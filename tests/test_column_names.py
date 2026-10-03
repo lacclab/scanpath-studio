@@ -458,6 +458,23 @@ class TestLabels:
     def test_a_carried_column_keeps_its_name(self):
         assert self.NAMES.label("gpt2_surprisal") == "gpt2_surprisal"
 
+    def test_a_converted_column_is_labelled_by_what_it_holds(self):
+        """A width read from two edges is their difference, not their sum."""
+        raw = pd.DataFrame(columns=["T", "W", "L", "R", "TOP", "BOT"])
+        schema = {
+            "trial": "T",
+            "word_id": "W",
+            "left": "L",
+            "right": "R",
+            "top": "TOP",
+            "bottom": "BOT",
+        }
+        names = from_schema("words", schema, raw.columns)
+        assert names.label("width") == "R − L"
+        assert names.label("x") == "L"
+        # The identity stays the source columns — what later phases rename by.
+        assert names.display("width") == "R + L"
+
     def test_option_labels_are_unique(self):
         labels = self.NAMES.option_labels(["trial_id", "unique_trial_id"])
         assert len(set(labels.values())) == 2
@@ -501,6 +518,8 @@ def test_the_rail_shows_the_demos_own_column_names(demo_raw):
     hover = at.multiselect(key="global_fixation_hover_fields")
     assert duration in hover.options, hover.options
     assert any(o.endswith(cn.COMPUTED_SUFFIX) for o in hover.options)
+    # "Line" is the app's, so it sorts after the dataset's own fields.
+    assert color.options[-1] == "Line" + cn.COMPUTED_SUFFIX
     metric = at.selectbox(key="global_heatmap_metric")
     assert metric.options == [duration, "Fixation count"]
     # The values are still canonical: links and saved configs are unchanged.
@@ -590,3 +609,11 @@ def test_an_alias_of_the_same_source_column_is_hidden():
     columns = ["trial_id", "unique_trial_id", "text_id", "unique_text_id", "x"]
     assert names.aliases(columns) == {"unique_trial_id"}
     assert cn.EMPTY.aliases(columns) == set()
+
+
+def test_the_axis_and_highlight_pickers_skip_internal_columns():
+    from scanpath_studio import controls
+
+    frame = pd.DataFrame({"x": [1.0], data.TEXT_ID_MAPPED: [True], "flag": [True]})
+    assert data.TEXT_ID_MAPPED not in controls.numeric_field_options(frame)
+    assert controls.highlight_column_options(frame) == ["flag"]

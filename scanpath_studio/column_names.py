@@ -229,6 +229,11 @@ class ColumnNames:
             and entry.sources
             and kind in (MAPPED, COMPOSITE, CONVERTED)
         ):
+            # A converted column says what it holds now: a box width is the
+            # difference of two edges, not their sum, and a duration read in
+            # seconds is in ms.
+            if kind == CONVERTED and entry.note:
+                return entry.note
             return entry.display
         if kind in (COMPUTED, GENERATED):
             return canonical_label(column) + COMPUTED_SUFFIX

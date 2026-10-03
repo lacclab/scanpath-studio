@@ -89,6 +89,7 @@ from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
+    COMPARE_SCREEN_PARAM,
     COMPARE_SOURCE_PARAM,
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
@@ -1041,6 +1042,12 @@ def _apply_url_preset() -> str | None:
             source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
             if source_b is not None:
                 st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
+            # B's own screen, for B's navigator — which keeps it only when B's
+            # trial has that screen, as A's does with `screen=`.
+            if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
+                st.session_state.setdefault(
+                    "single_compare_screen_id", str(qp[COMPARE_SCREEN_PARAM])
+                )
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
     # the deep link too, seeded before the loader's widgets render. Validate each
@@ -2586,6 +2593,8 @@ def _build_share_query(
                     f"The compared scanpath comes from **{source_b}**, which "
                     "can't be rebuilt from a link — it isn't included."
                 )
+        if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
+            params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 
     # Visualization toggles — emit an explicit 0/1 so a layer the user turned
     # *off* is shared as off (the URL coercion reads "0" as False).

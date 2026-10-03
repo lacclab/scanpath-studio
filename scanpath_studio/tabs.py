@@ -6515,6 +6515,8 @@ def render_single_trial_tab(
                 "participant_id": compare_meta["raw_participant"],
                 "trial_id": compare_meta["trial"],
                 "source": compare_meta.get("dataset"),
+                # B's own screen (`cmp_screen=`), from its own navigator.
+                "screen_id": selected_compare_screen,
             }
         else:
             share_selection.pop("compare", None)

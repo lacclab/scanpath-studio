@@ -357,6 +357,9 @@ SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 # in the same dataset as A", which is every pre-CMP-8 comparison.
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
+#: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
+#: `compare=`, and seeded into B's own navigator (`single_compare_screen_id`).
+COMPARE_SCREEN_PARAM = "cmp_screen"
 #: CMP-11 — the compare layout and the overlay's stimulus source. Closed
 #: vocabularies, so a bad value raises and the reader's "Ignored bad URL param"
 #: warning fires rather than the widget wedging on an option it has never heard of.
@@ -609,6 +612,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_CORPUS,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_SCREEN_PARAM,
     }
 )
 
@@ -678,6 +682,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,

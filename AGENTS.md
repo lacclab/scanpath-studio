@@ -183,23 +183,24 @@ correctness) and by annotation state (favorites / tags) before `build_combo_opti
 
 Open work is on **[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**,
 arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)**
-(`gh issue list`, `gh project item-list 5 --owner lacclab`). Issues are titled
-`[VIZ-37] <title>`: the stable tracker IDs are cited throughout these docs, the
-`plans/` notes and the git history, so they outlive GitHub's own numbering.
+(`gh issue list`, `gh project item-list 5 --owner lacclab`). GitHub's own `#N`
+is the ID: new issues get a plain title, and commits, PRs and changelog
+fragments cite `#N`. The `[VIZ-37]`-style IDs the old tracker used are retired
+(2026-10-03) — never mint one — but those already written into these docs, the
+`plans/` notes, the changelog and the git history stay, and still find their
+issue by search.
 
-Not every ID has an issue, deliberately: the changelog allocates the IDs — its
-unreleased entries are files in `changelog.d/` (ENG-86) — and an issue is
-opened when the item needs the **Review** gate, is blocked on the user (`waiting-on-you`), or is
-carried across sessions. So take a new ID's number from both registries —
-the changelog and `gh issue list` — never GitHub alone, and since `main` became
-protected, **check the open PRs too**: an ID sitting in an unmerged branch's
-changelog is in neither.
+Not every change gets an issue, deliberately: one finished inside a session is
+cited by its PR, and its `changelog.d/` fragment takes a slug name that the
+release resolves to that PR (ENG-86). An issue is opened when the item needs
+the **Review** gate, is blocked on the user (`waiting-on-you`), or is carried
+across sessions.
 
 Status (`Backlog · Planned · In progress · On hold · Review`) and priority live
 in the board's single-select columns, and kind is the native issue type
 (`Bug` / `Feature` / `Task`) — structured fields rather than labels, so there is
-one place per fact. Only `area:*` (which fixes the ID prefix) and
-`waiting-on-you` stayed labels, because GitHub has no field for either.
+one place per fact. Only `area:*` and `waiting-on-you` stayed labels, because
+GitHub has no field for either.
 **Closing an issue is the user's sign-off** — implementation finishes at *Review*,
 open, with everything waiting on them in a `### ⚖ Waiting on you` checklist. Full
 conventions, including the four-section body shape, in `CLAUDE.md` →

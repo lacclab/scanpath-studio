@@ -16,12 +16,14 @@ you work under `scanpath_studio/`); contributor setup is in
   `ruff format .`. CI's Lint job gates on **both**, so a
   missed format fails the build. Don't skip it, even for "docs-only" changes.
 - **Add a changelog fragment, never edit `CHANGELOG.md`** (ENG-86). Each item is
-  one file, `changelog.d/<ID>.<group>.md` (`VIZ-47.fixed.md`; several IDs join
-  with `+`), holding one line of plain text: what changed, for the user, with no
-  bullet and no ID. Groups are Keep a Changelog's (`added` / `changed` / `fixed`,
-  …). `/release` writes the fragments into `CHANGELOG.md`, so parallel PRs never
-  conflict over it. One line per item, no long form: the reasoning goes in the
-  PR description, or the issue when there is one. See `changelog.d/README.md`.
+  one file, `changelog.d/<issue>.<group>.md` (`341.fixed.md`; several issues
+  join with `+`), or `changelog.d/<slug>.<group>.md` when there is no issue —
+  the release cites the PR that merged it. It holds one line of plain text: what
+  changed, for the user, with no bullet and no number. Groups are Keep a
+  Changelog's (`added` / `changed` / `fixed`, …). `/release` writes the fragments
+  into `CHANGELOG.md`, so parallel PRs never conflict over it. One line per
+  item, no long form: the reasoning goes in the PR description, or the issue
+  when there is one. See `changelog.d/README.md`.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
 
@@ -61,66 +63,30 @@ you work under `scanpath_studio/`); contributor setup is in
   `gh project item-list 5 --owner lacclab`. The in-repo tracker that preceded
   them was migrated on 2026-08-20 (ENG-32) and removed on 2026-09-30 (ENG-84) —
   see *The archive* at the end of this section.
-- **Not every ID gets an issue, and that is deliberate.** The changelog (its
-  fragments in `changelog.d/`, then `CHANGELOG.md` once released) is where IDs are
-  allocated, and the PR description carries the write-up for finished work; an issue is
-  opened when an item needs something an issue is *for*. Open one when the item
-  reaches **Review** (the approval gate — the user's sign-off has to have
-  somewhere to happen), when it is blocked on a decision only the user can make
-  (`waiting-on-you`), or when it is carried across sessions and needs a place to
-  hold the brief. Work that is picked up and finished inside one session, whose
-  reasoning fits in its PR description, does not need a second copy on
-  GitHub — 81 of the 93 IDs cited since v0.29.0 are exactly that, including the
-  whole `UX-102`…`UX-137` run, and backfilling them would add noise, not history.
-  Confirmed with the user on 2026-08-28. The rule that is **not** optional: an ID
-  is still allocated for every item, still unique, still cited in the commit
-  subject and the changelog. If you are unsure, open the issue — the cost of one
+- **GitHub's own `#N` is the ID** (since 2026-10-03). New issues get a plain
+  title, no `[PREFIX-N]`, and commits, PRs, fragments and prose cite `#N`.
+  Nothing has to be allocated, so parallel sessions cannot collide. The
+  `[VIZ-37]`-style IDs were the old tracker's and are retired: never mint a new
+  one. The ones already written down stay as they are — the changelog, the docs,
+  the `plans/` notes, code comments, git history and the titles of the issues
+  that carry one still cite them, and `gh issue list --state all --search
+  "VIZ-37"` (or `git log --grep VIZ-37`) still finds them. Don't rewrite old
+  citations; cite `#N` in new text, alongside an old ID only when it is the
+  thing a reader would search for.
+- **Not every change gets an issue, and that is deliberate.** Work that is picked
+  up and finished inside one session, whose reasoning fits in its PR
+  description, is cited by its PR number — its changelog fragment takes a slug
+  name and the release fills the PR number in. An issue is opened when an item
+  needs something an issue is *for*: when it reaches **Review** (the approval
+  gate — the user's sign-off has to have somewhere to happen), when it is
+  blocked on a decision only the user can make (`waiting-on-you`), or when it is
+  carried across sessions and needs a place to hold the brief. Confirmed with
+  the user on 2026-08-28. If you are unsure, open the issue — the cost of one
   extra is far below the cost of shipping something past the review gate.
 - **Prefer GitHub's structured fields to labels.** Status, priority and kind are
   native — the board's `Status` and `Priority` single-selects and the org's
   issue types — so they are *not* also labels. Only two labels remain, for the
   two things GitHub has no field for: `area:*` and `waiting-on-you`.
-- **Stable IDs are still the currency.** Every issue is titled
-  `[VIZ-37] <title>`, because the docs, the `plans/` notes and the git history
-  cite items by that ID and always will. **Take the next free number by checking
-  both registries**, because most IDs live in only one of them:
-  the changelog — `CHANGELOG.md` and the unreleased file names in `changelog.d/`
-  (where the majority are — see the bullet above) — and
-  `gh issue list --state all --search "[DATA-"`. Searching GitHub alone will
-  hand you a number the changelog already spent:
-
-  ```bash
-  { grep -oh "\bDATA-[0-9]*\b" CHANGELOG.md docs/*.md scanpath_studio/*.py; ls changelog.d; } \
-    | grep -oE "\bDATA-[0-9]+\b" | sort -u -V | tail -3
-  ```
-
-  (The pre-migration archive was the third registry until ENG-84 removed it; for
-  every prefix the changelog already held its highest number, so dropping it
-  hands out no used ID.)
-
-  **Two registries stopped being enough once `main` became protected.** An ID
-  that lives in an *unmerged branch* is invisible to both — it is in that
-  branch's changelog, not main's, and it has no issue yet — so the command
-  above can hand you a number another open PR already spent, while you are
-  following this rule to the letter. It happened on 2026-09-15 in both
-  directions at once: `ENG-48` existed only on `eng-21-macos-signing`, so every
-  registry reported `ENG-47` as the maximum, and `ENG-46` was on GitHub and
-  nowhere else. So **also check the open PRs** before taking a number:
-
-  ```bash
-  gh pr list --state open --json number,headRefName,title
-  gh pr diff <n> --name-only | grep '^changelog.d/' | grep -oE "\b[A-Z]+-[0-9]+\b"
-  ```
-
-  Since ENG-86 the IDs a PR takes are the names of the fragments it adds, so the
-  file list is enough. Run it once per open PR.
-
-  And when another session or person is working right now, just ask which IDs
-  they have allocated — that is what actually resolved it, faster than any search.
-
-  Never reuse or renumber an ID. GitHub's own `#N` is an implementation detail;
-  cite the tracker ID in commits and prose, and the `#N` alongside it when a
-  link helps.
 - **Where each fact lives.**
   - **Status** → the board's `Status` column: `Backlog · Planned · In progress ·
     On hold · Review`. Closing the issue is the sixth state. Move it on the board,
@@ -133,15 +99,15 @@ you work under `scanpath_studio/`); contributor setup is in
     with `gh api -X PATCH repos/lacclab/scanpath-studio/issues/<n> -f type=Task`.
   - **Area** → an `area:*` label (`ux`, `compare`, `viz`, `data`, `perf`,
     `analysis`, `preprocessing`, `export`, `validation`, `bug`, `engineering`).
-    It decides the ID prefix, and stays a label because there is no field for it.
+    It stays a label because there is no field for it.
   - **Blocking the user** → the `waiting-on-you` label; see below.
 - **Approval gate.** Finishing implementation means board Status **Review** with
   the issue **open** — never close it yourself. Closing *is* the sign-off, and it
   is the user's to make. An issue closed without being implemented says why in a
   closing comment and uses `--reason "not planned"`. This is the gate that makes
   an issue *required*: an item you are handing back for review needs one, even
-  when it was allocated an ID an hour ago and finished in the same session —
-  create it at Review rather than leaving the hand-off in chat.
+  when it was started an hour ago and finished in the same session — create it
+  at Review rather than leaving the hand-off in chat.
 - **Claim it and move it to *In progress* when you pick it up**, not when you
   finish: `gh issue edit <n> --add-assignee @me`, and set the board's Status.
   Several sessions and two people share this repo; an unassigned issue reads as
@@ -155,7 +121,7 @@ as markdown headings, in this order:
 3. `## What's left` — **the developer's** remaining work only; link the
    follow-up issue when the remainder was split out. On a finished item this
    honestly says "Nothing." — the review is not developer work.
-4. `## Background` — anchors, design calls, gotchas, related IDs.
+4. `## Background` — anchors, design calls, gotchas, related issues.
 
 An optional `> blockquote` lede above them is the status / "update as of ⟨date⟩"
 line. A backlog issue has only *Request* (+ *Background*); the middle two are
@@ -174,8 +140,9 @@ item the moment it is answered — tick the box, and record the call under
 *Background* in the same edit — including when you settled it yourself.
 
 **Keep it current *while* you work.** One commit per feature or fix, not one per
-session, and put `(VIZ-37)` in the commit subject so the issue and the code stay
-findable from each other. Notice an unrelated problem? Fix it on the spot if it
+session, and put the issue in the commit subject — `(#341)` — so the issue and
+the code stay findable from each other (with no issue, the PR's squash-merge
+subject carries its own number). Notice an unrelated problem? Fix it on the spot if it
 is small, otherwise `gh issue create` so it does not get lost.
 
 **The archive.** The 320 items closed before the migration, with their full

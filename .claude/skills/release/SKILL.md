@@ -35,8 +35,11 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 1. **Branch** — `git switch -c release-v<version> origin/main`.
 2. **Changelog** — `python scripts/changelog_fragments.py release <version>`
    writes the `changelog.d/` fragments into a `## [<version>] - <today>`
-   section of `CHANGELOG.md` and deletes them (ENG-86). Read the section it
-   wrote; tidy wording there if needed.
+   section of `CHANGELOG.md` and deletes them (ENG-86). A fragment named by a
+   slug is cited by the PR whose squash-merge added it, read from `git log`; if
+   the script refuses one ("no merged PR found"), it did not land through a
+   PR — rename it to the issue or PR it belongs to. Read the section it wrote;
+   tidy wording there if needed.
 3. **Version bump** — set `__version__` in `scanpath_studio/__init__.py`. This
    is the single source of truth; `pyproject.toml` reads it dynamically — do
    NOT edit a version in `pyproject.toml`.

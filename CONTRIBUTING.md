@@ -42,7 +42,8 @@ If you use an AI coding assistant, it picks the project's conventions up on its
 own: [`CLAUDE.md`](CLAUDE.md) (working agreements) imports
 [`AGENTS.md`](AGENTS.md) (architecture map), and
 [`scanpath_studio/CLAUDE.md`](scanpath_studio/CLAUDE.md) loads when it works
-inside the package. Point it at a tracker ID and it will find the write-up.
+inside the package. Point it at an issue number (or an old `VIZ-37`-style ID)
+and it will find the write-up.
 
 ### If a code change doesn't show up
 
@@ -101,9 +102,10 @@ CI (`.github/workflows/ci.yml`) runs the same checks on every pull request to
 [CLAUDE.md](scanpath_studio/CLAUDE.md) for an architectural overview.
 
 Add a changelog entry as a file in [`changelog.d/`](changelog.d/README.md),
-named `<ID>.<group>.md` (e.g. `VIZ-47.fixed.md`) and holding one line of plain
-text. Don't edit `CHANGELOG.md` itself: the release writes the fragments into it,
-so parallel PRs never conflict over it (ENG-86).
+named `<issue>.<group>.md` (e.g. `341.fixed.md`) — or `<slug>.<group>.md` when
+there is no issue, which the release turns into your PR's number — and holding
+one line of plain text. Don't edit `CHANGELOG.md` itself: the release writes
+the fragments into it, so parallel PRs never conflict over it (ENG-86).
 
 If you add a user-facing feature, expose it on **every** surface — not just
 visually, but also the deep link / Share, the CLI, and the headless API. See
@@ -112,9 +114,9 @@ visually, but also the deep link / Share, the CLI, and the headless API. See
 Work items are tracked in
 [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues). If your PR
 corresponds to an issue, move its Status on the board and keep the write-up in the
-body current; the conventions — the `[VIZ-37]` title format, the four-section
-body, and the rule that **closing an issue is the maintainer's sign-off**, not
-yours — are in `CLAUDE.md` → *Tracking work*.
+body current; the conventions — plain titles cited by their `#N`, the
+four-section body, and the rule that **closing an issue is the maintainer's
+sign-off**, not yours — are in `CLAUDE.md` → *Tracking work*.
 
 If Streamlit's port is already taken, another person or editor session owns
 that server — start yours on a different one (`--server.port`) rather than
@@ -140,28 +142,21 @@ Common to both:
   and drag it to *In progress* on the
   [board](https://github.com/orgs/lacclab/projects/5) *before* writing code, not
   when you finish. The assignee is the only signal the other person has that it
-  is taken, and it is visible without pulling anything. New work always gets
-  an ID first; it gets an issue when it needs one — when it reaches *Review*,
-  is blocked on the maintainer, or is carried across sessions (`CLAUDE.md` →
-  *Tracking work*).
-- **Commit small, push often.** One commit per feature or fix, with the tracker
-  ID in the subject (`fix(viz): … (VIZ-37)`). A large uncommitted working
+  is taken, and it is visible without pulling anything. New work gets an
+  issue when it needs one — when it reaches *Review*, is blocked on the
+  maintainer, or is carried across sessions (`CLAUDE.md` → *Tracking work*);
+  otherwise its PR is its number.
+- **Commit small, push often.** One commit per feature or fix, citing its
+  issue in the subject (`fix(viz): … (#341)`). A large uncommitted working
   tree is the thing that actually hurts — it can't be pulled, reviewed, or built
   on, and merging it later is a marathon. Between clones, always `git pull`
   (or rebase your branch on `main`) before you push.
 - **The work queue no longer merges, because it is no longer a file.** Statuses,
   assignees and write-ups live on GitHub now, so two people moving two issues
   cannot conflict at all — which was most of what this section used to be about.
-  What still needs care is the **ID**: a new item takes the next free number in
-  its `area:*` prefix, and most IDs live in only one place. Check all three —
-  the changelog (`CHANGELOG.md` and the file names in `changelog.d/`, where most
-  are allocated), `gh issue list --state all --search "[DATA-"`, and the **open
-  PRs**, whose unmerged fragments the other two cannot see
-  (`gh pr list --state open`, then the `changelog.d/` files in each
-  `gh pr diff <n> --name-only`) — as
-  `CLAUDE.md` → *Tracking work* spells out. Two people reaching for a number at
-  the same moment will still collide: check again after creating, and renumber
-  **your own** item if it does.
+  Numbering no longer needs care either: GitHub assigns `#N`, so the
+  `[PREFIX-N]` IDs that used to collide between parallel branches are retired
+  (2026-10-03).
 - **Moving a card needs the `project` scope**, once per machine:
   `gh auth refresh -s project`. Without it the board is read-only from the CLI
   (the web UI still works).

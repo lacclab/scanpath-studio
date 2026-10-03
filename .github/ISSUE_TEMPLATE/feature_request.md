@@ -1,17 +1,15 @@
 ---
 name: Feature request
 about: Something Scanpath Studio should be able to do
-title: "[AREA-N] "
+title: ""
 type: Feature
 ---
 
 <!--
-Maintainers: pick the area label and match the title prefix to it —
-UX / CMP / VIZ / DATA / PERF / AN / PRE / EXP / VAL / ENG — then take the next
-free number in that prefix, checking the changelog (and changelog.d/), the issues and the open
-PRs (CLAUDE.md → Tracking work). IDs are stable and never renumbered. Add it to the
-"Scanpath Studio" project board and set Status; switch the type to Task if it is
-a chore rather than a capability.
+Maintainers: pick the area:* label, add it to the "Scanpath Studio" project
+board and set Status; switch the type to Task if it is a chore rather than a
+capability. The issue's own #N is its ID — no [AREA-N] prefix in the title
+(CLAUDE.md → Tracking work).
 -->
 
 ## Request

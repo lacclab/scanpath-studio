@@ -5998,6 +5998,26 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     )
 
 
+def dataset_table_scope_note(*, filtered: bool, stand_in_for: str | None) -> str | None:
+    """The line under 📂 Available datasets when 📊 Stats counts something else
+    (UX-203): a trial-filtered pool, or the bundled demo standing in for
+    ``stand_in_for``, a corpus that isn't on disk. ``None`` when the row and
+    Stats count the same thing.
+    """
+    if stand_in_for:
+        return (
+            f"Rows count whole datasets. {stand_in_for} isn't loaded, so Stats "
+            "below counts the bundled demo shown in its place"
+            + (", narrowed by the trial filters." if filtered else ".")
+        )
+    if filtered:
+        return (
+            "Whole datasets, before the trial filters — Stats below counts the "
+            "filtered trials."
+        )
+    return None
+
+
 @st.fragment
 def render_dataset_table(
     host=None,
@@ -6037,7 +6057,8 @@ def render_dataset_table(
         fixations: Its fixation frame.
         raw_gaze: Its raw-gaze frame.
         scope_note: A line under the rows saying the counts are whole
-            datasets, given while a trial filter narrows 📊 Stats (UX-203).
+            datasets, given while 📊 Stats counts something else
+            (`dataset_table_scope_note`, UX-203).
     """
     # DATA-35: Remove only opens a dialog, which costs a *fragment* rerun, not a
     # whole-app one. Opening a dataset asks for the app rerun here, because a
@@ -9215,18 +9236,22 @@ def _run_app() -> None:
         # dataset are this run's frames, which do not exist until the load has
         # happened. Unfiltered on purpose — the table describes the *dataset*,
         # not what the current Narrow-by left standing. UX-203: while a trial
-        # filter is on, the counts below it (📊 Stats) differ from the row's,
-        # so both say which they are.
+        # filter is on, or the demo stands in for the open corpus, the counts
+        # below it (📊 Stats) differ from the row's, so both say which they are.
         trials_filtered = has_active_trial_filters()
         _render_datasets_table(
             words_all,
             fixations_all,
             raw_gaze_all,
-            scope_note=(
-                "Whole datasets, before the trial filters — Stats below "
-                "counts the filtered trials."
-                if trials_filtered
-                else None
+            scope_note=dataset_table_scope_note(
+                filtered=trials_filtered,
+                stand_in_for=(
+                    _dataset_display_name(
+                        str(st.session_state.get("data_source_choice") or data_choice)
+                    )
+                    if st.session_state.get(_PLACEHOLDER_SHOWN_KEY)
+                    else None
+                ),
             ),
         )
         # UX-135 — one numbered headline over the whole first part, drawn into

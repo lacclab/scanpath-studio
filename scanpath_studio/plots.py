@@ -944,6 +944,10 @@ def _duration_key_references(duration_range) -> list[tuple[float, str]]:
     return refs
 
 
+# Name of the size key's label annotations, so the layer split can find them.
+_SIZE_KEY_NAME = "duration_size_key"
+
+
 def _add_duration_size_key(
     fig: go.Figure,
     size_range: tuple[int, int],
@@ -1004,7 +1008,7 @@ def _add_duration_size_key(
             xanchor="center",
             yanchor="middle",
             font=dict(size=10, color="#444444", family=font_family or FONT_FAMILY),
-            name="duration_size_key",
+            name=_SIZE_KEY_NAME,
         )
 
 
@@ -1473,6 +1477,13 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
             sh for sh, sl in zip(g.layout.shapes or (), shape_layers) if sl == layer
         )
         g.layout.images = fig.layout.images if layer == "stimulus_image" else ()
+        # The duration size key's ms labels belong with its circles, which ride
+        # the fixations layer; every other annotation (title text, the
+        # Illustration stamp) stays on each layer as before.
+        if layer != "fixations":
+            g.layout.annotations = tuple(
+                a for a in (g.layout.annotations or ()) if a.name != _SIZE_KEY_NAME
+            )
         # Transparent background so the layers overlay cleanly when re-stacked.
         g.update_layout(paper_bgcolor=_TRANSPARENT, plot_bgcolor=_TRANSPARENT)
         out[layer] = g

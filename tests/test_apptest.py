@@ -854,7 +854,9 @@ class TestDatasetTable:
         from scanpath_studio import api
         from scanpath_studio.data import load_sample_data
 
-        words, fixations = api.load_scanpath_data(*load_sample_data())
+        words, fixations = api.load_scanpath_data(
+            *load_sample_data(), names="canonical"
+        )
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["_datasets"] = {
             self.NAME: {
@@ -1178,7 +1180,9 @@ class TestDatasetTable:
         at = self._at()
         assert not [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
 
-        words, fixations = api.load_scanpath_data(*load_sample_data())
+        words, fixations = api.load_scanpath_data(
+            *load_sample_data(), names="canonical"
+        )
         entry = {
             "words": words,
             "fixations": fixations,
@@ -1584,7 +1588,9 @@ class TestDatasetRename:
         from scanpath_studio import api
         from scanpath_studio.data import load_sample_data
 
-        words, fixations = api.load_scanpath_data(*load_sample_data())
+        words, fixations = api.load_scanpath_data(
+            *load_sample_data(), names="canonical"
+        )
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["_datasets"] = {
             self.NAME: {
@@ -2435,7 +2441,9 @@ class TestUnmappedRawDataView:
 
         # Headless path: eyegenbench.load_eyegenbench uses EYEGENBENCH_FIX_SCHEMA
         # directly, so this is the ground truth the app must match.
-        _, headless_fixations = eyegenbench.load_eyegenbench(root, dataset="BSC")
+        _, headless_fixations = eyegenbench.load_eyegenbench(
+            root, dataset="BSC", names="canonical"
+        )
         headless_reader_count = headless_fixations["participant_id"].nunique()
         assert headless_reader_count == 3
 
@@ -3857,7 +3865,7 @@ class TestCorpusAnalysisTab:
         raw_words, raw_fix = load_sample_data()
         fix_schema = api.propose_schema(raw_fix, "fixations") | {"timestamp": None}
         words, fixations = api.load_scanpath_data(
-            raw_words, raw_fix, fix_schema=fix_schema
+            raw_words, raw_fix, fix_schema=fix_schema, names="canonical"
         )
 
         def opened(view, **state):
@@ -5292,7 +5300,9 @@ class TestAnnotationsBelongToTheirDataset:
         from scanpath_studio import api
         from scanpath_studio.data import load_sample_data
 
-        words, fixations = api.load_scanpath_data(*load_sample_data())
+        words, fixations = api.load_scanpath_data(
+            *load_sample_data(), names="canonical"
+        )
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["_datasets"] = {
             self.NAME: {

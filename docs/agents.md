@@ -37,10 +37,18 @@ scanpath no longer sits at its true on-screen position.
 
 Scanpath Studio works on a pair of tables — **word interest areas** (one row per
 word per trial, with its bounding box) and **fixations** (one row per fixation).
-`load_scanpath_data` maps whatever your columns are called onto these canonical
-names; everything downstream assumes them.
+`load_scanpath_data` maps whatever your columns are called onto the canonical
+fields below — and hands the frames back **under your own column names**:
+`fixations["CURRENT_FIX_DURATION"]`, not `fixations["duration_ms"]`. Each frame
+carries its map in `DataFrame.attrs`, so every API function reads it, and every
+option that names a column (`color_by=`, `word_hover_fields=`, …) takes your name
+or the canonical one. A column the loader changed (a duration read in seconds,
+ids shifted to start at 0) or made (`order_in_trial`) keeps its canonical name.
+The tables below are what `load_scanpath_data(..., names="canonical")` returns.
+A frame merged or concatenated with another table loses `attrs`: pass the result
+through `load_scanpath_data` again, or work on the canonical frames.
 
-**Words / IA** — after `load_scanpath_data`:
+**Words / IA** — canonical fields:
 
 | Column | Meaning |
 |--------|---------|
@@ -55,9 +63,9 @@ names; everything downstream assumes them.
 
 Pre-aggregated EyeLink IA measures (`IA_FIRST_FIXATION_DURATION` → `first_fixation_ms`, …)
 and linguistic features (`gpt2_surprisal`, `wordfreq_frequency`, `universal_pos`, …)
-are carried through under their canonical / original names when present.
+are carried through when present.
 
-**Fixations** — after `load_scanpath_data`:
+**Fixations** — canonical fields:
 
 | Column | Meaning |
 |--------|---------|

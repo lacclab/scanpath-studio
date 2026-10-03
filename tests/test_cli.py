@@ -58,7 +58,7 @@ def test_render_thumbnail_flags(tmp_path):
     """The thumbnail-control flags parse and flow into the figure build."""
     import scanpath_studio as sps
 
-    pid, tid = sps.list_trials(*sps.load_sample_data()).iloc[0]
+    pid, tid = sps.list_trials(*sps.load_sample_data(names="canonical")).iloc[0]
     out_file = tmp_path / "thumb.html"
     cli.main(
         [
@@ -89,7 +89,7 @@ def test_render_thumbnail_flags(tmp_path):
 def test_render_explicit_trial_with_flags(tmp_path):
     import scanpath_studio as sps
 
-    pid, tid = sps.list_trials(*sps.load_sample_data()).iloc[0]
+    pid, tid = sps.list_trials(*sps.load_sample_data(names="canonical")).iloc[0]
     out_file = tmp_path / "scanpath.html"
     cli.main(
         [
@@ -307,7 +307,7 @@ def test_render_trial_only_resolves_matching_participant(tmp_path, capsys):
     # A valid -t without -p picks a participant that actually has that trial.
     import scanpath_studio as sps
 
-    combos = sps.list_trials(*sps.load_sample_data())
+    combos = sps.list_trials(*sps.load_sample_data(names="canonical"))
     _pid, tid = combos.iloc[-1]
     out_file = tmp_path / "x.html"
     cli.main(["render", "--sample", "-t", tid, "-o", str(out_file)])
@@ -405,6 +405,7 @@ def test_render_animate_forwards_every_option_the_replay_takes(tmp_path, monkeyp
         "title",
         "caption",
         "screen",
+        "column_names",  # DATA-66: the dataset's names, for the replay's text
     }
 
 
@@ -1021,7 +1022,7 @@ def test_render_compare_across_two_datasets(tmp_path):
     """B from a second pair of tables — the cross-dataset half of CMP-9."""
     from scanpath_studio import api
 
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     words_path = tmp_path / "words_b.csv"
     fix_path = tmp_path / "fix_b.csv"
     words.to_csv(words_path, index=False)
@@ -1059,7 +1060,7 @@ def test_render_compare_overlay_refuses_two_different_screens(tmp_path):
     """Headless refuses rather than silently handing back a split layout."""
     from scanpath_studio import api
 
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     words_path = tmp_path / "words_b.csv"
     fix_path = tmp_path / "fix_b.csv"
     words.to_csv(words_path, index=False)
@@ -1268,7 +1269,7 @@ def test_render_animate_compare_rejects_two_screens(tmp_path):
     """A co-animation is an overlay on one clock, so it needs one screen."""
     from scanpath_studio import api
 
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     words_path = tmp_path / "words_b.csv"
     fix_path = tmp_path / "fix_b.csv"
     words.to_csv(words_path, index=False)
@@ -1314,7 +1315,7 @@ def test_render_animate_compare_reads_an_unstated_screen_off_the_data(tmp_path):
     is a demo trial, whose data spans more than the 1680x1050 stated for A."""
     from scanpath_studio import api
 
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     words_path = tmp_path / "words_b.csv"
     fix_path = tmp_path / "fix_b.csv"
     words.to_csv(words_path, index=False)

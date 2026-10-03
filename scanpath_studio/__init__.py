@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "ScanpathData",
     "__version__",
     "alignment_sensitivity",
     "analysis_tables",

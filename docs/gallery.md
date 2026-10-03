@@ -159,15 +159,16 @@ averaged over the demo's readers, with ± one standard deviation as a band. The
 app's :material/bar_chart: **Corpus Analysis** view draws this and more.
 
 ```python exec="true" html="true" source="below" session="gallery"
-measures = sps.compute_word_metrics(words, fixations)
-one_text = measures[measures["text_id"] == "2_1_1_Ele"]
+measures = sps.compute_word_metrics(words, fixations)  # the demo's own names
+one_text = measures[measures["unique_paragraph_id"] == "2_1_1_Ele"]
 profile = (
-    one_text.groupby("word_id")
+    one_text.groupby("IA_ID")
     .agg(
-        value=("total_fixation_duration_ms", "mean"),
-        sd=("total_fixation_duration_ms", "std"),
-        word_text=("text", "first"),
+        value=("IA_DWELL_TIME", "mean"),
+        sd=("IA_DWELL_TIME", "std"),
+        word_text=("IA_LABEL", "first"),
     )
+    .rename_axis("word_id")  # the column plot_corpus_figure reads
     .reset_index()
     .assign(lo=lambda d: d.value - d.sd, hi=lambda d: d.value + d.sd)
 )

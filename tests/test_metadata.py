@@ -885,7 +885,7 @@ class TestTheExportOptOut:
         from scanpath_studio import api
         from scanpath_studio.export import ExportOptions, bulk_export
 
-        words, fixations = api.load_sample_data()[:2]
+        words, fixations = api.load_sample_data(names="canonical")[:2]
         combos = (
             fixations[["participant_id", "trial_id"]].drop_duplicates().head(1).copy()
         )
@@ -1000,7 +1000,7 @@ class TestGroupingEndToEnd:
         from scanpath_studio.constants import _VIEW_CORPUS
         from tests.conftest import APP_SCRIPT, pin_view
 
-        _words, fixations = api.load_sample_data()
+        _words, fixations = api.load_sample_data(names="canonical")
         if grain == "trial":
             ids = sorted(fixations["trial_id"].astype(str).unique())
             column, field, option = "trial_id", "qa_condition", "trialmeta:qa_condition"

@@ -373,7 +373,7 @@ def _assert_canonical_intact(words: pd.DataFrame, fixations: pd.DataFrame) -> No
 
 def test_reader_metadata_merges_by_int_pid_and_session(full_tree):
     """``participant_data`` joins on the int-coerced pid + session, not the text."""
-    words, fixations = datasets.load_multipleye(full_tree)
+    words, fixations = datasets.load_multipleye(full_tree, names="canonical")
     _assert_canonical_intact(words, fixations)
 
     # The filename pid is zero-padded text ("001"); participant_data stores 1.
@@ -401,7 +401,7 @@ def test_reader_metadata_without_session_column_is_skipped(tmp_path):
     write_participant_data(
         root, pd.DataFrame({"participant_id": [1, 14], "age": [25, 31]})
     )
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
 
     assert not [c for c in fixations.columns if c.startswith("pp_")]
     _assert_canonical_intact(words, fixations)
@@ -420,7 +420,7 @@ def test_partial_reader_metadata_carries_only_the_columns_present(tmp_path):
             }
         ),
     )
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
     _assert_canonical_intact(words, fixations)
 
     assert [c for c in fixations.columns if c.startswith("pp_")] == ["pp_age"]
@@ -431,7 +431,7 @@ def test_partial_reader_metadata_carries_only_the_columns_present(tmp_path):
 def test_missing_participant_data_leaves_no_reader_columns(tmp_path):
     """No participant_data.csv → the pp_* columns are simply absent."""
     root = build_multipleye_tree(tmp_path, reader_metadata=False)
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
 
     assert "pp_age" not in fixations.columns
     _assert_canonical_intact(words, fixations)
@@ -442,7 +442,7 @@ def test_missing_participant_data_leaves_no_reader_columns(tmp_path):
 
 def test_questions_join_by_stimulus_not_by_trial(full_tree):
     """The questions JSON lands on every row of its stimulus — and only there."""
-    words, fixations = datasets.load_multipleye(full_tree)
+    words, fixations = datasets.load_multipleye(full_tree, names="canonical")
     _assert_canonical_intact(words, fixations)
 
     lit_json = set(
@@ -494,7 +494,7 @@ def test_questions_workbook_without_join_keys_is_skipped(tmp_path, monkeypatch):
         monkeypatch,
         pd.DataFrame({"stimulus_name": ["Lit_Demo"], "question": ["Why?"]}),
     )
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
 
     assert "comprehension_questions" not in words.columns
     assert "comprehension_questions" not in fixations.columns
@@ -508,14 +508,14 @@ def test_questions_skipped_when_the_excel_reader_is_missing(full_tree, monkeypat
         raise ImportError("Missing optional dependency 'openpyxl'")
 
     monkeypatch.setattr(pd, "read_excel", _no_openpyxl)
-    words, fixations = datasets.load_multipleye(full_tree)
+    words, fixations = datasets.load_multipleye(full_tree, names="canonical")
 
     assert "comprehension_questions" not in words.columns
     _assert_canonical_intact(words, fixations)
 
 
 def test_missing_questions_workbook_leaves_no_question_column(bare_tree):
-    words, fixations = datasets.load_multipleye(bare_tree)
+    words, fixations = datasets.load_multipleye(bare_tree, names="canonical")
 
     assert datasets._multipleye_questions_path(bare_tree) is None
     assert "comprehension_questions" not in words.columns
@@ -528,7 +528,7 @@ def test_missing_questions_workbook_leaves_no_question_column(bare_tree):
 
 def test_reading_measures_attach_per_reader_page_and_word(full_tree):
     """Each reader's measures land on that reader's boxes, keyed by page + word."""
-    words, fixations = datasets.load_multipleye(full_tree)
+    words, fixations = datasets.load_multipleye(full_tree, names="canonical")
     _assert_canonical_intact(words, fixations)
 
     # 4 Lit boxes for reader A + 4 Lit and 1 Arg box for reader B. The stimulus
@@ -595,7 +595,7 @@ def test_partial_reading_measures_only_map_the_columns_present(tmp_path):
             "FFD": [777, 888],
         },
     )
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
     _assert_canonical_intact(words, fixations)
 
     assert len(words) == 9  # the stray word_idx=99 row added nothing
@@ -614,7 +614,7 @@ def test_reading_measures_file_without_word_idx_is_skipped(tmp_path):
     write_reading_measures(
         root, READER_A, {"page": ["page_1", "page_2"], "FFD": [42, 43]}
     )
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
     _assert_canonical_intact(words, fixations)
 
     assert len(words) == 9
@@ -628,7 +628,7 @@ def test_word_boxes_stay_stimulus_level_without_reading_measures(bare_tree):
     assert not [c for c in raw_words.columns if c.startswith("IA_")]
     assert len(raw_words) == 5  # 4 Lit boxes + 1 Arg box, once each
 
-    words, fixations = datasets.load_multipleye(bare_tree)
+    words, fixations = datasets.load_multipleye(bare_tree, names="canonical")
     # normalize_words broadcasts the participant-less boxes onto the readers who
     # read each trial — same 9 rows as the per-reader path, no measures.
     assert len(words) == 9
@@ -665,7 +665,7 @@ def test_attach_reading_measures_off_keeps_boxes_stimulus_level(full_tree):
 
 def test_stimulus_image_path_resolves_per_stimulus_and_page(full_tree):
     """Each trial's image path points at that page's file, at the centered origin."""
-    words, fixations = datasets.load_multipleye(full_tree)
+    words, fixations = datasets.load_multipleye(full_tree, names="canonical")
     image_dir = full_tree / "stimuli_Demo" / "stimuli_images_zh_ch_1"
 
     for (trial, screen), filename in (
@@ -689,7 +689,7 @@ def test_app_resolves_the_trial_image_from_the_loaded_frames(full_tree):
     from scanpath_studio.plots import _png_pixel_size
     from scanpath_studio.tabs import _first_str
 
-    words, _ = datasets.load_multipleye(full_tree)
+    words, _ = datasets.load_multipleye(full_tree, names="canonical")
     path = _first_str(_screen_rows(words, READER_A, LIT_P2), "image_path")
 
     assert path is not None and path.endswith("lit_demo_id1_page_2_zh.png")
@@ -698,7 +698,7 @@ def test_app_resolves_the_trial_image_from_the_loaded_frames(full_tree):
 
 def test_missing_image_folder_yields_no_image_columns(bare_tree):
     """No stimuli_images_* folder → no image columns, and the load still works."""
-    words, fixations = datasets.load_multipleye(bare_tree)
+    words, fixations = datasets.load_multipleye(bare_tree, names="canonical")
 
     assert datasets._multipleye_image_dir(bare_tree) is None
     for frame in (words, fixations):
@@ -718,7 +718,7 @@ def test_image_path_for_a_page_with_no_file_draws_nothing(full_tree):
         / "stimuli_images_zh_ch_1"
         / "arg_other_id2_page_1_zh.png"
     ).unlink()
-    words, _ = datasets.load_multipleye(full_tree)
+    words, _ = datasets.load_multipleye(full_tree, names="canonical")
     path = _first_str(_screen_rows(words, READER_B, ARG_P1), "image_path")
 
     assert path is not None and not os.path.exists(path)
@@ -730,7 +730,9 @@ def test_image_path_for_a_page_with_no_file_draws_nothing(full_tree):
 
 def test_side_data_is_scoped_to_the_narrowed_load(full_tree):
     """A ``stimuli=`` narrowed load keeps that stimulus' side data and no other's."""
-    words, fixations = datasets.load_multipleye(full_tree, stimuli=[ARG])
+    words, fixations = datasets.load_multipleye(
+        full_tree, stimuli=[ARG], names="canonical"
+    )
 
     assert set(zip(words["trial_id"], words["screen_id"])) == {ARG_P1}
     assert set(fixations["participant_id"]) == {READER_B}  # only B read Arg_Other_2
@@ -774,7 +776,7 @@ def test_duplicate_reading_measures_files_do_not_multiply_word_rows(tmp_path):
     pd.DataFrame(dict(_READING_MEASURES[READER_A], FFD=[999] * 4)).to_csv(
         session_dir / f"{READER_A}_trial_7_Lit_Demo_reading_measures.csv", index=False
     )
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
 
     assert len(words) == 9  # 13 today: reader A's 4 Lit boxes are doubled
     _assert_canonical_intact(words, fixations)
@@ -791,7 +793,7 @@ def test_duplicate_reading_measures_files_do_not_multiply_word_rows(tmp_path):
 def test_unreadable_participant_data_degrades_to_no_metadata(tmp_path):
     root = build_multipleye_tree(tmp_path)
     (root / "participant_data.csv").write_text("")  # truncated export
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
 
     assert not [c for c in fixations.columns if c.startswith("pp_")]
     _assert_canonical_intact(words, fixations)
@@ -807,7 +809,7 @@ def test_unreadable_participant_data_degrades_to_no_metadata(tmp_path):
 def test_corrupt_questions_workbook_degrades_to_no_questions(tmp_path):
     root = build_multipleye_tree(tmp_path)
     (root / "stimuli_Demo" / _QUESTIONS_NAME).write_bytes(b"not a workbook")
-    words, fixations = datasets.load_multipleye(root)
+    words, fixations = datasets.load_multipleye(root, names="canonical")
 
     assert "comprehension_questions" not in words.columns
     _assert_canonical_intact(words, fixations)

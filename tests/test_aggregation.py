@@ -1559,7 +1559,7 @@ def _aoi_only_groups_app():
     from scanpath_studio import api
     from scanpath_studio.tabs import render_group_comparison_tab
 
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     render_group_comparison_tab(
         words,
         fixations.iloc[:0],

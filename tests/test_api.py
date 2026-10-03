@@ -21,7 +21,7 @@ from tests.synthetic_data import (
 @pytest.fixture(scope="module")
 def sample():
     """Normalized bundled demo data, loaded once per module."""
-    return sps.load_sample_data()
+    return sps.load_sample_data(names="canonical")
 
 
 def test_load_sample_data_is_normalized(sample):
@@ -62,14 +62,16 @@ def test_load_scanpath_data_from_files(tmp_path):
     words_raw.to_csv(words_path, index=False)
     fix_raw.to_csv(fix_path, index=False)
 
-    words, fixations = sps.load_scanpath_data(words_path, fix_path)
+    words, fixations = sps.load_scanpath_data(words_path, fix_path, names="canonical")
     assert "trial_id" in words.columns
     assert "duration_ms" in fixations.columns
 
 
 def test_load_scanpath_data_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
-        sps.load_scanpath_data(tmp_path / "nope.csv", tmp_path / "nope2.csv")
+        sps.load_scanpath_data(
+            tmp_path / "nope.csv", tmp_path / "nope2.csv", names="canonical"
+        )
 
 
 def test_load_scanpath_data_resolves_stimulus_images(tmp_path, sample_words_df):
@@ -84,6 +86,7 @@ def test_load_scanpath_data_resolves_stimulus_images(tmp_path, sample_words_df):
         words=words,
         image_root=tmp_path,
         image_pattern="{participant_id}.png",
+        names="canonical",
     )
 
     assert set(normalized["image_path"]) == expected
@@ -95,13 +98,14 @@ def test_load_scanpath_data_rejects_image_pattern_escape(tmp_path, sample_words_
             words=sample_words_df,
             image_root=tmp_path,
             image_pattern="../{text_id}.png",
+            names="canonical",
         )
 
 
 def test_load_scanpath_data_bad_schema():
     junk = pd.DataFrame({"a": [1], "b": [2]})
     with pytest.raises(ValueError, match="schema problems"):
-        sps.load_scanpath_data(junk, junk)
+        sps.load_scanpath_data(junk, junk, names="canonical")
 
 
 # --------------------------------------------------------------------------
@@ -115,7 +119,7 @@ def test_words_schema_error_names_field_candidates_and_columns():
         {"subject": ["s1"], "para": [1], "word": ["the"], "start_x": [10]}
     )
     with pytest.raises(ValueError) as excinfo:
-        sps.load_scanpath_data(words=words)
+        sps.load_scanpath_data(words=words, names="canonical")
     message = str(excinfo.value)
 
     # The canonical field, its schema key, and the exact candidates tried.
@@ -154,7 +158,7 @@ def test_words_schema_error_names_field_candidates_and_columns():
 def test_fixations_schema_error_names_field_candidates_and_columns():
     fixations = pd.DataFrame({"participant_id": ["s1"], "fix_dur": [210]})
     with pytest.raises(ValueError) as excinfo:
-        sps.load_scanpath_data(fixations=fixations)
+        sps.load_scanpath_data(fixations=fixations, names="canonical")
     message = str(excinfo.value)
 
     assert "Fixations schema problems: missing Trial ID; missing Duration" in message
@@ -171,7 +175,7 @@ def test_fixations_schema_error_names_field_candidates_and_columns():
 def test_schema_error_truncates_a_wide_table():
     wide = pd.DataFrame({f"col{i}": [0] for i in range(45)})
     with pytest.raises(ValueError) as excinfo:
-        sps.load_scanpath_data(words=wide)
+        sps.load_scanpath_data(words=wide, names="canonical")
     message = str(excinfo.value)
     assert "Columns present in the words/IA table (45): col0, " in message
     assert "col39, … (+5 more)" in message
@@ -187,7 +191,9 @@ def test_words_schema_rejects_a_column_the_table_does_not_have():
     schema = api.propose_schema(words_raw, "words")
     schema["trial"] = "TRIAL_LABEL"  # a plausible-looking EyeLink name that isn't there
     with pytest.raises(ValueError) as excinfo:
-        sps.load_scanpath_data(words=words_raw, fixations=fix_raw, word_schema=schema)
+        sps.load_scanpath_data(
+            words=words_raw, fixations=fix_raw, word_schema=schema, names="canonical"
+        )
     message = str(excinfo.value)
     assert (
         "Words/IA schema maps 1 column name the words/IA table doesn't have" in message
@@ -205,7 +211,7 @@ def test_fixations_schema_rejects_mapped_columns_and_reports_every_one():
     schema["x"] = "GAZE_X"
     schema["y"] = "GAZE_Y"
     with pytest.raises(ValueError) as excinfo:
-        sps.load_scanpath_data(fixations=fix_raw, fix_schema=schema)
+        sps.load_scanpath_data(fixations=fix_raw, fix_schema=schema, names="canonical")
     message = str(excinfo.value)
     assert "maps 2 column names the fixations table doesn't have" in message
     assert "fix_schema['x'] = 'GAZE_X': no such column" in message
@@ -219,7 +225,7 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     schema = api.propose_schema(words_raw, "words")
     schema["trial"] = ["participant_id", "TRIAL_INDEX"]
     words, _fixations = sps.load_scanpath_data(
-        words=words_raw, fixations=fix_raw, word_schema=schema
+        words=words_raw, fixations=fix_raw, word_schema=schema, names="canonical"
     )
     # The demo's reader ids hold a `_` ("l37_1129"), escaped inside the
     # composite so it cannot be mistaken for the separator (`data.compose_id`).
@@ -227,7 +233,7 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     assert words["trial_id"].iloc[0].startswith(first.replace("_", "\\_") + "_")
     schema["trial"] = ["participant_id", "TRIAL_NUMBER"]
     with pytest.raises(ValueError) as excinfo:
-        sps.load_scanpath_data(words=words_raw, word_schema=schema)
+        sps.load_scanpath_data(words=words_raw, word_schema=schema, names="canonical")
     assert "word_schema['trial'] = 'TRIAL_NUMBER': no such column" in str(excinfo.value)
 
 
@@ -245,6 +251,7 @@ def test_explicit_schema_error_points_at_the_mapping_not_at_detection():
                 "top": "IA_TOP",
                 "bottom": "IA_BOTTOM",
             },
+            names="canonical",
         )
     message = str(excinfo.value)
     assert "Words/IA schema problems: missing Trial ID" in message
@@ -269,7 +276,7 @@ def test_propose_schema_is_the_documented_repair_path():
     renamed = words_raw.rename(columns={"IA_ID": "internal_id"})
     # `IA_ID` was the only Word/IA ID candidate present, so detection now fails…
     with pytest.raises(ValueError, match="missing Word/IA ID"):
-        sps.load_scanpath_data(words=renamed, fixations=fix_raw)
+        sps.load_scanpath_data(words=renamed, fixations=fix_raw, names="canonical")
 
     schema = api.propose_schema(renamed, "words")
     assert schema["word_id"] is None
@@ -277,7 +284,7 @@ def test_propose_schema_is_the_documented_repair_path():
     assert schema["left"] == "IA_LEFT"
     schema["word_id"] = "internal_id"
     words, fixations = sps.load_scanpath_data(
-        words=renamed, fixations=fix_raw, word_schema=schema
+        words=renamed, fixations=fix_raw, word_schema=schema, names="canonical"
     )
     assert "word_id" in words.columns
     assert not sps.list_trials(words, fixations).empty
@@ -971,13 +978,13 @@ _EXP17_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
 def test_a_misspelled_color_by_column_raises_with_the_closest(builder):
     """The builder looks the column up and draws a flat colour when it is not
     there, so `color_by="duraton_ms"` rendered without a word."""
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     with pytest.raises(ValueError, match="duraton_ms.*Closest: 'duration_ms'"):
         getattr(api, builder)(words, fixations, *_EXP17_TRIAL, color_by="duraton_ms")
 
 
 def test_a_misspelled_highlight_column_raises():
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     with pytest.raises(ValueError, match="highlight_column='is_in_aspn'.*is_in_aspan"):
         api.plot_scanpath(
             words, fixations, *_EXP17_TRIAL, highlight_column="is_in_aspn"
@@ -985,7 +992,7 @@ def test_a_misspelled_highlight_column_raises():
 
 
 def test_a_comparison_checks_the_column_across_both_readings():
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     with pytest.raises(ValueError, match="color_by='nosuch'"):
         api.compare_scanpaths(
             words,
@@ -1000,7 +1007,7 @@ def test_the_synthetic_color_by_values_and_the_default_span_are_accepted():
     """`uniform` / `line` are not columns, and the default `is_in_aspan` span
     column is skipped quietly on data that has none — only a *named* column
     that is missing is an error."""
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     for value in ("(uniform)", "line", "duration_ms"):
         api.plot_scanpath(words, fixations, *_EXP17_TRIAL, color_by=value)
     api.plot_scanpath(words.drop(columns=["is_in_aspan"]), fixations, *_EXP17_TRIAL)
@@ -1014,7 +1021,7 @@ def test_color_by_line_draws_what_color_by_line_true_draws(builder):
     `color_by=line` — and the API accepted it (the EXP-17 message even
     recommended it), but only `color_by_line=True` reached the builders' line
     branch, so `color_by="line"` drew one flat colour."""
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     build = getattr(api, builder)
     by_value = build(words, fixations, *_EXP17_TRIAL, color_by="line")
     by_flag = build(words, fixations, *_EXP17_TRIAL, color_by_line=True)
@@ -1058,7 +1065,7 @@ def test_the_headless_helpers_are_root_exports(name):
 def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
     """With no Chrome, Kaleido fails on the first layer — and the folder the
     call had just created stayed behind, empty."""
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
 
     def no_chrome(*_args, **_kwargs):

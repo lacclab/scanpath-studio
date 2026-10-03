@@ -167,3 +167,24 @@ def test_the_data_page_names_the_dataset_s_own_columns(clean):
     assert "1 of 2 fixation rows, in 1 trial (1 negative)" in warning.value
     assert "`CURRENT_FIX_DURATION`" in warning.value
     assert any("Nothing is removed or changed" in c.value for c in at.caption)
+
+
+def test_the_api_reads_frames_under_the_datasets_own_names():
+    """`load_scanpath_data` returns the files' own column names (DATA-66); the
+    check must still find their problems, and name the columns as they do."""
+    raw = pd.DataFrame(
+        {
+            "RECORDING_SESSION_LABEL": ["p1", "p1", "p1"],
+            "TRIAL_INDEX": [1, 1, 1],
+            "CURRENT_FIX_X": [10.0, 20.0, 30.0],
+            "CURRENT_FIX_Y": [5.0, 5.0, 5.0],
+            "CURRENT_FIX_DURATION": [-50.0, 200.0, 180.0],
+        }
+    )
+    _words, fixations = sps.load_scanpath_data(None, raw)
+    assert "CURRENT_FIX_DURATION" in fixations.columns
+    table = sps.check_data_health(None, fixations)
+    row = table.set_index("check").loc["fixation_duration"]
+    assert row["rows"] == 1
+    assert "CURRENT_FIX_DURATION" in row["columns"]
+    assert "CURRENT_FIX_DURATION" in row["examples"][0]

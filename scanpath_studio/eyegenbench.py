@@ -253,8 +253,11 @@ def eyegenbench_raw_frames(root, *, dataset: str) -> tuple[pd.DataFrame, pd.Data
     return words, fixations
 
 
-def load_eyegenbench(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load an EyeGenBench corpus as normalized ``(words, fixations)``."""
+def load_eyegenbench(
+    root, *, dataset: str, names: str = "source"
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load an EyeGenBench corpus as normalized ``(words, fixations)``, under the
+    bundle's own column names (``names="canonical"`` for the internal ones)."""
     from .api import load_scanpath_data
 
     words, fixations = eyegenbench_raw_frames(root, dataset=dataset)
@@ -263,6 +266,7 @@ def load_eyegenbench(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]
         fixations,
         word_schema=EYEGENBENCH_WORD_SCHEMA,
         fix_schema=EYEGENBENCH_FIX_SCHEMA,
+        names=names,
     )
 
 

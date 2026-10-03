@@ -17,7 +17,12 @@ sps.save_figure(fig, "scanpath.html")
 All functions below are importable from `scanpath_studio`. The
 [figure options](#figure-options) table lists every figure keyword.
 
-On the bundled demo, the first steps print this (run when the docs are built):
+Columns keep the names your files give them. The demo's word table calls its
+word id `IA_ID` and its total fixation duration `IA_DWELL_TIME`, and every
+function and option takes those names. A column Scanpath Studio made keeps its
+internal name. `load_scanpath_data(..., names="canonical")` gives the internal
+names, which are the same for every dataset. On the bundled demo, the first
+steps print this (run when the docs are built):
 
 ```python exec="true" source="above" result="text" session="api"
 import scanpath_studio as sps  # markdown-exec: hide
@@ -26,13 +31,15 @@ words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head(3))
 
 measures = sps.compute_word_metrics(words, fixations)
-columns = ["word_id", "text", "first_fixation_ms", "total_fixation_duration_ms"]
+columns = ["IA_ID", "IA_LABEL", "IA_FIRST_FIXATION_DURATION", "IA_DWELL_TIME"]
 print(measures[columns].head(3))
 ```
 
 ## Load
 
 ::: scanpath_studio.api.load_scanpath_data
+
+::: scanpath_studio.api.ScanpathData
 
 ::: scanpath_studio.api.load_sample_data
 

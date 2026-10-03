@@ -1873,15 +1873,25 @@ def _column_title(column: str) -> str:
     return labels[column] if column in labels else _humanize_column(column)
 
 
-def _hover_label(field: str) -> str:
+def _table_label(field: str, table: str | None) -> str | None:
+    """``field``'s label in ``table`` when the build names it: the
+    ``"<table>:<field>"`` entry first — a word table and a fixation table can
+    call one canonical column differently (``word_id``) — then the plain one."""
+    labels = _COLUMN_LABELS.get() or {}
+    if table is not None and f"{table}:{field}" in labels:
+        return labels[f"{table}:{field}"]
+    return labels.get(field)
+
+
+def _hover_label(field: str, table: str | None = None) -> str:
     """Readable label for an arbitrary hover column.
 
-    The dataset's own name when the build has one (DATA-66); else a short label
-    for the app's own columns, else the column humanized without its unit (the
-    row writes the unit after the value)."""
-    labels = _COLUMN_LABELS.get() or {}
-    if field in labels:
-        return labels[field]
+    The dataset's own name when the build has one (DATA-66), as ``table``
+    names it; else a short label for the app's own columns, else the column
+    humanized without its unit (the row writes the unit after the value)."""
+    own = _table_label(field, table)
+    if own is not None:
+        return own
     aliases = {
         "text": "Word",
         "word_id": "Word #",
@@ -1901,8 +1911,10 @@ def _hover_payload(
     fields: Sequence[str],
     *,
     line_display: pd.Series | None = None,
+    table: str | None = None,
 ) -> tuple[np.ndarray | None, str]:
-    """Plotly customdata + template for a user-selected field list (VIZ-26)."""
+    """Plotly customdata + template for a user-selected field list (VIZ-26);
+    ``table`` says whose names label the rows (DATA-66)."""
     valid = [
         field
         for field in fields
@@ -1920,7 +1932,7 @@ def _hover_payload(
         )
         values.append(series)
         suffix = " ms" if field.endswith("_ms") else ""
-        rows.append(f"{_hover_label(field)}: %{{customdata[{idx}]}}{suffix}")
+        rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
     return customdata, "<br>".join(rows) + "<extra></extra>"
 
@@ -1952,7 +1964,7 @@ def _add_word_label_trace(
         line_display = (cluster_word_lines(words) + 1).rename("line")
         if word_hover_fields is not None:
             customdata, hover = _hover_payload(
-                words, word_hover_fields, line_display=line_display
+                words, word_hover_fields, line_display=line_display, table="words"
             )
         else:
             # Legacy API/deep-link behaviour: the three fixed identity lines plus
@@ -1960,8 +1972,8 @@ def _add_word_label_trace(
             customdata_parts: list[pd.Series] = [words["word_id"], line_display]
             hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
             if word_hover_measure and word_hover_measure in words.columns:
-                label = (_COLUMN_LABELS.get() or {}).get(
-                    word_hover_measure
+                label = _table_label(
+                    word_hover_measure, "words"
                 ) or _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
                 suffix = " ms" if word_hover_measure.endswith("_ms") else ""
                 hover += f"<br>{label}: %{{customdata[2]}}{suffix}"

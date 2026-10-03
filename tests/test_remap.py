@@ -512,6 +512,7 @@ class TestStimulusLevelWordsRemap:
             raw_f,
             word_schema=schemas["words"],
             fix_schema=schemas["fixations"],
+            names="canonical",
         )
         assert self._boxes(reloaded) == self._boxes(saved["words"])
 

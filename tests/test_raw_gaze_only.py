@@ -48,7 +48,7 @@ SAMPLE_RAW_GAZE = "scanpath_studio/sample_data/raw_gaze.csv"
 @pytest.fixture(scope="module")
 def raw_gaze() -> pd.DataFrame:
     """The bundled demo's raw gaze: one trial of samples, normalized."""
-    return api.load_sample_raw_gaze()
+    return api.load_sample_raw_gaze(names="canonical")
 
 
 @pytest.fixture(scope="module")
@@ -94,7 +94,7 @@ class TestSummaryRows:
         ]
 
     def test_a_words_only_trial_has_no_reading_time_or_fixation_count(self):
-        words, _ = sps.load_sample_data()
+        words, _ = sps.load_sample_data(names="canonical")
         pid, tid = words["participant_id"].iloc[0], words["trial_id"].iloc[0]
         trial_words = words[
             (words["participant_id"] == pid) & (words["trial_id"] == tid)
@@ -106,7 +106,7 @@ class TestSummaryRows:
         assert fields == ["Number of words"]
 
     def test_a_fixation_trial_keeps_every_row_it_had(self):
-        words, fixations = sps.load_sample_data()
+        words, fixations = sps.load_sample_data(names="canonical")
         pid, tid = fixations["participant_id"].iloc[0], fixations["trial_id"].iloc[0]
 
         def trial(frame):
@@ -289,14 +289,14 @@ class TestRawGazeDefault:
 
 class TestPool:
     def test_samples_only_trials_survive_beside_fixations(self, raw_gaze):
-        words, fixations = sps.load_sample_data()
+        words, fixations = sps.load_sample_data(names="canonical")
         extra = raw_gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
         gaze = pd.concat([raw_gaze, extra], ignore_index=True)
         kept = raw_gaze_in_pool(gaze, words, fixations, words, fixations)
         assert set(kept["trial_id"]) == {raw_gaze["trial_id"].iloc[0], "samples_only"}
 
     def test_a_filtered_out_trial_takes_its_samples_with_it(self, raw_gaze):
-        words, fixations = sps.load_sample_data()
+        words, fixations = sps.load_sample_data(names="canonical")
         _, tid = _key(raw_gaze)
         pool = fixations[fixations["trial_id"] != tid]
         kept = raw_gaze_in_pool(raw_gaze, words, fixations, words.iloc[0:0], pool)
@@ -311,7 +311,7 @@ class TestPool:
         )
 
     def test_the_picker_lists_a_samples_only_trial(self, raw_gaze):
-        words, fixations = sps.load_sample_data()
+        words, fixations = sps.load_sample_data(names="canonical")
         extra = raw_gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
         source = combo_source(fixations, words, extra)
         assert "samples_only" in set(source["trial_id"].astype(str))
@@ -341,7 +341,7 @@ class TestApi:
         assert not [a for a in fig.layout.annotations if "Illustration" in str(a.text)]
 
     def test_plot_scanpath_over_words_without_fixations(self, raw_gaze):
-        words, _ = sps.load_sample_data()
+        words, _ = sps.load_sample_data(names="canonical")
         pid, tid = _key(raw_gaze)
         fig = sps.plot_scanpath(words, None, pid, tid, raw_gaze=raw_gaze)
         names = [trace.name for trace in fig.data]
@@ -350,7 +350,7 @@ class TestApi:
     def test_animate_scanpath_says_it_needs_fixations(self, raw_gaze):
         with pytest.raises(ValueError, match="no raw-gaze layer"):
             sps.animate_scanpath(raw_gaze=raw_gaze)
-        words, _ = sps.load_sample_data()
+        words, _ = sps.load_sample_data(names="canonical")
         pid, tid = _key(raw_gaze)
         with pytest.raises(ValueError, match="no fixations to replay"):
             sps.animate_scanpath(words, None, pid, tid)
@@ -462,7 +462,7 @@ def _snippet_source_script():
         "Gaze": {
             "words": empty_words_frame(),
             "fixations": empty_fixations_frame(),
-            "raw_gaze": api.load_sample_raw_gaze(),
+            "raw_gaze": api.load_sample_raw_gaze(names="canonical"),
         }
     }
     st.session_state["_kind"] = _snippet_source("Gaze").kind
@@ -665,7 +665,9 @@ class TestScanpathView:
         assert len(trials) == 2
 
     def test_raw_gaze_beside_fixations_keeps_its_own_trials(self, raw_gaze):
-        words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+        words, fixations = api.load_scanpath_data(
+            *sps.load_sample_data(names="canonical"), names="canonical"
+        )
         extra = raw_gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
         at = self._open(
             pd.concat([raw_gaze, extra], ignore_index=True),
@@ -723,7 +725,9 @@ class TestScanpathView:
         alone keep it live — it draws from the word boxes' own measures."""
         at = self._open(raw_gaze, demo_first=False)
         assert at.toggle(key="global_show_heatmap").disabled
-        words, _ = api.load_scanpath_data(*sps.load_sample_data())
+        words, _ = api.load_scanpath_data(
+            *sps.load_sample_data(names="canonical"), names="canonical"
+        )
         pid, tid = _key(raw_gaze)
         trial_words = words[
             (words["participant_id"] == pid) & (words["trial_id"] == tid)
@@ -741,7 +745,9 @@ class TestScanpathView:
 def test_list_trials_adds_only_trials_neither_table_covers(raw_gaze):
     """A trial the words∩fixations rule leaves out on purpose stays out when
     its samples are passed too — only a trial *neither* table has is added."""
-    words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+    words, fixations = api.load_scanpath_data(
+        *sps.load_sample_data(names="canonical"), names="canonical"
+    )
     pid, tid = _key(raw_gaze)
     words = words[~((words["participant_id"] == pid) & (words["trial_id"] == tid))]
     without = sps.list_trials(words, fixations)
@@ -880,7 +886,9 @@ class TestLinkIsOneVisit:
 def _words_and_samples_without_fixations(raw_gaze):
     """The demo with the raw-gaze trial's fixations removed: that trial has
     words and samples, and every other trial has fixations."""
-    words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+    words, fixations = api.load_scanpath_data(
+        *sps.load_sample_data(names="canonical"), names="canonical"
+    )
     pid, tid = _key(raw_gaze)
     fixations = fixations[
         ~((fixations["participant_id"] == pid) & (fixations["trial_id"] == tid))
@@ -901,7 +909,9 @@ def test_the_api_lists_and_draws_a_words_and_samples_trial(raw_gaze):
 def test_list_parts_decides_per_trial(raw_gaze, two_screen_raw_gaze):
     """In a dataset with fixations for other trials, a samples-only trial
     keeps both of its screens headlessly, as it does in the app."""
-    words, fixations = api.load_scanpath_data(*sps.load_sample_data())
+    words, fixations = api.load_scanpath_data(
+        *sps.load_sample_data(names="canonical"), names="canonical"
+    )
     samples = two_screen_raw_gaze.assign(
         trial_id="samples_only", unique_trial_id="samples_only"
     )

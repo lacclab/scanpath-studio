@@ -258,7 +258,7 @@ def test_a_cancelled_task_raises_before_it_yields(fake_time):
 
 
 def test_building_a_replay_reports_every_frame():
-    words, fixations = api.load_scanpath_data(*load_synthetic_data())
+    words, fixations = api.load_scanpath_data(*load_synthetic_data(), names="canonical")
     pid = str(fixations["participant_id"].iloc[0])
     trial = str(fixations["trial_id"].iloc[0])
     with progress.task(("t", "replay"), title="x", steps=("Building frames",)) as task:
@@ -276,7 +276,7 @@ def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
     nothing in the cache. The next build, under a fresh task (`begin` never
     joins a cancelled one), is a miss: it starts again from the first frame
     and runs to the last."""
-    words, fixations = api.load_scanpath_data(*load_synthetic_data())
+    words, fixations = api.load_scanpath_data(*load_synthetic_data(), names="canonical")
     pid = str(fixations["participant_id"].iloc[0])
     trial = str(fixations["trial_id"].iloc[0])
     plan = tabs._plan_replay(

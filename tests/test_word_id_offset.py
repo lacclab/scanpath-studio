@@ -135,7 +135,7 @@ class TestBundledSample:
     def test_demo_fixations_line_up_with_the_word_boxes(self):
         from scanpath_studio import api
 
-        words, fixations = api.load_sample_data()
+        words, fixations = api.load_sample_data(names="canonical")
         trial = "l37_1129_2_2_1_Adv_r0"
         tw = words[words["trial_id"] == trial]
         tf = fixations[fixations["trial_id"] == trial].sort_values("order_in_trial")

@@ -1566,12 +1566,13 @@ def python_snippet(
             if _passes_raw_gaze(source, state)
             else "trials = sps.list_trials(words, fixations)"
         )
-        for column, value in (
-            ("participant_id", state.participant),
-            ("trial_id", state.trial),
-        ):
+        # DATA-66: `list_trials` names its two columns as the dataset does
+        # (participant, then trial), so they are picked by position.
+        for position, value in ((0, state.participant), (1, state.trial)):
             if value:
-                lines.append(f"trials = trials[trials[{column!r}] == {_py(value)}]")
+                lines.append(
+                    f"trials = trials[trials.iloc[:, {position}] == {_py(value)}]"
+                )
         lines += ["participant, trial = trials.iloc[0]", ""]
         participant, trial = "participant", "trial"
     args = ["words", "fixations"]

@@ -247,7 +247,7 @@ def _reports_on_a_miss(build: Callable[[], object]) -> bool:
 
 
 def _normalized_synthetic() -> tuple[pd.DataFrame, pd.DataFrame]:
-    return api.load_scanpath_data(*load_synthetic_data())
+    return api.load_scanpath_data(*load_synthetic_data(), names="canonical")
 
 
 def test_the_server_bundles_report_on_a_miss(monkeypatch):

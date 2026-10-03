@@ -909,7 +909,9 @@ class TestZeroPaddedIds:
         ).assign(duration_ms=200.0)
         fixations.to_parquet(tmp_path / "fix.parquet")
         w, f = sps.load_scanpath_data(
-            str(tmp_path / "words.csv"), str(tmp_path / "fix.parquet")
+            str(tmp_path / "words.csv"),
+            str(tmp_path / "fix.parquet"),
+            names="canonical",
         )
         assert set(w["participant_id"]) == {"007"}
         assert data_module.trial_keys(w) == data_module.trial_keys(f)

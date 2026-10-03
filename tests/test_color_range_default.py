@@ -46,7 +46,7 @@ COLOURED = {
 
 @pytest.fixture(scope="module")
 def demo():
-    return sps.load_sample_data()
+    return sps.load_sample_data(names="canonical")
 
 
 def _trial_frames(words, fixations, trial):
@@ -91,7 +91,7 @@ def _rail_app():
     if design:
         controls._apply_view_preset(design)  # a button on_click: runs first
     _apply_url_preset()  # app.main's order: the link, then the widgets
-    words, fixations = api.load_sample_data()
+    words, fixations = api.load_sample_data(names="canonical")
     pid, tid = st.session_state["_trial"]
     trial_fix = fixations[
         (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)

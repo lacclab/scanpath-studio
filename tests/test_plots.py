@@ -2318,7 +2318,7 @@ class TestPlotEnhancements:
         from scanpath_studio import api, plots
         from scanpath_studio.measures import word_box_bounds
 
-        words, _ = api.load_sample_data()
+        words, _ = api.load_sample_data(names="canonical")
         first_trial = words.iloc[0][["participant_id", "trial_id"]]
         trial = words[
             (words["participant_id"] == first_trial["participant_id"])

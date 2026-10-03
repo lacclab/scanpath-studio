@@ -139,3 +139,22 @@ def test_corpus_analysis_names_the_filtered_pool_and_clears_it():
     assert _pool_line(at) == "**24 trials · 2 readers** · no filters"
     assert at.button(key="corpus_pool_clear").disabled
     assert at.session_state["_trial_filters"]["participants"] is None
+
+
+@pytest.mark.timeout(240)
+def test_a_cleared_filter_stays_cleared_across_views():
+    """Clear on the pool line must not come back on the next view."""
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    at.session_state["filter_participants"] = ["l7_1090"]
+    at.run(timeout=90)
+    pin_view(at, "Corpus Analysis")
+    at.run(timeout=90)
+    at.button(key="corpus_pool_clear").click()
+    pin_view(at, "Corpus Analysis")
+    at.run(timeout=90)
+    for view in ("Data", "Scanpath", "Corpus Analysis"):
+        pin_view(at, view)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+    assert _pool_line(at) == "**24 trials · 2 readers** · no filters"

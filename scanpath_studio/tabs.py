@@ -8611,6 +8611,9 @@ def render_analysis_pool_bar(
         icon=ICONS["trial_filter"],
         width="content",
         help="The trial filters the Scanpath view uses — the same pool.",
+        # Stateful, so Clear can open it (`_clear_pool_filters`).
+        key=_POOL_POPOVER_KEY,
+        on_change="rerun",
     )
     _render_pool_filters(
         pop.container(key="corpus_pool_filters"),
@@ -8622,12 +8625,29 @@ def render_analysis_pool_bar(
         "Clear",
         icon=ICONS["close"],
         key="corpus_pool_clear",
-        on_click=clear_trial_filters,
+        on_click=_clear_pool_filters,
         disabled=not active,
         width="content",
         help="Reset every trial filter, on every view.",
     )
     return {"trial_filters": items, "pool": pool}
+
+
+_POOL_POPOVER_KEY = "corpus_pool_popover"
+
+
+def _clear_pool_filters() -> None:
+    """The pool line's Clear: reset the filters and open **Edit filters**.
+
+    A closed popover's widgets are not mounted in the browser, so a
+    value the server sets for them never reaches it, and the browser sent the
+    old selection back on a later rerun — the filter returned after a view
+    switch. Opening the popover mounts them with the cleared values, and shows
+    what was cleared. (The panel's own *Clear all filters* runs while it is
+    open, which is why it never had this problem.)
+    """
+    clear_trial_filters()
+    st.session_state[_POOL_POPOVER_KEY] = True
 
 
 #: AN-34 — what every Corpus Analysis table's recipe shares: the dataset, the

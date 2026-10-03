@@ -792,3 +792,62 @@ class TestTrialFiltersAreTrialLevel:
         assert annotations_mod.has_screen_annotations()
         del session[KEY][("p", "t", "s1")]
         assert not annotations_mod.has_screen_annotations()
+
+
+def _open_row_app():
+    """Click row ``_row`` of the Annotations table's **Open** column."""
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    records = [
+        {"participant_id": "p", "trial_id": "t", "screen_id": "s2"},
+        {"participant_id": "p", "trial_id": "hidden"},
+        {"participant_id": "p", "trial_id": "gone"},
+    ]
+    st.session_state["_click"] = {"row": st.session_state["_row"]}
+    ann._open_annotation(
+        "_click",
+        records,
+        frozenset({("p", "t"), ("p", "hidden")}),
+        frozenset({("p", "t")}),
+    )
+
+
+class TestOpenAnAnnotatedReading:
+    """Data Management → Annotations: a row's **Open** shows its reading."""
+
+    def _click(self, row: int):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_open_row_app)
+        at.session_state["_row"] = row
+        at.run()
+        assert not at.exception, at.exception
+        return at.session_state
+
+    def test_a_screen_annotation_opens_its_trial_and_screen(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        state = self._click(0)
+        assert state[PENDING_TRIAL_KEY] == {
+            "participant_id": "p",
+            "trial_id": "t",
+            "screen_id": "s2",
+        }
+        assert state["main_nav"] == "Scanpath Visualization"
+
+    def test_a_trial_the_filters_hide_is_explained_not_opened(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        state = self._click(1)
+        assert PENDING_TRIAL_KEY not in state
+        assert "main_nav" not in state
+        assert "the trial filters hide it" in state["_dataset_annotations_note"]
+
+    def test_a_trial_the_dataset_has_not_loaded_is_explained(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        state = self._click(2)
+        assert PENDING_TRIAL_KEY not in state
+        assert "hasn't loaded that trial" in state["_dataset_annotations_note"]

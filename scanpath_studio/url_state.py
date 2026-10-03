@@ -1501,8 +1501,13 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
 PENDING_TRIAL_KEY = "_pending_trial_selection"
 
 
-def request_trial(participant: str | None, trial_id: str | None) -> None:
+def request_trial(
+    participant: str | None, trial_id: str | None, *, screen_id: str | None = None
+) -> None:
     """Ask the app to open ``trial_id`` in the Scanpath view (ENG-36).
+
+    ``screen_id`` also opens that screen of a multipart trial — Data
+    Management → Annotations' **Open** on a screen annotation.
 
     Called from a *callback* — the reader/trial tables in Corpus Analysis have a
     "go to this trial" button — which runs before the script, so the trial pool
@@ -1516,6 +1521,7 @@ def request_trial(participant: str | None, trial_id: str | None) -> None:
     st.session_state[PENDING_TRIAL_KEY] = {
         "participant_id": str(participant) if participant else None,
         "trial_id": str(trial_id),
+        "screen_id": str(screen_id) if screen_id not in (None, "") else None,
     }
     _go_scanpath()
 

@@ -4438,6 +4438,56 @@ class TestOpenTrialFromCorpusTable:
         # Consumed once it lands, so it can't re-apply over later navigation.
         assert PENDING_TRIAL_KEY not in at.session_state
 
+    def test_an_annotation_row_opens_its_screen(self):
+        """Data Management → Annotations' **Open** on a screen annotation lands
+        on that screen of the trial, and the table offers the button."""
+        import pandas as pd
+
+        from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+        from scanpath_studio.constants import _VIEW_DATA
+        from scanpath_studio.synthetic import make_multipart_synthetic_data
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        words, fixations = make_multipart_synthetic_data()
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.session_state["_datasets"] = {
+            "Two screens": {
+                "words": words,
+                "fixations": fixations,
+                "raw_gaze": pd.DataFrame(),
+                "filter_fields": [],
+                "composite_trial_columns": [],
+            }
+        }
+        at.session_state["data_source_choice"] = "Two screens"
+        at.run()
+        assert at.session_state["single_screen_id"] == "intro"
+
+        at.session_state[ANNOTATIONS_STATE_KEY] = {
+            ("synthetic", "multipart_demo", "question"): {
+                "star": True,
+                "tags": [],
+                "note": "check",
+            }
+        }
+        at.session_state["main_nav"] = _VIEW_DATA
+        at.run()
+        assert not at.exception, at.exception
+        tables = [d.value for d in at.dataframe if "Note" in d.value.columns]
+        assert tables and "Open" in tables[0].columns
+
+        # What the row's callback parks (`annotations._open_annotation`).
+        at.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": "synthetic",
+            "trial_id": "multipart_demo",
+            "screen_id": "question",
+        }
+        at.session_state["main_nav"] = "Scanpath Visualization"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["single_trial_id"] == "multipart_demo"
+        assert at.session_state["single_screen_id"] == "question"
+
 
 class TestLazySubtabBodiesStillRender:
     """ENG-37 — the four on-demand panels are exercised, not just gated.

@@ -1077,6 +1077,48 @@ def _import_dataset_annotations(
     _refresh_dataset_widgets(note)
 
 
+#: Cell text of a row's **Open** button — `ButtonColumn` takes its label from
+#: the cell value, as `tabs._OPEN_TRIAL_LABEL` does.
+_OPEN_LABEL = f"{ICONS['open']} Open"
+
+
+def _open_annotation(
+    click_key: str, records: list[dict], trials: frozenset, open_trials: frozenset
+) -> None:
+    """A row's **Open**: show its reading (and screen) in the Scanpath view.
+
+    The click is a callback, so it parks the request with
+    ``url_state.request_trial`` — the Corpus Analysis tables' hop. It opens
+    only that exact reading: one the dataset hasn't loaded, or one the trial
+    filters hide, is explained here instead, since the picker would otherwise
+    land on another reader's trial of the same id or stay where it was.
+    """
+    click = st.session_state.get(click_key)
+    row = click.get("row") if isinstance(click, dict) else None
+    if row is None or not 0 <= row < len(records):
+        return
+    record = records[row]
+    pid, tid = str(record["participant_id"]), str(record["trial_id"])
+    where = f"participant **{pid}**, trial **{tid}**"
+    if (pid, tid) not in trials:
+        st.session_state[_DATASET_NOTE_KEY] = (
+            f"error:Can't open {where}: this dataset hasn't loaded that trial."
+        )
+        return
+    if (pid, tid) not in open_trials:
+        st.session_state[_DATASET_NOTE_KEY] = (
+            f"error:Can't open {where}: the trial filters hide it. Clear or "
+            f"change the filters on {ICONS['view_scanpath']} **Scanpath**, "
+            "then open it again."
+        )
+        return
+    # Imported at call time: `url_state` imports the controls, which import
+    # this module.
+    from .url_state import request_trial
+
+    request_trial(pid, tid, screen_id=record.get("screen_id"))
+
+
 def _delete_dataset_annotations(records: list[dict]) -> None:
     removed = drop_records(_store(), records)
     _refresh_dataset_widgets(f"Deleted {_plural(removed, 'annotation')}.")
@@ -1104,7 +1146,7 @@ def _annotations_frame(records: list[dict], trials: frozenset) -> pd.DataFrame:
     return frame
 
 
-def render_dataset_annotations(trials, *, dataset_name: str) -> None:
+def render_dataset_annotations(trials, *, dataset_name: str, open_trials=None) -> None:
     """🗂️ Data → **Annotations**: every annotation the open dataset holds.
 
     One table — participant, trial, favorite, tags, note — with **Export** (this
@@ -1120,6 +1162,10 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
     before annotations were per dataset assigned here (:func:`restore_payload`).
     Those are flagged rather than hidden, so an entry is never out of reach:
     exported from here, it imports into the dataset it belongs to.
+
+    ``open_trials`` — the trials the Scanpath picker can show, after the trial
+    filters — gives each row an **Open** button (:func:`_open_annotation`);
+    without it the table has none.
     """
     trials = _trial_set(trials)
     records = store_to_records(_store())
@@ -1178,14 +1224,30 @@ def render_dataset_annotations(trials, *, dataset_name: str) -> None:
             "dataset; to move them to another, **Export** them here and "
             "**Import** them there."
         )
+    frame = _annotations_frame(records, trials)
+    column_config = {}
+    if open_trials is not None:
+        frame.insert(0, "Open", _OPEN_LABEL)
+        open_key = _dataset_widget_key("open")
+        column_config["Open"] = st.column_config.ButtonColumn(
+            "",
+            type="tertiary",
+            width="small",
+            help="Show this reading — and its screen, for a screen annotation — "
+            "in the Scanpath view.",
+            on_click=_open_annotation,
+            args=(open_key, records, trials, _trial_set(open_trials)),
+            key=open_key,
+        )
     event = st.dataframe(
-        _annotations_frame(records, trials),
+        frame,
         hide_index=True,
         width="stretch",
         on_select="rerun",
         selection_mode="multi-row",
         key=_dataset_widget_key("table"),
         column_config={
+            **column_config,
             "Favorite": st.column_config.CheckboxColumn("Favorite", width="small"),
             "Tags": st.column_config.ListColumn("Tags"),
             "Note": st.column_config.TextColumn("Note", width="large"),

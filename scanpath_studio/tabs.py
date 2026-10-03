@@ -13864,6 +13864,7 @@ def render_data_inspection_tab(
     raw_gaze_filtered: pd.DataFrame,
     *,
     annotation_trials=None,
+    open_trials=None,
     dataset_name: str = "",
     scope: str | None = None,
 ) -> None:
@@ -13875,7 +13876,8 @@ def render_data_inspection_tab(
     in their fixed order — and, UX-174 r2, **Annotations**: every annotation on
     the dataset's trials (``annotation_trials``, its ``(participant, trial)``
     pairs before any filtering), to export, import or delete. Without
-    ``annotation_trials`` the tab is left off.
+    ``annotation_trials`` the tab is left off. ``open_trials`` — the same
+    pairs after the trial filters — gives its rows an **Open** button.
 
     UX-52 gave the section one level of hierarchy and folded the bulk away —
     "the answer stays open, the appendix folds". This round unfolded the raw
@@ -13918,7 +13920,11 @@ def render_data_inspection_tab(
     if annotation_trials is not None:
         *raw_tabs, annotations_tab = raw_tabs
         with annotations_tab:
-            render_dataset_annotations(annotation_trials, dataset_name=dataset_name)
+            render_dataset_annotations(
+                annotation_trials,
+                dataset_name=dataset_name,
+                open_trials=open_trials,
+            )
     _fill_raw_data_tabs(
         raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered, scope=scope
     )

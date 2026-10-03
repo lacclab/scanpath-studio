@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/controls.py: 90%</title>
+    <title>Coverage for scanpath_studio/controls.py: 91%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_15cffcd0.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>controls.py</b>:
-            <span class="pc_cov">90%</span>
+            <span class="pc_cov">91%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">2134 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">1927<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">207<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">1933<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">201<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_data_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-03 05:19 +0000
+            created at 2026-10-03 05:32 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -7210,13 +7210,13 @@
     <p class="run"><span class="n"><a id="t7128" href="#t7128">7128</a></span><span class="t">        <span class="nam">bare</span> <span class="op">=</span> <span class="nam">key</span><span class="op">[</span><span class="nam">len</span><span class="op">(</span><span class="nam">prefix</span><span class="op">)</span> <span class="op">:</span><span class="op">]</span> <span class="key">if</span> <span class="nam">prefix</span> <span class="key">and</span> <span class="nam">key</span><span class="op">.</span><span class="nam">startswith</span><span class="op">(</span><span class="nam">prefix</span><span class="op">)</span> <span class="key">else</span> <span class="nam">key</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t7129" href="#t7129">7129</a></span><span class="t">        <span class="key">if</span> <span class="nam">bare</span> <span class="key">in</span> <span class="nam">_FILTER_KEY_LABELS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t7130" href="#t7130">7130</a></span><span class="t">            <span class="key">return</span> <span class="nam">_FILTER_KEY_LABELS</span><span class="op">[</span><span class="nam">bare</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t7131" href="#t7131">7131</a></span><span class="t">        <span class="key">for</span> <span class="nam">stem</span> <span class="key">in</span> <span class="nam">_METADATA_FILTER_STEMS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t7132" href="#t7132">7132</a></span><span class="t">            <span class="key">if</span> <span class="nam">bare</span><span class="op">.</span><span class="nam">startswith</span><span class="op">(</span><span class="nam">stem</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t7133" href="#t7133">7133</a></span><span class="t">                <span class="key">return</span> <span class="nam">md</span><span class="op">.</span><span class="nam">field_label</span><span class="op">(</span><span class="nam">bare</span><span class="op">[</span><span class="nam">len</span><span class="op">(</span><span class="nam">stem</span><span class="op">)</span> <span class="op">:</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t7134" href="#t7134">7134</a></span><span class="t">        <span class="nam">col</span> <span class="op">=</span> <span class="nam">bare</span><span class="op">.</span><span class="nam">removeprefix</span><span class="op">(</span><span class="str">&quot;filter_&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t7135" href="#t7135">7135</a></span><span class="t">        <span class="key">if</span> <span class="nam">col</span><span class="op">.</span><span class="nam">endswith</span><span class="op">(</span><span class="str">&quot;_range&quot;</span><span class="op">)</span> <span class="key">and</span> <span class="nam">col</span><span class="op">.</span><span class="nam">removesuffix</span><span class="op">(</span><span class="str">&quot;_range&quot;</span><span class="op">)</span> <span class="key">in</span> <span class="nam">labels</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7131" href="#t7131">7131</a></span><span class="t">        <span class="key">for</span> <span class="nam">stem</span> <span class="key">in</span> <span class="nam">_METADATA_FILTER_STEMS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7132" href="#t7132">7132</a></span><span class="t">            <span class="key">if</span> <span class="nam">bare</span><span class="op">.</span><span class="nam">startswith</span><span class="op">(</span><span class="nam">stem</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7133" href="#t7133">7133</a></span><span class="t">                <span class="key">return</span> <span class="nam">md</span><span class="op">.</span><span class="nam">field_label</span><span class="op">(</span><span class="nam">bare</span><span class="op">[</span><span class="nam">len</span><span class="op">(</span><span class="nam">stem</span><span class="op">)</span> <span class="op">:</span><span class="op">]</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7134" href="#t7134">7134</a></span><span class="t">        <span class="nam">col</span> <span class="op">=</span> <span class="nam">bare</span><span class="op">.</span><span class="nam">removeprefix</span><span class="op">(</span><span class="str">&quot;filter_&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7135" href="#t7135">7135</a></span><span class="t">        <span class="key">if</span> <span class="nam">col</span><span class="op">.</span><span class="nam">endswith</span><span class="op">(</span><span class="str">&quot;_range&quot;</span><span class="op">)</span> <span class="key">and</span> <span class="nam">col</span><span class="op">.</span><span class="nam">removesuffix</span><span class="op">(</span><span class="str">&quot;_range&quot;</span><span class="op">)</span> <span class="key">in</span> <span class="nam">labels</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t7136" href="#t7136">7136</a></span><span class="t">            <span class="nam">col</span> <span class="op">=</span> <span class="nam">col</span><span class="op">.</span><span class="nam">removesuffix</span><span class="op">(</span><span class="str">&quot;_range&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t7137" href="#t7137">7137</a></span><span class="t">        <span class="key">return</span> <span class="nam">labels</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">col</span><span class="op">)</span> <span class="key">or</span> <span class="nam">_trial_filter_label</span><span class="op">(</span><span class="nam">col</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t7137" href="#t7137">7137</a></span><span class="t">        <span class="key">return</span> <span class="nam">labels</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="nam">col</span><span class="op">)</span> <span class="key">or</span> <span class="nam">_trial_filter_label</span><span class="op">(</span><span class="nam">col</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t7138" href="#t7138">7138</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t7139" href="#t7139">7139</a></span><span class="t">    <span class="key">return</span> <span class="nam">describe_filter_keys</span><span class="op">(</span><span class="nam">keys</span><span class="op">,</span> <span class="nam">values</span><span class="op">,</span> <span class="nam">label_for</span><span class="op">,</span> <span class="nam">prefix</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t7140" href="#t7140">7140</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -8465,7 +8465,7 @@
             <a class="nav" href="z_370c57a259db20f3_data_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-03 05:19 +0000
+            created at 2026-10-03 05:32 +0000
         </p>
     </div>
 </footer>

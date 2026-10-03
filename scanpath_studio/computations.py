@@ -1482,6 +1482,19 @@ def entries_in(category: str) -> tuple[Computation, ...]:
     return tuple(entry for entry in REGISTER if entry.category == category)
 
 
+def measure_entry(column: str) -> Computation | None:
+    """The reading-measure or fixation entry that defines ``column`` — the one
+    whose ``output`` names it — or ``None`` for a value the register does not
+    derive (a fixation's recorded duration). Lets the app quote the register's
+    own summary and unit beside a measure instead of keeping a second copy."""
+    for entry in REGISTER:
+        if not entry.id.startswith(("measure.", "fix.")):
+            continue
+        if column in (part.strip() for part in entry.output.split(",")):
+            return entry
+    return None
+
+
 def anchor(entry_id: str) -> str:
     """The page anchor of one entry — its id, so a link to ``measure.ffd``
     survives any rewording of the entry's name (``#measure-ffd``)."""

@@ -3734,6 +3734,23 @@ class TestCorpusAnalysisTab:
         d = next(m for m in at.metric if m.label == "Standardized difference")
         assert d.value == "—"
 
+    def test_the_measure_and_error_bars_are_explained_in_place(self):
+        """The Measure picker carries the register's definition, unit, link and
+        what one plotted value is; the error-bar choice says what it shows."""
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["ptext_view"] = "Cohort profile"
+        at.session_state["ptext3_spread"] = "SEM"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        captions = [c.value for c in at.caption]
+        note = next(c for c in captions if "computations/#measure-tfd" in c)
+        assert "All time spent on a word" in note and "Unit: ms." in note
+        assert "Each word's value is the mean across its readers." in note
+        assert any(
+            c.startswith("SEM: how precisely the mean is known") for c in captions
+        )
+
     def test_group_filter_set_mode_renders(self):
         # The 'Independent filter sets' group-definition mode (the second of the
         # two modes the user asked for) must render for both the single-group

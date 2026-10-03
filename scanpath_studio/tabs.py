@@ -98,7 +98,10 @@ from scanpath_studio.compare_source import (
     snapshot_for,
     source_has_raw_gaze,
 )
+from scanpath_studio.computations import anchor as computation_anchor
+from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
+    CITATION,
     DATASET_EDITOR_OPEN_KEY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
@@ -7867,6 +7870,57 @@ def _measure_picker(
     return MEASURES[labels[chosen]]
 
 
+_COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
+
+
+def _measure_note(host, measure: Measure, observation: str) -> None:
+    """One caption under the measure picker: what the measure is and its unit
+    (quoted from the computation register, VAL-5), what each plotted value
+    is, and a link to the measure's full definition."""
+    entry = measure_entry(measure.column)
+    if entry is None:
+        about, url = "As recorded in the data.", f"{CITATION['docs_url']}glossary/"
+        unit = measure.unit or "count"
+    else:
+        # The register's summaries can end in a tracker id ("(BUG-25)").
+        about = re.sub(r"\s*\([A-Z]+-\d+\)(?=\.?$)", "", entry.summary)
+        url = f"{_COMPUTATIONS_URL}#{computation_anchor(entry.id)}"
+        unit = entry.unit or measure.unit or "count"
+    host.caption(f"{about} Unit: {unit}. {observation} [Definition ↗]({url})")
+
+
+#: Appended to a measure note when the values are z-scored (AN-25).
+_Z_NOTE = " Z-scored within each reader, so in SD units rather than the unit above."
+
+
+def _observation(measure: Measure, normalize: bool = False) -> str:
+    """What one value of a raw-value view (a distribution) is."""
+    one = (
+        "Each value is one fixation."
+        if measure.frame == "fixations"
+        else "Each value is one word in one reading."
+    )
+    return one + (_Z_NOTE if normalize and not measure.is_rate else "")
+
+
+# What each error-bar choice shows, in one line: SD and IQR describe how the
+# values vary, SEM and the bootstrap CI how precisely the centre is known.
+_SPREAD_NOTES = {
+    "SD": "SD: how much the values vary (±1 standard deviation).",
+    "SEM": "SEM: how precisely the mean is known (SD ÷ √n), not how much values vary.",
+    "IQR": "IQR: the middle half of the values (25th to 75th percentile).",
+    "Bootstrap CI": "Bootstrap CI: a 95% interval for the centre, from "
+    "resampling the values — uncertainty, not variation.",
+}
+
+
+def _spread_note(host, spread: str) -> None:
+    """One caption under an error-bar selector saying what the choice shows."""
+    note = _SPREAD_NOTES.get(spread)
+    if note:
+        host.caption(f"{note} [Details ↗]({_COMPUTATIONS_URL}#agg-spread)")
+
+
 def _normalize_toggle(host, *, key, disabled=False):
     """Z-score-within-reader toggle (AN-25)."""
     return bool(
@@ -9142,6 +9196,17 @@ def render_per_text_tab(
         key="ptext_norm",
         disabled=measure.is_rate or view == "Word difficulty on stimulus",
     )
+    _measure_note(
+        c[0],
+        measure,
+        (
+            f"Each value is one reader on one word (the {agg} of their "
+            "readings of this text)."
+            if view in ("Per-reader profiles", "Word × reader heatmap")
+            else f"Each word's value is the {agg} across its readers."
+        )
+        + (_Z_NOTE if normalize and view != "Word difficulty on stimulus" else ""),
+    )
 
     if view == "Per-reader profiles":  # AN-1
         overlay = c[2].checkbox("Cohort mean", value=True, key="ptext1_overlay")
@@ -9233,6 +9298,7 @@ def render_per_text_tab(
             help="Band around each word's mean across readers — SD, SEM, IQR, "
             "or a 95% bootstrap confidence interval.",
         )
+        _spread_note(st, spread)
         min_readers = _min_readers_input(st, key="ptext3_min")
         prof = _c_cohort_profile(
             words_filtered,
@@ -9447,6 +9513,7 @@ def render_per_reader_tab(
             return
         kind = c[1].selectbox("Plot", ["violin", "box"], key="prdr7_kind")
         normalize = _normalize_toggle(c[2], key="prdr7_norm", disabled=measure.is_rate)
+        _measure_note(c[0], measure, _observation(measure, normalize))
         frame = fix_e if measure.frame == "fixations" else words_filtered
         groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
         _chart(
@@ -9557,6 +9624,12 @@ def render_per_reader_tab(
             key="prdr9_x",
             format_func=lambda s: s.replace("_", " "),
         )
+        _measure_note(
+            c[0],
+            measure,
+            "Each point is this reader's mean over the fixations at that "
+            "point in their trials.",
+        )
         df = metric_over_time(fix_e, measure, participant_id=pid, by=by)
         _chart(
             make_trend_figure(
@@ -9618,6 +9691,12 @@ def render_per_reader_tab(
             _AGG_OPTIONS,
             key="prdr13_agg",
             help="How the measure is combined within each trial (across its words / fixations).",
+        )
+        _measure_note(
+            c[0],
+            measure,
+            f"Each point is one trial: the {agg} over its "
+            f"{'fixations' if measure.frame == 'fixations' else 'words'}.",
         )
         frame = fix_e if measure.frame == "fixations" else words_filtered
         sub = frame[frame["participant_id"].astype(str) == str(pid)].copy()
@@ -9763,6 +9842,7 @@ def render_per_group_tab(
             return
         kind = c[1].selectbox("Plot", ["violin", "box"], key="pgrp14_kind")
         normalize = _normalize_toggle(c[2], key="pgrp14_norm", disabled=measure.is_rate)
+        _measure_note(c[0], measure, _observation(measure, normalize))
         frame = fix_g if measure.frame == "fixations" else words_g
         vals = measure_values(frame, measure, normalize=normalize)
         _chart(
@@ -9792,6 +9872,12 @@ def render_per_group_tab(
             help="How each word's value is combined across the group's readers.",
         )
         spread = c[3].selectbox("Spread", _SPREAD_OPTIONS, key="pgrp15_spread")
+        _measure_note(
+            st,
+            measure,
+            f"Each point is one word: the {agg} across the group's readers.",
+        )
+        _spread_note(st, spread)
         min_readers = _min_readers_input(st, key="pgrp15_min")
         # BUG-26: same single-screen scoping as the Per text views. There is no
         # free column on this row for a picker, so the helper's default (the
@@ -9895,6 +9981,13 @@ def render_per_group_tab(
         )
         show_readers = c[2].checkbox(
             "Per-reader behind", value=False, key="pgrp17_readers"
+        )
+        _measure_note(
+            c[0],
+            measure,
+            f"Each point is the mean, over the trials at that position, of each "
+            f"trial's {agg} over its "
+            f"{'fixations' if measure.frame == 'fixations' else 'words'}.",
         )
         frame = fix_g if measure.frame == "fixations" else words_g
         sub = frame.copy()
@@ -10022,6 +10115,7 @@ def render_group_comparison_tab(
             return
         kind = c[1].selectbox("Plot", ["violin", "box"], key="cmp18_kind")
         normalize = _normalize_toggle(c[2], key="cmp18_norm", disabled=measure.is_rate)
+        _measure_note(c[0], measure, _observation(measure, normalize))
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
         groups = two_group_values(
             frame,
@@ -10065,6 +10159,12 @@ def render_group_comparison_tab(
             help="How each word's value is combined across each group's readers, before A−B.",
         )
         min_readers = _min_readers_input(c[3], key="cmp19_min", label="Min/grp")
+        _measure_note(
+            st,
+            measure,
+            f"Each point is one word: group A's {agg} across its readers minus "
+            f"group B's.",
+        )
         diff = group_word_difference(
             words_filtered,
             text_col,
@@ -10128,6 +10228,11 @@ def render_group_comparison_tab(
         spread = c[1].selectbox(
             "Error bars", _SPREAD_OPTIONS, index=1, key="cmp20_spread"
         )
+        c[0].caption(
+            f"Each bar is the {agg} of all the group's values for that measure — "
+            "its words or fixations, pooled across readers."
+        )
+        _spread_note(c[1], spread)
         measures = [MEASURES[labels[m]] for m in chosen]
         if not measures:
             st.info("Pick at least one measure.")
@@ -10174,6 +10279,13 @@ def render_group_comparison_tab(
         by_reader = a is not None and b is not None
         if not by_reader:
             a, b = measure_values(group_a, measure), measure_values(group_b, measure)
+        _measure_note(
+            st,
+            measure,
+            "Each value is one reader's mean; a group's mean is the mean of those."
+            if by_reader
+            else _observation(measure),
+        )
         res = group_mean_difference(a, b)
         unit = "readers" if by_reader else "values"
         cols = st.columns(4)
@@ -10202,15 +10314,11 @@ def render_group_comparison_tab(
         )
         if not by_reader:
             note = (
-                "This dataset names no readers, so each value is one word or "
-                "fixation and n counts those; the standardized difference is "
-                "not shown."
+                "This dataset names no readers, so n counts words or fixations "
+                "and the standardized difference is not shown."
             )
         else:
-            note = (
-                f"Each value is one reader's mean {measure.axis_label}; n counts "
-                "the readers with a value for this measure."
-            )
+            note = "n counts the readers with a value for this measure."
             if shared:
                 note += (
                     f" {shared} reader{'' if shared == 1 else 's'} in both "
@@ -10265,6 +10373,12 @@ def render_group_comparison_tab(
             _AGG_OPTIONS,
             key="cmp22_agg",
             help="How each word's value is combined across each group's readers.",
+        )
+        _measure_note(
+            st,
+            measure,
+            f"Each cell is one word in one group: the {agg} across that group's "
+            "readers.",
         )
         long = two_group_word_profiles(
             words_filtered,

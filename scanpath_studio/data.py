@@ -5341,7 +5341,7 @@ def remap_normalized_frame(
             working, schema, keep_columns=keep, _renormalizing=True
         )
     elif kind == "raw_gaze":
-        result = normalize_raw_gaze(working, schema)
+        result = normalize_raw_gaze(working, schema, keep_columns=keep)
     else:
         raise ValueError(f"unknown frame kind: {kind!r}")
     if "unique_trial_id" not in result.columns and "trial_id" in result.columns:

@@ -17,6 +17,7 @@ fixations, and the tests pin that the surfaces say so rather than invent it.
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 
 import pandas as pd
@@ -506,6 +507,64 @@ def test_the_bundle_draws_and_writes_a_samples_only_trial(raw_gaze):
     archive = zipfile.ZipFile(io.BytesIO(data))
     assert "Raw gaze" in archive.read(figure).decode("utf-8")
     assert len(pd.read_csv(io.BytesIO(archive.read(table)))) == len(raw_gaze)
+
+
+def test_the_bundle_exports_multipart_samples_one_screen_at_a_time(
+    two_screen_raw_gaze,
+):
+    """A samples-only trial takes its screens from its samples, so each screen is
+    its own folder and figure rather than both coordinate spaces pooled; a trial
+    with fixations beside it keeps its own screens (BUG-105)."""
+    from scanpath_studio.export import ExportOptions, bulk_export
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+    from scanpath_studio.utils import build_combo_options
+
+    gaze = two_screen_raw_gaze.assign(
+        canvas_width=[640 if s == "s1" else 800 for s in two_screen_raw_gaze.screen_id],
+        canvas_height=[
+            480 if s == "s1" else 600 for s in two_screen_raw_gaze.screen_id
+        ],
+    )
+    words, fixations = make_multipart_synthetic_data()
+    combos = pd.concat(
+        [api.list_trials(words, fixations), build_combo_options(gaze)[0]],
+        ignore_index=True,
+    )
+    data, progress = bulk_export(
+        combos,
+        words,
+        fixations,
+        canvas_width=2560,
+        canvas_height=1440,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={"show_raw_gaze": True},
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=True,
+            include_raw_gaze=True,
+            include_plot_config=True,
+        ),
+        raw_gaze=gaze,
+    )
+    assert not progress.errors, progress.errors
+    assert progress.total_trials == 4
+    archive = zipfile.ZipFile(io.BytesIO(data))
+    names = archive.namelist()
+    for screen, (width, height) in {"s1": (640, 480), "s2": (800, 600)}.items():
+        folder = next(
+            n.rsplit("/", 1)[0]
+            for n in names
+            if n.endswith(f"-{screen}/raw_gaze.csv") and "/screens/" in n
+        )
+        table = pd.read_csv(io.BytesIO(archive.read(f"{folder}/raw_gaze.csv")))
+        assert len(table) == int((gaze["screen_id"] == screen).sum())
+        config = json.loads(archive.read(f"{folder}/plot_config.json"))
+        assert config["canvas_px"] == {"width": width, "height": height}
+    assert any("screen-001-intro/" in n for n in names)
 
 
 # -----------------------------------------------------------------------------

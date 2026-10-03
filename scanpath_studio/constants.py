@@ -112,6 +112,19 @@ def preprocessing_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def sentence_analysis_enabled() -> bool:
+    """Whether Corpus Analysis offers its **Per sentence** subtab (AN-33).
+
+    Held back: it works its numbers out from the fixation table, while the rest
+    of the page shows only the measures the dataset brought (AN-32), so a
+    dataset with supplied measures and no fixations read as 0 ms and skipped.
+    It comes back once it is built on the supplied measures. Off, the subtab
+    is not drawn and its table is never computed; `preprocessing.sentence_measures`
+    and `api.analysis_tables` are untouched.
+    """
+    return experimental_features_enabled()
+
+
 def derived_analysis_tables_enabled() -> bool:
     """Whether the 🗂️ Data page's "🧮 Derived analysis tables" section (Sentences
     / Saccades / Trials / Readers / Characters) is exposed **in the app** (UX-126).
@@ -723,7 +736,7 @@ ONESTOP_PART_LABELS = {
     "Paragraph": "Paragraph",
     "Questions": "Question",
     "Answers": "Answers",
-    "QA": "Question + answers (QA)",
+    "QA": "Question + answers combined (QA)",
     "Feedback": "Feedback",
 }
 # OneStop source variants → display label. `public` downloads from OSF on demand;

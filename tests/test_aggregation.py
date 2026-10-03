@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from scanpath_studio import aggregation as agg
 from scanpath_studio.aggregation import (
     MEASURES,
     Measure,
@@ -1435,3 +1436,81 @@ class TestScreenScoping:
             words, "text_id", "A", self.MEASURE, screen_id="anything"
         )
         pd.testing.assert_frame_equal(before, after)
+
+
+def test_equal_group_labels_keep_both_groups():
+    """BUG-111: the charts key series by label, so two cohorts both called
+    "Control" became one — B's values replaced A's."""
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2"],
+            "total_fixation_duration_ms": [100.0, 700.0],
+        }
+    )
+    a, b = {"participant_id": ["p1"]}, {"participant_id": ["p2"]}
+    groups = agg.two_group_values(
+        words, agg.MEASURES["tfd"], a, b, label_a="Control", label_b="Control"
+    )
+    assert {k: v.tolist() for k, v in groups.items()} == {
+        "Control (A)": [100.0],
+        "Control (B)": [700.0],
+    }
+    assert agg.distinct_group_labels("Adv", "Ele") == ("Adv", "Ele")
+
+
+def _aoi_only_groups_app():
+    from scanpath_studio import api
+    from scanpath_studio.tabs import render_group_comparison_tab
+
+    words, fixations = api.load_sample_data()
+    render_group_comparison_tab(
+        words,
+        fixations.iloc[:0],
+        viz_settings={},
+        canvas_width=2560,
+        canvas_height=1440,
+        base_font_size=16,
+        font_family="Arial",
+    )
+
+
+def test_aoi_only_cohorts_count_their_readers():
+    """BUG-112: readers were counted on the fixations alone, so a dataset of
+    word measures read "0 reader(s)" beside charts drawn from its readers."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
+    assert not at.exception, at.exception
+    assert "**Adv**: 2 readers · **Ele**: 2 readers." in [c.value for c in at.caption]
+
+
+def test_cohort_word_comparisons_share_one_screen():
+    """BUG-114: each cohort chose its own first screen, so A's page 1 and B's
+    page 2 were compared as the same word id."""
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2", "p2"],
+            "trial_id": ["t1", "t2", "t2"],
+            "text_id": ["text"] * 3,
+            "screen_id": ["page1", "page2", "page1"],
+            "screen_index": [1, 2, 1],
+            "word_id": [1, 1, 1],
+            "text": ["apple", "banana", "apple"],
+            "total_fixation_duration_ms": [100.0, 700.0, 300.0],
+        }
+    )
+    tfd = agg.MEASURES["tfd"]
+    a, b = {"participant_id": ["p1"]}, {"participant_id": ["p2"]}
+    page1 = agg.group_word_difference(words, "text_id", "text", tfd, a, b)
+    assert page1[["a", "b", "diff"]].to_dict("records") == [
+        {"a": 100.0, "b": 300.0, "diff": -200.0}
+    ]
+    # On page 2 only B read: A is missing, never borrowed from page 1.
+    page2 = agg.group_word_difference(
+        words, "text_id", "text", tfd, a, b, screen_id="page2"
+    )
+    assert page2["n_a"].tolist() == [0] and page2["b"].tolist() == [700.0]
+    profiles = agg.two_group_word_profiles(
+        words, "text_id", "text", tfd, a, b, screen_id="page2"
+    )
+    assert profiles[["group", "value"]].values.tolist() == [["Group B", 700.0]]

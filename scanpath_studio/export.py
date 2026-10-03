@@ -1767,6 +1767,17 @@ def bulk_export(
         parent_words = extract_trial(words, participant, trial)
         parent_fixations = extract_trial(fixations, participant, trial)
         screens = part_catalog(parent_words, parent_fixations)
+        if (
+            screens.empty
+            and parent_words.empty
+            and parent_fixations.empty
+            and raw_gaze is not None
+            and SCREEN_ID in raw_gaze.columns
+        ):
+            # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
+            # gaze alone takes its screens from its samples, so each screen's
+            # coordinate space is exported on its own instead of pooled.
+            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
         if screens.empty:
             export_units.append(combo)
         else:
@@ -1946,6 +1957,15 @@ def bulk_export(
                     progress_callback(progress)
                 continue
 
+            # A screen's own canvas, for its figure and its plot config alike.
+            unit_canvas = (
+                screen_canvas_size(trial_words)
+                or screen_canvas_size(trial_fix)
+                or screen_canvas_size(trial_raw_gaze)
+            )
+            unit_width = int(unit_canvas[0] if unit_canvas else canvas_width)
+            unit_height = int(unit_canvas[1] if unit_canvas else canvas_height)
+
             # EXP-1/EXP-2: everything this trial's paths, title and caption can
             # substitute — its combo row plus counts and the settings summary.
             fields = pattern_fields(
@@ -2010,17 +2030,10 @@ def bulk_export(
                         for name in STATIC_FIGURE_OPTIONS
                         if name in settings
                     }
-                    unit_canvas = screen_canvas_size(trial_words) or screen_canvas_size(
-                        trial_fix
-                    )
                     render_settings = FigureSettings.from_mapping(
                         render_values,
-                        canvas_width=int(
-                            unit_canvas[0] if unit_canvas else canvas_width
-                        ),
-                        canvas_height=int(
-                            unit_canvas[1] if unit_canvas else canvas_height
-                        ),
+                        canvas_width=unit_width,
+                        canvas_height=unit_height,
                         base_font_size=int(base_font_size),
                         font_family=font_family,
                         x_field=x_field,
@@ -2048,8 +2061,8 @@ def bulk_export(
                     # Render at the figure's own fitted size (not the raw
                     # monitor canvas) so the exported reading text matches the
                     # on-screen scale.
-                    out_w = int(fig.layout.width or canvas_width)
-                    out_h = int(fig.layout.height or canvas_height)
+                    out_w = int(fig.layout.width or unit_width)
+                    out_h = int(fig.layout.height or unit_height)
                     for fmt in figure_formats:
                         if fmt == "html":
                             # Browser-free + interactive; no Kaleido needed.
@@ -2074,8 +2087,8 @@ def bulk_export(
                 # already been written above).
                 if layer_formats and fig is not None:
                     try:
-                        out_w = int(fig.layout.width or canvas_width)
-                        out_h = int(fig.layout.height or canvas_height)
+                        out_w = int(fig.layout.width or unit_width)
+                        out_h = int(fig.layout.height or unit_height)
                         for layer_name, layer_fig in split_scanpath_layers(fig).items():
                             for fmt in layer_formats:
                                 scale = options.png_scale if fmt == "png" else 1
@@ -2100,8 +2113,8 @@ def bulk_export(
                 cfg = _plot_config_dict(
                     participant,
                     trial,
-                    canvas_width,
-                    canvas_height,
+                    unit_width,
+                    unit_height,
                     x_field,
                     y_field,
                     settings,

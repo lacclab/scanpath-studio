@@ -658,3 +658,34 @@ class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
             ]
         )
         assert out.is_file()
+
+
+class TestPerSentenceGate:
+    """AN-33: Per sentence derives its numbers from the fixations, unlike the
+    rest of Corpus Analysis (AN-32), so it is held back."""
+
+    def test_it_is_hidden_by_default(self):
+        assert not constants.sentence_analysis_enabled()
+        assert "Per sentence" not in tabs.corpus_subtabs()
+        assert tabs.corpus_subtabs() == ("Per text", "Per reader", "Groups")
+
+    def test_the_experimental_flag_brings_it_back(self, monkeypatch):
+        monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
+        assert tabs.corpus_subtabs() == tabs.CORPUS_SUBTABS
+
+    def test_the_corpus_view_draws_three_subtabs_and_no_sentence_table(
+        self, monkeypatch
+    ):
+        from streamlit.testing.v1 import AppTest
+
+        calls = []
+        monkeypatch.setattr(
+            tabs, "_render_per_sentence_tab", lambda *a, **k: calls.append(1)
+        )
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per sentence"
+        at.run()
+        assert not at.exception, at.exception
+        assert [t.label for t in at.tabs][-3:] == ["Per text", "Per reader", "Groups"]
+        assert calls == []

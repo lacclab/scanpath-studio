@@ -228,8 +228,10 @@ class TestPerDatasetStore:
         from A's values and write them into B's store."""
         session: dict = {}
         annotations_mod.activate_dataset(session, "A")
-        session["annotrial_star_p1__t1__parent"] = True
-        session["annotrial_note_p1__t1__parent"] = "A's note."
+        session["annotrial_star_" + annotations_mod.widget_slug("p1", "t1")] = True
+        session["annotrial_note_" + annotations_mod.widget_slug("p1", "t1")] = (
+            "A's note."
+        )
         annotations_mod.activate_dataset(session, "B")
         assert not [k for k in session if str(k).startswith("annotrial_")]
 
@@ -631,3 +633,56 @@ class TestAnnotationsFile:
         )
         assert (applied, skipped) == (1, 0)
         assert annotations_mod.file_dataset("not json") is None
+
+
+def _parent_screen_app():
+    import scanpath_studio.annotations as ann
+
+    ann.render_trial_annotations("p", "t", screen_id="parent", bare=True)
+
+
+def _colliding_ids_app():
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    pick = st.selectbox("Reading", ["one", "two"])
+    ann.render_trial_annotations(*(("a__b", "c") if pick == "one" else ("a", "b__c")))
+
+
+class TestEditorKeysAreTheStoreKeys:
+    """BUG-110: the editor's widget keys joined the ids with ``__`` and wrote the
+    parent scope as ``parent``, so two distinct store keys could share widgets —
+    and opening the second copied the first's star into it."""
+
+    def test_a_screen_named_parent_is_not_its_trials_parent(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_parent_screen_app).run()
+        at.checkbox[0].check().run()
+        at.radio[0].set_value("This screen").run()
+        assert not at.exception, at.exception
+        records = annotations_mod.store_to_records(
+            at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]
+        )
+        assert [(r["trial_id"], r.get("screen_id")) for r in records] == [("t", None)]
+
+    def test_ids_that_join_alike_keep_their_own_annotations(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_colliding_ids_app).run()
+        at.checkbox[0].check().run()
+        at.selectbox[0].set_value("two").run()
+        assert not at.exception, at.exception
+        assert at.checkbox[0].value is False
+        records = annotations_mod.store_to_records(
+            at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]
+        )
+        assert [(r["participant_id"], r["trial_id"]) for r in records] == [
+            ("a__b", "c")
+        ]
+
+    def test_the_slug_keeps_every_id_whole(self):
+        slug = annotations_mod.widget_slug
+        assert slug("a__b", "c") != slug("a", "b__c")
+        assert slug("p", "t") != slug("p", "t", "parent")

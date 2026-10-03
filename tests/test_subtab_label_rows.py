@@ -17,7 +17,10 @@ from __future__ import annotations
 import pytest
 from streamlit.proto.LabelVisibility_pb2 import LabelVisibility
 
+from scanpath_studio.annotations import widget_slug
 from scanpath_studio.constants import ICONS
+
+_SLUG = widget_slug("p1", "t1")
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -87,15 +90,15 @@ class TestConvertedFields:
         at = AppTest.from_function(app).run(timeout=30)
         assert not at.exception, at.exception
 
-        tags = at.multiselect(key="annotrial_tags_p1__t1__parent")
+        tags = at.multiselect(key="annotrial_tags_" + _SLUG)
         assert tags.label == "Tags"
         assert tags.proto.label_visibility.value == COLLAPSED
 
-        note = at.text_area(key="annotrial_note_p1__t1__parent")
+        note = at.text_area(key="annotrial_note_" + _SLUG)
         assert note.label == "Notes"
         assert note.proto.label_visibility.value == COLLAPSED
 
-        add_tag = at.text_input(key="annotrial_newtag_p1__t1__parent")
+        add_tag = at.text_input(key="annotrial_newtag_" + _SLUG)
         assert add_tag.placeholder == "Add a new tag"
         assert add_tag.proto.label_visibility.value == COLLAPSED
 
@@ -118,7 +121,7 @@ class TestConvertedFields:
             render_trial_annotations("p1", "t1", bare=True)
 
         at = AppTest.from_function(app).run(timeout=30)
-        star = at.checkbox(key="annotrial_star_p1__t1__parent")
+        star = at.checkbox(key="annotrial_star_" + _SLUG)
         assert star.label == f"{ICONS['favorite']} Favorite (star this trial)"
         assert star.proto.label_visibility.value == COLLAPSED
 
@@ -146,7 +149,7 @@ class TestConvertedFields:
             render_trial_annotations("p1", "t1", bare=True)
 
         at = AppTest.from_function(app).run(timeout=30)
-        at.checkbox(key="annotrial_star_p1__t1__parent").check()
+        at.checkbox(key="annotrial_star_" + _SLUG).check()
         at.run(timeout=30)
 
         assert at.selectbox(key="picker").options == ["★ t1"]

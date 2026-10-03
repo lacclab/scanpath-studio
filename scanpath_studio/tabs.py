@@ -30,8 +30,10 @@ from scanpath_studio.aggregation import (
     available_features,
     available_measures,
     cohort_word_profile,
+    distinct_group_labels,
     ensure_fixation_enrichment,
     group_effect_size,
+    group_mask,
     group_word_difference,
     landing_positions,
     measure_values,
@@ -122,6 +124,7 @@ from scanpath_studio.constants import (
     drift_correction_enabled,
     icon_html,
     preprocessing_enabled,
+    sentence_analysis_enabled,
     similarity_enabled,
     upload_limit_mb,
 )
@@ -210,6 +213,7 @@ from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
     SCREEN_ID,
+    SCREEN_INDEX,
     extract_part,
     has_screen_identity,
     part_catalog,
@@ -301,6 +305,16 @@ if TYPE_CHECKING:
 #: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
 #: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
 CORPUS_SUBTABS = ("Per text", "Per sentence", "Per reader", "Groups")
+
+
+def corpus_subtabs() -> tuple[str, ...]:
+    """The Corpus Analysis subtabs this build draws — Per sentence only behind
+    the experimental flag (AN-33)."""
+    return tuple(
+        name
+        for name in CORPUS_SUBTABS
+        if name != "Per sentence" or sentence_analysis_enabled()
+    )
 
 
 def _safe_filename(text: str) -> str:
@@ -3889,10 +3903,17 @@ def render_settings_file(
 _COMPARE_DATASET_SEP = COMPARE_DATASET_SEP
 
 #: Metric names that are safe across any two corpora (CMP-8 §5.4): canonical
-#: fixation columns every normalized frame carries, plus the two synthetic
-#: choices that are not columns at all.
+#: fixation columns every normalized frame carries, plus the synthetic choices
+#: that are not columns at all (``line``, ``counts``, and the uniform colour).
 _CROSS_DATASET_SAFE_METRICS = frozenset(
-    {"line", "counts", "duration_ms", "order_in_trial", "timestamp_ms"}
+    {
+        "line",
+        "counts",
+        "duration_ms",
+        "order_in_trial",
+        "timestamp_ms",
+        UNIFORM_COLOR_FIELD,
+    }
 )
 
 
@@ -5702,7 +5723,9 @@ def render_single_trial_tab(
                 # in controls.py for the full diagnosis; this row predates
                 # that helper but shares its exact shape and its exposure.
                 with st.popover(
-                    "",
+                    # BUG-108: named for screen readers; `styles.py` clips the
+                    # label off screen, so the chevron is all that is drawn.
+                    "Replay settings",
                     width="content",
                     key="split_mode_animate_popover",
                     help="Replay settings. Playback controls appear above the plot.",
@@ -5907,7 +5930,7 @@ def render_single_trial_tab(
                 # than hidden), *Legend* and *Step* as `label | ☑ Show` rows.
                 with (
                     st.popover(
-                        "",
+                        "Compare settings",  # BUG-108: see the Animate row
                         width="content",
                         key="split_mode_compare_popover",
                         help="Compare settings. "
@@ -6556,11 +6579,17 @@ def render_single_trial_tab(
         chip_fields = st.session_state.get("trial_chip_fields") or []
         with strip_col:
             if comparing and compare_meta:
-                # B's gaze-sample count, only while that chip is shown, and only
-                # for a B from this dataset — a cross-dataset B carries no
-                # samples, so it reads "–". Read off the *unfiltered* samples:
-                # B's pool ignores A's filters, so A's `raw_gaze` can lack B.
-                b_samples = raw_gaze if raw_gaze_all is None else raw_gaze_all
+                # B's gaze-sample count, only while that chip is shown. A
+                # cross-dataset B counts its own dataset's samples (VIZ-48 loads
+                # them); otherwise read off the *unfiltered* samples: B's pool
+                # ignores A's filters, so A's `raw_gaze` can lack B.
+                b_samples = (
+                    compare_source.raw_gaze
+                    if compare_source is not None
+                    else raw_gaze
+                    if raw_gaze_all is None
+                    else raw_gaze_all
+                )
                 b_gaze_samples = (
                     _c_gaze_sample_count(
                         b_samples,
@@ -6570,7 +6599,6 @@ def render_single_trial_tab(
                         selected_compare_screen,
                     )
                     if "@gaze_sample_count" in chip_fields
-                    and compare_source is None
                     and b_samples is not None
                     and not b_samples.empty
                     else None
@@ -8106,6 +8134,28 @@ def _render_filter_set(words, fixations, *, key, default_label):
     return spec, (label or default_label)
 
 
+def _cohort_readers(
+    fixations: pd.DataFrame | None, words: pd.DataFrame | None, spec=None
+) -> int:
+    """How many readers a cohort holds: counted on its fixations, or — for a
+    dataset of word measures alone — on its words (BUG-112: an AOI-only
+    dataset's cohorts read "0 readers" beside charts drawn from theirs).
+
+    ``spec`` selects the cohort from whole frames by mask, without copying them.
+    """
+    for frame in (fixations, words):
+        if frame is not None and not frame.empty and "participant_id" in frame:
+            ids = frame["participant_id"]
+            if spec:
+                ids = ids[group_mask(frame, spec)]
+            return int(ids.nunique())
+    return 0
+
+
+def _n_readers(count: int) -> str:
+    return f"{count} reader{'' if count == 1 else 's'}"
+
+
 def _render_group_definition(words, fixations, *, key, two_groups, host=None):
     """Group-definition UI → one ``spec``/``(spec, label)`` or two ``(a, b, la, lb)``."""
     host = host or st
@@ -8269,7 +8319,7 @@ def _corpus_unavailable_notice(
         )
     sections = "".join(
         f'<span class="sps-corpus-off-tab">{html.escape(name)}</span>'
-        for name in CORPUS_SUBTABS
+        for name in corpus_subtabs()
     )
     st.markdown(
         f'<div class="sps-corpus-off" aria-disabled="true">{sections}</div>',
@@ -8340,8 +8390,9 @@ def render_corpus_analysis_tab(
     # widget key, so a tutorial can only *point* at it, never switch it.
     #
     with st.container(key="tutorial_corpus_subtabs"):
-        text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
-            list(CORPUS_SUBTABS),
+        names = corpus_subtabs()
+        panes = st.tabs(
+            list(names),
             # PERF-9: the same PERF-3 fix the Scanpath subtabs got — `st.tabs`
             # runs every body on every run, so the hidden Per sentence table
             # (uncached, masking the whole fixation frame per sentence) was
@@ -8350,6 +8401,13 @@ def render_corpus_analysis_tab(
             key="corpus_subtab",
             on_change="rerun",
         )
+        opened = dict(zip(names, panes, strict=True))
+    text_tab, reader_tab, groups_tab = (
+        opened["Per text"],
+        opened["Per reader"],
+        opened["Groups"],
+    )
+    sentence_tab = opened.get("Per sentence")
     if text_tab.open:
         with text_tab:
             render_per_text_tab(
@@ -8363,7 +8421,7 @@ def render_corpus_analysis_tab(
                 viz_settings=viz_settings,
                 **common,
             )
-    if sentence_tab.open:
+    if sentence_tab is not None and sentence_tab.open:
         with sentence_tab:
             _render_per_sentence_tab(words_filtered, fixations_filtered)
     if groups_tab.open:
@@ -8380,8 +8438,32 @@ def render_corpus_analysis_tab(
 def _c_sentence_measures(_words, _fix, fwkey, ffkey):
     from scanpath_studio.preprocessing import sentence_measures
 
-    # `_words` already carries the per-word measures (BUG-78).
+    # Derived from the fixations, not the supplied word measures — why AN-33
+    # holds the subtab back.
     return sentence_measures(_words, _fix)
+
+
+#: Per sentence's measures, in picker order, with what each one says and its
+#: unit — the columns of `preprocessing.sentence_measures` (AN-33).
+_SENTENCE_MEASURE_LABELS = {
+    "total_dur": "Total fixation duration (ms)",
+    "total_n_fixations": "Fixations",
+    "firstpass_dur": "First-pass duration (ms)",
+    "firstpass_n_fixations": "First-pass fixations",
+    "gopast": "Go-past duration (ms)",
+    "gopast_sel": "Selective go-past duration (ms)",
+    "firstpass_forward_dur": "First-pass forward reading (ms)",
+    "firstpass_forward_n_fixations": "First-pass forward fixations",
+    "firstpass_reread_dur": "First-pass rereading (ms)",
+    "firstpass_reread_n_fixations": "First-pass rereading fixations",
+    "lookback_dur": "Look-back to earlier sentences (ms)",
+    "lookback_n_fixations": "Look-back fixations",
+    "lookfrom_dur": "Later rereading (ms)",
+    "lookfrom_n_fixations": "Later rereading fixations",
+    "nrun": "Runs",
+    "rate_wpm": "Reading rate (words/min)",
+    "n_words": "Words",
+}
 
 
 def _render_per_sentence_tab(
@@ -8399,29 +8481,45 @@ def _render_per_sentence_tab(
         "across readers for each text/sentence pair."
     )
     numeric = [
-        column
-        for column in sentence_table.select_dtypes(include="number").columns
-        if column not in {"sentence_id"}
+        column for column in _SENTENCE_MEASURE_LABELS if column in sentence_table
     ]
     if sentence_table.empty or not numeric:
         st.info("No sentence-level measures are available for this selection.")
     else:
         controls = st.columns(2)
         metric = controls[0].selectbox(
-            "Sentence measure", numeric, key="sentence_measure"
+            "Sentence measure",
+            numeric,
+            format_func=_SENTENCE_MEASURE_LABELS.get,
+            key="sentence_measure",
         )
         aggregate = controls[1].selectbox(
             "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
         )
+        # BUG-109: a sentence is identified within its screen. Sentence ids
+        # restart on every screen of a multipart text, so grouping on the text
+        # and sentence alone averaged different sentences together.
         identity = [
-            column for column in ("text_id", "sentence_id") if column in sentence_table
+            column
+            for column in ("text_id", SCREEN_ID, "sentence_id")
+            if column in sentence_table
         ]
         reducer = "mean" if aggregate == "Mean" else "median"
+        label = _SENTENCE_MEASURE_LABELS[metric]
         summary = (
             sentence_table.groupby(identity, dropna=False)[metric]
             .agg(reducer)
-            .reset_index(name=f"{reducer}_{metric}")
+            .reset_index(name=f"{aggregate} {label[0].lower()}{label[1:]}")
         )
+        if SCREEN_ID in identity and SCREEN_INDEX in sentence_table:
+            # Screens in reading order, not alphabetically.
+            order = sentence_table.groupby(identity, dropna=False)[SCREEN_INDEX].min()
+            summary = (
+                summary.assign(_order=order.to_numpy())
+                .sort_values(["_order" if c == SCREEN_ID else c for c in identity])
+                .drop(columns="_order")
+                .reset_index(drop=True)
+            )
         st.dataframe(summary, hide_index=True, width="stretch")
 
 
@@ -9122,12 +9220,12 @@ def render_per_group_tab(
         frame_fingerprint(words_g),
     )
     assign_derived(fix_g, "enrich_fix", (fix_in, words_g))
-    n_readers = (
-        fix_g["participant_id"].nunique()
-        if "participant_id" in getattr(fix_g, "columns", [])
-        else 0
+    n_readers = _cohort_readers(fix_g, words_g)
+    n_fix = len(fix_g) if fix_g is not None else 0
+    st.caption(
+        f"**{label}** — {_n_readers(n_readers)}, "
+        f"{n_fix} fixation{'' if n_fix == 1 else 's'} in scope."
     )
-    st.caption(f"**{label}** — {n_readers} reader(s), {len(fix_g)} fixations in scope.")
     if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
         st.info("This group is empty — widen the definition.")
         return
@@ -9306,13 +9404,15 @@ def render_group_comparison_tab(
         )
     spec_a = spec_a or {}
     spec_b = spec_b or {}
+    # BUG-111: every chart keys its series by label, so equal labels merged A
+    # into B; from here on both read apart, the caption included.
+    label_a, label_b = distinct_group_labels(label_a, label_b)
     _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
-    na = apply_group(fixations_filtered, spec_a)
-    nb = apply_group(fixations_filtered, spec_b)
+    readers_a = _cohort_readers(fixations_filtered, words_filtered, spec_a)
+    readers_b = _cohort_readers(fixations_filtered, words_filtered, spec_b)
     st.caption(
-        f"**{label_a}**: {na['participant_id'].nunique() if 'participant_id' in na else 0}"
-        f" reader(s) · **{label_b}**: "
-        f"{nb['participant_id'].nunique() if 'participant_id' in nb else 0} reader(s)."
+        f"**{label_a}**: {_n_readers(readers_a)} · **{label_b}**: "
+        f"{_n_readers(readers_b)}."
     )
     view = st.selectbox(
         "View",
@@ -9365,6 +9465,8 @@ def render_group_comparison_tab(
         if text_col is None or text_id is None:
             st.info("No word-level data.")
             return
+        # BUG-114: one screen for both groups, chosen before they are split.
+        screen_id = _screen_picker(words_filtered, text_col, text_id, key="cmp_screen")
         measure = _measure_picker(
             words_filtered,
             fixations_filtered,
@@ -9390,6 +9492,7 @@ def render_group_comparison_tab(
             spec_b,
             agg=agg,
             min_readers=min_readers,
+            screen_id=screen_id,
         )
         diff = _apply_min_readers(st, diff, min_readers, key="cmp19_note")
         _chart(
@@ -9504,6 +9607,8 @@ def render_group_comparison_tab(
         if text_col is None or text_id is None:
             st.info("No word-level data.")
             return
+        # BUG-114: one screen for both groups, chosen before they are split.
+        screen_id = _screen_picker(words_filtered, text_col, text_id, key="cmp_screen")
         measure = _measure_picker(
             words_filtered,
             fixations_filtered,
@@ -9529,6 +9634,7 @@ def render_group_comparison_tab(
             agg=agg,
             label_a=label_a,
             label_b=label_b,
+            screen_id=screen_id,
         )
         _chart(
             make_word_matrix_heatmap(

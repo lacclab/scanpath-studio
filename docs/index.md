@@ -57,7 +57,7 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
   heatmaps, replay, and comparison — including two trials from different
   datasets.
 - **Flexible loading:** your own word, fixation, and raw-gaze tables.
-- **Corpus analysis:** per-text, per-sentence, per-reader, and group summaries
+- **Corpus analysis:** per-text, per-reader, and group summaries
   of the reading measures in your data.
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.

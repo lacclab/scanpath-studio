@@ -38,7 +38,7 @@ of datasets:
 | OneStop — Repeated reading | Reading a paragraph for the second time. |
 | OneStop — Information seeking (repeated) | A second reading, after seeing the question. |
 
-Each holds **every part** of its regime's trials, the reading passage and the
+Each holds **every screen** of its regime's trials, the reading passage and the
 screens around it, from the public [OSF](https://osf.io/2prdq/) release:
 
 | Part | CLI id | What it is |
@@ -48,8 +48,12 @@ screens around it, from the public [OSF](https://osf.io/2prdq/) release:
 | Paragraph | `Paragraph` | The reading passage. |
 | Question | `Questions` | The question shown after reading. |
 | Answers | `Answers` | The four answer choices. |
-| Question + answers (QA) | `QA` | The combined question-and-answers screen. |
 | Feedback | `Feedback` | The correctness feedback screen. |
+
+The release also has a **QA** part (`QA`): the question and answers screens
+taken together as one interest period, not a screen of its own. Its fixations
+are the ones those two screens already hold, so the datasets leave it out;
+load it with `parts=["QA"]` when you want that combined period.
 
 Every part ships an **interest-area report** (one row per word, with bounding
 boxes and reading measures) and a **fixation report**, all in the same schema —
@@ -67,7 +71,7 @@ shows whether they're already present (until they are, the app shows the bundled
 demo, with a **⬇ Download now** panel). If they're present the dataset loads
 with no network access; if not, click **⬇ Download** to fetch them into the
 folder (cached on disk, so only the first load pays the download — reports
-range from tens to a few hundred MB each, and a regime has up to fourteen). While it
+range from tens to a few hundred MB each, and a regime has up to twelve). While it
 downloads, a card shows how much has arrived; **Stop download** ends it and
 deletes the partial file.
 
@@ -107,10 +111,10 @@ import scanpath_studio as sps
 words, fixations = sps.load_onestop(
     "data/OneStop",
     regime="ordinary",
-    parts=["Paragraph"],  # any subset of the seven parts
+    parts=["Paragraph"],  # any subset of the parts above, or QA
     download=True,
 )
-# The app's dataset for a regime is every part of it:
+# The app's dataset for a regime is every screen of it (every part but QA):
 from scanpath_studio.datasets import onestop_regime_parts
 
 parts = onestop_regime_parts("ordinary")

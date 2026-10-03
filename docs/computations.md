@@ -380,7 +380,7 @@ What the preprocessing pass would remove, and why.
 
 Per-sentence reading time and counts.
 
-**Formula.** Words are grouped into sentences by `infer_sentence_ids` (terminal punctuation), then the word measures are summed per sentence.
+**Formula.** Words are grouped into sentences by `infer_sentence_ids` (terminal punctuation). Each sentence's durations, fixation and run counts, go-past times and skip flag are then derived from the fixations on its words; the supplied word measures are not used, so a sentence with no fixations reads as skipped (why AN-33 holds Corpus Analysis → Per sentence back).
 
 | | |
 | --- | --- |

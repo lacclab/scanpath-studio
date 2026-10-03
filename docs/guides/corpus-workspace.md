@@ -15,12 +15,11 @@ It does not compute them itself. An EyeLink report's `IA_*` columns are mapped
 automatically; other names can be mapped under :material/database: **Data Management → Edit dataset**.
 Without any, the page says so.
 
-## Four views
+## Three views
 
 | View | Answers |
 | --- | --- |
 | **Per text** | How was this text read, word by word, across readers? |
-| **Per sentence** | How was each sentence read? |
 | **Per reader** | How does this reader behave across trials? |
 | **Groups** | How do conditions or populations differ? |
 

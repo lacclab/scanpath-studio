@@ -831,3 +831,40 @@ class TestResolveCompareSource:
         narrowed, _ = tabs._resolve_compare_source({"PoTeC": True}, {})
         assert narrowed is source, "the switch run should not narrow at all"
         assert st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] == "PoTeC"
+
+
+@pytest.fixture(scope="module")
+def _synthetic_vs_demo():
+    """A = the synthetic trial, B = the Bundled Demo's raw-gaze trial, with the
+    gaze-sample chip on and every other setting at its default."""
+    import re
+
+    from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+    from tests.conftest import APP_SCRIPT
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.session_state["single_compare_toggle"] = True
+    at.session_state[COMPARE_SOURCE_STATE_KEY] = "Bundled Demo"
+    at.session_state["trial_chip_fields"] = ["@gaze_sample_count"]
+    at.run()
+    at.session_state["single_compare_trial"] = "l37_1129_2_2_2_Adv_r0"
+    at.session_state["single_compare_pos"] = "l37_1129_2_2_2_Adv_r0"
+    at.run()
+    assert not at.exception, at.exception
+    texts = [
+        re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", el.value))
+        for el in [*at.markdown, *at.caption, *at.warning]
+    ]
+    return texts
+
+
+def test_the_uniform_colour_is_not_reported_missing(_synthetic_vs_demo):
+    """BUG-107: the default colour is a rendering choice, not a field B lacks."""
+    assert not [t for t in _synthetic_vs_demo if "isn't in both datasets" in t]
+
+
+def test_a_cross_dataset_b_counts_its_own_gaze_samples(_synthetic_vs_demo):
+    """BUG-106: VIZ-48 draws B's samples, so B's chip counts them too."""
+    table = next(t for t in _synthetic_vs_demo if "Number of gaze samples" in t)
+    assert "2,233" in table, table

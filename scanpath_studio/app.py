@@ -265,6 +265,7 @@ from scanpath_studio.tabs import (
     STIMULUS_JOIN_NOTICE_KEY,
     _build_figure_settings,
     _render_column_mapping_section,
+    data_scope_text,
     dataset_editor_is_dirty,
     render_analysis_pool_bar,
     render_corpus_analysis_tab,
@@ -5996,6 +5997,26 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     )
 
 
+def dataset_table_scope_note(*, filtered: bool, stand_in_for: str | None) -> str | None:
+    """The line under 📂 Available datasets when 📊 Stats counts something else
+    (UX-203): a trial-filtered pool, or the bundled demo standing in for
+    ``stand_in_for``, a corpus that isn't on disk. ``None`` when the row and
+    Stats count the same thing.
+    """
+    if stand_in_for:
+        return (
+            f"Rows count whole datasets. {stand_in_for} isn't loaded, so Stats "
+            "below counts the bundled demo shown in its place"
+            + (", narrowed by the trial filters." if filtered else ".")
+        )
+    if filtered:
+        return (
+            "Whole datasets, before the trial filters — Stats below counts the "
+            "filtered trials."
+        )
+    return None
+
+
 @st.fragment
 def render_dataset_table(
     host=None,
@@ -6004,6 +6025,7 @@ def render_dataset_table(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
+    scope_note: str | None = None,
 ) -> None:
     """📂 Available datasets — one focused row per dataset (UX-54 → UX-174).
 
@@ -6033,6 +6055,9 @@ def render_dataset_table(
         words: The open dataset's word frame, for its counts.
         fixations: Its fixation frame.
         raw_gaze: Its raw-gaze frame.
+        scope_note: A line under the rows saying the counts are whole
+            datasets, given while 📊 Stats counts something else
+            (`dataset_table_scope_note`, UX-203).
     """
     # DATA-35: Remove only opens a dialog, which costs a *fragment* rerun, not a
     # whole-app one. Opening a dataset asks for the app rerun here, because a
@@ -6069,6 +6094,10 @@ def render_dataset_table(
         _render_dataset_table_row(grid, row)
     if not ordered:
         box.caption("No dataset matches the search and filters.")
+    if scope_note:
+        box.container(key="dataset_table_scope").caption(
+            f"{ICONS['trial_filter']} {scope_note}"
+        )
 
     _render_delete_confirmation(box, tokens, uploaded)
     if note := st.session_state.pop("_dataset_table_note", None):
@@ -8453,7 +8482,9 @@ def _run_app() -> None:
         if showing_dataset:
             _remember_open_dataset(data_choice)
 
-    def _render_datasets_table(words, fixations, raw_gaze) -> None:
+    def _render_datasets_table(
+        words, fixations, raw_gaze, *, scope_note: str | None = None
+    ) -> None:
         """📂 Available datasets, whenever the Data page is showing its overview.
 
         BUG-81: this used to render only after a successful load, so a dataset
@@ -8497,6 +8528,7 @@ def _run_app() -> None:
                 words=words,
                 fixations=fixations,
                 raw_gaze=raw_gaze,
+                scope_note=scope_note,
             )
 
     # (DATA-9's ordered source-config group — description · options · data
@@ -9202,8 +9234,25 @@ def _run_app() -> None:
         # UX-54's dataset table is the first of those: its counts for the open
         # dataset are this run's frames, which do not exist until the load has
         # happened. Unfiltered on purpose — the table describes the *dataset*,
-        # not what the current Narrow-by left standing.
-        _render_datasets_table(words_all, fixations_all, raw_gaze_all)
+        # not what the current Narrow-by left standing. UX-203: while a trial
+        # filter is on, or the demo stands in for the open corpus, the counts
+        # below it (📊 Stats) differ from the row's, so both say which they are.
+        trials_filtered = has_active_trial_filters()
+        _render_datasets_table(
+            words_all,
+            fixations_all,
+            raw_gaze_all,
+            scope_note=dataset_table_scope_note(
+                filtered=trials_filtered,
+                stand_in_for=(
+                    _dataset_display_name(
+                        str(st.session_state.get("data_source_choice") or data_choice)
+                    )
+                    if st.session_state.get(_PLACEHOLDER_SHOWN_KEY)
+                    else None
+                ),
+            ),
+        )
         # UX-135 — one numbered headline over the whole first part, drawn into
         # the slot reserved above the description. Everything from here to the
         # metadata tables is that part; the mapping no longer titles itself,
@@ -9300,7 +9349,9 @@ def _run_app() -> None:
             render_dataset_inspection_head(active_token)
             # DATA-67 — what the dataset supports, before any trial filter:
             # the first thing a newly added dataset's overview answers.
-            render_dataset_capabilities(words_all, fixations_all, raw_gaze_all)
+            render_dataset_capabilities(
+                words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
+            )
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).
@@ -9316,6 +9367,7 @@ def _run_app() -> None:
                     dataset_name=_dataset_display_name(
                         _annotations_dataset(active_token)
                     ),
+                    scope=data_scope_text(combos, combos_all, words_all, fixations_all),
                 )
     elif active_view == _VIEW_CORPUS:
         with view_area:

@@ -3471,11 +3471,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # either row so screen order puts it first regardless of fill order.
     # What the files themselves held — a mapped column outside it was made from
     # the file names, which Share → Code has to name (its loader has no such
-    # step).
+    # step). Read before the derive step below adds its columns. Raw gaze
+    # uploads further down, after that step, so its entry is filled in there.
     uploaded_columns = {
         "words": set(map(str, raw_words.columns)),
         "fixations": set(map(str, raw_fix.columns)),
-        "raw_gaze": set(map(str, raw_gaze.columns)),
     }
     if has_words or has_fix:
         # UX-129: the same nudge the top of the stage shows before anything
@@ -3759,6 +3759,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         multi=False,
         noun="gaze points",
     )
+    # The derive step above ran before this upload existed, so nothing here was
+    # made from the file names: every column is the file's own.
+    uploaded_columns["raw_gaze"] = set(map(str, raw_gaze.columns))
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
     # before any of them exist — every `has_words`/`has_fix`/`raw_gaze.empty`
     # guard below already tolerates all three being empty (the same guards the

@@ -280,6 +280,43 @@ def test_an_upload_stores_its_column_names(monkeypatch):
     assert stashed["fixations"] == payload["column_names"]["fixations"]
 
 
+_UPLOAD_RAW_GAZE = pd.DataFrame(
+    {
+        "participant_id": ["r0"] * 4,
+        "trial_id": ["t0"] * 4,
+        "timestamp_ms": [0.0, 2.0, 4.0, 6.0],
+        "gaze_x": [15.0, 16.0, 65.0, 66.0],
+        "gaze_y": [24.0] * 4,
+    }
+)
+
+
+@pytest.mark.timeout(240)
+def test_an_uploads_raw_gaze_columns_are_the_files_own(monkeypatch):
+    """Share → Code names a mapped column as made from the file names only
+    when the files did not hold it. The raw-gaze table uploads after the
+    others, so its columns have to be read once it is in."""
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT
+
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {
+            "col_map_words": _UPLOAD_WORDS,
+            "col_map_fix": _UPLOAD_FIXATIONS,
+            "col_map_raw_gaze": _UPLOAD_RAW_GAZE,
+        }.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.run(timeout=180)
+    assert not at.exception, at.exception
+    recipe = at.session_state["_wizard_finalize_payload"]["source_recipe"]
+    assert recipe["schemas"]["raw_gaze"]  # raw gaze was mapped…
+    assert recipe["derived"] == []  # …from columns the file held
+
+
 def _stored_upload() -> dict:
     """A stored upload as the wizard leaves it, with its column-name record."""
     from scanpath_studio import api

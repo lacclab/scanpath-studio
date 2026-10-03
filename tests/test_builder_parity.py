@@ -439,10 +439,14 @@ class TestComparisonFixationSymbol:
         assert [m.marker.symbol for m in markers] == ["diamond", "diamond"]
         assert markers[0].marker.colorscale  # still the metric fill
 
-    def test_glyph_shapes_fall_back_to_the_default(self):
-        # ♥ is drawn as text in the static figure; a Plotly marker can't take it.
-        markers = _markers(_compare(fixation_symbol="heart"))
-        assert [m.marker.symbol for m in markers] == ["circle", "circle"]
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+    def test_glyph_shapes_are_drawn_as_text(self, layout):
+        # ♥ is drawn as text, as in the static figure — never a marker symbol
+        # Plotly would reject, and never silently a circle.
+        fig = _compare(layout=layout, fixation_symbol="heart")
+        assert not _markers(fig)
+        hearts = [t for t in fig.data if t.mode == "text" and "♥" in set(t.text)]
+        assert len(hearts) == 2
 
     @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
     def test_symbol_reaches_the_split_layouts(self, layout):

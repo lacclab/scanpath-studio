@@ -5546,8 +5546,11 @@ def render_plot_controls(
         # NOT override per scanpath.
         shape_help = (
             "Shape of the fixation markers. Unlike colour, shape still reads in "
-            "black & white. Applies on all three render paths, including both "
-            "compared scanpaths."
+            "black & white. Applies on every render path — the static plot, "
+            "the replay and Compare (animated or not), on both compared "
+            "scanpaths. ♥ is drawn as a text glyph; where Compare outlines a "
+            "marker in its scanpath's colour, a heart's outline is a slightly "
+            "larger heart behind it."
         )
         shape_dis, shape_help = _layer_gate(False, shape_help)
         _sub_row("Shape", caption_help=shape_help).selectbox(

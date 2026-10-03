@@ -311,3 +311,100 @@ def test_the_single_replay_colours_discrete_choices(color_by):
     (trail,) = _trails(fig)
     assert len(set(trail.marker.color)) == 2
     assert _category_entries(fig)
+
+
+# --- ♥ is a heart on every render path ----------------------------------------
+
+
+def _hearts(fig) -> list:
+    return [t for t in fig.data if t.mode == "text" and "♥" in set(t.text or ())]
+
+
+def _no_heart_markers(fig) -> bool:
+    """Nothing hands Plotly a ``heart`` symbol, and no fixation falls back to a
+    circle marker: the markers left are legend swatches and decorations."""
+    for trace in fig.data:
+        marker = getattr(trace, "marker", None)
+        if marker is None or not trace.mode or "markers" not in trace.mode:
+            continue
+        assert marker.symbol != "heart"
+        if trace.customdata is not None:
+            return False
+    return True
+
+
+@pytest.mark.parametrize("mode", [{}, {"single_animate": True}])
+def test_heart_in_the_static_figure_and_the_replay(mode):
+    at = _rail(global_fixation_symbol="heart", global_fixation_opacity=0.5, **mode)
+    assert not at.selectbox(key="global_fixation_symbol").disabled
+    words, fixations = _frames()
+    settings = _settings(at.session_state["_viz"])
+    for fig in (
+        plots.make_scanpath_figure(words, fixations, settings=settings),
+        plots.make_scanpath_animation(words, fixations, settings=settings),
+    ):
+        assert _no_heart_markers(fig)
+        (heart,) = _hearts(fig)
+        assert heart.opacity == 0.5
+        # Duration → size: the two 300 ms fixations draw the same size, larger
+        # than the 100 ms one.
+        sizes = list(heart.textfont.size)
+        assert len(sizes) == 4
+        assert sizes[2] == sizes[3] > sizes[0]
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_heart_in_every_comparison_layout(layout):
+    at = _rail(global_fixation_symbol="heart", single_compare_toggle=True)
+    assert not at.selectbox(key="global_fixation_symbol").disabled
+    viz = at.session_state["_viz"]
+    flat = _compare(viz, layout)
+    assert _no_heart_markers(flat)
+    a, b = _hearts(flat)
+    # Flat: each scanpath's own colour, nothing under it.
+    assert isinstance(a.textfont.color, str)
+    assert a.textfont.color != b.textfont.color
+    # Coloured: the category fills the heart, and the scanpath colour outlines
+    # it as a larger heart underneath.
+    coloured = _compare(viz, layout, color_by="eye")
+    outline_a, fill_a, outline_b, _fill_b = _hearts(coloured)
+    assert outline_a.textfont.color == a.textfont.color
+    assert outline_b.textfont.color == b.textfont.color
+    assert list(fill_a.textfont.color) != [a.textfont.color] * 4
+    assert all(o > f for o, f in zip(outline_a.textfont.size, fill_a.textfont.size))
+
+
+def test_heart_in_the_co_animation():
+    at = _rail(global_fixation_symbol="heart", single_compare_toggle=True)
+    words, fixations = _frames()
+    _, _, (words_b, fixations_b) = _pair()
+    fig = plots.make_scanpath_animation(
+        words,
+        fixations,
+        settings=_settings(at.session_state["_viz"], show_legend=True),
+        fixations_b=fixations_b,
+        words_b=words_b,
+    )
+    assert _no_heart_markers(fig)
+    hearts = _hearts(fig)
+    assert {h.name for h in hearts} == {"Scanpath A", "Scanpath B"}
+    # Every frame restates the hearts (and only moves them).
+    last = fig.frames[-1]
+    for heart in hearts:
+        index = list(fig.data).index(heart)
+        restated = last.data[list(last.traces).index(index)]
+        assert set(restated.text) == {"♥"}
+    # The A/B legend still names both readings.
+    assert {t.name for t in fig.data if t.showlegend} >= {"Scanpath A", "Scanpath B"}
+
+
+def test_a_numeric_colour_bar_survives_the_heart():
+    at = _rail(
+        global_fixation_symbol="heart",
+        global_color_by="duration_ms",
+        global_show_colorbars=True,
+    )
+    fig = _static(at)
+    bars = [t for t in fig.data if t.marker is not None and t.marker.showscale]
+    assert len(bars) == 1
+    assert (bars[0].marker.cmin, bars[0].marker.cmax) == (100.0, 300.0)

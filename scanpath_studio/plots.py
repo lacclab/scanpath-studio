@@ -966,6 +966,117 @@ def _add_category_legend(
         )
 
 
+#: How much larger (font px) the outline layer behind a glyph marker is: a text
+#: glyph takes no stroke, so its outline is a second, larger glyph drawn under it.
+_GLYPH_OUTLINE_PX = 4.0
+#: The outline-only form of each glyph shape, for hollow markers.
+_HOLLOW_GLYPHS = {"♥": "♡"}
+
+
+def _glyph_scatter_traces(
+    x, y, marker: dict, glyph: str, **top: Any
+) -> list[go.Scatter]:
+    """Draw a fixation ``marker`` dict as text glyphs (VIZ-15's ♥), bottom first.
+
+    Plotly's marker-symbol enum has no heart, so every builder draws one as
+    text, from the marker dict it would otherwise have used, keeping what that
+    dict says: duration→size (an array ``textfont.size``, scaled by
+    ``FIXATION_GLYPH_SIZE_SCALE``), the colour (a colorscale is sampled to
+    literal colours — ``textfont.color`` takes none), the opacity, and a
+    non-default outline (Compare's A/B cue) as a larger glyph underneath in the
+    outline colour. A hollow marker becomes the outline glyph (♡) in its
+    outline colour. ``top`` goes onto the glyph layer (name, hover, legend);
+    the outline layer under it takes no hover and no legend entry.
+    """
+    n = len(x)
+    sizes = np.asarray(marker.get("size"), dtype=float) * FIXATION_GLYPH_SIZE_SCALE
+    sizes = np.broadcast_to(sizes, (n,)) if sizes.ndim == 0 else sizes
+    color = marker.get("color")
+    line = marker.get("line") or {}
+    layers: list[tuple[str, object, np.ndarray]] = []
+    if isinstance(color, str) and color == "rgba(0,0,0,0)":
+        layers.append(
+            (
+                _HOLLOW_GLYPHS.get(glyph, glyph),
+                line.get("color") or FIX_MARKER_OUTLINE,
+                sizes,
+            )
+        )
+    else:
+        if (
+            marker.get("colorscale") is not None
+            and color is not None
+            and not isinstance(color, str)
+        ):
+            color = _sample_colorscale_colors(
+                color, marker["colorscale"], marker.get("cmin"), marker.get("cmax")
+            )
+        elif color is not None and not isinstance(color, str):
+            color = list(color)
+        outline = line.get("color")
+        if isinstance(outline, str) and outline != FIX_MARKER_OUTLINE:
+            layers.append((glyph, outline, sizes + _GLYPH_OUTLINE_PX))
+        layers.append((glyph, color, sizes))
+    opacity = float(marker.get("opacity", 1.0))
+    traces = []
+    for i, (char, layer_color, layer_sizes) in enumerate(layers):
+        is_top = i == len(layers) - 1
+        traces.append(
+            go.Scatter(
+                x=x,
+                y=y,
+                mode="text",
+                text=[char] * n,
+                textfont=dict(color=layer_color, size=list(layer_sizes)),
+                textposition="middle center",
+                opacity=opacity,
+                **(
+                    top
+                    if is_top
+                    else dict(
+                        hoverinfo="skip",
+                        showlegend=False,
+                        legendgroup=top.get("legendgroup"),
+                    )
+                ),
+            )
+        )
+    return traces
+
+
+def _glyph_colorbar_trace(marker: dict, values) -> go.Scatter | None:
+    """The colour bar a glyph marker's numeric colouring would have drawn.
+
+    A text glyph carries no colorscale, so the bar rides on an invisible
+    two-point marker trace pinned to the same range."""
+    if not marker.get("showscale") or marker.get("colorscale") is None:
+        return None
+    numeric = pd.to_numeric(pd.Series(list(values)), errors="coerce")
+    lo = marker.get("cmin")
+    hi = marker.get("cmax")
+    lo = float(numeric.min()) if lo is None else float(lo)
+    hi = float(numeric.max()) if hi is None else float(hi)
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return None
+    return go.Scatter(
+        x=[None, None],
+        y=[None, None],
+        mode="markers",
+        marker=dict(
+            color=[lo, hi],
+            colorscale=marker["colorscale"],
+            cmin=lo,
+            cmax=hi,
+            showscale=True,
+            colorbar=marker.get("colorbar"),
+            size=0,
+        ),
+        name="colour scale",
+        showlegend=False,
+        hoverinfo="skip",
+    )
+
+
 def _marker_symbol(symbol: str | None) -> str:
     """A ``marker.symbol`` Plotly will accept.
 
@@ -2735,38 +2846,24 @@ def _render_scanpath_figure(
         customdata, hovertemplate = _hover_payload(ordered, hover_fields)
         glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
         if glyph:
-            # VIZ-15: a shape Plotly's marker enum doesn't carry (♥). Draw it as
-            # text — an array `textfont.size` keeps duration→size, and the
+            # VIZ-15: a shape Plotly's marker enum doesn't carry (♥), drawn as
+            # text from the same marker dict (`_glyph_scatter_traces`); the
             # fixation-index labels move to their own trace since one Scatter has
-            # only one text field. `textfont.color` takes no colorscale, so a
-            # numeric colour-by is sampled to literal colours (same trick the
-            # hollow markers use).
-            glyph_color = marker["color"]
-            if is_numeric_color:
-                glyph_color = _sample_colorscale_colors(
-                    glyph_color,
-                    fixation_colorscale,
-                    marker.get("cmin"),
-                    marker.get("cmax"),
-                )
-            fig.add_trace(
-                go.Scatter(
-                    x=ordered[x_field],
-                    y=ordered[y_field],
-                    mode="text",
-                    text=[glyph] * len(ordered),
-                    textfont=dict(
-                        color=glyph_color,
-                        size=np.asarray(sizes) * FIXATION_GLYPH_SIZE_SCALE,
-                    ),
-                    textposition="middle center",
-                    opacity=marker["opacity"],
-                    hovertemplate=hovertemplate,
-                    customdata=customdata,
-                    name="Fixations",
-                    showlegend=False,
-                )
-            )
+            # only one text field, and a numeric colour bar to its own.
+            for trace in _glyph_scatter_traces(
+                ordered[x_field],
+                ordered[y_field],
+                marker,
+                glyph,
+                hovertemplate=hovertemplate,
+                customdata=customdata,
+                name="Fixations",
+                showlegend=False,
+            ):
+                fig.add_trace(trace)
+            bar = _glyph_colorbar_trace(marker, color_data if is_numeric_color else ())
+            if bar is not None:
+                fig.add_trace(bar)
             if show_order:
                 fig.add_trace(
                     go.Scatter(
@@ -4467,11 +4564,8 @@ def _render_scanpath_animation(
         colors = s["marker_colors"]
         marker = dict(
             size=list(s["sizes"]),
-            # VIZ-15: the glyph shapes (♥) are drawn as *text* in the static
-            # figure — a Plotly marker can't take them, and the animation's trail
-            # restates the marker on every frame, so it falls back to the default
-            # symbol rather than raising. One of the Animate-mode gaps VIZ-21 is
-            # to map out.
+            # A glyph shape (♥) has no Plotly symbol: `_trail_traces` draws this
+            # dict as text instead, so the symbol here only needs to be valid.
             symbol=_marker_symbol(fixation_symbol),
             color=colors if colors is not None else s["color"],
             line=s["marker_line"] or dict(color=FIX_MARKER_OUTLINE, width=0.5),
@@ -4486,6 +4580,29 @@ def _render_scanpath_animation(
             marker = _make_hollow(marker)
         return marker
 
+    glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
+
+    def _trail_traces(s, x, y, **top) -> list[go.Scatter]:
+        """The trail as drawn at positions ``x``/``y`` — one marker trace, or
+        for a glyph shape (♥) its text layers (`_glyph_scatter_traces`), which
+        un-mask exactly like the markers do. Full length either way, so the
+        frames still only move positions."""
+        if glyph:
+            return _glyph_scatter_traces(
+                x, y, _trail_marker(s), glyph, customdata=s["customdata"], **top
+            )
+        return [
+            go.Scatter(
+                x=x,
+                y=y,
+                mode="markers",
+                marker=_trail_marker(s),
+                text=s["order_text"],
+                customdata=s["customdata"],
+                **top,
+            )
+        ]
+
     # Base traces, with stable indices the frames update by position. Each
     # animated trace is built at FULL length (one slot per fixation); the replay
     # reveals a fixation by un-masking its x/y, never by growing the array or
@@ -4496,6 +4613,8 @@ def _render_scanpath_animation(
     # long replay run far slower than its quoted time. It also keeps the trail's
     # fixation number in `text` (hover only); the visible order numbers live in a
     # separate text trace (below).
+    # Scanpath legend entries of their own (dual + legend only): see the trail.
+    own_entries = bool(category_legend) or bool(glyph)
     for s in specs:
         ordered = s["ordered"]
         n_total = len(ordered)
@@ -4517,27 +4636,23 @@ def _render_scanpath_animation(
         s["curr_outline_w"] = 2.5 if dual else 2
 
         base_x, base_y = _revealed_xy(all_x, all_y, 1)
-        s["idx_trail"] = len(fig.data)
-        fig.add_trace(
-            go.Scatter(
-                x=base_x,
-                y=base_y,
-                mode="markers",
-                marker=_trail_marker(s),
-                text=s["order_text"],
-                # A/B legend on the dual overlay only — off by default, honours the
-                # compare-legend toggle (CMP-2). The single-replay colour-by legend
-                # below is separate and unaffected. Under shared category colours
-                # the swatch would show a category, so a neutral entry (below)
-                # names the scanpath by its outline instead.
-                showlegend=dual and show_legend and not category_legend,
-                name=s["label"],
-                legendgroup=s["label"],
-                hovertemplate=(s["label"] + "<br>" if dual else "")
-                + s["hovertemplate"],
-                customdata=s["customdata"],
-            )
+        trail = _trail_traces(
+            s,
+            base_x,
+            base_y,
+            # A/B legend on the dual overlay only — off by default, honours the
+            # compare-legend toggle (CMP-2). The single-replay colour-by legend
+            # below is separate and unaffected. Under shared category colours
+            # the swatch would show a category, and a glyph has no swatch, so a
+            # separate entry (below) names the scanpath instead.
+            showlegend=dual and show_legend and not own_entries,
+            name=s["label"],
+            legendgroup=s["label"],
+            hovertemplate=(s["label"] + "<br>" if dual else "") + s["hovertemplate"],
         )
+        s["idx_trails"] = list(range(len(fig.data), len(fig.data) + len(trail)))
+        for trace in trail:
+            fig.add_trace(trace)
         # Order numbers: a text trace holding EVERY fixation's final position,
         # with not-yet-reached fixations masked to None x/y (so nothing is drawn
         # there). A number snaps on at its fixation when that position un-masks —
@@ -4686,8 +4801,9 @@ def _render_scanpath_animation(
     # Categorical colour legend, as in the static figure. These dummy traces sit
     # AFTER the per-scanpath traces so the frame indices recorded above stay
     # valid; frames never touch them.
-    if dual and show_legend and category_legend:
+    if dual and show_legend and own_entries:
         for s in specs:
+            coloured = s["marker_line"] is not None
             fig.add_trace(
                 go.Scatter(
                     x=[None],
@@ -4696,8 +4812,11 @@ def _render_scanpath_animation(
                     marker=dict(
                         size=10,
                         symbol=_marker_symbol(fixation_symbol),
-                        color="#ffffff",
-                        line=dict(color=s["color"], width=2),
+                        color="#ffffff" if coloured else s["color"],
+                        line=dict(
+                            color=s["color"] if coloured else FIX_MARKER_OUTLINE,
+                            width=2 if coloured else 0.5,
+                        ),
                     ),
                     name=s["label"],
                     legendgroup=s["label"],
@@ -4706,6 +4825,14 @@ def _render_scanpath_animation(
                 )
             )
     _add_category_legend(fig, category_legend, color_label)
+    if glyph and specs:
+        # A glyph carries no colorscale, so A's numeric colour bar rides on a
+        # trace of its own (after the animated ones, like the legend entries).
+        bar = _glyph_colorbar_trace(
+            _trail_marker(specs[0]), specs[0]["marker_colors"] or ()
+        )
+        if bar is not None:
+            fig.add_trace(bar)
 
     frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
         specs,
@@ -4732,17 +4859,9 @@ def _render_scanpath_animation(
             # frame, so only positions change — `redraw=False` then re-renders
             # just this trace, not the whole figure.
             tx, ty = _revealed_xy(all_x, all_y, kk)
-            traces_in_frame.append(
-                go.Scatter(
-                    x=tx,
-                    y=ty,
-                    mode="markers",
-                    marker=_trail_marker(s),
-                    text=s["order_text"],
-                    customdata=s["customdata"],
-                )
-            )
-            traces_idx_in_frame.append(s["idx_trail"])
+            for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty)):
+                traces_in_frame.append(trace)
+                traces_idx_in_frame.append(idx)
 
             if show_order:
                 # Same full-length positions/text as the base order trace; the
@@ -5170,8 +5289,8 @@ def _add_comparison_fixation_trace(
 
     ``fixation_symbol`` (VIZ-15/23) sets the marker shape — shape is the channel
     that survives a greyscale print, which is exactly what comparison figures get
-    used for. The glyph shapes the static figure draws as text fall back to the
-    default symbol here (:func:`_marker_symbol`).
+    used for. A glyph shape (♥) is drawn as text, as on the static figure
+    (:func:`_glyph_scatter_traces`), its A/B outline a larger glyph beneath.
 
     ``show_fixations=False`` (CMP-7) drops the marker trace, and with it the
     fixation-index labels that ride on it as marker text — the same thing the
@@ -5357,26 +5476,63 @@ def _add_comparison_fixation_trace(
         else list(fixation_hover_fields)
     )
     customdata, hovertemplate = _hover_payload(trial_fix, hover_fields)
-    _add(
-        go.Scatter(
-            x=trial_fix["x"],
-            y=trial_fix["y"],
-            mode="markers+text" if show_order else "markers",
-            marker=marker,
+    glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
+    # The trace's own legend swatch would mislead under category colours (it
+    # shows the first fixation's category) and cannot draw a glyph (♥), so in
+    # either case a separate entry names the scanpath.
+    own_entry = category_colors is not None or bool(glyph)
+    if glyph:
+        # VIZ-15: ♥ as text, as on the static figure (`_glyph_scatter_traces`);
+        # the index labels and a numeric colour bar get traces of their own.
+        for trace in _glyph_scatter_traces(
+            trial_fix["x"],
+            trial_fix["y"],
+            marker,
+            glyph,
             name=display_name,
             legendgroup=display_name,
-            # Under category colours the trace's own swatch would show its first
-            # fixation's category; a neutral entry below names the scanpath by
-            # its outline instead, apart from the category entries.
-            showlegend=show_legend and category_colors is None,
-            text=trial_fix["order_in_trial"] if show_order else None,
-            textposition="top center",
-            textfont=order_font,
+            showlegend=False,
             hovertemplate=f"{display_name} {hovertemplate}",
             customdata=customdata,
+        ):
+            _add(trace)
+        if show_order:
+            _add(
+                go.Scatter(
+                    x=trial_fix["x"],
+                    y=trial_fix["y"],
+                    mode="text",
+                    text=trial_fix["order_in_trial"],
+                    textposition="top center",
+                    textfont=order_font,
+                    name=f"{display_name} · index",
+                    legendgroup=display_name,
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+        bar = _glyph_colorbar_trace(marker, trial_fix[color_by] if metric_color else ())
+        if bar is not None:
+            _add(bar)
+    else:
+        _add(
+            go.Scatter(
+                x=trial_fix["x"],
+                y=trial_fix["y"],
+                mode="markers+text" if show_order else "markers",
+                marker=marker,
+                name=display_name,
+                legendgroup=display_name,
+                showlegend=show_legend and not own_entry,
+                text=trial_fix["order_in_trial"] if show_order else None,
+                textposition="top center",
+                textfont=order_font,
+                hovertemplate=f"{display_name} {hovertemplate}",
+                customdata=customdata,
+            )
         )
-    )
-    if show_legend and category_colors is not None:
+    if show_legend and own_entry:
+        coloured = metric_color or category_colors is not None
         _add(
             go.Scatter(
                 x=[None],
@@ -5385,8 +5541,11 @@ def _add_comparison_fixation_trace(
                 marker=dict(
                     size=10,
                     symbol=symbol,
-                    color="#ffffff",
-                    line=dict(color=fix_color, width=2),
+                    color="#ffffff" if coloured else fix_color,
+                    line=dict(
+                        color=fix_color if coloured else FIX_MARKER_OUTLINE,
+                        width=2 if coloured else 0.5,
+                    ),
                 ),
                 name=display_name,
                 legendgroup=display_name,

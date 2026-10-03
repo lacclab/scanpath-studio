@@ -74,8 +74,8 @@ def test_the_reminder_shows_until_dismissed(monkeypatch):
     text = " ".join(str(m.value) for m in at.markdown)
     assert "This deployment saves nothing." in text
     assert BACKUP_GUIDE_URL in text
-    assert "Data → Annotations" in text
-    # Opened on Scanpath, so it offers the way to the Data page too.
+    assert "Data Management → Annotations" in text
+    # Opened on Scanpath, so it offers the way to the Data Management page too.
     assert [b for b in at.button if b.key == "sps_backup_reminder_go"]
 
     next(b for b in at.button if b.key == "sps_backup_reminder_dismiss").click()

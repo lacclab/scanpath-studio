@@ -44,6 +44,9 @@ from .constants import (
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     COLORSCALES,
+    LEGACY_MARKER_SIZE_SCALE,
+    MARKER_DURATION_BOUNDS,
+    MARKER_SIZE_SCALES,
     CUSTOM_PALETTE,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
@@ -175,6 +178,10 @@ def _parse_compare_layout(v) -> str:
 
 def _parse_compare_stimulus(v) -> str:
     return _parse_choice(v, _COMPARE_STIMULUS_OPTIONS, "compare stimulus source")
+
+
+def _parse_marker_size_scale(v) -> str:
+    return _parse_choice(v, tuple(MARKER_SIZE_SCALES), "marker size scale")
 
 
 #: The one colour spelling every `st.color_picker` holds and every figure
@@ -325,6 +332,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_saccade_arrows": "global_show_saccade_arrows",
     # VIZ-8: saccade-type colour key (default on, so always emitted).
     "saccade_type_legend": "global_saccade_type_legend",
+    # The fixed duration scale's size key (default on, so always emitted).
+    "duration_size_legend": "global_duration_size_legend",
     "snap_fixations": "global_fixation_snap_to_word",
     # PRE-3 / ENG-23: the drift-correction connector layer. Its algorithm rides
     # in `_SHARE_VALUE_PARAMS` below — both, or a shared corrected view reopens
@@ -363,6 +372,9 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
     "saccade_render_mode": "global_saccade_render_mode",
+    # The duration scale: always emitted (it is seeded), which is what lets the
+    # reader tell a link that predates it — see `_apply_url_preset`.
+    "marker_size_scale": "global_marker_size_scale",
     "illustration_label": "global_illustration_label",
     # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
     # algorithm). Since VIZ-23 it applies on all three render paths, so a link
@@ -508,6 +520,7 @@ _SHARE_FLOAT_PARAMS = {
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
+    "marker_duration_range": "global_marker_duration_range",
     # VIZ-40 (UX-135) closed VIZ-7's last surface gap: the window is now
     # linkable. Read like any other "lo,hi" range — `controls`' slider already
     # treats a value present before it first renders as explicit and clamps it
@@ -561,6 +574,7 @@ _URL_PRESETS = {
     # CMP-11 — same rule again: both are `st.segmented_control` options.
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
+    "marker_size_scale": ("global_marker_size_scale", _parse_marker_size_scale),
     # BUG-69 — and for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
     # BUG-75 — figure text from a link is text, never markup.
@@ -623,6 +637,7 @@ _URL_BOUNDED = {
     "global_anim_grid_step_ms": (20, 500),
     "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
+    "global_marker_duration_range": MARKER_DURATION_BOUNDS,
     "global_fixation_opacity": (0.1, 1.0),
     "global_stimulus_image_opacity": (0.1, 1.0),
     # VIZ-4: image-alignment nudge — clamp a hand-crafted link to sane ranges.
@@ -957,6 +972,17 @@ def _apply_url_preset() -> str | None:
             snapped_from_link.add(state_key)
         st.session_state.setdefault(state_key, value)
 
+    # The fixed duration scale is the default for a new figure, but a Share link
+    # copied before it existed was drawn on the relative scale. Every link
+    # carries the view toggles (seeded, so always emitted) and now the scale
+    # too, so toggles without a scale mark a link that predates it — reopen it
+    # as it was shared. A hand-written `?trial_id=` link carries neither and
+    # gets the new default.
+    if "marker_size_scale" not in qp and any(k in qp for k in _SHARE_TOGGLE_PARAMS):
+        st.session_state.setdefault(
+            "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
+        )
+
     # EXP-19: a source that declares its own monitor or typeface snaps the canvas
     # and font controls to it the first time it is seeded — on a recipient's
     # first run, that is, *after* this link has seeded them — so without a word
@@ -1280,6 +1306,9 @@ def sanitize_session_value(key: str, value):
 #   schema 4 — UX-179: the figure only. Annotations, the column mapping, the
 #              metadata tables and the saved designs left the file (each has
 #              its own export now); the reader no longer applies them.
+#   schema 5 — the fixed duration scale (`sizing.marker_size_scale`,
+#              `marker_duration_range`, `duration_size_legend`). Older files
+#              were drawn on the relative scale and are migrated to it.
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1288,7 +1317,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 4
+PLOT_CONFIG_SCHEMA = 5
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1373,12 +1402,34 @@ def _migrate_config_3_to_4(config: dict) -> dict:
     return config
 
 
+def _migrate_config_4_to_5(config: dict) -> dict:
+    """Keep an older figure on the scale it was drawn with.
+
+    Before schema 5 every figure sized its markers relative to its own
+    shortest and longest fixation; the default is now a fixed duration scale.
+    Stamping ``marker_size_scale: "relative"`` makes an old file restore the
+    figure it saved rather than silently resizing it. Only a file with plot
+    settings is touched — an annotations-only backup gains no ``sizing``
+    section (BUG-73's rule, as in the 2→3 step).
+    """
+    migrated = dict(config)
+    if not _has_plot_section(config):
+        return migrated
+    if "sizing" in config and not isinstance(config.get("sizing"), dict):
+        return migrated
+    sizing = dict(config.get("sizing") or {})
+    sizing.setdefault("marker_size_scale", LEGACY_MARKER_SIZE_SCALE)
+    migrated["sizing"] = sizing
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
     1: _migrate_config_1_to_2,
     2: _migrate_config_2_to_3,
     3: _migrate_config_3_to_4,
+    4: _migrate_config_4_to_5,
 }
 
 
@@ -1966,6 +2017,27 @@ def _restore_plot_config(
             lo = max(_MARKER_BOUNDS[0], min(int(lo), _MARKER_BOUNDS[1]))
             hi = max(_MARKER_BOUNDS[0], min(int(hi), _MARKER_BOUNDS[1]))
             put("global_marker_size_range", (min(lo, hi), max(lo, hi)))
+    if "marker_size_scale" in sizing:
+        put_valid(
+            sizing["marker_size_scale"] in MARKER_SIZE_SCALES,
+            "global_marker_size_scale",
+            sizing["marker_size_scale"],
+            "marker size scale",
+        )
+    durations = sizing.get("marker_duration_range")
+    if isinstance(durations, (list, tuple)) and len(durations) == 2:
+        lo, hi = number(durations[0]), number(durations[1])
+        if lo is None or hi is None or not math.isfinite(lo + hi):
+            skipped.append("marker duration range")
+        else:
+            put(
+                "global_marker_duration_range",
+                _clamp_url_value(
+                    "global_marker_duration_range", (int(round(lo)), int(round(hi)))
+                ),
+            )
+    if "duration_size_legend" in sizing:
+        put("global_duration_size_legend", bool(sizing["duration_size_legend"]))
     if "order_font_size" in sizing:
         put_int(
             sizing["order_font_size"],

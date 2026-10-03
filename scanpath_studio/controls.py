@@ -28,7 +28,11 @@ from .constants import (
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_MARKER_SIZE_SCALE,
+    MARKER_DURATION_BOUNDS,
+    MARKER_SIZE_SCALES,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
@@ -681,6 +685,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # VIZ-8: show the saccade-type colour key on the plot (default on). Optional,
     # like the other legends.
     "global_saccade_type_legend": True,
+    # The fixed duration scale: one mapping of duration to marker size for every
+    # figure (√ by default — area grows with duration). Old configs and links
+    # that predate it are migrated to "relative" so they still draw as saved.
+    "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
+    "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
+    "global_duration_size_legend": True,
     "global_saccade_class_color_forward": SACCADE_CLASS_COLORS["forward"],
     "global_saccade_class_color_skip": SACCADE_CLASS_COLORS["skip"],
     "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
@@ -3568,6 +3578,73 @@ def _check_row(
     )
 
 
+#: The help on the duration-scale rows — shared with nothing else, but long
+#: enough that the row code reads better without it inline.
+_SCALE_HELP = (
+    "How fixation duration sets marker size. The fixed scales (√, linear, log) "
+    "use the same duration bounds for every trial, comparison side, replay and "
+    "export, so one duration is always one size. √ makes marker area grow with "
+    "duration. Relative to this figure stretches each figure from its own "
+    "shortest to longest fixation, so sizes only compare within it."
+)
+_DURATION_BOUNDS_HELP = (
+    "Durations (ms) given the smallest and the largest marker. Shorter "
+    "fixations get the smallest marker and longer ones the largest. Unused on "
+    "the relative scale."
+)
+_SIZE_KEY_HELP = (
+    "Reference circles labelled in ms, in the figure's bottom-right corner, "
+    "on screen and in exports. Drawn only on a fixed scale."
+)
+
+
+def _render_duration_scale_rows() -> None:
+    """The fixed duration scale: curve, duration bounds and the size key.
+
+    One scale for both scanpaths of a comparison too (only the size *range* is
+    per scanpath there), so none of the three carries Compare's gate. The bounds
+    and the key are greyed, never hidden, on the relative scale.
+    """
+    scale_dis, scale_help = _layer_gate(False, _SCALE_HELP)
+    # Keyless, like the colorscale picker: a keyed selectbox first painted in a
+    # closed popover shows its first option rather than the seeded value — and a
+    # link or settings file that predates the fixed scale seeds "relative".
+    options = list(MARKER_SIZE_SCALES)
+    current = st.session_state.get("global_marker_size_scale")
+    st.session_state["global_marker_size_scale"] = _sub_row(
+        "Scale", caption_help=scale_help
+    ).selectbox(
+        "Duration scale",
+        options=options,
+        index=options.index(current) if current in options else 0,
+        format_func=lambda s: MARKER_SIZE_SCALES[s],
+        disabled=scale_dis,
+        help=scale_help,
+        label_visibility="collapsed",
+    )
+    relative = st.session_state["global_marker_size_scale"] == "relative"
+    _, bounds_help = _layer_gate(relative, _DURATION_BOUNDS_HELP)
+    _range_slider(
+        st,
+        "Durations (ms)",
+        key="global_marker_duration_range",
+        persist_state="session",
+        min_value=MARKER_DURATION_BOUNDS[0],
+        max_value=MARKER_DURATION_BOUNDS[1],
+        step=10,
+        disabled=relative,
+        help=_DURATION_BOUNDS_HELP,
+        field_host=_sub_row("Durations", caption_help=bounds_help),
+    )
+    key_dis, key_help = _layer_gate(relative, _SIZE_KEY_HELP)
+    _sub_row("Size key", caption_help=key_help).checkbox(
+        "Show",
+        key="global_duration_size_legend",
+        persist_state="session",
+        disabled=key_dis,
+    )
+
+
 def _sub_caption(host, text: str, help: str | None = None) -> None:
     """A muted field caption — `fields.row_label`'s markup plus ``.sps-fsub``."""
     text = _plain(text)
@@ -4469,6 +4546,13 @@ def _collect_viz_settings(
         x_field=ss.get("global_x_field"),
         y_field=ss.get("global_y_field"),
         marker_size_range=tuple(ss.get("global_marker_size_range", (8, 24))),
+        marker_size_scale=(
+            ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE
+        ),
+        marker_duration_range=tuple(
+            ss.get("global_marker_duration_range") or DEFAULT_MARKER_DURATION_RANGE
+        ),
+        duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
         show_colorbars=bool(ss.get("global_show_colorbars")),
@@ -5423,14 +5507,13 @@ def render_plot_controls(
         # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
         # / `cmp*_opacity` override these there), so they carry its gate.
         _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-        _, size_help = _layer_gate(
-            _dis,
-            _gated_help(
-                "Marker size range in px: the shortest fixation's marker, then "
-                "the longest's.",
-                _reason,
-            ),
+        size_text = (
+            "Marker diameter range in px: the smallest marker, then the "
+            "largest. On a fixed scale they belong to the two duration bounds "
+            "below; on the relative scale, to this figure's shortest and "
+            "longest fixation."
         )
+        _, size_help = _layer_gate(_dis, _gated_help(size_text, _reason))
         _range_slider(
             st,
             "Size",
@@ -5439,13 +5522,10 @@ def render_plot_controls(
             min_value=4,
             max_value=40,
             disabled=_dis,
-            help=_gated_help(
-                "Marker size range in px: the shortest fixation's marker, then "
-                "the longest's.",
-                _reason,
-            ),
+            help=_gated_help(size_text, _reason),
             field_host=_sub_row("Size", caption_help=size_help),
         )
+        _render_duration_scale_rows()
         _, opac_help = _layer_gate(
             _dis,
             _gated_help(

@@ -739,7 +739,8 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_plot",
         "title": f"{ICONS['view_scanpath']} The scanpath",
         "body": "This is the main plot. Each circle is a **fixation**, sized by "
-        "duration; the lines are **saccades** between them.",
+        "duration on one scale shared by every figure (the key in the corner "
+        "gives sizes in ms); the lines are **saccades** between them.",
     },
     {
         "selector": ".st-key-tour_grp_data_source",

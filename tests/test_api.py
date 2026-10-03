@@ -314,8 +314,10 @@ def test_plot_scanpath_returns_figure(sample):
         words, fixations, pid, tid, canvas_size=(2560, 1440), show_heatmap=False
     )
     assert isinstance(fig, go.Figure)
-    # One box shape per word of the trial, plus the plot-border rect.
-    assert len(fig.layout.shapes) == len(trial_words) + 1
+    # One box shape per word of the trial, plus the plot-border rect — and the
+    # duration-size key's reference circles, one per labelled duration.
+    key = [a for a in fig.layout.annotations if a.name == "duration_size_key"]
+    assert len(fig.layout.shapes) == len(trial_words) + 1 + len(key)
     # One marker per fixation, drawn at the fixation coordinates.
     markers = [t for t in fig.data if t.mode and "markers" in t.mode]
     assert len(markers) == 1

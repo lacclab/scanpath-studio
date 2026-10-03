@@ -158,6 +158,7 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
+    TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
     _check_row,
     _collect_compare_styles,
@@ -189,8 +190,10 @@ from scanpath_studio.controls import (
     render_viz_reset,
 )
 from scanpath_studio.data import (
+    IDENTITY_SCHEMA_FIELDS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    ReadPlan,
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
@@ -205,9 +208,12 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames,
     has_explicit_trial_index,
+    identity_text_plan,
     normalize_fixations,
+    normalize_raw_gaze,
     normalize_words,
     propose_fix_schema,
+    propose_raw_gaze_schema,
     propose_word_schema,
     read_tables,
     remap_normalized_frame,
@@ -223,6 +229,7 @@ from scanpath_studio.data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+    verbatim_text_plan,
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
@@ -12879,6 +12886,59 @@ def _harmonize_noting_join(
     return result
 
 
+def _reading_keys(frame, columns) -> set:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return set()
+    if not set(columns) <= set(frame.columns):
+        return set()
+    # Deduplicated before the text conversion: a raw-gaze table is samples.
+    rows = frame[list(columns)].drop_duplicates().dropna().astype(str)
+    return set(map(tuple, rows.to_numpy()))
+
+
+def raw_gaze_identity_problem(raw_gaze: pd.DataFrame, entry: dict) -> str | None:
+    """Why a raw-gaze table cannot join this dataset, or ``None`` if it can.
+
+    Samples are drawn under the scanpath of the reading — participant + trial,
+    and the screen on a multipart dataset — they share, so a table that shares
+    none with the dataset's fixations (else its word boxes) would attach and
+    then never appear. Said before Save commits it, naming the fields to check.
+    """
+    parent = ["participant_id", "trial_id"]
+    for table_key in ("fixations", "words"):
+        frame = entry.get(table_key)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            break
+    else:
+        return None
+    if not _reading_keys(raw_gaze, parent) & _reading_keys(frame, parent):
+        return (
+            "None of its readings match this dataset's: no sample has a "
+            "participant and trial the dataset's "
+            f"{_TABLE_LABELS[table_key].lower()} table has. Check that "
+            "**Participant ID** and **Trial ID** name the same readers and "
+            "trials, spelled the same way."
+        )
+    gaze_screens = (
+        "screen_id" in raw_gaze.columns and raw_gaze["screen_id"].notna().any()
+    )
+    data_screens = "screen_id" in frame.columns and frame["screen_id"].notna().any()
+    if gaze_screens and not data_screens:
+        return (
+            "It maps a **Screen ID**, but this dataset has no screens. Clear "
+            "Screen ID, or add the dataset again with its screens mapped."
+        )
+    if gaze_screens and not (
+        _reading_keys(raw_gaze, [*parent, "screen_id"])
+        & _reading_keys(frame, [*parent, "screen_id"])
+    ):
+        return (
+            "Its readings match, but none of its screens do. Check that "
+            "**Screen ID** names the same screens as the dataset's."
+        )
+    return None
+
+
 def _apply_remap() -> None:
     """Re-derive the active stored dataset's frames under the edited mapping and
     overwrite the entry in place (the "Apply remapping" button's ``on_click``).
@@ -12940,9 +13000,23 @@ def _apply_remap() -> None:
         if frame is None or frame.empty or table_key not in pending:
             continue
         schema = pending[table_key]
-        new_entry[table_key] = remap_normalized_frame(
-            frame, schema, kind=table_key, repeat_of=repeat_of
-        )
+        try:
+            new_entry[table_key] = remap_normalized_frame(
+                frame, schema, kind=table_key, repeat_of=repeat_of
+            )
+        except Exception as exc:
+            # A complete mapping the data does not fit (a Screen ID that maps
+            # to two screen orders in one trial, say). Reported on the screen
+            # like the added tables' failures below, never raised from this
+            # `on_click`; nothing is saved — `new_entry` is only written back
+            # at the end, so the tables remapped before this one stay as they
+            # were too — and the draft stays open to be corrected.
+            from scanpath_studio.app import mapping_failure_problem
+
+            st.session_state["_remap_problems"] = {
+                table_key: [mapping_failure_problem(exc)]
+            }
+            return
         new_schemas[table_key] = schema
         earlier = ColumnNames.from_payload(new_names.get(table_key))
         recipe_schemas[table_key], missing = source_schema(schema, earlier)
@@ -12961,13 +13035,21 @@ def _apply_remap() -> None:
     # uploaded today line up with a half uploaded weeks ago. Both halves are
     # written back, because harmonizing can change either.
     harmonized = False
-    for table_key in added:
+    # Raw gaze last, so it is matched against the fixations and boxes this save
+    # ends with, including a table added beside it.
+    for table_key in sorted(added, key=lambda key: key == "raw_gaze"):
         raw = st.session_state.get(_added_raw_key(name, table_key))
         if raw is None or raw.empty or table_key not in pending:
             continue
         schema = pending[table_key]
         try:
-            if table_key == "words":
+            if table_key == "raw_gaze":
+                fresh = normalize_raw_gaze(raw, schema)
+                if problem := raw_gaze_identity_problem(fresh, new_entry):
+                    st.session_state["_remap_problems"] = {"raw_gaze": [problem]}
+                    return
+                new_entry["raw_gaze"] = fresh
+            elif table_key == "words":
                 # UX-106 — the add screen's aggregation, on the add-a-table
                 # path. Runs on the RAW frame before normalization, which is the
                 # only point it can: `normalize_words` expects one row per box.
@@ -12987,7 +13069,7 @@ def _apply_remap() -> None:
                     other = empty_words_frame()
                 other, fresh = _harmonize_noting_join(other, fresh)
                 new_entry["words"], new_entry["fixations"] = other, fresh
-            harmonized = True
+            harmonized = harmonized or table_key != "raw_gaze"
         except Exception as exc:
             # The mapping is complete but the pipeline rejects the combination
             # (`app.mapping_failure_problem` names the usual causes). Reported
@@ -13087,6 +13169,11 @@ def _apply_remap() -> None:
             }
         )
     st.session_state["_datasets"][name] = new_entry
+    # Improvement A — the description and the metadata tables are part of the
+    # same save; committed under the old name, which the rename below carries.
+    from scanpath_studio.app import commit_editor_staging
+
+    commit_editor_staging(name)
     # UX-178 — and the name typed at the top of the screen. Applied last, after
     # the entry is saved under the name its widgets were keyed by: every editor
     # key carries the dataset's name, so renaming mid-edit would orphan them.
@@ -13113,6 +13200,7 @@ def _apply_remap() -> None:
     for key in [k for k in st.session_state if str(k).startswith("_remap_")]:
         if key != "_remap_applied":
             st.session_state.pop(key, None)
+    discard_editor_widgets()
     st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
     # DATA-46 — and the "use the current estimate" choice, which belongs to it.
     for key in [k for k in st.session_state if str(k).endswith("_setup_reestimate")]:
@@ -13220,7 +13308,7 @@ _EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
 _TABLE_LABELS = {"fixations": "Fixations", "words": "AOI", "raw_gaze": "Raw gaze"}
 
 
-#: UX-104 — the two tables a stored dataset can be *missing* and later gain.
+#: UX-104 — the tables a stored dataset can be *missing* and later gain.
 #: A dataset added from fixations alone is a complete dataset (the app draws a
 #: scanpath with no text), and so is one added from word boxes alone (it draws a
 #: heatmap from pre-aggregated measures) — but until now the only way to give
@@ -13234,7 +13322,19 @@ _ADDABLE_TABLES = (
         propose_fix_schema,
     ),
     ("words", "Add an AOI (word box) table", "Word AOI CSVs", propose_word_schema),
+    # Round 6, improvement C — the samples, for a dataset added from its
+    # fixation / AOI reports before they were exported.
+    (
+        "raw_gaze",
+        "Add a raw gaze table",
+        "Raw gaze sample CSVs",
+        propose_raw_gaze_schema,
+    ),
 )
+
+
+#: Each addable table's auto-detect, by table.
+_ADDABLE_PROPOSERS = {key: propose for key, _h, _p, propose in _ADDABLE_TABLES}
 
 
 def _added_raw_key(name: str, table_key: str) -> str:
@@ -13281,15 +13381,38 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             st.session_state.pop(raw_key, None)
             st.session_state.pop(signature_key, None)
             continue
-        signature = tuple(
+        # The files, and the columns read as literal text: a new Trial or text
+        # pick can change those, and a value pandas has already turned into a
+        # number or a missing cell cannot be recovered by a later mapping — so
+        # the file is read again then, and only then (not when a pick names a
+        # column that is already read as text, nor when the fields first seed
+        # themselves with what auto-detection proposed).
+        files = tuple(
             getattr(upload, "file_id", None)
             or (upload.name, getattr(upload, "size", None))
             for upload in uploads
         )
-        if st.session_state.get(signature_key) != signature:
+        held = st.session_state.get(signature_key)
+        current = st.session_state.get(raw_key)
+        stale = not (
+            isinstance(held, tuple)
+            and held[0] == files
+            and isinstance(current, pd.DataFrame)
+            and held[1] == _literal_columns(name, table_key, current.columns)
+        )
+        if stale:
             try:
-                st.session_state[raw_key] = read_tables(list(uploads))
-                st.session_state[signature_key] = signature
+                fresh = read_tables(
+                    list(uploads),
+                    plan_for=lambda header, table_key=table_key: _added_table_plan(
+                        name, table_key, header
+                    ),
+                )
+                st.session_state[raw_key] = fresh
+                st.session_state[signature_key] = (
+                    files,
+                    _literal_columns(name, table_key, fresh.columns),
+                )
             except Exception as exc:  # unreadable file — say so, keep the page
                 st.session_state.pop(raw_key, None)
                 box.error(f"Could not read that file: {exc}")
@@ -13299,6 +13422,50 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
             box.caption(f"{len(raw):,} rows · {len(raw.columns)} columns.")
             added[table_key] = raw
     return added
+
+
+#: The mapping fields whose source columns are read as literal text: the ids
+#: (BUG-59 — `007` stays `007`) and the word text (BUG-53 — `NA` stays a word).
+_LITERAL_READ_FIELDS = (*IDENTITY_SCHEMA_FIELDS, "text")
+
+
+def _added_table_picks(name: str, table_key: str) -> tuple:
+    """What the user has picked so far for the literal-text fields of a table
+    being added — the part of its mapping the file's read depends on."""
+    prefix = f"remap_{name}_{table_key}_add"
+    picks = []
+    for field in _LITERAL_READ_FIELDS:
+        key = f"{prefix}_{field}"
+        if key in st.session_state:
+            value = st.session_state[key]
+            if isinstance(value, (list, tuple)):
+                value = tuple(str(item) for item in value)
+            picks.append((field, value))
+    return tuple(picks)
+
+
+def _added_table_plan(name: str, table_key: str, header) -> ReadPlan:
+    """How to read a table being added on ✏️ Edit dataset — as the add screen does.
+
+    The ids as text and the word text verbatim, decided before pandas infers
+    anything (`data.verbatim_text_plan` / `identity_text_plan`): the columns
+    the user has picked for those fields, else the ones auto-detection would
+    propose from the header. Every column is still read — the editor decides
+    what to keep only once the table is mapped.
+    """
+    names = [str(column) for column in header]
+    schema = dict(_ADDABLE_PROPOSERS[table_key](pd.DataFrame(columns=names)))
+    for field, value in _added_table_picks(name, table_key):
+        schema[field] = list(value) if isinstance(value, tuple) else value
+    if table_key == "words":
+        return verbatim_text_plan(names, schema)
+    return identity_text_plan(names, schema, kind=table_key)
+
+
+def _literal_columns(name: str, table_key: str, header) -> tuple:
+    """The columns `_added_table_plan` reads as literal text, for ``header``."""
+    plan = _added_table_plan(name, table_key, header)
+    return (tuple(sorted(plan.verbatim)), tuple(sorted(plan.identity)))
 
 
 def aggregate_key(name: str) -> str:
@@ -13393,7 +13560,10 @@ def _render_remap_fields(
             state_key_prefix=prefixes[table_key],
             field_specs=specs_by_table[table_key],
             proposed=proposals[table_key],
-            problems=problems.get(table_key),
+            # What blocked the last Save is listed once per table above
+            # ✅ Save changes (`render_dataset_editor_footer`); handed to every
+            # one-field cell here, it printed the same warning in each of them.
+            problems=None,
             container=host,
             use_expander=False,
             only_keys=[field],
@@ -13848,6 +14018,49 @@ def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> No
         )
 
 
+#: ✏️ Edit dataset's own widget namespace — ``remap_<dataset>_…``: every
+#: mapping select, coordinate-format radio, aggregation toggle and table
+#: uploader on the screen. Its mapping widgets persist across runs
+#: (``persist_state="session"``, so a draft survives a visit to another view),
+#: which is exactly why a finished edit has to clear them.
+EDITOR_WIDGET_PREFIX = "remap_"
+
+
+def discard_editor_widgets() -> None:
+    """Forget every answer the editor's widgets hold.
+
+    Run when an edit ends (✕ Cancel, ✅ Save changes) and when a fresh one
+    opens: a mapping widget seeds itself from the saved dataset only when its
+    key is absent, so a key left behind by a cancelled edit would reopen the
+    editor on the abandoned pick — and the dirty baseline, captured from those
+    picks, would then call it unchanged. The field-touch marks and the
+    column-universe markers that go with those keys go too, and so does the
+    Recording setup form's ``edit_*_setup_*`` keys. The add screen's
+    ``col_map_*`` keys are a different namespace and are not touched.
+    """
+    session = st.session_state
+    marker = f"_mapped_columns_{EDITOR_WIDGET_PREFIX}"
+    for key in [
+        k
+        for k in list(session)
+        if isinstance(k, str)
+        and (
+            k.startswith((EDITOR_WIDGET_PREFIX, marker))
+            # The Recording setup form (`wizard._wizard_setup_step` under
+            # ``edit_<dataset>`` / ``edit_src_<token>``) persists its widgets
+            # too and seeds them with `setdefault`, so a cancelled setup edit
+            # would come back the same way.
+            or (k.startswith("edit_") and "_setup_" in k)
+        )
+    ]:
+        del session[key]
+    touched = session.get(TOUCHED_FIELDS_KEY)
+    if touched:
+        session[TOUCHED_FIELDS_KEY] = {
+            key for key in touched if not str(key).startswith(EDITOR_WIDGET_PREFIX)
+        }
+
+
 def _render_remap_editor(
     name: str, stored: dict, uploads_host=None, setup_host=None
 ) -> None:
@@ -13864,6 +14077,11 @@ def _render_remap_editor(
     setup** renders into ``setup_host``, the editor's own numbered part, so this
     function draws mapping and nothing else. Without a host it stays where it
     was, under a ``##### `` heading after a rule."""
+    if _REMAP_BASELINE_KEY not in st.session_state:
+        # A fresh edit (the baseline is captured at the end of its first
+        # render): start every field from the saved dataset, whatever an
+        # earlier edit left in the widgets.
+        discard_editor_widgets()
     # UX-54: the dataset table's ✏️ Edit both opened this dataset and sent the
     # user here, so say so — otherwise the page has silently changed under them
     # and the mapping form is several screens down.

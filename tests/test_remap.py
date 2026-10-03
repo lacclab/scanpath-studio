@@ -11,6 +11,7 @@ from scanpath_studio.data import (
     compute_keep_columns,
     dropped_columns,
     normalize_fixations,
+    normalize_raw_gaze,
     normalize_words,
     remap_normalized_frame,
 )
@@ -161,6 +162,62 @@ class TestRemapNormalizedFrame:
         assert list(out["width"]) == [40.0, 40.0]
         assert list(out["text"]) == ["The", "cat"]
         assert "freq" in out.columns
+
+
+def _normalized_raw_gaze() -> pd.DataFrame:
+    raw = pd.DataFrame(
+        {
+            "reader": ["p1", "p1"],
+            "trial": ["t1", "t1"],
+            "gx": [100.0, 110.0],
+            "gy": [200.0, 210.0],
+            "alt_x": [333.0, 343.0],
+            "time_ms": [50, 51],
+            "pupil": [3.5, 3.6],
+            "quality": ["good", "poor"],
+            "source_file": ["s1", "s1"],
+        }
+    )
+    schema = {
+        "participant": "reader",
+        "trial": "trial",
+        "x": "gx",
+        "y": "gy",
+        "timestamp": "time_ms",
+    }
+    keep = {"alt_x", "pupil", "quality", "source_file"}
+    return normalize_raw_gaze(raw, schema, keep_columns=keep)
+
+
+_RAW_GAZE_IDENTITY = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "x": "x",
+    "y": "y",
+    "timestamp": "timestamp_ms",
+}
+
+
+class TestRawGazeRemapKeepsColumns:
+    """A raw-gaze remap reassigns roles; it never drops retained columns."""
+
+    def test_identity_remap_keeps_extras(self):
+        before = _normalized_raw_gaze()
+        after = remap_normalized_frame(before, _RAW_GAZE_IDENTITY, kind="raw_gaze")
+        assert set(before.columns) <= set(after.columns)
+        assert after["pupil"].tolist() == [3.5, 3.6]
+        assert after["quality"].tolist() == ["good", "poor"]
+        assert after["source_file"].tolist() == ["s1", "s1"]
+
+    def test_changed_mapping_keeps_unrelated_extras(self):
+        before = _normalized_raw_gaze()
+        after = remap_normalized_frame(
+            before, {**_RAW_GAZE_IDENTITY, "x": "alt_x"}, kind="raw_gaze"
+        )
+        assert after["x"].tolist() == [333.0, 343.0]
+        assert after["pupil"].tolist() == [3.5, 3.6]
+        assert after["quality"].tolist() == ["good", "poor"]
+        assert after["source_file"].tolist() == ["s1", "s1"]
 
 
 def _normalized_onestop_fixations():

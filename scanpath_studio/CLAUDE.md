@@ -75,7 +75,15 @@ sits at the end of the *What's in…* heading (`app.render_dataset_inspection_he
 and the editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
 and **Description**. An upload's name is applied by ✅ Save changes
 (`tabs._apply_remap`, via `EDITOR_PENDING_NAME_KEY`) because every editor
-widget key carries it; a built-in's is a display alias set on change. The description is
+widget key carries it; a built-in's is a display alias, also applied by Save.
+**Everything on the editor waits for Save** (round 6): the description and a
+built-in's name are drafts in their widgets (`commit_editor_staging` applies
+them), and the metadata tables — whose sections attach as a file is read — are
+noted when the editor opens (`hold_editor_staging`) and put back by ✕ Cancel
+(`_discard_editor_staging` → `apply_editor_restore`, before
+`metadata.activate_dataset`). `_editor_is_dirty` covers all of it. The editor's
+mapping widgets (`remap_*`, persisted) are cleared by
+`tabs.discard_editor_widgets` when an edit ends or a fresh one opens. The description is
 `app.dataset_description` — the user's own, from
 `constants.DATASET_DESCRIPTIONS_KEY` (a recovery-cache session key; renamed and
 dropped with an upload by `wizard`), else the catalogue's — edited on ✏️ Edit

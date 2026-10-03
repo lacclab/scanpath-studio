@@ -1079,6 +1079,47 @@ class TestAuthoringEditorFlow:
 
 
 @pytest.mark.timeout(180)
+def test_co_animating_two_readings_of_one_text_renders():
+    """Animate + Compare on two readings in one coordinate space reaches the
+    same-text check, which called a two-argument helper with one argument —
+    a second `_trial_text_id` had shadowed the first — and stopped the view."""
+    from scanpath_studio.session_keys import (
+        PENDING_COMPARE_STATE_KEY,
+        SINGLE_ANIMATE,
+        SINGLE_COMPARE_TOGGLE,
+    )
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = make_multipart_synthetic_data()
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {
+        "Two readers": {
+            "words": pd.concat(
+                [words, words.assign(participant_id="reader2")], ignore_index=True
+            ),
+            "fixations": pd.concat(
+                [fixations, fixations.assign(participant_id="reader2")],
+                ignore_index=True,
+            ),
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Two readers"
+    at.run()
+    _clean(at, "on boot:")
+    at.session_state[SINGLE_ANIMATE] = True
+    at.session_state[SINGLE_COMPARE_TOGGLE] = True
+    at.session_state[PENDING_COMPARE_STATE_KEY] = {
+        "participant_id": "synthetic",
+        "trial_id": "multipart_demo",
+    }
+    at.run()
+    _clean(at, "co-animating two readings of one text:")
+
+
+@pytest.mark.timeout(180)
 class TestCrossDatasetCompareFlow:
     """CMP-8 — pick scanpath B out of a *different* dataset and render it.
 

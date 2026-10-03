@@ -1039,16 +1039,6 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
     )
 
 
-def _trial_text_id(trial_words: pd.DataFrame) -> str | None:
-    """Best-available text identifier for a trial's words (for same-text checks)."""
-    for col in ("unique_text_id", "text_id"):
-        if col in trial_words.columns and not trial_words.empty:
-            value = trial_words[col].iloc[0]
-            if pd.notna(value):
-                return str(value)
-    return None
-
-
 _MIME_FOR_FORMAT = {
     "PNG": "image/png",
     "SVG": "image/svg+xml",
@@ -7211,8 +7201,8 @@ def render_single_trial_tab(
                 # A co-replay is always one coordinate space (`requested_layout`
                 # is forced to overlay above), so the overlay wording applies.
                 text_note = _different_texts_note(
-                    _trial_text_id(trial_words),
-                    _trial_text_id(compare_meta["words"]),
+                    _trial_text_id(trial_words, trial_fixations),
+                    _trial_text_id(compare_meta["words"], compare_meta["fixations"]),
                 )
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])

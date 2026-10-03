@@ -2024,6 +2024,10 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 <td><code>--compare-with PARTICIPANT:TRIAL</code></td>
 </tr>
 <tr>
+<td>pick each screen of a multipart trial</td>
+<td><code>--screen ID</code> (A), <code>--compare-screen ID</code> (B); each defaults to its trial's first screen</td>
+</tr>
+<tr>
 <td>arrange the panels</td>
 <td><code>--compare-layout {overlay,side-by-side,stacked}</code> (default <code>overlay</code>)</td>
 </tr>
@@ -2085,16 +2089,18 @@ default.</p>
 <p><code>--animate --compare-with</code> replays <strong>both</strong> readings on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
 <code>--compare-with</code> cannot be combined with <code>--all-screens</code>: a comparison
-is a single figure of two readings, so render one screen at a time with
-<code>--screen</code>.</p>
+is a single figure of two readings, each drawn from one screen. Pick A's with
+<code>--screen</code> and B's with <code>--compare-screen</code>; B's is looked up in B's own trial,
+so it can be a later page, or a page of the second dataset.</p>
 <p><strong>Overlay across two datasets requires matching canvases.</strong> On two different
 canvases <code>--compare-layout overlay</code> fails rather than falling back, and so does
 <code>--animate</code>, which replays both readings in one coordinate space; pass
 <code>--compare-layout side-by-side</code> or <code>stacked</code>, without <code>--animate</code>. Without
 <code>--compare-canvas</code> the second dataset's screen is read off its data, as A's is
 when neither <code>--canvas</code> nor a built-in source gives one. That extent rarely
-spans the whole screen, so state both screens when you know them. Nothing is
-rescaled.</p>
+spans the whole screen, so state both screens when you know them. Within one
+dataset, two screens whose own canvases differ are refused the same way.
+Nothing is rescaled.</p>
 <p>A second dataset is loaded from <strong>files only</strong>. Any corpus reachable from Python
 can still be scanpath B via
 <a href="../api/#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>, which takes
@@ -3154,6 +3160,12 @@ with the default and help <code>--help</code> prints.</p>
 <td>Compare against a second scanpath, named as participant:trial. Taken from the loaded dataset unless <code>--compare-words</code>/<code>--compare-fixations</code> name a second one.</td>
 </tr>
 <tr>
+<td><code>--compare-screen</code></td>
+<td><code>SCREEN_ID</code></td>
+<td>—</td>
+<td>Screen of the second scanpath's multipart trial (default: its first screen), looked up in its own trial. <code>--screen</code> picks the first scanpath's. Each scanpath is drawn from one screen.</td>
+</tr>
+<tr>
 <td><code>--compare-layout</code></td>
 <td><code>{overlay,side-by-side,stacked}</code></td>
 <td><code>overlay</code></td>
@@ -3319,7 +3331,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 09:07:55 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 11:33:59 UTC">October 3, 2026</span>
   </span>
 
     

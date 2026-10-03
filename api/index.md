@@ -312,7 +312,7 @@ Remaining keywords override the app's defaults and are forwarded to `plots.make_
 ### scanpath_studio.api.animate_scanpath
 
 ```
-animate_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
+animate_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, screen_b: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
 ```
 
 Build the animated scanpath replay for one trial.
@@ -325,7 +325,7 @@ When `playback_speed` is not `1`, the automatic Illustration label says the repl
 
 CMP-24: in a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`).
 
-`trial_b=(participant, trial)` co-animates a second reading on the same clock, like the app's Animate + Compare. It is looked up in `words_b` / `fixations_b` when given, else in `words` / `fixations` — the way compare_scanpaths takes it. Without `trial_b`, `words_b` / `fixations_b` must hold one trial; B frames holding several raise `ValueError` rather than drawing them all. A multipart B is drawn at its first recorded screen; cut B's frames to another with `multipart.extract_part` to draw that one.
+`trial_b=(participant, trial)` co-animates a second reading on the same clock, like the app's Animate + Compare. It is looked up in `words_b` / `fixations_b` when given, else in `words` / `fixations` — the way compare_scanpaths takes it. Without `trial_b`, `words_b` / `fixations_b` must hold one trial; B frames holding several raise `ValueError` rather than drawing them all. A multipart B is drawn at `screen_b` — looked up in B's own trial — or at its first recorded screen without it, as A is with `screen`.
 
 **Two datasets.** Both readings are drawn in A's coordinates, so a co-animation is an overlay, and a reading from another dataset has to share A's screen. Name that dataset with `dataset_b` (or give its `setup_b`) and the pair is checked the way `compare_scanpaths` checks an overlay: two different canvases raise `IncomparableScreensError`, a `ValueError`, rather than draw. `setup` / `setup_b` are `experimental_setup.SetupSnapshot` values; a side without one is read off its data — the extent of that one trial, which rarely spans the whole screen, so state both when you know them — and `canvas_size` covers A when you only have a resolution. `dataset_b` also prefixes B's participant ids with the dataset's name, as `compare_scanpaths` does, so a hover says whose reader it is. `words_b` / `fixations_b` passed without either are taken to be from A's dataset, as `render` passes them for `--compare-with` alone, and are not checked: two readings of one corpus can span different extents, and inferring a canvas from each would refuse pairs that shared a screen.
 
@@ -338,18 +338,22 @@ The replay is made of fixations, so a trial without any — one recorded as raw 
 ### scanpath_studio.api.compare_scanpaths
 
 ```
-compare_scanpaths(words: DataFrame, fixations: DataFrame, trial_a: tuple[str, str], trial_b: tuple[str, str], *, words_b: DataFrame | None = None, fixations_b: DataFrame | None = None, dataset_b: str = 'Dataset B', raw_gaze: DataFrame | None = None, raw_gaze_b: DataFrame | None = None, layout: str = 'overlay', compare_stimulus: str = 'both', setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, canvas_size: tuple[int, int] | None = None, labels: tuple[str, str] | None = None, style_a: dict | None = None, style_b: dict | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, drift_correction: str | None = None, title: str = '', caption: str = '', **figure_overrides) -> Figure
+compare_scanpaths(words: DataFrame, fixations: DataFrame, trial_a: tuple[str, str], trial_b: tuple[str, str], *, screen: str | None = None, screen_b: str | None = None, words_b: DataFrame | None = None, fixations_b: DataFrame | None = None, dataset_b: str = 'Dataset B', raw_gaze: DataFrame | None = None, raw_gaze_b: DataFrame | None = None, layout: str = 'overlay', compare_stimulus: str = 'both', setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, canvas_size: tuple[int, int] | None = None, labels: tuple[str, str] | None = None, style_a: dict | None = None, style_b: dict | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, drift_correction: str | None = None, title: str = '', caption: str = '', **figure_overrides) -> Figure
 ```
 
 Build a two-scanpath comparison figure.
 
 The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(participant, trial)` pairs; `layout` is `"overlay"`, `"side_by_side"` (`"side-by-side"` also accepted) or `"stacked"`.
 
+**Multipart trials.** Each scanpath is one screen, never a whole multipart trial: every screen is its own coordinate space, so pooling them would draw saccades across page boundaries. `screen` picks A's screen and `screen_b` B's, independently — B's is looked up in B's own frames, so it may be a later page or another dataset's. Either one left out is that trial's first recorded screen, as in plot_scanpath; `list_parts()` lists them. A screen named for a single-screen trial, or one the trial does not have, raises `ValueError`.
+
 **Two datasets.** Pass `words_b` / `fixations_b` to draw B from a *different* corpus. Two corpora can hold the same `(participant_id, trial_id)` and the builder slices by exactly that pair, so B's participant ids are namespaced with `dataset_b` inside the throwaway merged frames — without it one reading would silently render as two. The frames you pass in are never modified, and nothing in the returned figure's data depends on the namespace beyond the trace labels.
 
-**The overlay gate.** Across datasets an overlay needs both canvases to be the same size; otherwise this raises `ValueError` (the app falls back to side by side). Pass `layout="side_by_side"` or `"stacked"` to compare readings from different screens. Nothing is rescaled.
+**The overlay gate.** Across datasets an overlay needs both canvases to be the same size; otherwise this raises `ValueError` (the app falls back to side by side). One dataset can hold screens of different sizes too, so a same-dataset pair is refused the same way when the two selected screens carry different canvases (`canvas_width` / `canvas_height` columns) or `setup_b` states another screen. Pass `layout="side_by_side"` or `"stacked"` to compare readings from different screens; each panel is then drawn to its own. Nothing is rescaled.
 
 `setup` / `setup_b` are `experimental_setup.SetupSnapshot` values — what the gate reads. `canvas_size` covers A when you only have a resolution; omit both and the canvas is read off the data.
+
+**Stimulus images.** `background_image` is A's page. A split layout draws B's panel over `background_image_b` (with `background_image_size_b` / `background_image_origin_b`) and over nothing without it — never A's, since sharing a dataset says nothing about sharing a page.
 
 `compare_stimulus` picks whose word boxes and text an **overlay** draws — `"both"` (default), `"a"` or `"b"`. Two datasets' AOIs coincide only when the text is identical. Split layouts ignore it; each panel owns its own stimulus.
 
@@ -415,7 +419,7 @@ sps.save_figure(fig, 'scanpath.png')
 ### scanpath_studio.api.figure_code
 
 ```
-figure_code(*, kind: str = 'static', source: str = 'demo', source_options: dict | None = None, participant: str = '', trial: str = '', screen: str | None = None, compare: tuple[str, str] | None = None, compare_layout: str = 'overlay', compare_stimulus: str = 'both', compare_dataset: str = '', compare_canvas: tuple[int, int] | None = None, compare_labels: tuple[str, str] | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, title: str = '', caption: str = '', fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', drift_correction: str | None = None, drift_connectors: bool = False, playback_speed: float = 1.0, autoplay: bool = True, flavor: str = 'python', explicit: bool = False, output: str | None = None, **figure_overrides) -> str
+figure_code(*, kind: str = 'static', source: str = 'demo', source_options: dict | None = None, participant: str = '', trial: str = '', screen: str | None = None, compare: tuple[str, str] | None = None, compare_screen: str | None = None, compare_layout: str = 'overlay', compare_stimulus: str = 'both', compare_dataset: str = '', compare_canvas: tuple[int, int] | None = None, compare_labels: tuple[str, str] | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, title: str = '', caption: str = '', fix_index_range: tuple[int, int] | None = None, illustration_label: str = 'auto', drift_correction: str | None = None, drift_connectors: bool = False, playback_speed: float = 1.0, autoplay: bool = True, flavor: str = 'python', explicit: bool = False, output: str | None = None, **figure_overrides) -> str
 ```
 
 The API or CLI code that reproduces a figure.
@@ -428,6 +432,8 @@ print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
 ```
 
 `source` names how the data is loaded — `"demo"`, `"synthetic"`, `"files"`, `"potec"`, `"onestop"`, `"multipleye"`, `"benchmark"`, `"author"`, or `"unknown"` for data a snippet can't name — with `source_options` carrying that loader's arguments (`{"root": …}`, `{"words": [...], "fixations": [...]}`, and so on). With `show_raw_gaze=True` the raw-gaze table is read too: the demo's own, or the path(s) given as `source_options["raw_gaze"]` (plus an optional `"raw_gaze_schema"`) — load_raw_gaze in the Python form, `--raw-gaze` in the CLI one. `source="raw_gaze"` is a dataset recorded as raw gaze alone: the samples at `source_options["raw_gaze"]` are the data, and `plot_scanpath` is handed `None` for the words and fixations.
+
+`screen` / `compare_screen` are A's and B's screens of a multipart trial (`screen=` / `screen_b=`, `--screen` / `--compare-screen`).
 
 `compare_dataset` names the corpus scanpath B was loaded from when it is a *second* one. B's participant id belongs to that corpus rather than the one the snippet loads, so both forms then load B's own tables and name B in them — `words_b=` / `fixations_b=` / `dataset_b=`, and `--compare-words` / `--compare-fixations` beside `--compare-with` — from the placeholder paths `B_WORDS` / `B_FIXATIONS`, which you point at its files. `compare_canvas` is B's screen, `(width, height)`, when you know it: written as `setup_b=` and `--compare-canvas`, which a co-animation across datasets needs.
 

@@ -26,7 +26,7 @@ Open **Export → Current figure** and choose:
 | interactive inspection | HTML              |
 | replay                 | HTML, GIF, or MP4 |
 
-PNG and SVG are saved by your browser from the figure on screen, and HTML needs nothing either (it loads Plotly from the internet when opened); PDF, GIF and MP4 need Chrome, Chromium or Edge. For a still figure, the plot's own camera button saves the same PNG.
+PNG and SVG are saved by your browser from the figure on screen, and HTML needs nothing either (it loads Plotly from the internet when opened, or tick **HTML files → Self-contained HTML** for a larger file that opens offline); PDF, GIF and MP4 need Chrome, Chromium or Edge. For a still figure, the plot's own camera button saves the same PNG.
 
 ## 3. Export a batch when needed
 
@@ -41,6 +41,6 @@ For post-production, enable separable layers so text, boxes, fixations, saccades
 
 ## 4. Keep provenance
 
-Keep `plot_config.json` with the batch (or a **Share → File** settings file for a single figure), and record the package version, dataset version and any trial filtering in the caption or analysis log — the export does not store them.
+Keep `plot_config.json` with the batch (or a **Share → File** settings file for a single figure). The bundle's `README.md` records the package version and which readings it was built from, and `index.csv` lists every file with its participant, trial and screen, and any that failed. Record the dataset version and the trial filters you used in the caption or analysis log — the export does not store them.
 
 **Done:** the exported files share one visual configuration and can be recreated. For scripted runs, see [Automation](https://lacclab.github.io/scanpath-studio/automation/index.md).

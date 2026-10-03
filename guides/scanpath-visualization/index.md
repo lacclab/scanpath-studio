@@ -41,6 +41,8 @@ Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the s
 - **Compare** adds a second reading, overlaid or side by side. **Compare with** can take it from another dataset.
 - **Comparisons** lists other trials that match this one on a field you choose: other readings of the same text, or the same reader's other trials.
 
-Two readings can be overlaid only when they were shown on the same screen size; otherwise they are drawn side by side. Nothing is rescaled to force an overlay.
+Side by side, each panel shows its own reading's stimulus image, or none when that reading has no image. An uploaded image stands for the first reading's page, so the second shows it only when it reads the same text on the same screen.
+
+Two readings can be overlaid only when they were shown on the same screen size, including two screens of one dataset whose sizes differ; otherwise they are drawn side by side, each on its own screen. Nothing is rescaled to force an overlay.
 
 Compare is also available from Python ([`compare_scanpaths`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.compare_scanpaths)) and the [CLI](https://lacclab.github.io/scanpath-studio/cli/#compare-two-scanpaths).

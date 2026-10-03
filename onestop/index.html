@@ -1776,7 +1776,7 @@ of datasets:</p>
 </tr>
 </tbody>
 </table>
-<p>Each holds <strong>every part</strong> of its regime's trials, the reading passage and the
+<p>Each holds <strong>every screen</strong> of its regime's trials, the reading passage and the
 screens around it, from the public <a href="https://osf.io/2prdq/">OSF</a> release:</p>
 <table>
 <thead>
@@ -1813,17 +1813,16 @@ screens around it, from the public <a href="https://osf.io/2prdq/">OSF</a> relea
 <td>The four answer choices.</td>
 </tr>
 <tr>
-<td>Question + answers (QA)</td>
-<td><code>QA</code></td>
-<td>The combined question-and-answers screen.</td>
-</tr>
-<tr>
 <td>Feedback</td>
 <td><code>Feedback</code></td>
 <td>The correctness feedback screen.</td>
 </tr>
 </tbody>
 </table>
+<p>The release also has a <strong>QA</strong> part (<code>QA</code>): the question and answers screens
+taken together as one interest period, not a screen of its own. Its fixations
+are the ones those two screens already hold, so the datasets leave it out;
+load it with <code>parts=["QA"]</code> when you want that combined period.</p>
 <p>Every part ships an <strong>interest-area report</strong> (one row per word, with bounding
 boxes and reading measures) and a <strong>fixation report</strong>, all in the same schema —
 so each part renders as a scanpath. A trial is one reading of one paragraph,
@@ -1839,7 +1838,7 @@ shows whether they're already present (until they are, the app shows the bundled
 demo, with a <strong>⬇ Download now</strong> panel). If they're present the dataset loads
 with no network access; if not, click <strong>⬇ Download</strong> to fetch them into the
 folder (cached on disk, so only the first load pays the download — reports
-range from tens to a few hundred MB each, and a regime has up to fourteen). While it
+range from tens to a few hundred MB each, and a regime has up to twelve). While it
 downloads, a card shows how much has arrived; <strong>Stop download</strong> ends it and
 deletes the partial file.</p>
 <p>Each report is downloaded at a <strong>fixed OSF version</strong> (version 1, of
@@ -1873,10 +1872,10 @@ plot-ready frames:</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_onestop</span><span class="p">(</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">"data/OneStop"</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">regime</span><span class="o">=</span><span class="s2">"ordinary"</span><span class="p">,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">parts</span><span class="o">=</span><span class="p">[</span><span class="s2">"Paragraph"</span><span class="p">],</span>  <span class="c1"># any subset of the seven parts</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">parts</span><span class="o">=</span><span class="p">[</span><span class="s2">"Paragraph"</span><span class="p">],</span>  <span class="c1"># any subset of the parts above, or QA</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># The app's dataset for a regime is every part of it:</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># The app's dataset for a regime is every screen of it (every part but QA):</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">onestop_regime_parts</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">parts</span> <span class="o">=</span> <span class="n">onestop_regime_parts</span><span class="p">(</span><span class="s2">"ordinary"</span><span class="p">)</span>
@@ -1910,7 +1909,7 @@ plot-ready frames:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 2, 2026 21:43:38 UTC">October 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 04:32:52 UTC">October 3, 2026</span>
   </span>
 
     

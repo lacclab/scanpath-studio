@@ -12,12 +12,11 @@ Load the corpus and narrow the trial pool before opening Corpus Analysis. Check 
 
 Select **Corpus Analysis** in the navigation, then choose the view that matches the question:
 
-| Question                                   | View             |
-| ------------------------------------------ | ---------------- |
-| How was one text read?                     | **Per text**     |
-| How was one sentence read, across readers? | **Per sentence** |
-| How does one reader behave across trials?  | **Per reader**   |
-| How do conditions or populations differ?   | **Groups**       |
+| Question                                  | View           |
+| ----------------------------------------- | -------------- |
+| How was one text read?                    | **Per text**   |
+| How does one reader behave across trials? | **Per reader** |
+| How do conditions or populations differ?  | **Groups**     |
 
 ## 3. Choose one measure
 

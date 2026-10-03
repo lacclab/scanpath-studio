@@ -21,21 +21,22 @@ OneStop is exposed as **four public datasets**, one per reading regime. In the a
 | OneStop — Repeated reading               | Reading a paragraph for the second time.                      |
 | OneStop — Information seeking (repeated) | A second reading, after seeing the question.                  |
 
-Each holds **every part** of its regime's trials, the reading passage and the screens around it, from the public [OSF](https://osf.io/2prdq/) release:
+Each holds **every screen** of its regime's trials, the reading passage and the screens around it, from the public [OSF](https://osf.io/2prdq/) release:
 
-| Part                    | CLI id             | What it is                                                            |
-| ----------------------- | ------------------ | --------------------------------------------------------------------- |
-| Title                   | `Title`            | The article title screen.                                             |
-| Question preview        | `Question_Preview` | The question shown before reading (information-seeking regimes only). |
-| Paragraph               | `Paragraph`        | The reading passage.                                                  |
-| Question                | `Questions`        | The question shown after reading.                                     |
-| Answers                 | `Answers`          | The four answer choices.                                              |
-| Question + answers (QA) | `QA`               | The combined question-and-answers screen.                             |
-| Feedback                | `Feedback`         | The correctness feedback screen.                                      |
+| Part             | CLI id             | What it is                                                            |
+| ---------------- | ------------------ | --------------------------------------------------------------------- |
+| Title            | `Title`            | The article title screen.                                             |
+| Question preview | `Question_Preview` | The question shown before reading (information-seeking regimes only). |
+| Paragraph        | `Paragraph`        | The reading passage.                                                  |
+| Question         | `Questions`        | The question shown after reading.                                     |
+| Answers          | `Answers`          | The four answer choices.                                              |
+| Feedback         | `Feedback`         | The correctness feedback screen.                                      |
+
+The release also has a **QA** part (`QA`): the question and answers screens taken together as one interest period, not a screen of its own. Its fixations are the ones those two screens already hold, so the datasets leave it out; load it with `parts=["QA"]` when you want that combined period.
 
 Every part ships an **interest-area report** (one row per word, with bounding boxes and reading measures) and a **fixation report**, all in the same schema — so each part renders as a scanpath. A trial is one reading of one paragraph, and its parts are that trial's **screens**, in the order they were shown — step through them with the **Screen** picker above the plot. Each screen keeps its own word boxes; not every reading has every part (the title screen opens an article, so only a reading of its first paragraph has one). On OSF only *Paragraph* is split by regime; the other parts come from one all-regimes release, which the four datasets share on disk, and each dataset keeps only its own regime's trials from them (by the reports' `question_preview` and `repeated_reading_trial` columns).
 
-The **Edit dataset** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). If they're present the dataset loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each, and a regime has up to fourteen). While it downloads, a card shows how much has arrived; **Stop download** ends it and deletes the partial file.
+The **Edit dataset** screen's data-location part lists the **Expected files** and shows whether they're already present (until they are, the app shows the bundled demo, with a **⬇ Download now** panel). If they're present the dataset loads with no network access; if not, click **⬇ Download** to fetch them into the folder (cached on disk, so only the first load pays the download — reports range from tens to a few hundred MB each, and a regime has up to twelve). While it downloads, a card shows how much has arrived; **Stop download** ends it and deletes the partial file.
 
 Each report is downloaded at a **fixed OSF version** (version 1, of 2025-05-28) and checked against that version's size, so everyone who downloads OneStop through the app gets the same files. That is also why the dataset list can show a regime's counts before you open it.
 
@@ -58,10 +59,10 @@ import scanpath_studio as sps
 words, fixations = sps.load_onestop(
     "data/OneStop",
     regime="ordinary",
-    parts=["Paragraph"],  # any subset of the seven parts
+    parts=["Paragraph"],  # any subset of the parts above, or QA
     download=True,
 )
-# The app's dataset for a regime is every part of it:
+# The app's dataset for a regime is every screen of it (every part but QA):
 from scanpath_studio.datasets import onestop_regime_parts
 
 parts = onestop_regime_parts("ordinary")

@@ -1893,6 +1893,7 @@ behind each line, and the releases before 0.28.0, are in
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
+<li>Corpus Analysis → Per sentence is held back until it is built on the dataset's own reading measures; until then it is behind SCANPATH_EXPERIMENTAL=1, with plain-language measure names. (AN-33)</li>
 <li>Public corpora now download at a fixed version (OneStop's and PoTeC's OSF files, PoTeC's word boxes), checked by size, and the four OneStop datasets show their counts before they are opened. (DATA-65)</li>
 <li>Shortened the user docs: desktop install steps now sit in Getting started, export troubleshooting is folded into the FAQ, and the feature guides, tutorials index and FAQ are rewritten to be brief. (ENG-88)</li>
 <li>The docs show the app's own Material icons instead of emoji, and every screenshot is re-captured from the current app. (ENG-89)</li>
@@ -1919,12 +1920,24 @@ behind each line, and the releases before 0.28.0, are in
 <li>A public dataset whose tables load but fail to normalize now says so on the Data page, naming the dataset and the reason, with Edit dataset and Load the bundled demo beside it; the error and its traceback also reach the server terminal. (BUG-100)</li>
 <li>The Line index field's help now says what it does: the plot infers lines from the word boxes, not from this column. (BUG-102)</li>
 <li>Loading a corrected version of a large table (over 200,000 rows) no longer brings back the old version's values. Before, if the change fell in a row the app did not check, it kept the old normalized tables, stored them as the new dataset and kept showing the old results. (BUG-103)</li>
+<li>A multipart export's plot config records each screen's own canvas, not the dataset's. (BUG-104)</li>
+<li>A multipart trial recorded as raw gaze alone exports one folder per screen, instead of drawing every screen's samples in one figure. (BUG-105)</li>
+<li>Comparing with another dataset, the gaze-sample chip counts scanpath B's own samples instead of showing a dash. (BUG-106)</li>
+<li>Comparing with another dataset no longer warns that the default uniform colour isn't in both datasets. (BUG-107)</li>
+<li>The settings buttons beside each plot control, and beside Animate and Compare, have names a screen reader can announce, such as "Fixation settings". (BUG-108)</li>
+<li>Corpus Analysis → Per sentence keeps each screen's sentences apart, instead of averaging sentence 1 of every screen together. (BUG-109)</li>
+<li>Opening a trial whose ids join like another's (a__b / c and a / b__c), or a screen named "parent", no longer copies the other's star, tags or note into it. (BUG-110)</li>
+<li>Two Groups cohorts with the same name are shown as "Name (A)" and "Name (B)" instead of one replacing the other in every chart. (BUG-111)</li>
+<li>Groups counts a cohort's readers on its word measures when the dataset has no fixations, instead of reporting 0 readers. (BUG-112)</li>
 <li>The dataset list's Status column now says whether each dataset can be opened (Ready, Needs download, Needs setup), the same way whichever dataset is open. (BUG-113)</li>
+<li>Groups' difference profile and two-group word heatmap compare both cohorts on one screen, chosen with a Screen picker, instead of each cohort's own first screen. (BUG-114)</li>
 <li>PoTeC's trial ID is now the reader and the text together (<code>0_b0</code>), not the text name every reader shares, in the app, the CLI (<code>render --potec -t 0_b0</code>) and <code>load_potec</code>. (DATA-61)</li>
 <li>A built-in dataset's Edit dataset screen (the demo, PoTeC, OneStop) now ends in Save changes: mapping edits wait for it, and Cancel discards them. (DATA-62)</li>
+<li>The OneStop datasets no longer load the QA part, which is the question and answers screens again as one period, so its fixations are no longer counted twice or shown as an extra screen. (DATA-64)</li>
 <li>The docs Gallery's figures draw after you arrive from another page or a heading link, and the site's llms.txt and llms-full.txt list every page again. (ENG-92)</li>
 <li>The docs are corrected where a careful review found them wrong or vague: Pupil Labs coordinates, which measures are computed where, excluding trials by tag, which counts follow the filters, offline HTML, and what a setup file holds. (ENG-93)</li>
 <li>The docs site is published only from a build that passed, and is rebuilt when the scripts and changelog it is generated from change. (ENG-94)</li>
+<li>The security policy now lists the settings a shared deployment should use, instead of linking to a docs page that led straight back to it. (ENG-95)</li>
 <li>Switching back to the dataset you had open just before no longer normalizes it again: going PoTeC → OneStop → PoTeC is instant on the way back. (PERF-18)</li>
 <li>The plot no longer shows a scrollbar with nothing to scroll. (UX-188)</li>
 <li>Clicking the plot, or any other embedded frame, now closes an open plot-control popover. (UX-193)</li>

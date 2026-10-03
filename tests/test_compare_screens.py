@@ -242,3 +242,54 @@ def test_render_refuses_compare_screen_without_compare_with(tmp_path):
                 str(tmp_path / "x.html"),
             ]
         )
+
+
+def _sized_pair(width_a: int, width_b: int):
+    """Two readings of one dataset, each on a screen with its own canvas."""
+    words, fixations = [], []
+    for trial, width in (("t1", width_a), ("t2", width_b)):
+        w, f = api.build_authored_scanpath("First page")
+        common = dict(
+            participant_id="p",
+            trial_id=trial,
+            screen_id="page1",
+            screen_index=1,
+            canvas_width=width,
+            canvas_height=900,
+        )
+        words.append(w.assign(**common))
+        fixations.append(f.assign(**common))
+    return pd.concat(words, ignore_index=True), pd.concat(fixations, ignore_index=True)
+
+
+@pytest.mark.parametrize(("width_a", "width_b"), [(800, 1600), (1600, 800)])
+def test_one_datasets_two_screen_sizes_refuse_an_overlay(width_a, width_b):
+    from scanpath_studio.experimental_setup import IncomparableScreensError
+
+    words, fixations = _sized_pair(width_a, width_b)
+    with pytest.raises(IncomparableScreensError, match="different screens"):
+        api.compare_scanpaths(words, fixations, ("p", "t1"), ("p", "t2"))
+
+
+@pytest.mark.parametrize(("width_a", "width_b"), [(800, 1600), (1600, 800)])
+@pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+def test_each_panel_is_drawn_to_its_own_screen(width_a, width_b, layout):
+    words, fixations = _sized_pair(width_a, width_b)
+    fig = api.compare_scanpaths(
+        words,
+        fixations,
+        ("p", "t1"),
+        ("p", "t2"),
+        layout=layout,
+        fit_to_monitor=True,
+    )
+    assert list(fig.layout.xaxis.range) == [0, width_a]
+    assert list(fig.layout.xaxis2.range) == [0, width_b]
+
+
+def test_one_screen_size_still_overlays():
+    words, fixations = _sized_pair(800, 800)
+    fig = api.compare_scanpaths(
+        words, fixations, ("p", "t1"), ("p", "t2"), fit_to_monitor=True
+    )
+    assert list(fig.layout.xaxis.range) == [0, 800]

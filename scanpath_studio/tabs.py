@@ -4040,8 +4040,11 @@ def _compare_setups(
 ) -> tuple[bool, str]:
     """CMP-11: may A and B be drawn in one coordinate space? Plus the reason.
 
-    ``(True, "")`` for every *same-dataset* pair — one corpus is one screen, and
-    that case must stay exactly as it was before CMP-11.
+    A *same-dataset* pair is ``(True, "")`` while B's screen (``compare_meta``'s
+    ``"canvas"``, its selected screen's own canvas) matches the one A is drawn
+    on; one dataset can hold screens of different sizes, so two that differ
+    are refused with the same reason as two datasets' would be. Its
+    provenance is one corpus's either way, so there is no caveat to add.
 
     For a cross-dataset pair both snapshots go through
     `compare_source.snapshot_for`, deliberately: A's live ``global_*`` canvas
@@ -4055,10 +4058,21 @@ def _compare_setups(
     rail's 🖥️ Screen & geometry panel can override it, and the gate has to test
     the figure that is drawn, not the one the corpus declares.
     """
-    from scanpath_studio.experimental_setup import setups_comparable
+    from scanpath_studio.experimental_setup import SetupSnapshot, setups_comparable
 
-    if not compare_meta or not compare_meta.get("dataset"):
+    if not compare_meta:
         return True, ""
+    if not compare_meta.get("dataset"):
+        canvas_b = compare_meta.get("canvas")
+        canvas_a = (int(canvas_width), int(canvas_height))
+        if canvas_b is None or tuple(canvas_b) == canvas_a:
+            return True, ""
+        return setups_comparable(
+            SetupSnapshot(canvas_width=canvas_a[0], canvas_height=canvas_a[1]),
+            SetupSnapshot(
+                canvas_width=int(canvas_b[0]), canvas_height=int(canvas_b[1])
+            ),
+        )
     setup_b = compare_meta.get("setup")
     if setup_b is None:
         # BUG-85: why, not what happens next — like `setups_comparable`'s reason.
@@ -4097,9 +4111,17 @@ def _build_compare_meta(
     primary_dataset: str | None = None,
     raw_gaze: pd.DataFrame | None = None,
     include_raw_gaze: bool = True,
+    dataset_canvas: tuple[int, int] | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
+
+    ``"canvas"`` in the result is B's own screen: the selected screen's canvas
+    when B's rows carry one, else its dataset's — ``source.setup`` for a second
+    dataset, ``dataset_canvas`` (A's dataset canvas, before any per-screen
+    override) for this one. One dataset can hold screens of different sizes, so
+    dataset identity alone never makes B's screen A's. A second dataset's
+    ``"setup"`` carries the same canvas.
 
     ``primary_dataset`` is A's own corpus name (CMP-15): a cross-dataset
     comparison names *both* sides above their chip strips, since naming only B
@@ -4185,6 +4207,17 @@ def _build_compare_meta(
     else:
         label_primary = str(selected_trial)
         label_compare = str(compare_trial)
+    # B's screen, read before the participant ids are namespaced (they don't
+    # touch the canvas columns, but this is B's data as its corpus has it).
+    setup_b = source.setup if source is not None else None
+    canvas_b = screen_canvas_size(compare_words) or screen_canvas_size(compare_fix)
+    if canvas_b is not None and setup_b is not None:
+        setup_b = replace(setup_b, canvas_width=canvas_b[0], canvas_height=canvas_b[1])
+    if canvas_b is None:
+        if setup_b is not None:
+            canvas_b = setup_b.canvas
+        elif source is None and dataset_canvas is not None:
+            canvas_b = (int(dataset_canvas[0]), int(dataset_canvas[1]))
     figure_participant = compare_participant
     if source is not None:
         compare_words = _qualify_for_compare(compare_words, source.name)
@@ -4204,7 +4237,8 @@ def _build_compare_meta(
         "raw_participant": compare_participant,
         "trial": compare_trial,
         "dataset": source.name if source is not None else None,
-        "setup": source.setup if source is not None else None,
+        "setup": setup_b,
+        "canvas": canvas_b,
         "text_id": _first_text_id(compare_words) if source is not None else None,
     }
 
@@ -5578,6 +5612,9 @@ def render_single_trial_tab(
         words_all = words_filtered
     if fixations_all is None:
         fixations_all = fixations_filtered
+    # The dataset's canvas, before a multipart screen's own replaces it below —
+    # a same-dataset B on a screen with no canvas of its own is drawn on this.
+    dataset_canvas = (int(canvas_width), int(canvas_height))
 
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
@@ -6437,6 +6474,7 @@ def render_single_trial_tab(
             else None
         ),
         include_raw_gaze=draw_compare_raw_gaze,
+        dataset_canvas=dataset_canvas,
     )
     comparing = compare_meta is not None
     # VIZ-48: Compare draws raw gaze too — each reading's own samples, so the
@@ -6822,10 +6860,7 @@ def render_single_trial_tab(
     # overlay layout asks. CMP-11 therefore gates it on the same predicate
     # instead of refusing every cross-dataset pair outright (CMP-8 §5.3).
     dual_anim = (
-        animate
-        and comparing
-        and not fig_compare_fix.empty
-        and (not cross_dataset or compare_comparable)
+        animate and comparing and not fig_compare_fix.empty and compare_comparable
     )
 
     # EXP-7: publish the state the 🔗 Share subtab writes its reproduction
@@ -7057,7 +7092,7 @@ def render_single_trial_tab(
                     dataset_name_b=dataset_name_b,
                 )
             _release_animation_task(anim_task)
-            if comparing and cross_dataset and not compare_comparable:
+            if comparing and not compare_comparable:
                 # UX-144: the replay has no split layout and shows A alone, so
                 # that is what it says. BUG-85 took the static figure's "shown
                 # side by side instead" out of the gate's reason, which is what
@@ -7632,13 +7667,16 @@ def _render_comparison_figure(
         highlight_column=_marked_text_column(viz_settings),
     )
     dropped_metric = None
+    canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
+    # §4: B's panel is drawn to B's own screen — its selected screen's canvas,
+    # else its dataset's (`_build_compare_meta`). Only the split layouts read
+    # it; an overlay of two different screens never gets here (§5.3 resolves
+    # it away), and that holds within one dataset as much as across two.
+    canvas_b = (compare_meta or {}).get("canvas")
+    canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
+    if canvas_b is not None and (cross_dataset or canvas_b != canvas_a):
+        overrides["canvas_b"] = canvas_b
     if cross_dataset:
-        # §4: B's panel is drawn to B's own monitor. Only the split layouts read
-        # this; overlay never gets here (§5.3 resolves it away).
-        setup_b = compare_meta.get("setup")
-        if setup_b is not None:
-            overrides["canvas_b"] = setup_b.canvas
-
         # §5.4: a metric only one corpus ships would colour one panel and blank
         # the other. Fall back for *this render* — the stored choice is left
         # alone, so a same-dataset pair gets it straight back — and name what
@@ -7701,9 +7739,8 @@ def _render_comparison_figure(
         # monitor, so a box twice the size of the one beside it may be the same
         # physical size — naming both screens is what keeps that readable.
         active = st.session_state.get("data_source_choice") or "this dataset"
-        setup_b = compare_meta.get("setup")
-        canvas_a = (settings.canvas_width, settings.canvas_height)
-        canvas_b = setup_b.canvas if setup_b is not None else canvas_a
+        if canvas_b is None:
+            canvas_b = canvas_a
         if layout == "overlay":
             # CMP-11: a cross-dataset pair only reaches the overlay on equal
             # canvases, so the caption states the ground it stands on. When
@@ -7735,6 +7772,15 @@ def _render_comparison_figure(
                 f"{canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
+    elif canvas_b is not None and canvas_b != canvas_a:
+        # One dataset, two screen sizes: each panel is drawn to its own screen,
+        # and `setup_note` says why an Overlay could not be drawn.
+        st.caption(
+            "Panels are drawn to each reading's own screen — "
+            f"A {canvas_a[0]}×{canvas_a[1]}, B {canvas_b[0]}×{canvas_b[1]}. "
+            "Sizes are not comparable across panels."
+            + (f" {setup_note}" if setup_note else "")
+        )
     if dropped_metric:
         st.caption(
             f"{ICONS['warning']} **{dropped_metric}** isn't in both datasets, so it can't colour "

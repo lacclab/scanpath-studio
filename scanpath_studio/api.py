@@ -28,6 +28,7 @@ from __future__ import annotations
 import difflib
 import logging
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -2365,8 +2366,12 @@ def compare_scanpaths(
 
     **The overlay gate.** Across datasets an overlay needs both canvases to be
     the same size; otherwise this raises ``ValueError`` (the app falls back to
-    side by side). Pass ``layout="side_by_side"`` or ``"stacked"`` to compare
-    readings from different screens. Nothing is rescaled.
+    side by side). One dataset can hold screens of different sizes too, so a
+    same-dataset pair is refused the same way when the two selected screens
+    carry different canvases (``canvas_width`` / ``canvas_height`` columns) or
+    ``setup_b`` states another screen. Pass ``layout="side_by_side"`` or
+    ``"stacked"`` to compare readings from different screens; each panel is
+    then drawn to its own. Nothing is rescaled.
 
     ``setup`` / ``setup_b`` are `experimental_setup.SetupSnapshot`
     values — what the gate reads. ``canvas_size`` covers A when you only have a
@@ -2464,14 +2469,39 @@ def compare_scanpaths(
     resolved_setup_b = _compare_setup(
         setup_b, None, trial_words_b, trial_fix_b, side="setup_b"
     )
-    if resolved_layout == "overlay" and cross_dataset:
+    # One dataset can hold screens of different sizes, so a same-dataset pair
+    # is gated too — on the screens either side actually *knows* (a stated
+    # setup, or the selected screen's own canvas columns). Two data extents
+    # say nothing: two readings of one screen rarely span the same area.
+    gate = cross_dataset
+    if not cross_dataset:
+        own_b = screen_canvas_size(trial_words_b) or screen_canvas_size(trial_fix_b)
+        a_known = (
+            setup is not None
+            or canvas_size is not None
+            or (screen_canvas_size(trial_words_a) or screen_canvas_size(trial_fix_a))
+            is not None
+        )
+        if setup_b is None and own_b is not None:
+            resolved_setup_b = replace(
+                setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
+            )
+        elif setup_b is None and a_known:
+            resolved_setup_b = setup_a
+        gate = a_known and (setup_b is not None or own_b is not None)
+        gate = gate and resolved_setup_b.canvas != setup_a.canvas
+    if resolved_layout == "overlay" and gate:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
             # BUG-85: the reason says why; this says what happened here and how
             # to ask for the split in Python. `render` rewords it in its flags.
-            hint = _inferred_screen_hint(
-                a_inferred=setup is None and canvas_size is None,
-                b_inferred=setup_b is None,
+            hint = (
+                _inferred_screen_hint(
+                    a_inferred=setup is None and canvas_size is None,
+                    b_inferred=setup_b is None,
+                )
+                if cross_dataset
+                else ""
             )
             raise IncomparableScreensError(
                 f"{note} So no overlay was drawn; pass layout='side_by_side' (or "

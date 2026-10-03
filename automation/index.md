@@ -17,8 +17,8 @@ Replace `--sample` with `--words ia.csv --fixations fixations.csv`. The [CLI ref
 import scanpath_studio as sps
 
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-trials = sps.list_trials(words, fixations)
-pid, tid = trials.iloc[0][["participant_id", "trial_id"]]
+trials = sps.list_trials(words, fixations)  # (participant, trial), your names
+pid, tid = trials.iloc[0]
 
 fig = sps.plot_scanpath(
     words,
@@ -56,15 +56,15 @@ words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
 out = Path("figures")
 out.mkdir(exist_ok=True)
 
-for row in sps.list_trials(words, fixations).itertuples():
+for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
     fig = sps.plot_scanpath(
         words,
         fixations,
-        row.participant_id,
-        row.trial_id,
+        pid,
+        tid,
         canvas_size=(2560, 1440),  # the monitor the stimulus was shown on
     )
-    sps.save_figure(fig, out / f"{row.participant_id}_{row.trial_id}.html")
+    sps.save_figure(fig, out / f"{pid}_{tid}.html")
 ```
 
 HTML needs nothing else. PNG, SVG and PDF need Chrome, Chromium or Edge installed; with none, run `plotly_get_chrome -y` once, or save HTML.

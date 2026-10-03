@@ -1934,6 +1934,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>The trial filters' annotation section is now titled By trial annotation: its tag pickers offer only tags used on whole trials, and when a dataset has screen annotations it says those are not used by the filters and are listed on Data Management → Annotations. (<a href="https://github.com/lacclab/scanpath-studio/issues/335">#335</a>)</li>
 <li>The welcome tour's first card has a Skip tour button beside Next; Help → Tutorials still replays it. (<a href="https://github.com/lacclab/scanpath-studio/issues/335">#335</a>)</li>
 <li>Edit dataset now holds every change until you click Save changes, including the name, the description and the metadata tables; Cancel discards all of them. (<a href="https://github.com/lacclab/scanpath-studio/issues/337">#337</a>)</li>
+<li>The Python API's frames now keep your files' column names (<code>CURRENT_FIX_DURATION</code>, not <code>duration_ms</code>): every function and column option takes either name, <code>load_scanpath_data(..., names="canonical")</code> gives the internal names, <code>ScanpathData.column_names</code> holds the map, and <code>render --list-trials</code> and <code>analyze</code> print and write your names. (<a href="https://github.com/lacclab/scanpath-studio/issues/338">#338</a>)</li>
 </ul>
 <p><strong>Removed</strong></p>
 <ul>

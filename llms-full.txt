@@ -489,8 +489,8 @@ Replace `--sample` with `--words ia.csv --fixations fixations.csv`. The [CLI ref
 import scanpath_studio as sps
 
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-trials = sps.list_trials(words, fixations)
-pid, tid = trials.iloc[0][["participant_id", "trial_id"]]
+trials = sps.list_trials(words, fixations)  # (participant, trial), your names
+pid, tid = trials.iloc[0]
 
 fig = sps.plot_scanpath(
     words,
@@ -528,15 +528,15 @@ words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
 out = Path("figures")
 out.mkdir(exist_ok=True)
 
-for row in sps.list_trials(words, fixations).itertuples():
+for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
     fig = sps.plot_scanpath(
         words,
         fixations,
-        row.participant_id,
-        row.trial_id,
+        pid,
+        tid,
         canvas_size=(2560, 1440),  # the monitor the stimulus was shown on
     )
-    sps.save_figure(fig, out / f"{row.participant_id}_{row.trial_id}.html")
+    sps.save_figure(fig, out / f"{pid}_{tid}.html")
 ```
 
 HTML needs nothing else. PNG, SVG and PDF need Chrome, Chromium or Edge installed; with none, run `plotly_get_chrome -y` once, or save HTML.
@@ -574,26 +574,26 @@ sps.save_figure(fig, "scanpath.html")
 
 All functions below are importable from `scanpath_studio`. The [figure options](#figure-options) table lists every figure keyword.
 
-On the bundled demo, the first steps print this (run when the docs are built):
+Columns keep the names your files give them. The demo's word table calls its word id `IA_ID` and its total fixation duration `IA_DWELL_TIME`, and every function and option takes those names. A column Scanpath Studio made keeps its internal name. `load_scanpath_data(..., names="canonical")` gives the internal names, which are the same for every dataset. On the bundled demo, the first steps print this (run when the docs are built):
 
 ```
 words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head(3))
 
 measures = sps.compute_word_metrics(words, fixations)
-columns = ["word_id", "text", "first_fixation_ms", "total_fixation_duration_ms"]
+columns = ["IA_ID", "IA_LABEL", "IA_FIRST_FIXATION_DURATION", "IA_DWELL_TIME"]
 print(measures[columns].head(3))
 ```
 
 ```
-  participant_id               trial_id
+  participant_id        unique_trial_id
 0       l37_1129  l37_1129_2_1_1_Ele_r0
 1       l37_1129  l37_1129_2_1_2_Ele_r0
 2       l37_1129  l37_1129_2_1_3_Adv_r0
-   word_id      text  first_fixation_ms  total_fixation_duration_ms
-0        0    Robert               32.0                         387
-1        1  Myslajek              170.0                         785
-2        2     stops              290.0                        1330
+   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
+0      0    Robert                        32.0            387
+1      1  Myslajek                       170.0            785
+2      2     stops                       290.0           1330
 ```
 
 ## Load
@@ -601,10 +601,12 @@ print(measures[columns].head(3))
 ### scanpath_studio.api.load_scanpath_data
 
 ```
-load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png') -> tuple[DataFrame, DataFrame]
+load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png', names: str = NAMES_SOURCE) -> ScanpathData
 ```
 
 Load and normalize a words/IA table and/or a fixations table.
+
+The columns keep the names your files give them (DATA-66): `CURRENT_FIX_DURATION`, not `duration_ms`. A column Scanpath Studio built, converted, computed or changed keeps its internal name, and `data.column_names` (a ScanpathData) records what every column was called. Every API function takes these frames, and every column option (`color_by=`, hover fields …) takes either name. `names="canonical"` returns the internal names instead — the same for every dataset, for code that works across them.
 
 `words` / `fixations` may be DataFrames, paths to `.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` / `.xls` files (or a `.zip` of them), glob patterns, or lists of paths — multi-file datasets (one file per participant and/or text) are concatenated, with each file's stem kept in a `source_file` column. Column schemas are auto-detected (EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake_case names); pass `word_schema` / `fix_schema` mappings (field → column name; see propose_schema) to override detection. For per-word reading measures, pass the result to compute_word_metrics.
 
@@ -612,18 +614,26 @@ Load and normalize a words/IA table and/or a fixations table.
 
 Returns the normalized `(words, fixations)` frames the plotting functions expect. Raises `ValueError` if a required field can't be found — the message names the canonical field, the column names auto-detection looked for, and the columns the table actually has — and `data.StimulusJoinError` (a `ValueError`) when a stimulus-level words table shares neither a trial id nor a `text_id` with any reading (or, multipart, with every screen a reading has fixations on).
 
+### scanpath_studio.api.ScanpathData
+
+Bases: `tuple`
+
+What load_scanpath_data returns: the `(words, fixations)` frames — so `words, fixations = load_scanpath_data(…)` unpacks it — plus `column_names`, the dataset's own name for every canonical column, per table (`{"words": ColumnNames, "fixations": ColumnNames}`).
+
+With `names="source"` (the default) the frames' columns are the dataset's own names and each frame carries its map, so any API function takes it — sliced, filtered or merged — and the names it writes are yours. With `names="canonical"` they are the internal names, the same for every dataset.
+
 ### scanpath_studio.api.load_sample_data
 
 ```
-load_sample_data() -> tuple[DataFrame, DataFrame]
+load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData
 ```
 
-Return the bundled OneStop demo, normalized and ready to plot: two readers, twelve paragraphs each, every one of them with fixations.
+Return the bundled OneStop demo, normalized and ready to plot: two readers, twelve paragraphs each, every one of them with fixations. Under the demo's own column names; `names="canonical"` for the internal ones (see load_scanpath_data).
 
 ### scanpath_studio.api.load_raw_gaze
 
 ```
-load_raw_gaze(table: TablesLike, *, raw_gaze_schema: dict | None = None) -> DataFrame
+load_raw_gaze(table: TablesLike, *, raw_gaze_schema: dict | None = None, names: str = NAMES_SOURCE) -> DataFrame
 ```
 
 Load and normalize a raw (sample-level) gaze table for `raw_gaze=`.
@@ -635,10 +645,12 @@ raw_gaze = sps.load_raw_gaze("gaze_samples.csv")
 fig = sps.plot_scanpath(words, fixations, "p1", "t3", raw_gaze=raw_gaze)
 ```
 
+Under the table's own column names, like `load_scanpath_data`'s; `names="canonical"` for the internal ones.
+
 ### scanpath_studio.api.load_sample_raw_gaze
 
 ```
-load_sample_raw_gaze() -> DataFrame
+load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> DataFrame
 ```
 
 The bundled demo's raw gaze, normalized — what the app overlays on it.
@@ -737,10 +749,12 @@ Load a scanpath-author JSON file (or its text) as normalized word/fixation frame
 ### scanpath_studio.datasets.load_potec
 
 ```
-load_potec(root, *, readers: Iterable | None = None, texts: Iterable[str] | None = None, download: bool = False) -> tuple[DataFrame, DataFrame]
+load_potec(root, *, readers: Iterable | None = None, texts: Iterable[str] | None = None, download: bool = False, names: str = 'source') -> tuple[DataFrame, DataFrame]
 ```
 
 Load PoTeC as normalized `(words, fixations)` frames, ready to plot.
+
+Under PoTeC's own column names; `names="canonical"` for the internal ones (see `api.load_scanpath_data`).
 
 `root` is a clone of the PoTeC repo (with the eye-tracking data downloaded) or any folder; with `download=True` the needed files are fetched into it on first use (~45 MB). Narrow the load with `readers` (e.g. `[0, 1]`) and/or `texts` (e.g. `["b0", "p3"]`) — the full corpus is 75 readers × 12 texts = 900 trials.
 
@@ -760,10 +774,12 @@ The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as `canvas_size`
 ### scanpath_studio.datasets.load_onestop
 
 ```
-load_onestop(root, *, regime: str = 'ordinary', parts: Iterable[str] | None = None, variant: str = 'public', download: bool = False) -> tuple[DataFrame, DataFrame]
+load_onestop(root, *, regime: str = 'ordinary', parts: Iterable[str] | None = None, variant: str = 'public', download: bool = False, names: str = 'source') -> tuple[DataFrame, DataFrame]
 ```
 
 Load OneStop as normalized `(words, fixations)` frames, ready to plot.
+
+Under OneStop's own column names; `names="canonical"` for the internal ones (see `api.load_scanpath_data`).
 
 `root` is a folder holding (or to download into, public variant only) the OneStop reports. Narrow the load with `regime` (`ordinary` / `information_seeking` / `repeated` / `information_seeking_repeated`), `parts` (any subset of `Title / Question_Preview / Paragraph / Questions / Answers / QA / Feedback` — default Paragraph), and `variant` (`public` OSF release or `lacclab` local export). The public OSF reports are large; pass `download=True` to fetch the chosen regime + parts into `root` on first use::
 
@@ -789,7 +805,7 @@ list_trials(words: DataFrame | None = None, fixations: DataFrame | None = None, 
 
 Plottable `(participant_id, trial_id)` combos.
 
-Combos present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), combos from whichever frame has data. `raw_gaze` (a frame from load_raw_gaze) adds the trials that only its samples cover — every trial, for a dataset recorded as raw gaze alone (pass `None` for `words` and `fixations` then).
+Combos present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), combos from whichever frame has data. `raw_gaze` (a frame from load_raw_gaze) adds the trials that only its samples cover — every trial, for a dataset recorded as raw gaze alone (pass `None` for `words` and `fixations` then). The id columns take the names the frames carry (DATA-66).
 
 ### scanpath_studio.api.list_parts
 
@@ -809,7 +825,7 @@ compute_word_metrics(words: DataFrame, fixations: DataFrame) -> DataFrame
 
 Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).
 
-Pre-aggregated columns in `words` (EyeLink IA exports) are preserved; anything missing is computed from fixations + word bounding boxes. Takes the normalized frames from load_scanpath_data.
+Pre-aggregated columns in `words` (EyeLink IA exports) are preserved; anything missing is computed from fixations + word bounding boxes. Takes the normalized frames from load_scanpath_data, and answers in the names they carry.
 
 ### scanpath_studio.api.preprocess_data
 
@@ -852,7 +868,7 @@ Exportable one-row-per-reader reading summary.
 ### scanpath_studio.api.plot_scanpath
 
 ```
-plot_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, raw_gaze: DataFrame | None = None, drift_correction: str | None = None, drift_connectors: bool = False, fix_index_range: tuple[int, int] | None = None, illustration: bool = False, illustration_label: str = 'auto', title: str = '', caption: str = '', **figure_overrides) -> Figure
+plot_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, raw_gaze: DataFrame | None = None, drift_correction: str | None = None, drift_connectors: bool = False, fix_index_range: tuple[int, int] | None = None, illustration: bool = False, illustration_label: str = 'auto', title: str = '', caption: str = '', column_names: dict | None = None, **figure_overrides) -> Figure
 ```
 
 Build the canonical scanpath figure for one trial.
@@ -867,15 +883,17 @@ Build the canonical scanpath figure for one trial.
 
 Remaining keywords override the app's defaults and are forwarded to `plots.make_scanpath_figure` (e.g. `show_heatmap=False`, `color_by="pass_index"`, `x_field="order_in_trial"`); an unknown keyword raises a `TypeError` naming the closest valid options, and figure_options lists them all with their defaults. A `color_by` / `highlight_column` naming a column the trial's table doesn't have raises a `ValueError` naming the closest ones, rather than drawing without it.
 
+Frames under the dataset's own column names (what `load_scanpath_data` returns by default) are read through the map they carry, and an option naming a column takes either name. `column_names` is that map for frames loaded with `names="canonical"` (`data.column_names`): the options then take the dataset's names too, and the figure's text uses them.
+
 ### scanpath_studio.api.animate_scanpath
 
 ```
-animate_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, screen_b: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
+animate_scanpath(words: DataFrame | None = None, fixations: DataFrame | None = None, participant: str | None = None, trial: str | None = None, *, screen: str | None = None, screen_b: str | None = None, canvas_size: tuple[int, int] | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, playback_speed: float = 1.0, autoplay: bool = True, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, illustration_label: str = 'auto', title: str = '', caption: str = '', column_names: dict | None = None, trial_b: tuple[str, str] | None = None, dataset_b: str | None = None, setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, **animation_overrides) -> Figure
 ```
 
 Build the animated scanpath replay for one trial.
 
-Same trial selection and canvas semantics as plot_scanpath, including `screen` selection for multipart trials. The replay takes the reading time divided by `playback_speed`: save it as interactive HTML with save_figure, whose page keeps that clock itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which lasts as long. (`fig.show()` plays it on Plotly's own frame queue, which runs slow.) `fix_index_range=(start, end)` replays only that window of the trial's fixations (1-based, inclusive), like plot_scanpath.
+Same trial selection, canvas and column-name semantics as plot_scanpath (`column_names` included), and `screen` selection for multipart trials. The replay takes the reading time divided by `playback_speed`: save it as interactive HTML with save_figure, whose page keeps that clock itself, or rasterize it to GIF/MP4 with `animation_export.export_animation`, which lasts as long. (`fig.show()` plays it on Plotly's own frame queue, which runs slow.) `fix_index_range=(start, end)` replays only that window of the trial's fixations (1-based, inclusive), like plot_scanpath.
 
 With `autoplay` (default `True`) the saved interactive HTML auto-starts the replay on load *at `playback_speed`* — save_figure honors the marker the builder stamps on the figure. Pass `autoplay=False` to save a figure that opens paused (press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4 always plays from its first frame.
 
@@ -896,7 +914,7 @@ The replay is made of fixations, so a trial without any — one recorded as raw 
 ### scanpath_studio.api.compare_scanpaths
 
 ```
-compare_scanpaths(words: DataFrame, fixations: DataFrame, trial_a: tuple[str, str], trial_b: tuple[str, str], *, screen: str | None = None, screen_b: str | None = None, words_b: DataFrame | None = None, fixations_b: DataFrame | None = None, dataset_b: str = 'Dataset B', raw_gaze: DataFrame | None = None, raw_gaze_b: DataFrame | None = None, layout: str = 'overlay', compare_stimulus: str = 'both', setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, canvas_size: tuple[int, int] | None = None, labels: tuple[str, str] | None = None, style_a: dict | None = None, style_b: dict | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, drift_correction: str | None = None, title: str = '', caption: str = '', **figure_overrides) -> Figure
+compare_scanpaths(words: DataFrame, fixations: DataFrame, trial_a: tuple[str, str], trial_b: tuple[str, str], *, screen: str | None = None, screen_b: str | None = None, words_b: DataFrame | None = None, fixations_b: DataFrame | None = None, dataset_b: str = 'Dataset B', raw_gaze: DataFrame | None = None, raw_gaze_b: DataFrame | None = None, layout: str = 'overlay', compare_stimulus: str = 'both', setup: SetupSnapshot | None = None, setup_b: SetupSnapshot | None = None, canvas_size: tuple[int, int] | None = None, labels: tuple[str, str] | None = None, style_a: dict | None = None, style_b: dict | None = None, base_font_size: int = 16, font_family: str = FONT_FAMILY, fix_index_range: tuple[int, int] | None = None, fix_index_range_b: tuple[int, int] | None = None, drift_correction: str | None = None, title: str = '', caption: str = '', column_names: dict | None = None, **figure_overrides) -> Figure
 ```
 
 Build a two-scanpath comparison figure.
@@ -919,7 +937,7 @@ The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(par
 
 **Raw gaze (VIZ-48).** `raw_gaze` is a frame from load_raw_gaze; each reading's samples are drawn under its scanpath, in that scanpath's colour (`raw_gaze_marker_size` / `raw_gaze_opacity` style them). It serves both readings of a same-dataset comparison; across datasets it is A's, and `raw_gaze_b` is B's. Passing either turns the layer on; `show_raw_gaze=False` keeps it off.
 
-Remaining keywords are forwarded to `plots.make_comparison_figure` (e.g. `show_words=False`, `color_by="duration_ms"`); an unknown one raises `TypeError` naming the closest valid options; `figure_options("comparison")` lists the accepted keywords.
+Remaining keywords are forwarded to `plots.make_comparison_figure` (e.g. `show_words=False`, `color_by="duration_ms"`); an unknown one raises `TypeError` naming the closest valid options; `figure_options("comparison")` lists the accepted keywords. Column names follow plot_scanpath's rule: A's names (or `column_names`) name the options and the figure's text, and either dataset's frames may come under their own names.
 
 ### scanpath_studio.api.render_parent_trial
 
@@ -1496,7 +1514,7 @@ SCANPATH_LOCAL_FS=1.
 | `--color-by`                   | `FIELD`                                                          | —       | Fixation color field, e.g. duration_ms or gpt2_surprisal, or 'line' to colour each fixation by its text line (same as `--color-by-line`; default: (uniform) — one flat colour, since marker size already shows duration).                                                                                                                                                                                                             |
 | `--fixation-color`             | `COLOR`                                                          | —       | Flat fixation marker colour used when `--color-by` is (uniform) (default: #0072B2).                                                                                                                                                                                                                                                                                                                                                   |
 | `--fixation-symbol`            | `{circle,square,diamond,triangle-up,cross,x,star,hexagon,heart}` | —       | Fixation marker shape. Unlike colour, shape survives a greyscale print (default: circle).                                                                                                                                                                                                                                                                                                                                             |
-| `--heatmap-metric`             | `{duration_ms,counts}`                                           | —       | Heatmap weighting (default: duration_ms).                                                                                                                                                                                                                                                                                                                                                                                             |
+| `--heatmap-metric`             | `COLUMN`                                                         | —       | Heatmap weighting: the fixation duration column — under your file's name or as duration_ms (the default) — or counts.                                                                                                                                                                                                                                                                                                                 |
 | `--heatmap-style`              | `{word-boxes,interpolated,duration-mass}`                        | —       | Heatmap geometry (default: word-boxes).                                                                                                                                                                                                                                                                                                                                                                                               |
 | `--duration-mass-sigma`        | `CHARS`                                                          | —       | Gaussian sigma in character widths for `--heatmap-style` duration-mass.                                                                                                                                                                                                                                                                                                                                                               |
 | `--heatmap-colorscale`         | `NAME`                                                           | —       | Heatmap colorscale, e.g. Greens (default: the app's default).                                                                                                                                                                                                                                                                                                                                                                         |
@@ -1623,9 +1641,9 @@ sps.save_figure(fig, "scanpath.html")  # .png/.svg/.pdf need Chrome
 
 ## Two tables in, one figure out
 
-Scanpath Studio works on a pair of tables — **word interest areas** (one row per word per trial, with its bounding box) and **fixations** (one row per fixation). `load_scanpath_data` maps whatever your columns are called onto these canonical names; everything downstream assumes them.
+Scanpath Studio works on a pair of tables — **word interest areas** (one row per word per trial, with its bounding box) and **fixations** (one row per fixation). `load_scanpath_data` maps whatever your columns are called onto the canonical fields below — and hands the frames back **under your own column names**: `fixations["CURRENT_FIX_DURATION"]`, not `fixations["duration_ms"]`. Each frame carries its map in `DataFrame.attrs`, so every API function reads it, and every option that names a column (`color_by=`, `word_hover_fields=`, …) takes your name or the canonical one. A column the loader changed (a duration read in seconds, ids shifted to start at 0) or made (`order_in_trial`) keeps its canonical name. The tables below are what `load_scanpath_data(..., names="canonical")` returns. A frame merged or concatenated with another table loses `attrs`: pass the result through `load_scanpath_data` again, or work on the canonical frames.
 
-**Words / IA** — after `load_scanpath_data`:
+**Words / IA** — canonical fields:
 
 | Column                      | Meaning                                                                                                                                                                                                                                                    |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1638,9 +1656,9 @@ Scanpath Studio works on a pair of tables — **word interest areas** (one row p
 | `x`, `y`, `width`, `height` | Word bounding box in screen px, origin top-left. **Required** (or supply `left`/`right`/`top`/`bottom`, which are converted).                                                                                                                              |
 | `line_idx`                  | Source line number, when the export has one. Often constant — the plots derive visual lines from box `y` instead.                                                                                                                                          |
 
-Pre-aggregated EyeLink IA measures (`IA_FIRST_FIXATION_DURATION` → `first_fixation_ms`, …) and linguistic features (`gpt2_surprisal`, `wordfreq_frequency`, `universal_pos`, …) are carried through under their canonical / original names when present.
+Pre-aggregated EyeLink IA measures (`IA_FIRST_FIXATION_DURATION` → `first_fixation_ms`, …) and linguistic features (`gpt2_surprisal`, `wordfreq_frequency`, `universal_pos`, …) are carried through when present.
 
-**Fixations** — after `load_scanpath_data`:
+**Fixations** — canonical fields:
 
 | Column                                                   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

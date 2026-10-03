@@ -754,64 +754,282 @@ class TestDroppedColumns:
         assert dropped_columns(raw) == []
 
 
+def _setup_file_raw_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """An AOI table with *edge* boxes and a fixation table with a seconds
+    duration and a composite trial id, every column under a name the app does
+    not use — the case a setup file has to restate faithfully."""
+    words = pd.DataFrame(
+        {
+            "reader": ["p1", "p1"],
+            "session": ["s1", "s1"],
+            "item": ["i1", "i1"],
+            "wid": [1, 2],
+            "token": ["Hello", "world"],
+            "L": [10.0, 70.0],
+            "R": [60.0, 130.0],
+            "T": [20.0, 20.0],
+            "B": [40.0, 40.0],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "reader": ["p1", "p1"],
+            "session": ["s1", "s1"],
+            "item": ["i1", "i1"],
+            "fx": [30.0, 100.0],
+            "fy": [30.0, 30.0],
+            "dur [s]": [0.2, 0.25],
+            "alt_x": [333.0, 444.0],
+        }
+    )
+    return words, fixations
+
+
+_SETUP_WORD_SCHEMA = {
+    "participant": "reader",
+    "trial": ["session", "item"],
+    "word_id": "wid",
+    "text": "token",
+    "left": "L",
+    "right": "R",
+    "top": "T",
+    "bottom": "B",
+}
+_SETUP_FIX_SCHEMA = {
+    "participant": "reader",
+    "trial": ["session", "item"],
+    "x": "fx",
+    "y": "fy",
+    "duration": "dur [s]",
+}
+
+
+def _setup_file_editor_app():
+    """✏️ Edit dataset over the tables above, with the real field grid; its
+    setup file lands in ``config``. ``_choose_alt_x`` maps X to a kept column."""
+    import streamlit as st
+
+    from scanpath_studio.app import _edit_open_dataset
+    from scanpath_studio.column_names import from_schema
+    from scanpath_studio.data import (
+        harmonize_frames,
+        normalize_fixations,
+        normalize_words,
+    )
+    from scanpath_studio.tabs import _editor_setup_config, _render_remap_editor
+    from tests.test_remap import (
+        _SETUP_FIX_SCHEMA,
+        _SETUP_WORD_SCHEMA,
+        _setup_file_raw_tables,
+    )
+
+    if "_datasets" not in st.session_state:
+        raw_words, raw_fix = _setup_file_raw_tables()
+        words, fixations = harmonize_frames(
+            normalize_words(raw_words, _SETUP_WORD_SCHEMA),
+            normalize_fixations(raw_fix, _SETUP_FIX_SCHEMA, keep_columns={"alt_x"}),
+        )
+        st.session_state["_datasets"] = {
+            "Lab": {
+                "words": words,
+                "fixations": fixations,
+                "schemas": {
+                    "words": _SETUP_WORD_SCHEMA,
+                    "fixations": _SETUP_FIX_SCHEMA,
+                },
+                "composite_trial_columns": ["session", "item"],
+                "column_names": {
+                    "words": from_schema(
+                        "words", _SETUP_WORD_SCHEMA, raw_words.columns
+                    ).to_payload(),
+                    "fixations": from_schema(
+                        "fixations", _SETUP_FIX_SCHEMA, raw_fix.columns
+                    ).to_payload(),
+                },
+            }
+        }
+        st.session_state["data_source_choice"] = "Lab"
+        _edit_open_dataset("Lab")
+    stored = st.session_state["_datasets"]["Lab"]
+    _render_remap_editor("Lab", stored)
+    st.session_state["config"] = _editor_setup_config("Lab")
+
+
+def _setup_file_restore_app():
+    """A fresh add screen restoring that file over the *original* files: the
+    real ``column_mapping_ui`` for each table, its mapping in ``restored``."""
+    import streamlit as st
+
+    from scanpath_studio.controls import (
+        FIX_FIELD_SPECS,
+        WORD_FIELD_SPECS,
+        column_mapping_ui,
+    )
+    from scanpath_studio.data import propose_fix_schema, propose_word_schema
+    from scanpath_studio.url_state import _seed_column_mapping
+    from tests.test_remap import _setup_file_raw_tables
+
+    if "restored" not in st.session_state:
+        _seed_column_mapping(st.session_state["file"], overwrite=True)
+    raw_words, raw_fix = _setup_file_raw_tables()
+    st.session_state["restored"] = {
+        "words": column_mapping_ui(
+            raw_words,
+            table_label="AOI",
+            state_key_prefix="col_map_words",
+            field_specs=WORD_FIELD_SPECS,
+            proposed=propose_word_schema(raw_words),
+        ),
+        "fixations": column_mapping_ui(
+            raw_fix,
+            table_label="Fixations",
+            state_key_prefix="col_map_fix",
+            field_specs=FIX_FIELD_SPECS,
+            proposed=propose_fix_schema(raw_fix),
+        ),
+    }
+
+
 class TestEditorSetupExport:
     """The ✏️ Edit dataset footer's ⬇️ Save setup — the add screen's own export,
     for the screen that edits what it created.
 
     It exists so an already-added dataset's mapping can travel: a share link
     carries settings but never files, so "send them the files and this JSON" is
-    the only way the recipient skips re-mapping by hand.
+    the only way the recipient skips re-mapping by hand. Which means the file
+    has to name **the files' columns**, not the stored frame's canonical ones.
     """
 
-    def _session(self, monkeypatch):
-        import streamlit as st
+    def _names(self, table, schema, raw):
+        from scanpath_studio.column_names import from_schema
 
-        st.session_state.clear()
-        return st.session_state
+        return from_schema(table, schema, raw.columns).to_payload()
 
-    def test_the_editor_keys_are_rewritten_into_the_add_screens(self, monkeypatch):
-        from scanpath_studio.tabs import _editor_setup_config
+    def test_a_stored_table_is_written_in_its_files_column_names(self):
+        from scanpath_studio.tabs import _setup_file_mapping
 
-        session = self._session(monkeypatch)
-        session["remap_My corpus_words_x"] = "left_px"
-        session["remap_My corpus_words_box_format"] = "Origin + size"
-        session["remap_My corpus_fixations_duration"] = "dur_ms"
-        session["remap_My corpus_fixations_trial"] = ["reader", "item"]
-        session["remap_My corpus_raw_gaze_timestamp"] = "t"
-        # Scaffolding under the same prefix that is not part of the mapping.
-        session["remap_My corpus_words_x_cell_confirm"] = False
-        session["remap_My corpus_words_header"] = ["left_px", "top_px"]
-        session["_remap_pending_setup"] = {"canvas_width": 1920}
+        raw_words, raw_fix = _setup_file_raw_tables()
+        stored = {
+            "column_names": {
+                "words": self._names("words", _SETUP_WORD_SCHEMA, raw_words),
+                "fixations": self._names("fixations", _SETUP_FIX_SCHEMA, raw_fix),
+            }
+        }
+        # What the editor's pickers hold: the stored frame's canonical columns.
+        pending = {
+            "fixations": {
+                "participant": "participant_id",
+                "trial": ["session", "item"],
+                "text_id": "text_id",
+                "x": "alt_x",
+                "y": "y",
+                "duration": "duration_ms",
+            },
+            "words": {
+                "participant": "participant_id",
+                "trial": ["session", "item"],
+                "word_id": "word_id",
+                "text": "text",
+                "x": "x",
+                "y": "y",
+                "width": "width",
+                "height": "height",
+                "left": None,
+                "right": None,
+                "top": None,
+                "bottom": None,
+            },
+        }
+        mapping, notes = _setup_file_mapping(pending, stored)
 
-        mapping = _editor_setup_config("My corpus")["column_mapping"]
+        assert mapping["col_map_fix_participant"] == "reader"
+        assert mapping["col_map_fix_trial"] == ["session", "item"]
+        # The pending edit, in the file's name; a seconds column by its own
+        # name, which the add screen converts again.
+        assert mapping["col_map_fix_x"] == "alt_x"
+        assert mapping["col_map_fix_y"] == "fy"
+        assert mapping["col_map_fix_duration"] == "dur [s]"
+        # The app made the text id from the trial id: written unmapped, so the
+        # add screen makes it again, never as a column the files lack.
+        assert mapping["col_map_fix_text_id"] is None
+        # A box read from edges is restated as those edges.
+        assert mapping["col_map_words_box_format"] == "Edges"
+        assert [mapping[f"col_map_words_{k}"] for k in ("left", "right")] == [
+            "L",
+            "R",
+        ]
+        assert [mapping[f"col_map_words_{k}"] for k in ("top", "bottom")] == [
+            "T",
+            "B",
+        ]
+        assert "col_map_words_width" not in mapping
+        assert mapping["col_map_words_word_id"] == "wid"
+        assert mapping["col_map_words_text"] == "token"
+        assert notes == []
 
-        assert mapping["col_map_words_x"] == "left_px"
+    def test_a_table_being_added_uses_the_add_screens_keys(self):
+        """Its widgets carry an ``_add`` suffix in the editor; the file must
+        not, or the add screen restores nothing for it."""
+        from scanpath_studio.tabs import _setup_file_mapping
+
+        pending = {"words": {"trial": "item", "x": "x0", "y": "y0", "width": "w"}}
+        mapping, notes = _setup_file_mapping(
+            pending, {}, added={"words"}, box_formats={"words": "Origin + size"}
+        )
+        assert mapping["col_map_words_x"] == "x0"
         assert mapping["col_map_words_box_format"] == "Origin + size"
-        assert mapping["col_map_fix_duration"] == "dur_ms"
-        # A composite trial id survives as a list, which is what it means.
-        assert mapping["col_map_fix_trial"] == ["reader", "item"]
-        assert mapping["col_map_raw_gaze_timestamp"] == "t"
-        assert not [k for k in mapping if "_cell" in k or k.endswith("_header")]
+        # Trial ID is a multiselect on the add screen.
+        assert mapping["col_map_words_trial"] == ["item"]
+        assert not [k for k in mapping if "_add" in k]
+        assert notes == []
 
-    def test_the_file_is_the_shape_the_wizards_restore_reads(self, monkeypatch):
-        """`_seed_column_mapping` only writes keys that start with `col_map_`, so
-        a file whose keys were left in the editor's namespace would restore
-        nothing at all — silently."""
-        from scanpath_studio.tabs import _editor_setup_config
-        from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA, _seed_column_mapping
+    def test_what_a_restore_cannot_reproduce_is_said(self):
+        from scanpath_studio.tabs import _setup_file_mapping
 
-        session = self._session(monkeypatch)
-        session["remap_My corpus_words_x"] = "left_px"
-        session["_remap_pending_setup"] = {"canvas_width": 1920}
-        config = _editor_setup_config("My corpus")
+        stored = {
+            "column_names": {"fixations": {"trial_id": {"sources": ["item"]}}},
+            "source_recipe": {"derived": ["item"], "steps": []},
+        }
+        _mapping, notes = _setup_file_mapping(
+            {"fixations": {"trial": "trial_id"}}, stored
+        )
+        assert any("file names" in note for note in notes)
+        # A dataset stored before the column-name map existed says so.
+        _mapping, notes = _setup_file_mapping({"fixations": {"x": "x"}}, {})
+        assert any("before the app kept" in note for note in notes)
 
-        assert config["schema"] == PLOT_CONFIG_SCHEMA
-        assert config["data_source"] == "My corpus"
-        assert config["experimental_setup"] == {"canvas_width": 1920}
+    def test_edit_then_restore_over_the_original_files_gives_the_same_mapping(
+        self,
+    ):
+        """End to end: the real editor writes the file, and a fresh add screen
+        restoring it over the original files maps them exactly as the edit
+        does — including the edit itself (X → ``alt_x``)."""
+        from streamlit.testing.v1 import AppTest
 
-        session.clear()
-        _seed_column_mapping(config["column_mapping"], overwrite=True)
-        assert session["col_map_words_x"] == "left_px"
+        editor = AppTest.from_function(_setup_file_editor_app, default_timeout=30)
+        editor.run()
+        assert not editor.exception, editor.exception
+        editor.selectbox(key="remap_Lab_fixations_x").set_value("alt_x").run()
+        assert not editor.exception, editor.exception
+        config = editor.session_state["config"]
+        assert config["column_mapping_notes"] == []
+
+        restore = AppTest.from_function(_setup_file_restore_app, default_timeout=30)
+        restore.session_state["file"] = config["column_mapping"]
+        restore.run()
+        assert not restore.exception, restore.exception
+        restored = restore.session_state["restored"]
+
+        expected_fix = {**_SETUP_FIX_SCHEMA, "x": "alt_x"}
+        for key, value in expected_fix.items():
+            assert restored["fixations"][key] == value, key
+        for key, value in _SETUP_WORD_SCHEMA.items():
+            assert restored["words"][key] == value, key
+        # And the frames it builds are the ones the edit saves.
+        _raw_words, raw_fix = _setup_file_raw_tables()
+        again = normalize_fixations(raw_fix, restored["fixations"])
+        assert again["x"].tolist() == [333.0, 444.0]
+        assert again["duration_ms"].tolist() == [200.0, 250.0]
 
     def test_the_footer_offers_both_halves_of_the_add_screens_pair(self):
         """Source-level: AppTest reports no download_button, and what must not
@@ -824,6 +1042,7 @@ class TestEditorSetupExport:
         assert "f\"{ICONS['download']} Save setup\"" in source
         assert "f\"{ICONS['confirm']} Save changes\"" in source
         assert "_editor_setup_config" in source
+        assert "column_mapping_notes" in source
         # It borrows the wizard's own column widths so the two rows line up.
         assert "_FOOTER_ROW_W" in source
 
@@ -1149,3 +1368,159 @@ class TestLegacyStoredRepeats:
             for (reader, trial), text in expected.items():
                 got = extract_trial(entry["words"], reader, trial)["text"].tolist()
                 assert got == text, (fix_pick, reader, trial, got)
+
+
+class TestEditorEstimateUsesPendingMapping:
+    """*Estimate from my data* on ✏️ Edit dataset measures the data as it will
+    be **saved** — the pending mapping, and a table being added — not the
+    stored frame's old coordinates."""
+
+    def test_a_remapped_coordinate_is_what_the_estimate_encloses(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_setup_file_editor_app, default_timeout=30)
+        at.run()
+        at.selectbox(key="remap_Lab_fixations_x").set_value("alt_x").run()
+        at.radio(key="edit_Lab_setup_screen_mode").set_value(
+            "Estimate from my data"
+        ).run()
+        assert not at.exception, at.exception
+        # The old X reaches 100 and the boxes 130; the new X reaches 444.
+        assert at.session_state["_remap_pending_setup"]["canvas_width"] == 500
+
+    def test_a_table_being_added_counts_towards_the_estimate(self):
+        from scanpath_studio.tabs import _pending_canvas_estimate
+
+        _raw_words, raw_fix = _setup_file_raw_tables()
+        stored = {"fixations": normalize_fixations(raw_fix, _SETUP_FIX_SCHEMA)}
+        added_words = pd.DataFrame(
+            {"item": ["i1"], "L": [1000.0], "R": [1450.0], "T": [900.0], "B": [950.0]}
+        )
+        pending = {
+            "fixations": {"x": "x", "y": "y"},
+            "words": {"left": "L", "right": "R", "top": "T", "bottom": "B"},
+        }
+        assert _pending_canvas_estimate(stored, pending, {}) == (100, 100)
+        assert _pending_canvas_estimate(stored, pending, {"words": added_words}) == (
+            1500,
+            1000,
+        )
+
+
+def _two_readings() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Two readings of one text by one reader (trials r1/r2, both in block
+    "b1") — the case a coarser Trial ID silently merges."""
+    raw_fix = pd.DataFrame(
+        {
+            "subj": ["p1"] * 4,
+            "tr": ["r1", "r1", "r2", "r2"],
+            "block": ["b1"] * 4,
+            "fx": [10.0, 20.0, 30.0, 40.0],
+            "fy": [5.0, 5.0, 5.0, 5.0],
+            "alt_x": [110.0, 120.0, 130.0, 140.0],
+            "dur": [100, 100, 100, 100],
+        }
+    )
+    schema = {
+        "participant": "subj",
+        "trial": "tr",
+        "x": "fx",
+        "y": "fy",
+        "duration": "dur",
+    }
+    fixations = normalize_fixations(raw_fix, schema, keep_columns={"block", "alt_x"})
+    raw_words = pd.DataFrame(
+        {
+            "tr": ["r1", "r2"],
+            "wid": [1, 1],
+            "w": ["Hi", "Hi"],
+            "x": [0, 0],
+            "y": [0, 0],
+            "width": [50, 50],
+            "height": [20, 20],
+        }
+    )
+    words = normalize_words(
+        raw_words,
+        {
+            "trial": "tr",
+            "word_id": "wid",
+            "text": "w",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+        },
+    )
+    return words, fixations
+
+
+_IDENTITY_PICKS = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "text_id": "text_id",
+    "x": "x",
+    "y": "y",
+}
+
+
+class TestPendingChangePreview:
+    """✏️ Edit dataset says what ✅ Save changes will do to the ids and
+    coordinates before it does — a few rows always, the counts and joins on
+    request."""
+
+    def test_an_untouched_mapping_previews_nothing(self):
+        from scanpath_studio.tabs import pending_value_changes
+
+        _words, fixations = _two_readings()
+        assert pending_value_changes(fixations, dict(_IDENTITY_PICKS)) == []
+
+    def test_a_changed_pick_shows_rows_now_and_after(self):
+        from scanpath_studio.tabs import pending_value_changes
+
+        _words, fixations = _two_readings()
+        pending = {**_IDENTITY_PICKS, "trial": "block", "x": "alt_x"}
+        rows = {row["field"]: row for row in pending_value_changes(fixations, pending)}
+        assert set(rows) == {"trial", "x"}
+        assert rows["trial"]["now"] == ["r1", "r2"]
+        assert rows["trial"]["after"] == ["b1", "b1"]
+        assert rows["x"]["now"][:2] == ["10", "20"]
+        assert rows["x"]["after"][:2] == ["110", "120"]
+
+    def test_the_census_counts_merged_readings_and_broken_joins(self):
+        from scanpath_studio.tabs import pending_census
+
+        words, fixations = _two_readings()
+        pending = {"fixations": {**_IDENTITY_PICKS, "trial": "block"}}
+        readers = pd.DataFrame({"participant_id": ["p1"], "age": [30]})
+        trials = pd.DataFrame({"trial_id": ["r1", "r2"], "cond": ["a", "b"]})
+        census = {
+            row["what"]: (row["now"], row["after"])
+            for row in pending_census(
+                {"words": words, "fixations": fixations},
+                pending,
+                {"participants": readers, "trials": trials},
+            )
+        }
+        # Two readings become one scanpath…
+        assert census["Trials"] == (2, 1)
+        # …which no word box and no trial-table row is keyed by any more.
+        assert census["Trials with word boxes"] == ("2 of 2", "0 of 1")
+        assert census["Trials in the trial table"] == ("2 of 2", "0 of 1")
+        # The readers are untouched.
+        assert census["Readers in the participant table"] == ("1 of 1", "1 of 1")
+
+    def test_the_editor_shows_it_and_counts_on_request(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_setup_file_editor_app, default_timeout=30)
+        at.run()
+        assert not [m for m in at.markdown if "What Save changes will do" in m.value]
+        at.selectbox(key="remap_Lab_fixations_x").set_value("alt_x").run()
+        assert not at.exception, at.exception
+        preview = next(m.value for m in at.markdown if "Fixations · X" in m.value)
+        assert "`30` → `333`" in preview
+        at.button(key="remap_preview_census_Lab").click().run()
+        assert not at.exception, at.exception
+        table = at.dataframe[-1].value
+        assert table.iloc[0].tolist() == ["Trials", "1", "1"]

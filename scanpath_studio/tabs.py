@@ -216,6 +216,7 @@ from scanpath_studio.data import (
     shareable_frame,
     text_ids,
     timestamps_synthesized,
+    trial_id_series,
     trial_keys,
     trial_mapping_columns,
     user_columns,
@@ -13487,6 +13488,366 @@ def _render_remap_fields(
     return pending
 
 
+def _pending_canvas_estimate(
+    stored: dict, pending: dict, added: dict
+) -> tuple[int, int]:
+    """*Estimate from my data* on ✏️ Edit dataset: the screen the data **as it
+    will be saved** needs — the pending mapping over the stored frames, and a
+    table being added in place of the one the dataset lacks.
+
+    The stored frames' own ``x``/``y`` are the *old* mapping's; estimating from
+    them and saving a new coordinate column beside it stored a screen that did
+    not hold the data saved with it. A dataset can only add a table it has
+    none of, so each table comes from exactly one place. Reuses the add
+    screen's cached estimate (`wizard._c_estimate_canvas`), which projects just
+    the mapped geometry columns rather than normalizing anything.
+    """
+    from scanpath_studio.wizard import (
+        _FIX_GEOMETRY_FIELDS,
+        _WORD_GEOMETRY_FIELDS,
+        _c_estimate_canvas,
+        _geometry_key,
+    )
+
+    frames: dict = {}
+    for table in ("words", "fixations"):
+        frame = added.get(table)
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            frame = stored.get(table)
+        if isinstance(frame, pd.DataFrame) and not frame.empty and pending.get(table):
+            frames[table] = frame
+    words, fixations = frames.get("words"), frames.get("fixations")
+    word_schema = pending.get("words") if words is not None else None
+    fix_schema = pending.get("fixations") if fixations is not None else None
+    return _c_estimate_canvas(
+        words,
+        word_schema,
+        fixations,
+        fix_schema,
+        (frame_fingerprint(words), frame_fingerprint(fixations)),
+        (
+            _geometry_key(word_schema, _WORD_GEOMETRY_FIELDS),
+            _geometry_key(fix_schema, _FIX_GEOMETRY_FIELDS),
+        ),
+    )
+
+
+#: The fields the pending-change preview spells out: schema key → the stored
+#: frame's canonical column, and whether the field is an id (else a coordinate).
+_PREVIEW_CHANGE_FIELDS = (
+    ("participant", "participant_id", True),
+    ("trial", "trial_id", True),
+    ("screen_id", "screen_id", True),
+    ("text_id", "text_id", True),
+    ("x", "x", False),
+    ("y", "y", False),
+)
+_PREVIEW_FIELD_LABELS = {
+    "participant": "Participant ID",
+    "trial": "Trial ID",
+    "screen_id": "Screen ID",
+    "text_id": "Text ID",
+    "x": "X",
+    "y": "Y",
+}
+#: The rows the preview reads: enough to find a few distinct values.
+_PREVIEW_HEAD = 200
+
+
+def _pending_field_values(
+    frame: pd.DataFrame, key: str, column, is_id: bool
+) -> pd.Series:
+    """What ``column`` gives field ``key`` on ``frame``'s rows, as text."""
+    if not column:
+        if key == "participant":
+            return pd.Series("(one reader)", index=frame.index)
+        if key == "text_id":
+            # Normalization falls back to the trial id (`from_schema`).
+            return pd.Series("(the trial id)", index=frame.index)
+        return pd.Series("(none)", index=frame.index)
+    columns = [str(c) for c in trial_mapping_columns(column)]
+    if any(c not in frame.columns for c in columns):
+        return pd.Series("(none)", index=frame.index)
+    if is_id:
+        return trial_id_series(frame, column).astype(str)
+    values = pd.to_numeric(frame[columns[0]], errors="coerce")
+    return values.map(lambda v: "—" if pd.isna(v) else f"{v:,.6g}")
+
+
+def pending_value_changes(
+    frame: pd.DataFrame, schema: dict, *, limit: int = 3
+) -> list[dict]:
+    """A few rows of what a pending remap does to ``frame``'s ids and
+    coordinates — ``{"field", "now", "after"}`` per changed field, the values
+    paired row by row (``now[i]`` becomes ``after[i]``).
+
+    Pure, and cheap: it reads the head of the stored frame, whose canonical
+    columns are what the dataset says now, through the pending mapping's
+    columns (the same composition normalization uses, `data.trial_id_series`).
+    A field whose pending column is its own canonical one is unchanged and
+    left out, so an untouched editor previews nothing.
+    """
+    head = frame.head(_PREVIEW_HEAD)
+    rows: list[dict] = []
+    for key, canonical, is_id in _PREVIEW_CHANGE_FIELDS:
+        if key not in schema:
+            continue
+        pending = schema.get(key)
+        parts = [str(c) for c in trial_mapping_columns(pending)] if pending else []
+        present = canonical in frame.columns
+        if parts == ([canonical] if present else []):
+            continue
+        if key == "text_id" and not parts and not present:
+            continue
+        now = (
+            _pending_field_values(head, key, canonical, is_id)
+            if present
+            else _pending_field_values(head, key, None, is_id)
+        )
+        after = _pending_field_values(head, key, pending, is_id)
+        if now.equals(after):
+            # Another spelling of the same values — a composite Trial ID the
+            # editor seeds as its parts, say — changes nothing.
+            continue
+        pairs = pd.DataFrame({"now": now, "after": after}).drop_duplicates().head(limit)
+        rows.append(
+            {
+                "field": key,
+                "now": pairs["now"].tolist(),
+                "after": pairs["after"].tolist(),
+            }
+        )
+    return rows
+
+
+def _pending_keys(frame: pd.DataFrame, schema: dict, fields: tuple) -> pd.DataFrame:
+    """``frame``'s id columns as the pending mapping would build them."""
+    return pd.DataFrame(
+        {
+            key: _pending_field_values(frame, key, schema.get(key), True)
+            for key in fields
+        }
+    )
+
+
+def _current_keys(frame: pd.DataFrame, fields: tuple) -> pd.DataFrame:
+    canon = {key: column for key, column, _ in _PREVIEW_CHANGE_FIELDS}
+    return pd.DataFrame(
+        {
+            key: (
+                frame[canon[key]].astype(str)
+                if canon[key] in frame.columns
+                else pd.Series("(one reader)", index=frame.index)
+            )
+            for key in fields
+        }
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_pending_census(
+    _frames: dict,
+    _metadata: dict,
+    pending_json: str,
+    fingerprints: tuple,
+) -> list[dict]:
+    """``pending_census``, cached on the frames' fingerprints and the mapping."""
+    return pending_census(_frames, json.loads(pending_json), _metadata)
+
+
+def pending_census(frames: dict, pending: dict, metadata: dict) -> list[dict]:
+    """Counts before and after a pending remap — ``{"what", "now", "after"}``.
+
+    Trials (and screens, where the data has them) as the mapping would split
+    them, and whether what hangs off those ids still finds them: the word boxes
+    the fixations' trials point at, and an attached participant or trial table.
+    Reads every row, which is why the editor runs it only on request.
+    """
+    rows: list[dict] = []
+    fix = frames.get("fixations")
+    words = frames.get("words")
+    reading = fix if isinstance(fix, pd.DataFrame) and not fix.empty else words
+    if not isinstance(reading, pd.DataFrame) or reading.empty:
+        return rows
+    table = "fixations" if reading is fix else "words"
+    schema = pending.get(table) or {}
+    trial_fields = ("participant", "trial")
+    now = _current_keys(reading, trial_fields)
+    after = _pending_keys(reading, schema, trial_fields)
+    rows.append(
+        {
+            "what": "Trials",
+            "now": len(now.drop_duplicates()),
+            "after": len(after.drop_duplicates()),
+        }
+    )
+    if "screen_id" in reading.columns or schema.get("screen_id"):
+        screen_fields = (*trial_fields, "screen_id")
+        rows.append(
+            {
+                "what": "Screens",
+                "now": len(_current_keys(reading, screen_fields).drop_duplicates())
+                if "screen_id" in reading.columns
+                else len(now.drop_duplicates()),
+                "after": len(
+                    _pending_keys(reading, schema, screen_fields).drop_duplicates()
+                ),
+            }
+        )
+    if (
+        table == "fixations"
+        and isinstance(words, pd.DataFrame)
+        and not words.empty
+        and "trial_id" in words.columns
+    ):
+        word_schema = pending.get("words") or {}
+        trials_now = set(now["trial"])
+        boxes_now = set(words["trial_id"].astype(str))
+        trials_after = set(after["trial"])
+        boxes_after = (
+            set(_pending_keys(words, word_schema, ("trial",))["trial"])
+            if word_schema
+            else boxes_now
+        )
+        rows.append(
+            {
+                "what": "Trials with word boxes",
+                "now": f"{len(trials_now & boxes_now)} of {len(trials_now)}",
+                "after": f"{len(trials_after & boxes_after)} of {len(trials_after)}",
+            }
+        )
+    readers = metadata.get("participants")
+    if isinstance(readers, pd.DataFrame) and "participant_id" in readers.columns:
+        known = set(readers["participant_id"].astype(str))
+        before, later = set(now["participant"]), set(after["participant"])
+        rows.append(
+            {
+                "what": "Readers in the participant table",
+                "now": f"{len(before & known)} of {len(before)}",
+                "after": f"{len(later & known)} of {len(later)}",
+            }
+        )
+    trials = metadata.get("trials")
+    if isinstance(trials, pd.DataFrame) and "trial_id" in trials.columns:
+        by_reader = "participant_id" in trials.columns
+        cols = ["participant", "trial"] if by_reader else ["trial"]
+        table_cols = ["participant_id", "trial_id"] if by_reader else ["trial_id"]
+        known = set(map(tuple, trials[table_cols].astype(str).to_numpy()))
+        before = set(map(tuple, now[cols].to_numpy()))
+        later = set(map(tuple, after[cols].to_numpy()))
+        rows.append(
+            {
+                "what": "Trials in the trial table",
+                "now": f"{len(before & known)} of {len(before)}",
+                "after": f"{len(later & known)} of {len(later)}",
+            }
+        )
+    return rows
+
+
+#: The editor asked for the pending-change census (a `_remap_*` key, so it ends
+#: with the edit).
+_PREVIEW_CENSUS_KEY = "_remap_preview_census"
+
+
+def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> None:
+    """What ✅ Save changes would do to the ids and coordinates — before it does.
+
+    A changed pick is otherwise only a different column name in its select,
+    and its effect (readings merged by a coarser Trial ID, a metadata table
+    that no longer finds its readers) shows after the save. Shown only once a
+    stored table's id or coordinate mapping differs from what is saved: a few
+    rows of now → after (`pending_value_changes`), and on request the counts and
+    joins (`pending_census`), which read every row.
+    """
+    names_by_table = stored.get("column_names") or {}
+    changes = []
+    for table in ("fixations", "words", "raw_gaze"):
+        frame = stored.get(table)
+        schema = pending.get(table)
+        if not isinstance(frame, pd.DataFrame) or frame.empty or not schema:
+            continue
+        for row in pending_value_changes(frame, schema):
+            changes.append((table, row))
+    if not changes:
+        st.session_state.pop(_PREVIEW_CENSUS_KEY, None)
+        return
+    box = st.container(border=True, key=f"remap_preview_{name}")
+    box.markdown(f"**{ICONS['preview']} What Save changes will do**")
+    lines = []
+    for table, row in changes:
+        names = ColumnNames.from_payload(names_by_table.get(table))
+        column = (pending.get(table) or {}).get(row["field"])
+        source = (
+            " + ".join(names.display(c) for c in trial_mapping_columns(column))
+            if column
+            else "made by the app"
+        )
+        pairs = ", ".join(
+            f"`{a}` → `{b}`" if a != b else f"`{a}`"
+            for a, b in zip(row["now"], row["after"], strict=True)
+        )
+        lines.append(
+            f"- **{_TABLE_LABELS[table]} · {_PREVIEW_FIELD_LABELS[row['field']]}** "
+            f"from {source}: {pairs}"
+        )
+    box.markdown("\n".join(lines))
+    signature = _editor_signature(pending, {})
+    if st.session_state.get(_PREVIEW_CENSUS_KEY) != signature:
+        box.button(
+            f"{ICONS['search']} Count trials and check joins",
+            key=f"remap_preview_census_{name}",
+            on_click=lambda: st.session_state.__setitem__(
+                _PREVIEW_CENSUS_KEY, signature
+            ),
+            help="Count the trials and screens this mapping makes, and check "
+            "that the word boxes and any attached participant or trial table "
+            "still find them. Reads every row.",
+        )
+        return
+    from scanpath_studio import metadata as md
+
+    frames = {
+        table: stored.get(table)
+        for table in ("words", "fixations")
+        if isinstance(stored.get(table), pd.DataFrame)
+    }
+    participant_table = st.session_state.get(md.SESSION_KEY)
+    trial_table = st.session_state.get(md.TRIAL_SESSION_KEY)
+    metadata = {
+        "participants": getattr(participant_table, "frame", None),
+        "trials": getattr(trial_table, "frame", None),
+    }
+    census = _c_pending_census(
+        frames,
+        metadata,
+        json.dumps(pending, sort_keys=True, default=str),
+        (
+            *(frame_fingerprint(f) for f in frames.values()),
+            *(
+                frame_fingerprint(f) if isinstance(f, pd.DataFrame) else None
+                for f in metadata.values()
+            ),
+        ),
+    )
+    box.dataframe(
+        pd.DataFrame(
+            [
+                {"": r["what"], "Now": str(r["now"]), "After saving": str(r["after"])}
+                for r in census
+            ]
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    if any(r["what"] == "Trials" and int(r["after"]) < int(r["now"]) for r in census):
+        box.warning(
+            "This mapping makes fewer trials: some readings would be joined into "
+            "one scanpath.",
+            icon=ICONS["warning"],
+        )
+
+
 def _render_remap_editor(
     name: str, stored: dict, uploads_host=None, setup_host=None
 ) -> None:
@@ -13528,6 +13889,7 @@ def _render_remap_editor(
     )
     pending: dict = _render_remap_fields(name, stored, problems, composite, added)
     st.session_state["_remap_pending_schemas"] = pending
+    _render_pending_change_preview(name, stored, pending)
 
     # The add and edit flows now share the same three-column Recording setup
     # renderer. Editing starts from the saved values and publishes only when
@@ -13565,6 +13927,7 @@ def _render_remap_editor(
         key_prefix=f"edit_{name}",
         initial=initial_setup,
         publish=False,
+        estimate=partial(_pending_canvas_estimate, stored, pending, added or {}),
     )
     st.session_state["_remap_pending_setup"] = setup.to_dict()
     # UX-107 — is there anything to lose by leaving? A table uploaded here is
@@ -13640,7 +14003,164 @@ def dataset_editor_is_dirty() -> bool:
     signature that cannot be built) counts as changed, because a wrong "clean"
     discards work in silence while a wrong "dirty" costs one extra click.
     """
-    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True))
+    return bool(st.session_state.get(_REMAP_DIRTY_KEY, True)) or bool(
+        st.session_state.get(_BUILTIN_SETUP_DIRTY_KEY)
+    )
+
+
+#: A built-in or public dataset's **Recording setup** on ✏️ Edit dataset — the
+#: same form an upload gets, saved as the user's own setup for that dataset
+#: (`app.save_dataset_setup_override`) rather than over the corpus' declared
+#: one. ``_remap_*`` keys, so ✕ Cancel and ✅ Save changes sweep them with the
+#: rest of the edit: which dataset's form is open (its widgets are forgotten
+#: when a new edit opens, so a cancelled answer never comes back), what it
+#: holds, what it held when it opened, a pending *Reset to source setup*, and
+#: whether it differs.
+_BUILTIN_SETUP_OPEN_KEY = "_remap_builtin_setup_open"
+_BUILTIN_SETUP_PENDING_KEY = "_remap_builtin_setup_pending"
+_BUILTIN_SETUP_BASELINE_KEY = "_remap_builtin_setup_baseline"
+_BUILTIN_SETUP_RESET_KEY = "_remap_builtin_setup_reset"
+_BUILTIN_SETUP_DIRTY_KEY = "_remap_builtin_setup_dirty"
+
+
+def _builtin_setup_prefix(token: str) -> str:
+    """The form's widget-key prefix — not ``edit_<name>``, an upload's."""
+    return f"edit_src_{token}"
+
+
+def _forget_builtin_setup_widgets(token: str) -> None:
+    prefix = f"{_builtin_setup_prefix(token)}_setup_"
+    for key in [k for k in st.session_state if str(k).startswith(prefix)]:
+        st.session_state.pop(key, None)
+
+
+def _reset_builtin_setup(token: str) -> None:
+    """*Reset to source setup*: redraw the form at the corpus' own values.
+    Nothing is dropped until ✅ Save changes (`commit_builtin_setup`)."""
+    _forget_builtin_setup_widgets(token)
+    st.session_state[_BUILTIN_SETUP_RESET_KEY] = token
+    st.session_state.pop(_BUILTIN_SETUP_BASELINE_KEY, None)
+
+
+def _setup_groups_differing(a, b) -> list[str]:
+    """The setup groups whose values or provenance differ between two
+    snapshots, by their on-screen names."""
+    fields = {
+        "screen": ("canvas_width", "canvas_height"),
+        "geometry": ("monitor_width_mm", "viewing_distance_mm"),
+        "text": (
+            "base_font_size",
+            "font_family",
+            "line_spacing",
+            "scale_text_to_boxes",
+        ),
+    }
+    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+    return [
+        labels[group]
+        for group, names in fields.items()
+        if a.provenance[group] != b.provenance[group]
+        or any(getattr(a, n) != getattr(b, n) for n in names)
+    ]
+
+
+def render_builtin_setup_editor(
+    token: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    host,
+) -> None:
+    """Recording setup for a built-in or public dataset, editable.
+
+    The upload's form (`wizard._wizard_setup_step`), started from the setup
+    this dataset has now — the user's own, if they saved one, else what the
+    corpus declares. ✅ Save changes keeps a changed form as this dataset's own
+    setup (`commit_builtin_setup`); ✕ Cancel discards it. The corpus' declared
+    values are never rewritten, so *Reset to source setup* can always go back.
+    """
+    from scanpath_studio.app import (
+        cached_canvas_size,
+        dataset_setup_override,
+        source_setup_snapshot,
+    )
+    from scanpath_studio.wizard import _wizard_setup_step
+
+    if st.session_state.get(_BUILTIN_SETUP_OPEN_KEY) != token:
+        # A new edit: whatever an earlier, cancelled one typed is not this one.
+        _forget_builtin_setup_widgets(token)
+        st.session_state.pop(_BUILTIN_SETUP_BASELINE_KEY, None)
+        st.session_state.pop(_BUILTIN_SETUP_RESET_KEY, None)
+        st.session_state[_BUILTIN_SETUP_OPEN_KEY] = token
+    resetting = st.session_state.get(_BUILTIN_SETUP_RESET_KEY) == token
+    words = words if isinstance(words, pd.DataFrame) else pd.DataFrame()
+    fixations = fixations if isinstance(fixations, pd.DataFrame) else pd.DataFrame()
+    source = source_setup_snapshot(token, words, fixations)
+    override = None if resetting else dataset_setup_override(token)
+    note, action = host.columns([0.78, 0.22], vertical_alignment="center")
+    if override is not None:
+        changed = _setup_groups_differing(override, source)
+        note.caption(
+            f"{ICONS['edit']} **Your own setup** for this dataset"
+            + (f" — set by you: {', '.join(changed)}" if changed else "")
+            + ". The corpus' declared setup is kept; reset to go back to it."
+        )
+        action.button(
+            f"{ICONS['reset']} Reset to source setup",
+            key=f"{_builtin_setup_prefix(token)}_reset",
+            on_click=_reset_builtin_setup,
+            args=(token,),
+            width="stretch",
+            help="Show the setup this corpus declares. Nothing changes until you save.",
+        )
+    elif resetting:
+        note.caption(
+            "Back to the setup this corpus declares — **Save changes** to drop "
+            "your own."
+        )
+    else:
+        note.caption(
+            "The setup this corpus declares. Change anything to save your own "
+            "for this dataset; the corpus' values are kept."
+        )
+    setup = _wizard_setup_step(
+        host,
+        words,
+        fixations,
+        not words.empty,
+        key_prefix=_builtin_setup_prefix(token),
+        initial=override or source,
+        publish=False,
+        estimate=partial(cached_canvas_size, words, fixations),
+    )
+    payload = setup.to_dict()
+    st.session_state[_BUILTIN_SETUP_PENDING_KEY] = {"token": token, "setup": payload}
+    signature = _editor_signature({}, payload)
+    baseline = st.session_state.get(_BUILTIN_SETUP_BASELINE_KEY)
+    if baseline is None:
+        st.session_state[_BUILTIN_SETUP_BASELINE_KEY] = baseline = signature
+    st.session_state[_BUILTIN_SETUP_DIRTY_KEY] = resetting or signature != baseline
+
+
+def commit_builtin_setup() -> None:
+    """✅ Save changes' half for a built-in dataset's Recording setup.
+
+    A form the user changed becomes the dataset's own setup; a *Reset to source
+    setup* left as it was drops it; an untouched form changes nothing — saving
+    the mapping must not turn the corpus' declared setup into an override.
+    """
+    from scanpath_studio.app import save_dataset_setup_override
+
+    pending = st.session_state.get(_BUILTIN_SETUP_PENDING_KEY)
+    if not isinstance(pending, dict) or not pending.get("token"):
+        return
+    token, payload = str(pending["token"]), pending.get("setup")
+    changed = _editor_signature({}, payload) != st.session_state.get(
+        _BUILTIN_SETUP_BASELINE_KEY
+    )
+    if changed and isinstance(payload, dict):
+        save_dataset_setup_override(token, payload)
+    elif st.session_state.get(_BUILTIN_SETUP_RESET_KEY) == token:
+        save_dataset_setup_override(token, None)
 
 
 #: The editor's own widget namespace → the add screen's. The two screens run the
@@ -13662,38 +14182,139 @@ _EDITOR_TO_WIZARD_PREFIX = {
 _EDITOR_KEY_NOISE = ("_cell", "_upload", "_header")
 
 
+#: Each table's name in a setup-file note.
+_SETUP_TABLE_NAMES = {"words": "AOI", "fixations": "Fixations", "raw_gaze": "Raw gaze"}
+_BOX_EDGE_KEYS = ("left", "right", "top", "bottom")
+_BOX_ORIGIN_KEYS = ("x", "y", "width", "height")
+
+
+def _setup_file_mapping(
+    pending: dict,
+    stored: dict,
+    *,
+    added=(),
+    box_formats: dict | None = None,
+) -> tuple[dict, list[str]]:
+    """The editor's pending mapping as the add screen's ``col_map_*`` keys, in
+    the **dataset's own files'** column names, plus what the file cannot carry.
+
+    A table already in the dataset is mapped onto the stored frame's canonical
+    columns (``x``, ``duration_ms``); restated through its column-name map
+    (`column_names.source_schema`) each becomes the file column it was read
+    from — a seconds column by its own name (the add screen converts it again),
+    a composite id as its parts, a box stored as x/y/width/height but read from
+    edges as those edges. A column the app *made* (a text id from the trial id)
+    is written unmapped, so the add screen makes it again. A field that cannot
+    be traced back is left out — the add screen then detects it — and named in
+    the notes. A table being *added* is raw, so its mapping already speaks the
+    file's names; only its widget namespace (``…_add``) differs, and the file
+    uses the add screen's.
+    """
+    from scanpath_studio.controls import (
+        _HIDDEN_MAPPING_KEYS,
+        BOX_FORMAT_EDGES,
+        BOX_FORMAT_ORIGIN,
+    )
+
+    box_formats = box_formats or {}
+    names_by_table = stored.get("column_names") or {}
+    recipe = stored.get("source_recipe") or {}
+    derived = {str(c) for c in recipe.get("derived") or ()}
+    specs = {table: spec for table, _label, spec, _canon in _REMAP_TABLES}
+    mapping: dict = {}
+    notes: list[str] = []
+    for table, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
+        schema = pending.get(table)
+        if not isinstance(schema, dict):
+            continue
+        label = _SETUP_TABLE_NAMES[table]
+        if table in added:
+            source: dict = dict(schema)
+        else:
+            names = ColumnNames.from_payload(names_by_table.get(table))
+            if not names.entries:
+                notes.append(
+                    f"{label}: this dataset was added before the app kept its "
+                    "files' column names, so the file names the app's own "
+                    "columns. Check them after restoring."
+                )
+            restated, unresolved = source_schema(schema, names)
+            source = dict(restated or {})
+            for key in unresolved:
+                source.pop(key, None)
+            if unresolved:
+                notes.append(
+                    f"{label}: {', '.join(unresolved)} could not be traced back "
+                    "to your files and is left out; map it after restoring."
+                )
+        multi = {spec["key"] for spec in specs[table] if spec.get("multi")}
+        if table == "words":
+            if any(source.get(k) for k in _BOX_EDGE_KEYS):
+                box = BOX_FORMAT_EDGES
+            elif any(source.get(k) for k in _BOX_ORIGIN_KEYS):
+                box = BOX_FORMAT_ORIGIN
+            else:
+                box = box_formats.get(table)
+            other = _BOX_ORIGIN_KEYS if box == BOX_FORMAT_EDGES else _BOX_EDGE_KEYS
+            for key in other:
+                source.pop(key, None)
+            if box:
+                mapping[f"{wizard_prefix}_box_format"] = box
+        from_file_names: set = set()
+        for key, value in source.items():
+            if key in _HIDDEN_MAPPING_KEYS:
+                continue  # never a widget: the add screen detects them
+            if isinstance(value, (list, tuple)):
+                value = [str(item) for item in value]
+            elif value is not None:
+                value = str(value)
+            if key in multi and isinstance(value, str):
+                value = [value]
+            mapping[f"{wizard_prefix}_{key}"] = value
+            for column in value if isinstance(value, list) else [value]:
+                if column in derived:
+                    from_file_names.add(column)
+        if from_file_names:
+            notes.append(
+                f"{label}: {', '.join(sorted(from_file_names))} came from the "
+                "file names, not a column; set up *Derive columns from the "
+                "filename* again after restoring."
+            )
+    if "aggregate_char_boxes" in (recipe.get("steps") or ()):
+        notes.append(
+            "AOI: character boxes were combined into word boxes; turn "
+            "*Aggregate character AOIs into word boxes* on again after restoring."
+        )
+    return mapping, notes
+
+
 def _editor_setup_config(name: str) -> dict:
     """The open editor's mapping + recording setup, in the add screen's setup
     format (``wizard._wizard_setup_config``).
 
     So ⬇️ Save setup means the same thing on both screens, and a file saved from
-    either is restored by the same *Restore a saved setup* uploader. The mapping
-    is swept out of session state rather than rebuilt from
-    ``_remap_pending_schemas`` because the coordinate-format radio
-    (``*_box_format``) is a widget answer, not a schema field, and a restored
-    file without it opens the wizard on the wrong box format.
+    either is restored by the same *Restore a saved setup* uploader — over the
+    **original files**, which is why the mapping is written in their column
+    names rather than the stored frame's (`_setup_file_mapping`). What a
+    restore cannot reproduce is listed under ``column_mapping_notes``, and the
+    footer says it beside the button.
     """
     from datetime import datetime
 
     from scanpath_studio import __version__
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-    mapping: dict = {}
-    for table_key, wizard_prefix in _EDITOR_TO_WIZARD_PREFIX.items():
-        prefix = f"remap_{name}_{table_key}_"
-        for key in sorted(k for k in st.session_state if isinstance(k, str)):
-            if not key.startswith(prefix) or any(
-                noise in key for noise in _EDITOR_KEY_NOISE
-            ):
-                continue
-            value = st.session_state[key]
-            if value is None or isinstance(value, (str, int, float, bool)):
-                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = value
-            elif isinstance(value, (list, tuple)):
-                # The composite trial id — a list of component columns.
-                mapping[f"{wizard_prefix}_{key[len(prefix) :]}"] = [
-                    str(item) for item in value
-                ]
+    stored = (st.session_state.get("_datasets") or {}).get(name) or {}
+    added = set(st.session_state.get("_remap_added_tables") or ())
+    mapping, notes = _setup_file_mapping(
+        st.session_state.get("_remap_pending_schemas") or {},
+        stored,
+        added=added,
+        box_formats={
+            table: st.session_state.get(f"remap_{name}_{table}_add_box_format")
+            for table in added
+        },
+    )
     setup = st.session_state.get("_remap_pending_setup")
     return {
         "schema": PLOT_CONFIG_SCHEMA,
@@ -13701,6 +14322,7 @@ def _editor_setup_config(name: str) -> dict:
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": name,
         "column_mapping": mapping,
+        "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
     }
 
@@ -13745,9 +14367,10 @@ def render_dataset_editor_footer(host) -> None:
     save_col, apply_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
+    config = _editor_setup_config(name)
     save_col.download_button(
         f"{ICONS['download']} Save setup",
-        data=json.dumps(_editor_setup_config(name), indent=2),
+        data=json.dumps(config, indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
         key=f"remap_setup_download_{name}",
@@ -13766,6 +14389,13 @@ def render_dataset_editor_footer(host) -> None:
         width="stretch",
         help="Save the mapping and recording setup, then re-derive the dataset.",
     )
+    # What a restore over the original files will not reproduce on its own —
+    # said before the file is sent, not discovered by whoever restores it.
+    if config["column_mapping_notes"]:
+        box.caption(
+            "**The saved setup needs a hand after restoring.** "
+            + " ".join(config["column_mapping_notes"])
+        )
 
 
 def _request_full_identity_scan() -> None:
@@ -13879,7 +14509,12 @@ def render_trial_identity_section() -> None:
 
 
 def _render_column_mapping_section(
-    *, editor_rendered: bool = False, uploads_host=None, setup_host=None
+    *,
+    editor_rendered: bool = False,
+    uploads_host=None,
+    setup_host=None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
 ) -> None:
     """The body of the Data page's **Column mapping** section (DATA-26).
 
@@ -13908,12 +14543,26 @@ def _render_column_mapping_section(
     callee with no host renders inline under its own heading, as before, and
     normalizing it to ``st`` here would silently drop that heading for every
     caller.
+
+    In mode A the Recording setup is editable too while ✏️ Edit dataset is
+    open (`render_builtin_setup_editor`, which reads ``words`` / ``fixations``
+    for *Estimate from my data*): the demo and the public corpora have the
+    editor's ✅ Save changes, and a declared setup can still be wrong for how
+    someone uses the data — an assumed physical size, most often.
     """
     if editor_rendered:
         # The editable built-in mapping now uses the same compact field grid as
         # Add dataset; widen its option menus just as the wizard does.
         st.markdown(mapping_menu_css(), unsafe_allow_html=True)
-        _render_setup_provenance_note(host=setup_host)
+        token = str(st.session_state.get("data_source_choice") or "")
+        if (
+            setup_host is not None
+            and token
+            and st.session_state.get(DATASET_EDITOR_OPEN_KEY)
+        ):
+            render_builtin_setup_editor(token, words, fixations, setup_host)
+        else:
+            _render_setup_provenance_note(host=setup_host)
         return
     active = _active_stored_dataset()
     if active is not None:

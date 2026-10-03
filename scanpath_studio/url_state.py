@@ -67,6 +67,7 @@ from .constants import (
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
@@ -680,7 +681,9 @@ _URL_BOUNDED = {
 #: EXP-19 — the settings a source's own declared monitor or typeface overwrites
 #: the first time that source is seeded (`app.seed_canvas_state`: the canvas
 #: pair, and `app._FONT_SNAP_KEYS`). A link that carries one names it under
-#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value.
+#: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value. A recording
+#: setup the recipient saved for that dataset (`app._apply_setup_override`) is
+#: applied on the same first seeding, and keeps a linked value the same way.
 _SOURCE_SNAPPED_KEYS = frozenset(
     {
         "global_canvas_width",
@@ -688,6 +691,7 @@ _SOURCE_SNAPPED_KEYS = frozenset(
         "global_base_font_size",
         "global_font_family",
         "global_scale_text_to_boxes",
+        *SETUP_OVERRIDE_SESSION_KEYS,
     }
 )
 
@@ -2803,7 +2807,11 @@ def _link_defaults(data_choice: str) -> dict:
         # snaps the base font to *that* — a sender who chose the factory 16
         # there has to say so, or the recipient gets the corpus' size.
         defaults.pop("global_base_font_size")
-    width, height, authoritative = resolve_source_monitor(data_choice, None, None)
+    # What the source itself declares: the recipient has none of this
+    # session's own saved setup for it, so a canvas the sender saved travels.
+    width, height, authoritative = resolve_source_monitor(
+        data_choice, None, None, own_setup=False
+    )
     if authoritative:
         lo, hi = _CANVAS_BOUNDS
         defaults["global_canvas_width"] = min(max(int(width), lo), hi)

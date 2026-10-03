@@ -293,3 +293,13 @@ def test_one_screen_size_still_overlays():
         words, fixations, ("p", "t1"), ("p", "t2"), fit_to_monitor=True
     )
     assert list(fig.layout.xaxis.range) == [0, 800]
+
+
+def test_a_co_animation_of_two_screen_sizes_in_one_dataset_is_refused():
+    from scanpath_studio.experimental_setup import IncomparableScreensError
+
+    words, fixations = _sized_pair(800, 1600)
+    with pytest.raises(IncomparableScreensError, match="different screens"):
+        api.animate_scanpath(words, fixations, "p", "t1", trial_b=("p", "t2"))
+    words, fixations = _sized_pair(800, 800)
+    api.animate_scanpath(words, fixations, "p", "t1", trial_b=("p", "t2"))

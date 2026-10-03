@@ -1988,6 +1988,22 @@ def animate_scanpath(
             fixations_b,
             a_inferred=setup is None and canvas_size is None,
         )
+    elif fixations_b is not None and not fixations_b.empty:
+        # One dataset, two screen sizes it knows of: refused as the app and
+        # `compare_scanpaths`' overlay refuse them.
+        same_b = _same_dataset_setup_b(
+            setup_a,
+            setup_b,
+            a_known=setup is not None or canvas_size is not None,
+            words_a=trial_words,
+            fixations_a=trial_fixations,
+            words_b=words_b,
+            fixations_b=fixations_b,
+        )
+        if same_b is not None:
+            _refuse_co_animation_across_screens(
+                setup_a, same_b, words_b, fixations_b, a_inferred=False
+            )
     full_fix_range_b = None
     if (
         fixations_b is not None
@@ -2157,6 +2173,45 @@ def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
             "screen; if both were shown on one, pass B's as setup_b=."
         )
     return ""
+
+
+def _same_dataset_setup_b(
+    setup_a: SetupSnapshot,
+    setup_b: SetupSnapshot | None,
+    *,
+    a_known: bool,
+    words_a: pd.DataFrame | None,
+    fixations_a: pd.DataFrame | None,
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
+) -> SetupSnapshot | None:
+    """B's screen when it is known to differ from A's, within one dataset.
+
+    One dataset can hold screens of different sizes, so a same-dataset pair is
+    gated too — but only on screens either side actually *knows*: a stated
+    setup, or the selected screen's own canvas columns. Two data extents say
+    nothing (two readings of one screen rarely span the same area). Returns
+    B's snapshot when both are known and the canvases differ — the pair an
+    overlay or co-animation must refuse — else ``None``. ``a_known`` is whether
+    the caller stated A's screen.
+    """
+    own_b = screen_canvas_size(words_b) or screen_canvas_size(fixations_b)
+    a_known = (
+        a_known
+        or screen_canvas_size(words_a) is not None
+        or screen_canvas_size(fixations_a) is not None
+    )
+    if setup_b is not None:
+        resolved = setup_b
+    elif own_b is not None:
+        resolved = replace(
+            setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
+        )
+    else:
+        return None
+    if not a_known or resolved.canvas == setup_a.canvas:
+        return None
+    return resolved
 
 
 def _refuse_co_animation_across_screens(
@@ -2474,27 +2529,35 @@ def compare_scanpaths(
     resolved_setup_b = _compare_setup(
         setup_b, None, trial_words_b, trial_fix_b, side="setup_b"
     )
-    # One dataset can hold screens of different sizes, so a same-dataset pair
-    # is gated too — on the screens either side actually *knows* (a stated
-    # setup, or the selected screen's own canvas columns). Two data extents
-    # say nothing: two readings of one screen rarely span the same area.
     gate = cross_dataset
     if not cross_dataset:
-        own_b = screen_canvas_size(trial_words_b) or screen_canvas_size(trial_fix_b)
-        a_known = (
-            setup is not None
-            or canvas_size is not None
-            or (screen_canvas_size(trial_words_a) or screen_canvas_size(trial_fix_a))
-            is not None
+        same_b = _same_dataset_setup_b(
+            setup_a,
+            setup_b,
+            a_known=setup is not None or canvas_size is not None,
+            words_a=trial_words_a,
+            fixations_a=trial_fix_a,
+            words_b=trial_words_b,
+            fixations_b=trial_fix_b,
         )
-        if setup_b is None and own_b is not None:
-            resolved_setup_b = replace(
-                setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
-            )
-        elif setup_b is None and a_known:
-            resolved_setup_b = setup_a
-        gate = a_known and (setup_b is not None or own_b is not None)
-        gate = gate and resolved_setup_b.canvas != setup_a.canvas
+        gate = same_b is not None
+        if same_b is not None:
+            resolved_setup_b = same_b
+        elif setup_b is None:
+            # Not refused: B's split panel is drawn to its own screen's canvas,
+            # else A's known one, else (neither known) its own data's extent.
+            own_b = screen_canvas_size(trial_words_b) or screen_canvas_size(trial_fix_b)
+            if own_b is None and (
+                setup is not None
+                or canvas_size is not None
+                or screen_canvas_size(trial_words_a) is not None
+                or screen_canvas_size(trial_fix_a) is not None
+            ):
+                resolved_setup_b = setup_a
+            elif own_b is not None:
+                resolved_setup_b = replace(
+                    setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
+                )
     if resolved_layout == "overlay" and gate:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:

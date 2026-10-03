@@ -12192,7 +12192,19 @@ def _render_remap_fields(
             # mapping (the frame is already normalized), not a fresh
             # auto-detect — say so. A table being added *is* auto-detected.
             detected_label=detected_labels.get(table_key, "currently mapped"),
+            option_labels=stored_labels.get(table_key),
         )
+
+    # DATA-66: a stored table's columns are canonical; offer them by the
+    # dataset's own names. A table being added is raw — its names are its own.
+    stored_names = stored.get("column_names") or {}
+    stored_labels = {
+        table_key: ColumnNames.from_payload(stored_names.get(table_key)).option_labels(
+            user_columns(frame)
+        )
+        for table_key, frame in frames.items()
+        if detected_labels.get(table_key) == "currently mapped"
+    }
 
     pending: dict = {table: {} for table in frames}
     seen: set = set()

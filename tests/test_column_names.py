@@ -517,3 +517,60 @@ def test_a_table_header_shows_the_users_name():
     assert config["duration_ms"]["label"] == "CURRENT_FIX_DURATION"
     assert config["is_regression"]["label"].endswith(cn.COMPUTED_SUFFIX)
     assert "my_extra" not in config  # already shown by its own name
+
+
+@pytest.mark.timeout(240)
+def test_the_keep_picker_lists_the_files_own_names(monkeypatch):
+    """The add screen showed `reduced_pos` for a column the file calls
+    `Reduced_POS` — a canonical name, before anything had been normalized."""
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT
+
+    words = _UPLOAD_WORDS.assign(Reduced_POS=["NOUN", "VERB", "NOUN"])
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {
+            "col_map_words": words,
+            "col_map_fix": _UPLOAD_FIXATIONS,
+        }.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.run(timeout=180)
+    assert not at.exception, at.exception
+    keep = next(
+        m for m in at.multiselect if str(m.key).startswith("wizard_keep_col_map_w")
+    )
+    assert "Reduced_POS" in keep.options, keep.options
+    assert "reduced_pos" not in keep.options
+
+
+def test_the_mapping_picker_takes_option_labels():
+    """✏️ Edit dataset offers the stored *canonical* columns; it must show them
+    by the user's names."""
+    import inspect
+
+    from scanpath_studio import controls
+
+    assert "option_labels" in inspect.signature(controls.column_mapping_ui).parameters
+
+
+@pytest.mark.timeout(240)
+def test_the_edit_screen_offers_columns_by_their_users_names():
+    """✏️ Edit dataset offers the stored frame's canonical columns; a person sees
+    the names they uploaded (`CURRENT_FIX_DURATION`, not `duration_ms`)."""
+    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+    from tests.conftest import APP_SCRIPT, pin_data_view
+
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["_datasets"] = {"study": _stored_upload()}
+    at.session_state["data_source_choice"] = "study"
+    at.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    pin_data_view(at)
+    at.run(timeout=180)
+    assert not at.exception, at.exception
+    duration = at.selectbox(key="remap_study_fixations_duration")
+    assert "CURRENT_FIX_DURATION" in duration.options, duration.options
+    assert "duration_ms" not in duration.options
+    assert duration.value == "duration_ms"  # the value is still canonical

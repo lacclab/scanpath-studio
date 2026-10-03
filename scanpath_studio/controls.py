@@ -2637,6 +2637,7 @@ def column_mapping_ui(
     columns_per_row: int = 1,
     stack_labels: bool | None = None,
     dataset: object = None,
+    option_labels: dict | None = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -2687,6 +2688,12 @@ def column_mapping_ui(
     # original import by design) — fall back to the parsed frame there.
     full_header = st.session_state.get(f"{state_key_prefix}_header")
     options = list(full_header) if full_header else user_columns(df)
+
+    # DATA-66: ✏️ Edit dataset offers the stored *canonical* columns; the caller
+    # passes the dataset's own names for them. The values stay canonical.
+    def _option_label(column) -> str:
+        return (option_labels or {}).get(column, column)
+
     expanded = bool(expand_on_problem and problems)
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
@@ -2823,6 +2830,7 @@ def column_mapping_ui(
         chosen = field_col.selectbox(
             field_label,
             options=options,
+            format_func=_option_label,
             index=None,
             placeholder=_UNMAPPED_PLACEHOLDER,
             key=state_key,
@@ -2852,6 +2860,9 @@ def column_mapping_ui(
             touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
             detected_label=detected_label,
         )
+        if option_labels and default and hover:
+            # DATA-66: "currently mapped `duration_ms`" names the user's column.
+            hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
         if state == "auto":
@@ -3044,6 +3055,7 @@ def column_mapping_ui(
                 # joined into one id — the composable columns are exactly the
                 # ones a narrowed parse is most likely to have left out.
                 options=options,
+                format_func=_option_label,
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",

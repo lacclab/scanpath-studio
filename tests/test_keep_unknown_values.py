@@ -316,3 +316,43 @@ def test_the_empty_pool_diagnosis_names_and_applies_the_choice():
     assert keys == ("filter_score_range",)
     _, kept = apply(_frame(), _frame())
     assert set(kept["participant_id"]) == {"p1", "p2"}
+
+
+def test_the_metadata_ranges_are_not_recounted_on_every_rerun(monkeypatch):
+    """The numeric metadata filters' extents and *Keep unknown values* counts
+    are cached on the table and the pool: a rerun that changes neither does
+    not walk them again (they were several passes per field per rerun)."""
+    calls = []
+    for name in ("numeric_extent", "unknown_count"):
+        real = getattr(md, name)
+
+        def counting(*args, _real=real, _name=name, **kwargs):
+            calls.append(_name)
+            return _real(*args, **kwargs)
+
+        monkeypatch.setattr(md, name, counting)
+    st.cache_data.clear()
+    at = AppTest.from_function(_metadata_panel_app)
+    at.run()
+    assert not at.exception, at.exception
+    assert calls  # the first run computes them
+    calls.clear()
+    at.run()
+    assert not at.exception, at.exception
+    assert calls == []
+    captions = [c.value for c in at.caption]
+    assert "2 trials have no value and stay in the pool." in captions
+
+
+def test_the_cached_summary_matches_the_per_field_answers():
+    built = _paired_trials()
+    summary = controls._metadata_numeric_summary(built, lambda: LOADED, ("pool", "one"))
+    assert summary == {
+        "score": (
+            md.numeric_extent(built, "score"),
+            md.unknown_count(built, "score", LOADED),
+        )
+    }
+    assert controls._metadata_numeric_summary(built)["score"][1] == md.unknown_count(
+        built, "score"
+    )

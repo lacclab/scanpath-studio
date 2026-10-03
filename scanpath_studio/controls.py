@@ -8047,9 +8047,7 @@ def _render_metadata_range(
     Scanpath view for a one-row trial table — so it is shown as that value,
     and its unknowns choice is the only narrowing it offers.
     """
-    from scanpath_studio import metadata as md
-
-    extent = md.numeric_extent(attached, field.name)
+    extent = _metadata_numeric_summary(attached)[field.name][0]
     if extent is None:
         st.session_state.pop(keep_unknown_key(key), None)
         return
@@ -8080,9 +8078,7 @@ def _metadata_range_narrowing(attached, field, key: str, prefix: str):
     values* is off — then even the full extent (or a constant field's one
     value) leaves out the records with no value.
     """
-    from scanpath_studio import metadata as md
-
-    extent = md.numeric_extent(attached, field.name)
+    extent = _metadata_numeric_summary(attached)[field.name][0]
     if extent is None:
         return None
     keep = _keeps_unknown(key, prefix)
@@ -8123,7 +8119,7 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
                 key,
                 noun="reader",
                 table="participant",
-                unknown=md.unknown_count(attached, field.name),
+                unknown=_metadata_numeric_summary(attached)[field.name][1],
                 prefix=prefix,
                 on_change=on_change,
             )
@@ -8144,7 +8140,12 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
 
 
 def _render_trial_metadata_filters(
-    host, *, prefix: str, on_change, keys: Callable[[], set] | None = None
+    host,
+    *,
+    prefix: str,
+    on_change,
+    keys: Callable[[], set] | None = None,
+    pool_key: tuple | None = None,
 ) -> None:
     """One control per registered trial-grain field (DATA-29).
 
@@ -8155,7 +8156,8 @@ def _render_trial_metadata_filters(
 
     ``keys`` returns the loaded pool's ``(participant_id, trial_id)`` pairs, so
     the *Keep unknown values* caption counts readings; without it the count is
-    of the table's own keys.
+    of the table's own keys. ``pool_key`` identifies that pool (the frames'
+    fingerprints) for the cached count, so ``keys`` is called only on a miss.
     """
     from scanpath_studio import metadata as md
 
@@ -8173,9 +8175,9 @@ def _render_trial_metadata_filters(
                 key,
                 noun="trial",
                 table="trial",
-                unknown=md.unknown_count(
-                    attached, field.name, keys() if keys is not None else None
-                ),
+                unknown=_metadata_numeric_summary(attached, keys, pool_key)[field.name][
+                    1
+                ],
                 prefix=prefix,
                 on_change=on_change,
             )
@@ -8219,7 +8221,7 @@ def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
                 key,
                 noun="text",
                 table="text",
-                unknown=md.unknown_count(attached, field.name),
+                unknown=_metadata_numeric_summary(attached)[field.name][1],
                 prefix=prefix,
                 on_change=on_change,
             )
@@ -8384,6 +8386,54 @@ def _c_loaded_trial_keys(_words, _fixations, wkey, fkey) -> frozenset:
     from scanpath_studio.data import trial_keys as _keys
 
     return frozenset(_keys(_words)) | frozenset(_keys(_fixations))
+
+
+def _pool_fingerprint(words: pd.DataFrame, fixations: pd.DataFrame) -> tuple:
+    """The loaded pool's identity, for a cache keyed on it."""
+    from scanpath_studio.data import frame_fingerprint
+
+    return (frame_fingerprint(words), frame_fingerprint(fixations))
+
+
+def _metadata_numeric_summary(
+    attached, keys: Callable[[], set] | None = None, pool_key: tuple | None = None
+) -> dict:
+    """``{field: (extent, unknown count)}`` for an attached metadata table's
+    numeric fields — what each range filter is drawn and narrowed from.
+
+    Cached on the table's content (its frame's fingerprint and its join report)
+    and, when ``keys`` counts unknowns over the loaded pool, on ``pool_key``:
+    the filter panel draws on every rerun, and these were several Python passes
+    over the table and the pool per numeric field each time. ``keys`` without a
+    ``pool_key`` is called every time, and the pool it returns is the key.
+    """
+    from scanpath_studio.data import frame_fingerprint
+
+    names = tuple(f.name for f in attached.fields if f.is_numeric)
+    table_key = (
+        type(attached).__name__,
+        frame_fingerprint(attached.frame),
+        hash(attached.report),
+        names,
+    )
+    if keys is not None and pool_key is None:
+        loaded = frozenset(keys())
+        keys, pool_key = (lambda: loaded), loaded
+    return _c_metadata_numeric_summary(attached, table_key, keys, pool_key)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_metadata_numeric_summary(_attached, table_key, _keys, pool_key) -> dict:
+    from scanpath_studio import metadata as md
+
+    loaded = _keys() if _keys is not None else None
+    return {
+        name: (
+            md.numeric_extent(_attached, name),
+            md.unknown_count(_attached, name, loaded),
+        )
+        for name in table_key[-1]
+    }
 
 
 def _compute_trial_filters(
@@ -8752,6 +8802,7 @@ def render_trial_filters(
         prefix=prefix,
         on_change=_apply,
         keys=lambda: _loaded_trial_keys(words, fixations),
+        pool_key=_pool_fingerprint(words, fixations),
     )
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 

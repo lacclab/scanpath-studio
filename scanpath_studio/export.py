@@ -1106,6 +1106,26 @@ def _preview_fields(combos: pd.DataFrame) -> dict:
     return fields
 
 
+def _prune_stale_fields(state, state_key: str, names: list[str]) -> None:
+    """Drop field names the attached table no longer has from a stored picker
+    selection — the house `controls._drop_stale_multi` pattern.
+
+    Two states must stay apart. An **empty** stored list is the user clearing
+    the picker, which leaves the table out of the bundle, so it is kept as is.
+    A non-empty list that names **only** stale fields is what a replaced table
+    leaves behind; Streamlit would filter it to `[]` and read it as that same
+    omission, so it is removed and the picker starts again on every field.
+    """
+    stored = state.get(state_key)
+    if not isinstance(stored, (list, tuple)) or not stored:
+        return
+    kept = [name for name in stored if name in names]
+    if not kept:
+        state.pop(state_key, None)
+    elif list(stored) != kept:
+        state[state_key] = kept
+
+
 def _render_metadata_field_picker(key_prefix: str):
     """DATA-20 milestone 10 — which participant fields ride along in the bundle.
 
@@ -1128,20 +1148,8 @@ def _render_metadata_field_picker(key_prefix: str):
         return None
     names = [field.name for field in attached.fields]
     labels = {field.name: field.label for field in attached.fields}
-    # Prune the persisted selection against *this* table's fields, the house
-    # `controls._drop_stale_multi` pattern. Without it, attaching a second table
-    # leaves a selection naming only the first one's columns; Streamlit filters
-    # invalid values out silently, the widget yields `[]`, and an empty tuple is
-    # "leave the table out of the bundle" — so a stale key would read as a
-    # deliberate omission and the participant file would just be missing.
     state_key = f"{key_prefix}_meta_fields"
-    stored = st.session_state.get(state_key)
-    if isinstance(stored, (list, tuple)):
-        kept = [name for name in stored if name in names]
-        if not kept:
-            st.session_state.pop(state_key, None)
-        elif list(stored) != kept:
-            st.session_state[state_key] = kept
+    _prune_stale_fields(st.session_state, state_key, names)
     chosen = panel_field(
         st,
         "multiselect",
@@ -1174,13 +1182,7 @@ def _render_trial_metadata_field_picker(key_prefix: str):
     names = [field.name for field in attached.fields]
     labels = {field.name: field.label for field in attached.fields}
     state_key = f"{key_prefix}_trial_meta_fields"
-    stored = st.session_state.get(state_key)
-    if isinstance(stored, (list, tuple)):
-        kept = [name for name in stored if name in names]
-        if not kept:
-            st.session_state.pop(state_key, None)
-        elif list(stored) != kept:
-            st.session_state[state_key] = kept
+    _prune_stale_fields(st.session_state, state_key, names)
     chosen = panel_field(
         st,
         "multiselect",
@@ -1213,13 +1215,7 @@ def _render_text_metadata_field_picker(key_prefix: str):
     names = [field.name for field in attached.fields]
     labels = {field.name: field.label for field in attached.fields}
     state_key = f"{key_prefix}_text_meta_fields"
-    stored = st.session_state.get(state_key)
-    if isinstance(stored, (list, tuple)):
-        kept = [name for name in stored if name in names]
-        if not kept:
-            st.session_state.pop(state_key, None)
-        elif list(stored) != kept:
-            st.session_state[state_key] = kept
+    _prune_stale_fields(st.session_state, state_key, names)
     chosen = panel_field(
         st,
         "multiselect",

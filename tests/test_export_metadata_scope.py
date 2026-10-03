@@ -147,3 +147,63 @@ def test_ids_compare_as_text():
     frame = pd.DataFrame({"participant_id": [1, 2], "age": [20, 50]})
     kept = _rows_in_scope(frame, pairs={("1", "t")}, texts=set(), grain="participant")
     assert kept["age"].tolist() == [20]
+
+
+def _picker_app():
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import metadata as md
+    from scanpath_studio.export import (
+        _render_metadata_field_picker,
+        _render_text_metadata_field_picker,
+        _render_trial_metadata_field_picker,
+    )
+
+    if "_table" not in st.session_state:
+        st.session_state["_table"] = "first"
+    column = "age" if st.session_state["_table"] == "first" else "height"
+    st.session_state[md.SESSION_KEY] = md.build_participant_metadata(
+        pd.DataFrame({"participant_id": ["p1", "p2"], column: [20, 50]}),
+        "participant_id",
+    )
+    st.session_state[md.TRIAL_SESSION_KEY] = md.build_trial_metadata(
+        pd.DataFrame({"trial_id": ["t1", "t2"], "block": ["A", "B"]}),
+        "trial_id",
+    )
+    st.session_state[md.TEXT_SESSION_KEY] = md.build_text_metadata(
+        pd.DataFrame({"text_id": ["x1", "x2"], "genre": ["news", "opinion"]}),
+        "text_id",
+    )
+    st.session_state["choices"] = [
+        _render_metadata_field_picker("probe"),
+        _render_trial_metadata_field_picker("probe"),
+        _render_text_metadata_field_picker("probe"),
+    ]
+
+
+def test_clearing_a_metadata_picker_stays_cleared():
+    """An empty picker is "leave this table out", and survives reruns."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_picker_app).run()
+    assert at.session_state["choices"] == [None, None, None]
+    for widget in at.multiselect:
+        widget.set_value([])
+    at.run()
+    at.run()
+    assert [w.value for w in at.multiselect] == [[], [], []]
+    assert at.session_state["choices"] == [(), (), ()]
+    assert not at.exception
+
+
+def test_a_selection_naming_only_replaced_fields_starts_again_on_every_field():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_picker_app).run()
+    at.multiselect[0].set_value(["age"])
+    at.run()
+    at.session_state["_table"] = "second"
+    at.run()
+    assert at.multiselect[0].value == ["height"]
+    assert at.session_state["choices"][0] is None

@@ -64,7 +64,10 @@ def default_entry() -> Entry:
 
 
 def _normalize_entry(star: object, tags: object, note: object) -> Entry:
-    clean_tags = sorted({str(t).strip() for t in (tags or []) if str(t).strip()})
+    # A recovery-cache record is not checked like an imported file is
+    # (`deserialize`), so a stray scalar here is no tags rather than a crash.
+    tags = tags if isinstance(tags, (list, tuple, set, frozenset)) else []
+    clean_tags = sorted({str(t).strip() for t in tags if str(t).strip()})
     return {"star": bool(star), "tags": clean_tags, "note": str(note or "").strip()}
 
 
@@ -140,15 +143,60 @@ def file_dataset(text: str) -> str | None:
     return name if isinstance(name, str) and name else None
 
 
+class AnnotationsFileError(ValueError):
+    """A JSON document that is not an annotations file — wrong shape, not syntax."""
+
+
+_ID_TYPES = (str, int, float)
+
+
+def _check_record(index: int, record: object) -> None:
+    """Raise :class:`AnnotationsFileError` unless ``record`` has the exported shape."""
+    where = f"entry {index + 1}"
+    if not isinstance(record, dict):
+        raise AnnotationsFileError(f"{where} is not an annotation")
+    for field in ("participant_id", "trial_id"):
+        value = record.get(field)
+        if isinstance(value, bool) or not isinstance(value, _ID_TYPES):
+            raise AnnotationsFileError(f"{where} has no usable {field}")
+    screen_id = record.get("screen_id")
+    if screen_id is not None and (
+        isinstance(screen_id, bool) or not isinstance(screen_id, _ID_TYPES)
+    ):
+        raise AnnotationsFileError(f"{where} has an unusable screen_id")
+    if not isinstance(record.get("star", False), bool):
+        raise AnnotationsFileError(f"{where}: star must be true or false")
+    tags = record.get("tags", [])
+    if tags is not None and (
+        not isinstance(tags, list)
+        or any(isinstance(t, bool) or not isinstance(t, _ID_TYPES) for t in tags)
+    ):
+        raise AnnotationsFileError(f"{where}: tags must be a list of words")
+    note = record.get("note", "")
+    if note is not None and not isinstance(note, str):
+        raise AnnotationsFileError(f"{where}: note must be text")
+
+
 def deserialize(text: str) -> dict[Key, Entry]:
-    """Parse a JSON document (object with ``annotations`` or a bare list)."""
+    """Parse a JSON document (object with ``annotations`` or a bare list).
+
+    The shape is checked before anything is built, so a JSON file that is not
+    an annotations file — another app's, a settings file, a hand edit gone
+    wrong — raises :class:`AnnotationsFileError` (a ``ValueError``) rather than
+    importing nothing or failing half-way. Invalid JSON raises ``ValueError``
+    from :func:`json.loads`.
+    """
     data = json.loads(text)
     if isinstance(data, dict):
-        records = data.get("annotations", [])
-    elif isinstance(data, list):
-        records = data
+        if "annotations" not in data:
+            raise AnnotationsFileError("it has no annotations list")
+        records = data["annotations"]
     else:
-        records = []
+        records = data
+    if not isinstance(records, list):
+        raise AnnotationsFileError("its annotations are not a list")
+    for index, record in enumerate(records):
+        _check_record(index, record)
     return records_to_store(records)
 
 
@@ -983,9 +1031,13 @@ def _import_dataset_annotations(
     try:
         text = upload.getvalue().decode("utf-8")
         records = store_to_records(deserialize(text))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError) as exc:
+        # Nothing was merged yet, so the dataset's annotations are untouched,
+        # and the fresh uploader key below lets another file be chosen.
+        reason = f" ({exc})" if isinstance(exc, AnnotationsFileError) else ""
         st.session_state[_DATASET_NOTE_KEY] = (
-            "error:That file is not an annotations JSON file."
+            f"error:That file is not an annotations JSON file{reason}. "
+            "Nothing was imported."
         )
         st.session_state[_DATASET_NONCE_KEY] = (
             int(st.session_state.get(_DATASET_NONCE_KEY, 0)) + 1

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 import scanpath_studio.annotations as annotations_mod
 from scanpath_studio.annotations import (
     deserialize,
@@ -633,6 +635,68 @@ class TestAnnotationsFile:
         )
         assert (applied, skipped) == (1, 0)
         assert annotations_mod.file_dataset("not json") is None
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            {"annotations": [1]},
+            {"annotations": None},
+            {"annotations": "x"},
+            {"something": "else"},
+            5,
+            [{"participant_id": "p", "trial_id": "t", "tags": 3}],
+            [{"participant_id": "p", "trial_id": "t", "tags": [{"a": 1}]}],
+            [{"participant_id": "p", "trial_id": "t", "star": "yes"}],
+            [{"participant_id": "p", "trial_id": "t", "note": ["n"]}],
+            [{"participant_id": {"id": 1}, "trial_id": "t", "star": True}],
+            [{"trial_id": "t", "star": True}],
+        ],
+    )
+    def test_a_wrongly_shaped_file_is_refused_not_half_read(self, document):
+        with pytest.raises(annotations_mod.AnnotationsFileError):
+            deserialize(json.dumps(document))
+
+    def test_an_empty_annotations_list_is_a_valid_file(self):
+        assert deserialize(json.dumps({"schema": 3, "annotations": []})) == {}
+
+
+def _bad_import_app():
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    class _Upload:
+        def getvalue(self) -> bytes:
+            return st.session_state["_bytes"]
+
+    st.session_state.setdefault(
+        ann.ANNOTATIONS_STATE_KEY,
+        {("p", "t"): {"star": True, "tags": ["keep"], "note": ""}},
+    )
+    st.session_state["_upload"] = _Upload()
+    ann._import_dataset_annotations("_upload", frozenset({("p", "t")}), "test")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"annotations":[1]}',
+        b'{"annotations":[{"participant_id":"p","trial_id":"t","tags":3}]}',
+        b"not json",
+    ],
+)
+def test_importing_a_malformed_file_reports_it_and_keeps_the_store(payload):
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_bad_import_app)
+    at.session_state["_bytes"] = payload
+    at.run()
+    assert not at.exception, at.exception
+    note = at.session_state["_dataset_annotations_note"]
+    assert note.startswith("error:That file is not an annotations JSON file")
+    assert at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] == {
+        ("p", "t"): {"star": True, "tags": ["keep"], "note": ""}
+    }
 
 
 def _parent_screen_app():

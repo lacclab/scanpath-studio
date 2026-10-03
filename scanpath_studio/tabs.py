@@ -203,6 +203,7 @@ from scanpath_studio.data import (
     read_tables,
     remap_normalized_frame,
     repeat_bases,
+    shareable_frame,
     text_ids,
     timestamps_synthesized,
     trial_keys,
@@ -11243,7 +11244,7 @@ def _render_raw_table(
     single chokepoint (``export.strip_local_paths``).
     """
     # DATA-49: bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    shown = drop_internal_columns(df)
+    shown = shareable_frame(df)
     # DATA-66: headed by the dataset's own names (``table`` says whose).
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
     # A copy of a partner from the same source column is shown once — left out

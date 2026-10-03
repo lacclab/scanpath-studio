@@ -1744,3 +1744,36 @@ class TestReaderPercentileAmongOthers:
             "22nd",
             "100th",
         ]
+
+
+class TestMadeUpTimestampsStayInside:
+    """The 0, 1, 2, … that stand in for a missing onset never leave the app
+    under ``timestamp_ms``: read back, they would be recorded milliseconds."""
+
+    def test_the_export_and_analyze_tables_drop_them(self):
+        import io
+        import zipfile
+
+        from scanpath_studio import api, export
+        from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+        _, fixations = api.load_scanpath_data(
+            make_synthetic_words(),
+            make_synthetic_fixations().drop(columns=["timestamp_ms"]),
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            export._write_table(zf, "fixations.csv", fixations, "csv")
+        with zipfile.ZipFile(buf) as zf:
+            header = zf.read("fixations.csv").decode().splitlines()[0].split(",")
+        assert "timestamp_ms" not in header
+        assert "duration_ms" in header
+
+    def test_recorded_timestamps_are_kept(self):
+        from scanpath_studio import api, data
+        from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+        _, fixations = api.load_scanpath_data(
+            make_synthetic_words(), make_synthetic_fixations()
+        )
+        assert "timestamp_ms" in data.shareable_frame(fixations).columns

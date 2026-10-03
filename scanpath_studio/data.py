@@ -3404,6 +3404,18 @@ def drop_internal_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.drop(columns=present) if present else frame
 
 
+def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """``frame`` as it leaves the app: no bookkeeping, no made-up clock.
+
+    :func:`drop_internal_columns`, and also ``timestamp_ms`` when normalization
+    numbered the fixations itself (:func:`timestamps_synthesized`): those
+    numbers are a sort order, and a file that carried them under that name
+    would read back as recorded milliseconds."""
+    if timestamps_synthesized(frame) and "timestamp_ms" in frame.columns:
+        frame = frame.drop(columns="timestamp_ms")
+    return drop_internal_columns(frame)
+
+
 class StimulusJoinError(ValueError):
     """A stimulus-level AOI table that the readings in the fixations can't use.
 

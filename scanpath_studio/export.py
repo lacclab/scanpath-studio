@@ -32,6 +32,7 @@ import io
 import json
 import re
 import zipfile
+from collections.abc import Mapping
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -41,6 +42,13 @@ from time import perf_counter
 import pandas as pd
 
 from .aggregation import reader_summary_table, trial_summary_table
+from .column_names import (
+    ColumnNames,
+    across_tables,
+    as_written,
+    columns_manifest,
+    dictionary_lines,
+)
 from .constants import (
     CITATION,
     DEFAULT_FIXATION_COLOR,
@@ -454,8 +462,14 @@ def pattern_fields(
     dataset_name: str = "",
     compare_row: dict | None = None,
     metadata_rows: dict | None = None,
+    column_names: ColumnNames | None = None,
 ) -> dict:
     """Every value a filename / title / caption pattern can substitute.
+
+    DATA-66: with ``column_names`` (the dataset's map), every field its file
+    named is also reachable under that name — ``{RECORDING_SESSION_LABEL}`` and
+    ``{participant_id}`` both work, so a pattern can be written in either
+    vocabulary.
 
     The trial's own combo columns (participant, trial, text, conditions …) plus
     counts and the settings summary. Values are left raw here; path rendering
@@ -506,6 +520,9 @@ def pattern_fields(
     for name in PAIRED_PATTERN_FIELDS:
         fields[f"{name}_a"] = fields.get(name, "")
         fields[f"{name}_b"] = (compare_row or {}).get(name, "")
+    if column_names is not None:
+        for canonical, header in column_names.export_headers(list(fields)).items():
+            fields.setdefault(header, fields[canonical])
     return fields
 
 
@@ -695,9 +712,31 @@ def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _write_table(zf: zipfile.ZipFile, path: str, df: pd.DataFrame, fmt: str) -> int:
+#: DATA-66: which of the dataset's tables each written artifact's columns come
+#: from, so a fixation table's `x` is named as the fixation file named it and a
+#: word table's `x` as the AOI file did. An artifact not here (a summary
+#: across tables) takes the identity names any table gives.
+_ARTIFACT_TABLE = {
+    "fixations": "fixations",
+    "saccades": "fixations",
+    "raw_gaze": "raw_gaze",
+    "measures": "words",
+    "word_measures": "words",
+    "characters": "words",
+}
+
+
+def _write_table(
+    zf: zipfile.ZipFile,
+    path: str,
+    df: pd.DataFrame,
+    fmt: str,
+    names: ColumnNames | None = None,
+) -> int:
     # DATA-49: the pipeline's bookkeeping columns stay out of what is shared.
     df = strip_local_paths(drop_internal_columns(df))
+    # DATA-66: and the columns the user's file named go out under those names.
+    df = as_written(df, names)
     if fmt == "parquet":
         buf = io.BytesIO()
         df.to_parquet(buf, index=False)
@@ -1611,8 +1650,14 @@ def pair_export(
     settings: dict,
     options: ExportOptions,
     status_callback: StatusCallback | None = None,
+    column_names: Mapping[str, ColumnNames] | None = None,
 ) -> bytes:
     """Zip one comparison **pair** — figure, manifest, and both scanpaths' tables.
+
+    ``column_names`` (DATA-66) is the active dataset's map per table. It names
+    the tables' columns only when both scanpaths come from that dataset: a pair
+    across two datasets shares no file names, so its tables keep the internal
+    ones, which both datasets understand.
 
     CMP-8 §6. An exported cross-dataset figure is unreproducible on its own:
     nothing in the image records where B came from. The bundle writes the bulk
@@ -1664,6 +1709,16 @@ def pair_export(
 
         words_a, fix_a = side_a.stamped("A")
         words_b, fix_b = side_b.stamped("B")
+        maps = (
+            {table: names for table, names in (column_names or {}).items() if names}
+            if side_b.dataset in (None, side_a.dataset)
+            else {}
+        )
+        if maps and options.any_table():
+            zf.writestr(
+                f"{folder}/columns.json",
+                json.dumps(columns_manifest(maps), indent=2),
+            )
         for fmt in options.table_formats():
             if options.include_fixations:
                 _write_table(
@@ -1671,6 +1726,7 @@ def pair_export(
                     f"{folder}/fixations.{fmt}",
                     pd.concat([fix_a, fix_b], ignore_index=True),
                     fmt,
+                    maps.get("fixations"),
                 )
             if options.include_measures:
                 # AN-32 / EXP-23: the measures each side's dataset brought.
@@ -1687,6 +1743,7 @@ def pair_export(
                         f"{folder}/measures.{fmt}",
                         pd.concat(measures, ignore_index=True),
                         fmt,
+                        maps.get("words"),
                     )
 
         config = _plot_config_dict(
@@ -1826,8 +1883,16 @@ def bulk_export(
     metadata_rows_for=None,
     annotation_records: list[dict] | None = None,
     annotation_dataset: str | None = None,
+    column_names: Mapping[str, ColumnNames] | None = None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
+
+    ``column_names`` (DATA-66) is the dataset's map per table
+    (``{"fixations": …, "words": …, "raw_gaze": …}``): each table is written
+    with the columns its file named under those names, the README's data
+    dictionary says where every column came from, and a ``columns.json``
+    records the map; patterns accept either name. Without it (headless
+    callers, until the API carries maps) the tables keep the internal names.
 
     ``metadata_rows_for(participant, trial, text_id)`` (EXP-22) returns a
     trial's metadata-table rows for ``{table.field}`` patterns — the app passes
@@ -1844,6 +1909,15 @@ def bulk_export(
     trial so the UI can update a progress bar.
     """
     combos = _apply_scope(combos, options)
+    maps = {table: names for table, names in (column_names or {}).items() if names}
+    every_table = across_tables(maps)
+
+    def names_for(artifact: str) -> ColumnNames:
+        """The map an artifact's columns come from — its own table's, for the
+        three tables; for a summary of several, the identity columns any of
+        them names (`across_tables`)."""
+        return maps.get(_ARTIFACT_TABLE.get(artifact, ""), every_table)
+
     export_units: list[dict] = []
     for combo in combos.to_dict("records"):
         participant, trial = combo["participant_id"], combo["trial_id"]
@@ -1889,6 +1963,7 @@ def bulk_export(
     # and the README says why.
     measures_wanted = options.include_measures or options.include_analysis_family
     brought = brought_reading_measures(words)
+    measure_headers = names_for("measures").export_headers(brought)
 
     readme_lines = [
         "# Bulk export",
@@ -1923,13 +1998,28 @@ def bulk_export(
         ),
         "",
         "## Data dictionary",
-        "Canonical column names from the visualization tool:",
-        "- participant_id, trial_id, text_id, word_id",
-        "- screen_id, screen_index (multipart trials only)",
-        "- x, y, width, height (word bounding boxes in screen px)",
-        "- x, y, duration_ms, timestamp_ms (fixations)",
         *(
-            [f"- {column}" for column in brought]
+            [
+                "Columns keep the names they have in the dataset's own files. "
+                "A column Scanpath Studio built, converted or computed keeps its "
+                "internal name; `columns.json` maps every column below to its "
+                "internal name, for scripts that work across datasets. Columns "
+                "not listed are written under their own names.",
+                *dictionary_lines(maps),
+                "",
+                "Reading measures in the word tables:",
+            ]
+            if maps
+            else [
+                "Canonical column names from the visualization tool:",
+                "- participant_id, trial_id, text_id, word_id",
+                "- screen_id, screen_index (multipart trials only)",
+                "- x, y, width, height (word bounding boxes in screen px)",
+                "- x, y, duration_ms, timestamp_ms (fixations)",
+            ]
+        ),
+        *(
+            [f"- {measure_headers.get(column, column)}" for column in brought]
             if brought
             else ["- (no reading measures — see below)"]
             if measures_wanted
@@ -1952,6 +2042,8 @@ def bulk_export(
         f"Demo corpus note: {CITATION['corpus_note']}",
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
+    if maps and options.any_table():
+        zf.writestr("columns.json", json.dumps(columns_manifest(maps), indent=2))
     if options.include_analysis_family:
         zf.writestr(
             "run_config.json",
@@ -2060,6 +2152,7 @@ def bulk_export(
                 settings,
                 combo_row=combo._asdict(),
                 dataset_name=options.dataset_name,
+                column_names=every_table,
                 metadata_rows=(
                     metadata_rows_for(
                         participant, trial, combo._asdict().get("text_id")
@@ -2299,7 +2392,7 @@ def bulk_export(
                 for fmt in options.table_formats():
                     for artifact, table in tables.items():
                         progress.bytes_written += _write_table(
-                            zf, _path(artifact, fmt), table, fmt
+                            zf, _path(artifact, fmt), table, fmt, names_for(artifact)
                         )
             if options.include_analysis_family:
                 family_words.append(measured)
@@ -2333,7 +2426,11 @@ def bulk_export(
     for fmt in options.table_formats():
         for artifact, table in stacked.items():
             progress.bytes_written += _write_table(
-                zf, f"aggregate/all_{artifact}.{fmt}", table, fmt
+                zf,
+                f"aggregate/all_{artifact}.{fmt}",
+                table,
+                fmt,
+                names_for(artifact),
             )
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a

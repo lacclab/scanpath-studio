@@ -13,6 +13,12 @@ Open the **Export** subtab in the Scanpath view.
   more tables. Tables are written per trial, or combined into one file each.
   Word tables carry the reading measures your data brought; the export computes
   none.
+  The tables use your files' column names (`CURRENT_FIX_DURATION`, not
+  `duration_ms`). A column Scanpath Studio built, converted or computed keeps
+  the app's name. The bundle's README says where each column came from, and its
+  `columns.json` maps every column to the app's name, for scripts that work
+  across datasets. File-name, title and caption patterns accept either name:
+  `{RECORDING_SESSION_LABEL}` and `{participant_id}` both work.
 
 <figure class="sps-screenshot" markdown>
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)

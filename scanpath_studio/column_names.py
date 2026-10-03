@@ -324,6 +324,49 @@ class ColumnNames:
                 hidden.add(alias)
         return hidden
 
+    def export_headers(self, columns: Iterable) -> dict[str, str]:
+        """``{column: header}`` for a table written out (DATA-66 phase 3).
+
+        A column read from one column of the user's file is written under that
+        column's name. One built from several (a composite trial id), converted
+        (a box width from two edges, a duration read in seconds) or made by the
+        app keeps its canonical name — its values are not what the file held
+        under any one name — and the bundle's `columns.json` and README say
+        where it came from. A header that would repeat another column's name
+        keeps the canonical one. Columns not renamed are left out.
+        """
+        names = [str(c) for c in columns]
+        taken = set(names)
+        out: dict[str, str] = {}
+        for column in names:
+            entry = self.source(column)
+            if entry is None or entry.kind != MAPPED or len(entry.sources) != 1:
+                continue
+            header = entry.sources[0]
+            if header == column or header in taken:
+                continue
+            taken.add(header)
+            out[column] = header
+        return out
+
+    def provenance(self, column) -> str:
+        """Where ``column`` came from, in a sentence fragment (the README's)."""
+        entry = self.source(column)
+        kind = self.kind_of(column)
+        sources = ", ".join(f"`{s}`" for s in entry.sources) if entry else ""
+        note = entry.note if entry else ""
+        if kind == MAPPED and sources:
+            return f"your column {sources}"
+        if kind == COMPOSITE:
+            return f"joined from your columns {sources}"
+        if kind == CONVERTED:
+            return f"converted from your {sources}" + (f" ({note})" if note else "")
+        if kind == GENERATED:
+            return "made by Scanpath Studio" + (f" ({note})" if note else "")
+        if kind == COMPUTED:
+            return "computed by Scanpath Studio"
+        return "your column, under its own name"
+
     def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
         """Only the entries for ``columns`` — a frame's actual columns.
 
@@ -558,3 +601,62 @@ def for_tables(
             table, schema, columns, keep_columns=keeps.get(table)
         ).to_payload()
     return out
+
+
+# --- Phase 3: what a written table calls its columns -------------------------
+
+#: The `columns.json` format a bundle writes beside its tables.
+COLUMNS_FILE_SCHEMA = 1
+
+
+def as_written(frame, names: ColumnNames):
+    """``frame`` as a bundle writes it: each column the user's file named under
+    that name (`ColumnNames.export_headers`), and a `unique_*` alias that only
+    repeats its partner (`ColumnNames.aliases`) left out. The same object when
+    nothing changes."""
+    if names is None or not names.entries:
+        return frame
+    hidden = names.aliases(frame.columns)
+    if hidden:
+        frame = frame.drop(columns=sorted(hidden))
+    headers = names.export_headers(frame.columns)
+    return frame.rename(columns=headers) if headers else frame
+
+
+def columns_manifest(tables: Mapping[str, ColumnNames]) -> dict:
+    """The `columns.json` a bundle carries: for each table, every column the map
+    records — the header it is written under, its internal (canonical) name,
+    and where it came from — so a script can map the files back."""
+    out: dict[str, list[dict]] = {}
+    for table, names in tables.items():
+        if names is None or not names.entries:
+            continue
+        headers = names.export_headers(names.entries)
+        out[table] = [
+            {
+                "column": headers.get(column, column),
+                "canonical": column,
+                "kind": entry.kind,
+                "sources": list(entry.sources),
+                "note": entry.note,
+            }
+            for column, entry in names.entries.items()
+        ]
+    return {"schema": COLUMNS_FILE_SCHEMA, "tables": out}
+
+
+def dictionary_lines(tables: Mapping[str, ColumnNames]) -> list[str]:
+    """The README's data dictionary for the columns the maps record, a list of
+    markdown lines grouped by table; empty when no table has a map."""
+    titles = {"fixations": "Fixations", "words": "Words (AOIs)", "raw_gaze": "Raw gaze"}
+    lines: list[str] = []
+    for table, names in tables.items():
+        if names is None or not names.entries:
+            continue
+        headers = names.export_headers(names.entries)
+        lines += ["", f"### {titles.get(table, table)}"]
+        for column in names.entries:
+            written = headers.get(column, column)
+            internal = "" if written == column else f" (internally `{column}`)"
+            lines.append(f"- `{written}`{internal}: {names.provenance(column)}")
+    return lines

@@ -91,6 +91,7 @@ from scanpath_studio.column_names import (
     ColumnNames,
     across_tables,
     active_all,
+    as_written,
     from_schema,
 )
 from scanpath_studio.column_names import active as active_column_names
@@ -4400,6 +4401,8 @@ def _rendered_title_caption(
         # animation, compare) all get it without each remembering to.
         dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
         compare_row=compare_row,
+        # DATA-66: `{CURRENT_FIX_DURATION}` as well as `{duration_ms}`.
+        column_names=active_all(st.session_state),
         # EXP-22: `{trials.font_size}` and the other tables' fields.
         metadata_rows=_metadata_mod.pattern_rows(
             participant, trial, (combo_row or {}).get("text_id")
@@ -4809,6 +4812,14 @@ def _build_and_render_animation(
     return view, save_slug, file_stem
 
 
+def _dataset_table_names() -> dict[str, ColumnNames]:
+    """DATA-66: the open dataset's map per table, as the exporters take it."""
+    return {
+        table: active_column_names(st.session_state, table)
+        for table in ("fixations", "words", "raw_gaze")
+    }
+
+
 def _render_pair_export(
     fig,
     sides: tuple,
@@ -4886,6 +4897,7 @@ def _render_pair_export(
                 y_field=viz_settings.get("y_field", "y"),
                 settings=settings,
                 options=options,
+                column_names=_dataset_table_names(),
             ),
             file_name=f"comparison_{side_a.slug}__vs__{side_b.slug}.zip",
             mime="application/zip",
@@ -7373,6 +7385,11 @@ def _render_bulk_export(
         json.dumps(annotation_records, sort_keys=True, default=str),
         annotation_dataset,
         EXPORTER_VERSION,
+        # DATA-66: a renamed column changes every table's header.
+        json.dumps(
+            {t: n.to_payload() for t, n in _dataset_table_names().items()},
+            sort_keys=True,
+        ),
     )
     cache = st.session_state.get("_bulk_export_cache")
     if cache and cache.get("sig") != sig:
@@ -7423,6 +7440,8 @@ def _render_bulk_export(
                 options=options,
                 raw_gaze=active_raw_gaze,
                 status_callback=on_status,
+                # DATA-66: the tables go out under the dataset's own names.
+                column_names=_dataset_table_names(),
             )
         except Exception as exc:
             progress_slot.empty()
@@ -7915,7 +7934,10 @@ def _download_tidy(
     if df is None or getattr(df, "empty", True):
         return
     context = _RECIPE_CONTEXT.get()
-    csv = df.to_csv(index=False).encode("utf-8")
+    # DATA-66: the identity columns under the dataset's own names, as on screen.
+    csv = (
+        as_written(df, active_all(st.session_state)).to_csv(index=False).encode("utf-8")
+    )
     if recipe is None or context is None:
         host.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
         return

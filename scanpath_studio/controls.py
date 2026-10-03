@@ -7121,7 +7121,9 @@ def reset_viz_settings() -> None:
         st.query_params.pop(param, None)
 
 
-def clear_trial_filter(*keys: str, prefix: str = "") -> None:
+def clear_trial_filter(
+    *keys: str, prefix: str = "", frames: tuple | None = None
+) -> None:
     """Reset *one* trial filter (UX-7) — the same mechanism as the reset-all.
 
     Deleting the widget's key is the correct reset for every filter shape here,
@@ -7129,11 +7131,29 @@ def clear_trial_filter(*keys: str, prefix: str = "") -> None:
     an empty multiselect for Narrow-by, *all* values selected for a condition,
     unchecked for Favorites. Safe as a button ``on_click`` for the same reason
     :func:`clear_trial_filters` is.
+
+    BUG-115: only ``keys`` leave the ``_trial_filters_raw`` mirror. The
+    empty-pool panel, the one caller, replaces the view and its filter funnel,
+    so on that run Streamlit has dropped every filter widget's key and the
+    mirror is all that remembers the *other* filters; dropping it whole cleared
+    them all. With ``frames`` (the ``(words, fixations)`` the funnel filters)
+    the survivors are seeded back into their widget keys and the result is
+    re-derived, so the next run applies them instead of one run later.
     """
+    raw_key = f"{prefix}_trial_filters_raw"
+    mirror = dict(st.session_state.get(raw_key) or {})
     for key in keys:
         st.session_state.pop(key, None)
-    st.session_state.pop(f"{prefix}_trial_filters", None)
-    st.session_state.pop(f"{prefix}_trial_filters_raw", None)
+        mirror.pop(key, None)
+    st.session_state[raw_key] = mirror
+    if frames is None:
+        st.session_state.pop(f"{prefix}_trial_filters", None)
+        return
+    for key, value in mirror.items():
+        st.session_state.setdefault(key, value)
+    st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
+        *frames, prefix=prefix
+    )
 
 
 def has_active_trial_filters(prefix: str = "") -> bool:

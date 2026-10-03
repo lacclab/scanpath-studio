@@ -8955,20 +8955,32 @@ def _render_pool_filters(
     draw the same widgets under the same ``filter_*`` keys; only one view runs
     per rerun, so the keys never meet.
     """
-    # VIZ-45: a raw-gaze-only dataset's readers and trials are in its
-    # samples, so that is what the filters are offered from (and what
-    # `app.main` narrows with them); beside fixations or words the
-    # samples follow those tables' filters instead.
-    filter_fixations = (
-        raw_gaze_all
-        if words_all.empty
+    words, fixations = pool_filter_frames(words_all, fixations_all, raw_gaze_all)
+    render_narrow_by(words, fixations, text_host=host, part_host=host)
+    render_trial_filters(words, fixations, host=host)
+
+
+def pool_filter_frames(
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+    raw_gaze_all: pd.DataFrame | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The ``(words, fixations)`` the trial filters are offered from.
+
+    VIZ-45: a raw-gaze-only dataset's readers and trials are in its samples,
+    so that is what the filters are offered from (and what `app.main` narrows
+    with them); beside fixations or words the samples follow those tables'
+    filters instead. Shared with the empty-pool panel's per-filter Clear
+    (BUG-115), which re-derives the filters from the same frames.
+    """
+    if (
+        words_all.empty
         and fixations_all.empty
         and raw_gaze_all is not None
         and not raw_gaze_all.empty
-        else fixations_all
-    )
-    render_narrow_by(words_all, filter_fixations, text_host=host, part_host=host)
-    render_trial_filters(words_all, filter_fixations, host=host)
+    ):
+        return words_all, raw_gaze_all
+    return words_all, fixations_all
 
 
 def _count_noun(n: int, noun: str) -> str:

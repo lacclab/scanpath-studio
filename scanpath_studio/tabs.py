@@ -8553,6 +8553,40 @@ def _md_escape(text: str) -> str:
     return re.sub(r"([\\`*_\[\]<>#|~$])", r"\\\1", str(text))
 
 
+def data_scope_text(
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+) -> str:
+    """What the Data page's 📊 Stats and raw tables count, on one line (UX-203).
+
+    ``12 of 24 trials · 1 of 2 readers · filtered: Participant: p1`` while a
+    trial filter narrows the pool, ``24 trials · 2 readers · whole dataset``
+    otherwise — the Corpus Analysis pool line's counts and filter names
+    (UX-198), so the two pages describe the same pool the same way.
+    """
+    counts = pool_count_text(
+        len(combos),
+        len(combos_all),
+        _n_unique_readers(combos),
+        _n_unique_readers(combos_all),
+    )
+    if not has_active_trial_filters():
+        return f"{counts} · whole dataset"
+    described = " · ".join(
+        _md_escape(format_filter_item(i))
+        for i in active_filter_items(words_all, fixations_all)
+    )
+    return f"{counts} · filtered" + (f": {described}" if described else "")
+
+
+def render_data_scope(text: str | None, *, key: str) -> None:
+    """Draw `data_scope_text` as a caption over the counts it describes."""
+    if text:
+        st.container(key=key).caption(f"{ICONS['trial_filter']} {text}")
+
+
 def render_analysis_pool_bar(
     host,
     *,
@@ -11118,19 +11152,25 @@ def _fill_raw_data_tabs(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
+    *,
+    scope: str | None = None,
 ) -> None:
     """Draw the six raw-data tables into six already-created tab containers.
 
     The Data page puts them on *one* bar with its 📊 Stats tab rather than
-    nesting a second `st.tabs` inside a tab.
+    nesting a second `st.tabs` inside a tab. ``scope`` (UX-203) heads the three
+    tables the trial filters narrow; the metadata tables are whole.
     """
     from scanpath_studio import metadata as md
 
     with tabs[0]:
+        render_data_scope(scope, key="data_scope_fixations")
         render_fixations_tab(fixations_filtered)
     with tabs[1]:
+        render_data_scope(scope, key="data_scope_words")
         render_words_tab(words_filtered)
     with tabs[2]:
+        render_data_scope(scope, key="data_scope_raw_gaze")
         render_raw_gaze_tab(raw_gaze_filtered)
     with tabs[3]:
         _render_raw_metadata_tab(
@@ -13586,6 +13626,8 @@ def _render_dataset_stats_tab(
     stats: dict,
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
+    *,
+    scope: str | None = None,
 ) -> None:
     """The 📊 Stats tab: every number "what's in this dataset" has to offer.
 
@@ -13600,6 +13642,9 @@ def _render_dataset_stats_tab(
     facts. UX-137 then took the remaining four out of a table entirely — see
     `_render_spread_cards`.
     """
+    # UX-203: these counts follow the trial filters while the table above and
+    # *Available with this dataset* count the whole dataset — say which.
+    render_data_scope(scope, key="data_scope_stats")
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
     parts = part_catalog(words_filtered, fixations_filtered)
@@ -13740,12 +13785,15 @@ def render_dataset_capabilities(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,
     raw_gaze: pd.DataFrame | None,
+    *,
+    filtered: bool = False,
 ) -> None:
     """*Available with this dataset* under the *What's in…* heading (DATA-67).
 
     A handful of lines for the whole dataset, before any trial filter: the
     numbers are in 📊 Stats below, and how to change what is available is
-    ✏️ Edit dataset on the heading's line.
+    ✏️ Edit dataset on the heading's line. While a trial filter narrows 📊
+    Stats, the title says these lines do not follow it (UX-203).
     """
     lines = _c_dataset_capabilities(
         words,
@@ -13758,7 +13806,10 @@ def render_dataset_capabilities(
         ),
     )
     with st.container(key="dataset_capabilities"):
-        st.caption("**Available with this dataset**")
+        st.caption(
+            "**Available with this dataset**"
+            + (" · whole dataset, before the trial filters" if filtered else "")
+        )
         st.caption("  \n".join(lines))
 
 
@@ -13769,6 +13820,7 @@ def render_data_inspection_tab(
     *,
     annotation_trials=None,
     dataset_name: str = "",
+    scope: str | None = None,
 ) -> None:
     """Render the *What's in this dataset* section of the 🗂️ Data page.
 
@@ -13789,6 +13841,9 @@ def render_data_inspection_tab(
 
     Every tab body still renders on every run — tab switching is client-side, so
     no widget key is dropped, exactly as with the expanders this replaced.
+
+    ``scope`` is `data_scope_text`'s line (UX-203), drawn over the counts and
+    tables the trial filters narrow; ``None`` leaves it off.
     """
     stats = _dataset_statistics(
         words_filtered,
@@ -13812,12 +13867,16 @@ def render_data_inspection_tab(
         labels.append(f"{ICONS['annotations']} Annotations")
     stats_tab, *raw_tabs = st.tabs(labels)
     with stats_tab:
-        _render_dataset_stats_tab(stats, words_filtered, fixations_filtered)
+        _render_dataset_stats_tab(
+            stats, words_filtered, fixations_filtered, scope=scope
+        )
     if annotation_trials is not None:
         *raw_tabs, annotations_tab = raw_tabs
         with annotations_tab:
             render_dataset_annotations(annotation_trials, dataset_name=dataset_name)
-    _fill_raw_data_tabs(raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered)
+    _fill_raw_data_tabs(
+        raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered, scope=scope
+    )
 
     # UX-126: the whole section — including the computation that backs it — is
     # held back from this release, the same way PRE-21/PRE-22 hold back drift

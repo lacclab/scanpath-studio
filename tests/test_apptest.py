@@ -3779,7 +3779,9 @@ class TestCorpusAnalysisTab:
 
         at = opened("Fixation duration over time", prdr_measure="Fixation duration")
         x_axis = [s for s in at.selectbox if s.key == "prdr9_x"]
-        assert x_axis and x_axis[0].options == ["order in trial"]
+        # Only the fixation order is offered; no `timestamp_ms` axis.
+        assert x_axis and len(x_axis[0].options) == 1
+        assert "order" in x_axis[0].options[0].lower()
 
     def test_group_means_view_is_descriptive_and_names_shared_readers(self):
         """The Groups summary runs no significance test, and when the same

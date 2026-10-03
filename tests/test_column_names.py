@@ -617,3 +617,144 @@ def test_the_axis_and_highlight_pickers_skip_internal_columns():
     frame = pd.DataFrame({"x": [1.0], data.TEXT_ID_MAPPED: [True], "flag": [True]})
     assert data.TEXT_ID_MAPPED not in controls.numeric_field_options(frame)
     assert controls.highlight_column_options(frame) == ["flag"]
+
+
+# --- Phase 2b: chips, filters, sort, figure text -----------------------------
+
+
+def test_across_tables_prefers_fixations_then_words_then_raw_gaze():
+    maps = {
+        "raw_gaze": ColumnNames({"x": SourceName(("GAZE_X",))}),
+        "words": ColumnNames(
+            {"x": SourceName(("IA_LEFT",)), "text": SourceName(("IA_LABEL",))}
+        ),
+        "fixations": ColumnNames({"x": SourceName(("CURRENT_FIX_X",))}),
+    }
+    merged = cn.across_tables(maps)
+    assert merged.label("x") == "CURRENT_FIX_X"
+    assert merged.label("text") == "IA_LABEL"
+    assert cn.across_tables({}) == cn.EMPTY
+
+
+def test_active_all_reads_every_table_of_the_session():
+    session = {
+        cn.ACTIVE_COLUMN_NAMES_KEY: {
+            "words": ColumnNames({"text": SourceName(("IA_LABEL",))}).to_payload(),
+            "fixations": ColumnNames(
+                {"duration_ms": SourceName(("DUR",))}
+            ).to_payload(),
+        }
+    }
+    names = cn.active_all(session)
+    assert names.label("text") == "IA_LABEL"
+    assert names.label("duration_ms") == "DUR"
+
+
+def test_a_chip_is_named_as_the_dataset_names_its_column():
+    from scanpath_studio import controls
+
+    names = ColumnNames({"participant_id": SourceName(("RECORDING_SESSION_LABEL",))})
+    assert (
+        controls.chip_field_label("participant_id", names) == "RECORDING_SESSION_LABEL"
+    )
+    # A summary statistic is the app's and keeps its name.
+    stat = next(iter(controls.SUMMARY_CHIP_FIELDS))
+    assert controls.chip_field_label(stat, names) == controls.SUMMARY_CHIP_FIELDS[stat]
+
+
+def test_the_trial_sort_lists_the_datasets_columns_before_the_computed_stats():
+    from scanpath_studio.utils import trial_sort_keys
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p", "p", "p"],
+            "trial_id": ["t1", "t1", "t2"],
+            "duration_ms": [100.0, 200.0, 300.0],
+            "cond": ["a", "a", "b"],
+        }
+    )
+    combos = fixations[["participant_id", "trial_id", "cond"]].drop_duplicates()
+    names = ColumnNames({"cond": SourceName(("CONDITION",))})
+    keys = list(
+        trial_sort_keys(combos, "trial_id", fixations=fixations, label_of=names.label)
+    )
+    assert "CONDITION" in keys
+    computed = [k for k in keys if k.endswith(cn.COMPUTED_SUFFIX)]
+    assert computed, keys
+    assert keys.index("CONDITION") < min(keys.index(k) for k in computed)
+
+
+def test_figure_labels_name_the_users_columns_and_leave_the_apps():
+    names = ColumnNames(
+        {
+            "duration_ms": SourceName(("CURRENT_FIX_DURATION",)),
+            "fixation_id": SourceName((), cn.GENERATED),
+        }
+    )
+    labels = names.figure_labels(
+        ["duration_ms", "gpt2_surprisal", "is_regression", "fixation_id"]
+    )
+    assert labels == {
+        "duration_ms": "CURRENT_FIX_DURATION",
+        "gpt2_surprisal": "gpt2_surprisal",
+    }
+
+
+class TestFigureText:
+    """`FigureSettings.column_labels` reaches the figure's own text."""
+
+    @pytest.fixture
+    def demo(self, synthetic_words_df, synthetic_fixations_df):
+        return synthetic_words_df, synthetic_fixations_df
+
+    def _figure(self, demo, **settings):
+        from scanpath_studio import plots
+
+        words, fixations = demo
+        return plots.make_scanpath_figure(
+            words,
+            fixations,
+            canvas_width=2560,
+            canvas_height=1440,
+            base_font_size=16,
+            **settings,
+        )
+
+    def test_the_colour_bar_takes_the_datasets_name(self, demo):
+        fig = self._figure(
+            demo,
+            color_by="duration_ms",
+            show_colorbars=True,
+            column_labels={"duration_ms": "CURRENT_FIX_DURATION"},
+        )
+        titles = [
+            trace.marker.colorbar.title.text
+            for trace in fig.data
+            if getattr(trace, "marker", None) is not None
+            and trace.marker.colorbar is not None
+            and trace.marker.colorbar.title.text
+        ]
+        assert "CURRENT_FIX_DURATION" in titles, titles
+
+    def test_a_hover_row_takes_the_datasets_name(self, demo):
+        fig = self._figure(
+            demo,
+            fixation_hover_fields=("duration_ms",),
+            column_labels={"duration_ms": "CURRENT_FIX_DURATION"},
+        )
+        templates = " ".join(str(t.hovertemplate) for t in fig.data)
+        assert "CURRENT_FIX_DURATION: " in templates
+
+    def test_without_labels_a_figure_is_unchanged(self, demo):
+        """The API passes none (phase 4), and its figures keep today's text."""
+        assert (
+            self._figure(demo, color_by="duration_ms").to_json()
+            == self._figure(demo, color_by="duration_ms", column_labels={}).to_json()
+        )
+
+    def test_a_hover_row_never_writes_its_unit_twice(self):
+        from scanpath_studio import plots
+
+        assert plots._hover_label("total_fixation_duration_ms") == "Total fixation"
+        assert plots._hover_label("my_measure_ms") == "My Measure"
+        assert plots._column_title("my_measure_ms") == "My Measure (ms)"

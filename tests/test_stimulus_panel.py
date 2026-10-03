@@ -14,7 +14,7 @@ import pytest
 from scanpath_studio.tabs import (
     _detect_question_columns,
     _detect_span_columns,
-    _humanize_field,
+    _field_label,
     _is_boolish,
 )
 
@@ -105,8 +105,8 @@ class TestDetection:
         assert "question" in qa and "selected_answer" in qa and "is_correct" in qa
         # Span flags are NOT treated as Q&A text fields.
         assert "is_in_aspan" not in qa and "is_in_dspan" not in qa
-        assert _humanize_field("is_in_aspan") == "Answer (critical) span"
-        assert _humanize_field("question") == "Question"
+        assert _field_label("is_in_aspan") == "is_in_aspan"
+        assert _field_label("question") == "question"
 
     def test_generic_non_onestop_columns(self):
         w = pd.DataFrame(
@@ -121,7 +121,7 @@ class TestDetection:
         assert _detect_span_columns(w) == ["is_target_span"]
         qa = _detect_question_columns(w)
         assert "q_prompt" in qa and "response" in qa
-        assert _humanize_field("is_target_span") == "Is target span"
+        assert _field_label("is_target_span") == "is_target_span"
 
     def test_titles_and_reading_instructions_are_context(self):
         w = pd.DataFrame(
@@ -222,21 +222,21 @@ class TestRender:
         at.run()
         assert not at.exception, at.exception
         md = " ".join(m.value for m in at.markdown)
-        assert "Question" in md
+        assert "question" in md
         assert "Which colour?" in md
-        assert "Answer (critical) span" in md
-        assert "Distractor span" in md
+        assert "is_in_aspan" in md
+        assert "is_in_dspan" in md
 
     def test_generic_renders_detected_fields(self):
         at = AppTest.from_function(_generic_panel_app)
         at.run()
         assert not at.exception, at.exception
         md = " ".join(m.value for m in at.markdown)
-        # Generic column names humanized + shown — no OneStop names required.
-        assert "Q prompt" in md
+        # The dataset's own column names (DATA-66) — no OneStop names required.
+        assert "q_prompt" in md
         assert "Pick the target" in md
-        assert "Response" in md
-        assert "Is target span" in md
+        assert "response" in md
+        assert "is_target_span" in md
 
 
 def _unhinted_panel_app():
@@ -312,7 +312,7 @@ class TestFieldPicker:
         at.run()
         md = " ".join(m.value for m in at.markdown)
         assert "Which one stands out?" in md
-        assert "Focus region" in md
+        assert "focus_region" in md
 
     def test_switching_corpus_shape_re_seeds_from_detection(self):
         """A stored pick must not leave the panel blank on another dataset."""

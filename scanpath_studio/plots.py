@@ -6,7 +6,9 @@ import base64
 import copy
 import math
 import struct
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
 from typing import Any
@@ -171,6 +173,11 @@ class FigureSettings:
     # rectangles. Split layouts ignore it — each panel owns its own stimulus,
     # and hiding one panel's boxes would just leave a blank half.
     compare_stimulus: str = "both"
+    # DATA-66 — the dataset's own names for the columns the figure's text names
+    # (hover rows, colour-bar and legend titles, non-spatial axis titles),
+    # canonical column → label. Built by the caller (`tabs`); not a figure
+    # option, so no option set, link or `render` flag carries it.
+    column_labels: dict | None = None
 
     @classmethod
     def from_mapping(
@@ -1351,9 +1358,61 @@ _HOVER_MEASURE_LABELS: dict[str, str] = {
     "n_fixations": "Fixations",
 }
 
+#: DATA-66: `FigureSettings.column_labels` for the build in progress. The three
+#: builders set it (`_labelled_columns`) and the helpers that write a column's
+#: name into the figure read it (`_column_title`, `_hover_label`), so the dozen
+#: helpers in between keep their signatures. Empty outside a build.
+_COLUMN_LABELS: ContextVar[Mapping[str, str] | None] = ContextVar(
+    "scanpath_column_labels", default=None
+)
+
+
+@contextmanager
+def _labelled_columns(labels: Mapping[str, str] | None) -> Iterator[None]:
+    """Make ``labels`` the column names one figure build writes."""
+    token = _COLUMN_LABELS.set(dict(labels or {}))
+    try:
+        yield
+    finally:
+        _COLUMN_LABELS.reset(token)
+
+
+def _humanize_column(column: str, *, unit: bool = True) -> str:
+    """``total_fixation_duration_ms`` → "Total Fixation Duration (ms)".
+
+    ``unit=False`` drops the unit, for a hover row that writes it after the
+    value — which used to read "… Duration Ms: 200 ms"."""
+    text = str(column)
+    in_ms = text.endswith("_ms")
+    if in_ms:
+        text = text[: -len("_ms")]
+    title = text.replace("_", " ").strip().title()
+    return f"{title} (ms)" if in_ms and unit else title
+
+
+def _column_name(column: str) -> str:
+    """A column's name in a legend entry: the dataset's own (DATA-66), else the
+    column's own, as the legend has always written it."""
+    labels = _COLUMN_LABELS.get() or {}
+    return labels.get(column, str(column))
+
+
+def _column_title(column: str) -> str:
+    """A column's name in a figure's titles: the dataset's own (DATA-66), else
+    the column humanized."""
+    labels = _COLUMN_LABELS.get() or {}
+    return labels[column] if column in labels else _humanize_column(column)
+
 
 def _hover_label(field: str) -> str:
-    """Readable label for an arbitrary hover column."""
+    """Readable label for an arbitrary hover column.
+
+    The dataset's own name when the build has one (DATA-66); else a short label
+    for the app's own columns, else the column humanized without its unit (the
+    row writes the unit after the value)."""
+    labels = _COLUMN_LABELS.get() or {}
+    if field in labels:
+        return labels[field]
     aliases = {
         "text": "Word",
         "word_id": "Word #",
@@ -1363,7 +1422,8 @@ def _hover_label(field: str) -> str:
         "timestamp_ms": "Timestamp",
     }
     return aliases.get(
-        field, _HOVER_MEASURE_LABELS.get(field, field.replace("_", " ").title())
+        field,
+        _HOVER_MEASURE_LABELS.get(field, _humanize_column(field, unit=False)),
     )
 
 
@@ -1431,9 +1491,9 @@ def _add_word_label_trace(
             customdata_parts: list[pd.Series] = [words["word_id"], line_display]
             hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
             if word_hover_measure and word_hover_measure in words.columns:
-                label = _HOVER_MEASURE_LABELS.get(
-                    word_hover_measure, word_hover_measure
-                )
+                label = (_COLUMN_LABELS.get() or {}).get(
+                    word_hover_measure
+                ) or _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
                 suffix = " ms" if word_hover_measure.endswith("_ms") else ""
                 hover += f"<br>{label}: %{{customdata[2]}}{suffix}"
                 customdata_parts.append(words[word_hover_measure])
@@ -2375,7 +2435,7 @@ def _render_scanpath_figure(
             colorscale=fixation_colorscale if is_numeric_color else None,
             showscale=show_colorbars and is_numeric_color,
             colorbar=_colorbar_dict(
-                color_label.replace("_", " ").title(),
+                _column_title(color_label),
                 orientation=colorbar_orientation,
                 tickangle=colorbar_tickangle,
                 tickfont_size=colorbar_tickfont_size,
@@ -2488,7 +2548,7 @@ def _render_scanpath_figure(
                         color=color,
                         line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                     ),
-                    name=f"{color_label}: {category}",
+                    name=f"{_column_name(color_label)}: {category}",
                     showlegend=True,
                     hoverinfo="skip",
                 )
@@ -2569,10 +2629,10 @@ def _render_scanpath_figure(
         )
     else:
         xaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=x_field.replace("_", " ").title()
+            showticklabels=True, showgrid=True, title=_column_title(x_field)
         )
         yaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=y_field.replace("_", " ").title()
+            showticklabels=True, showgrid=True, title=_column_title(y_field)
         )
 
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -4048,7 +4108,7 @@ def _render_scanpath_animation(
                 colorbar = None
                 if show_colorbars:
                     colorbar = _colorbar_dict(
-                        color_label.replace("_", " ").title(),
+                        _column_title(color_label),
                         orientation=colorbar_orientation,
                         tickangle=colorbar_tickangle,
                         tickfont_size=colorbar_tickfont_size,
@@ -4301,7 +4361,7 @@ def _render_scanpath_animation(
                     color=color,
                     line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                 ),
-                name=f"{color_label}: {category}",
+                name=f"{_column_name(color_label)}: {category}",
                 showlegend=True,
                 hoverinfo="skip",
             )
@@ -4909,9 +4969,7 @@ def _add_comparison_fixation_trace(
             showscale=bool(show_colorbar),
             # VIZ-23: the same styled colorbar the static figure builds, so the
             # orientation / tick-angle / tick-size controls reach Compare too.
-            colorbar=_colorbar_dict(
-                color_by.replace("_", " ").title(), **(colorbar_style or {})
-            )
+            colorbar=_colorbar_dict(_column_title(color_by), **(colorbar_style or {}))
             if show_colorbar
             else None,
             line=dict(color=fix_color, width=1.4),
@@ -6039,13 +6097,18 @@ def make_trend_figure(
     base_font_size: int,
     font_family: str,
     height: int = 340,
+    x_label: str | None = None,
 ) -> go.Figure:
     """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
 
     ``df`` has columns ``[x_col, "value", "sem"]`` (see
     ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
-    subtabs for the trial-index trend.
+    subtabs for the trial-index trend. ``x_label`` titles the x axis — the
+    caller's name for what ``x_col`` holds (AN-9's frame calls it ``x``, which
+    is no title); without one, ``x_col`` humanized.
     """
+    if x_label is None:
+        x_label = x_col.replace("_", " ").title()
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     if df is None or df.empty:
@@ -6080,7 +6143,7 @@ def make_trend_figure(
             line=dict(color=COMPARISON_PALETTE[0], width=2),
             marker=dict(size=5, color=COMPARISON_PALETTE[0]),
             name=y_label,
-            hovertemplate=f"{x_col}: %{{x}}<br>{y_label}: %{{y:.1f}}<extra></extra>",
+            hovertemplate=f"{x_label}: %{{x}}<br>{y_label}: %{{y:.1f}}<extra></extra>",
         )
     )
     fig.update_layout(
@@ -6090,7 +6153,7 @@ def make_trend_figure(
         margin=dict(l=60, r=10, t=40, b=45),
         template="plotly_white",
         font=font_settings,
-        xaxis=dict(title=x_col.replace("_", " ").title()),
+        xaxis=dict(title=x_label),
         yaxis=dict(title=y_label),
         title=title,
         showlegend=False,
@@ -6942,6 +7005,8 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "compare_stimulus",
         # CMP-24 — B's flags in a co-animation; one trial has no B.
         "fixation_flags_b",
+        # DATA-66 — names, not an option: read by `_labelled_columns`.
+        "column_labels",
     }
 )
 #: What `make_comparison_figure` accepts (CMP-9). Only the animation-only fields
@@ -6959,6 +7024,8 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "anim_max_frames",
         # CMP-24 — a comparison reads B's filters off `style_b` instead.
         "fixation_flags_b",
+        # DATA-66 — names, not an option: read by `_labelled_columns`.
+        "column_labels",
     }
 )
 ANIMATION_FIGURE_OPTIONS = _setting_names(
@@ -6996,6 +7063,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "background_image_b",
         "background_image_size_b",
         "background_image_origin_b",
+        # DATA-66 — names, not an option: read by `_labelled_columns`.
+        "column_labels",
     }
 )
 
@@ -7015,12 +7084,13 @@ def make_scanpath_figure(
     object can flow unchanged through UI, export, and headless surfaces.
     """
     resolved = _resolve_figure_settings(settings, overrides)
-    return _render_scanpath_figure(
-        words,
-        fixations,
-        settings=resolved,
-        raw_gaze=raw_gaze,
-    )
+    with _labelled_columns(resolved.column_labels):
+        return _render_scanpath_figure(
+            words,
+            fixations,
+            settings=resolved,
+            raw_gaze=raw_gaze,
+        )
 
 
 def make_scanpath_animation(
@@ -7069,13 +7139,14 @@ def build_scanpath_replay(
             "word_hover_measure": None,
         },
     )
-    return _render_scanpath_animation(
-        words,
-        fixations,
-        settings=resolved,
-        fixations_b=fixations_b,
-        words_b=words_b,
-    )
+    with _labelled_columns(resolved.column_labels):
+        return _render_scanpath_animation(
+            words,
+            fixations,
+            settings=resolved,
+            fixations_b=fixations_b,
+            words_b=words_b,
+        )
 
 
 def make_comparison_figure(
@@ -7105,11 +7176,12 @@ def make_comparison_figure(
             "heatmap_metric": "duration_ms",
         },
     )
-    return _render_comparison_figure(
-        words,
-        fixations,
-        trial_a,
-        trial_b,
-        settings=resolved,
-        raw_gaze=raw_gaze,
-    )
+    with _labelled_columns(resolved.column_labels):
+        return _render_comparison_figure(
+            words,
+            fixations,
+            trial_a,
+            trial_b,
+            settings=resolved,
+            raw_gaze=raw_gaze,
+        )

@@ -1,1 +1,1 @@
-The plot controls, the Data Management tables and the dataset setup screens now name each column as it is in your files, and mark the columns Scanpath Studio computed.
+The app now names each column as it is in your files — in the plot controls, the trial chips, filters and sort, the Scanpath subtabs, Corpus Analysis, the figure's hover, legend and colour bar, the Data Management tables and the dataset setup screens — and marks the columns Scanpath Studio computed.

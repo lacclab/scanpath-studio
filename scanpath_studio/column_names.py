@@ -239,6 +239,19 @@ class ColumnNames:
             return canonical_label(column) + COMPUTED_SUFFIX
         return str(column)
 
+    def figure_labels(self, columns: Iterable) -> dict[str, str]:
+        """``{column: label}`` for a figure's text (`FigureSettings.column_labels`).
+
+        Every column the dataset brought, under its own name; the columns the
+        app made are left out, so a figure keeps its short labels for them
+        ("Fixation #", "FFD") rather than writing "(computed)" into a hover.
+        """
+        return {
+            str(column): self.label(column)
+            for column in columns
+            if self.kind_of(column) not in (COMPUTED, GENERATED)
+        }
+
     def merged(self, other: ColumnNames) -> ColumnNames:
         """Both tables' entries, this map's winning where both name a column."""
         return ColumnNames({**dict(other.entries), **dict(self.entries)})
@@ -341,6 +354,30 @@ def active(session: Mapping, table: str) -> ColumnNames:
     """
     stash = session.get(ACTIVE_COLUMN_NAMES_KEY) or {}
     return ColumnNames.from_payload(stash.get(table))
+
+
+def active_all(session: Mapping) -> ColumnNames:
+    """The open dataset's map over all its tables, for a label any table can own.
+
+    The fixations table's entries win, then the words table's (word-level
+    fields such as surprisal are carried onto fixations), then raw gaze's.
+    """
+    return across_tables({table: active(session, table) for table in _TABLES})
+
+
+#: The tables a dataset's map covers, in the order their entries win.
+_TABLES = ("fixations", "words", "raw_gaze")
+
+
+def across_tables(maps: Mapping[str, ColumnNames]) -> ColumnNames:
+    """One map from a dataset's per-table maps (fixations', then words', then
+    raw gaze's entries win) — what :func:`active_all` reads from the session,
+    for a dataset held elsewhere (Compare's B, `SecondaryDataset.column_names`)."""
+    out = EMPTY
+    for table in _TABLES:
+        if table in maps:
+            out = out.merged(maps[table])
+    return out
 
 
 #: Mapped screen fields: schema key → canonical column (`data._copy_screen_fields`).

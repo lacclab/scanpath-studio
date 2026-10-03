@@ -69,6 +69,7 @@ from scanpath_studio.annotations import (
 from scanpath_studio.column_names import (
     ACTIVE_COLUMN_NAMES_KEY,
     ColumnNames,
+    active_all,
     from_schema,
 )
 from scanpath_studio.column_names import active as active_names
@@ -621,13 +622,14 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
             )
         )
     keys_by_col = trial_filters.get("metadata_keys") or {}
-    # UX-149: `TRIAL_INDEX` and `trial_index` must not both read "Trial index".
+    # DATA-66: each filter by the dataset's own name for its column, as the
+    # filter panel titles it; UX-149: no two share a label.
     names = unique_field_labels(
         [
             *(trial_filters.get("metadata") or {}),
             *(trial_filters.get("ranges") or {}),
         ],
-        lambda c: c.replace("_", " ").capitalize(),
+        active_all(st.session_state).label,
     )
     for col, allowed in (trial_filters.get("metadata") or {}).items():
         label = f"{names[col]} = {', '.join(sorted(map(str, allowed))[:4])}"

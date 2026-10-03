@@ -577,7 +577,7 @@ class TestZeroPadding:
 
         words = _aoi(["7"], ["7"], ["seven"])
         fixations = _fix(["p1"], ["007"], ["007"])
-        w, _f, join = app._normalize_pair_uncached(
+        w, _f, join, _rewrites = app._normalize_pair_uncached(
             words,
             {**_EDGE_SCHEMA, "trial": "trial"},
             fixations,

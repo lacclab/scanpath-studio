@@ -6769,6 +6769,8 @@ def render_plot_controls(
                 {},
                 dataset_name=current_dataset_name(),
                 metadata_rows=_selected_metadata_rows(_sel_fix),
+                # DATA-66: the field list offers the dataset's own names too.
+                column_names=_rail_names(),
             )
             # EXP-5: two text boxes, two previews and a field list, inline — the
             # overlay's width is the point, and Streamlit won't nest a popover.

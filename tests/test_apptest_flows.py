@@ -538,7 +538,8 @@ class TestBulkExportFlow:
         assert options.include_fixations is True
         assert options.export_unfiltered is False
 
-        expected = {"README.md", "index.csv"}
+        # DATA-66: the demo's column-name map travels with its tables.
+        expected = {"README.md", "index.csv", "columns.json"}
         for trial in pool:
             expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
             expected.add(f"per_trial/l7_1090__{trial}/plot_config.json")
@@ -567,8 +568,10 @@ class TestBulkExportFlow:
         assert expected_rows > 0
         assert len(fix_csv) == expected_rows
         assert set(fix_csv["participant_id"].unique()) == {"l7_1090"}
-        assert set(fix_csv["trial_id"].unique()) == {pool[0]}
-        assert sorted(fix_csv["duration_ms"]) == sorted(
+        # Under the demo's own names (DATA-66): its file calls the trial id
+        # `unique_trial_id` and the duration `CURRENT_FIX_DURATION`.
+        assert set(fix_csv["unique_trial_id"].unique()) == {pool[0]}
+        assert sorted(fix_csv["CURRENT_FIX_DURATION"]) == sorted(
             raw_fix.loc[
                 (raw_fix["participant_id"] == "l7_1090")
                 & (raw_fix["unique_trial_id"] == pool[0]),
@@ -608,7 +611,8 @@ class TestBulkExportFlow:
             if name.startswith("per_trial/")
         }
         assert exported == {"l7_1090", "l37_1129"}
-        assert len(names_all) == 2 + 2 * DEMO_TRIALS_IN_PICKER
+        # README, index.csv and columns.json, then two files per trial.
+        assert len(names_all) == 3 + 2 * DEMO_TRIALS_IN_PICKER
 
     def test_the_plan_is_said_and_a_stopped_build_offers_no_bundle(self, monkeypatch):
         """Before the build, the panel says what it will write; Stop mid-build

@@ -306,10 +306,14 @@ def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 def _builtin_column_names(name: str) -> dict[str, dict]:
     """DATA-66: the demo's / synthetic trial's own column names, for a B drawn
     from them — read from the same raw frames and auto-detected schemas
-    `_load_builtin_frames` normalizes, as payloads."""
+    `_load_builtin_frames` normalizes, as payloads — with the columns that
+    load rewrites marked (the demo's word ids are shifted onto its boxes)."""
     from scanpath_studio.column_names import for_tables
     from scanpath_studio.data import (
+        harmonize_frames_reporting,
         load_sample_data,
+        normalize_fixations,
+        normalize_words,
         propose_fix_schema,
         propose_word_schema,
     )
@@ -318,12 +322,16 @@ def _builtin_column_names(name: str) -> dict[str, dict]:
     words, fixations = (
         load_sample_data() if name == DEMO_CHOICE else load_synthetic_data()
     )
+    schemas = {
+        "words": propose_word_schema(words),
+        "fixations": propose_fix_schema(fixations),
+    }
+    *_frames, rewrites = harmonize_frames_reporting(
+        normalize_words(words, schemas["words"]),
+        normalize_fixations(fixations, schemas["fixations"]),
+    )
     return for_tables(
-        {
-            "words": propose_word_schema(words),
-            "fixations": propose_fix_schema(fixations),
-        },
-        {"words": words, "fixations": fixations},
+        schemas, {"words": words, "fixations": fixations}, rewrites=rewrites
     )
 
 

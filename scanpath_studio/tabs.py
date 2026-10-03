@@ -93,6 +93,7 @@ from scanpath_studio.column_names import (
     ColumnNames,
     across_tables,
     active_all,
+    as_written,
     from_schema,
     source_schema,
     stored_source_recipe,
@@ -206,7 +207,7 @@ from scanpath_studio.data import (
     filter_to_keys,
     filter_trials,
     frame_fingerprint,
-    harmonize_frames,
+    harmonize_frames_reporting,
     has_explicit_trial_index,
     identity_text_plan,
     normalize_fixations,
@@ -4551,6 +4552,8 @@ def _rendered_title_caption(
         # animation, compare) all get it without each remembering to.
         dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
         compare_row=compare_row,
+        # DATA-66: `{CURRENT_FIX_DURATION}` as well as `{duration_ms}`.
+        column_names=active_all(st.session_state),
         # EXP-22: `{trials.font_size}` and the other tables' fields.
         metadata_rows=_metadata_mod.pattern_rows(
             participant, trial, (combo_row or {}).get("text_id")
@@ -4972,6 +4975,14 @@ def _build_and_render_animation(
     return view, save_slug, file_stem
 
 
+def _dataset_table_names() -> dict[str, ColumnNames]:
+    """DATA-66: the open dataset's map per table, as the exporters take it."""
+    return {
+        table: active_column_names(st.session_state, table)
+        for table in ("fixations", "words", "raw_gaze")
+    }
+
+
 def _render_pair_export(
     fig,
     sides: tuple,
@@ -5050,6 +5061,7 @@ def _render_pair_export(
                 y_field=viz_settings.get("y_field", "y"),
                 settings=settings,
                 options=options,
+                column_names=_dataset_table_names(),
             ),
             file_name=f"comparison_{side_a.slug}__vs__{side_b.slug}.zip",
             mime="application/zip",
@@ -7614,6 +7626,11 @@ def _render_bulk_export(
         json.dumps(annotation_records, sort_keys=True, default=str),
         annotation_dataset,
         EXPORTER_VERSION,
+        # DATA-66: a renamed column changes every table's header.
+        json.dumps(
+            {t: n.to_payload() for t, n in _dataset_table_names().items()},
+            sort_keys=True,
+        ),
     )
     cache = st.session_state.get("_bulk_export_cache")
     if cache and cache.get("sig") != sig:
@@ -7672,6 +7689,8 @@ def _render_bulk_export(
                     options=options,
                     raw_gaze=active_raw_gaze,
                     status_callback=on_status,
+                    # DATA-66: the tables go out under the dataset's own names.
+                    column_names=_dataset_table_names(),
                 )
         except Exception as exc:
             stop_slot.empty()
@@ -8311,14 +8330,18 @@ def _download_tidy(
     if df is None or getattr(df, "empty", True):
         return
     context = _RECIPE_CONTEXT.get()
-    csv = df.to_csv(index=False).encode("utf-8")
+    # Written on click, not on every rerun: a words × readers table on a full
+    # corpus took most of a second to serialize. DATA-66: under the dataset's
+    # own names, as on screen — the map is read here, where the session is.
+    csv = partial(_tidy_csv, df, active_all(st.session_state).identity())
+    button = dict(data=csv, file_name=name, mime="text/csv", key=key, on_click="ignore")
     if recipe is None or context is None:
-        host.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+        host.download_button(label, **button)
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
     row = host.container(horizontal=True, gap="small")
-    row.download_button(label, data=csv, file_name=name, mime="text/csv", key=key)
+    row.download_button(label, **button)
     row.download_button(
         "⬇ Download the recipe (JSON)",
         data=partial(_recipe_json, context, recipe, name, counts),
@@ -8329,6 +8352,11 @@ def _download_tidy(
         help="How this table was made: the dataset, the trial filters, these "
         "choices and the counts. No data rows and no figure settings.",
     )
+
+
+def _tidy_csv(df: pd.DataFrame, names: ColumnNames) -> bytes:
+    """A tidy table's CSV, built when its download button is clicked."""
+    return as_written(df, names).to_csv(index=False).encode("utf-8")
 
 
 def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
@@ -8384,7 +8412,7 @@ def _render_trials_with_open_button(
     """
     # DATA-66: the identity columns under the dataset's own names.
     headers = (
-        column_label_config(trials.columns, active_all(st.session_state))
+        column_label_config(trials.columns, active_all(st.session_state).identity())
         if trials is not None
         else {}
     )
@@ -10018,7 +10046,7 @@ def render_per_reader_tab(
                     width="stretch",
                     hide_index=True,
                     column_config=column_label_config(
-                        selected_reader.columns, active_all(st.session_state)
+                        selected_reader.columns, active_all(st.session_state).identity()
                     ),
                 )
                 _download_tidy(
@@ -10382,7 +10410,7 @@ def render_per_group_tab(
                 width="stretch",
                 hide_index=True,
                 column_config=column_label_config(
-                    table.columns, active_all(st.session_state)
+                    table.columns, active_all(st.session_state).identity()
                 ),
             )
             _download_tidy(
@@ -10402,7 +10430,7 @@ def render_per_group_tab(
                 width="stretch",
                 hide_index=True,
                 column_config=column_label_config(
-                    trials.columns, active_all(st.session_state)
+                    trials.columns, active_all(st.session_state).identity()
                 ),
             )
             _download_tidy(
@@ -11651,7 +11679,7 @@ def _render_raw_table(
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
     # A copy of a partner from the same source column is shown once — left out
     # of `column_order` rather than dropped, so a large frame is not copied.
-    hidden = names.aliases(shown.columns)
+    hidden = names.redundant_aliases(shown)
     order = [c for c in shown.columns if c not in hidden]
     st.dataframe(
         shown,
@@ -13022,16 +13050,22 @@ STIMULUS_JOIN_NOTICE_KEY = "_stimulus_join_notice"
 
 
 def _harmonize_noting_join(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    rewrites: list | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """``harmonize_frames``, keeping its ``StimulusJoinWarning`` for the page.
 
     ✅ Save changes runs in an ``on_click``, where a warning only reaches the
     server's terminal; this parks its text under ``STIMULUS_JOIN_NOTICE_KEY``
-    instead (DATA-49). Any other warning is re-raised as it was."""
+    instead (DATA-49). Any other warning is re-raised as it was. The columns
+    whose values it changed (``data.Rewrite``) go into ``rewrites`` (DATA-66)."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = harmonize_frames(words, fixations)
+        words, fixations, _join, changed = harmonize_frames_reporting(words, fixations)
+        result = (words, fixations)
+    if rewrites is not None:
+        rewrites.extend(changed)
     notices = []
     for record in caught:
         if issubclass(record.category, StimulusJoinWarning):
@@ -13148,6 +13182,8 @@ def _apply_remap() -> None:
     # stored before the join recorded provenance folds a repeat's copy of the
     # boxes back into the trial it copied (`data.repeat_bases`).
     repeat_of = repeat_bases(stored.get("fixations"))
+    # DATA-66: the columns the fixups below change the values of.
+    rewrites: list = []
     # Share → Code's record of how a script loads this dataset's files: a
     # remap is restated in the files' own names, an added table is its own.
     recipe = stored_source_recipe(stored)
@@ -13219,14 +13255,14 @@ def _apply_remap() -> None:
                 other = new_entry.get("fixations")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_fixations_frame()
-                fresh, other = _harmonize_noting_join(fresh, other)
+                fresh, other = _harmonize_noting_join(fresh, other, rewrites)
                 new_entry["words"], new_entry["fixations"] = fresh, other
             else:
                 fresh = normalize_fixations(raw, schema)
                 other = new_entry.get("words")
                 if not isinstance(other, pd.DataFrame) or other.empty:
                     other = empty_words_frame()
-                other, fresh = _harmonize_noting_join(other, fresh)
+                other, fresh = _harmonize_noting_join(other, fresh, rewrites)
                 new_entry["words"], new_entry["fixations"] = other, fresh
             harmonized = harmonized or table_key != "raw_gaze"
         except Exception as exc:
@@ -13269,7 +13305,9 @@ def _apply_remap() -> None:
         has_fixations = isinstance(fixations, pd.DataFrame) and not fixations.empty
         try:
             words, fixations = _harmonize_noting_join(
-                before, fixations if has_fixations else empty_fixations_frame()
+                before,
+                fixations if has_fixations else empty_fixations_frame(),
+                rewrites,
             )
         except Exception as exc:
             # Same reason as the added tables above: an `on_click` must report,
@@ -13288,7 +13326,12 @@ def _apply_remap() -> None:
         if has_fixations:
             new_entry["fixations"] = fixations
     new_entry["schemas"] = new_schemas
-    new_entry["column_names"] = new_names
+    new_entry["column_names"] = {
+        table: ColumnNames.from_payload(payload)
+        .with_rewrites(table, rewrites)
+        .to_payload()
+        for table, payload in new_names.items()
+    }
     new_entry["source_recipe"] = {
         **recipe,
         "schemas": recipe_schemas,

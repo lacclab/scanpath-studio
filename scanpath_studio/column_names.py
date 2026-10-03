@@ -133,6 +133,24 @@ _CANONICAL_LABELS: dict[str, str] = {
 #: `ColumnNames.aliases`.
 _ALIAS_PAIRS = (("trial_id", "unique_trial_id"), ("text_id", "unique_text_id"))
 
+#: The note a time column read in another unit carries ("FPOGD, in ms"). A
+#: figure drops it: its hover writes the unit after the value.
+IN_MS = ", in ms"
+
+#: The id columns a derived table (a summary, a saccade table) shares with the
+#: dataset's own — the only ones it may carry under the file's names.
+IDENTITY_COLUMNS = frozenset(
+    {
+        "participant_id",
+        "trial_id",
+        "unique_trial_id",
+        "text_id",
+        "unique_text_id",
+        "screen_id",
+        "word_id",
+    }
+)
+
 
 def canonical_label(column) -> str:
     """A readable label for a column the app made (a measure, a run, an angle …)."""
@@ -260,13 +278,15 @@ class ColumnNames:
             ):
                 continue
             entry = self.source(column)
-            single_conversion = (
+            unit_conversion = (
                 entry is not None
                 and entry.kind == CONVERTED
-                and len(entry.sources) == 1
+                and entry.note.endswith(IN_MS)
             )
             out[str(column)] = (
-                entry.sources[0] if single_conversion else self.label(column)
+                entry.note.removesuffix(IN_MS)
+                if unit_conversion
+                else self.label(column)
             )
         return out
 
@@ -323,6 +343,85 @@ class ColumnNames:
             ):
                 hidden.add(alias)
         return hidden
+
+    def with_rewrites(self, table: str, rewrites: Iterable) -> ColumnNames:
+        """This map with every column the load rewrote (``data.Rewrite``s for
+        ``table``) marked converted: a padded id, a shifted word id, positions
+        filled from word boxes are no longer what the file held under its name,
+        so the column is labelled "<source><how>" and exported under its
+        internal name."""
+        changed = dict(self.entries)
+        for rewritten_table, column, how in rewrites or ():
+            entry = changed.get(column)
+            if rewritten_table != table or entry is None or entry.kind != MAPPED:
+                continue
+            note = " + ".join(entry.sources) + how
+            changed[column] = SourceName(entry.sources, CONVERTED, note)
+        return ColumnNames(changed)
+
+    def identity(self) -> ColumnNames:
+        """This map's id columns only (:data:`IDENTITY_COLUMNS`).
+
+        For a table the app derives — a summary, a saccade table, a character
+        grid — whose other columns reuse a canonical name (`n_fixations`,
+        `duration_ms`, `x`) for a value of their own: only its ids are the
+        file's."""
+        return self.restricted_to(IDENTITY_COLUMNS)
+
+    def redundant_aliases(self, frame) -> set[str]:
+        """:meth:`aliases` that really repeat their partner in ``frame``.
+
+        The map says both came from one column; the values decide, since a
+        padded or suffixed id can part from its copy (BUG-59)."""
+        partners = {alias: main for main, alias in _ALIAS_PAIRS}
+        return {
+            alias
+            for alias in self.aliases(frame.columns)
+            if frame[alias].equals(frame[partners[alias]])
+        }
+
+    def export_headers(self, columns: Iterable) -> dict[str, str]:
+        """``{column: header}`` for a table written out (DATA-66 phase 3).
+
+        A column read from one column of the user's file is written under that
+        column's name. One built from several (a composite trial id), converted
+        (a box width from two edges, a duration read in seconds) or made by the
+        app keeps its canonical name — its values are not what the file held
+        under any one name — and the bundle's `columns.json` and README say
+        where it came from. A header that would repeat another column's name
+        keeps the canonical one. Columns not renamed are left out.
+        """
+        names = [str(c) for c in columns]
+        taken = set(names)
+        out: dict[str, str] = {}
+        for column in names:
+            entry = self.source(column)
+            if entry is None or entry.kind != MAPPED or len(entry.sources) != 1:
+                continue
+            header = entry.sources[0]
+            if header == column or header in taken:
+                continue
+            taken.add(header)
+            out[column] = header
+        return out
+
+    def provenance(self, column) -> str:
+        """Where ``column`` came from, in a sentence fragment (the README's)."""
+        entry = self.source(column)
+        kind = self.kind_of(column)
+        sources = ", ".join(f"`{s}`" for s in entry.sources) if entry else ""
+        note = entry.note if entry else ""
+        if kind == MAPPED and sources:
+            return f"your column {sources}"
+        if kind == COMPOSITE:
+            return f"joined from your columns {sources}"
+        if kind == CONVERTED:
+            return f"converted from your {sources}" + (f" ({note})" if note else "")
+        if kind == GENERATED:
+            return "made by Scanpath Studio" + (f" ({note})" if note else "")
+        if kind == COMPUTED:
+            return "computed by Scanpath Studio"
+        return "your column, under its own name"
 
     def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
         """Only the entries for ``columns`` — a frame's actual columns.
@@ -480,8 +579,11 @@ def from_schema(
     elif text_id := _id_entry(schema.get("text_id")):
         # A remap fills `unique_text_id` from the mapped Text ID
         # (`data.remap_normalized_frame`); a first load has no such column, and
-        # an entry for an absent column names nothing.
-        out["text_id"] = out["unique_text_id"] = text_id
+        # an entry for an absent column names nothing. A `unique_text_id` the
+        # file itself has is the user's own column, under its own name.
+        out["text_id"] = text_id
+        if "unique_text_id" not in present:
+            out["unique_text_id"] = text_id
     else:
         out["text_id"] = SourceName((), GENERATED, "the trial id")
     for key, canonical in _SCREEN_FIELDS:
@@ -546,18 +648,108 @@ def for_tables(
     schemas: Mapping[str, Mapping | None],
     frames: Mapping[str, object],
     keeps: Mapping[str, Iterable[str] | None] | None = None,
+    rewrites: Iterable | None = None,
 ) -> dict[str, dict]:
-    """``{table: payload}`` for every table with a schema and a raw frame."""
+    """``{table: payload}`` for every table with a schema and a raw frame.
+
+    ``rewrites`` are the ``data.Rewrite``s the load made
+    (:meth:`ColumnNames.with_rewrites`)."""
     keeps = keeps or {}
+    rewrites = tuple(rewrites or ())
     out: dict[str, dict] = {}
     for table, schema in schemas.items():
         columns = getattr(frames.get(table), "columns", None)
         if not schema or columns is None or len(columns) == 0:
             continue
-        out[table] = from_schema(
-            table, schema, columns, keep_columns=keeps.get(table)
-        ).to_payload()
+        names = from_schema(table, schema, columns, keep_columns=keeps.get(table))
+        out[table] = names.with_rewrites(table, rewrites).to_payload()
     return out
+
+
+# --- Phase 3: what a written table calls its columns -------------------------
+
+#: The `columns.json` format a bundle writes beside its tables.
+COLUMNS_FILE_SCHEMA = 1
+
+
+def _written_plan(frame, names: ColumnNames) -> tuple[set[str], dict[str, str]]:
+    """``(left out, renamed)`` for writing ``frame``: the `unique_*` aliases that
+    only repeat their partner, and each remaining column's header."""
+    hidden = names.redundant_aliases(frame)
+    kept = [c for c in frame.columns if c not in hidden]
+    return hidden, names.export_headers(kept)
+
+
+def as_written(frame, names: ColumnNames | None, hidden: set[str] | None = None):
+    """``frame`` as a bundle writes it: each column the user's file named under
+    that name (`ColumnNames.export_headers`), and a `unique_*` alias that only
+    repeats its partner left out. The same object when nothing changes.
+
+    ``hidden`` is the aliases to leave out, decided once for the whole table
+    (:meth:`ColumnNames.redundant_aliases`) so every per-trial file of it has
+    the same columns; without it, ``frame`` decides."""
+    if names is None or not names.entries:
+        return frame
+    if hidden is None:
+        hidden, headers = _written_plan(frame, names)
+    else:
+        hidden = {c for c in hidden if c in frame.columns}
+        headers = names.export_headers([c for c in frame.columns if c not in hidden])
+    if hidden:
+        frame = frame.drop(columns=sorted(hidden))
+    return frame.rename(columns=headers) if headers else frame
+
+
+def written_columns(frame, names: ColumnNames | None) -> list[dict]:
+    """What :func:`as_written` makes of ``frame``'s mapped columns, one row each:
+    the header written, the internal (canonical) name, its kind, its sources and
+    note. Columns the map does not record are written under their own names and
+    are not listed."""
+    if names is None or not names.entries:
+        return []
+    hidden, headers = _written_plan(frame, names)
+    rows = []
+    for column in frame.columns:
+        entry = names.source(column)
+        if column in hidden or entry is None:
+            continue
+        rows.append(
+            {
+                "column": headers.get(column, column),
+                "canonical": column,
+                "kind": entry.kind,
+                "sources": list(entry.sources),
+                "note": entry.note,
+            }
+        )
+    return rows
+
+
+def columns_manifest(tables: Mapping[str, list[dict]]) -> dict:
+    """The `columns.json` a bundle carries: ``{table: written_columns(…)}``, so a
+    script can map every file back to the internal names."""
+    return {
+        "schema": COLUMNS_FILE_SCHEMA,
+        "tables": {table: rows for table, rows in tables.items() if rows},
+    }
+
+
+def dictionary_lines(
+    tables: Mapping[str, list[dict]], names: Mapping[str, ColumnNames]
+) -> list[str]:
+    """The README's data dictionary: for each table's :func:`written_columns`,
+    the header written and where it came from, in markdown."""
+    titles = {"fixations": "Fixations", "words": "Words (AOIs)", "raw_gaze": "Raw gaze"}
+    lines: list[str] = []
+    for table, rows in tables.items():
+        if not rows:
+            continue
+        lines += ["", f"### {titles.get(table, table)}"]
+        for row in rows:
+            written, column = row["column"], row["canonical"]
+            internal = "" if written == column else f" (internally `{column}`)"
+            lines.append(f"- `{written}`{internal}: {names[table].provenance(column)}")
+    return lines
 
 
 def source_schema(

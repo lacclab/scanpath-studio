@@ -15,6 +15,14 @@ Open the **Export** subtab in the Scanpath view.
   none.
   Each bundle has an `index.csv` listing every file with its participant,
   trial and screen, and any requested file that failed.
+  The tables use your files' column names (`CURRENT_FIX_DURATION`, not
+  `duration_ms`). A column Scanpath Studio built, converted, computed or
+  changed keeps the app's name. For example, word ids shifted to line up with
+  the word boxes are written as `word_id`. The bundle's README says where each
+  column came from, and its `columns.json` maps every column to the app's
+  name, for scripts that work across datasets. File-name, title and caption
+  patterns accept either name: `{RECORDING_SESSION_LABEL}` and
+  `{participant_id}` both work.
 
 <figure class="sps-screenshot" markdown>
 ![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)

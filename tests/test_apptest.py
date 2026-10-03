@@ -3865,7 +3865,7 @@ class TestCorpusAnalysisTab:
         raw_words, raw_fix = load_sample_data()
         fix_schema = api.propose_schema(raw_fix, "fixations") | {"timestamp": None}
         words, fixations = api.load_scanpath_data(
-            raw_words, raw_fix, fix_schema=fix_schema
+            raw_words, raw_fix, fix_schema=fix_schema, names="canonical"
         )
 
         def opened(view, **state):

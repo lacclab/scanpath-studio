@@ -117,7 +117,7 @@ def test_an_unknown_scale_is_refused():
 
 @pytest.fixture(scope="module")
 def sample():
-    return api.load_sample_data()
+    return api.load_sample_data(names="canonical")
 
 
 def _trial(fixations, pid, tid):

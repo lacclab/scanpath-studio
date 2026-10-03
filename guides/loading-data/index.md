@@ -41,4 +41,4 @@ Describe the screen the data was **recorded** on, not the one you are using now.
 
 **Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, column mapping and recording setup, or adds a table it is missing. Changes apply when you click **Save changes**; **Cancel** discards them. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
 
-Columns are named as they are in your files: in the tables, the plot controls and the setup screens, a column you uploaded as `CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one Scanpath Studio made, such as a reading measure your data did not bring.
+Columns are named as they are in your files: in the tables, the plot controls, the trial chips, filters and sort, Corpus Analysis, the figure's hover and colour bar, and the setup screens, a column you uploaded as `CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one Scanpath Studio made, such as a reading measure your data did not bring.

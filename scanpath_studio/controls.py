@@ -15,6 +15,7 @@ import streamlit as st
 from streamlit.errors import StreamlitAPIException
 from streamlit_sortables import sort_items
 
+from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .annotations import known_tags
 from .constants import (
@@ -237,6 +238,17 @@ def _labeled(host, kind: str, label: str, **kwargs):
         bool(kwargs.get("disabled", False)), kwargs.get("help")
     )
     return labeled(host, kind, label, **kwargs)
+
+
+def _rail_names() -> cn.ColumnNames:
+    """DATA-66: the open dataset's names, for the rail's column pickers.
+
+    The fixations table's, then the words table's for the word-level fields
+    (surprisal, frequency …) carried onto fixations. The pickers' values stay
+    canonical — only what they show changes."""
+    return cn.active(st.session_state, "fixations").merged(
+        cn.active(st.session_state, "words")
+    )
 
 
 def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
@@ -2634,6 +2646,7 @@ def column_mapping_ui(
     columns_per_row: int = 1,
     stack_labels: bool | None = None,
     dataset: object = None,
+    option_labels: dict | None = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -2684,6 +2697,12 @@ def column_mapping_ui(
     # original import by design) — fall back to the parsed frame there.
     full_header = st.session_state.get(f"{state_key_prefix}_header")
     options = list(full_header) if full_header else user_columns(df)
+
+    # DATA-66: ✏️ Edit dataset offers the stored *canonical* columns; the caller
+    # passes the dataset's own names for them. The values stay canonical.
+    def _option_label(column) -> str:
+        return (option_labels or {}).get(column, column)
+
     expanded = bool(expand_on_problem and problems)
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
@@ -2820,6 +2839,7 @@ def column_mapping_ui(
         chosen = field_col.selectbox(
             field_label,
             options=options,
+            format_func=_option_label,
             index=None,
             placeholder=_UNMAPPED_PLACEHOLDER,
             key=state_key,
@@ -2849,6 +2869,9 @@ def column_mapping_ui(
             touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
             detected_label=detected_label,
         )
+        if option_labels and default and hover:
+            # DATA-66: "currently mapped `duration_ms`" names the user's column.
+            hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
         if state == "auto":
@@ -3044,6 +3067,7 @@ def column_mapping_ui(
                 # joined into one id — the composable columns are exactly the
                 # ones a narrowed parse is most likely to have left out.
                 options=options,
+                format_func=_option_label,
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",
@@ -3273,7 +3297,7 @@ def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
     """Numeric columns offered as X/Y axis fields."""
     return [
         col
-        for col in trial_fixations.columns
+        for col in user_columns(trial_fixations)
         if pd.api.types.is_numeric_dtype(trial_fixations[col])
     ]
 
@@ -3292,7 +3316,7 @@ def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     if words is None or words.empty:
         return []
     cols = [c for c in _PREFERRED_HIGHLIGHT_FIELDS if c in words.columns]
-    for col in words.columns:
+    for col in user_columns(words):
         if col not in cols and pd.api.types.is_bool_dtype(words[col]):
             cols.append(col)
     return cols
@@ -5270,9 +5294,24 @@ def render_plot_controls(
         by_col, style_col = field.columns(
             [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
         )
+        # DATA-66: the dataset's own names, its columns before the app's.
+        rail_names = _rail_names()
+        color_labels = rail_names.option_labels(
+            color_fields,
+            {
+                UNIFORM_COLOR_FIELD: UNIFORM_COLOR_FIELD,
+                "line": "Line" + cn.COMPUTED_SUFFIX,
+            },
+        )
         color_by = by_col.selectbox(
             "Color fixations by",
-            options=color_fields,
+            # "line" is no column of either table, so it is placed by hand,
+            # after the app's own fields like the computed field it is.
+            options=rail_names.sort_options(
+                [f for f in color_fields if f != "line"], first=(UNIFORM_COLOR_FIELD,)
+            )
+            + (["line"] if "line" in color_fields else []),
+            format_func=color_labels.__getitem__,
             key="global_color_by",
             persist_state="session",
             # VIZ-46: a chosen colour range is in the units of the column it was
@@ -5545,11 +5584,15 @@ def render_plot_controls(
         # Honoured by all three render paths (static, animation, and — since the
         # comparison builders now take `fixation_hover_fields` too — Compare),
         # so this one carries no `_mode_gate`.
+        hover_names = _rail_names()
+        fix_hover = hover_names.sort_options(hover_field_options(trial_fixations))
+        fix_hover_labels = hover_names.option_labels(fix_hover)
         _labeled(
             st,
             "multiselect",
             "Hover fields",
-            options=hover_field_options(trial_fixations),
+            options=fix_hover,
+            format_func=fix_hover_labels.__getitem__,
             key="global_fixation_hover_fields",
             persist_state="session",
             help="Fields shown when hovering a fixation. Choose any retained "
@@ -5912,9 +5955,13 @@ def render_plot_controls(
         )
         span_off_disabled, _ = _layer_gate(not span_on, None)
         if highlight_options:
+            highlight_labels = cn.active(st.session_state, "words").option_labels(
+                highlight_options
+            )
             span_rest.selectbox(
                 "Highlight words by",
                 options=highlight_options,
+                format_func=highlight_labels.__getitem__,
                 key="global_highlight_column",
                 persist_state="session",
                 disabled=span_off_disabled,
@@ -6087,11 +6134,15 @@ def render_plot_controls(
         # Honoured by all three render paths (static, animation, and — since
         # the comparison builders take `word_hover_fields` too — Compare), so
         # this one carries no `_mode_gate`.
+        word_names = cn.active(st.session_state, "words")
+        word_hover = word_names.sort_options(hover_field_options(words, words=True))
+        word_hover_labels = word_names.option_labels(word_hover)
         _labeled(
             st,
             "multiselect",
             "Hover fields",
-            options=hover_field_options(words, words=True),
+            options=word_hover,
+            format_func=word_hover_labels.__getitem__,
             key="global_word_hover_fields",
             persist_state="session",
             help="Fields shown when hovering a word: identity, any reading "
@@ -6192,9 +6243,13 @@ def render_plot_controls(
         metric_col, scale_col = field.columns(
             [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
         )
+        metric_labels = _rail_names().option_labels(
+            ["duration_ms", "counts"], {"counts": "Fixation count"}
+        )
         heatmap_metric = metric_col.selectbox(
             "Metric",
             options=["duration_ms", "counts"],
+            format_func=metric_labels.__getitem__,
             key="global_heatmap_metric",
             persist_state="session",
             disabled=metric_disabled_h,
@@ -6500,9 +6555,11 @@ def render_plot_controls(
         )
         _row_label(axes_cols[0], "Axes", axis_help)
         _sub_caption(axes_cols[1], "X")
+        axis_labels = _rail_names().option_labels(numeric_fields)
         axes_cols[2].selectbox(
             "X axis field",
             options=numeric_fields,
+            format_func=axis_labels.__getitem__,
             key="global_x_field",
             persist_state="session",
             disabled=axis_disabled,
@@ -6512,6 +6569,7 @@ def render_plot_controls(
         axes_cols[4].selectbox(
             "Y axis field",
             options=numeric_fields,
+            format_func=axis_labels.__getitem__,
             key="global_y_field",
             persist_state="session",
             disabled=axis_disabled,

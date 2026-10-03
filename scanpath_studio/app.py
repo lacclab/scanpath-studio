@@ -66,7 +66,12 @@ from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.annotations import (
     filter_keys,
 )
-from scanpath_studio.column_names import ColumnNames, from_schema
+from scanpath_studio.column_names import (
+    ACTIVE_COLUMN_NAMES_KEY,
+    ColumnNames,
+    from_schema,
+)
+from scanpath_studio.column_names import active as active_names
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -3152,11 +3157,6 @@ def _normalize_pair(
     return words_norm, fixations_norm
 
 
-#: DATA-66 — the open dataset's column-name map per table, as payloads
-#: (`column_names.ColumnNames.to_payload`), stashed beside the mapping.
-ACTIVE_COLUMN_NAMES_KEY = "_active_column_names"
-
-
 def _reset_active_mapping() -> None:
     """Clear the stashed column mapping at the start of each data load, so a new
     source doesn't inherit the previous one's mapping in the Data Inspection tab."""
@@ -3192,8 +3192,7 @@ def _stash_active_mapping(
 
 def active_column_names(table: str) -> ColumnNames:
     """The open dataset's column-name map for ``table`` (DATA-66)."""
-    stash = st.session_state.get(ACTIVE_COLUMN_NAMES_KEY) or {}
-    return ColumnNames.from_payload(stash.get(table))
+    return active_names(st.session_state, table)
 
 
 #: Lead of the ``problems`` entry a **rejected** mapping produces, as opposed to

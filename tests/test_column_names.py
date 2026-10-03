@@ -431,3 +431,189 @@ def test_a_measure_cleared_on_edit_dataset_loses_its_name():
     assert "total_fixation_duration_ms" not in saved["words"].columns
     words = ColumnNames.from_payload(saved["column_names"]["words"])
     assert words.source("total_fixation_duration_ms") is None
+
+
+class TestLabels:
+    NAMES = ColumnNames(
+        {
+            "duration_ms": SourceName(("CURRENT_FIX_DURATION",)),
+            "trial_id": SourceName(("TRIAL",)),
+            "unique_trial_id": SourceName(("TRIAL",)),
+            "fixation_id": SourceName((), cn.GENERATED, "1, 2, …"),
+        }
+    )
+
+    def test_a_mapped_column_is_labelled_by_its_source(self):
+        assert self.NAMES.label("duration_ms") == "CURRENT_FIX_DURATION"
+
+    def test_an_app_made_column_says_so(self):
+        assert self.NAMES.label("is_regression") == "Regression (computed)"
+        assert self.NAMES.label("fixation_id").endswith(cn.COMPUTED_SUFFIX)
+
+    def test_a_reading_measure_takes_its_full_name(self):
+        assert cn.canonical_label("total_fixation_duration_ms") != (
+            "total_fixation_duration_ms"
+        )
+
+    def test_a_carried_column_keeps_its_name(self):
+        assert self.NAMES.label("gpt2_surprisal") == "gpt2_surprisal"
+
+    def test_a_converted_column_is_labelled_by_what_it_holds(self):
+        """A width read from two edges is their difference, not their sum."""
+        raw = pd.DataFrame(columns=["T", "W", "L", "R", "TOP", "BOT"])
+        schema = {
+            "trial": "T",
+            "word_id": "W",
+            "left": "L",
+            "right": "R",
+            "top": "TOP",
+            "bottom": "BOT",
+        }
+        names = from_schema("words", schema, raw.columns)
+        assert names.label("width") == "R − L"
+        assert names.label("x") == "L"
+        # The identity stays the source columns — what later phases rename by.
+        assert names.display("width") == "R + L"
+
+    def test_option_labels_are_unique(self):
+        labels = self.NAMES.option_labels(["trial_id", "unique_trial_id"])
+        assert len(set(labels.values())) == 2
+        assert labels["trial_id"].startswith("TRIAL")
+
+    def test_the_users_columns_come_first_and_computed_last(self):
+        ordered = self.NAMES.sort_options(
+            ["is_regression", "(uniform)", "duration_ms", "gpt2_surprisal"],
+            first=("(uniform)",),
+        )
+        assert ordered == [
+            "(uniform)",
+            "duration_ms",
+            "gpt2_surprisal",
+            "is_regression",
+        ]
+
+    def test_merged_prefers_its_own_entries(self):
+        words = ColumnNames({"duration_ms": SourceName(("OTHER",))})
+        assert self.NAMES.merged(words).label("duration_ms") == "CURRENT_FIX_DURATION"
+
+    def test_active_reads_the_session(self):
+        session = {cn.ACTIVE_COLUMN_NAMES_KEY: {"fixations": self.NAMES.to_payload()}}
+        assert cn.active(session, "fixations") == self.NAMES
+        assert cn.active({}, "fixations") == cn.EMPTY
+
+
+@pytest.mark.timeout(180)
+def test_the_rail_shows_the_demos_own_column_names(demo_raw):
+    """AppTest exposes a picker's *formatted* options — what a person sees."""
+    from tests.conftest import APP_SCRIPT
+
+    _, fixations = demo_raw
+    duration = data.propose_fix_schema(fixations)["duration"]
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.run()
+    assert not at.exception, at.exception
+    color = at.selectbox(key="global_color_by")
+    assert duration in color.options, color.options
+    assert "duration_ms" not in color.options
+    hover = at.multiselect(key="global_fixation_hover_fields")
+    assert duration in hover.options, hover.options
+    assert any(o.endswith(cn.COMPUTED_SUFFIX) for o in hover.options)
+    # "Line" is the app's, so it sorts after the dataset's own fields.
+    assert color.options[-1] == "Line" + cn.COMPUTED_SUFFIX
+    metric = at.selectbox(key="global_heatmap_metric")
+    assert metric.options == [duration, "Fixation count"]
+    # The values are still canonical: links and saved configs are unchanged.
+    assert at.session_state["global_heatmap_metric"] == "duration_ms"
+
+
+def test_a_table_header_shows_the_users_name():
+    from scanpath_studio import tabs
+
+    names = ColumnNames({"duration_ms": SourceName(("CURRENT_FIX_DURATION",))})
+    config = tabs.column_label_config(
+        ["duration_ms", "is_regression", "my_extra"], names
+    )
+    assert config["duration_ms"]["label"] == "CURRENT_FIX_DURATION"
+    assert config["is_regression"]["label"].endswith(cn.COMPUTED_SUFFIX)
+    assert "my_extra" not in config  # already shown by its own name
+
+
+@pytest.mark.timeout(240)
+def test_the_keep_picker_lists_the_files_own_names(monkeypatch):
+    """The add screen showed `reduced_pos` for a column the file calls
+    `Reduced_POS` — a canonical name, before anything had been normalized."""
+    from scanpath_studio import app
+    from tests.conftest import APP_SCRIPT
+
+    words = _UPLOAD_WORDS.assign(Reduced_POS=["NOUN", "VERB", "NOUN"])
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {
+            "col_map_words": words,
+            "col_map_fix": _UPLOAD_FIXATIONS,
+        }.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.run(timeout=180)
+    assert not at.exception, at.exception
+    keep = next(
+        m for m in at.multiselect if str(m.key).startswith("wizard_keep_col_map_w")
+    )
+    assert "Reduced_POS" in keep.options, keep.options
+    assert "reduced_pos" not in keep.options
+
+
+def test_the_mapping_picker_takes_option_labels():
+    """✏️ Edit dataset offers the stored *canonical* columns; it must show them
+    by the user's names."""
+    import inspect
+
+    from scanpath_studio import controls
+
+    assert "option_labels" in inspect.signature(controls.column_mapping_ui).parameters
+
+
+@pytest.mark.timeout(240)
+def test_the_edit_screen_offers_columns_by_their_users_names():
+    """✏️ Edit dataset offers the stored frame's canonical columns; a person sees
+    the names they uploaded (`CURRENT_FIX_DURATION`, not `duration_ms`)."""
+    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+    from tests.conftest import APP_SCRIPT, pin_data_view
+
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["_datasets"] = {"study": _stored_upload()}
+    at.session_state["data_source_choice"] = "study"
+    at.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    pin_data_view(at)
+    at.run(timeout=180)
+    assert not at.exception, at.exception
+    duration = at.selectbox(key="remap_study_fixations_duration")
+    assert "CURRENT_FIX_DURATION" in duration.options, duration.options
+    assert "duration_ms" not in duration.options
+    assert duration.value == "duration_ms"  # the value is still canonical
+
+
+def test_an_alias_of_the_same_source_column_is_hidden():
+    """`unique_trial_id` mirrors `trial_id` (BUG-58): when both come from one
+    column of the user's file, a table shows that column once."""
+    names = ColumnNames(
+        {
+            "trial_id": SourceName(("unique_trial_id",)),
+            "unique_trial_id": SourceName(("unique_trial_id",)),
+            "text_id": SourceName(("PARAGRAPH",)),
+            "unique_text_id": SourceName(("OTHER",)),
+        }
+    )
+    columns = ["trial_id", "unique_trial_id", "text_id", "unique_text_id", "x"]
+    assert names.aliases(columns) == {"unique_trial_id"}
+    assert cn.EMPTY.aliases(columns) == set()
+
+
+def test_the_axis_and_highlight_pickers_skip_internal_columns():
+    from scanpath_studio import controls
+
+    frame = pd.DataFrame({"x": [1.0], data.TEXT_ID_MAPPED: [True], "flag": [True]})
+    assert data.TEXT_ID_MAPPED not in controls.numeric_field_options(frame)
+    assert controls.highlight_column_options(frame) == ["flag"]

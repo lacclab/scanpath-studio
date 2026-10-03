@@ -86,7 +86,9 @@ from scanpath_studio.code_snippet import (
     CompareTarget,
     FigureState,
 )
+from scanpath_studio.column_names import EMPTY as EMPTY_NAMES
 from scanpath_studio.column_names import ColumnNames, from_schema
+from scanpath_studio.column_names import active as active_column_names
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
     THIS_DATASET,
@@ -10917,7 +10919,24 @@ def render_multiple_comparison_tab(
 # -----------------------------------------------------------------------------
 
 
-def _render_raw_table(df: pd.DataFrame, caption: str | None = None) -> None:
+def column_label_config(columns, names: ColumnNames) -> dict:
+    """DATA-66: header labels for a table of canonical columns.
+
+    The user's own names, and the app's columns marked, for every column whose
+    label differs from its name. The frame itself stays canonical, so sorting
+    and the lazy stream are untouched.
+    """
+    labels = names.option_labels(list(columns))
+    return {
+        column: st.column_config.Column(label=label)
+        for column, label in labels.items()
+        if label != str(column)
+    }
+
+
+def _render_raw_table(
+    df: pd.DataFrame, caption: str | None = None, *, table: str | None = None
+) -> None:
     """Render one of the raw Data Inspection tables, whole.
 
     ``lazy=True`` (ENG-36 — Streamlit 1.61) replaced a hand-rolled pager: a
@@ -10936,7 +10955,21 @@ def _render_raw_table(df: pd.DataFrame, caption: str | None = None) -> None:
     single chokepoint (``export.strip_local_paths``).
     """
     # DATA-49: bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    st.dataframe(drop_internal_columns(df), hide_index=True, width="stretch", lazy=True)
+    shown = drop_internal_columns(df)
+    # DATA-66: headed by the dataset's own names (``table`` says whose).
+    names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
+    # A copy of a partner from the same source column is shown once — left out
+    # of `column_order` rather than dropped, so a large frame is not copied.
+    hidden = names.aliases(shown.columns)
+    order = [c for c in shown.columns if c not in hidden]
+    st.dataframe(
+        shown,
+        hide_index=True,
+        width="stretch",
+        lazy=True,
+        column_order=order,
+        column_config=column_label_config(order, names),
+    )
     if caption:
         st.caption(caption)
 
@@ -10946,7 +10979,7 @@ def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     if fixations_filtered.empty:
         st.caption("No Fixations table uploaded.")
         return
-    _render_raw_table(fixations_filtered)
+    _render_raw_table(fixations_filtered, table="fixations")
 
 
 def render_words_tab(words_filtered: pd.DataFrame) -> None:
@@ -10960,7 +10993,7 @@ def render_words_tab(words_filtered: pd.DataFrame) -> None:
     if words_filtered.empty:
         st.caption("No Words / IA table uploaded.")
         return
-    _render_raw_table(words_filtered)
+    _render_raw_table(words_filtered, table="words")
 
 
 def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
@@ -10976,7 +11009,7 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
             f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."
         )
-    _render_raw_table(raw_gaze_filtered)
+    _render_raw_table(raw_gaze_filtered, table="raw_gaze")
 
 
 def _render_raw_metadata_tab(label: str, attached, id_note: str) -> None:
@@ -12823,7 +12856,19 @@ def _render_remap_fields(
             # mapping (the frame is already normalized), not a fresh
             # auto-detect — say so. A table being added *is* auto-detected.
             detected_label=detected_labels.get(table_key, "currently mapped"),
+            option_labels=stored_labels.get(table_key),
         )
+
+    # DATA-66: a stored table's columns are canonical; offer them by the
+    # dataset's own names. A table being added is raw — its names are its own.
+    stored_names = stored.get("column_names") or {}
+    stored_labels = {
+        table_key: ColumnNames.from_payload(stored_names.get(table_key)).option_labels(
+            user_columns(frame)
+        )
+        for table_key, frame in frames.items()
+        if detected_labels.get(table_key) == "currently mapped"
+    }
 
     pending: dict = {table: {} for table in frames}
     seen: set = set()

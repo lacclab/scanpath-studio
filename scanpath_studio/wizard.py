@@ -1606,7 +1606,9 @@ def _wizard_table_keep_picker(
         # UX-121: no more "· meta"/"· extra" suffix — each table's picker is
         # already its own, so the category badge that used to help tell
         # cross-table entries apart is redundant now; the field name alone.
-        labels[src] = d["dest"]
+        # DATA-66: the file's own name — this screen used to show the canonical
+        # one (`reduced_pos` for `Reduced_POS`) before anything was normalized.
+        labels[src] = src
         # Trial-level conditions and detected measures/linguistic features
         # were both auto-kept before UX-114 split them into two pickers —
         # same net defaults, offered as one choice now.

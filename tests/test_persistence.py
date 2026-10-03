@@ -1292,3 +1292,23 @@ def test_restoring_datasets_reports_each_one(tmp_path):
         assert restore_state({}, tmp_path)
     snap = task.snapshot()
     assert (snap.done, snap.total, snap.unit) == (1, 1, "datasets")
+
+
+def test_column_names_survive_a_cache_round_trip(tmp_path):
+    """DATA-66: the column-name map is a plain payload on the entry, so the
+    manifest carries it like `setup` — a restored upload keeps its names."""
+    names = {
+        "fixations": {
+            "duration_ms": {
+                "sources": ["CURRENT_FIX_DURATION"],
+                "kind": "mapped",
+                "note": "",
+            }
+        }
+    }
+    payload = _dataset()
+    payload["column_names"] = names
+    assert save_state({"_datasets": {"Corpus": payload}}, tmp_path)
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert restored["_datasets"]["Corpus"]["column_names"] == names

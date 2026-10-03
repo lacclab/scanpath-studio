@@ -19,12 +19,14 @@ cycle (the same reason `wizard.py` is imported lazily by `app`).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import pandas as pd
 import streamlit as st
 
 from . import progress
+from .column_names import ColumnNames
 from .constants import (
     DEMO_CHOICE,
     EYEGENBENCH_DEFAULT_DIR,
@@ -72,6 +74,9 @@ class SecondaryDataset:
     #: VIZ-48: the source's normalized raw gaze, when it carries any — an
     #: upload's, or the bundled demo's. The public corpora ship none.
     raw_gaze: pd.DataFrame | None = None
+    #: DATA-66: B's column-name map per table — a stored upload's own; empty for
+    #: a public corpus or the demo until their loaders return one (phase 4).
+    column_names: Mapping[str, ColumnNames] = field(default_factory=dict)
 
 
 def _resolved_dir(key: str, default_dir: str) -> str:
@@ -374,10 +379,15 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
         return None
     stored = (st.session_state.get("_datasets") or {}).get(name)
     raw_gaze = None
+    column_names: dict[str, ColumnNames] = {}
     if isinstance(stored, dict):
         words, fixations = stored["words"], stored["fixations"]
         composite = tuple(stored.get("composite_trial_columns") or ())
         raw_gaze = stored.get("raw_gaze")
+        column_names = {
+            table: ColumnNames.from_payload(payload)
+            for table, payload in (stored.get("column_names") or {}).items()
+        }
         vouch_for_frames((words, fixations, raw_gaze))
     else:
         from scanpath_studio import app
@@ -411,4 +421,5 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
         setup=snapshot_for(name, words, fixations),
         composite_trial_columns=composite,
         raw_gaze=raw_gaze if raw_gaze is not None and not raw_gaze.empty else None,
+        column_names=column_names,
     )

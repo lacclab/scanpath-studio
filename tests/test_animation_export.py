@@ -111,6 +111,7 @@ class TestStaticBase:
         assert tuple(base.frames) == ()
         # Top margin trimmed to the slim static band, height reduced to match.
         assert base.layout.margin.t == ae._STATIC_TOP_MARGIN_PX
+        assert base.layout.margin.l == anim_fig.layout.margin.l
         assert int(base.layout.height) < int(anim_fig.layout.height)
         # BUG-93: the replay's clock is for the live player, not every raster.
         assert base.layout.meta is None
@@ -135,6 +136,97 @@ class TestElapsedLabels:
     def test_no_slider_returns_blanks(self):
         fig = go.Figure()
         assert ae._elapsed_labels(fig, 3) == ["", "", ""]
+
+
+def _annotation_record(annotation) -> dict:
+    keep = ("name", "text", "x", "y", "xanchor", "yanchor", "yshift")
+    return {k: v for k, v in annotation.to_plotly_json().items() if k in keep}
+
+
+def _frames_sent_to_kaleido(monkeypatch, fig, **kwargs) -> list:
+    """Run the real raster loop; return the layouts handed to Kaleido."""
+    import kaleido
+
+    sent = []
+
+    def _capture(figure, **_opts):
+        sent.append(go.Figure(figure).layout)
+        return _png("white")
+
+    monkeypatch.setattr(ae, "chromium_browser_path", lambda: "unused-browser")
+    monkeypatch.setattr(kaleido, "start_sync_server", lambda **_k: None)
+    monkeypatch.setattr(kaleido, "stop_sync_server", lambda **_k: None)
+    monkeypatch.setattr(kaleido, "calc_fig_sync", _capture)
+    ae.render_png_frames(fig, frame_indices=[0, len(fig.frames) - 1], **kwargs)
+    return sent
+
+
+class TestRasterFrameAnnotations:
+    """The clip keeps the figure's own annotations; the readout is one more."""
+
+    @pytest.fixture
+    def finished_fig(self, normalized_words_df, normalized_fixations_df):
+        from scanpath_studio.export import annotate_figure
+        from scanpath_studio.plots import add_illustration_label
+
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            duration_size_legend=True,
+        )
+        # What the app's finishing step adds before handing the figure over.
+        add_illustration_label(fig, ["Playback speed changed"])
+        annotate_figure(fig, title="A title", caption="A caption")
+        return fig
+
+    def test_first_and_last_frames_keep_every_annotation(
+        self, monkeypatch, finished_fig
+    ):
+        before = [_annotation_record(a) for a in finished_fig.layout.annotations]
+        assert any("Illustration" in a["text"] for a in before)  # precondition
+        assert any(a["text"] == "A caption" for a in before)
+        assert any(a.get("name") == "duration_size_key" for a in before)
+        labels = ae._elapsed_labels(finished_fig, len(finished_fig.frames))
+        sent = _frames_sent_to_kaleido(monkeypatch, finished_fig)
+        assert len(sent) == 2
+        for layout, label in zip(sent, (labels[0], labels[-1])):
+            records = [_annotation_record(a) for a in layout.annotations]
+            elapsed = [a for a in records if a.get("name") == "elapsed_readout"]
+            assert [a["text"] for a in elapsed] == [f"Elapsed: {label}"]
+            assert [a for a in records if a.get("name") != "elapsed_readout"] == (
+                before
+            )
+            assert sum(a["text"].startswith("Elapsed") for a in records) == 1
+        # The caller's figure is untouched — the HTML export reuses it.
+        assert [
+            _annotation_record(a) for a in finished_fig.layout.annotations
+        ] == before
+
+    def test_no_readout_when_elapsed_is_off(self, monkeypatch, finished_fig):
+        before = [_annotation_record(a) for a in finished_fig.layout.annotations]
+        sent = _frames_sent_to_kaleido(monkeypatch, finished_fig, show_elapsed=False)
+        for layout in sent:
+            assert [_annotation_record(a) for a in layout.annotations] == before
+
+    def test_only_the_control_band_is_trimmed(self, monkeypatch, finished_fig):
+        # A title above, a caption below and the grid / colour-bar reserves at
+        # the sides keep their margins; only the transport band goes.
+        from scanpath_studio.plots import _CONTROLS_MARGIN_PX
+
+        margin = finished_fig.layout.margin
+        trim = _CONTROLS_MARGIN_PX - ae._STATIC_TOP_MARGIN_PX
+        layout = _frames_sent_to_kaleido(monkeypatch, finished_fig)[0]
+        assert layout.margin.t == margin.t - trim
+        assert (layout.margin.l, layout.margin.r, layout.margin.b) == (
+            margin.l,
+            margin.r,
+            margin.b,
+        )
+        assert layout.height == finished_fig.layout.height - trim
+        assert ae._static_height(finished_fig) == layout.height
 
 
 class TestEncodeGif:

@@ -9,6 +9,7 @@ __all__ = [
     "animate_scanpath",
     "build_authored_scanpath",
     "cache_status",
+    "check_data_health",
     "clear_cache",
     "compare_scanpaths",
     "compute_word_metrics",

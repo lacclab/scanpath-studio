@@ -11761,14 +11761,32 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     id) into a single passage string. Cached on a cheap content fingerprint of
     the words frame (the frame itself is passed un-hashed via the underscore
     arg) so a rerun that doesn't change the data reuses the result.
+
+    A multipart text is read screen by screen, and its word ids (and lines)
+    may start again on every screen: a word is ``(screen, word id)`` there, the
+    screens go in their ``screen_index`` order (the earliest any reader saw
+    each, since MultiplEYE shuffles question screens per reader), and every
+    screen of a text with more than one opens with its own ``[screen id]``
+    marker — naming the screen's kind when the data has one — with a
+    *# Screens* column beside.
     """
     empty = pd.DataFrame(columns=["Text ID", "# Words", "Text"])
     if _words.empty or "text_id" not in _words.columns or "text" not in _words.columns:
         return empty
 
+    multipart = SCREEN_ID in _words.columns
     cols = [
         c
-        for c in ("text_id", "unique_text_id", "word_id", "line_idx", "text")
+        for c in (
+            "text_id",
+            "unique_text_id",
+            SCREEN_ID,
+            SCREEN_INDEX,
+            "screen_kind",
+            "word_id",
+            "line_idx",
+            "text",
+        )
         if c in _words.columns
     ]
     sub = _words[cols].copy()
@@ -11776,15 +11794,34 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     if sub.empty:
         return empty
 
-    # Collapse identical word rows coming from multiple participants (stimulus
-    # AoIs are shared by every reader; per-participant tables repeat them).
-    if "word_id" in sub.columns:
-        sub = sub.drop_duplicates(subset=["text_id", "word_id"])
-    else:
-        sub = sub.drop_duplicates()
+    if multipart:
+        sub[SCREEN_ID] = sub[SCREEN_ID].astype("string").fillna("")
+        # One position per screen of a text: the earliest any reader had it.
+        position = (
+            pd.to_numeric(sub[SCREEN_INDEX], errors="coerce")
+            if SCREEN_INDEX in sub.columns
+            else pd.Series(np.nan, index=sub.index)
+        )
+        sub["_screen_order"] = position.groupby(
+            [sub["text_id"], sub[SCREEN_ID]], dropna=False
+        ).transform("min")
 
-    sort_cols = ["text_id"] + [c for c in ("line_idx", "word_id") if c in sub.columns]
-    sub = sub.sort_values(sort_cols, kind="stable")
+    # Collapse identical word rows coming from multiple participants (stimulus
+    # AoIs are shared by every reader; per-participant tables repeat them). On
+    # a multipart text a word is only the same word on the same screen.
+    word_key = ["text_id", *([SCREEN_ID] if multipart else [])]
+    if "word_id" in sub.columns:
+        sub = sub.drop_duplicates(subset=[*word_key, "word_id"])
+    else:
+        sub = sub.drop_duplicates(subset=[c for c in sub.columns if c != SCREEN_INDEX])
+
+    screen_sort = ["_screen_order", SCREEN_ID] if multipart else []
+    sort_cols = (
+        ["text_id"]
+        + screen_sort
+        + [c for c in ("line_idx", "word_id") if c in sub.columns]
+    )
+    sub = sub.sort_values(sort_cols, kind="stable", na_position="last")
 
     # Only surface unique_text_id as its own column when it actually differs
     # from text_id (after the unique_paragraph_id fallback they're identical).
@@ -11792,14 +11829,31 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
         sub["unique_text_id"].astype(str).eq(sub["text_id"].astype(str)).all()
     )
 
+    def _words_of(frame: pd.DataFrame) -> list[str]:
+        return [w for w in frame["text"].astype(str).tolist() if w and w != "nan"]
+
+    def _screen_marker(screen_id: str, frame: pd.DataFrame) -> str:
+        label = screen_id or "(no screen id)"
+        if "screen_kind" in frame.columns:
+            kinds = frame["screen_kind"].dropna().astype(str).unique().tolist()
+            if len(kinds) == 1 and kinds[0].lower() not in label.lower():
+                label = f"{label} · {kinds[0]}"
+        return f"[{label}]"
+
     rows = []
     for text_id, grp in sub.groupby("text_id", sort=False):
-        words_list = [w for w in grp["text"].astype(str).tolist() if w and w != "nan"]
-        row = {
-            "Text ID": text_id,
-            "# Words": len(words_list),
-            "Text": " ".join(words_list),
-        }
+        words_list = _words_of(grp)
+        n_screens = grp[SCREEN_ID].nunique() if multipart else 1
+        if n_screens > 1:
+            text = " ".join(
+                " ".join([_screen_marker(str(screen), page), *_words_of(page)])
+                for screen, page in grp.groupby(SCREEN_ID, sort=False)
+            )
+        else:
+            text = " ".join(words_list)
+        row = {"Text ID": text_id, "# Words": len(words_list), "Text": text}
+        if multipart:
+            row["# Screens"] = n_screens
         if has_unique:
             uniques = grp["unique_text_id"].dropna().astype(str).unique().tolist()
             row["Unique Text ID"] = ", ".join(uniques)
@@ -11809,6 +11863,8 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     ordered = ["Text ID"]
     if has_unique:
         ordered.append("Unique Text ID")
+    if multipart:
+        ordered.append("# Screens")
     ordered += ["# Words", "Text"]
     return result[[c for c in ordered if c in result.columns]]
 
@@ -15456,6 +15512,90 @@ def render_dataset_capabilities(
             + (" · whole dataset, before the trial filters" if filtered else "")
         )
         st.caption("  \n".join(lines))
+
+
+@st.cache_data(show_spinner=False)
+def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
+    """`data_health.check_data_health`, once per dataset (keyed on fingerprints)."""
+    from .data_health import check_data_health
+
+    return check_data_health(_words, _fixations, _raw_gaze)
+
+
+#: How a health finding names the rows of each table.
+_HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "AOI", "raw_gaze": "raw-gaze"}
+
+
+def render_data_health(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+    *,
+    filtered: bool = False,
+) -> None:
+    """*Data checks* under *Available with this dataset*: values that parsed but
+    cannot be right — a fixation of 0 ms or less, a position that is not a finite
+    number, a word box with no area (`data_health`).
+
+    Runs on the whole dataset, before the trial filters, cached per dataset, so
+    a rerun costs a fingerprint lookup. Each finding names the dataset's own
+    columns (DATA-66), counts rows and trials, quotes a few rows and says what
+    the app does with them. Nothing is removed or changed.
+    """
+    from .column_names import active
+
+    findings = _c_data_health(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+    with st.container(key="dataset_health"):
+        st.caption(
+            "**Data checks**"
+            + (" · whole dataset, before the trial filters" if filtered else "")
+        )
+        if not findings:
+            st.caption(
+                "No fixation lasts 0 ms or less, every position is a finite "
+                "number, and every word box has an area."
+            )
+            return
+        lines: dict[str, list[str]] = {"warning": [], "note": []}
+        for finding in findings:
+            names = active(st.session_state, finding.table)
+            columns = ", ".join(f"`{names.label(c)}`" for c in finding.columns)
+            kinds = ", ".join(f"{n:,} {k}" for k, n in finding.breakdown.items())
+            noun = _HEALTH_ROW_NOUN.get(finding.table, finding.table)
+            trials = f"{finding.trials:,} trial" + ("" if finding.trials == 1 else "s")
+            lines[finding.severity].append(
+                f"**{finding.title}** — {finding.rows:,} of {finding.total_rows:,} "
+                f"{noun} rows, in {trials} ({kinds}); from {columns}."
+            )
+        if lines["warning"]:
+            st.warning("  \n".join(lines["warning"]), icon=ICONS["warning"])
+        if lines["note"]:
+            st.caption("  \n".join(lines["note"]))
+        with st.expander("What the data checks found", expanded=False):
+            st.caption(
+                "Nothing is removed or changed: these rows stay in every table "
+                "and export. What each one does in the app:"
+            )
+            for finding in findings:
+                names = active(st.session_state, finding.table)
+                st.markdown(f"**{finding.title}**")
+                st.caption(finding.consequence)
+                if finding.examples:
+                    example = pd.DataFrame(list(finding.examples))
+                    st.dataframe(
+                        example.rename(columns=names.label),
+                        hide_index=True,
+                        width="stretch",
+                    )
 
 
 def render_data_inspection_tab(

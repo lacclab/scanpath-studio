@@ -2380,8 +2380,9 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "key": "timestamp",
         "label": "Timestamp (ms)",
         "required": False,
-        "help": "Sample time (ms); orders the continuous gaze path. "
-        "Defaults to row order.",
+        "help": "Sample time (ms); orders the continuous gaze path. Left "
+        "unmapped, the samples keep their row order and are numbered "
+        "1, 2, … per trial — with no time, since no sampling rate is known.",
     },
 ]
 

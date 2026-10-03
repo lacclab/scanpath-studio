@@ -16,7 +16,7 @@ any guess.
 |-------|-------|-----------------------------|
 | **Words / IA** | one row per word / interest area, with its on-screen box | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
 | **Fixations** | one row per fixation | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id |
-| **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y, timestamp |
+| **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y; optionally timestamp |
 | **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
 | **Trial metadata** *(optional)* | one row per trial | trial id, plus anything you know about that trial |
 | **Text metadata** *(optional)* | one row per text | text id, plus anything you know about that text |
@@ -26,6 +26,12 @@ loads: its rows are taken to be in reading order. Reading time and reading
 speed are then an estimate — the fixations laid end to end by their durations,
 leaving out the time between them — and the summaries label them so
 (`reading_time_source`). The replay uses the same clock.
+
+A raw gaze table with no timestamp column keeps its samples in file order and
+gives them no time: each sample is numbered 1, 2, … within its trial
+(`sample_index`), the plot colours the samples by that order under a
+*Sample order* legend title and the hover reads `sample n`, and the exported
+table carries the sample number. Nothing assumes a sampling rate.
 
 **Units.** Durations and timestamps are read in milliseconds. A column whose
 header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon

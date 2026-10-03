@@ -49,6 +49,7 @@ from .constants import (
     SACCADE_DIRECTION_CLASSES,
     SACCADE_DIRECTION_FOLD,
     SACCADE_DIRECTION_LABELS,
+    SAMPLE_INDEX,
     TRENDLINE_COLOR,
     UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
@@ -2074,16 +2075,31 @@ def _add_raw_gaze_layer(
     and a non-empty frame. **UX-86**: ``raw_gaze_color`` is the flat colour
     used when the data carries no ``timestamp_ms`` — when it does, fixations
     stay time-mapped (Viridis) since that is the more informative default and
-    a flat colour would throw it away.
+    a flat colour would throw it away. Samples imported without a clock carry
+    ``sample_index`` instead: coloured by that order, with the legend titled
+    *Sample order* and the hover saying ``sample n`` — never milliseconds.
     """
     if not (show_raw_gaze and raw_gaze is not None and not raw_gaze.empty):
         return False
+    legend_title = None
     if "timestamp_ms" in raw_gaze.columns:
         color_vals = raw_gaze["timestamp_ms"]
         colorscale = "Viridis"
+        customdata = raw_gaze["timestamp_ms"]
+        when = "<br>t: %{customdata} ms"
+    elif SAMPLE_INDEX in raw_gaze.columns:
+        # No clock (the import mapped none): coloured by the samples' order,
+        # and said so — a ramp with no title would read as time.
+        color_vals = raw_gaze[SAMPLE_INDEX]
+        colorscale = "Viridis"
+        customdata = raw_gaze[SAMPLE_INDEX]
+        when = "<br>sample %{customdata}"
+        legend_title = "Sample order"
     else:
         color_vals = raw_gaze_color
         colorscale = None
+        customdata = None
+        when = ""
     fig.add_trace(
         go.Scatter(
             x=raw_gaze["x"],
@@ -2097,12 +2113,11 @@ def _add_raw_gaze_layer(
                 showscale=False,
             ),
             hovertemplate=(
-                "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}"
-                "<br>t: %{customdata} ms<extra></extra>"
+                "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}" + when + "<extra></extra>"
             ),
-            customdata=raw_gaze["timestamp_ms"]
-            if "timestamp_ms" in raw_gaze.columns
-            else None,
+            customdata=customdata,
+            legendgroup="raw_gaze" if legend_title else None,
+            legendgrouptitle_text=legend_title,
             name="Raw gaze",
             showlegend=True,
         )
@@ -5019,7 +5034,12 @@ def _add_comparison_raw_gaze_trace(
     """
     if samples is None or samples.empty:
         return
-    has_time = "timestamp_ms" in samples.columns
+    if "timestamp_ms" in samples.columns:
+        customdata, when = samples["timestamp_ms"], "<br>t: %{customdata} ms"
+    elif SAMPLE_INDEX in samples.columns:  # no clock: the sample's number
+        customdata, when = samples[SAMPLE_INDEX], "<br>sample %{customdata}"
+    else:
+        customdata, when = None, ""
     trace = go.Scatter(
         x=samples["x"],
         y=samples["y"],
@@ -5031,10 +5051,10 @@ def _add_comparison_raw_gaze_trace(
         ),
         hovertemplate=(
             f"Raw gaze · {display_name}<br>x: %{{x:.1f}}<br>y: %{{y:.1f}}"
-            + ("<br>t: %{customdata} ms" if has_time else "")
+            + when
             + "<extra></extra>"
         ),
-        customdata=samples["timestamp_ms"] if has_time else None,
+        customdata=customdata,
         name=f"{display_name} · raw gaze",
         legendgroup=display_name,
         showlegend=bool(settings.show_legend),

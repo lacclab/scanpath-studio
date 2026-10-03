@@ -910,6 +910,34 @@ def load_sample_raw_gaze() -> pd.DataFrame:
     return load_raw_gaze(_data.load_sample_raw_gaze())
 
 
+def check_data_health(
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
+
+    Checks the normalized tables (from
+    [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data] /
+    [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) for fixations lasting
+    0 ms or less, fixations and raw-gaze samples whose position is missing or
+    infinite, and word boxes with no area. One row per check that found
+    anything: ``table``, ``check``, ``problem``, the canonical ``columns``,
+    ``rows`` of ``of_rows``, the ``trials`` they fall in, a ``breakdown`` by
+    kind, ``severity`` (``"note"`` for raw-gaze gaps, which blinks and track
+    loss make ordinary), ``what_happens`` to those rows in the app, and a few
+    ``examples``. An empty frame means every check passed. Nothing is changed
+    or dropped::
+
+        words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+        print(sps.check_data_health(words, fixations))
+    """
+    from .data_health import check_data_health as _check
+    from .data_health import findings_frame
+
+    return findings_frame(_check(words, fixations, raw_gaze))
+
+
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).
 

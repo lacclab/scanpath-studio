@@ -1766,6 +1766,70 @@ def _selected_text_metadata_columns(frame, fields: tuple[str, ...] | None):
     return frame[keep] if keep else None
 
 
+def _rows_in_scope(
+    frame,
+    *,
+    pairs: set[tuple[str, str]],
+    texts: set[str],
+    grain: str,
+):
+    """``frame``'s rows about what the bundle exports, or ``None`` when none are.
+
+    A bundle's metadata describes only its own readers, trials and texts:
+    ``grain`` ``"participant"`` keeps the readers in ``pairs``, ``"trial"`` the
+    readings — by the (reader, trial) pair when the table has a reader column,
+    else by trial id — and ``"text"`` the texts in ``texts``. Ids compare as
+    text, as the metadata module matches them. A table with no key column, or
+    no matching row, is left out rather than shipped whole.
+    """
+    if frame is None or frame.empty:
+        return None
+    if grain == "participant":
+        if "participant_id" not in frame.columns:
+            return None
+        mask = frame["participant_id"].astype(str).isin({p for p, _ in pairs})
+    elif grain == "trial":
+        if "trial_id" not in frame.columns:
+            return None
+        if "participant_id" in frame.columns:
+            keys = pd.Series(
+                list(
+                    zip(
+                        frame["participant_id"].astype(str),
+                        frame["trial_id"].astype(str),
+                        strict=True,
+                    )
+                ),
+                index=frame.index,
+                dtype=object,
+            )
+            mask = keys.isin(pairs)
+        else:
+            mask = frame["trial_id"].astype(str).isin({t for _, t in pairs})
+    else:
+        if "text_id" not in frame.columns:
+            return None
+        mask = frame["text_id"].astype(str).isin(texts)
+    kept = frame[mask]
+    return None if kept.empty else kept
+
+
+def _unit_text_ids(combo_row: dict, *frames: pd.DataFrame) -> set[str]:
+    """Every text id one exported reading carries — its combo row's, and the
+    ``unique_text_id`` / ``text_id`` values in its own rows — as text."""
+    found: set[str] = set()
+    value = combo_row.get("text_id")
+    if value is not None and not pd.isna(value):
+        found.add(str(value))
+    for frame in frames:
+        if frame is None or frame.empty:
+            continue
+        for column in ("unique_text_id", "text_id"):
+            if column in frame.columns:
+                found.update(frame[column].dropna().astype(str).unique())
+    return found
+
+
 def _session_text_metadata():
     """The attached text table, when running inside the app.
 
@@ -1979,6 +2043,10 @@ def bulk_export(
     # the trial id, say). Two zip entries at one name silently loses a file, so
     # `resolve_export_path` disambiguates against what's already been written.
     used_paths: set = set()
+    # The readers, trials and texts the bundle actually holds — what its
+    # metadata tables are narrowed to at the end.
+    exported_pairs: set[tuple[str, str]] = set()
+    exported_texts: set[str] = set()
     emit_status(
         status_callback,
         (
@@ -2043,6 +2111,11 @@ def bulk_export(
                 if progress_callback:
                     progress_callback(progress)
                 continue
+
+            exported_pairs.add((str(participant), str(trial)))
+            exported_texts.update(
+                _unit_text_ids(combo._asdict(), trial_words, trial_fix, trial_raw_gaze)
+            )
 
             # A screen's own canvas, for its figure and its plot config alike.
             unit_canvas = (
@@ -2350,8 +2423,11 @@ def bulk_export(
     participant_metadata = (settings or {}).get("participant_metadata")
     if participant_metadata is None:
         participant_metadata = _session_participant_metadata()
-    participant_metadata = _selected_metadata_columns(
-        participant_metadata, options.metadata_fields
+    participant_metadata = _rows_in_scope(
+        _selected_metadata_columns(participant_metadata, options.metadata_fields),
+        pairs=exported_pairs,
+        texts=exported_texts,
+        grain="participant",
     )
     if participant_metadata is not None and not participant_metadata.empty:
         for fmt in options.table_formats():
@@ -2367,8 +2443,11 @@ def bulk_export(
     trial_metadata = (settings or {}).get("trial_metadata")
     if trial_metadata is None:
         trial_metadata = _session_trial_metadata()
-    trial_metadata = _selected_trial_metadata_columns(
-        trial_metadata, options.trial_metadata_fields
+    trial_metadata = _rows_in_scope(
+        _selected_trial_metadata_columns(trial_metadata, options.trial_metadata_fields),
+        pairs=exported_pairs,
+        texts=exported_texts,
+        grain="trial",
     )
     if trial_metadata is not None and not trial_metadata.empty:
         for fmt in options.table_formats():
@@ -2382,8 +2461,11 @@ def bulk_export(
     text_metadata = (settings or {}).get("text_metadata")
     if text_metadata is None:
         text_metadata = _session_text_metadata()
-    text_metadata = _selected_text_metadata_columns(
-        text_metadata, options.text_metadata_fields
+    text_metadata = _rows_in_scope(
+        _selected_text_metadata_columns(text_metadata, options.text_metadata_fields),
+        pairs=exported_pairs,
+        texts=exported_texts,
+        grain="text",
     )
     if text_metadata is not None and not text_metadata.empty:
         for fmt in options.table_formats():

@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 import streamlit as st
 
+from scanpath_studio import column_names as cn
 from scanpath_studio import controls
 from scanpath_studio.data import filter_trials
 
@@ -281,8 +282,8 @@ class TestTheBundledDemoOffersOne:
         assert low < high
 
     def test_its_two_trial_index_sliders_have_different_titles(self):
-        """UX-149: `TRIAL_INDEX` and `trial_index` both humanize to "Trial
-        Index"; the later one names its column, as the ✏️ chip editor does.
+        """UX-149: `TRIAL_INDEX` and `trial_index` once both humanized to
+        "Trial Index". DATA-66 titles each by its own name, so they differ.
         `trial_index` is not a default filter field, so it is offered the way
         an upload offers it: picked in the wizard."""
         words, fixations = self._demo_frames()
@@ -290,8 +291,16 @@ class TestTheBundledDemoOffersOne:
         labels = controls.trial_filter_labels(words, fixations)
         assert {"TRIAL_INDEX", "trial_index"} <= set(labels)
         assert len(set(labels.values())) == len(labels)
-        assert labels["TRIAL_INDEX"] == "Trial Index"
-        assert labels["trial_index"] == "Trial Index (trial_index)"
+        assert labels["TRIAL_INDEX"] == "TRIAL_INDEX"
+        assert labels["trial_index"] == "trial_index"
+
+    def test_a_filter_is_titled_by_the_datasets_own_name(self):
+        """DATA-66: a column the user's file names `COND` reads `COND`."""
+        words, fixations = self._demo_frames()
+        st.session_state["wizard_filter_fields"] = ["TRIAL_INDEX"]
+        names = cn.ColumnNames({"TRIAL_INDEX": cn.SourceName(("Trial no.",))})
+        labels = controls.trial_filter_labels(words, fixations, names=names)
+        assert labels["TRIAL_INDEX"] == "Trial no."
 
 
 class TestUniqueFieldLabels:

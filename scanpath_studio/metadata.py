@@ -1075,14 +1075,15 @@ def _coerce(series: pd.Series, dtype: str) -> pd.Series:
 
 
 def field_label(name: str) -> str:
-    """Human-readable label for a raw column name (``native_language`` → …).
+    """The label for a metadata field: its column name, as the table spelled it.
 
-    Public because it is the *only* labeller for a metadata field: the picker in
-    ``tabs._pretty_col`` has to name a field the same way whether or not it can
-    reach the attached table at that moment.
+    DATA-66: a field the user attached is shown under the name it has in their
+    file (``native_language``, not "Native language"). Public because it is the
+    *only* labeller for a metadata field: the picker in ``tabs._pretty_col`` has
+    to name a field the same way whether or not it can reach the attached table
+    at that moment.
     """
-    text = str(name).replace("_", " ").replace("-", " ").strip()
-    return text[:1].upper() + text[1:] if text else str(name)
+    return str(name)
 
 
 def build_participant_metadata(

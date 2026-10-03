@@ -69,22 +69,22 @@ class TestTrialSortKeys:
         self, combos, fixations
     ):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
-        assert "Fixations (n)" in keys
-        assert "Reading time (s)" in keys
-        assert keys["Fixations (n)"]["t2"] == 3
-        assert keys["Reading time (s)"]["t2"] == pytest.approx(0.6)
-        assert keys["Mean fixation (ms)"]["t3"] == pytest.approx(250.0)
+        assert "Fixation count (computed)" in keys
+        assert "Reading time, s (computed)" in keys
+        assert keys["Fixation count (computed)"]["t2"] == 3
+        assert keys["Reading time, s (computed)"]["t2"] == pytest.approx(0.6)
+        assert keys["Mean fixation, ms (computed)"]["t3"] == pytest.approx(250.0)
 
     def test_computed_stats_are_dropped_without_their_frame(self, combos):
         keys = trial_sort_keys(combos, "trial_id")
-        assert "Fixations (n)" not in keys
-        assert "Words (n)" not in keys
+        assert "Fixation count (computed)" not in keys
+        assert "Word count (computed)" not in keys
 
     def test_trial_level_columns_are_offered(self, combos, fixations):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
-        assert keys["Participant id"]["t1"] == "p2"
-        assert keys["Text id"]["t2"] == "a"
-        assert bool(keys["Is correct"]["t3"]) is True
+        assert keys["participant_id"]["t1"] == "p2"
+        assert keys["text_id"]["t2"] == "a"
+        assert bool(keys["is_correct"]["t3"]) is True
 
     def test_a_column_that_varies_within_a_trial_is_not_offered(self, fixations):
         """Two rows for the same trial disagreeing on a column can't order it."""
@@ -94,12 +94,12 @@ class TestTrialSortKeys:
                 {"participant_id": "p1", "trial_id": "t1", "text_id": "b"},
             ]
         )
-        assert "Text id" not in trial_sort_keys(combos, "trial_id")
+        assert "text_id" not in trial_sort_keys(combos, "trial_id")
 
     def test_empty_combos_still_returns_the_computed_stats(self, fixations):
         keys = trial_sort_keys(pd.DataFrame(), "trial_id", fixations=fixations)
-        assert "Fixations (n)" in keys
-        assert "Participant id" not in keys
+        assert "Fixation count (computed)" in keys
+        assert "participant_id" not in keys
 
     def test_discovers_metadata_before_the_combo_projection_drops_it(self):
         combos = pd.DataFrame(
@@ -128,10 +128,10 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
 
-        assert keys["Difficulty band"].to_dict() == {"t1": "easy", "t2": "hard"}
-        assert keys["Device batch"].to_dict() == {"t1": 3, "t2": 7}
-        assert "Word index" not in keys
-        assert "Duration ms" not in keys
+        assert keys["difficulty_band"].to_dict() == {"t1": "easy", "t2": "hard"}
+        assert keys["device_batch"].to_dict() == {"t1": 3, "t2": 7}
+        assert "word_index" not in keys
+        assert "duration_ms" not in keys
 
     def test_participant_scope_prevents_repeated_trial_ids_from_colliding(self):
         # This mirrors the report: the picker has already been narrowed to p1,
@@ -153,8 +153,8 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words)
 
-        assert keys["Condition"].to_dict() == {"t1": "A", "t2": "B"}
-        assert sort_trial_options(["t1", "t2"], keys["Condition"]) == ["t1", "t2"]
+        assert keys["condition"].to_dict() == {"t1": "A", "t2": "B"}
+        assert sort_trial_options(["t1", "t2"], keys["condition"]) == ["t1", "t2"]
 
     def test_matching_cross_table_metadata_is_merged_once(self):
         combos = pd.DataFrame(
@@ -177,8 +177,8 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
 
-        assert list(keys).count("Session") == 1
-        assert keys["Session"].to_dict() == {"t1": "s1", "t2": "s2"}
+        assert list(keys).count("session") == 1
+        assert keys["session"].to_dict() == {"t1": "s1", "t2": "s2"}
 
     def test_cross_table_conflict_is_not_silently_resolved(self):
         combos = pd.DataFrame(
@@ -195,7 +195,7 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
 
-        assert "Genre" not in keys
+        assert "genre" not in keys
 
     def test_unique_trial_identity_drives_metadata_and_computed_stats(self):
         combos = pd.DataFrame(
@@ -217,8 +217,8 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "unique_trial_id", fixations=fixations)
 
-        assert keys["Fixations (n)"].to_dict() == {"u1": 1.0, "u2": 2.0}
-        assert keys["Is correct"].to_dict() == {"u1": True, "u2": False}
+        assert keys["Fixation count (computed)"].to_dict() == {"u1": 1.0, "u2": 2.0}
+        assert keys["is_correct"].to_dict() == {"u1": True, "u2": False}
 
     def test_within_trial_variation_and_non_metadata_payloads_are_excluded(self):
         combos = pd.DataFrame(
@@ -237,10 +237,10 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words)
 
-        assert "Condition" not in keys
-        assert "Source file" not in keys
-        assert "Image x" not in keys
-        assert "Notes" not in keys
+        assert "condition" not in keys
+        assert "source_file" not in keys
+        assert "image_x" not in keys
+        assert "notes" not in keys
 
 
 class TestSortTrialOptions:
@@ -250,8 +250,14 @@ class TestSortTrialOptions:
     def test_sorts_by_a_numeric_key(self, combos, fixations):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
         options = ["t1", "t2", "t3"]
-        assert sort_trial_options(options, keys["Fixations (n)"]) == ["t1", "t3", "t2"]
-        assert sort_trial_options(options, keys["Fixations (n)"], descending=True) == [
+        assert sort_trial_options(options, keys["Fixation count (computed)"]) == [
+            "t1",
+            "t3",
+            "t2",
+        ]
+        assert sort_trial_options(
+            options, keys["Fixation count (computed)"], descending=True
+        ) == [
             "t2",
             "t3",
             "t1",
@@ -259,7 +265,7 @@ class TestSortTrialOptions:
 
     def test_sorts_by_a_text_key(self, combos, fixations):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
-        assert sort_trial_options(["t1", "t2", "t3"], keys["Text id"]) == [
+        assert sort_trial_options(["t1", "t2", "t3"], keys["text_id"]) == [
             "t2",
             "t1",
             "t3",
@@ -356,12 +362,12 @@ class TestSortValueIsVisibleInThePicker:
     def test_sorting_puts_the_value_on_every_option_and_names_the_key(self):
         at = AppTest.from_function(_sortable_picker_app)
         at.run(timeout=20)
-        at.selectbox(key="single_trial_sort").set_value("Fixations (n)")
+        at.selectbox(key="single_trial_sort").set_value("Fixation count (computed)")
         at.run(timeout=20)
         assert not at.exception, at.exception
         picker = self._picker(at)
         # The label says what the order *is* — ascending by fixation count.
-        assert picker.label == "**Select Trial**  ·  by Fixations (n) ↑"
+        assert picker.label == "**Select Trial**  ·  by Fixation count (computed) ↑"
         assert [picker.format_func(o) for o in picker.options] == [
             "t_c  ·  2",
             "t_a  ·  5",
@@ -371,7 +377,7 @@ class TestSortValueIsVisibleInThePicker:
     def test_descending_flips_the_order_and_the_arrow(self):
         at = AppTest.from_function(_sortable_picker_app)
         at.run(timeout=20)
-        at.selectbox(key="single_trial_sort").set_value("Fixations (n)")
+        at.selectbox(key="single_trial_sort").set_value("Fixation count (computed)")
         at.run(timeout=20)
         at.checkbox(key="single_trial_sort_desc").check()
         at.run(timeout=20)
@@ -388,9 +394,9 @@ class TestSortValueIsVisibleInThePicker:
         at.run(timeout=20)
         assert not at.exception, at.exception
         sorter = at.selectbox(key="single_trial_sort")
-        assert "Condition" in sorter.options
+        assert "condition" in sorter.options
 
-        sorter.set_value("Condition")
+        sorter.set_value("condition")
         at.run(timeout=20)
 
         picker = self._picker(at)

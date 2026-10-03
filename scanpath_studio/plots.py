@@ -28,7 +28,9 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
+    DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_SACCADE_WIDTH,
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
@@ -36,6 +38,7 @@ from .constants import (
     FONT_FAMILY,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
+    MARKER_SIZE_SCALES,
     OUT_OF_TEXT_COLOR,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_LABELS,
@@ -88,6 +91,15 @@ class FigureSettings:
     heatmap_norm: str = "Linear"
     duration_mass_sigma_chars: float = 1.0
     marker_size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
+    #: How duration maps onto ``marker_size_range`` — one of
+    #: ``constants.MARKER_SIZE_SCALES``. The fixed scales ("sqrt", "linear",
+    #: "log") map ``marker_duration_range`` (ms) onto it for every figure, so
+    #: equal durations draw at equal sizes across trials, comparison sides,
+    #: replays and exports; "relative" spans each figure's own durations.
+    marker_size_scale: str = DEFAULT_MARKER_SIZE_SCALE
+    marker_duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE
+    #: A few reference circles labelled in ms, drawn under a fixed scale.
+    duration_size_legend: bool = True
     order_font_size: int | None = 10
     order_font_color: str = "#111111"
     show_colorbars: bool = False
@@ -860,16 +872,140 @@ def _marker_symbol(symbol: str | None) -> str:
     return symbol
 
 
+def _duration_bounds(duration_range) -> tuple[float, float]:
+    """The fixed scale's (lo, hi) in ms, ordered and never empty."""
+    lo, hi = sorted(float(v) for v in duration_range)
+    lo = max(lo, 1.0)  # log needs a positive floor; no fixation is shorter
+    return lo, max(hi, lo + 1.0)
+
+
+def _scale_transform(scale: str):
+    try:
+        return {"sqrt": np.sqrt, "linear": lambda d: d, "log": np.log}[scale]
+    except KeyError:
+        raise ValueError(
+            f"Unknown marker_size_scale {scale!r}; choose one of "
+            f"{', '.join(MARKER_SIZE_SCALES)}."
+        ) from None
+
+
 def _compute_marker_sizes(
-    durations: pd.Series, size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
+    durations: pd.Series,
+    size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
+    scale: str = DEFAULT_MARKER_SIZE_SCALE,
+    duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE,
 ) -> np.ndarray:
-    """Map fixation durations to marker sizes by linear interpolation."""
+    """Map fixation durations to marker sizes (px diameter).
+
+    A fixed ``scale`` ("sqrt" / "linear" / "log") maps ``duration_range`` (ms)
+    onto ``size_range`` through that curve, the same for every figure: a
+    duration at or below the lower bound gets the smallest marker, at or above
+    the upper bound the largest, so a fixation's size never depends on the
+    other fixations drawn beside it. ``"relative"`` is the original scale —
+    linear between this set's own shortest and longest durations — which is
+    why it is only comparable within one figure.
+    """
     durations = pd.to_numeric(durations, errors="coerce").fillna(0)
-    d_min, d_max = float(durations.min()), float(durations.max())
     min_size, max_size = size_range
-    if d_max - d_min > 0:
-        return np.interp(durations, (d_min, d_max), (min_size, max_size))
-    return np.full(len(durations), (min_size + max_size) / 2)
+    if scale == "relative":
+        d_min, d_max = float(durations.min()), float(durations.max())
+        if d_max - d_min > 0:
+            return np.interp(durations, (d_min, d_max), (min_size, max_size))
+        return np.full(len(durations), (min_size + max_size) / 2)
+    transform = _scale_transform(scale)
+    lo, hi = _duration_bounds(duration_range)
+    clipped = np.clip(durations.to_numpy(dtype=float), lo, hi)
+    f_lo, f_hi = float(transform(lo)), float(transform(hi))
+    frac = (transform(clipped) - f_lo) / (f_hi - f_lo)
+    return min_size + frac * (max_size - min_size)
+
+
+def _settings_size_scale(settings: FigureSettings) -> dict:
+    """The duration-scale keywords of :func:`_compute_marker_sizes`."""
+    return {
+        "scale": settings.marker_size_scale,
+        "duration_range": settings.marker_duration_range,
+    }
+
+
+def _duration_key_references(duration_range) -> list[tuple[float, str]]:
+    """The durations a size key draws, each with its label.
+
+    The two bounds (labelled ``≤`` / ``≥``, because everything beyond them
+    clamps) plus the round values 100/200/400/800/1600 ms that fall strictly
+    between them — at most three of those, so the key stays compact."""
+    lo, hi = _duration_bounds(duration_range)
+    inner = [d for d in (100, 200, 400, 800, 1600) if lo < d < hi][:3]
+    if not inner and hi - lo > 2:
+        inner = [round((lo + hi) / 2)]
+    refs = [(lo, f"≤{lo:g}")]
+    refs += [(float(d), f"{d:g}") for d in inner]
+    refs.append((hi, f"≥{hi:g} ms"))
+    return refs
+
+
+def _add_duration_size_key(
+    fig: go.Figure,
+    size_range: tuple[int, int],
+    scale: str,
+    duration_range,
+    *,
+    font_family: str | None = None,
+) -> None:
+    """Draw the fixed duration scale's key: reference circles labelled in ms.
+
+    Pixel-sized shapes anchored in the plot's bottom-right corner (paper
+    coordinates), so each circle is exactly the diameter a fixation of that
+    duration gets — at any canvas size and through every export path, since
+    they are layout shapes rather than a trace. Nothing is drawn for the
+    relative scale: its sizes mean something only inside one figure."""
+    if scale == "relative":
+        return
+    refs = _duration_key_references(duration_range)
+    sizes = _compute_marker_sizes(
+        pd.Series([d for d, _ in refs]), size_range, scale, duration_range
+    )
+    slot = max(float(size_range[1]), 30.0) + 8.0  # px per reference circle
+    label_px = 16.0
+    pad = 8.0
+    n = len(refs)
+    for i, ((_, label), size) in enumerate(zip(refs, sizes)):
+        # Centre of slot i, counted from the right edge, in px.
+        dx = -(pad + (n - i - 0.5) * slot)
+        r = float(size) / 2.0
+        cy = pad + label_px + float(size_range[1]) / 2.0
+        fig.add_shape(
+            type="circle",
+            xref="paper",
+            yref="paper",
+            xsizemode="pixel",
+            ysizemode="pixel",
+            xanchor=1,
+            yanchor=0,
+            x0=dx - r,
+            x1=dx + r,
+            y0=cy - r,
+            y1=cy + r,
+            line=dict(color="#555555", width=1),
+            fillcolor="rgba(120,120,120,0.35)",
+            layer="above",
+            # Rides the fixations layer of a separable export (VIZ-5).
+            name=_shape_layer_tag("fixations"),
+        )
+        fig.add_annotation(
+            x=1,
+            y=0,
+            xref="paper",
+            yref="paper",
+            xshift=dx,
+            yshift=pad + label_px / 2.0,
+            text=label,
+            showarrow=False,
+            xanchor="center",
+            yanchor="middle",
+            font=dict(size=10, color="#444444", family=font_family or FONT_FAMILY),
+            name="duration_size_key",
+        )
 
 
 # VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight
@@ -2367,7 +2503,9 @@ def _render_scanpath_figure(
         marker_color, category_legend = _resolve_marker_colors(
             color_data, is_numeric_color, fixation_color
         )
-        sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
+        sizes = _compute_marker_sizes(
+            ordered["duration_ms"], marker_size_range, **_settings_size_scale(settings)
+        )
         marker = dict(
             size=sizes,
             symbol=fixation_symbol or DEFAULT_FIXATION_SYMBOL,
@@ -3063,7 +3201,12 @@ _CONTROLS_MARGIN_PX = 116
 _CONTROLS_SAFETY_PX = 24
 
 
-def _scanpath_anim_specs(entries, marker_size_range):
+def _scanpath_anim_specs(
+    entries,
+    marker_size_range,
+    scale: str = DEFAULT_MARKER_SIZE_SCALE,
+    duration_range=DEFAULT_MARKER_DURATION_RANGE,
+):
     """Build per-scanpath animation specs from (fixations, color, label) entries.
 
     Empty/None fixations are skipped. Onsets are the recorded ``timestamp_ms``
@@ -3071,8 +3214,9 @@ def _scanpath_anim_specs(entries, marker_size_range):
     *real reading-time* clock. When timestamps aren't real times — missing, or
     the 0,1,2,… row index ``data.normalize_fixations`` synthesises when the
     source has no timestamp column — fixations are instead laid out back-to-back
-    by their durations. Marker sizes are scaled over the COMBINED durations so
-    equal durations render at equal sizes across scanpaths.
+    by their durations. Marker sizes use the figure's duration scale; under the
+    relative scale they span the COMBINED durations, so equal durations still
+    render at equal sizes across the two scanpaths.
     """
     from .measures import rebased_fixation_onsets
 
@@ -3098,7 +3242,10 @@ def _scanpath_anim_specs(entries, marker_size_range):
         )
     if specs:
         combined = _compute_marker_sizes(
-            pd.concat([s["dur"] for s in specs], ignore_index=True), marker_size_range
+            pd.concat([s["dur"] for s in specs], ignore_index=True),
+            marker_size_range,
+            scale,
+            duration_range,
         )
         cursor = 0
         for s in specs:
@@ -3981,7 +4128,9 @@ def _render_scanpath_animation(
         (fixations, COMPARISON_PALETTE[0], label_a),
         (fixations_b, COMPARISON_PALETTE[1], label_b),
     ]
-    specs = _scanpath_anim_specs(entries, marker_size_range)
+    specs = _scanpath_anim_specs(
+        entries, marker_size_range, **_settings_size_scale(settings)
+    )
     # The words frame each surviving scanpath is flagged against (the highlight
     # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
     # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
@@ -4758,6 +4907,7 @@ def _add_comparison_fixation_trace(
     trial_words: pd.DataFrame | None = None,
     fixation_flags: dict | None = None,
     saccade_classes: Iterable[str] | None = None,
+    duration_scale: dict | None = None,
 ) -> None:
     """Add one scanpath's saccades + fixation markers to a comparison figure.
 
@@ -4790,6 +4940,10 @@ def _add_comparison_fixation_trace(
     and their index labels (the saccades still bridge across them), *Highlight*
     overlays its marker, and hidden saccade classes lose their line and arrow.
     Both need ``trial_words`` for the geometry they classify against.
+
+    ``duration_scale`` is the figure's (``_settings_size_scale``): both
+    scanpaths share it, so under a fixed scale one duration draws at one size
+    on either side; only the size *range* is per scanpath.
     """
     if trial_fix.empty:
         return
@@ -4886,7 +5040,11 @@ def _add_comparison_fixation_trace(
         trial_fix = _discard_flagged_fixations(trial_fix, words_for_flags, flags)
         if trial_fix.empty:
             return
-    sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
+    sizes = _compute_marker_sizes(
+        trial_fix["duration_ms"],
+        style["marker_size_range"],
+        **(duration_scale or {}),
+    )
     # Metric colouring ("Color fixations by") when a numeric column is chosen:
     # colour the FILL by the metric (shared colorscale/range across both
     # scanpaths) and keep the per-scanpath flat colour as the marker OUTLINE so
@@ -5458,6 +5616,7 @@ def _make_split_comparison_figure(
             col=col,
             trial_words=spec["trial_words"],
             **_comparison_filters(spec["style"], settings),
+            duration_scale=_settings_size_scale(settings),
         )
 
         panel_fits.append(
@@ -5845,6 +6004,7 @@ def _render_comparison_figure(
             fixation_hover_fields=fixation_hover_fields,
             trial_words=spec["trial_words"],
             **_comparison_filters(spec["style"], settings),
+            duration_scale=_settings_size_scale(settings),
         )
         if show_words and draws_stimulus[_idx]:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -7015,12 +7175,15 @@ def make_scanpath_figure(
     object can flow unchanged through UI, export, and headless surfaces.
     """
     resolved = _resolve_figure_settings(settings, overrides)
-    return _render_scanpath_figure(
+    fig = _render_scanpath_figure(
         words,
         fixations,
         settings=resolved,
         raw_gaze=raw_gaze,
     )
+    if resolved.show_fixations:
+        _maybe_add_duration_key(fig, resolved, resolved.marker_size_range, fixations)
+    return fig
 
 
 def make_scanpath_animation(
@@ -7069,13 +7232,17 @@ def build_scanpath_replay(
             "word_hover_measure": None,
         },
     )
-    return _render_scanpath_animation(
+    fig, frame_step_ms = _render_scanpath_animation(
         words,
         fixations,
         settings=resolved,
         fixations_b=fixations_b,
         words_b=words_b,
     )
+    _maybe_add_duration_key(
+        fig, resolved, resolved.marker_size_range, fixations, fixations_b
+    )
+    return fig, frame_step_ms
 
 
 def make_comparison_figure(
@@ -7105,11 +7272,45 @@ def make_comparison_figure(
             "heatmap_metric": "duration_ms",
         },
     )
-    return _render_comparison_figure(
+    fig = _render_comparison_figure(
         words,
         fixations,
         trial_a,
         trial_b,
         settings=resolved,
         raw_gaze=raw_gaze,
+    )
+    # One key serves both scanpaths only while they share a size range; with
+    # per-scanpath ranges (Compare's own Size) one duration is two sizes.
+    ranges = {
+        tuple(
+            _comparison_scanpath_style(
+                idx, style, default_marker_size_range=resolved.marker_size_range
+            )["marker_size_range"]
+        )
+        for idx, style in enumerate((resolved.style_a, resolved.style_b))
+    }
+    if resolved.show_fixations and len(ranges) == 1:
+        _maybe_add_duration_key(fig, resolved, ranges.pop(), fixations)
+    return fig
+
+
+def _maybe_add_duration_key(
+    fig: go.Figure,
+    settings: FigureSettings,
+    size_range: tuple[int, int],
+    *fixation_frames: pd.DataFrame | None,
+) -> None:
+    """Add the duration-size key when the figure draws fixation markers on a
+    fixed scale and the caller asked for it (``duration_size_legend``)."""
+    if not settings.duration_size_legend or settings.marker_size_scale == "relative":
+        return
+    if not any(f is not None and not f.empty for f in fixation_frames):
+        return
+    _add_duration_size_key(
+        fig,
+        size_range,
+        settings.marker_size_scale,
+        settings.marker_duration_range,
+        font_family=settings.font_family,
     )

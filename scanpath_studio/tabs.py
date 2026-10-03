@@ -114,7 +114,9 @@ from scanpath_studio.constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
+    DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FOCUS_MAPPING_KEY,
@@ -253,6 +255,7 @@ from scanpath_studio.plots import (
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _discard_flagged_fixations,
+    _maybe_add_duration_key,
     _png_pixel_size,
     add_illustration_label,
     animation_clip_frame_ms,
@@ -1597,6 +1600,13 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             else None
         ),
         marker_size_range=viz_settings["marker_size_range"],
+        marker_size_scale=viz_settings.get(
+            "marker_size_scale", DEFAULT_MARKER_SIZE_SCALE
+        ),
+        marker_duration_range=tuple(
+            viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
+        ),
+        duration_size_legend=viz_settings.get("duration_size_legend", True),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
         show_colorbars=viz_settings["show_colorbars"],
@@ -3793,6 +3803,18 @@ def _build_studio_config(
         },
         "sizing": {
             "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
+            "marker_size_scale": str(
+                figure_settings.get("marker_size_scale", DEFAULT_MARKER_SIZE_SCALE)
+            ),
+            "marker_duration_range": [
+                int(s)
+                for s in figure_settings.get(
+                    "marker_duration_range", DEFAULT_MARKER_DURATION_RANGE
+                )
+            ],
+            "duration_size_legend": bool(
+                figure_settings.get("duration_size_legend", True)
+            ),
             "order_font_size": int(figure_settings["order_font_size"]),
             "order_font_color": figure_settings["order_font_color"],
             "base_font_size": int(base_font_size),
@@ -4678,6 +4700,10 @@ def _plan_replay(
         playback_speed=1.0,
         autoplay=True,
         illustration_reasons=None,
+        # The duration-size key is layout only — no frame draws it — so it is
+        # stamped onto the cached replay in `finished_figure`, and toggling it
+        # costs no frame rebuild.
+        duration_size_legend=False,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -4783,6 +4809,13 @@ def _build_and_render_animation(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
         add_illustration_label(fig, reasons)
+        _maybe_add_duration_key(
+            fig,
+            animation_settings,
+            animation_settings.marker_size_range,
+            trial_fixations,
+            anim_inputs["fixations_b"],
+        )
         _annotate_preprocessing(fig, preprocessing)
         if title or caption:
             annotate_figure(fig, title=title, caption=caption)
@@ -4797,6 +4830,7 @@ def _build_and_render_animation(
         tuple(sorted((str(k), repr(v)) for k, v in (preprocessing or {}).items())),
         title,
         caption,
+        bool(animation_settings.duration_size_legend),
     )
     view = _cached_replay_view(
         clip_inputs,

@@ -939,6 +939,8 @@ def _plot_config_dict(
         },
         "sizing": {
             "marker_size_range": list(settings.get("marker_size_range", [])),
+            "marker_size_scale": settings.get("marker_size_scale"),
+            "marker_duration_range": list(settings.get("marker_duration_range") or []),
             "order_font_size": settings.get("order_font_size"),
         },
         # True-to-scale reading text: records how the word labels were sized so

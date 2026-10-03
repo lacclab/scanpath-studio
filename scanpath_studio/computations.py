@@ -1398,21 +1398,33 @@ REGISTER: tuple[Computation, ...] = (
         id="disp.marker_sizes",
         name="Fixation marker sizing",
         category=CATEGORY_DISPLAY,
-        summary="Dot area encodes fixation duration.",
+        summary="Marker size encodes fixation duration on one fixed scale.",
         formula=(
-            "Durations are scaled between a minimum and maximum marker size "
-            "across the drawn set. **Display only** — never a recorded value."
+            "Fixed scales (`marker_size_scale` = `sqrt`, the default; `linear`; "
+            "`log`): `size = s_min + (s_max − s_min) · (f(d) − f(lo)) / "
+            "(f(hi) − f(lo))`, with `d` clamped to the duration bounds "
+            "`[lo, hi]` (`marker_duration_range`, default 50–600 ms) and `f` "
+            "= √, identity or ln. `relative`: linear between the drawn set's "
+            "own shortest and longest duration (the scale before the fixed one; "
+            "older saved configs and Share links keep it). **Display only** — "
+            "never a recorded value."
         ),
         code="scanpath_studio/plots.py:_compute_marker_sizes",
         unit="px (marker diameter)",
+        missing="A missing duration is treated as 0 ms: the smallest marker.",
         precedence=(
-            "Shared by single-trial, comparison and export builders so the same "
-            "trial renders identically everywhere."
+            "One scale for single-trial figures, both comparison sides, replays "
+            "and bulk exports, so a duration draws at one size in all of them; "
+            "only the px range is per scanpath in Compare."
         ),
         tiers="C, D",
         status=STATUS_CONVENTION,
         consumers=(_UI, _API, _CLI, _EXPORT),
-        tests=("tests/test_plots.py", "tests/test_builder_parity.py"),
+        tests=(
+            "tests/test_duration_scale.py",
+            "tests/test_plots.py",
+            "tests/test_builder_parity.py",
+        ),
     ),
     Computation(
         id="disp.axis_ranges",

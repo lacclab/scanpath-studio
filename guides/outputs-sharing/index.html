@@ -1763,7 +1763,15 @@
   Word tables carry the reading measures your data brought; the export computes
   none.
   Each bundle has an <code>index.csv</code> listing every file with its participant,
-  trial and screen, and any requested file that failed.</li>
+  trial and screen, and any requested file that failed.
+  The tables use your files' column names (<code>CURRENT_FIX_DURATION</code>, not
+  <code>duration_ms</code>). A column Scanpath Studio built, converted, computed or
+  changed keeps the app's name. For example, word ids shifted to line up with
+  the word boxes are written as <code>word_id</code>. The bundle's README says where each
+  column came from, and its <code>columns.json</code> maps every column to the app's
+  name, for scripts that work across datasets. File-name, title and caption
+  patterns accept either name: <code>{RECORDING_SESSION_LABEL}</code> and
+  <code>{participant_id}</code> both work.</li>
 </ul>
 <figure class="sps-screenshot">
 <p><img alt="The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming" src="../../assets/screenshots/export.webp" /></p>
@@ -1849,7 +1857,7 @@ datasets and work, restored after a refresh or restart.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 11:33:59 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 12:02:55 UTC">October 3, 2026</span>
   </span>
 
     

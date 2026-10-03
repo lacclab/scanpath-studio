@@ -78,7 +78,7 @@ Corpus Analysis shows the reading measures your interest-area table brings (mapp
 
 ## 1. Define the analysis pool
 
-Load the corpus and narrow the trial pool before opening Corpus Analysis. Check the participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data Management** page, which follow the filters. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
+Load the corpus and narrow the trial pool, with the Scanpath view's filter or **Edit filters** at the top of Corpus Analysis. The line beside the dataset picker there counts the trials and readers left and names each active filter; **Clear** resets them. The participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data Management** page follow the filters too. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis
 
@@ -104,9 +104,9 @@ Use a scanpath view to investigate surprising cases.
 
 ## 5. Download the table
 
-Select **Download this table (CSV)** beside the relevant result, and note the trial filters and cohort definitions that produced it beside the file. Neither travels anywhere else: a **Share → File** settings file keeps the figure settings and trial selection, but not the filter selections or the Corpus Analysis choices, and a Share link carries neither.
+Select **Download this table (CSV)** beside the relevant result, and **Download the recipe (JSON)** beside it. The recipe records how the table was made: the app version, the dataset's name, the trial filters, the view's text, screen, measure, aggregation, normalization, spread, minimum readers and group definitions, and the trial and reader counts. It names the dataset rather than copying it, and holds no figure settings: a **Share → File** settings file keeps those and the trial selection, but no trial filters. A Share link carries neither the filters nor the Corpus Analysis choices.
 
-**Done:** you have a scoped corpus result, its contributing counts, and the table used for downstream statistics or reporting.
+**Done:** you have a scoped corpus result, its contributing counts, the table used for downstream statistics or reporting, and the recipe that made it.
 
 # Tutorial: check data collection
 
@@ -252,7 +252,7 @@ For end-to-end workflows, see the [tutorials](https://lacclab.github.io/scanpath
 
 # Corpus workspace
 
-**Corpus Analysis** summarises many readings at once. It uses the same dataset and trial filters as the Scanpath view.
+**Corpus Analysis** summarises many readings at once. It uses the same dataset and trial filters as the Scanpath view. The line beside the dataset picker counts what those filters keep (for example *12 of 24 trials · 1 of 2 readers*) and names each active filter. **Edit filters** opens the Scanpath view's filter panel, and **Clear** resets every filter.
 
 ## Reading measures come from your data
 
@@ -272,7 +272,7 @@ Choose a measure, how to aggregate it, and the spread to show. Set a **minimum n
 
 ## From summary to evidence
 
-Every result has **⬇ Download this table (CSV)**. When something looks odd, open the trials behind it in the Scanpath view.
+Every result table has **⬇ Download this table (CSV)**, with **⬇ Download the recipe (JSON)** beside it: the dataset, trial filters, analysis choices and counts that produced the table, without its rows or any figure settings. When something looks odd, open the trials behind it in the Scanpath view.
 
 # Loading public and own data
 
@@ -307,6 +307,8 @@ The import screen has three parts:
 
 Then click **Add dataset**. Anything the app cannot use is listed above the button before you confirm.
 
+To see what the two main tables look like, click **Download example tables** before uploading anything: a tiny AOI table and fixation table that map without a single manual pick, with a README giving each column's unit and what the IDs mean.
+
 ### Recording setup
 
 Describe the screen the data was **recorded** on, not the one you are using now. A wrong resolution rescales every figure, so nothing is preselected. For each value, say how you know it: measured, estimated from your data, or a default. That answer travels with the dataset, so others can tell measured values from assumed ones.
@@ -324,7 +326,7 @@ Open the **Export** subtab in the Scanpath view.
 - **Current figure** downloads what is on screen: PNG, SVG, PDF or HTML, or the replay as HTML, GIF or MP4.
 - **Export bundle** writes figures and tables for this trial, the filtered trials, or the whole dataset, plus a `plot_config.json` recording the main settings they were drawn with (the full set is **Share → File**). Options add separable layers for a vector editor, raw gaze, annotations, and more tables. Tables are written per trial, or combined into one file each. Word tables carry the reading measures your data brought; the export computes none.
 
-HTML, and the current figure's PNG and SVG, always work. An HTML file loads the Plotly library from the internet when opened; one written by the Python API or the CLI embeds it and opens offline. PDF, GIF, MP4 and the bundle's images need Chrome, Chromium or Edge installed ([FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails)).
+HTML, and the current figure's PNG and SVG, always work. An HTML file loads the Plotly library from the internet when opened; one written by the Python API or the CLI embeds it and opens offline. PDF, GIF, MP4 and the bundle's images need Chrome, Chromium or Edge installed ([FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails)); the bundle says so when none is found. After a build it reports how many files and figures it made and how many failed, and a partly built bundle still downloads.
 
 ## Share
 
@@ -446,7 +448,7 @@ When you run it locally or as the desktop app, nowhere: it stays on your compute
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data → Saved on this computer** shows what it holds. The online demo keeps nothing, so export your annotations and settings before you leave.
+Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
 
 ### How do I turn the recovery copy off, or delete it?
 

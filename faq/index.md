@@ -50,7 +50,7 @@ When you run it locally or as the desktop app, nowhere: it stays on your compute
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data → Saved on this computer** shows what it holds. The online demo keeps nothing, so export your annotations and settings before you leave.
+Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
 
 ### How do I turn the recovery copy off, or delete it?
 

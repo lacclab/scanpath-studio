@@ -31,6 +31,8 @@ The import screen has three parts:
 
 Then click **Add dataset**. Anything the app cannot use is listed above the button before you confirm.
 
+To see what the two main tables look like, click **Download example tables** before uploading anything: a tiny AOI table and fixation table that map without a single manual pick, with a README giving each column's unit and what the IDs mean.
+
 ### Recording setup
 
 Describe the screen the data was **recorded** on, not the one you are using now. A wrong resolution rescales every figure, so nothing is preselected. For each value, say how you know it: measured, estimated from your data, or a default. That answer travels with the dataset, so others can tell measured values from assumed ones.

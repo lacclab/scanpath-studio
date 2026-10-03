@@ -1,6 +1,6 @@
 # Corpus workspace
 
-**Corpus Analysis** summarises many readings at once. It uses the same dataset and trial filters as the Scanpath view.
+**Corpus Analysis** summarises many readings at once. It uses the same dataset and trial filters as the Scanpath view. The line beside the dataset picker counts what those filters keep (for example *12 of 24 trials · 1 of 2 readers*) and names each active filter. **Edit filters** opens the Scanpath view's filter panel, and **Clear** resets every filter.
 
 ## Reading measures come from your data
 
@@ -20,4 +20,4 @@ Choose a measure, how to aggregate it, and the spread to show. Set a **minimum n
 
 ## From summary to evidence
 
-Every result has **⬇ Download this table (CSV)**. When something looks odd, open the trials behind it in the Scanpath view.
+Every result table has **⬇ Download this table (CSV)**, with **⬇ Download the recipe (JSON)** beside it: the dataset, trial filters, analysis choices and counts that produced the table, without its rows or any figure settings. When something looks odd, open the trials behind it in the Scanpath view.

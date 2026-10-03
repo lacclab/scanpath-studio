@@ -6,7 +6,7 @@ Corpus Analysis shows the reading measures your interest-area table brings (mapp
 
 ## 1. Define the analysis pool
 
-Load the corpus and narrow the trial pool before opening Corpus Analysis. Check the participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data Management** page, which follow the filters. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
+Load the corpus and narrow the trial pool, with the Scanpath view's filter or **Edit filters** at the top of Corpus Analysis. The line beside the dataset picker there counts the trials and readers left and names each active filter; **Clear** resets them. The participant, text, and trial counts under **What's in the … dataset → Stats** on the **Data Management** page follow the filters too. A text ID must identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis
 
@@ -32,6 +32,6 @@ Use a scanpath view to investigate surprising cases.
 
 ## 5. Download the table
 
-Select **Download this table (CSV)** beside the relevant result, and note the trial filters and cohort definitions that produced it beside the file. Neither travels anywhere else: a **Share → File** settings file keeps the figure settings and trial selection, but not the filter selections or the Corpus Analysis choices, and a Share link carries neither.
+Select **Download this table (CSV)** beside the relevant result, and **Download the recipe (JSON)** beside it. The recipe records how the table was made: the app version, the dataset's name, the trial filters, the view's text, screen, measure, aggregation, normalization, spread, minimum readers and group definitions, and the trial and reader counts. It names the dataset rather than copying it, and holds no figure settings: a **Share → File** settings file keeps those and the trial selection, but no trial filters. A Share link carries neither the filters nor the Corpus Analysis choices.
 
-**Done:** you have a scoped corpus result, its contributing counts, and the table used for downstream statistics or reporting.
+**Done:** you have a scoped corpus result, its contributing counts, the table used for downstream statistics or reporting, and the recipe that made it.

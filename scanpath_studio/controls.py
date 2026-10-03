@@ -52,6 +52,7 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_DIRECTION_CLASSES,
     SACCADE_WIDTH_BOUNDS,
+    SELF_SCALED_HEATMAP_STYLES,
     UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -6529,14 +6530,26 @@ def render_plot_controls(
                 "raise it to compress. Log scaling keeps these ms endpoints and "
                 "bends only the colour curve between them."
             )
+            # Finding 12: the smoothed styles scale their density to their own
+            # peak, so a range does nothing there — greyed, and kept for Word
+            # boxes. Compare always draws word boxes, so it applies again.
+            self_scaled = not comparing and heat_style in SELF_SCALED_HEATMAP_STYLES
             # VIZ-46: auto (per trial, like the API) until a range is chosen.
             _render_color_range(
                 "Color range",
                 "global_heatmap_color_range",
                 hmin,
                 hmax_eff,
-                disabled=heat_disabled,
-                reason=heat_reason,
+                disabled=heat_disabled or self_scaled,
+                reason=heat_reason
+                or (
+                    f"{ICONS['warning']} **{heat_style}** scales its smoothed "
+                    "density to each figure's own peak, so a range has nothing "
+                    "to pin. Your range is kept and applies again to **Word "
+                    "boxes** and in Compare."
+                    if self_scaled
+                    else ""
+                ),
                 help=range_text,
                 slider_format="%d ms",
                 field_host=_sub_row("Range", caption_help=range_text),

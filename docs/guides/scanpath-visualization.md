@@ -39,7 +39,9 @@ Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it
 fixed as you step through trials and filters, so they stay comparable; its
 number boxes take any endpoint, beyond the data shown too. The word-box
 heatmap's range is in dwell time per word (ms), the summed duration of the
-fixations in each box.
+fixations in each box. **Interpolated** and **Duration mass** scale their
+smoothed density to each figure's own peak, so their range is greyed; it is
+kept for Word boxes and Compare, which always draws word boxes.
 
 Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the
 smallest to the largest marker in every trial, both sides of a comparison, the

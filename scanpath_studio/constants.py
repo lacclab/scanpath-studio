@@ -184,6 +184,11 @@ COLORSCALES = [
 # non-index-0 default here still keeps the picker and the figure in sync.
 DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"
+#: Heatmap styles that scale their smoothed density to each figure's own peak
+#: (`plots._add_interpolated_heatmap`), so a ``heatmap_range`` does nothing to
+#: them: the rail greys the range for these, and the code snippet omits it.
+#: Compare always draws word boxes, where the range applies again.
+SELF_SCALED_HEATMAP_STYLES = frozenset({"Interpolated", "Duration mass"})
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 # How fixation duration maps onto that size range. The three *fixed* scales map

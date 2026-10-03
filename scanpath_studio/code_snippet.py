@@ -609,6 +609,8 @@ def figure_kwargs(
             continue
         if key in _DERIVED_SETTINGS:
             continue
+        if key == "heatmap_range" and _heatmap_self_scaled(settings, kind):
+            continue  # kept for Word boxes, but it pins nothing here
         value = settings[key]
         if key == "fixation_flags_b" and _same_flags(
             value, settings.get("fixation_flags")
@@ -633,6 +635,17 @@ def figure_kwargs(
         if explicit or _comparable(value) != _comparable(default):
             out[key] = value
     return out
+
+
+def _heatmap_self_scaled(settings: dict, kind: str) -> bool:
+    """Whether the figure's heatmap ignores ``heatmap_range``: a smoothed style,
+    which scales to its own peak, outside a comparison (always word boxes)."""
+    from .constants import SELF_SCALED_HEATMAP_STYLES
+
+    return (
+        kind != "comparison"
+        and settings.get("heatmap_style") in SELF_SCALED_HEATMAP_STYLES
+    )
 
 
 #: The per-scanpath style options → which scanpath each styles.

@@ -282,3 +282,40 @@ class TestHeatmapValueBounds:
         words["total_fixation_duration_ms"] = [250.0, 0.0]
         assert heatmap_value_bounds(pd.DataFrame(), words) == (250.0, 250.0)
         assert heatmap_value_bounds(pd.DataFrame(), words.iloc[:0]) is None
+
+
+class TestASmoothedHeatmapOffersNoRange:
+    """Finding 12: Interpolated and Duration mass scale their density to their
+    own peak, so the range is greyed for them — kept, not cleared — and the
+    code snippet does not present it as pinning anything."""
+
+    @pytest.mark.parametrize("style", ["Interpolated", "Duration mass"])
+    def test_the_range_is_greyed_and_kept(self, style):
+        at = _rail(**{**WORD_HEAT, "global_heatmap_style": style, HEAT_KEY: (0, 600)})
+        assert at.slider(key=HEAT_VIEW).proto.disabled
+        assert at.checkbox(key="_heatmap_color_range_auto").proto.disabled
+        assert "own peak" in at.slider(key=HEAT_VIEW).proto.help
+        assert at.session_state[HEAT_KEY] == (0, 600)
+        # Back on Word boxes the same range is live again.
+        at.session_state["global_heatmap_style"] = "Word boxes"
+        _rerun(at)
+        assert not at.slider(key=HEAT_VIEW).proto.disabled
+        assert at.session_state["_viz"]["heatmap_range"] == (0.0, 600.0)
+
+    def test_compare_draws_word_boxes_so_the_range_stays_live(self):
+        at = _rail(
+            **{**WORD_HEAT, "global_heatmap_style": "Interpolated", HEAT_KEY: (0, 600)},
+            single_compare_toggle=True,
+        )
+        assert not at.slider(key=HEAT_VIEW).proto.disabled
+
+    def test_the_code_snippet_omits_it_for_a_smoothed_style(self):
+        from scanpath_studio.code_snippet import figure_kwargs
+
+        settings = {"heatmap_range": (0.0, 600.0), "show_heatmap": True}
+        assert "heatmap_range" in figure_kwargs(
+            {**settings, "heatmap_style": "Word boxes"}
+        )
+        smoothed = {**settings, "heatmap_style": "Interpolated"}
+        assert "heatmap_range" not in figure_kwargs(smoothed)
+        assert "heatmap_range" in figure_kwargs(smoothed, "comparison")

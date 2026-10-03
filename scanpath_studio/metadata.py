@@ -48,7 +48,7 @@ Later grains (stimulus, screen, word, fixation) add rows to the same registry;
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -445,6 +445,81 @@ def _merge_duplicates(work: pd.DataFrame, key: pd.Series, value_columns) -> tupl
     return work[keep], key[keep], duplicated, conflicting, combined
 
 
+def _range_mask(
+    frame: pd.DataFrame,
+    ranges: Mapping[str, tuple[float, float]],
+    keep_unknown: Mapping[str, bool] | None,
+) -> pd.Series:
+    """Rows inside every range in ``ranges`` (inclusive).
+
+    A row with no value for a ranged field is kept — a range narrows, it does
+    not exclude the unmeasured (UX-49) — unless ``keep_unknown`` maps that
+    field to ``False``: the researcher's explicit "only records with a
+    measured value".
+    """
+    mask = pd.Series(True, index=frame.index)
+    for name, (low, high) in ranges.items():
+        numeric = pd.to_numeric(frame[name], errors="coerce")
+        inside = numeric.between(low, high)
+        if (keep_unknown or {}).get(name, True) is not False:
+            inside |= numeric.isna()
+        mask &= inside
+    return mask
+
+
+def _keeps_unlisted(
+    ranges: Mapping[str, tuple[float, float]],
+    keep_unknown: Mapping[str, bool] | None,
+) -> bool:
+    """Whether a record the table has **no row** for survives ``ranges``.
+
+    It has no value for any field, so it is unknown for every range: kept
+    while every active range keeps its unknowns, left out once one does not.
+    """
+    return all((keep_unknown or {}).get(name, True) is not False for name in ranges)
+
+
+def numeric_extent(metadata, name: str) -> tuple[float, float] | None:
+    """``(min, max)`` of a numeric field over the loaded records, **equal ends
+    included** — or ``None`` when no loaded record has a value.
+
+    :func:`bounds_for` and its siblings answer "is there a range to slide
+    over?" and so return ``None`` for a constant field. This one answers "what
+    values are there?", which a constant field still has: the filter panel
+    shows it as a fixed value, and its *Keep unknown values* choice can still
+    leave out the records that have none. Works on any of the three tables.
+    """
+    if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
+        return None
+    numeric = pd.to_numeric(metadata.joined_frame[name], errors="coerce").dropna()
+    if numeric.empty:
+        return None
+    return float(numeric.min()), float(numeric.max())
+
+
+def unknown_count(metadata, name: str, keys: Iterable | None = None) -> int:
+    """How many loaded records have no value for ``name`` — the unknowns a
+    range keeps or, with *Keep unknown values* off, leaves out.
+
+    Counted in the unit the filter keeps or drops: readers for the participant
+    table, texts for the text table, and for the trial table **readings**
+    (``(participant_id, trial_id)`` pairs) when ``keys`` — the loaded pool's
+    pairs — is given, the table's own keys otherwise. A record with no row at
+    all is unknown too.
+    """
+    if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
+        return 0
+    if isinstance(metadata, TrialMetadata) and keys is not None:
+        loaded = {tuple(str(part) for part in key) for key in keys}
+        values = pd.to_numeric(metadata.frame[name], errors="coerce")
+        known = set(metadata.key_series()[values.notna()])
+        if metadata.keyed_by_participant:
+            return sum(1 for key in loaded if key not in known)
+        return sum(1 for key in loaded if len(key) < 2 or key[1] not in known)
+    values = pd.to_numeric(metadata.joined_frame[name], errors="coerce")
+    return int(values.isna().sum()) + len(metadata.report.only_in_data)
+
+
 def active_trials() -> TrialMetadata | None:
     """The trial table attached to this session, or ``None`` (DATA-29)."""
     try:
@@ -644,6 +719,7 @@ def trials_matching(
     ranges: dict[str, tuple[float, float]] | None = None,
     *,
     keys: Iterable | None = None,
+    keep_unknown: Mapping[str, bool] | None = None,
 ) -> set | None:
     """``(participant_id, trial_id)`` keys satisfying every trial constraint.
 
@@ -656,6 +732,10 @@ def trials_matching(
     that share that trial id, and keeping the trials the table never mentions
     when the only constraint is a numeric range (``data.filter_trials``' rule
     that a range narrows rather than excludes the unmeasured — UX-49).
+
+    ``keep_unknown`` maps a ranged field to ``False`` to leave its unknowns
+    out instead: a reading whose value is missing, and one with no row at all
+    (see :func:`_range_mask`).
     """
     if metadata is None or metadata.frame.empty:
         return None
@@ -677,9 +757,7 @@ def trials_matching(
     for name, values in active_selections.items():
         allowed = {str(value) for value in values}
         mask &= frame[name].astype(str).isin(allowed)
-    for name, (low, high) in active_ranges.items():
-        numeric = pd.to_numeric(frame[name], errors="coerce")
-        mask &= numeric.between(low, high) | numeric.isna()
+    mask &= _range_mask(frame, active_ranges, keep_unknown)
     matching = set(metadata.key_series()[mask])
 
     loaded = {tuple(str(part) for part in key) for key in (keys or ())}
@@ -688,7 +766,11 @@ def trials_matching(
     else:
         # Trial-id grain describes every reading of that trial.
         result = {key for key in loaded if key[1] in matching}
-    if not active_selections and loaded:
+    if (
+        not active_selections
+        and loaded
+        and _keeps_unlisted(active_ranges, keep_unknown)
+    ):
         # Range-only narrowing keeps the unmeasured, including a reading with no
         # row at all — the participant table's rule, one grain down. "Has a
         # row" is read from the whole table, never from the rows that passed
@@ -939,13 +1021,16 @@ def texts_matching(
     metadata: TextMetadata | None,
     selections: dict[str, Sequence] | None = None,
     ranges: dict[str, tuple[float, float]] | None = None,
+    *,
+    keep_unknown: Mapping[str, bool] | None = None,
 ) -> set | None:
     """Text ids satisfying every metadata constraint, or ``None`` for "any".
 
     Flat-grain sibling of :func:`participants_matching` — an empty constraint
     must not narrow the pool to the texts *listed in the table*, and a numeric
     range keeps a text with no value (``data.filter_trials``' rule that a
-    range narrows rather than excludes the unmeasured).
+    range narrows rather than excludes the unmeasured) unless ``keep_unknown``
+    maps that field to ``False``.
     """
     if metadata is None or metadata.frame.empty:
         return None
@@ -967,11 +1052,9 @@ def texts_matching(
     for name, values in active.items():
         allowed = {str(value) for value in values}
         mask &= frame[name].astype(str).isin(allowed)
-    for name, (low, high) in active_ranges.items():
-        numeric = pd.to_numeric(frame[name], errors="coerce")
-        mask &= numeric.between(low, high) | numeric.isna()
+    mask &= _range_mask(frame, active_ranges, keep_unknown)
     matching = set(frame.loc[mask, "text_id"])
-    if not active:
+    if not active and _keeps_unlisted(active_ranges, keep_unknown):
         # Range-only narrowing keeps the unmeasured, including a text with no
         # row at all (`participants_matching`'s rule, one grain over).
         matching |= set(metadata.report.only_in_data)
@@ -1283,6 +1366,8 @@ def participants_matching(
     metadata: ParticipantMetadata | None,
     selections: dict[str, Sequence] | None = None,
     ranges: dict[str, tuple[float, float]] | None = None,
+    *,
+    keep_unknown: Mapping[str, bool] | None = None,
 ) -> set | None:
     """Reader ids satisfying every metadata constraint, or ``None`` for "any".
 
@@ -1292,7 +1377,9 @@ def participants_matching(
 
     Membership follows the categorical filters; a numeric range keeps readers
     with **no value**, matching ``data.filter_trials``' rule that a range is a
-    narrowing control and not an exclusion of the unmeasured.
+    narrowing control and not an exclusion of the unmeasured. ``keep_unknown``
+    maps a ranged field to ``False`` to leave those readers out instead — the
+    explicit *Keep unknown values* choice beside the slider.
     """
     if metadata is None or metadata.frame.empty:
         return None
@@ -1314,11 +1401,9 @@ def participants_matching(
     for name, values in active.items():
         allowed = {str(value) for value in values}
         mask &= frame[name].astype(str).isin(allowed)
-    for name, (low, high) in active_ranges.items():
-        numeric = pd.to_numeric(frame[name], errors="coerce")
-        mask &= numeric.between(low, high) | numeric.isna()
+    mask &= _range_mask(frame, active_ranges, keep_unknown)
     matching = set(frame.loc[mask, "participant_id"])
-    if not active:
+    if not active and _keeps_unlisted(active_ranges, keep_unknown):
         # Range-only narrowing keeps the unmeasured (`data.filter_trials`' rule,
         # UX-49) — and a reader with **no row at all** is the most unmeasured
         # there is, so they are kept on the same terms as a reader whose value

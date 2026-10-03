@@ -2389,12 +2389,18 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         participants=filters["participants"],
         metadata=filters["metadata"],
         ranges=filters.get("ranges"),
+        drop_unknown=filters.get("ranges_drop_unknown"),
     )
     assign_derived(
         (words, fixations),
         "filter_trials",
         (source.words, source.fixations),
-        (filters["participants"], filters["metadata"], filters.get("ranges")),
+        (
+            filters["participants"],
+            filters["metadata"],
+            filters.get("ranges"),
+            tuple(filters.get("ranges_drop_unknown") or ()),
+        ),
     )
     selected_keys = filters.get("trial_keys")
     if selected_keys is not None:

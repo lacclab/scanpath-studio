@@ -402,6 +402,8 @@ class TestTrialFilterFlow:
             "participants": None,
             "metadata": {},
             "ranges": {},  # UX-49's continuous filters, likewise unconstrained
+            # …and none of them leaves out the trials with no value.
+            "ranges_drop_unknown": (),
             "metadata_keys": {},
             # DATA-20: the widget keys behind a participant-grain metadata
             # narrowing. Empty here — nothing was attached — and it must reset

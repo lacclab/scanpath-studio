@@ -78,9 +78,32 @@ class TestFilterDescriptions:
         )
         assert items == [
             {"field": "participants", "values": ["p1"]},
-            {"field": "TRIAL_INDEX_range", "range": [3.0, 10.0]},
+            {"field": "TRIAL_INDEX_range", "range": [3.0, 10.0], "unknown": "kept"},
             {"field": "favorites"},
         ]
+
+    def test_a_range_names_what_it_does_with_unknown_values(self):
+        """Keep unknown values off: the range item says so, and a constant
+        field — no range to slide — is listed by that choice alone."""
+        items = describe_filter_keys(
+            ["filter_score_range", "filter_trialmeta_level"],
+            {
+                "filter_score_range": (80, 100),
+                "filter_keepunknown_score_range": False,
+                "filter_keepunknown_trialmeta_level": False,
+            },
+            lambda key: key.removeprefix("filter_"),
+        )
+        assert items == [
+            {"field": "score_range", "range": [80.0, 100.0], "unknown": "excluded"},
+            {"field": "trialmeta_level", "unknown": "excluded"},
+        ]
+        assert format_filter_item(items[0]) == (
+            "score_range: 80–100 (unknown values excluded)"
+        )
+        assert format_filter_item(items[1]) == (
+            "trialmeta_level: unknown values excluded"
+        )
 
     def test_a_two_value_categorical_list_is_not_a_range(self):
         items = describe_filter_keys(

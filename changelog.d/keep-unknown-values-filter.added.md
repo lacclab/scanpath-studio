@@ -1,0 +1,1 @@
+A numeric trial filter, including one from a participant, trial or text table, now has a Keep unknown values choice that can leave out the records with no value, and says how many records that concerns.

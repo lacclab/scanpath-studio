@@ -174,7 +174,9 @@ def build_analysis_recipe(
     """The recipe for one Corpus Analysis table.
 
     ``trial_filters`` is ``controls.active_filter_items`` — one
-    ``{"field", "values" | "range"}`` entry per filter narrowing the pool; an
+    ``{"field", "values" | "range"}`` entry per filter narrowing the pool (a
+    range also carries ``"unknown": "kept" | "excluded"`` — what it does with
+    the records that have no value); an
     empty list is an unfiltered pool. ``pool`` holds its trial and reader
     counts against the dataset's.
     """
@@ -188,7 +190,7 @@ def build_analysis_recipe(
             {
                 k: jsonable(v)
                 for k, v in item.items()
-                if k in ("field", "values", "range")
+                if k in ("field", "values", "range", "unknown")
             }
             for item in trial_filters
         ],

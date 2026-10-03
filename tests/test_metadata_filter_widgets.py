@@ -98,3 +98,29 @@ def test_the_full_app_survives_a_one_row_trial_table():
     at.run()
     assert not at.exception, [e.message for e in at.exception]
     assert md.trial_bounds_for(table, "difficulty_score") is None
+
+
+def test_the_full_app_can_leave_out_trials_the_table_does_not_describe():
+    """*Keep unknown values* off, in the running app: the one-row table's
+    trial is all that stays, and the choice is mirrored for the next view."""
+    from tests.conftest import APP_SCRIPT
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    selection = at.session_state["_share_selection"]
+    trial = selection["trial_id"]
+    table = md.build_trial_metadata(
+        pd.DataFrame({"trial": [trial], "difficulty_score": [20]}),
+        "trial",
+        keys={(selection["participant_id"], trial)},
+    )
+    md.mark_restored(at.session_state, "trial", table)
+    at.run()
+    key = "filter_keepunknown_trialmeta_difficulty_score"
+    assert at.checkbox(key=key).value is True
+    assert at.session_state["_trial_filters"]["trial_keys"] is None
+
+    at.checkbox(key=key).uncheck().run()
+    assert not at.exception, [e.message for e in at.exception]
+    kept = at.session_state["_trial_filters"]["trial_keys"]
+    assert kept and {tid for _pid, tid in kept} == {str(trial)}
+    assert at.session_state["_trial_filters_raw"][key] is False

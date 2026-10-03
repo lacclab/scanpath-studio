@@ -6987,6 +6987,9 @@ _EMPTY_TRIAL_FILTERS: dict = {
     # apart from `metadata` because that one is membership (`.isin`) and
     # enumerating a float column's values is exactly what doesn't work.
     "ranges": {},
+    # The ranged columns whose *Keep unknown values* is off: a trial with no
+    # value there is left out instead of kept (`data.filter_trials`).
+    "ranges_drop_unknown": (),
     # DATA-20: widget keys behind a participant-grain metadata narrowing (which
     # lands in `participants`, not `metadata`), so UX-7's per-filter clear can
     # reset the control that actually caused it.
@@ -7144,7 +7147,9 @@ def clear_trial_filter(
     """
     raw_key = f"{prefix}_trial_filters_raw"
     mirror = dict(st.session_state.get(raw_key) or {})
-    for key in keys:
+    # A range's *Keep unknown values* choice is part of that filter, so it
+    # goes with it.
+    for key in (*keys, *(keep_unknown_key(k) for k in keys)):
         st.session_state.pop(key, None)
         mirror.pop(key, None)
     st.session_state[raw_key] = mirror
@@ -7229,6 +7234,12 @@ def describe_filter_keys(
     two-number tuple, or a two-number list under a range or metadata key —
     a categorical multiselect also holds a list. ``Favorites only`` has
     neither values nor range: it is on or absent.
+
+    A range also says what happens to the records with no value —
+    ``"unknown": "kept"`` or ``"excluded"``, from its *Keep unknown values*
+    choice (``values`` holds it under :func:`keep_unknown_key`). A constant
+    field has no range to slide, so its entry is only ``"unknown":
+    "excluded"``: that choice is the whole filter.
     """
     items: list[dict] = []
     for key in keys:
@@ -7238,14 +7249,22 @@ def describe_filter_keys(
             if value:
                 items.append({"field": label_for(key)})
             continue
+        unknown = "excluded" if values.get(keep_unknown_key(key)) is False else "kept"
         ranged = isinstance(value, tuple) or (
             isinstance(value, list)
             and (bare.endswith("_range") or bare.startswith(_METADATA_FILTER_STEMS))
         )
         if ranged and len(value) == 2 and all(_is_number(v) for v in value):
             items.append(
-                {"field": label_for(key), "range": [float(value[0]), float(value[1])]}
+                {
+                    "field": label_for(key),
+                    "range": [float(value[0]), float(value[1])],
+                    "unknown": unknown,
+                }
             )
+            continue
+        if value is None and unknown == "excluded":
+            items.append({"field": label_for(key), "unknown": unknown})
             continue
         if isinstance(value, (list, tuple, set)) and value:
             items.append({"field": label_for(key), "values": [str(v) for v in value]})
@@ -7267,7 +7286,8 @@ def active_filter_items(
     if not keys:
         return []
     values = dict(st.session_state.get(f"{prefix}_trial_filters_raw") or {})
-    values.update({k: st.session_state[k] for k in keys if k in st.session_state})
+    live = [*keys, *(keep_unknown_key(k) for k in keys)]
+    values.update({k: st.session_state[k] for k in live if k in st.session_state})
     names = _rail_names()
     labels = trial_filter_labels(words, fixations, names=names)
 
@@ -7289,10 +7309,18 @@ def active_filter_items(
 
 
 def format_filter_item(item: dict, *, max_values: int = 3) -> str:
-    """``Participant: p1, p2`` / ``Trial index: 3–10`` / ``Favorites only``."""
+    """``Participant: p1, p2`` / ``Trial index: 3–10`` / ``Favorites only``.
+
+    A filter that leaves out the records with no value says so:
+    ``Score: 80–100 (unknown values excluded)``.
+    """
+    excluded = item.get("unknown") == "excluded"
     if "range" in item:
         lo, hi = item["range"]
-        return f"{item['field']}: {lo:g}–{hi:g}"
+        text = f"{item['field']}: {lo:g}–{hi:g}"
+        return f"{text} (unknown values excluded)" if excluded else text
+    if excluded and not item.get("values"):
+        return f"{item['field']}: unknown values excluded"
     values = list(item.get("values") or ())
     if not values:
         return str(item["field"])
@@ -7683,6 +7711,83 @@ def _range_filter_key(col: str, prefix: str = "") -> str:
     return f"{prefix}filter_{col}_range"
 
 
+#: The stem a range filter's *Keep unknown values* key carries after
+#: ``filter_`` — see :func:`keep_unknown_key`.
+_KEEP_UNKNOWN_STEM = "keepunknown_"
+
+
+def keep_unknown_key(range_key: str) -> str:
+    """Session key of the *Keep unknown values* choice beside a range filter.
+
+    ``filter_score_range`` → ``filter_keepunknown_score_range``,
+    ``cmpfilter_meta_age`` → ``cmpfilter_keepunknown_meta_age``. Under the
+    filter layer's own ``…filter_`` prefix, so *✕ Clear all filters*, the
+    ``_trial_filters_raw`` mirror and compare-mode B's namespace treat it as
+    one more filter key without being taught about it. A plain session key:
+    trial filters travel in no share link or settings file, so it is not a
+    wire key either. ``True`` (or absent) keeps the records with no value —
+    the filter's long-standing rule; ``False`` leaves them out.
+    """
+    head, sep, rest = range_key.partition("filter_")
+    if not sep or rest.startswith(_KEEP_UNKNOWN_STEM):
+        return range_key
+    return f"{head}filter_{_KEEP_UNKNOWN_STEM}{rest}"
+
+
+def _keeps_unknown(range_key: str, prefix: str = "") -> bool:
+    """The *Keep unknown values* choice for ``range_key``, mirror as fallback."""
+    key = keep_unknown_key(range_key)
+    if key in st.session_state:
+        return st.session_state[key] is not False
+    mirror = st.session_state.get(f"{prefix}_trial_filters_raw") or {}
+    return mirror.get(key, True) is not False
+
+
+def _render_keep_unknown(
+    host, range_key: str, *, unknown: int, noun: str, prefix: str, on_change
+) -> None:
+    """The *Keep unknown values* checkbox under a range, and what it does.
+
+    Drawn only when some record has no value — with none, there is nothing to
+    keep or leave out, and the stale choice is dropped so it cannot narrow a
+    pool where it means nothing. The caption names how many records it
+    concerns, in the unit the filter keeps or drops.
+    """
+    key = keep_unknown_key(range_key)
+    if unknown <= 0:
+        st.session_state.pop(key, None)
+        return
+    if key not in st.session_state:
+        mirror = st.session_state.get(f"{prefix}_trial_filters_raw") or {}
+        st.session_state[key] = mirror.get(key, True) is not False
+    _labeled(
+        host,
+        "checkbox",
+        "Keep unknown values",
+        key=key,
+        on_change=on_change,
+        help=f"On: {noun}s with no value stay in the pool whatever the range. "
+        f"Off: only {noun}s with a value in the range are kept.",
+    )
+    plural = f"{unknown:,} {noun}{'s' if unknown != 1 else ''}"
+    one = unknown == 1
+    verb = "has" if one else "have"
+    if st.session_state[key]:
+        fate = "and stays in the pool" if one else "and stay in the pool"
+    else:
+        fate = "and is left out" if one else "and are left out"
+    host.caption(f"{plural} {verb} no value {fate}.")
+
+
+def _render_fixed_value(host, label: str, value: float, noun: str) -> None:
+    """A numeric field with one value: shown as that value, not a slider.
+
+    Streamlit refuses a slider whose ends are equal, and there is no range to
+    pick anyway.
+    """
+    host.caption(f"**{label}**: {value:g} for every {noun} that has a value.")
+
+
 def _numeric_filter_fields(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> dict[str, tuple]:
@@ -7779,6 +7884,78 @@ def text_metadata_fields():
     return attached.fields if attached is not None else ()
 
 
+def _render_metadata_range(
+    host,
+    attached,
+    field,
+    key: str,
+    *,
+    noun: str,
+    table: str,
+    unknown: int,
+    prefix: str,
+    on_change,
+) -> None:
+    """One numeric metadata field's filter, at any of the three grains.
+
+    A slider over the loaded records' values, then *Keep unknown values* when
+    some record has none. A field with one value has no range to slide —
+    Streamlit refuses a slider whose ends are equal, which stopped the whole
+    Scanpath view for a one-row trial table — so it is shown as that value,
+    and its unknowns choice is the only narrowing it offers.
+    """
+    from scanpath_studio import metadata as md
+
+    extent = md.numeric_extent(attached, field.name)
+    if extent is None:
+        st.session_state.pop(keep_unknown_key(key), None)
+        return
+    low, high = extent
+    if low < high:
+        _seed_range_bounds(key, low, high, prefix=prefix)
+        host.slider(
+            field.label,
+            min_value=low,
+            max_value=high,
+            key=key,
+            on_change=on_change,
+            help=f"From your {table} table ({field.source}). Keep only {noun}s "
+            "whose value falls in this range.",
+        )
+    else:
+        _render_fixed_value(host, field.label, low, noun)
+    _render_keep_unknown(
+        host, key, unknown=unknown, noun=noun, prefix=prefix, on_change=on_change
+    )
+
+
+def _metadata_range_narrowing(attached, field, key: str, prefix: str):
+    """``(range, keep_unknown)`` one numeric metadata field narrows by, or
+    ``None`` when it does not narrow.
+
+    It narrows when its slider is off full extent, or when *Keep unknown
+    values* is off — then even the full extent (or a constant field's one
+    value) leaves out the records with no value.
+    """
+    from scanpath_studio import metadata as md
+
+    extent = md.numeric_extent(attached, field.name)
+    if extent is None:
+        return None
+    keep = _keeps_unknown(key, prefix)
+    chosen = st.session_state.get(key)
+    if (
+        extent[0] < extent[1]
+        and isinstance(chosen, (tuple, list))
+        and len(chosen) == 2
+        and tuple(chosen) != extent
+    ):
+        return (float(chosen[0]), float(chosen[1])), keep
+    if not keep:
+        return extent, keep
+    return None
+
+
 def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> None:
     """One control per registered participant-grain field.
 
@@ -7796,19 +7973,16 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
     for field in attached.fields:
         key = metadata_filter_key(field.name, prefix)
         if field.is_numeric:
-            bounds = md.bounds_for(attached, field.name)
-            if bounds is None:
-                continue
-            low, high = bounds
-            _seed_range_bounds(key, low, high, prefix=prefix)
-            host.slider(
-                field.label,
-                min_value=low,
-                max_value=high,
-                key=key,
+            _render_metadata_range(
+                host,
+                attached,
+                field,
+                key,
+                noun="reader",
+                table="participant",
+                unknown=md.unknown_count(attached, field.name),
+                prefix=prefix,
                 on_change=on_change,
-                help=f"From your participant table ({field.source}). Readers with "
-                "no value are kept.",
             )
             continue
         options = md.options_for(attached, field.name)
@@ -7826,13 +8000,19 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
         )
 
 
-def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
+def _render_trial_metadata_filters(
+    host, *, prefix: str, on_change, keys: Callable[[], set] | None = None
+) -> None:
     """One control per registered trial-grain field (DATA-29).
 
     The mirror image of :func:`_render_participant_metadata_filters`, and simpler
     for the reason DATA-29 opened with: a trial attribute already *is* the grain
     the pool is keyed on, so the selection resolves straight to
     ``(participant_id, trial_id)`` keys with no reader indirection in between.
+
+    ``keys`` returns the loaded pool's ``(participant_id, trial_id)`` pairs, so
+    the *Keep unknown values* caption counts readings; without it the count is
+    of the table's own keys.
     """
     from scanpath_studio import metadata as md
 
@@ -7843,19 +8023,18 @@ def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
     for field in attached.fields:
         key = trial_metadata_filter_key(field.name, prefix)
         if field.is_numeric:
-            bounds = md.trial_bounds_for(attached, field.name)
-            if bounds is None:
-                continue
-            low, high = bounds
-            _seed_range_bounds(key, low, high, prefix=prefix)
-            host.slider(
-                field.label,
-                min_value=low,
-                max_value=high,
-                key=key,
+            _render_metadata_range(
+                host,
+                attached,
+                field,
+                key,
+                noun="trial",
+                table="trial",
+                unknown=md.unknown_count(
+                    attached, field.name, keys() if keys is not None else None
+                ),
+                prefix=prefix,
                 on_change=on_change,
-                help=f"From your trial table ({field.source}). Trials with no "
-                "value are kept.",
             )
             continue
         options = md.trial_options_for(attached, field.name)
@@ -7890,19 +8069,16 @@ def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
     for field in attached.fields:
         key = text_metadata_filter_key(field.name, prefix)
         if field.is_numeric:
-            bounds = md.text_bounds_for(attached, field.name)
-            if bounds is None:
-                continue
-            low, high = bounds
-            _seed_range_bounds(key, low, high, prefix=prefix)
-            host.slider(
-                field.label,
-                min_value=low,
-                max_value=high,
-                key=key,
+            _render_metadata_range(
+                host,
+                attached,
+                field,
+                key,
+                noun="text",
+                table="text",
+                unknown=md.unknown_count(attached, field.name),
+                prefix=prefix,
                 on_change=on_change,
-                help=f"From your text table ({field.source}). Texts with no "
-                "value are kept.",
             )
             continue
         options = md.text_options_for(attached, field.name)
@@ -7933,26 +8109,25 @@ def _text_metadata_narrowing(prefix: str) -> tuple:
         return None, ()
     selections: dict[str, list] = {}
     ranges: dict[str, tuple] = {}
+    keep_unknown: dict[str, bool] = {}
     keys: list = []
     for field in attached.fields:
         key = text_metadata_filter_key(field.name, prefix)
         chosen = st.session_state.get(key)
         if field.is_numeric:
-            bounds = md.text_bounds_for(attached, field.name)
-            if (
-                bounds
-                and isinstance(chosen, (tuple, list))
-                and len(chosen) == 2
-                and tuple(chosen) != bounds
-            ):
-                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+            narrowing = _metadata_range_narrowing(attached, field, key, prefix)
+            if narrowing is not None:
+                ranges[field.name], keep_unknown[field.name] = narrowing
                 keys.append(key)
             continue
         options = md.text_options_for(attached, field.name)
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
-    return md.texts_matching(attached, selections, ranges), tuple(keys)
+    return (
+        md.texts_matching(attached, selections, ranges, keep_unknown=keep_unknown),
+        tuple(keys),
+    )
 
 
 def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
@@ -7971,19 +8146,15 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
         return None, ()
     selections: dict[str, list] = {}
     ranges: dict[str, tuple] = {}
+    keep_unknown: dict[str, bool] = {}
     widget_keys: list = []
     for field in attached.fields:
         key = trial_metadata_filter_key(field.name, prefix)
         chosen = st.session_state.get(key)
         if field.is_numeric:
-            bounds = md.trial_bounds_for(attached, field.name)
-            if (
-                bounds
-                and isinstance(chosen, (tuple, list))
-                and len(chosen) == 2
-                and tuple(chosen) != bounds
-            ):
-                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+            narrowing = _metadata_range_narrowing(attached, field, key, prefix)
+            if narrowing is not None:
+                ranges[field.name], keep_unknown[field.name] = narrowing
                 widget_keys.append(key)
             continue
         options = md.trial_options_for(attached, field.name)
@@ -7991,7 +8162,9 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
             selections[field.name] = list(chosen)
             widget_keys.append(key)
     return (
-        md.trials_matching(attached, selections, ranges, keys=keys()),
+        md.trials_matching(
+            attached, selections, ranges, keys=keys(), keep_unknown=keep_unknown
+        ),
         tuple(widget_keys),
     )
 
@@ -8029,26 +8202,27 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
         return None, ()
     selections: dict[str, list] = {}
     ranges: dict[str, tuple] = {}
+    keep_unknown: dict[str, bool] = {}
     keys: list = []
     for field in attached.fields:
         key = metadata_filter_key(field.name, prefix)
         chosen = st.session_state.get(key)
         if field.is_numeric:
-            bounds = md.bounds_for(attached, field.name)
-            if (
-                bounds
-                and isinstance(chosen, (tuple, list))
-                and len(chosen) == 2
-                and tuple(chosen) != bounds
-            ):
-                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+            narrowing = _metadata_range_narrowing(attached, field, key, prefix)
+            if narrowing is not None:
+                ranges[field.name], keep_unknown[field.name] = narrowing
                 keys.append(key)
             continue
         options = md.options_for(attached, field.name)
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
-    return md.participants_matching(attached, selections, ranges), tuple(keys)
+    return (
+        md.participants_matching(
+            attached, selections, ranges, keep_unknown=keep_unknown
+        ),
+        tuple(keys),
+    )
 
 
 def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
@@ -8085,6 +8259,8 @@ def _compute_trial_filters(
         "participants": None,
         "metadata": {},
         "ranges": {},
+        # Ranged columns whose *Keep unknown values* is off.
+        "ranges_drop_unknown": (),
         # column -> the session key holding it, so "clear just this filter"
         # (UX-7) can reset one widget. Not derivable from the column name: the
         # Narrow-by Text multiselect lands in `metadata` under the *text column*
@@ -8180,17 +8356,25 @@ def _compute_trial_filters(
             result["text_filter_keys"] = text_meta_keys
     # UX-49: numeric trial-level columns narrow by range, not by membership. A
     # slider still at full extent is "no filter" and contributes nothing.
+    # With *Keep unknown values* off, even the full extent narrows: it leaves
+    # out the trials with no value.
     numeric_fields = _numeric_filter_fields(words, fixations)
+    drop_unknown: list = []
     for col, (_frame, lo, hi) in numeric_fields.items():
         key = _range_filter_key(col, prefix)
         chosen = st.session_state.get(key)
-        if not (isinstance(chosen, (tuple, list)) and len(chosen) == 2):
-            continue
-        sel_lo, sel_hi = float(chosen[0]), float(chosen[1])
-        if sel_lo <= lo and sel_hi >= hi:
+        keep = _keeps_unknown(key, prefix)
+        if isinstance(chosen, (tuple, list)) and len(chosen) == 2:
+            sel_lo, sel_hi = float(chosen[0]), float(chosen[1])
+        else:
+            sel_lo, sel_hi = float(lo), float(hi)
+        if sel_lo <= lo and sel_hi >= hi and keep:
             continue
         result["ranges"][col] = (sel_lo, sel_hi)
         result["metadata_keys"][col] = key
+        if not keep:
+            drop_unknown.append(col)
+    result["ranges_drop_unknown"] = tuple(drop_unknown)
     for col in _filter_fields_for(words, fixations):
         if col in numeric_fields:
             continue
@@ -8369,18 +8553,20 @@ def render_trial_filters(
             max_value=hi,
             key=_range_filter_key(col, prefix),
             on_change=_apply,
-            help="Keep only trials whose value falls in this range. Trials with "
-            "no value are kept.",
+            help="Keep only trials whose value falls in this range.",
         )
-        missing = _trials_missing_column(
-            frame, col, cache_key=(frame_fingerprint(frame), col)
+        # Say how many trials have no value and what happens to them, or the
+        # kept-anyway trials look like the range isn't working.
+        _render_keep_unknown(
+            host,
+            _range_filter_key(col, prefix),
+            unknown=_trials_missing_column(
+                frame, col, cache_key=(frame_fingerprint(frame), col)
+            ),
+            noun="trial",
+            prefix=prefix,
+            on_change=_apply,
         )
-        if missing:
-            # Say it, or the kept-anyway trials look like the range isn't working.
-            host.caption(
-                f"{missing} trial{'s' if missing != 1 else ''} have no "
-                f"**{label}** value and are kept regardless."
-            )
     for col in _filter_fields_for(words, fixations):
         if col in numeric_fields:
             continue
@@ -8418,7 +8604,12 @@ def render_trial_filters(
                 )
 
     _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)
-    _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
+    _render_trial_metadata_filters(
+        host,
+        prefix=prefix,
+        on_change=_apply,
+        keys=lambda: _loaded_trial_keys(words, fixations),
+    )
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
     # The annotation filters are trial level: they read the trial's own star
@@ -8508,6 +8699,9 @@ def render_trial_filters(
         # And the text table, the third grain — same reasoning again.
         + [text_metadata_filter_key(f.name, prefix) for f in text_metadata_fields()]
     )
+    # Each range's *Keep unknown values* choice, for the same reason as the
+    # range itself.
+    keys += [keep_unknown_key(k) for k in keys]
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }

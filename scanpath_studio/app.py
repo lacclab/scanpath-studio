@@ -651,11 +651,17 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
         )
     # UX-49: a range narrows too, so it is one of the things that can empty the
     # pool and has to be named in the diagnosis alongside the categorical ones.
+    dropping = set(trial_filters.get("ranges_drop_unknown") or ())
     for col, bounds in (trial_filters.get("ranges") or {}).items():
+        label = f"{names[col]} between {bounds[0]:g} and {bounds[1]:g}"
+        if col in dropping:
+            label += " (unknown values excluded)"
         steps.append(
             (
-                f"{names[col]} between {bounds[0]:g} and {bounds[1]:g}",
-                lambda w, f, c=col, b=bounds: filter_trials(w, f, ranges={c: b}),
+                label,
+                lambda w, f, c=col, b=bounds, d=col in dropping: filter_trials(
+                    w, f, ranges={c: b}, drop_unknown=(c,) if d else None
+                ),
                 (keys_by_col.get(col, f"filter_{col}_range"),),
             )
         )
@@ -2733,6 +2739,7 @@ def _narrowed_raw_gaze(
     metadata,
     ranges,
     trial_keys,
+    drop_unknown=None,
 ) -> pd.DataFrame:
     """The samples table narrowed by the trial filters that apply to it (VIZ-45).
 
@@ -2753,6 +2760,7 @@ def _narrowed_raw_gaze(
             participants=participants,
             metadata=metadata,
             ranges=ranges,
+            drop_unknown=drop_unknown,
         )
         if trial_keys is not None:
             narrowed = filter_frame_to_keys(narrowed, trial_keys)
@@ -2764,6 +2772,7 @@ def _narrowed_raw_gaze(
         hashable_key(metadata or {}),
         hashable_key(ranges or {}),
         hashable_key(trial_keys),
+        hashable_key(tuple(drop_unknown or ())),
     )
     return frame_cache("raw_gaze_narrowed", key, _build)
 
@@ -9552,6 +9561,7 @@ def _run_app() -> None:
         participants=trial_filters["participants"],
         metadata=trial_filters["metadata"],
         ranges=trial_filters.get("ranges"),
+        drop_unknown=trial_filters.get("ranges_drop_unknown"),
     )
     assign_derived(
         (words_df, fixations_df),
@@ -9561,6 +9571,7 @@ def _run_app() -> None:
             trial_filters["participants"],
             trial_filters["metadata"],
             trial_filters.get("ranges"),
+            tuple(trial_filters.get("ranges_drop_unknown") or ()),
         ),
     )
     # DATA-29: a trial-grain metadata narrowing is already `(participant_id,
@@ -9584,6 +9595,9 @@ def _run_app() -> None:
         metadata=trial_filters["metadata"] if samples_only_dataset else None,
         ranges=trial_filters.get("ranges") if samples_only_dataset else None,
         trial_keys=trialmeta_keys,
+        drop_unknown=trial_filters.get("ranges_drop_unknown")
+        if samples_only_dataset
+        else None,
     )
     if trialmeta_keys is not None:
         pool = (words_df, fixations_df)

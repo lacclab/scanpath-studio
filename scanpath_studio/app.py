@@ -277,6 +277,7 @@ from scanpath_studio.tabs import (
     pool_filter_frames,
     render_analysis_pool_bar,
     render_corpus_analysis_tab,
+    render_data_health,
     render_data_inspection_tab,
     render_dataset_capabilities,
     render_dataset_editor_footer,
@@ -9946,6 +9947,11 @@ def _run_app() -> None:
             # DATA-67 — what the dataset supports, before any trial filter:
             # the first thing a newly added dataset's overview answers.
             render_dataset_capabilities(
+                words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
+            )
+            # Values that parsed but cannot be right (negative durations,
+            # infinite positions, empty word boxes) — counted, not removed.
+            render_data_health(
                 words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
             )
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and

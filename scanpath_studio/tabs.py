@@ -15490,6 +15490,90 @@ def render_dataset_capabilities(
         st.caption("  \n".join(lines))
 
 
+@st.cache_data(show_spinner=False)
+def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
+    """`data_health.check_data_health`, once per dataset (keyed on fingerprints)."""
+    from .data_health import check_data_health
+
+    return check_data_health(_words, _fixations, _raw_gaze)
+
+
+#: How a health finding names the rows of each table.
+_HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "AOI", "raw_gaze": "raw-gaze"}
+
+
+def render_data_health(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+    *,
+    filtered: bool = False,
+) -> None:
+    """*Data checks* under *Available with this dataset*: values that parsed but
+    cannot be right — a fixation of 0 ms or less, a position that is not a finite
+    number, a word box with no area (`data_health`).
+
+    Runs on the whole dataset, before the trial filters, cached per dataset, so
+    a rerun costs a fingerprint lookup. Each finding names the dataset's own
+    columns (DATA-66), counts rows and trials, quotes a few rows and says what
+    the app does with them. Nothing is removed or changed.
+    """
+    from .column_names import active
+
+    findings = _c_data_health(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+    with st.container(key="dataset_health"):
+        st.caption(
+            "**Data checks**"
+            + (" · whole dataset, before the trial filters" if filtered else "")
+        )
+        if not findings:
+            st.caption(
+                "No fixation lasts 0 ms or less, every position is a finite "
+                "number, and every word box has an area."
+            )
+            return
+        lines: dict[str, list[str]] = {"warning": [], "note": []}
+        for finding in findings:
+            names = active(st.session_state, finding.table)
+            columns = ", ".join(f"`{names.label(c)}`" for c in finding.columns)
+            kinds = ", ".join(f"{n:,} {k}" for k, n in finding.breakdown.items())
+            noun = _HEALTH_ROW_NOUN.get(finding.table, finding.table)
+            trials = f"{finding.trials:,} trial" + ("" if finding.trials == 1 else "s")
+            lines[finding.severity].append(
+                f"**{finding.title}** — {finding.rows:,} of {finding.total_rows:,} "
+                f"{noun} rows, in {trials} ({kinds}); from {columns}."
+            )
+        if lines["warning"]:
+            st.warning("  \n".join(lines["warning"]), icon=ICONS["warning"])
+        if lines["note"]:
+            st.caption("  \n".join(lines["note"]))
+        with st.expander("What the data checks found", expanded=False):
+            st.caption(
+                "Nothing is removed or changed: these rows stay in every table "
+                "and export. What each one does in the app:"
+            )
+            for finding in findings:
+                names = active(st.session_state, finding.table)
+                st.markdown(f"**{finding.title}**")
+                st.caption(finding.consequence)
+                if finding.examples:
+                    example = pd.DataFrame(list(finding.examples))
+                    st.dataframe(
+                        example.rename(columns=names.label),
+                        hide_index=True,
+                        width="stretch",
+                    )
+
+
 def render_data_inspection_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,

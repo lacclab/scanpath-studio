@@ -129,6 +129,11 @@ _CANONICAL_LABELS: dict[str, str] = {
 }
 
 
+#: Canonical columns that can carry a copy of a partner's values — see
+#: `ColumnNames.aliases`.
+_ALIAS_PAIRS = (("trial_id", "unique_trial_id"), ("text_id", "unique_text_id"))
+
+
 def canonical_label(column) -> str:
     """A readable label for a column the app made (a measure, a run, an angle …)."""
     from .data import READING_MEASURE_FIELDS
@@ -260,6 +265,28 @@ class ColumnNames:
             + [o for o in rest if self.kind_of(o) not in made]
             + [o for o in rest if self.kind_of(o) in made]
         )
+
+    def aliases(self, columns: Iterable[str]) -> set[str]:
+        """Columns in ``columns`` that only repeat a partner from the same source.
+
+        `unique_trial_id` mirrors `trial_id` (BUG-58) and `unique_text_id`
+        usually mirrors `text_id`; when both of a pair were read from one column
+        of the user's file, a table needs to show it once.
+        """
+        present = {str(c) for c in columns}
+        hidden: set[str] = set()
+        for main, alias in _ALIAS_PAIRS:
+            first, second = self.source(main), self.source(alias)
+            if (
+                main in present
+                and alias in present
+                and first is not None
+                and second is not None
+                and first.sources
+                and first.sources == second.sources
+            ):
+                hidden.add(alias)
+        return hidden
 
     def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
         """Only the entries for ``columns`` — a frame's actual columns.

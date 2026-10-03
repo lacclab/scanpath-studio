@@ -5549,8 +5549,9 @@ def render_plot_controls(
         # Honoured by all three render paths (static, animation, and — since the
         # comparison builders now take `fixation_hover_fields` too — Compare),
         # so this one carries no `_mode_gate`.
-        fix_hover = _rail_names().sort_options(hover_field_options(trial_fixations))
-        fix_hover_labels = _rail_names().option_labels(fix_hover)
+        hover_names = _rail_names()
+        fix_hover = hover_names.sort_options(hover_field_options(trial_fixations))
+        fix_hover_labels = hover_names.option_labels(fix_hover)
         _labeled(
             st,
             "multiselect",

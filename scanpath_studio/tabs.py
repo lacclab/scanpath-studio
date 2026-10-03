@@ -10318,12 +10318,17 @@ def _render_raw_table(
     shown = drop_internal_columns(df)
     # DATA-66: headed by the dataset's own names (``table`` says whose).
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
+    # A copy of a partner from the same source column is shown once — left out
+    # of `column_order` rather than dropped, so a large frame is not copied.
+    hidden = names.aliases(shown.columns)
+    order = [c for c in shown.columns if c not in hidden]
     st.dataframe(
         shown,
         hide_index=True,
         width="stretch",
         lazy=True,
-        column_config=column_label_config(shown.columns, names),
+        column_order=order,
+        column_config=column_label_config(order, names),
     )
     if caption:
         st.caption(caption)

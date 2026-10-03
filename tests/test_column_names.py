@@ -574,3 +574,19 @@ def test_the_edit_screen_offers_columns_by_their_users_names():
     assert "CURRENT_FIX_DURATION" in duration.options, duration.options
     assert "duration_ms" not in duration.options
     assert duration.value == "duration_ms"  # the value is still canonical
+
+
+def test_an_alias_of_the_same_source_column_is_hidden():
+    """`unique_trial_id` mirrors `trial_id` (BUG-58): when both come from one
+    column of the user's file, a table shows that column once."""
+    names = ColumnNames(
+        {
+            "trial_id": SourceName(("unique_trial_id",)),
+            "unique_trial_id": SourceName(("unique_trial_id",)),
+            "text_id": SourceName(("PARAGRAPH",)),
+            "unique_text_id": SourceName(("OTHER",)),
+        }
+    )
+    columns = ["trial_id", "unique_trial_id", "text_id", "unique_text_id", "x"]
+    assert names.aliases(columns) == {"unique_trial_id"}
+    assert cn.EMPTY.aliases(columns) == set()

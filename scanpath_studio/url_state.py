@@ -45,14 +45,14 @@ from .constants import (
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     COLORSCALES,
-    LEGACY_MARKER_SIZE_SCALE,
-    MARKER_DURATION_BOUNDS,
-    MARKER_SIZE_SCALES,
     CUSTOM_PALETTE,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
     ICONS,
+    LEGACY_MARKER_SIZE_SCALE,
     MANUAL_SAMPLE_CHOICE,
+    MARKER_DURATION_BOUNDS,
+    MARKER_SIZE_SCALES,
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
@@ -2041,7 +2041,7 @@ def _restore_plot_config(
             put(
                 "global_marker_duration_range",
                 _clamp_url_value(
-                    "global_marker_duration_range", (int(round(lo)), int(round(hi)))
+                    "global_marker_duration_range", (round(lo), round(hi))
                 ),
             )
     if "duration_size_legend" in sizing:

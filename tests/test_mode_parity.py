@@ -760,3 +760,39 @@ def _pair_words(frame: pd.DataFrame, participant, trial_id) -> pd.DataFrame:
     return frame[
         (frame["participant_id"] == participant) & (frame["trial_id"] == trial_id)
     ]
+
+
+def test_a_styled_co_animation_is_keyed_without_the_unread_global_look():
+    """Animate + Compare draws each scanpath in its own style, so a global
+    saccade width or opacity left over from another mode must not split the
+    replay's cache key (and rebuild identical frames)."""
+    frames = (
+        _trial(_words(), "A"),
+        _trial(_fixations(), "A"),
+        _trial(_words(), "B"),
+        _trial(_fixations(), "B"),
+        "A",
+        "t1",
+        "B",
+        "t1",
+    )
+    style = {
+        "fix_color": "#00ff00",
+        "saccade_color": "#00ff00",
+        "saccade_style": "solid",
+        "saccade_width": 2.0,
+        "marker_size_range": (4, 10),
+        "opacity": 0.5,
+        "hollow": False,
+    }
+
+    def key(**look):
+        viz = _viz(compare_style_a=style, compare_style_b=style, **look)
+        return tabs._plan_replay(
+            *frames,
+            settings=_figure_settings(viz),
+            viz_settings=viz,
+            playback_speed=1.0,
+        ).key
+
+    assert key() == key(saccade_width=7.0, fixation_opacity=0.2)

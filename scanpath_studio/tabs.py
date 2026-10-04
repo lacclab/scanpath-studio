@@ -4778,6 +4778,25 @@ def _release_animation_task(task_key: tuple) -> None:
         st.session_state.pop(ANIM_TASK_KEY, None)
 
 
+# The figure-wide marker and saccade look a co-animation never reads (each
+# scanpath draws in its own style), at the builder's defaults.
+_DUAL_UNREAD_STYLE = {
+    field.name: field.default
+    for field in dataclass_fields(FigureSettings)
+    if field.name
+    in {
+        "fixation_color",
+        "fixation_opacity",
+        "hollow_fixations",
+        "marker_size_range",
+        "order_font_color",
+        "saccade_color",
+        "saccade_style",
+        "saccade_width",
+    }
+}
+
+
 def _replay_style(style: dict | None) -> dict | None:
     """A per-scanpath comparison style as the co-animation takes it: its look
     only, without the filters (`COMPARE_FILTER_STYLE_KEYS`) `_plan_replay`
@@ -4889,6 +4908,14 @@ def _plan_replay(
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
+        # A co-animation wears `style_a` / `style_b` (the rail always fills
+        # every key), so the figure-wide look is never read — pinned, it can't
+        # split the key over a value last set in another mode.
+        **(
+            _DUAL_UNREAD_STYLE
+            if dual and animation_settings.style_a and animation_settings.style_b
+            else {}
+        ),
     )
     anim_inputs = {
         field.name: getattr(frame_settings, field.name)

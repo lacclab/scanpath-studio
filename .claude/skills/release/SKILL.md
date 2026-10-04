@@ -51,17 +51,25 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    release a failing tree.
 7. **Commit + PR** — commit the changes (the three files plus the deleted fragments) with message `Release v<version>`
    (no AI co-author trailer — repo rule), push the branch, and open a PR to
-   `main`. Wait for CI to pass and for the PR to merge; do not tag the branch.
-8. **Tag on main** — once merged: `git fetch origin`, check that
+   `main`, and turn on auto-merge so it lands once CI is green. Do not tag the
+   branch.
+8. **Wait for the merge** — tagging is part of `/release`, so don't hand off
+   here. Wait in the background (Bash `run_in_background`, which re-invokes
+   you when it exits) rather than polling in the foreground:
+   `until [ "$(gh pr view <n> --json state -q .state)" = MERGED ]; do
+   [ "$(gh pr view <n> --json state -q .state)" = CLOSED ] && exit 1; sleep 60; done`.
+   If CI fails, the PR closes, or the wait times out, stop and report — do
+   not tag.
+9. **Tag on main** — once merged: `git fetch origin`, check that
    `origin/main`'s `scanpath_studio/__init__.py` holds the new version, then
-   `git tag v<version> origin/main` and `git push origin v<version>`. Confirm
-   with the user immediately before the push: pushing a `v*` tag triggers the
-   `Publish to PyPI` workflow (`.github/workflows/publish.yml`, Trusted
-   Publishing) and the `Desktop builds` workflow
-   (`.github/workflows/desktop.yml`), which attaches per-OS bundles to the
-   GitHub release. `publish.yml` refuses a tag that does not match
-   `__version__` (ENG-62) — which is why the tag goes on the merged commit, not
-   on a commit from before the bump.
+   `git tag v<version> origin/main` and `git push origin v<version>`. Running
+   `/release` is the go-ahead for this push — no separate confirmation.
+   Pushing a `v*` tag triggers the `Publish to PyPI` workflow
+   (`.github/workflows/publish.yml`, Trusted Publishing) and the
+   `Desktop builds` workflow (`.github/workflows/desktop.yml`), which
+   attaches per-OS bundles to the GitHub release. `publish.yml` refuses a tag
+   that does not match `__version__` (ENG-62) — which is why the tag goes on
+   the merged commit, not on a commit from before the bump.
 
 ## After
 

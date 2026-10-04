@@ -2029,6 +2029,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>Arc saccades with Snap to word no longer run off the top of the plot: the view now reserves room for the arcs as they are drawn, from the snapped positions. (<a href="https://github.com/lacclab/scanpath-studio/issues/340">#340</a>)</li>
 <li>Side-by-side and stacked comparisons size each panel's word labels from the space that panel finally gets, so text stays in proportion to its boxes when the two readings come from different screens, and a colour bar no longer shrinks the panels under it. (<a href="https://github.com/lacclab/scanpath-studio/issues/340">#340</a>)</li>
 <li>Add space between the loading card's progress bar and its Cancel button. (<a href="https://github.com/lacclab/scanpath-studio/issues/341">#341</a>)</li>
+<li>Changing a plot setting on a large dataset is about three times faster: on OneStop a click went from about 3.5 s to about 1.2 s, because the app no longer re-detects the column mapping or rebuilds the trial picker's labels and sort keys on every click. (<a href="https://github.com/lacclab/scanpath-studio/issues/342">#342</a>)</li>
 </ul>
 <p><strong>Security</strong></p>
 <ul>

@@ -3469,17 +3469,42 @@ def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
     return kernel / kernel.sum()
 
 
+def _blur_axis(grid: np.ndarray, sigma: float, axis: int) -> np.ndarray:
+    """Zero-padded Gaussian blur along one axis; the output keeps ``grid``'s shape.
+
+    ``np.convolve(mode="same")`` returns the *kernel's* length when the kernel
+    is longer than the axis, which shifted the density off its coordinates on a
+    short grid. Padding by the kernel radius and taking the ``valid`` part pins
+    the length. Taps further out than the axis is long only ever meet the zero
+    padding, so they are dropped first: the result is identical and the cost is
+    bounded by the axis length, not by sigma.
+    """
+    kernel = _gaussian_kernel_1d(sigma)
+    radius = min(len(kernel) // 2, grid.shape[axis] - 1)
+    centre = len(kernel) // 2
+    kernel = kernel[centre - radius : centre + radius + 1]
+    pad = [(0, 0)] * grid.ndim
+    pad[axis] = (radius, radius)
+    padded = np.pad(grid, pad)
+    return np.apply_along_axis(
+        lambda v: np.convolve(v, kernel, mode="valid"), axis, padded
+    )
+
+
 def _gaussian_blur_2d(
     grid: np.ndarray, sigma_rows: float, sigma_cols: float
 ) -> np.ndarray:
-    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage)."""
+    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage).
+
+    Zero padding beyond the grid; the output always has the input's shape.
+    """
     out = grid.astype(float)
+    if out.size == 0:
+        return out
     if sigma_rows and sigma_rows > 0:
-        k = _gaussian_kernel_1d(sigma_rows)
-        out = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 0, out)
+        out = _blur_axis(out, sigma_rows, 0)
     if sigma_cols and sigma_cols > 0:
-        k = _gaussian_kernel_1d(sigma_cols)
-        out = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 1, out)
+        out = _blur_axis(out, sigma_cols, 1)
     return out
 
 

@@ -1269,6 +1269,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#data-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#many-trials" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1798,6 +1809,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#data-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#many-trials" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2128,7 +2150,7 @@ B's frames directly.</p>
 </tr>
 <tr>
 <td>color fixations</td>
-<td><code>--color-by FIELD</code></td>
+<td><code>--color-by FIELD</code> — a column of your own too, once <code>--keep-columns COLUMN…</code> carries it through loading</td>
 </tr>
 <tr>
 <td>size fixations by duration</td>
@@ -2281,6 +2303,12 @@ keep <code>excluded</code> / <code>excluded_reason</code>:</p>
 <td>—</td>
 <td>Column mapping for the <code>--fixations</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.</td>
 </tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be <code>--color-by</code>, an axis or a hover field. The keep_columns= of api.load_scanpath_data.</td>
+</tr>
 </tbody>
 </table>
 <p>The preprocessing settings and <code>--pixels-per-degree</code> are recorded in
@@ -2352,6 +2380,90 @@ have and renders a styled corpus figure
 </tr>
 </tbody>
 </table>
+<h2 id="data-checks">Data checks<a class="headerlink" href="#data-checks" title="Permanent link">&para;</a></h2>
+<p><code>check</code> runs the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data</strong> page's <strong>Data checks</strong> on your
+tables without opening the app: fixations lasting 0 ms or less, fixations and
+raw-gaze samples with no finite position, and word boxes with no area. Each
+finding gives the rows and trials affected, a few example rows, and what the
+app does with them. It changes nothing, and it exits 0 whatever it finds;
+<code>--json</code> prints the table
+<a href="../api/#scanpath_studio.api.check_data_health"><code>api.check_data_health</code></a> returns.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
+</code></pre></div>
+<p><strong>Options</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--sample</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Check the bundled OneStop demo instead of your own tables.</td>
+</tr>
+<tr>
+<td><code>--words</code></td>
+<td><code>WORDS [WORDS ...]</code></td>
+<td>—</td>
+<td>Words/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--fixations</code></td>
+<td><code>FIXATIONS [FIXATIONS ...]</code></td>
+<td>—</td>
+<td>Fixations table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Raw (sample-level) gaze table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection (same shape as <code>--fix-schema</code>).</td>
+</tr>
+<tr>
+<td><code>--trial-parts-manifest</code></td>
+<td><code>TRIAL_PARTS_MANIFEST</code></td>
+<td>—</td>
+<td>JSON manifest assigning source rows to ordered screens.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Print the findings as JSON (the rows api.check_data_health returns).</td>
+</tr>
+<tr>
+<td><code>--word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--words</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--fixations</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be <code>--color-by</code>, an axis or a hover field. The keep_columns= of api.load_scanpath_data.</td>
+</tr>
+</tbody>
+</table>
 <h2 id="many-trials">Many trials<a class="headerlink" href="#many-trials" title="Permanent link">&para;</a></h2>
 <p>The <code>render</code> command renders one trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
 or <strong>Export → Export bundle</strong> for many figures.</p>
@@ -2361,10 +2473,10 @@ or <strong>Export → Export bundle</strong> for many figures.</p>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, and annotations — so a refresh or a
 restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
 <p>The same information is at the foot of the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data</strong> page, under <strong>Saved on
 this computer</strong>. A running app writes a new copy at its next change, so clear
@@ -2390,14 +2502,15 @@ with the default and help <code>--help</code> prints.</p>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                                   (see `scanpath-studio render --help`)
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>  scanpath-studio analyze …        export preprocessing + the full measure family
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  scanpath-studio corpus …         render a styled corpus-analysis figure
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  scanpath-studio cache …          show / clear the on-device recovery cache
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  scanpath-studio --version        print the version
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>Unrecognized flags are forwarded to `streamlit run` (e.g.
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>`scanpath-studio --server.port 8502`); an unknown command word is an error.
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>The app listens on this computer only; `--server.address 0.0.0.0` serves it
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>on your network (it has no login) with local folder access off, unless
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>SCANPATH_LOCAL_FS=1.
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  scanpath-studio check …          run the Data checks on your tables
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  scanpath-studio cache …          show / clear the on-device recovery cache
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>  scanpath-studio --version        print the version
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>Unrecognized flags are forwarded to `streamlit run` (e.g.
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>`scanpath-studio --server.port 8502`); an unknown command word is an error.
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>The app listens on this computer only; `--server.address 0.0.0.0` serves it
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>on your network (it has no login) with local folder access off, unless
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>SCANPATH_LOCAL_FS=1.
 </code></pre></div>
 <details class="note">
 <summary><code>render</code> — every flag</summary>
@@ -2532,6 +2645,12 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>JSON</code></td>
 <td>—</td>
 <td>Column mapping for the <code>--fixations</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be <code>--color-by</code>, an axis or a hover field. The keep_columns= of api.load_scanpath_data.</td>
 </tr>
 <tr>
 <td><code>--potec</code></td>
@@ -3310,7 +3429,7 @@ with the default and help <code>--help</code> prints.</p>
 </tbody>
 </table>
 </details>
-<p><code>analyze</code> and <code>corpus</code> are listed in full in their own sections above.</p>
+<p><code>analyze</code>, <code>corpus</code> and <code>check</code> are listed in full in their own sections above.</p>
 
 
 
@@ -3331,7 +3450,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 11:33:59 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 06:44:27 UTC">October 4, 2026</span>
   </span>
 
     

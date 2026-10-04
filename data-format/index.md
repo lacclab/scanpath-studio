@@ -8,12 +8,14 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**, **fi
 | ------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Words / IA**                        | one row per word / interest area, with its on-screen box | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
 | **Fixations**                         | one row per fixation                                     | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id                                                       |
-| **Raw gaze** *(optional)*             | one row per gaze sample                                  | participant id, trial id, x, y, timestamp                                                                                                                 |
+| **Raw gaze** *(optional)*             | one row per gaze sample                                  | participant id, trial id, x, y; optionally timestamp                                                                                                      |
 | **Participant metadata** *(optional)* | one row per reader                                       | participant id, plus anything you know about them                                                                                                         |
 | **Trial metadata** *(optional)*       | one row per trial                                        | trial id, plus anything you know about that trial                                                                                                         |
 | **Text metadata** *(optional)*        | one row per text                                         | text id, plus anything you know about that text                                                                                                           |
 
 **Without timestamps.** A fixations table with no timestamp column still loads: its rows are taken to be in reading order. Reading time and reading speed are then an estimate — the fixations laid end to end by their durations, leaving out the time between them — and the summaries label them so (`reading_time_source`). The replay uses the same clock.
+
+A raw gaze table with no timestamp column keeps its samples in file order and gives them no time: each sample is numbered 1, 2, … within its trial (`sample_index`), the plot colours the samples by that order under a *Sample order* legend title and the hover reads `sample n`, and the exported table carries the sample number. Nothing assumes a sampling rate.
 
 **Units.** Durations and timestamps are read in milliseconds. A column whose header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon write — is converted, and so are the vendor columns documented in seconds (Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core `norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since the load does not know the screen size — multiply them by the screen width and height in pixels first. Pupil Labs Core measures *y* upward from the bottom edge, so its row is `(1 − y) × height`. Its `norm_pos` is relative to the world-camera image, not the screen: map the gaze onto the stimulus screen first (Pupil's Surface Tracker), whose coordinates have the same bottom-left origin.
 
@@ -34,8 +36,8 @@ p02,English,31,0.91
 Three rules are worth knowing:
 
 - **The table is never copied onto your fixations.** It stays its own table and is exported separately (`metadata/participants.csv`).
-- **Nothing is guessed.** The join is reported before anything uses it: readers in your data with no row, rows describing readers you did not load, and duplicate rows. Duplicates that *disagree* are dropped and named rather than resolved by taking the first one, so the field reads as missing.
-- **A missing reader is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool.
+- **Nothing is guessed.** The join is reported before anything uses it: readers in your data with no row, rows describing readers you did not load, and duplicate rows. Duplicates that *disagree* are dropped and named rather than resolved by taking the first one, so the field reads as missing. Duplicates that do not disagree are combined: each field keeps the one value the rows hold, so one row's age and another's language both survive.
+- **A missing reader is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool. A numeric range keeps the readers with no value too, unless you untick **Keep unknown values** under it; the line under the box says how many readers that concerns. The same choice sits under every numeric trial filter, for the trial and text tables as well.
 
 Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render` and [`load_participant_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 

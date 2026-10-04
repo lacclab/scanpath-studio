@@ -2178,6 +2178,11 @@ datasets and settings (when it listens only on this computer, as
 <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management → Saved on this computer</strong> shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
 (<a href="../guides/outputs-sharing/#back-up-your-work">what to back up</a>).</p>
+<p>If one saved dataset's files go missing or are damaged, the rest of the
+session still comes back. The app names the dataset that didn't, keeps its
+saved copy as it is, and offers <strong>Retry</strong> and <strong>Remove from cache</strong>. If the
+whole recovery copy can't be read, the app opens without it and stops saving
+over it until you retry or clear it.</p>
 <h3 id="how-do-i-turn-the-recovery-copy-off-or-delete-it">How do I turn the recovery copy off, or delete it?<a class="headerlink" href="#how-do-i-turn-the-recovery-copy-off-or-delete-it" title="Permanent link">&para;</a></h3>
 <p>Start the app with <code>scanpath-studio run --no-persist</code> to save nothing. To
 delete what is saved, close the app and run <code>scanpath-studio cache --clear</code>.
@@ -2205,7 +2210,7 @@ See <a href="../cli/#recovery-cache">Recovery cache</a>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 04:54:27 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 06:44:27 UTC">October 4, 2026</span>
   </span>
 
     

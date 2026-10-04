@@ -149,7 +149,7 @@ sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 
 Every figure keyword, its default, its `render` flag and the builders that accept it: the [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options), or `api.figure_options(kind)` at runtime. The option *values* below are the ones neither reference spells out.
 
-`color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, …), the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each fixation by the text line it lands on (the lines are inferred from word-box geometry); a name the frame doesn't have raises a `ValueError` naming the closest columns (see [Errors](#errors-and-what-they-mean)). `color_by_line=True` is the same as `color_by="line"`, and on a single-trial figure it overrides any other `color_by`. A comparison figure never colours by line, as in the app's Compare mode: each scanpath keeps its own colour, and a numeric `color_by` fills both readings' markers on one shared scale while their outlines keep that colour.
+`color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, a pupil size you kept with `load_scanpath_data(keep_columns=[…])`, …), the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each fixation by the text line it lands on (the lines are inferred from word-box geometry); a name the frame doesn't have raises a `ValueError` naming the closest columns (see [Errors](#errors-and-what-they-mean)). `color_by_line=True` is the same as `color_by="line"`, and on a single-trial figure it overrides any other `color_by`. A comparison figure, and a co-animation (`fixations_b=`), colours as the app's Compare mode does: each scanpath keeps its own colour on its marker outlines, while a numeric `color_by` fills both readings' markers on one shared scale and a categorical one (or `"line"`) on one shared category→colour mapping, with a legend entry per category.
 
 `fixation_flags` marks or drops suspicious fixations (display only — reading measures and exports are untouched). One entry per category, each with a mode of `"Off"` / `"Highlight"` / `"Discard"`:
 
@@ -176,7 +176,7 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
 
 `heatmap_style` is `"Word boxes"`, `"Interpolated"` or `"Duration mass"`; `heatmap_metric="counts"` weights by fixation count instead of dwell time; `heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
-`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the metric's own units. Left at `None` each trial is scaled to its own values, and a comparison shares one scale across A and B. Pass a range to put every trial on the same scale.
+`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the metric's own units — for the word-box heatmap, dwell time per word in ms. Left at `None` each trial is scaled to its own values, and a comparison shares one scale across A and B. Pass a range to put every trial on the same scale. The `"Interpolated"` and `"Duration mass"` styles scale their density to their own peak and ignore `heatmap_range`.
 
 `highlight_column` is a boolean words column (OneStop's critical span by default); the default is skipped when absent, a column you name must exist.
 

@@ -1341,6 +1341,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.check_data_health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_data_health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.compute_word_metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2225,6 +2236,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.check_data_health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_data_health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.compute_word_metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2610,7 +2632,7 @@ steps print this (run when the docs are built):</p>
 
 
 <a href="#scanpath_studio.api.load_scanpath_data" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_scanpath_data</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><span title="scanpath_studio.api.TablesLike">TablesLike</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><span title="scanpath_studio.api.TablesLike">TablesLike</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">word_schema</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fix_schema</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial_parts_manifest</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_root</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_pattern</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="s1">'</span><span class="si">{text_id}</span><span class="s1">.png'</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="n"><span title="scanpath_studio.api.NAMES_SOURCE">NAMES_SOURCE</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;scanpath_studio.api.ScanpathData&lt;/span&gt;" href="#scanpath_studio.api.ScanpathData">ScanpathData</a></span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_scanpath_data</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><span title="scanpath_studio.api.TablesLike">TablesLike</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><span title="scanpath_studio.api.TablesLike">TablesLike</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">word_schema</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fix_schema</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial_parts_manifest</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_root</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_pattern</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="s1">'</span><span class="si">{text_id}</span><span class="s1">.png'</span><span class="p">,</span> <span class="n">keep_columns</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;collections.abc.Iterable&lt;/code&gt;" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable">Iterable</a></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="n"><span title="scanpath_studio.api.NAMES_SOURCE">NAMES_SOURCE</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;scanpath_studio.api.ScanpathData&lt;/span&gt;" href="#scanpath_studio.api.ScanpathData">ScanpathData</a></span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2648,6 +2670,12 @@ else its <code>text_id</code> (trial ids that embed the reader), with a
 none — and fixations without x/y but with a word/AoI ID are placed at
 word-box centers. Columns named in <code>data.INTERNAL_COLUMNS</code> are the
 pipeline's bookkeeping (<code>data.drop_internal_columns</code> removes them).</p>
+<p>Normalization keeps the mapped fields and the recognised optional ones
+(eye, EyeLink's interest-area measures, linguistic features …) and drops the
+rest. <code>keep_columns</code> names further columns of your own to carry through
+under their own names — a pupil size, a detection confidence — from
+whichever table has them, so a figure can colour, hover or plot by them
+(the app's <em>Keep columns</em>; <code>render --keep-columns</code> on the command line).</p>
 <p>Returns the normalized <code>(words, fixations)</code> frames the plotting
 functions expect. Raises <code>ValueError</code> if a required field can't be found —
 the message names the canonical field, the column names auto-detection
@@ -3143,6 +3171,41 @@ take the names the frames carry (DATA-66).</p>
 alone takes its screens from <code>raw_gaze</code> (its <code>screen_id</code>), decided per
 trial — so a samples-only trial keeps its screens in a dataset whose other
 trials have fixations.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.check_data_health" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.check_data_health</span>
+
+
+<a href="#scanpath_studio.api.check_data_health" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">check_data_health</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">raw_gaze</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Values that loaded as numbers but cannot be right — the Data page's <em>Data checks</em>.</p>
+<p>Checks the normalized tables (from
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a> /
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>) for fixations lasting
+0 ms or less, fixations and raw-gaze samples whose position is missing or
+infinite, and word boxes with no area. One row per check that found
+anything: <code>table</code>, <code>check</code>, <code>problem</code>, the <code>columns</code> it read (in the
+names the frames carry),
+<code>rows</code> of <code>of_rows</code>, the <code>trials</code> they fall in, a <code>breakdown</code> by
+kind, <code>severity</code> (<code>"note"</code> for raw-gaze gaps, which blinks and track
+loss make ordinary), <code>what_happens</code> to those rows in the app, and a few
+<code>examples</code>. An empty frame means every check passed. Nothing is changed
+or dropped::</p>
+<div class="highlight"><pre><span></span><code>words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+print(sps.check_data_health(words, fixations))
+</code></pre></div>
 
 
     </div>
@@ -4261,7 +4324,9 @@ where it left off — on localhost/desktop only, never on a hosted deployment. T
 reports that store without launching the app: <code>enabled</code>, <code>directory</code>,
 <code>datasets</code> (name + per-frame row counts), <code>rows</code>, <code>annotations</code>,
 <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> / <code>readable</code> for a
-missing or unreadable manifest. Delete it with
+missing or unreadable manifest, and <code>damaged</code> (name + reason) for a stored
+dataset whose entry or files are broken — the app restores the others and
+keeps that one in the cache rather than dropping it. Delete it with
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.clear_cache&lt;/span&gt;" href="#scanpath_studio.api.clear_cache"><code>clear_cache</code></a>; the same information is in the
 app's 🗂️ Data Management → <em>Saved on this computer</em> section and in
 <code>scanpath-studio cache</code>.</p>
@@ -4318,7 +4383,7 @@ Chrome/Chromium.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 12:52:47 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 06:44:27 UTC">October 4, 2026</span>
   </span>
 
     

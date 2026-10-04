@@ -2189,16 +2189,18 @@ Chrome/Chromium binary: run <code>plotly_get_chrome -y</code> once, or fall back
 accept it: the <a href="../api/#figure-options">figure options table</a>, or
 <code>api.figure_options(kind)</code> at runtime. The option <em>values</em> below are the ones
 neither reference spells out.</p>
-<p><code>color_by</code> is a <em>fixation column name</em> (<code>"duration_ms"</code>, <code>"pass_index"</code>, …),
+<p><code>color_by</code> is a <em>fixation column name</em> (<code>"duration_ms"</code>, <code>"pass_index"</code>, a
+pupil size you kept with <code>load_scanpath_data(keep_columns=[…])</code>, …),
 the sentinel <code>"(uniform)"</code> for one flat colour, or <code>"line"</code> to colour each
 fixation by the text line it lands on (the lines are inferred from word-box
 geometry); a name the frame doesn't have raises a <code>ValueError</code> naming the
 closest columns (see <a href="#errors-and-what-they-mean">Errors</a>). <code>color_by_line=True</code>
 is the same as <code>color_by="line"</code>, and on a single-trial figure it overrides any
-other <code>color_by</code>. A comparison figure never colours by line, as in the app's
-Compare mode: each scanpath keeps its own colour, and a numeric <code>color_by</code>
-fills both readings' markers on one shared scale while their outlines keep
-that colour.</p>
+other <code>color_by</code>. A comparison figure, and a co-animation (<code>fixations_b=</code>),
+colours as the app's Compare mode does: each scanpath keeps its own colour on
+its marker outlines, while a numeric <code>color_by</code> fills both readings' markers on
+one shared scale and a categorical one (or <code>"line"</code>) on one shared
+category→colour mapping, with a legend entry per category.</p>
 <p><code>fixation_flags</code> marks or drops suspicious fixations (display only — reading
 measures and exports are untouched). One entry per category, each with a mode of
 <code>"Off"</code> / <code>"Highlight"</code> / <code>"Discard"</code>:</p>
@@ -2233,9 +2235,11 @@ the linear-reading schematic.</p>
 <code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times. Duration mass spreads
 dwell over nearby characters; <code>duration_mass_sigma_chars</code> controls its Gaussian.</p>
 <p><code>fixation_color_range</code> and <code>heatmap_range</code> are <code>(min, max)</code> pairs in the
-metric's own units. Left at <code>None</code> each trial is scaled to its own values, and
-a comparison shares one scale across A and B. Pass a range to put every trial on
-the same scale.</p>
+metric's own units — for the word-box heatmap, dwell time per word in ms. Left
+at <code>None</code> each trial is scaled to its own values, and a comparison shares one
+scale across A and B. Pass a range to put every trial on the same scale. The
+<code>"Interpolated"</code> and <code>"Duration mass"</code> styles scale their density to their own
+peak and ignore <code>heatmap_range</code>.</p>
 <p><code>highlight_column</code> is a boolean words column (OneStop's critical span by
 default); the default is skipped when absent, a column you name must exist.</p>
 <p><code>fit_to_monitor=True</code> frames the whole <code>canvas_size</code>; <code>False</code> crops to the data.
@@ -2387,7 +2391,7 @@ what the replay does — the reading time over <code>playback_speed</code> — u
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 12:52:47 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 06:44:27 UTC">October 4, 2026</span>
   </span>
 
     

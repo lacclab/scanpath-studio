@@ -43,7 +43,7 @@ print(measures[columns].head(3))
 ### scanpath_studio.api.load_scanpath_data
 
 ```
-load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png', names: str = NAMES_SOURCE) -> ScanpathData
+load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png', keep_columns: Iterable[str] | None = None, names: str = NAMES_SOURCE) -> ScanpathData
 ```
 
 Load and normalize a words/IA table and/or a fixations table.
@@ -53,6 +53,8 @@ The columns keep the names your files give them (DATA-66): `CURRENT_FIX_DURATION
 `words` / `fixations` may be DataFrames, paths to `.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` / `.xls` files (or a `.zip` of them), glob patterns, or lists of paths — multi-file datasets (one file per participant and/or text) are concatenated, with each file's stem kept in a `source_file` column. Column schemas are auto-detected (EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake_case names); pass `word_schema` / `fix_schema` mappings (field → column name; see propose_schema) to override detection. For per-word reading measures, pass the result to compute_word_metrics.
 
 `trial_parts_manifest` accepts a nested parent-trial/parts definition for datasets whose source tables identify screens through arbitrary selector columns; explicit `screen_id` / `screen_index` columns can instead be mapped directly in each schema. Either table may be omitted for datasets that ship only one report: the missing side comes back as an empty canonical frame and the plots simply skip that layer. Words without a participant column (stimulus-level AoIs) are copied onto every reading in the fixations — each reading matched by its trial id, else the trial id it had before a repeat's `_r2` suffix, else its `text_id` (trial ids that embed the reader), with a `data.StimulusJoinWarning` (a `UserWarning`) when some readings match none — and fixations without x/y but with a word/AoI ID are placed at word-box centers. Columns named in `data.INTERNAL_COLUMNS` are the pipeline's bookkeeping (`data.drop_internal_columns` removes them).
+
+Normalization keeps the mapped fields and the recognised optional ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the rest. `keep_columns` names further columns of your own to carry through under their own names — a pupil size, a detection confidence — from whichever table has them, so a figure can colour, hover or plot by them (the app's *Keep columns*; `render --keep-columns` on the command line).
 
 Returns the normalized `(words, fixations)` frames the plotting functions expect. Raises `ValueError` if a required field can't be found — the message names the canonical field, the column names auto-detection looked for, and the columns the table actually has — and `data.StimulusJoinError` (a `ValueError`) when a stimulus-level words table shares neither a trial id nor a `text_id` with any reading (or, multipart, with every screen a reading has fixations on).
 
@@ -258,6 +260,21 @@ list_parts(words: DataFrame | None, fixations: DataFrame | None, participant: st
 Ordered screens in multipart data, optionally narrowed to one parent.
 
 Single-screen data returns an empty table. A trial recorded as raw gaze alone takes its screens from `raw_gaze` (its `screen_id`), decided per trial — so a samples-only trial keeps its screens in a dataset whose other trials have fixations.
+
+### scanpath_studio.api.check_data_health
+
+```
+check_data_health(words: DataFrame | None = None, fixations: DataFrame | None = None, raw_gaze: DataFrame | None = None) -> DataFrame
+```
+
+Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
+
+Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixations lasting 0 ms or less, fixations and raw-gaze samples whose position is missing or infinite, and word boxes with no area. One row per check that found anything: `table`, `check`, `problem`, the `columns` it read (in the names the frames carry), `rows` of `of_rows`, the `trials` they fall in, a `breakdown` by kind, `severity` (`"note"` for raw-gaze gaps, which blinks and track loss make ordinary), `what_happens` to those rows in the app, and a few `examples`. An empty frame means every check passed. Nothing is changed or dropped::
+
+```
+words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+print(sps.check_data_health(words, fixations))
+```
 
 ### scanpath_studio.api.compute_word_metrics
 
@@ -596,7 +613,7 @@ cache_status() -> dict
 
 Describe the on-device recovery cache a local app run keeps.
 
-The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest. Delete it with clear_cache; the same information is in the app's 🗂️ Data Management → *Saved on this computer* section and in `scanpath-studio cache`.
+The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest, and `damaged` (name + reason) for a stored dataset whose entry or files are broken — the app restores the others and keeps that one in the cache rather than dropping it. Delete it with clear_cache; the same information is in the app's 🗂️ Data Management → *Saved on this computer* section and in `scanpath-studio cache`.
 
 ### scanpath_studio.api.clear_cache
 

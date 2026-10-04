@@ -319,6 +319,8 @@ Describe the screen the data was **recorded** on, not the one you are using now.
 
 **Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, description, column mapping, recording setup and metadata tables, or adds a table it is missing (fixations, AOIs or raw gaze); its mapped fields show the same value preview. On an added dataset, changing an ID or coordinate column shows a few values as they are now and as they will be after saving, and **Count trials and check joins** says whether readings would merge or the word boxes or a metadata table would stop matching. Its **Save setup** writes the mapping in your files' own column names, so whoever has the same files can restore it on the add screen; anything a restore cannot redo by itself is listed beside the button. For the demo and the public corpora, a recording setup you save is your own for that dataset alone: the setup the corpus declares is kept, and **Reset to source setup** goes back to it. Nothing applies until you click **Save changes**; **Cancel** discards all of it. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
 
+Above the open dataset's tables, **Data checks** looks for values that loaded as numbers but cannot be right: fixations lasting 0 ms or less, fixations or raw-gaze samples whose position is missing or infinite, and word boxes with no width or height. Each finding gives the rows and trials affected, the columns they came from, a few example rows, and what the app does with them. Nothing is removed: the rows stay in every table and export. `check_data_health` runs the same checks from Python, and `scanpath-studio check` from the terminal.
+
 Columns are named as they are in your files: in the tables, the plot controls, the trial chips, filters and sort, Corpus Analysis, the figure's hover and colour bar, and the setup screens, a column you uploaded as `CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one Scanpath Studio made, such as a reading measure your data did not bring.
 
 # Outputs and sharing
@@ -338,7 +340,7 @@ The **Share** subtab passes a view on in three ways:
 
 - **Link** — a URL with the dataset choice, trial and every figure setting. It never contains your uploaded data: the recipient must load the same dataset. (A scanpath created by hand is the exception; its link carries it.)
 - **Code** — Python or a CLI command that reproduces the figure.
-- **File** — the figure's settings as a file, to restore later.
+- **File** — the figure's settings as a file, to restore later: its mode (static, animated or a comparison) and, for a comparison, which reading it was compared with and on which screen.
 
 ## Back up your work
 
@@ -385,7 +387,7 @@ The **Plot controls** rail starts with **Animate**, **Compare**, four design pre
 | Filter          | which fixations and saccades are drawn                  |
 | Figure & canvas | screen framing, axes and grid, title and labels         |
 
-Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials, so they stay comparable.
+Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials and filters, so they stay comparable; its number boxes take any endpoint, beyond the data shown too. The word-box heatmap's range is in dwell time per word (ms), the summed duration of the fixations in each box. **Interpolated** and **Duration mass** scale their smoothed density to each figure's own peak, so their range is greyed; it is kept for Word boxes and Compare, which always draws word boxes.
 
 Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the smallest to the largest marker in every trial, both sides of a comparison, the replay and every export, so one duration is always one size. Shorter fixations take the smallest marker and longer ones the largest. Under **Fixations ▾**, **Scale** picks the curve: **√ duration** (the default) grows marker area with duration, **Linear** grows the diameter with it, **Log** compresses long fixations. **Durations** sets the two bounds, and **Size key** draws reference circles labelled in ms in the figure's corner (in Compare, only while both scanpaths use the same marker size range). **Relative to this figure** stretches each figure from its own shortest to longest fixation instead, so its sizes compare only within that figure. Share links, settings files, saved designs and restored sessions from before the fixed scale reopen on the relative one, as they were drawn.
 
@@ -458,6 +460,8 @@ When you run it locally or as the desktop app, nowhere: it stays on your compute
 ### Will a refresh lose my work?
 
 Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
+
+If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove from cache**. If the whole recovery copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
 ### How do I turn the recovery copy off, or delete it?
 
@@ -601,7 +605,7 @@ print(measures[columns].head(3))
 ### scanpath_studio.api.load_scanpath_data
 
 ```
-load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png', names: str = NAMES_SOURCE) -> ScanpathData
+load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png', keep_columns: Iterable[str] | None = None, names: str = NAMES_SOURCE) -> ScanpathData
 ```
 
 Load and normalize a words/IA table and/or a fixations table.
@@ -611,6 +615,8 @@ The columns keep the names your files give them (DATA-66): `CURRENT_FIX_DURATION
 `words` / `fixations` may be DataFrames, paths to `.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` / `.xls` files (or a `.zip` of them), glob patterns, or lists of paths — multi-file datasets (one file per participant and/or text) are concatenated, with each file's stem kept in a `source_file` column. Column schemas are auto-detected (EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake_case names); pass `word_schema` / `fix_schema` mappings (field → column name; see propose_schema) to override detection. For per-word reading measures, pass the result to compute_word_metrics.
 
 `trial_parts_manifest` accepts a nested parent-trial/parts definition for datasets whose source tables identify screens through arbitrary selector columns; explicit `screen_id` / `screen_index` columns can instead be mapped directly in each schema. Either table may be omitted for datasets that ship only one report: the missing side comes back as an empty canonical frame and the plots simply skip that layer. Words without a participant column (stimulus-level AoIs) are copied onto every reading in the fixations — each reading matched by its trial id, else the trial id it had before a repeat's `_r2` suffix, else its `text_id` (trial ids that embed the reader), with a `data.StimulusJoinWarning` (a `UserWarning`) when some readings match none — and fixations without x/y but with a word/AoI ID are placed at word-box centers. Columns named in `data.INTERNAL_COLUMNS` are the pipeline's bookkeeping (`data.drop_internal_columns` removes them).
+
+Normalization keeps the mapped fields and the recognised optional ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the rest. `keep_columns` names further columns of your own to carry through under their own names — a pupil size, a detection confidence — from whichever table has them, so a figure can colour, hover or plot by them (the app's *Keep columns*; `render --keep-columns` on the command line).
 
 Returns the normalized `(words, fixations)` frames the plotting functions expect. Raises `ValueError` if a required field can't be found — the message names the canonical field, the column names auto-detection looked for, and the columns the table actually has — and `data.StimulusJoinError` (a `ValueError`) when a stimulus-level words table shares neither a trial id nor a `text_id` with any reading (or, multipart, with every screen a reading has fixations on).
 
@@ -816,6 +822,21 @@ list_parts(words: DataFrame | None, fixations: DataFrame | None, participant: st
 Ordered screens in multipart data, optionally narrowed to one parent.
 
 Single-screen data returns an empty table. A trial recorded as raw gaze alone takes its screens from `raw_gaze` (its `screen_id`), decided per trial — so a samples-only trial keeps its screens in a dataset whose other trials have fixations.
+
+### scanpath_studio.api.check_data_health
+
+```
+check_data_health(words: DataFrame | None = None, fixations: DataFrame | None = None, raw_gaze: DataFrame | None = None) -> DataFrame
+```
+
+Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
+
+Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixations lasting 0 ms or less, fixations and raw-gaze samples whose position is missing or infinite, and word boxes with no area. One row per check that found anything: `table`, `check`, `problem`, the `columns` it read (in the names the frames carry), `rows` of `of_rows`, the `trials` they fall in, a `breakdown` by kind, `severity` (`"note"` for raw-gaze gaps, which blinks and track loss make ordinary), `what_happens` to those rows in the app, and a few `examples`. An empty frame means every check passed. Nothing is changed or dropped::
+
+```
+words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+print(sps.check_data_health(words, fixations))
+```
 
 ### scanpath_studio.api.compute_word_metrics
 
@@ -1154,7 +1175,7 @@ cache_status() -> dict
 
 Describe the on-device recovery cache a local app run keeps.
 
-The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest. Delete it with clear_cache; the same information is in the app's 🗂️ Data Management → *Saved on this computer* section and in `scanpath-studio cache`.
+The app stores completed uploaded datasets, column mappings, view settings and annotations under the user's cache directory so a refresh or restart resumes where it left off — on localhost/desktop only, never on a hosted deployment. This reports that store without launching the app: `enabled`, `directory`, `datasets` (name + per-frame row counts), `rows`, `annotations`, `settings`, `bytes`, `saved_at`, plus `exists` / `readable` for a missing or unreadable manifest, and `damaged` (name + reason) for a stored dataset whose entry or files are broken — the app restores the others and keeps that one in the cache rather than dropping it. Delete it with clear_cache; the same information is in the app's 🗂️ Data Management → *Saved on this computer* section and in `scanpath-studio cache`.
 
 ### scanpath_studio.api.clear_cache
 
@@ -1315,7 +1336,7 @@ A second dataset is loaded from **files only**. Any corpus reachable from Python
 | hide a layer                         | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap`                                                                                                                   |
 | animate                              | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning                                   |
 | set display geometry                 | `--canvas WIDTHxHEIGHT`                                                                                                                                                                                        |
-| color fixations                      | `--color-by FIELD`                                                                                                                                                                                             |
+| color fixations                      | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading                                                                                                        |
 | size fixations by duration           | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend`                    |
 | draw only part of a trial            | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too)                                                                                                      |
 | add the stimulus image               | `--stimulus-image PATH`                                                                                                                                                                                        |
@@ -1369,6 +1390,7 @@ This writes fixation, saccade, word, sentence, trial, reader, character and clea
 | `--pixels-per-degree`      | `PIXELS_PER_DEGREE`                      | —        | Screen pixels per degree of visual angle; adds degree-valued amplitudes to the saccade table.                                                                                                                                                                                                                                                                   |
 | `--word-schema`            | `JSON`                                   | —        | Column mapping for the `--words` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.     |
 | `--fix-schema`             | `JSON`                                   | —        | Column mapping for the `--fixations` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from. |
+| `--keep-columns`           | `COLUMN [COLUMN ...]`                    | —        | Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be `--color-by`, an axis or a hover field. The keep_columns= of api.load_scanpath_data.                                    |
 
 The preprocessing settings and `--pixels-per-degree` are recorded in `run_config.json`.
 
@@ -1392,6 +1414,30 @@ scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 | `--value-col`       | `VALUE_COL`                         | `value`   | The value column (default: value).                                                                                                       |
 | `--primary-color`   | `PRIMARY_COLOR`                     | `#1f77b4` | First series colour (default: #1f77b4).                                                                                                  |
 | `--secondary-color` | `SECONDARY_COLOR`                   | `#e45756` | Second series colour (default: #e45756).                                                                                                 |
+
+## Data checks
+
+`check` runs the **Data** page's **Data checks** on your tables without opening the app: fixations lasting 0 ms or less, fixations and raw-gaze samples with no finite position, and word boxes with no area. Each finding gives the rows and trials affected, a few example rows, and what the app does with them. It changes nothing, and it exits 0 whatever it finds; `--json` prints the table [`api.check_data_health`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.check_data_health) returns.
+
+```
+scanpath-studio check --words ia.csv --fixations fixations.csv
+scanpath-studio check --raw-gaze gaze_samples.csv --json
+```
+
+**Options**
+
+| Option                   | Value                       | Default | Description                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--sample`               | switch                      | —       | Check the bundled OneStop demo instead of your own tables.                                                                                                                                                                                                                                                                                                      |
+| `--words`                | `WORDS [WORDS ...]`         | —       | Words/IA table(s), as for render.                                                                                                                                                                                                                                                                                                                               |
+| `--fixations`            | `FIXATIONS [FIXATIONS ...]` | —       | Fixations table(s), as for render.                                                                                                                                                                                                                                                                                                                              |
+| `--raw-gaze`             | `PATH [PATH ...]`           | —       | Raw (sample-level) gaze table(s), as for render.                                                                                                                                                                                                                                                                                                                |
+| `--raw-gaze-schema`      | `JSON`                      | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection (same shape as `--fix-schema`).                                                                                                                                                                                                                                                             |
+| `--trial-parts-manifest` | `TRIAL_PARTS_MANIFEST`      | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                         |
+| `--json`                 | switch                      | —       | Print the findings as JSON (the rows api.check_data_health returns).                                                                                                                                                                                                                                                                                            |
+| `--word-schema`          | `JSON`                      | —       | Column mapping for the `--words` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.     |
+| `--fix-schema`           | `JSON`                      | —       | Column mapping for the `--fixations` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from. |
+| `--keep-columns`         | `COLUMN [COLUMN ...]`       | —       | Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be `--color-by`, an axis or a hover field. The keep_columns= of api.load_scanpath_data.                                    |
 
 ## Many trials
 
@@ -1432,6 +1478,7 @@ usage:
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family
   scanpath-studio corpus …         render a styled corpus-analysis figure
+  scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio --version        print the version
 
@@ -1460,26 +1507,27 @@ SCANPATH_LOCAL_FS=1.
 
 **Input (bundled sample, or words and/or fixations)**
 
-| Option                           | Value             | Default         | Description                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------------- | ----------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--sample`                       | switch            | —               | Use the bundled OneStop demo: 2 readers, 12 paragraphs each (`--list-trials` shows them).                                                                                                                                                                                                                                                                       |
-| `--authoring`                    | `PATH`            | —               | Scanpath Studio authoring JSON created by the in-app editor.                                                                                                                                                                                                                                                                                                    |
-| `--words`                        | `PATH [PATH ...]` | —               | Words/IA table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them); columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Multiple paths or a quoted glob pattern concatenate multi-file datasets.                                                                                                       |
-| `--fixations`                    | `PATH [PATH ...]` | —               | Fixations table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them), auto-detected like `--words`. Multiple paths or a quoted glob pattern concatenate multi-file datasets (e.g. one file per participant).                                                                                                                                        |
-| `--image-root`                   | `DIR`             | —               | Local stimulus-image folder. Files are matched per row using `--image-pattern`.                                                                                                                                                                                                                                                                                 |
-| `--image-pattern`                | `PATTERN`         | `{text_id}.png` | Relative filename pattern with row placeholders, for example '{text_id}.png' or '{participant_id}/{trial_id}.png'.                                                                                                                                                                                                                                              |
-| `--trial-parts-manifest`         | `PATH`            | —               | JSON manifest that assigns arbitrary source rows to ordered screens inside each logical trial. Use with `--words`/`--fixations` when the source tables have no explicit screen columns.                                                                                                                                                                         |
-| `--word-schema`                  | `JSON`            | —               | Column mapping for the `--words` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.     |
-| `--fix-schema`                   | `JSON`            | —               | Column mapping for the `--fixations` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from. |
-| `--potec`                        | `DIR`             | —               | Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading the needed files (~45 MB) on first use. Participants are the corpus's 75 reader ids (sparse within 0–105; `--list-trials` shows them); a trial is one reader's reading of one text, <reader>\_<text> (0_b0), with texts b0–b5 and p0–p5.                                                           |
-| `--onestop`                      | `DIR`             | —               | Load the OneStop corpus from DIR. For the public variant the chosen regime + parts' reports are downloaded from OSF on first use (tens–hundreds MB each); the lacclab variant reads a local export. Tune with `--onestop-regime` / `--onestop-part` / `--onestop-variant`.                                                                                      |
-| `--onestop-regime`               | `REGIME`          | `ordinary`      | OneStop reading regime for `--onestop` (default: ordinary).                                                                                                                                                                                                                                                                                                     |
-| `--onestop-part`                 | `PART`            | —               | OneStop trial part(s) for `--onestop`; repeatable (default: Paragraph). Loading several makes each part its own trial.                                                                                                                                                                                                                                          |
-| `--onestop-variant`              | `VARIANT`         | `public`        | OneStop source variant for `--onestop`: 'public' (OSF download) or 'lacclab' (a local lab-processed export; no download).                                                                                                                                                                                                                                       |
-| `--participant-metadata`         | `FILE`            | —               | Participant-level metadata table: one row per reader, an id column plus anything known about them. The join is validated and reported against the loaded readers, and the fields are added to `--list-trials` output.                                                                                                                                           |
-| `--trial-metadata`               | `FILE`            | —               | Trial-level metadata table: one row per reading, a trial-id column plus anything known about it. Validated and reported the same way, and its fields are added to `--list-trials` output.                                                                                                                                                                       |
-| `--trial-metadata-reader-column` | `COLUMN`          | —               | Key the `--trial-metadata` table by reader AND trial, using this column as the reader id. Without it the table is keyed by trial id alone, which means a row describes a \*text\* and every reader's reading of it inherits that row. Never inferred: nothing in the file says which of the two a corpus means.                                                 |
-| `--text-metadata`                | `FILE`            | —               | Text-level metadata table: one row per text, a text-id column plus anything known about it. Validated and reported the same way, and its fields are added to `--list-trials` output. Flat grain, never keyed by reader — a text is a stimulus, not something one reader owns.                                                                                   |
+| Option                           | Value                 | Default         | Description                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------- | --------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--sample`                       | switch                | —               | Use the bundled OneStop demo: 2 readers, 12 paragraphs each (`--list-trials` shows them).                                                                                                                                                                                                                                                                       |
+| `--authoring`                    | `PATH`                | —               | Scanpath Studio authoring JSON created by the in-app editor.                                                                                                                                                                                                                                                                                                    |
+| `--words`                        | `PATH [PATH ...]`     | —               | Words/IA table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them); columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Multiple paths or a quoted glob pattern concatenate multi-file datasets.                                                                                                       |
+| `--fixations`                    | `PATH [PATH ...]`     | —               | Fixations table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them), auto-detected like `--words`. Multiple paths or a quoted glob pattern concatenate multi-file datasets (e.g. one file per participant).                                                                                                                                        |
+| `--image-root`                   | `DIR`                 | —               | Local stimulus-image folder. Files are matched per row using `--image-pattern`.                                                                                                                                                                                                                                                                                 |
+| `--image-pattern`                | `PATTERN`             | `{text_id}.png` | Relative filename pattern with row placeholders, for example '{text_id}.png' or '{participant_id}/{trial_id}.png'.                                                                                                                                                                                                                                              |
+| `--trial-parts-manifest`         | `PATH`                | —               | JSON manifest that assigns arbitrary source rows to ordered screens inside each logical trial. Use with `--words`/`--fixations` when the source tables have no explicit screen columns.                                                                                                                                                                         |
+| `--word-schema`                  | `JSON`                | —               | Column mapping for the `--words` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.     |
+| `--fix-schema`                   | `JSON`                | —               | Column mapping for the `--fixations` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from. |
+| `--keep-columns`                 | `COLUMN [COLUMN ...]` | —               | Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be `--color-by`, an axis or a hover field. The keep_columns= of api.load_scanpath_data.                                    |
+| `--potec`                        | `DIR`                 | —               | Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading the needed files (~45 MB) on first use. Participants are the corpus's 75 reader ids (sparse within 0–105; `--list-trials` shows them); a trial is one reader's reading of one text, <reader>\_<text> (0_b0), with texts b0–b5 and p0–p5.                                                           |
+| `--onestop`                      | `DIR`                 | —               | Load the OneStop corpus from DIR. For the public variant the chosen regime + parts' reports are downloaded from OSF on first use (tens–hundreds MB each); the lacclab variant reads a local export. Tune with `--onestop-regime` / `--onestop-part` / `--onestop-variant`.                                                                                      |
+| `--onestop-regime`               | `REGIME`              | `ordinary`      | OneStop reading regime for `--onestop` (default: ordinary).                                                                                                                                                                                                                                                                                                     |
+| `--onestop-part`                 | `PART`                | —               | OneStop trial part(s) for `--onestop`; repeatable (default: Paragraph). Loading several makes each part its own trial.                                                                                                                                                                                                                                          |
+| `--onestop-variant`              | `VARIANT`             | `public`        | OneStop source variant for `--onestop`: 'public' (OSF download) or 'lacclab' (a local lab-processed export; no download).                                                                                                                                                                                                                                       |
+| `--participant-metadata`         | `FILE`                | —               | Participant-level metadata table: one row per reader, an id column plus anything known about them. The join is validated and reported against the loaded readers, and the fields are added to `--list-trials` output.                                                                                                                                           |
+| `--trial-metadata`               | `FILE`                | —               | Trial-level metadata table: one row per reading, a trial-id column plus anything known about it. Validated and reported the same way, and its fields are added to `--list-trials` output.                                                                                                                                                                       |
+| `--trial-metadata-reader-column` | `COLUMN`              | —               | Key the `--trial-metadata` table by reader AND trial, using this column as the reader id. Without it the table is keyed by trial id alone, which means a row describes a \*text\* and every reader's reading of it inherits that row. Never inferred: nothing in the file says which of the two a corpus means.                                                 |
+| `--text-metadata`                | `FILE`                | —               | Text-level metadata table: one row per text, a text-id column plus anything known about it. Validated and reported the same way, and its fields are added to `--list-trials` output. Flat grain, never keyed by reader — a text is a stimulus, not something one reader owns.                                                                                   |
 
 **Visualization (renders the full canonical figure; use `--no-`\* to hide layers)**
 
@@ -1611,7 +1659,7 @@ SCANPATH_LOCAL_FS=1.
 | `--json`  | switch | —       | Print the status as JSON        |
 | `--clear` | switch | —       | Delete the stored session       |
 
-`analyze` and `corpus` are listed in full in their own sections above.
+`analyze`, `corpus` and `check` are listed in full in their own sections above.
 
 # Agent guide (headless use)
 
@@ -1764,7 +1812,7 @@ sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 
 Every figure keyword, its default, its `render` flag and the builders that accept it: the [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options), or `api.figure_options(kind)` at runtime. The option *values* below are the ones neither reference spells out.
 
-`color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, …), the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each fixation by the text line it lands on (the lines are inferred from word-box geometry); a name the frame doesn't have raises a `ValueError` naming the closest columns (see [Errors](#errors-and-what-they-mean)). `color_by_line=True` is the same as `color_by="line"`, and on a single-trial figure it overrides any other `color_by`. A comparison figure never colours by line, as in the app's Compare mode: each scanpath keeps its own colour, and a numeric `color_by` fills both readings' markers on one shared scale while their outlines keep that colour.
+`color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, a pupil size you kept with `load_scanpath_data(keep_columns=[…])`, …), the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each fixation by the text line it lands on (the lines are inferred from word-box geometry); a name the frame doesn't have raises a `ValueError` naming the closest columns (see [Errors](#errors-and-what-they-mean)). `color_by_line=True` is the same as `color_by="line"`, and on a single-trial figure it overrides any other `color_by`. A comparison figure, and a co-animation (`fixations_b=`), colours as the app's Compare mode does: each scanpath keeps its own colour on its marker outlines, while a numeric `color_by` fills both readings' markers on one shared scale and a categorical one (or `"line"`) on one shared category→colour mapping, with a legend entry per category.
 
 `fixation_flags` marks or drops suspicious fixations (display only — reading measures and exports are untouched). One entry per category, each with a mode of `"Off"` / `"Highlight"` / `"Discard"`:
 
@@ -1791,7 +1839,7 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
 
 `heatmap_style` is `"Word boxes"`, `"Interpolated"` or `"Duration mass"`; `heatmap_metric="counts"` weights by fixation count instead of dwell time; `heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
-`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the metric's own units. Left at `None` each trial is scaled to its own values, and a comparison shares one scale across A and B. Pass a range to put every trial on the same scale.
+`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the metric's own units — for the word-box heatmap, dwell time per word in ms. Left at `None` each trial is scaled to its own values, and a comparison shares one scale across A and B. Pass a range to put every trial on the same scale. The `"Interpolated"` and `"Duration mass"` styles scale their density to their own peak and ignore `heatmap_range`.
 
 `highlight_column` is a boolean words column (OneStop's critical span by default); the default is skipped when absent, a column you name must exist.
 
@@ -1870,12 +1918,14 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**, **fi
 | ------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Words / IA**                        | one row per word / interest area, with its on-screen box | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
 | **Fixations**                         | one row per fixation                                     | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id                                                       |
-| **Raw gaze** *(optional)*             | one row per gaze sample                                  | participant id, trial id, x, y, timestamp                                                                                                                 |
+| **Raw gaze** *(optional)*             | one row per gaze sample                                  | participant id, trial id, x, y; optionally timestamp                                                                                                      |
 | **Participant metadata** *(optional)* | one row per reader                                       | participant id, plus anything you know about them                                                                                                         |
 | **Trial metadata** *(optional)*       | one row per trial                                        | trial id, plus anything you know about that trial                                                                                                         |
 | **Text metadata** *(optional)*        | one row per text                                         | text id, plus anything you know about that text                                                                                                           |
 
 **Without timestamps.** A fixations table with no timestamp column still loads: its rows are taken to be in reading order. Reading time and reading speed are then an estimate — the fixations laid end to end by their durations, leaving out the time between them — and the summaries label them so (`reading_time_source`). The replay uses the same clock.
+
+A raw gaze table with no timestamp column keeps its samples in file order and gives them no time: each sample is numbered 1, 2, … within its trial (`sample_index`), the plot colours the samples by that order under a *Sample order* legend title and the hover reads `sample n`, and the exported table carries the sample number. Nothing assumes a sampling rate.
 
 **Units.** Durations and timestamps are read in milliseconds. A column whose header names another unit — `[s]`, `[μs]`, `[ns]`, as Tobii and Pupil Labs Neon write — is converted, and so are the vendor columns documented in seconds (Gazepoint `FPOGD` / `FPOGS`, Pupil Labs Core `start_timestamp`). Positions must be **pixels**: screen fractions (Gazepoint `FPOGX` / `FPOGY`, Pupil Labs Core `norm_pos_x` / `norm_pos_y`) are flagged with a warning but not converted, since the load does not know the screen size — multiply them by the screen width and height in pixels first. Pupil Labs Core measures *y* upward from the bottom edge, so its row is `(1 − y) × height`. Its `norm_pos` is relative to the world-camera image, not the screen: map the gaze onto the stimulus screen first (Pupil's Surface Tracker), whose coordinates have the same bottom-left origin.
 
@@ -1896,8 +1946,8 @@ p02,English,31,0.91
 Three rules are worth knowing:
 
 - **The table is never copied onto your fixations.** It stays its own table and is exported separately (`metadata/participants.csv`).
-- **Nothing is guessed.** The join is reported before anything uses it: readers in your data with no row, rows describing readers you did not load, and duplicate rows. Duplicates that *disagree* are dropped and named rather than resolved by taking the first one, so the field reads as missing.
-- **A missing reader is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool.
+- **Nothing is guessed.** The join is reported before anything uses it: readers in your data with no row, rows describing readers you did not load, and duplicate rows. Duplicates that *disagree* are dropped and named rather than resolved by taking the first one, so the field reads as missing. Duplicates that do not disagree are combined: each field keeps the one value the rows hold, so one row's age and another's language both survive.
+- **A missing reader is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool. A numeric range keeps the readers with no value too, unless you untick **Keep unknown values** under it; the line under the box says how many readers that concerns. The same choice sits under every numeric trial filter, for the trial and text tables as well.
 
 Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render` and [`load_participant_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 
@@ -2180,7 +2230,7 @@ Place a fixation with no x/y at its word box's center.
 
 Attach a participant-level table without broadcasting it (DATA-20).
 
-**Formula.** Left join on string `participant_id`. Duplicate ids that agree collapse; duplicate ids that **disagree** are dropped and reported, so no `groupby.first()` winner is ever invented. A field is projected onto the per-trial frame, never onto word/fixation rows.
+**Formula.** Left join on string `participant_id`. Duplicate ids that agree are combined field by field (each field keeps the one non-missing value the rows hold); duplicate ids that **disagree** are dropped and reported, so no `groupby.first()` winner is ever invented. A field is projected onto the per-trial frame, never onto word/fixation rows.
 
 |                          |                                                                       |
 | ------------------------ | --------------------------------------------------------------------- |
@@ -2189,7 +2239,7 @@ Attach a participant-level table without broadcasting it (DATA-20).
 | **Precedence & caveats** | A real recorded column of the same name always wins.                  |
 | **Code**                 | `scanpath_studio/metadata.py:build_participant_metadata`              |
 | **Consumers**            | UI, API, CLI, Export, Data Inspection                                 |
-| **Tests**                | `tests/test_metadata.py`                                              |
+| **Tests**                | `tests/test_metadata.py`, `tests/test_metadata_duplicates.py`         |
 | **Verification**         | tier A, C, D — **Verified**                                           |
 
 ## Assignment / classification
@@ -3332,7 +3382,7 @@ The public demo has no account or data-use agreement. Use it with the bundled sa
 ## What's in a link, a config file, and an export
 
 - A **share link** contains the participant and trial IDs plus the visualization settings. It does not contain the data tables — except for a scanpath made with **Author a scanpath**, whose link carries the typed text and every hand-placed fixation, because they *are* its data.
-- A **settings file** ( Share → File) contains the figure's settings and the selected participant and trial IDs.
+- A **settings file** ( Share → File) contains the figure's settings and the selected participant and trial IDs — for a comparison, the second reading's participant and trial IDs and its dataset's name too.
 - An **annotations file** ( Data → Annotations, or `annotations.json` in an Export bundle) contains your notes, which may mention participants.
 - A **setup file** ( Edit dataset → Save setup) contains the dataset's name, its column mapping, and its recording setup.
 - An **exported table** contains the selected research data. A bundle's attached metadata tables hold only the readers, trials and texts it exports.

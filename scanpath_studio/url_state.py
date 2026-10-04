@@ -449,7 +449,9 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
         for part in ("mode", "symbol", "color")
     },
     # EXP-19: Compare's per-scanpath colours, line style and legend label.
-    **_cmp_style_params("fix_color", "saccade_color", "saccade_style", "label_pattern"),
+    **_cmp_style_params(
+        "fix_color", "saccade_color", "saccade_style", "label_pattern", "box_color"
+    ),
     # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
     # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
     "cmp_b_saccade_classes": "cmp1_saccade_classes",
@@ -480,7 +482,7 @@ _SHARE_COLOR_PARAMS = (
     "fixclass_long_color",
     "fixclass_oob_color",
     "fixclass_blink_color",
-    *_cmp_style_params("fix_color", "saccade_color"),
+    *_cmp_style_params("fix_color", "saccade_color", "box_color"),
 )
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -2491,6 +2493,13 @@ def _restore_plot_config(
             sc = entry.get("saccade_color")
             if isinstance(sc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sc):
                 put(f"cmp{idx}_saccade_color", sc)
+            # "" is a real value — "follow the fixation colour" — and must
+            # clear an override the session already holds.
+            bc = entry.get("box_color")
+            if isinstance(bc, str) and (
+                bc == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bc)
+            ):
+                put(f"cmp{idx}_box_color", bc)
             if "saccade_style" in entry:
                 put_valid(
                     entry["saccade_style"] in SACCADE_DASH_OPTIONS,

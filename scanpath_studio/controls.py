@@ -4111,7 +4111,8 @@ def compare_style_defaults() -> dict:
     One table for the seeding below and for EXP-19's share link, which leaves a
     style off the link while it still equals this (`url_state._link_defaults`).
     ``cmp{idx}_label_pattern`` is not seeded — its absence *is* the auto label —
-    so it is listed here as the empty string it reads as.
+    so it is listed here as the empty string it reads as; ``cmp{idx}_box_color``
+    likewise, its absence being "the scanpath's own colour".
     """
     defaults: dict = {}
     for idx, _ in _COMPARE_SCANPATHS:
@@ -4130,6 +4131,8 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_opacity": COMPARE_FIXATION_OPACITY,
                 f"cmp{idx}_hollow": False,
                 f"cmp{idx}_label_pattern": "",
+                # The word-box outline; empty follows `cmp{idx}_fix_color`.
+                f"cmp{idx}_box_color": "",
             }
         )
     # CMP-24 — scanpath B's own filters (A's are the rail's ordinary ones).
@@ -4152,64 +4155,100 @@ def _seed_compare_styles() -> None:
     ``persist_state="session"``, which keeps the value alive through the runs
     where the popover isn't open (ENG-36)."""
     for key, default in compare_style_defaults().items():
-        if not key.endswith("_label_pattern"):
+        if not key.endswith(("_label_pattern", "_box_color")):
             _pin(key, default)
 
 
-def _render_compare_fix_styles() -> None:
-    """Per-scanpath *fixation* styling for the two-trial comparison — rendered
-    inside the Fixation-style popover (when comparing), beside the single-trial
-    fixation controls.
+def _render_compare_fix_styles(*, uniform: bool = True) -> None:
+    """Scanpath B's fixation styling for the two-trial comparison, rendered in
+    the Fixations popover straight under the *Marker* group — which, in
+    Compare, is scanpath A's (its colour, size and opacity rows write A's
+    ``cmp0_*`` keys).
 
-    UX-159: one group per scanpath, its name as the group title and a caption
-    per row (`_sub_row`), matching the popover's *Marker* group. The widgets
-    keep the prefixed label as their accessible name (it is what tells the six
-    rows apart); only the visible text is shortened."""
-    st.caption("Per scanpath (Compare)")
-    swatch_disabled, _ = _layer_gate(False, None)
-    for idx, name in _COMPARE_SCANPATHS:
+    UX-159: the scanpath's name as the group title and a caption per row
+    (`_sub_row`). The widgets keep the prefixed label as their accessible name;
+    only the visible text is shortened. With a colour-by column the markers are
+    filled by it, so the scanpath's colour is captioned as their *Outline*."""
+    idx, name = _COMPARE_SCANPATHS[1]
+    caption = "Color" if uniform else "Outline"
+    _compare_fix_color_picker(
         _sub_row(
-            "Color",
+            caption,
             section=name,
             section_help=_COMPARE_SCANPATH_HELP[idx],
+            caption_help=None if uniform else _COMPARE_OUTLINE_HELP,
             section_share=_COMPARE_SECTION_SHARE,
-        ).color_picker(
-            f"{name} — fixation color",
-            key=f"cmp{idx}_fix_color",
-            persist_state="session",
-            disabled=swatch_disabled,
-            label_visibility="collapsed",
-        )
-        _range_slider(
-            st,
-            f"{name} — marker size range",
-            key=f"cmp{idx}_marker_size_range",
-            persist_state="session",
-            min_value=4,
-            max_value=40,
-            field_host=_sub_row("Size", section_share=_COMPARE_SECTION_SHARE),
-        )
-        _numeric_slider(
-            st,
-            f"{name} — opacity",
-            key=f"cmp{idx}_opacity",
-            persist_state="session",
-            min_value=0.1,
-            max_value=1.0,
-            step=0.05,
-            slider_format="%.2f",
-            help="Marker opacity for this scanpath (1.0 = fully opaque).",
-            field_host=_sub_row("Opacity", section_share=_COMPARE_SECTION_SHARE),
-        )
+        ),
+        idx,
+    )
+    _compare_size_slider(
+        idx,
+        "Marker diameter range in px for this scanpath: the smallest marker, "
+        "then the largest.",
+    )
+    _compare_opacity_slider(idx)
+
+
+_COMPARE_OUTLINE_HELP = (
+    "With a colour-by column the markers are filled by its values, so the "
+    "scanpath's own colour outlines them — the A/B cue."
+)
+
+
+def _compare_fix_color_picker(host, idx: int) -> None:
+    """One scanpath's flat fixation colour, ``cmp{idx}_fix_color``."""
+    disabled, _ = _layer_gate(False, None)
+    host.color_picker(
+        f"{_COMPARE_SCANPATHS[idx][1]} — fixation color",
+        key=f"cmp{idx}_fix_color",
+        persist_state="session",
+        disabled=disabled,
+        label_visibility="collapsed",
+    )
+
+
+def _compare_size_slider(idx: int, help: str) -> None:
+    """One scanpath's marker size range, ``cmp{idx}_marker_size_range``."""
+    _, size_help = _layer_gate(False, help)
+    _range_slider(
+        st,
+        f"{_COMPARE_SCANPATHS[idx][1]} — marker size range",
+        key=f"cmp{idx}_marker_size_range",
+        persist_state="session",
+        min_value=4,
+        max_value=40,
+        help=help,
+        field_host=_sub_row("Size", caption_help=size_help),
+    )
+
+
+def _compare_opacity_slider(idx: int) -> None:
+    """One scanpath's marker opacity, ``cmp{idx}_opacity``."""
+    _numeric_slider(
+        st,
+        f"{_COMPARE_SCANPATHS[idx][1]} — opacity",
+        key=f"cmp{idx}_opacity",
+        persist_state="session",
+        min_value=0.1,
+        max_value=1.0,
+        step=0.05,
+        slider_format="%.2f",
+        help="Marker opacity for this scanpath (1.0 = fully opaque).",
+        field_host=_sub_row("Opacity"),
+    )
 
 
 #: UX-159: the per-scanpath groups' titles ("Scanpath A") are longer than a
-#: popover group title usually is, so they take more of the label column.
+#: popover group title usually is, so their title row takes more of the label
+#: column. Only that row: the group's other captions keep the usual share, so
+#: "Opacity" is not cut to "Opa…".
 _COMPARE_SECTION_SHARE = 0.62
 
+#: The tooltip already leads with the group's title ("Scanpath A — …"), so
+#: these start at what follows it.
 _COMPARE_SCANPATH_HELP = {
-    0: "Scanpath A — the selected trial.",
-    1: "Scanpath B — the trial it is compared with.",
+    0: "The selected trial.",
+    1: "The trial it is compared with.",
 }
 
 
@@ -4256,7 +4295,52 @@ def _render_compare_saccade_styles() -> None:
             step=0.5,
             slider_format="%.1f px",
             number_format="%.1f",
-            field_host=_sub_row("Width", section_share=_COMPARE_SECTION_SHARE),
+            field_host=_sub_row("Width"),
+        )
+
+
+def _render_compare_box_lines(section_help: str) -> None:
+    """The word-box outline per scanpath, for the static comparison.
+
+    Each reading's boxes are outlined in its own colour — its fixation colour
+    until one is picked here, so A and B stay apart by default. The picker is a
+    shadow of ``cmp{idx}_box_color``: it shows the colour actually drawn, and
+    only a pick writes the override, so an untouched outline keeps following
+    the scanpath's colour when that changes."""
+    for idx, name in _COMPARE_SCANPATHS:
+        key = f"cmp{idx}_box_color"
+        pick_key = f"{key}__pick"
+        st.session_state[pick_key] = st.session_state.get(key) or (
+            st.session_state.get(f"cmp{idx}_fix_color") or compare_palette_color(idx)
+        )
+
+        def _apply(key=key, pick_key=pick_key, idx=idx) -> None:
+            if _shadow_key_missing(pick_key):  # BUG-18
+                return
+            picked = st.session_state[pick_key]
+            follow = st.session_state.get(
+                f"cmp{idx}_fix_color"
+            ) or compare_palette_color(idx)
+            # Picking the scanpath's own colour again goes back to following it.
+            st.session_state[key] = "" if picked.lower() == follow.lower() else picked
+
+        line_disabled, line_help = _layer_gate(
+            False,
+            f"Colour of {name}'s word-box outlines — its fixation colour until "
+            "you pick another. Pick that colour again to go back to following it.",
+        )
+        _sub_row(
+            f"Line {name[-1]}",
+            section="Box" if idx == 0 else None,
+            section_help=section_help,
+            caption_help=line_help,
+        ).color_picker(
+            f"{name} — word box line color",
+            key=pick_key,
+            on_change=_apply,
+            disabled=line_disabled,
+            help=line_help,
+            label_visibility="collapsed",
         )
 
 
@@ -4289,6 +4373,9 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 ),
                 hollow=bool(st.session_state.get(f"cmp{idx}_hollow", False)),
                 opacity=float(st.session_state.get(f"cmp{idx}_opacity", 1.0)),
+                # None (no override) is dropped by the builder, which then
+                # outlines the boxes in `fix_color`.
+                box_color=st.session_state.get(f"cmp{idx}_box_color") or None,
             )
         )
     # CMP-24: B draws under its own filters. A's style names none, so the
@@ -5614,12 +5701,23 @@ def render_plot_controls(
             metric_reason,
         )
         by_disabled, by_help = _layer_gate(metric_disabled, by_help)
+        # In Compare this group *is* scanpath A's: its colour, size and opacity
+        # rows write A's `cmp0_*` keys (the figure-wide ones are inert there),
+        # and scanpath B's group follows it. Shape and the duration scale stay
+        # shared by both.
         field = _sub_row(
             "Color",
-            section="Marker",
-            section_help="How each fixation marker is drawn: its colour, shape, "
-            "size range and opacity.",
+            section=_COMPARE_SCANPATHS[0][1] if comparing else "Marker",
+            section_help=(
+                _COMPARE_SCANPATH_HELP[0] + " Its colour, size and opacity are "
+                "its own; the shape and the duration scale apply to both "
+                "scanpaths."
+                if comparing
+                else "How each fixation marker is drawn: its colour, shape, "
+                "size range and opacity."
+            ),
             caption_help=by_help,
+            section_share=_COMPARE_SECTION_SHARE if comparing else 0.45,
         )
         by_col, style_col = field.columns(
             [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
@@ -5653,7 +5751,9 @@ def render_plot_controls(
             help=by_help,
             label_visibility="collapsed",
         )
-        if color_by == UNIFORM_COLOR_FIELD:
+        if color_by == UNIFORM_COLOR_FIELD and comparing:
+            _compare_fix_color_picker(style_col, 0)
+        elif color_by == UNIFORM_COLOR_FIELD:
             _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
             _dis, _tip = _layer_gate(
                 _dis,
@@ -5699,6 +5799,11 @@ def render_plot_controls(
                 disabled=_dis,
                 help=_tip,
                 label_visibility="collapsed",
+            )
+        if comparing and color_by != UNIFORM_COLOR_FIELD:
+            # A column fills the markers, so A's colour is their outline.
+            _compare_fix_color_picker(
+                _sub_row("Outline", caption_help=_COMPARE_OUTLINE_HELP), 0
             )
         raw_cmin = (
             trial_fixations[color_by].min()
@@ -5762,44 +5867,52 @@ def render_plot_controls(
             "below; on the relative scale, to this figure's shortest and "
             "longest fixation."
         )
-        _, size_help = _layer_gate(_dis, _gated_help(size_text, _reason))
-        _range_slider(
-            st,
-            "Size",
-            key="global_marker_size_range",
-            persist_state="session",
-            min_value=4,
-            max_value=40,
-            disabled=_dis,
-            help=_gated_help(size_text, _reason),
-            field_host=_sub_row("Size", caption_help=size_help),
-        )
+        if comparing:
+            _compare_size_slider(0, size_text)
+        else:
+            _, size_help = _layer_gate(_dis, _gated_help(size_text, _reason))
+            _range_slider(
+                st,
+                "Size",
+                key="global_marker_size_range",
+                persist_state="session",
+                min_value=4,
+                max_value=40,
+                disabled=_dis,
+                help=_gated_help(size_text, _reason),
+                field_host=_sub_row("Size", caption_help=size_help),
+            )
         _render_duration_scale_rows()
-        _, opac_help = _layer_gate(
-            _dis,
-            _gated_help(
-                "Fixation marker opacity. Lower it so overlapping fixations "
-                "show through (1.0 = fully opaque).",
-                _reason,
-            ),
-        )
-        _numeric_slider(
-            st,
-            "Opacity",
-            key="global_fixation_opacity",
-            persist_state="session",
-            min_value=0.1,
-            max_value=1.0,
-            step=0.05,
-            slider_format="%.2f",
-            disabled=_dis,
-            help=_gated_help(
-                "Fixation marker opacity. Lower it so overlapping fixations "
-                "show through (1.0 = fully opaque).",
-                _reason,
-            ),
-            field_host=_sub_row("Opacity", caption_help=opac_help),
-        )
+        if comparing:
+            _compare_opacity_slider(0)
+            # Scanpath B's group, straight under A's.
+            _render_compare_fix_styles(uniform=color_by == UNIFORM_COLOR_FIELD)
+        else:
+            _, opac_help = _layer_gate(
+                _dis,
+                _gated_help(
+                    "Fixation marker opacity. Lower it so overlapping fixations "
+                    "show through (1.0 = fully opaque).",
+                    _reason,
+                ),
+            )
+            _numeric_slider(
+                st,
+                "Opacity",
+                key="global_fixation_opacity",
+                persist_state="session",
+                min_value=0.1,
+                max_value=1.0,
+                step=0.05,
+                slider_format="%.2f",
+                disabled=_dis,
+                help=_gated_help(
+                    "Fixation marker opacity. Lower it so overlapping fixations "
+                    "show through (1.0 = fully opaque).",
+                    _reason,
+                ),
+                field_host=_sub_row("Opacity", caption_help=opac_help),
+            )
         # PRE-3: vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"
         # leaves the raw coordinates. VIZ-23 hoisted the correction above the
@@ -5930,10 +6043,6 @@ def render_plot_controls(
                 static_reason,
             ),
         )
-        # When comparing two trials, the per-scanpath fixation styling lives
-        # here (under the Fixation settings), not in a separate panel.
-        if comparing:
-            _render_compare_fix_styles()
 
     # VIZ-27: filtering decides which fixations are visible; it is not marker
     # appearance. Keep it beside the fixation layer as a first-class popover and
@@ -6725,33 +6834,31 @@ def render_plot_controls(
         _popover_rows("boxes"),
     ):
         # The co-animation (Compare + Animate) draws one set of boxes in this
-        # colour, so only the static comparison greys it.
-        per_reading_outline = comparing and not animating
-        line_disabled, line_help = _layer_gate(
-            per_reading_outline,
-            _gated_help(
-                "Colour of each word box's outline.",
-                f"{ICONS['warning']} In **Compare** mode each reading's boxes are "
-                "outlined in its scanpath colour, so A and B stay apart. Your "
-                "value is kept and applies again once the mode is off."
-                if per_reading_outline
-                else "",
-            ),
+        # colour; the static comparison outlines each reading's boxes on its
+        # own, so there the one *Line* row becomes one per scanpath.
+        box_section_help = (
+            "How each word's interest area is drawn — exactly the bounding box "
+            "the data gives, outlined and filled."
         )
-        _sub_row(
-            "Line",
-            section="Box",
-            section_help="How each word's interest area is drawn — exactly the "
-            "bounding box the data gives, outlined and filled.",
-            caption_help=line_help,
-        ).color_picker(
-            "Line color",
-            key="global_word_box_color",
-            persist_state="session",
-            disabled=line_disabled,
-            help=line_help,
-            label_visibility="collapsed",
-        )
+        if comparing and not animating:
+            _render_compare_box_lines(box_section_help)
+        else:
+            line_disabled, line_help = _layer_gate(
+                False, "Colour of each word box's outline."
+            )
+            _sub_row(
+                "Line",
+                section="Box",
+                section_help=box_section_help,
+                caption_help=line_help,
+            ).color_picker(
+                "Line color",
+                key="global_word_box_color",
+                persist_state="session",
+                disabled=line_disabled,
+                help=line_help,
+                label_visibility="collapsed",
+            )
         fill_disabled, fill_help = _layer_gate(
             False, "Colour the inside of each box is filled with."
         )

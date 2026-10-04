@@ -235,6 +235,8 @@ CMP_HOLLOW = "cmp{idx}_hollow"
 CMP_OPACITY = "cmp{idx}_opacity"
 # UX-31: the A/B legend label override ("" = the auto "participant · trial").
 CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
+# The word-box outline override ("" = the scanpath's own fixation colour).
+CMP_BOX_COLOR = "cmp{idx}_box_color"
 
 # --- CMP-24: scanpath B's own filters in Compare ----------------------------
 # A's filters are the rail's ordinary ones (`global_fixclass_*`,
@@ -491,7 +493,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "fixclass_blink_color": GLOBAL_FIXCLASS_BLINK_COLOR,
         # EXP-19.
         **_compare_style_params(
-            "fix_color", "saccade_color", "saccade_style", "label_pattern"
+            "fix_color", "saccade_color", "saccade_style", "label_pattern", "box_color"
         ),
         # CMP-24.
         "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
@@ -668,6 +670,7 @@ COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
             "hollow",
             "opacity",
             "label_pattern",
+            "box_color",
         ),
         **COMPARE_B_FILTER_PARAMS,
     }
@@ -813,6 +816,7 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_HOLLOW,
         CMP_OPACITY,
         CMP_LABEL_PATTERN,
+        CMP_BOX_COLOR,
     }
 )
 

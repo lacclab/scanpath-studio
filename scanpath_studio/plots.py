@@ -3471,25 +3471,70 @@ def _add_density_heatmap(
     )
 
 
-def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
-    """Normalized 1-D Gaussian kernel, truncated at 3 sigma."""
+# Past this radius the 3-sigma kernel's normalising sum is taken from the
+# Gaussian integral (exact to float precision at that sigma) instead of an array.
+_KERNEL_EXACT_SUM_RADIUS = 100_000
+
+
+def _gaussian_kernel_1d(sigma: float, max_radius: int | None = None) -> np.ndarray:
+    """Normalized 1-D Gaussian kernel, truncated at 3 sigma.
+
+    ``max_radius`` builds only the central taps, still normalized over the full
+    3-sigma kernel, so a short axis pays for the taps it can reach rather than
+    for sigma.
+    """
     radius = max(1, round(sigma * 3))
-    offsets = np.arange(-radius, radius + 1)
+    keep = radius if max_radius is None else max(0, min(radius, max_radius))
+    offsets = np.arange(-keep, keep + 1)
     kernel = np.exp(-(offsets**2) / (2.0 * sigma * sigma))
-    return kernel / kernel.sum()
+    if keep == radius:
+        total = kernel.sum()
+    elif radius <= _KERNEL_EXACT_SUM_RADIUS:
+        full = np.arange(-radius, radius + 1)
+        total = np.exp(-(full**2) / (2.0 * sigma * sigma)).sum()
+    else:
+        total = (
+            sigma
+            * math.sqrt(2.0 * math.pi)
+            * math.erf((radius + 0.5) / (sigma * math.sqrt(2.0)))
+        )
+    return kernel / total
+
+
+def _blur_axis(grid: np.ndarray, sigma: float, axis: int) -> np.ndarray:
+    """Zero-padded Gaussian blur along one axis; the output keeps ``grid``'s shape.
+
+    ``np.convolve(mode="same")`` returns the *kernel's* length when the kernel
+    is longer than the axis, which shifted the density off its coordinates on a
+    short grid. Padding by the kernel radius and taking the ``valid`` part pins
+    the length. Taps further out than the axis is long only ever meet the zero
+    padding, so they are never built: the result is identical and the cost is
+    bounded by the axis length, not by sigma.
+    """
+    kernel = _gaussian_kernel_1d(sigma, max_radius=grid.shape[axis] - 1)
+    radius = len(kernel) // 2
+    pad = [(0, 0)] * grid.ndim
+    pad[axis] = (radius, radius)
+    padded = np.pad(grid, pad)
+    return np.apply_along_axis(
+        lambda v: np.convolve(v, kernel, mode="valid"), axis, padded
+    )
 
 
 def _gaussian_blur_2d(
     grid: np.ndarray, sigma_rows: float, sigma_cols: float
 ) -> np.ndarray:
-    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage)."""
+    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage).
+
+    Zero padding beyond the grid; the output always has the input's shape.
+    """
     out = grid.astype(float)
+    if out.size == 0:
+        return out
     if sigma_rows and sigma_rows > 0:
-        k = _gaussian_kernel_1d(sigma_rows)
-        out = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 0, out)
+        out = _blur_axis(out, sigma_rows, 0)
     if sigma_cols and sigma_cols > 0:
-        k = _gaussian_kernel_1d(sigma_cols)
-        out = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 1, out)
+        out = _blur_axis(out, sigma_cols, 1)
     return out
 
 
@@ -3501,6 +3546,20 @@ _INTERP_SIGMA_FRAC = 0.02  # sigma as a fraction of the larger data span
 _INTERP_MIN_SIGMA_PX = 8.0
 _INTERP_OPACITY = 0.45
 _INTERP_FLOOR_FRAC = 0.02  # cells below this fraction of the peak render transparent
+_INTERP_MIN_CELLS = 10  # cells along the narrower axis, at least
+_INTERP_MIN_SPAN_PX = 2.0 * _INTERP_MIN_SIGMA_PX  # narrower than this is widened
+
+
+def _interp_grid_shape(x_span: float, y_span: float) -> tuple[int, int]:
+    """(nx, ny) cells: _INTERP_GRID on the wider axis, a proportional share on
+    the other, each within [_INTERP_MIN_CELLS, _INTERP_GRID]."""
+    wide = max(x_span, y_span)
+    narrow = min(x_span, y_span)
+    share = round(_INTERP_GRID * narrow / wide) if wide > 0 else _INTERP_GRID
+    n_narrow = int(min(_INTERP_GRID, max(_INTERP_MIN_CELLS, share)))
+    if x_span >= y_span:
+        return _INTERP_GRID, n_narrow
+    return n_narrow, _INTERP_GRID
 
 
 def _add_interpolated_heatmap(
@@ -3547,8 +3606,24 @@ def _add_interpolated_heatmap(
 
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
-    nx = _INTERP_GRID
-    ny = max(10, round(_INTERP_GRID * y_span / x_span))
+    sigma_px = float(
+        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
+    )
+    # An axis with (next to) no extent — coincident fixations, one row or one
+    # column of a fixation-only import — is widened around its centre to the
+    # blob's own size (±3 sigma), so the edges match the span the cells and the
+    # sigma are computed from, and the blob is round rather than a sliver.
+    min_span = max(_INTERP_MIN_SPAN_PX, 6.0 * sigma_px)
+    if x_max - x_min < _INTERP_MIN_SPAN_PX:
+        x_mid = (x_min + x_max) / 2.0
+        x_min, x_max, x_span = x_mid - min_span / 2, x_mid + min_span / 2, min_span
+    if y_max - y_min < _INTERP_MIN_SPAN_PX:
+        y_mid = (y_min + y_max) / 2.0
+        y_min, y_max, y_span = y_mid - min_span / 2, y_mid + min_span / 2, min_span
+    # The cell budget sits on the wider axis and the other gets its share of it,
+    # so neither axis, nor the grid, outgrows _INTERP_GRID (squared): a tall,
+    # narrow reading must not ask for 240 cells across and 96,000 down.
+    nx, ny = _interp_grid_shape(x_span, y_span)
     x_edges = np.linspace(x_min, x_max, nx + 1)
     y_edges = np.linspace(y_min, y_max, ny + 1)
     # histogram2d returns shape (nx, ny); transpose so rows index y, cols index x
@@ -3556,9 +3631,6 @@ def _add_interpolated_heatmap(
     hist, _, _ = np.histogram2d(xs, ys, bins=[x_edges, y_edges], weights=w)
     grid = hist.T
 
-    sigma_px = float(
-        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
-    )
     blurred = _gaussian_blur_2d(
         grid, sigma_rows=sigma_px / (y_span / ny), sigma_cols=sigma_px / (x_span / nx)
     )

@@ -103,6 +103,12 @@ class TestGaussianBlurShape:
         )
         np.testing.assert_allclose(plots._gaussian_blur_2d(grid, 4.5, 7.25), expected)
 
+    def test_trimmed_kernel_is_the_full_kernels_centre(self):
+        full = plots._gaussian_kernel_1d(30.0)
+        trimmed = plots._gaussian_kernel_1d(30.0, max_radius=4)
+        centre = len(full) // 2
+        np.testing.assert_allclose(trimmed, full[centre - 4 : centre + 5])
+
 
 class TestHeatmapCoordinates:
     @pytest.mark.parametrize("style", ["Interpolated", "Duration mass"])
@@ -121,3 +127,64 @@ class TestHeatmapCoordinates:
         peak_row = np.unravel_index(np.argmax(z), z.shape)[0]
         step = trace.y[1] - trace.y[0]
         assert abs(trace.y[peak_row] - 110) <= step
+
+
+_NO_WORDS = pd.DataFrame(
+    columns=[
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "word_id",
+        "text",
+        "line_idx",
+        "x",
+        "y",
+        "width",
+        "height",
+    ]
+)
+
+
+class TestInterpolationGridBudget:
+    @pytest.mark.parametrize(
+        ("xs", "ys"),
+        [
+            ([100, 500], [100, 100]),  # horizontal, one row
+            ([100, 100], [100, 500]),  # vertical, one column
+            ([100, 101], [100, 50_000]),  # tall and narrow
+            ([100, 100], [100, 100]),  # coincident
+            ([100, 100.0001], [100, 100.0002]),  # near-coincident
+        ],
+    )
+    def test_fixation_only_grid_stays_within_budget(self, xs, ys, monkeypatch):
+        requested = {}
+        real_histogram2d = np.histogram2d
+
+        def spy(x, y, bins, **kwargs):
+            requested["nx"], requested["ny"] = len(bins[0]) - 1, len(bins[1]) - 1
+            return real_histogram2d(x, y, bins=bins, **kwargs)
+
+        monkeypatch.setattr(plots.np, "histogram2d", spy)
+        trace = _heatmap_trace(_NO_WORDS, _fixations(xs, ys), "Interpolated")
+        nx, ny = requested["nx"], requested["ny"]
+        assert max(nx, ny) == plots._INTERP_GRID
+        assert min(nx, ny) >= plots._INTERP_MIN_CELLS
+        assert nx * ny <= plots._INTERP_GRID**2
+        z = np.asarray(trace.z, dtype=float)
+        assert z.shape == (len(trace.y), len(trace.x)) == (ny, nx)
+        # Every edge is distinct, so the blob has real extent on both axes.
+        assert trace.x[-1] > trace.x[0] and trace.y[-1] > trace.y[0]
+
+    def test_budget_goes_to_the_wider_axis(self):
+        assert plots._interp_grid_shape(800.0, 200.0) == (240, 60)
+        assert plots._interp_grid_shape(200.0, 800.0) == (60, 240)
+        assert plots._interp_grid_shape(10_000.0, 1.0) == (240, 10)
+
+    def test_coincident_fixations_peak_at_their_point(self):
+        trace = _heatmap_trace(
+            _NO_WORDS, _fixations([100, 100], [300, 300]), "Interpolated"
+        )
+        z = np.nan_to_num(np.asarray(trace.z, dtype=float))
+        row, col = np.unravel_index(np.argmax(z), z.shape)
+        assert abs(trace.x[col] - 100) <= trace.x[1] - trace.x[0]
+        assert abs(trace.y[row] - 300) <= trace.y[1] - trace.y[0]

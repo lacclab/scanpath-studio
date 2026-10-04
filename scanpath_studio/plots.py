@@ -1906,6 +1906,30 @@ def _hover_label(field: str, table: str | None = None) -> str:
     )
 
 
+def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
+    """The fixation-number labels of a replay trail, one per row of ``ordered``.
+
+    The trial's own ``order_in_trial``, as the static figure, the comparison
+    and every hover show it — so a later screen of a multipart trial, a
+    fixation window or a *Discard* keeps its gaps (501, 502 …) instead of
+    renumbering what is left 1..n. A row without an index gets no label, as
+    on the static figure. Only a frame with no usable index at all (no column,
+    or nothing numeric in it) falls back to the ordinal 1..n."""
+    n = len(ordered)
+    if "order_in_trial" in ordered.columns:
+        values = pd.to_numeric(ordered["order_in_trial"], errors="coerce")
+        if values.notna().any():
+            return [
+                ""
+                if pd.isna(value)
+                else str(int(value))
+                if float(value).is_integer()
+                else f"{value:g}"
+                for value in values.tolist()
+            ]
+    return [str(j + 1) for j in range(n)]
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
@@ -4761,7 +4785,9 @@ def _render_scanpath_animation(
             else list(fixation_hover_fields)
         )
         s["customdata"], s["hovertemplate"] = _hover_payload(ordered, hover_fields)
-        s["order_text"] = [str(j + 1) for j in range(n_total)]
+        # The trial's own fixation numbers, as the static figure and the hover
+        # show them — never a 1..n renumbering of what survived the filters.
+        s["order_text"] = _fixation_order_labels(ordered)
         s["text_color"] = s["color"] if dual else order_font_color
         s["sac_color"] = s["color"] if dual else saccade_color
         s["curr_outline"] = s["color"] if dual else CURRENT_FIX_OUTLINE

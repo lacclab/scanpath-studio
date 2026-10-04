@@ -1,1 +1,0 @@
-A fixations table without timestamps no longer reports an inflated reading speed: reading time and words per minute come from the summed fixation durations, labelled as an estimate in the Reading summary and in the exported summary tables.

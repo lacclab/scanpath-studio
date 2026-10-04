@@ -1,1 +1,0 @@
-The docs are corrected where a careful review found them wrong or vague: Pupil Labs coordinates, which measures are computed where, excluding trials by tag, which counts follow the filters, offline HTML, and what a setup file holds.

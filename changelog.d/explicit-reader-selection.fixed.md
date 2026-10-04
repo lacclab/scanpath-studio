@@ -1,1 +1,0 @@
-Opening a saved selection, a settings file or an in-app Open for a reader who is not in the current trial pool no longer lands on another reader's trial of the same name; the selection is listed as skipped, or the Open says why it could not navigate.

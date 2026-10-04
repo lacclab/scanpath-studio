@@ -1,1 +1,0 @@
-Editing the text of an authored scanpath keeps your fixations as placed and flags any target word the edit changed; resetting to one fixation per word is now its own button, and Restore previous draft undoes the last change that removed, moved or retimed fixations.

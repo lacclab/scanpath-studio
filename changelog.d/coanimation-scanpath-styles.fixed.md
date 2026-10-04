@@ -1,1 +1,0 @@
-In Compare + Animate, the replay now draws each scanpath with its own colour, size range, opacity and saccade line from the per-scanpath style controls, matching the static comparison; the API's animate_scanpath and render --animate take the same style_a / style_b.

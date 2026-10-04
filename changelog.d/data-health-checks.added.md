@@ -1,1 +1,0 @@
-The Data page has a Data checks line that flags fixations lasting 0 ms or less, positions that are missing or infinite, and word boxes with no area, with the rows and trials affected, your own column names, example rows and what the app does with them; check_data_health runs the same checks from Python.

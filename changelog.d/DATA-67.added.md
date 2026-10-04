@@ -1,1 +1,0 @@
-Add dataset offers Download example tables, a tiny AOI and fixation table that map without manual picks, with a README on each column's unit and the IDs; and each dataset's What's in section opens with what it supports: scanpaths, supplied reading measures, raw gaze and screens.

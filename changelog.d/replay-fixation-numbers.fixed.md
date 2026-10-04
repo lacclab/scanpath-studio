@@ -1,1 +1,0 @@
-The replay's fixation numbers are now each fixation's index in the trial, as on the static figure and in the hover, so a later screen, a fixation window or Discard no longer renumbers the remaining fixations from 1.

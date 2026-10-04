@@ -1,1 +1,0 @@
-Export bundles now include an index.csv listing every file with its participant, trial and screen, and any requested file that failed, and their README records the package version and which readings were exported.

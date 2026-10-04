@@ -1,1 +1,0 @@
-Color by now also offers the other numeric fixation columns a dataset kept (a pupil size, say), under the dataset's own names, after the familiar fields; load_scanpath_data(keep_columns=...) and render --keep-columns carry such a column through headless loading, and the Share code snippet keeps it.

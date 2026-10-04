@@ -1,1 +1,0 @@
-Changing a plot setting on a large dataset is about three times faster: on OneStop a click went from about 3.5 s to about 1.2 s, because the app no longer re-detects the column mapping or rebuilds the trial picker's labels and sort keys on every click.

@@ -1,1 +1,0 @@
-A trial, participant or text ID built from several columns no longer merges two different readings when a value contains an underscore; links, annotation files and scripts that use the old spelling still find their trial.

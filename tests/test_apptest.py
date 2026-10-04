@@ -5373,3 +5373,33 @@ class TestAnnotationsBelongToTheirDataset:
         assert at.session_state[annotations_mod.OWNER_KEY] == self.NAME
         assert dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == store
         assert any(o.startswith("★ ") for o in self._picker_options(at))
+
+
+def test_column_detection_runs_once_per_table_not_on_every_rerun(monkeypatch):
+    """Auto-detecting the mapping reads every value of the box columns (BUG-99),
+    ~1.4 s on OneStop's IA report, and the answer depends only on the table — so
+    a rerun that changes a plot setting must not work it out again."""
+    from scanpath_studio import app
+
+    calls = {"words": 0, "fixations": 0}
+    real_words, real_fix = app.propose_word_schema, app.propose_fix_schema
+
+    def counting(kind, real):
+        def propose(frame):
+            calls[kind] += 1
+            return real(frame)
+
+        return propose
+
+    monkeypatch.setattr(app, "propose_word_schema", counting("words", real_words))
+    monkeypatch.setattr(app, "propose_fix_schema", counting("fixations", real_fix))
+    at = _make_apptest(synthetic=True)
+    at.run(timeout=60)
+    assert not at.exception, f"Streamlit exceptions: {at.exception}"
+    first = dict(calls)
+    assert first["words"] >= 1 and first["fixations"] >= 1
+    at.session_state["global_show_fix"] = False
+    at.run(timeout=60)
+    at.run(timeout=60)
+    assert not at.exception, f"Streamlit exceptions: {at.exception}"
+    assert calls == first

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import html
 import math
 import struct
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -1906,6 +1907,29 @@ def _hover_label(field: str, table: str | None = None) -> str:
     )
 
 
+def _plotly_literal(value: str) -> str:
+    """``value`` as Plotly text that draws its own characters.
+
+    Plotly reads a text or hover string as its pseudo-HTML, so a stimulus
+    token ``<b>bold</b>`` drew bold and ``x<br>y`` broke the line (round-8
+    review, finding 6). Escaping ``&``, ``<`` and ``>`` — the entities Plotly
+    decodes back — keeps the dataset's characters on screen. Applied once, to
+    data values only, at the figure boundary: the tables, exports and the
+    app's own markup (a hover's ``<br>``) are left as they are."""
+    return html.escape(value, quote=False)
+
+
+def _plotly_literal_values(series: pd.Series) -> pd.Series:
+    """A hover column with its strings made literal (:func:`_plotly_literal`);
+    numbers, missing values and anything else pass through untouched."""
+    if pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series):
+        return series
+    return series.map(
+        lambda value: _plotly_literal(value) if isinstance(value, str) else value,
+        na_action="ignore",
+    )
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
@@ -1930,7 +1954,7 @@ def _hover_payload(
             if field == "line_idx" and line_display is not None
             else frame[field]
         )
-        values.append(series)
+        values.append(_plotly_literal_values(series))
         suffix = " ms" if field.endswith("_ms") else ""
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
@@ -1969,7 +1993,10 @@ def _add_word_label_trace(
         else:
             # Legacy API/deep-link behaviour: the three fixed identity lines plus
             # the old single optional measure.
-            customdata_parts: list[pd.Series] = [words["word_id"], line_display]
+            customdata_parts: list[pd.Series] = [
+                _plotly_literal_values(words["word_id"]),
+                line_display,
+            ]
             hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
             if word_hover_measure and word_hover_measure in words.columns:
                 label = _table_label(
@@ -1977,7 +2004,9 @@ def _add_word_label_trace(
                 ) or _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
                 suffix = " ms" if word_hover_measure.endswith("_ms") else ""
                 hover += f"<br>{label}: %{{customdata[2]}}{suffix}"
-                customdata_parts.append(words[word_hover_measure])
+                customdata_parts.append(
+                    _plotly_literal_values(words[word_hover_measure])
+                )
             hover += "<extra></extra>"
             customdata = pd.concat(customdata_parts, axis=1)
     # Per-word text color: the highlight colour for highlighted words when the
@@ -2005,8 +2034,11 @@ def _add_word_label_trace(
         rtl = rtl.fillna(False).astype(bool)
     box_x0, _, box_x1, _ = word_box_bounds(words)
     label_x = (box_x0 + box_x1) / 2.0
+    # The word drawn as its own characters (finding 6 — not as Plotly markup),
+    # escaped before the direction isolates wrap it; the hover's `%{text}`
+    # reads this same string, so it shows the word literally too.
     label_text = [
-        f"\u2067{value}\u2069" if is_rtl else value
+        f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
         for value, is_rtl in zip(words["text"].astype(str), rtl)
     ]
     trace = go.Scatter(
@@ -6056,9 +6088,9 @@ def _make_split_comparison_figure(
     # byte-identical to the pre-CMP-8 figure.
     canvas_b = settings.canvas_b or (canvas_width, canvas_height)
     panel_canvas = [(canvas_width, canvas_height), (int(canvas_b[0]), int(canvas_b[1]))]
-    # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
-    # size word labels true-to-scale within each panel. Per-panel rather than one
-    # value, since the two panels may be on different-sized screens.
+    # Each panel's share of its screen, for the preliminary fit that picks the
+    # figure's size. The word labels are *not* sized from it: they are sized
+    # from the subplot space each panel finally gets (round-8 review, finding 5).
     panel_widths = [w if is_stacked else w // 2 for w, _ in panel_canvas]
     # B's stimulus page. Inheriting A's is right for a same-dataset pair (two
     # readings of the same text) and *wrong* across datasets — a PoTeC panel with
@@ -6168,6 +6200,66 @@ def _make_split_comparison_figure(
         if show_legend
         else None
     )
+
+    # Each panel's own axis ranges, from its trial's words + fixations (CMP-8).
+    panel_ranges = []
+    for idx, spec in enumerate(trial_specs):
+        panel_cw, panel_ch = panel_canvas[idx]
+        x_range, y_range, *_ = _compute_axis_ranges(
+            panel_cw,
+            panel_ch,
+            (spec["trial_fix"], "x", "y"),
+            (spec["raw_gaze"], "x", "y"),
+            word_frames=[spec["trial_words"]] if not spec["trial_words"].empty else [],
+            fit_to_monitor=fit_to_monitor,
+        )
+        panel_ranges.append((x_range, y_range))
+    panel_fits = [
+        _fit_display_size(
+            panel_widths[idx], panel_canvas[idx][1], x_range, y_range, spatial_axes=True
+        )
+        for idx, (x_range, y_range) in enumerate(panel_ranges)
+    ]
+
+    # The figure's size, chosen before anything is sized against it. Two panels
+    # that share a screen reuse the last panel's fit — which keeps every
+    # same-dataset figure the size it always was. Two *different* screens can't
+    # be reconciled that way: the panels then get the widest / tallest fit of the
+    # pair, so neither is clipped. (Which is also why the caption in
+    # `tabs._render_comparison_figure` says sizes are not comparable across
+    # panels — each panel is true-to-scale on its own monitor.)
+    if settings.canvas_b is None:
+        panel_w, panel_h = panel_fits[-1]
+    else:
+        panel_w = max(fit[0] for fit in panel_fits)
+        panel_h = max(fit[1] for fit in panel_fits)
+    if is_stacked:
+        total_width = panel_w
+        total_height = panel_h * 2 + 40
+    else:  # side-by-side
+        total_width = panel_w * 2
+        total_height = panel_h
+    # A colour bar gets its own reserved band — below the panels when horizontal
+    # (VIZ-23), to their right when vertical — so the figure grows by it rather
+    # than Plotly's automargin shrinking the panels under text already sized for
+    # them (the single-trial figure's `_decoration_margins` rule).
+    has_colorbar = _comparison_metric_colorbar(
+        fixations, color_by, show_colorbars
+    ) or bool(show_heatmap and show_colorbars and any(heatmap_maps))
+    colorbar_horizontal = colorbar_orientation == "Horizontal"
+    bottom_px = _COLORBAR_BOTTOM_PX if (has_colorbar and colorbar_horizontal) else 0
+    right_px = _COLORBAR_RESERVE_PX if (has_colorbar and not colorbar_horizontal) else 0
+    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
+    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
+    # The t band was the (now-removed) title; keep a slim band only for the
+    # optional legend.
+    top_px = (_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0
+    figure_width = total_width + grid_left + right_px
+    figure_height = total_height + bottom_px + grid_bottom
+    plot_area = (
+        max(figure_width - grid_left - right_px, 1),
+        max(figure_height - top_px - bottom_px - grid_bottom, 1),
+    )
     if is_stacked:
         fig = make_subplots(
             rows=2,
@@ -6183,8 +6275,29 @@ def _make_split_comparison_figure(
             subplot_titles=subplot_titles,
         )
 
+    # Each panel's data→screen scale, from the subplot space it actually gets
+    # in the final figure: its domain's share of the plot area, then the
+    # equal-aspect constraint, which shrinks whichever side has room to spare.
+    panel_displays = []
+    for idx, (x_range, y_range) in enumerate(panel_ranges):
+        suffix = "" if idx == 0 else str(idx + 1)
+        x_domain = fig.layout[f"xaxis{suffix}"].domain
+        y_domain = fig.layout[f"yaxis{suffix}"].domain
+        scale = _display_scale(
+            x_range,
+            y_range,
+            (x_domain[1] - x_domain[0]) * plot_area[0],
+            (y_domain[1] - y_domain[0]) * plot_area[1],
+        )
+        panel_displays.append(
+            (
+                scale,
+                round((x_range[1] - x_range[0]) * scale),
+                round((y_range[0] - y_range[1]) * scale),
+            )
+        )
+
     all_shapes: list = []
-    panel_fits: list = []
     for idx, spec in enumerate(trial_specs):
         if is_stacked:
             row, col = idx + 1, 1
@@ -6196,17 +6309,8 @@ def _make_split_comparison_figure(
         yref = f"y{axis_suffix}"
         trial_words = spec["trial_words"]
         trial_fix = spec["trial_fix"]
-        panel_cw, panel_ch = panel_canvas[idx]
-        panel_fit_w = panel_widths[idx]
-
-        x_range, y_range, *_ = _compute_axis_ranges(
-            panel_cw,
-            panel_ch,
-            (trial_fix, "x", "y"),
-            (spec["raw_gaze"], "x", "y"),
-            word_frames=[trial_words] if not trial_words.empty else [],
-            fit_to_monitor=fit_to_monitor,
-        )
+        x_range, y_range = panel_ranges[idx]
+        panel_scale, panel_display_w, panel_display_h = panel_displays[idx]
 
         # Stimulus-page background image (VIZ-4/23), one per panel, UNDER every
         # trace — `row`/`col` bind it to this panel's axes. B may carry its own
@@ -6294,14 +6398,7 @@ def _make_split_comparison_figure(
             category_colors=category_colors[idx],
         )
 
-        panel_fits.append(
-            _fit_display_size(
-                panel_fit_w, panel_ch, x_range, y_range, spatial_axes=True
-            )
-        )
         if show_word_labels:
-            pf_w, pf_h = panel_fits[idx]
-            panel_scale = _display_scale(x_range, y_range, pf_w, pf_h)
             _add_word_label_trace(
                 fig,
                 trial_words,
@@ -6349,8 +6446,8 @@ def _make_split_comparison_figure(
             spacing=coordinate_grid_spacing,
             x_range=x_range,
             y_range=y_range,
-            rendered_width=panel_fit_w,
-            rendered_height=panel_ch,
+            rendered_width=panel_display_w,
+            rendered_height=panel_display_h,
         )
         fig.update_layout(**{xaxis_key: xaxis, yaxis_key: yaxis})
 
@@ -6367,51 +6464,11 @@ def _make_split_comparison_figure(
         )
     _add_category_legend(fig, category_legend, category_label or "")
 
-    # Fit the figure to the data aspect just like the single-trial plot.
-    # `x_range` / `y_range` from the inner loop are per-trial; the two trials
-    # being compared usually share the paragraph (same canvas), so re-using
-    # the last loop iteration's fit is fine — and keeps every same-dataset
-    # figure byte-identical to the pre-CMP-8 one.
-    #
-    # Two *different* screens can't be reconciled that way: the panels then get
-    # the widest / tallest fit of the pair, so neither is clipped. (Which is also
-    # why the caption in `tabs._render_comparison_figure` says sizes are not
-    # comparable across panels — each panel is true-to-scale on its own monitor.)
-    if settings.canvas_b is None:
-        panel_w, panel_h = panel_fits[-1]
-    else:
-        panel_w = max(fit[0] for fit in panel_fits)
-        panel_h = max(fit[1] for fit in panel_fits)
-    if is_stacked:
-        total_width = panel_w
-        total_height = panel_h * 2 + 40
-    else:  # side-by-side
-        total_width = panel_w * 2
-        total_height = panel_h
-    # A horizontal colorbar (VIZ-23) sits under the panels, so it gets its own
-    # reserved band instead of overlapping them. Vertical keeps today's layout.
-    bottom_px = (
-        _COLORBAR_BOTTOM_PX
-        if (
-            colorbar_orientation == "Horizontal"
-            and _comparison_metric_colorbar(fixations, color_by, show_colorbars)
-        )
-        else 0
-    )
-    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
-    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     fig.update_layout(
-        height=total_height + bottom_px + grid_bottom,
-        width=total_width + grid_left,
+        height=figure_height,
+        width=figure_width,
         autosize=False,
-        # The t=40 band was the (now-removed) title; keep a slim band only for the
-        # optional legend.
-        margin=dict(
-            l=grid_left,
-            r=0,
-            t=(_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0,
-            b=bottom_px + grid_bottom,
-        ),
+        margin=dict(l=grid_left, r=right_px, t=top_px, b=bottom_px + grid_bottom),
         legend=dict(
             orientation="h",
             yanchor="bottom",

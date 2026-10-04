@@ -1930,6 +1930,30 @@ def _plotly_literal_values(series: pd.Series) -> pd.Series:
     )
 
 
+def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
+    """The fixation-number labels of a replay trail, one per row of ``ordered``.
+
+    The trial's own ``order_in_trial``, as the static figure, the comparison
+    and every hover show it — so a later screen of a multipart trial, a
+    fixation window or a *Discard* keeps its gaps (501, 502 …) instead of
+    renumbering what is left 1..n. A row without an index gets no label, as
+    on the static figure. Only a frame with no usable index at all (no column,
+    or nothing numeric in it) falls back to the ordinal 1..n."""
+    n = len(ordered)
+    if "order_in_trial" in ordered.columns:
+        values = pd.to_numeric(ordered["order_in_trial"], errors="coerce")
+        if values.notna().any():
+            return [
+                ""
+                if pd.isna(value)
+                else str(int(value))
+                if float(value).is_integer()
+                else f"{value:g}"
+                for value in values.tolist()
+            ]
+    return [str(j + 1) for j in range(n)]
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
@@ -3733,6 +3757,8 @@ def _scanpath_anim_specs(
     marker_size_range,
     scale: str = DEFAULT_MARKER_SIZE_SCALE,
     duration_range=DEFAULT_MARKER_DURATION_RANGE,
+    *,
+    size_ranges=None,
 ):
     """Build per-scanpath animation specs from (fixations, color, label) entries.
 
@@ -3744,11 +3770,18 @@ def _scanpath_anim_specs(
     by their durations. Marker sizes use the figure's duration scale; under the
     relative scale they span the COMBINED durations, so equal durations still
     render at equal sizes across the two scanpaths.
+
+    ``size_ranges`` (one per entry, default ``marker_size_range`` for each)
+    gives each scanpath its own size range, as Compare's per-scanpath *Size*
+    does: the duration scale stays shared — one duration is one *fraction* of
+    the range on either side — and each side maps that fraction onto its own.
     """
     from .measures import rebased_fixation_onsets
 
+    if size_ranges is None:
+        size_ranges = [marker_size_range] * len(entries)
     specs = []
-    for fix_df, color, label in entries:
+    for (fix_df, color, label), size_range in zip(entries, size_ranges):
         if fix_df is None or fix_df.empty:
             continue
         ordered = fix_df.sort_values("timestamp_ms").reset_index(drop=True)
@@ -3765,19 +3798,26 @@ def _scanpath_anim_specs(
                 end=float(onsets[-1] + dur.iloc[-1]),
                 color=color,
                 label=label,
+                size_range=tuple(size_range),
             )
         )
     if specs:
-        combined = _compute_marker_sizes(
+        # Each duration's place on the shared scale, 0..1, then sized in its
+        # own scanpath's range — identical to sizing the combined durations in
+        # one range whenever the two ranges agree.
+        fractions = _compute_marker_sizes(
             pd.concat([s["dur"] for s in specs], ignore_index=True),
-            marker_size_range,
+            (0.0, 1.0),
             scale,
             duration_range,
         )
         cursor = 0
         for s in specs:
             n = len(s["dur"])
-            s["sizes"] = np.asarray(combined[cursor : cursor + n], dtype=float)
+            low, high = s["size_range"]
+            s["sizes"] = low + np.asarray(
+                fractions[cursor : cursor + n], dtype=float
+            ) * (high - low)
             cursor += n
     return specs
 
@@ -4489,9 +4529,12 @@ def _render_scanpath_animation(
     ``reading_span / playback_speed`` — exactly what
     :func:`animation_playback_ms` reports (and the side panel quotes).
 
-    With two scanpaths the trails take the two comparison colours, order numbers
-    are tinted per-scanpath, and an optional A/B legend (``show_legend``) names
-    them; word boxes/labels come from
+    With two scanpaths each trail wears its own style — ``style_a`` /
+    ``style_b``, resolved exactly as :func:`make_comparison_figure` resolves
+    them (colour, size range, opacity, hollow markers and the saccade line's
+    colour, dash and width; the comparison palette where a style names none) —
+    order numbers are tinted per-scanpath, and an optional A/B legend
+    (``show_legend``) names them; word boxes/labels come from
     ``words`` (scanpath A), so the overlay is meaningful for two readings of the
     same text. With one scanpath the behaviour matches the classic single replay
     (order numbers honour ``order_font_color``, no legend).
@@ -4645,7 +4688,10 @@ def _render_scanpath_animation(
         words,
         words_b if (words_b is not None and not words_b.empty) else words,
     ]
-    # CMP-24: B carries its own flags when it was given any.
+    # CMP-24: B carries its own flags when it was given any — as
+    # `fixation_flags_b`, or (the comparison's spelling) on its `style_b`.
+    if fixation_flags_b is None and isinstance(settings.style_b, dict):
+        fixation_flags_b = settings.style_b.get("fixation_flags")
     flags_b = flags if fixation_flags_b is None else (fixation_flags_b or {})
     entry_flags = [flags, flags_b]
     if flags:
@@ -4653,24 +4699,46 @@ def _render_scanpath_animation(
     if flags_b and fixations_b is not None:
         fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags_b)
 
+    # The co-animation draws each scanpath in its own style, exactly as the
+    # static comparison resolves it (`_comparison_scanpath_style`: the rail's
+    # per-scanpath colour, size range, opacity, hollow and saccade line). A lone
+    # scanpath keeps the figure-wide settings below.
+    dual_input = all(f is not None and not f.empty for f in (fixations, fixations_b))
+    styles = [
+        _comparison_scanpath_style(
+            idx, style, default_marker_size_range=marker_size_range
+        )
+        for idx, style in enumerate((settings.style_a, settings.style_b))
+    ]
     entries = [
-        (fixations, COMPARISON_PALETTE[0], label_a),
-        (fixations_b, COMPARISON_PALETTE[1], label_b),
+        (frame, style["fix_color"], label)
+        for frame, style, label in zip(
+            (fixations, fixations_b), styles, (label_a, label_b)
+        )
     ]
     specs = _scanpath_anim_specs(
-        entries, marker_size_range, **_settings_size_scale(settings)
+        entries,
+        marker_size_range,
+        size_ranges=[
+            style["marker_size_range"] if dual_input else marker_size_range
+            for style in styles
+        ],
+        **_settings_size_scale(settings),
     )
     # The words frame each surviving scanpath is flagged against (the highlight
     # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
     # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
     surviving = [
-        (w, f)
-        for (fix_df, _color, _label), w, f in zip(entries, entry_words, entry_flags)
+        (w, f, style)
+        for (fix_df, _color, _label), w, f, style in zip(
+            entries, entry_words, entry_flags, styles
+        )
         if fix_df is not None and not fix_df.empty
     ]
-    for spec, (spec_words, spec_flags) in zip(specs, surviving):
+    for spec, (spec_words, spec_flags, spec_style) in zip(specs, surviving):
         spec["words"] = spec_words
         spec["flags"] = spec_flags
+        spec["style"] = spec_style
     dual = len(specs) > 1
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
@@ -4807,10 +4875,8 @@ def _render_scanpath_animation(
         )
         # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
         # default for variable-size scatter markers (VIZ-6).
-        marker["opacity"] = float(
-            fixation_opacity if fixation_opacity is not None else 1.0
-        )
-        if hollow_fixations:
+        marker["opacity"] = float(s["opacity"] if s["opacity"] is not None else 1.0)
+        if s["hollow"]:
             marker = _make_hollow(marker)
         return marker
 
@@ -4875,9 +4941,19 @@ def _render_scanpath_animation(
             else list(fixation_hover_fields)
         )
         s["customdata"], s["hovertemplate"] = _hover_payload(ordered, hover_fields)
-        s["order_text"] = [str(j + 1) for j in range(n_total)]
+        # The trial's own fixation numbers, as the static figure and the hover
+        # show them — never a 1..n renumbering of what survived the filters.
+        s["order_text"] = _fixation_order_labels(ordered)
         s["text_color"] = s["color"] if dual else order_font_color
-        s["sac_color"] = s["color"] if dual else saccade_color
+        # The co-animation draws each scanpath's saccades, opacity and hollow
+        # markers from its own style, as the static comparison does; a lone
+        # replay keeps the figure-wide settings.
+        style = s["style"]
+        s["sac_color"] = style["saccade_color"] if dual else saccade_color
+        s["sac_width"] = style["saccade_width"] if dual else saccade_width
+        s["sac_dash"] = style["saccade_style"] if dual else saccade_style
+        s["opacity"] = style["opacity"] if dual else fixation_opacity
+        s["hollow"] = bool(style["hollow"]) if dual else hollow_fixations
         s["curr_outline"] = s["color"] if dual else CURRENT_FIX_OUTLINE
         s["curr_outline_w"] = 2.5 if dual else 2
 
@@ -4935,7 +5011,7 @@ def _render_scanpath_animation(
                     y=sac_y,
                     mode="lines",
                     line=dict(
-                        color=s["sac_color"], width=saccade_width, dash=saccade_style
+                        color=s["sac_color"], width=s["sac_width"], dash=s["sac_dash"]
                     ),
                     showlegend=False,
                     legendgroup=s["label"],
@@ -5144,8 +5220,8 @@ def _render_scanpath_animation(
                         mode="lines",
                         line=dict(
                             color=s["sac_color"],
-                            width=saccade_width,
-                            dash=saccade_style,
+                            width=s["sac_width"],
+                            dash=s["sac_dash"],
                         ),
                     )
                 )
@@ -7913,8 +7989,6 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "illustration_reasons",
         "trial_labels",
         "layout",
-        "style_a",
-        "style_b",
         # CMP-8 §4 — B-side geometry, read only by the split comparison layouts.
         "canvas_b",
         "background_image_b",
@@ -8008,10 +8082,34 @@ def build_scanpath_replay(
             fixations_b=fixations_b,
             words_b=words_b,
         )
-    _maybe_add_duration_key(
-        fig, resolved, resolved.marker_size_range, fixations, fixations_b
-    )
+    size_range = replay_size_key_range(resolved, fixations, fixations_b)
+    if size_range is not None:
+        _maybe_add_duration_key(fig, resolved, size_range, fixations, fixations_b)
     return fig, frame_step_ms
+
+
+def replay_size_key_range(
+    settings: FigureSettings,
+    fixations: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None = None,
+) -> tuple[int, int] | None:
+    """The size range a replay's duration key draws, or ``None`` for no key.
+
+    A lone replay's is the figure's ``marker_size_range``. A co-animation sizes
+    each scanpath in its own style's range, and one key serves both only while
+    those agree — as on the static comparison."""
+    dual = all(f is not None and not f.empty for f in (fixations, fixations_b))
+    if not dual:
+        return tuple(settings.marker_size_range)
+    ranges = {
+        tuple(
+            _comparison_scanpath_style(
+                idx, style, default_marker_size_range=settings.marker_size_range
+            )["marker_size_range"]
+        )
+        for idx, style in enumerate((settings.style_a, settings.style_b))
+    }
+    return ranges.pop() if len(ranges) == 1 else None
 
 
 def _require_one_screen_per_reading(

@@ -1367,7 +1367,8 @@ def _render_parser() -> argparse.ArgumentParser:
             "with KEY one of fix_color / saccade_color (#RRGGBB), saccade_style "
             f"({'|'.join(SACCADE_DASH_OPTIONS.values())}), saccade_width (px), "
             "marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — "
-            f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5.",
+            f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5. Applies to "
+            "the --animate co-animation too.",
         )
     # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /

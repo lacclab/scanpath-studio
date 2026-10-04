@@ -1238,7 +1238,15 @@ _CLI_EMITTERS: dict[str, Any] = {
 #: the animation builder takes them and ignores them — so there they are left
 #: off the command rather than written into one `render` would reject.
 _COMPARE_ONLY_SETTINGS = frozenset(
-    {"show_legend", "label_a", "label_b", "compare_stimulus", "fixation_flags_b"}
+    {
+        "show_legend",
+        "label_a",
+        "label_b",
+        "compare_stimulus",
+        "fixation_flags_b",
+        "style_a",
+        "style_b",
+    }
 )
 
 

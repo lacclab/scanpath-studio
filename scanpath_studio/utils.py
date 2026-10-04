@@ -534,7 +534,7 @@ def _merge_trial_level_sources(
     return merged
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=16)
 def _trial_level_sort_columns_cached(
     _combos: pd.DataFrame,
     _words: pd.DataFrame | None,
@@ -661,16 +661,49 @@ def trial_sort_keys(
                 # A column the dataset itself calls "Trial ID" is not the menu's.
                 label = f"{label} ({col})"
             keys[label] = series
-    picker_ids = (
-        set(combos[trial_field].dropna().astype(str).unique()) if has_combos else set()
+    keys.update(
+        _trial_sort_stats_cached(
+            combos if has_combos else None,
+            words,
+            fixations,
+            trial_field,
+            cache_key=(
+                frame_fingerprint(combos) if has_combos else None,
+                frame_fingerprint(words),
+                frame_fingerprint(fixations),
+                trial_field,
+            ),
+        )
     )
+    return keys
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _trial_sort_stats_cached(
+    _combos: pd.DataFrame | None,
+    _words: pd.DataFrame | None,
+    _fixations: pd.DataFrame | None,
+    trial_field: str,
+    cache_key,
+) -> dict[str, pd.Series]:
+    """The computed sort keys (fixation count, reading time …), label → Series.
+
+    Each is a group-by over the whole fixation or word table, ~0.25 s a rerun
+    at OneStop scale for numbers that change only with the trial pool."""
+    del cache_key  # explicit hash input for the underscore-prefixed frames
+    picker_ids = (
+        set(_combos[trial_field].dropna().astype(str).unique())
+        if _combos is not None
+        else set()
+    )
+    stats: dict[str, pd.Series] = {}
     for label, (which, how) in _TRIAL_SORT_STATS.items():
-        frame = fixations if which == "fixations" else words
+        frame = _fixations if which == "fixations" else _words
         field = _effective_trial_field(frame, trial_field, picker_ids)
         series = _per_trial_stat(frame, field or trial_field, how)
         if not series.empty:
-            keys[label] = series
-    return keys
+            stats[label] = series
+    return stats
 
 
 def sort_trial_options(
@@ -688,7 +721,8 @@ def sort_trial_options(
         return sorted(options)
     lookup = key_series.to_dict()
     ranked = [o for o in options if o in lookup and pd.notna(lookup[o])]
-    unranked = sorted(o for o in options if o not in ranked)
+    ranked_set = set(ranked)
+    unranked = sorted(o for o in options if o not in ranked_set)
     ranked.sort(key=lambda o: (_sort_scalar(lookup[o]), o), reverse=descending)
     return ranked + unranked
 
@@ -1114,10 +1148,13 @@ def _select_trial_none_mode(
     # Trial id → participant, so the annotation markers (UX-6) can be looked up per
     # option (annotations are keyed by (participant, trial)). Mirrors the selection
     # below, which resolves the participant the same way (first matching row).
-    trial_to_pid = {
-        str(r[trial_field]): r["participant_id"]
-        for r in available_trials.to_dict("records")
-    }
+    trial_to_pid = dict(
+        zip(
+            available_trials[trial_field].astype(str),
+            available_trials["participant_id"],
+            strict=True,
+        )
+    )
 
     # Populated once the ⇅ popover has rendered (below), and read by the option
     # labels — so an active ordering is *visible* in the picker itself rather than
@@ -1131,12 +1168,24 @@ def _select_trial_none_mode(
         composite_cols=st.session_state.get("_composite_trial_columns") or (),
     )
 
+    # Read once: a picker lists every trial in the pool, and going through the
+    # session for each one cost ~0.3 s a rerun at OneStop scale.
+    store = store_for_prefix()
+
     def _option_label(value: str) -> str:
-        marks = annotation_markers(trial_to_pid.get(value), value)
+        marks = annotation_markers(trial_to_pid.get(value), value, store=store)
         base = id_display.get(value) or _trial_display_label(value)
         label = f"{marks} {base}" if marks else base
         shown = sort_values.get(value)
         return f"{label}  ·  {shown}" if shown else label
+
+    # Every label made once, when the order is final (filled below): Streamlit
+    # formats each option more than once a run, and the slider's twice over.
+    option_labels: dict[str, str] = {}
+
+    def _format_option(value: str) -> str:
+        label = option_labels.get(value)
+        return _option_label(value) if label is None else label
 
     n_trials = len(trial_options)
     picker_label = "**Select Trial**"
@@ -1179,7 +1228,7 @@ def _select_trial_none_mode(
         def _slider_label(value: str) -> str:
             # index/TOTAL first, then the id — the slider doubles as the counter,
             # so a separate "Trial X / N" caption is redundant.
-            return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_option_label(value)}"
+            return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_format_option(value)}"
 
         # UX-64 — ONE row for everything: [dataset] [trial] [slider] [◀ ▶ ⇅ 🔎].
         # The Narrow-by row above it is gone; its filters live in the 🔎 popover
@@ -1267,6 +1316,8 @@ def _select_trial_none_mode(
     if trial_id_key:
         st.session_state[trial_options_snapshot_key(key_prefix)] = list(trial_options)
 
+    option_labels.update({opt: _option_label(opt) for opt in trial_options})
+
     # The label is shown so its help "?" icon (the type-to-search hint) is visible
     # — a collapsed label hides it.
     selected_trial_label = sel_col.selectbox(
@@ -1279,7 +1330,7 @@ def _select_trial_none_mode(
         # left A and B on different texts). A value the pool no longer holds is
         # still reset above, before this renders.
         persist_state="session",
-        format_func=_option_label,
+        format_func=_format_option,
         help=" ".join(
             filter(
                 None,
@@ -1294,6 +1345,7 @@ def _select_trial_none_mode(
     )
 
     if n_trials > 1:
+        slider_labels = {opt: _slider_label(opt) for opt in trial_options}
         with slider_col:
             st.select_slider(
                 "Trial",
@@ -1305,7 +1357,9 @@ def _select_trial_none_mode(
                 "plus the sort value when one is active); the dropdown jumps to "
                 "a specific id.",
                 label_visibility="collapsed",
-                format_func=_slider_label,
+                format_func=lambda value: (
+                    slider_labels.get(value) or _slider_label(value)
+                ),
             )
         # Both step buttons in the keyed container reserved above, which styles.py
         # lays out as a flex ROW (a Streamlit vertical block stacks its children

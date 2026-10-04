@@ -3635,6 +3635,28 @@ def declared_schemas_for(data_choice: str) -> tuple[dict | None, dict | None]:
     return dict(EYEGENBENCH_WORD_SCHEMA), dict(EYEGENBENCH_FIX_SCHEMA)
 
 
+def _proposed_schema(kind: str, frame: pd.DataFrame) -> dict:
+    """The auto-detected mapping for one raw table, worked out once per table.
+
+    Detection reads values, not only names — BUG-99 rules a box column out when
+    no cell parses as a number — so on a corpus-sized table it costs ~1.4 s
+    (OneStop's IA report). The answer depends on nothing but the table, and
+    `prepare_data` asks again on every rerun, so it is kept per table under the
+    table's fingerprint. A copy is handed out: callers layer their own fields on.
+    """
+    propose = propose_word_schema if kind == "words" else propose_fix_schema
+    return dict(
+        frame_cache(
+            f"proposed_{kind}_schema",
+            frame_fingerprint(frame),
+            lambda: propose(frame),
+            # PERF-18: as the normalized pair keeps two, so going back to the
+            # previous dataset doesn't detect its columns again.
+            keep=2,
+        )
+    )
+
+
 def prepare_data(
     words_df: pd.DataFrame,
     fixations_df: pd.DataFrame,
@@ -3683,7 +3705,7 @@ def prepare_data(
 
     if has_words:
         word_proposed = _apply_declared_schema(
-            propose_word_schema(words_df), declared_word_schema
+            _proposed_schema("words", words_df), declared_word_schema
         )
         if allow_override:
             word_schema = column_mapping_ui(
@@ -3714,7 +3736,7 @@ def prepare_data(
 
     if has_fixations:
         fix_proposed = _apply_declared_schema(
-            propose_fix_schema(fixations_df), declared_fix_schema
+            _proposed_schema("fixations", fixations_df), declared_fix_schema
         )
         if allow_override:
             fix_schema = column_mapping_ui(

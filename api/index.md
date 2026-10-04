@@ -577,6 +577,9 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `style_a`                   | `None`                                         | `--style-a`                                               | animate, compare |
 | `style_b`                   | `None`                                         | `--style-b`                                               | animate, compare |
 | `text_color`                | `'#000000'`                                    | `--text-color`                                            | all three        |
+| `word_box_color`            | `'#6c757d'`                                    | `--word-box-color`                                        | all three        |
+| `word_box_fill_color`       | `'#646464'`                                    | `--word-box-fill-color`                                   | all three        |
+| `word_box_fill_opacity`     | `0.05`                                         | `--word-box-fill-opacity`                                 | all three        |
 | `word_heatmap_col`          | `None`                                         | `--word-heatmap-col`                                      | plot, compare    |
 | `word_heatmap_title`        | `None`                                         | `--word-heatmap-title`                                    | plot, compare    |
 | `word_hover_fields`         | `list` (see `figure_options()`)                | `--word-hover-fields`                                     | all three        |

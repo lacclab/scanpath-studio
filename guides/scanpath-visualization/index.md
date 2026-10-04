@@ -17,15 +17,16 @@ Pick a trial above the plot. The **filter funnel** beside it narrows the list by
 
 The **Plot controls** rail starts with **Animate**, **Compare**, four design presets and a palette. Below them, each section is one line: a switch, and a **▾** with its settings.
 
-| Section         | What it controls                                        |
-| --------------- | ------------------------------------------------------- |
-| Fixations       | markers: size, colour, order                            |
-| Saccades        | lines and arrows, coloured by direction or reading type |
-| Stimulus        | text, word boxes, stimulus image, font and background   |
-| Heatmap         | where fixations concentrate, by count or duration       |
-| Raw gaze        | the gaze samples as recorded                            |
-| Filter          | which fixations and saccades are drawn                  |
-| Figure & canvas | screen framing, axes and grid, title and labels         |
+| Section         | What it controls                                                   |
+| --------------- | ------------------------------------------------------------------ |
+| Fixations       | markers: size, colour, order                                       |
+| Saccades        | lines and arrows, coloured by direction or reading type            |
+| Stimulus        | text, span highlight, stimulus image, font and background          |
+| Word boxes      | each word's interest area: outline colour, fill colour and opacity |
+| Heatmap         | where fixations concentrate, by count or duration                  |
+| Raw gaze        | the gaze samples as recorded                                       |
+| Filter          | which fixations and saccades are drawn                             |
+| Figure & canvas | screen framing, axes and grid, title and labels, hover fields      |
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials and filters, so they stay comparable; its number boxes take any endpoint, beyond the data shown too. The word-box heatmap's range is in dwell time per word (ms), the summed duration of the fixations in each box. **Interpolated** and **Duration mass** scale their smoothed density to each figure's own peak, so their range is greyed; it is kept for Word boxes and Compare, which always draws word boxes.
 

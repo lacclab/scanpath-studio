@@ -1942,6 +1942,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>Duplicate rows in a participant, trial or text table that do not disagree are now combined field by field, so a value that only a later row holds is kept, and the table's status line says how many rows were combined. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
 <li>The animated replay builds about three times faster on a long trial, most of all with heart or hollow fixations or colour by a value. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
 <li>The duration-weighted word heatmap's colour bar is titled Dwell time per word (ms), so it is not mistaken for a fixation-duration colour bar beside it. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
+<li>Word boxes have their own section on the plot rail, with an outline colour, a fill colour and a fill opacity (also <code>--word-box-color</code> / <code>--word-box-fill-color</code> / <code>--word-box-fill-opacity</code> and the matching <code>word_box_*</code> API options), and the word and fixation hover fields moved together under Figure &amp; canvas → Hover. (<a href="https://github.com/lacclab/scanpath-studio/issues/343">#343</a>)</li>
 </ul>
 <p><strong>Removed</strong></p>
 <ul>

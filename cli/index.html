@@ -2182,6 +2182,10 @@ B's frames directly.</p>
 <td><code>--separable-layers</code></td>
 </tr>
 <tr>
+<td>style the word boxes</td>
+<td><code>--word-box-color</code>, <code>--word-box-fill-color</code>, <code>--word-box-fill-opacity</code> (0 draws outlines only)</td>
+</tr>
+<tr>
 <td>draw the raw gaze</td>
 <td><code>--raw-gaze PATH…</code> (or <code>--sample-raw-gaze</code> with <code>--sample</code>), <code>--raw-gaze-schema JSON</code>, <code>--raw-gaze-color</code>, <code>--raw-gaze-marker-size</code>, <code>--raw-gaze-opacity</code>; <code>--no-raw-gaze</code> loads the table but hides the layer</td>
 </tr>
@@ -3159,6 +3163,24 @@ with the default and help <code>--help</code> prints.</p>
 <td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection (same shape as <code>--fix-schema</code>); needed only when a column isn't recognised.</td>
 </tr>
 <tr>
+<td><code>--word-box-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Word-box outline colour (default: #6c757d). A comparison outlines each reading's boxes in its scanpath colour instead.</td>
+</tr>
+<tr>
+<td><code>--word-box-fill-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Word-box fill colour, drawn at <code>--word-box-fill-opacity</code>: #rrggbb, #rgb or rgb(r, g, b) (default: #646464).</td>
+</tr>
+<tr>
+<td><code>--word-box-fill-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Word-box fill opacity, 0–1; 0 draws outlines only (default: 0.05).</td>
+</tr>
+<tr>
 <td><code>--raw-gaze-color</code></td>
 <td><code>COLOR</code></td>
 <td>—</td>
@@ -3451,7 +3473,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 07:31:10 UTC">October 4, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 11:24:48 UTC">October 4, 2026</span>
   </span>
 
     

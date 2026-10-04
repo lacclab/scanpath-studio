@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import html
 import math
 import struct
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -1906,6 +1907,29 @@ def _hover_label(field: str, table: str | None = None) -> str:
     )
 
 
+def _plotly_literal(value: str) -> str:
+    """``value`` as Plotly text that draws its own characters.
+
+    Plotly reads a text or hover string as its pseudo-HTML, so a stimulus
+    token ``<b>bold</b>`` drew bold and ``x<br>y`` broke the line (round-8
+    review, finding 6). Escaping ``&``, ``<`` and ``>`` — the entities Plotly
+    decodes back — keeps the dataset's characters on screen. Applied once, to
+    data values only, at the figure boundary: the tables, exports and the
+    app's own markup (a hover's ``<br>``) are left as they are."""
+    return html.escape(value, quote=False)
+
+
+def _plotly_literal_values(series: pd.Series) -> pd.Series:
+    """A hover column with its strings made literal (:func:`_plotly_literal`);
+    numbers, missing values and anything else pass through untouched."""
+    if pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series):
+        return series
+    return series.map(
+        lambda value: _plotly_literal(value) if isinstance(value, str) else value,
+        na_action="ignore",
+    )
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
@@ -1930,7 +1954,7 @@ def _hover_payload(
             if field == "line_idx" and line_display is not None
             else frame[field]
         )
-        values.append(series)
+        values.append(_plotly_literal_values(series))
         suffix = " ms" if field.endswith("_ms") else ""
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
@@ -1969,7 +1993,10 @@ def _add_word_label_trace(
         else:
             # Legacy API/deep-link behaviour: the three fixed identity lines plus
             # the old single optional measure.
-            customdata_parts: list[pd.Series] = [words["word_id"], line_display]
+            customdata_parts: list[pd.Series] = [
+                _plotly_literal_values(words["word_id"]),
+                line_display,
+            ]
             hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
             if word_hover_measure and word_hover_measure in words.columns:
                 label = _table_label(
@@ -1977,7 +2004,9 @@ def _add_word_label_trace(
                 ) or _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
                 suffix = " ms" if word_hover_measure.endswith("_ms") else ""
                 hover += f"<br>{label}: %{{customdata[2]}}{suffix}"
-                customdata_parts.append(words[word_hover_measure])
+                customdata_parts.append(
+                    _plotly_literal_values(words[word_hover_measure])
+                )
             hover += "<extra></extra>"
             customdata = pd.concat(customdata_parts, axis=1)
     # Per-word text color: the highlight colour for highlighted words when the
@@ -2005,8 +2034,11 @@ def _add_word_label_trace(
         rtl = rtl.fillna(False).astype(bool)
     box_x0, _, box_x1, _ = word_box_bounds(words)
     label_x = (box_x0 + box_x1) / 2.0
+    # The word drawn as its own characters (finding 6 — not as Plotly markup),
+    # escaped before the direction isolates wrap it; the hover's `%{text}`
+    # reads this same string, so it shows the word literally too.
     label_text = [
-        f"\u2067{value}\u2069" if is_rtl else value
+        f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
         for value, is_rtl in zip(words["text"].astype(str), rtl)
     ]
     trace = go.Scatter(

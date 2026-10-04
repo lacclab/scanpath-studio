@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import html
 import math
 import struct
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -1906,6 +1907,53 @@ def _hover_label(field: str, table: str | None = None) -> str:
     )
 
 
+def _plotly_literal(value: str) -> str:
+    """``value`` as Plotly text that draws its own characters.
+
+    Plotly reads a text or hover string as its pseudo-HTML, so a stimulus
+    token ``<b>bold</b>`` drew bold and ``x<br>y`` broke the line (round-8
+    review, finding 6). Escaping ``&``, ``<`` and ``>`` — the entities Plotly
+    decodes back — keeps the dataset's characters on screen. Applied once, to
+    data values only, at the figure boundary: the tables, exports and the
+    app's own markup (a hover's ``<br>``) are left as they are."""
+    return html.escape(value, quote=False)
+
+
+def _plotly_literal_values(series: pd.Series) -> pd.Series:
+    """A hover column with its strings made literal (:func:`_plotly_literal`);
+    numbers, missing values and anything else pass through untouched."""
+    if pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series):
+        return series
+    return series.map(
+        lambda value: _plotly_literal(value) if isinstance(value, str) else value,
+        na_action="ignore",
+    )
+
+
+def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
+    """The fixation-number labels of a replay trail, one per row of ``ordered``.
+
+    The trial's own ``order_in_trial``, as the static figure, the comparison
+    and every hover show it — so a later screen of a multipart trial, a
+    fixation window or a *Discard* keeps its gaps (501, 502 …) instead of
+    renumbering what is left 1..n. A row without an index gets no label, as
+    on the static figure. Only a frame with no usable index at all (no column,
+    or nothing numeric in it) falls back to the ordinal 1..n."""
+    n = len(ordered)
+    if "order_in_trial" in ordered.columns:
+        values = pd.to_numeric(ordered["order_in_trial"], errors="coerce")
+        if values.notna().any():
+            return [
+                ""
+                if pd.isna(value)
+                else str(int(value))
+                if float(value).is_integer()
+                else f"{value:g}"
+                for value in values.tolist()
+            ]
+    return [str(j + 1) for j in range(n)]
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
@@ -1930,7 +1978,7 @@ def _hover_payload(
             if field == "line_idx" and line_display is not None
             else frame[field]
         )
-        values.append(series)
+        values.append(_plotly_literal_values(series))
         suffix = " ms" if field.endswith("_ms") else ""
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
@@ -1969,7 +2017,10 @@ def _add_word_label_trace(
         else:
             # Legacy API/deep-link behaviour: the three fixed identity lines plus
             # the old single optional measure.
-            customdata_parts: list[pd.Series] = [words["word_id"], line_display]
+            customdata_parts: list[pd.Series] = [
+                _plotly_literal_values(words["word_id"]),
+                line_display,
+            ]
             hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
             if word_hover_measure and word_hover_measure in words.columns:
                 label = _table_label(
@@ -1977,7 +2028,9 @@ def _add_word_label_trace(
                 ) or _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
                 suffix = " ms" if word_hover_measure.endswith("_ms") else ""
                 hover += f"<br>{label}: %{{customdata[2]}}{suffix}"
-                customdata_parts.append(words[word_hover_measure])
+                customdata_parts.append(
+                    _plotly_literal_values(words[word_hover_measure])
+                )
             hover += "<extra></extra>"
             customdata = pd.concat(customdata_parts, axis=1)
     # Per-word text color: the highlight colour for highlighted words when the
@@ -2005,8 +2058,11 @@ def _add_word_label_trace(
         rtl = rtl.fillna(False).astype(bool)
     box_x0, _, box_x1, _ = word_box_bounds(words)
     label_x = (box_x0 + box_x1) / 2.0
+    # The word drawn as its own characters (finding 6 — not as Plotly markup),
+    # escaped before the direction isolates wrap it; the hover's `%{text}`
+    # reads this same string, so it shows the word literally too.
     label_text = [
-        f"\u2067{value}\u2069" if is_rtl else value
+        f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
         for value, is_rtl in zip(words["text"].astype(str), rtl)
     ]
     trace = go.Scatter(
@@ -2560,18 +2616,40 @@ def _render_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
+    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
+    # so the saccade layer AND the fixation markers below draw from the snapped
+    # positions. Off by default. The axis ranges above and the heatmaps below keep
+    # the RECORDED positions (raw gaze density); only the drawn connectors and
+    # markers move — and the Arc headroom just below, which must follow them.
+    render_fix = fixations
+    if (
+        fixation_snap_to_word
+        and spatial_axes
+        and not fixations.empty
+        and not words.empty
+    ):
+        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
+
     # VIZ-9 arc mode: the saccade arches rise ABOVE the fixations, so reserve
     # headroom at the top of the view (smaller y — the axis is inverted) or a wide
     # top-line saccade's apex gets clipped. Computed from the exact Bézier apex of
     # each segment so it's tight; only in Arc mode, so the default view is
-    # unchanged.
+    # unchanged. The apexes come from ``render_fix`` — the coordinates the
+    # connectors are actually drawn from — because Snap to word can both widen a
+    # saccade (two near-edge fixations jump to their words' centres) and lift its
+    # endpoints (to the box tops), so an arc over the recorded positions would
+    # under-reserve and clip the snapped curve.
+    # Whole-monitor view (``fit_to_monitor``): the range still starts as the full
+    # screen, and this only ever *grows* it — past the screen's top edge when an
+    # arc would reach it — so a schematic arc is never silently cut off; the
+    # screen itself is always shown whole.
     if (
         spatial_axes
         and saccade_render_mode == "Arc"
         and show_saccades
-        and len(fixations) > 1
+        and len(render_fix) > 1
     ):
-        fo = fixations.sort_values("timestamp_ms")
+        fo = render_fix.sort_values("timestamp_ms")
         fxv = pd.to_numeric(fo[x_field], errors="coerce").to_numpy(dtype=float)
         fyv = pd.to_numeric(fo[y_field], errors="coerce").to_numpy(dtype=float)
         apex = np.inf
@@ -2782,18 +2860,6 @@ def _render_scanpath_figure(
                     heatmap_norm=heatmap_norm,
                     colorbar_style=cb_style,
                 )
-
-    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
-    # so the saccade layer AND the fixation markers below draw from the snapped
-    # positions (the heatmap above keeps the raw gaze density). Off by default.
-    render_fix = fixations
-    if (
-        fixation_snap_to_word
-        and spatial_axes
-        and not fixations.empty
-        and not words.empty
-    ):
-        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
 
     # Saccade lines + optional direction arrowheads (drawn before the fixation
     # markers so the dots sit on top).
@@ -3461,25 +3527,70 @@ def _add_density_heatmap(
     )
 
 
-def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
-    """Normalized 1-D Gaussian kernel, truncated at 3 sigma."""
+# Past this radius the 3-sigma kernel's normalising sum is taken from the
+# Gaussian integral (exact to float precision at that sigma) instead of an array.
+_KERNEL_EXACT_SUM_RADIUS = 100_000
+
+
+def _gaussian_kernel_1d(sigma: float, max_radius: int | None = None) -> np.ndarray:
+    """Normalized 1-D Gaussian kernel, truncated at 3 sigma.
+
+    ``max_radius`` builds only the central taps, still normalized over the full
+    3-sigma kernel, so a short axis pays for the taps it can reach rather than
+    for sigma.
+    """
     radius = max(1, round(sigma * 3))
-    offsets = np.arange(-radius, radius + 1)
+    keep = radius if max_radius is None else max(0, min(radius, max_radius))
+    offsets = np.arange(-keep, keep + 1)
     kernel = np.exp(-(offsets**2) / (2.0 * sigma * sigma))
-    return kernel / kernel.sum()
+    if keep == radius:
+        total = kernel.sum()
+    elif radius <= _KERNEL_EXACT_SUM_RADIUS:
+        full = np.arange(-radius, radius + 1)
+        total = np.exp(-(full**2) / (2.0 * sigma * sigma)).sum()
+    else:
+        total = (
+            sigma
+            * math.sqrt(2.0 * math.pi)
+            * math.erf((radius + 0.5) / (sigma * math.sqrt(2.0)))
+        )
+    return kernel / total
+
+
+def _blur_axis(grid: np.ndarray, sigma: float, axis: int) -> np.ndarray:
+    """Zero-padded Gaussian blur along one axis; the output keeps ``grid``'s shape.
+
+    ``np.convolve(mode="same")`` returns the *kernel's* length when the kernel
+    is longer than the axis, which shifted the density off its coordinates on a
+    short grid. Padding by the kernel radius and taking the ``valid`` part pins
+    the length. Taps further out than the axis is long only ever meet the zero
+    padding, so they are never built: the result is identical and the cost is
+    bounded by the axis length, not by sigma.
+    """
+    kernel = _gaussian_kernel_1d(sigma, max_radius=grid.shape[axis] - 1)
+    radius = len(kernel) // 2
+    pad = [(0, 0)] * grid.ndim
+    pad[axis] = (radius, radius)
+    padded = np.pad(grid, pad)
+    return np.apply_along_axis(
+        lambda v: np.convolve(v, kernel, mode="valid"), axis, padded
+    )
 
 
 def _gaussian_blur_2d(
     grid: np.ndarray, sigma_rows: float, sigma_cols: float
 ) -> np.ndarray:
-    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage)."""
+    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage).
+
+    Zero padding beyond the grid; the output always has the input's shape.
+    """
     out = grid.astype(float)
+    if out.size == 0:
+        return out
     if sigma_rows and sigma_rows > 0:
-        k = _gaussian_kernel_1d(sigma_rows)
-        out = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 0, out)
+        out = _blur_axis(out, sigma_rows, 0)
     if sigma_cols and sigma_cols > 0:
-        k = _gaussian_kernel_1d(sigma_cols)
-        out = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 1, out)
+        out = _blur_axis(out, sigma_cols, 1)
     return out
 
 
@@ -3491,6 +3602,20 @@ _INTERP_SIGMA_FRAC = 0.02  # sigma as a fraction of the larger data span
 _INTERP_MIN_SIGMA_PX = 8.0
 _INTERP_OPACITY = 0.45
 _INTERP_FLOOR_FRAC = 0.02  # cells below this fraction of the peak render transparent
+_INTERP_MIN_CELLS = 10  # cells along the narrower axis, at least
+_INTERP_MIN_SPAN_PX = 2.0 * _INTERP_MIN_SIGMA_PX  # narrower than this is widened
+
+
+def _interp_grid_shape(x_span: float, y_span: float) -> tuple[int, int]:
+    """(nx, ny) cells: _INTERP_GRID on the wider axis, a proportional share on
+    the other, each within [_INTERP_MIN_CELLS, _INTERP_GRID]."""
+    wide = max(x_span, y_span)
+    narrow = min(x_span, y_span)
+    share = round(_INTERP_GRID * narrow / wide) if wide > 0 else _INTERP_GRID
+    n_narrow = int(min(_INTERP_GRID, max(_INTERP_MIN_CELLS, share)))
+    if x_span >= y_span:
+        return _INTERP_GRID, n_narrow
+    return n_narrow, _INTERP_GRID
 
 
 def _add_interpolated_heatmap(
@@ -3537,8 +3662,24 @@ def _add_interpolated_heatmap(
 
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
-    nx = _INTERP_GRID
-    ny = max(10, round(_INTERP_GRID * y_span / x_span))
+    sigma_px = float(
+        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
+    )
+    # An axis with (next to) no extent — coincident fixations, one row or one
+    # column of a fixation-only import — is widened around its centre to the
+    # blob's own size (±3 sigma), so the edges match the span the cells and the
+    # sigma are computed from, and the blob is round rather than a sliver.
+    min_span = max(_INTERP_MIN_SPAN_PX, 6.0 * sigma_px)
+    if x_max - x_min < _INTERP_MIN_SPAN_PX:
+        x_mid = (x_min + x_max) / 2.0
+        x_min, x_max, x_span = x_mid - min_span / 2, x_mid + min_span / 2, min_span
+    if y_max - y_min < _INTERP_MIN_SPAN_PX:
+        y_mid = (y_min + y_max) / 2.0
+        y_min, y_max, y_span = y_mid - min_span / 2, y_mid + min_span / 2, min_span
+    # The cell budget sits on the wider axis and the other gets its share of it,
+    # so neither axis, nor the grid, outgrows _INTERP_GRID (squared): a tall,
+    # narrow reading must not ask for 240 cells across and 96,000 down.
+    nx, ny = _interp_grid_shape(x_span, y_span)
     x_edges = np.linspace(x_min, x_max, nx + 1)
     y_edges = np.linspace(y_min, y_max, ny + 1)
     # histogram2d returns shape (nx, ny); transpose so rows index y, cols index x
@@ -3546,9 +3687,6 @@ def _add_interpolated_heatmap(
     hist, _, _ = np.histogram2d(xs, ys, bins=[x_edges, y_edges], weights=w)
     grid = hist.T
 
-    sigma_px = float(
-        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
-    )
     blurred = _gaussian_blur_2d(
         grid, sigma_rows=sigma_px / (y_span / ny), sigma_cols=sigma_px / (x_span / nx)
     )
@@ -3619,6 +3757,8 @@ def _scanpath_anim_specs(
     marker_size_range,
     scale: str = DEFAULT_MARKER_SIZE_SCALE,
     duration_range=DEFAULT_MARKER_DURATION_RANGE,
+    *,
+    size_ranges=None,
 ):
     """Build per-scanpath animation specs from (fixations, color, label) entries.
 
@@ -3630,11 +3770,18 @@ def _scanpath_anim_specs(
     by their durations. Marker sizes use the figure's duration scale; under the
     relative scale they span the COMBINED durations, so equal durations still
     render at equal sizes across the two scanpaths.
+
+    ``size_ranges`` (one per entry, default ``marker_size_range`` for each)
+    gives each scanpath its own size range, as Compare's per-scanpath *Size*
+    does: the duration scale stays shared — one duration is one *fraction* of
+    the range on either side — and each side maps that fraction onto its own.
     """
     from .measures import rebased_fixation_onsets
 
+    if size_ranges is None:
+        size_ranges = [marker_size_range] * len(entries)
     specs = []
-    for fix_df, color, label in entries:
+    for (fix_df, color, label), size_range in zip(entries, size_ranges):
         if fix_df is None or fix_df.empty:
             continue
         ordered = fix_df.sort_values("timestamp_ms").reset_index(drop=True)
@@ -3651,19 +3798,26 @@ def _scanpath_anim_specs(
                 end=float(onsets[-1] + dur.iloc[-1]),
                 color=color,
                 label=label,
+                size_range=tuple(size_range),
             )
         )
     if specs:
-        combined = _compute_marker_sizes(
+        # Each duration's place on the shared scale, 0..1, then sized in its
+        # own scanpath's range — identical to sizing the combined durations in
+        # one range whenever the two ranges agree.
+        fractions = _compute_marker_sizes(
             pd.concat([s["dur"] for s in specs], ignore_index=True),
-            marker_size_range,
+            (0.0, 1.0),
             scale,
             duration_range,
         )
         cursor = 0
         for s in specs:
             n = len(s["dur"])
-            s["sizes"] = np.asarray(combined[cursor : cursor + n], dtype=float)
+            low, high = s["size_range"]
+            s["sizes"] = low + np.asarray(
+                fractions[cursor : cursor + n], dtype=float
+            ) * (high - low)
             cursor += n
     return specs
 
@@ -4375,9 +4529,12 @@ def _render_scanpath_animation(
     ``reading_span / playback_speed`` — exactly what
     :func:`animation_playback_ms` reports (and the side panel quotes).
 
-    With two scanpaths the trails take the two comparison colours, order numbers
-    are tinted per-scanpath, and an optional A/B legend (``show_legend``) names
-    them; word boxes/labels come from
+    With two scanpaths each trail wears its own style — ``style_a`` /
+    ``style_b``, resolved exactly as :func:`make_comparison_figure` resolves
+    them (colour, size range, opacity, hollow markers and the saccade line's
+    colour, dash and width; the comparison palette where a style names none) —
+    order numbers are tinted per-scanpath, and an optional A/B legend
+    (``show_legend``) names them; word boxes/labels come from
     ``words`` (scanpath A), so the overlay is meaningful for two readings of the
     same text. With one scanpath the behaviour matches the classic single replay
     (order numbers honour ``order_font_color``, no legend).
@@ -4531,7 +4688,10 @@ def _render_scanpath_animation(
         words,
         words_b if (words_b is not None and not words_b.empty) else words,
     ]
-    # CMP-24: B carries its own flags when it was given any.
+    # CMP-24: B carries its own flags when it was given any — as
+    # `fixation_flags_b`, or (the comparison's spelling) on its `style_b`.
+    if fixation_flags_b is None and isinstance(settings.style_b, dict):
+        fixation_flags_b = settings.style_b.get("fixation_flags")
     flags_b = flags if fixation_flags_b is None else (fixation_flags_b or {})
     entry_flags = [flags, flags_b]
     if flags:
@@ -4539,24 +4699,46 @@ def _render_scanpath_animation(
     if flags_b and fixations_b is not None:
         fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags_b)
 
+    # The co-animation draws each scanpath in its own style, exactly as the
+    # static comparison resolves it (`_comparison_scanpath_style`: the rail's
+    # per-scanpath colour, size range, opacity, hollow and saccade line). A lone
+    # scanpath keeps the figure-wide settings below.
+    dual_input = all(f is not None and not f.empty for f in (fixations, fixations_b))
+    styles = [
+        _comparison_scanpath_style(
+            idx, style, default_marker_size_range=marker_size_range
+        )
+        for idx, style in enumerate((settings.style_a, settings.style_b))
+    ]
     entries = [
-        (fixations, COMPARISON_PALETTE[0], label_a),
-        (fixations_b, COMPARISON_PALETTE[1], label_b),
+        (frame, style["fix_color"], label)
+        for frame, style, label in zip(
+            (fixations, fixations_b), styles, (label_a, label_b)
+        )
     ]
     specs = _scanpath_anim_specs(
-        entries, marker_size_range, **_settings_size_scale(settings)
+        entries,
+        marker_size_range,
+        size_ranges=[
+            style["marker_size_range"] if dual_input else marker_size_range
+            for style in styles
+        ],
+        **_settings_size_scale(settings),
     )
     # The words frame each surviving scanpath is flagged against (the highlight
     # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
     # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
     surviving = [
-        (w, f)
-        for (fix_df, _color, _label), w, f in zip(entries, entry_words, entry_flags)
+        (w, f, style)
+        for (fix_df, _color, _label), w, f, style in zip(
+            entries, entry_words, entry_flags, styles
+        )
         if fix_df is not None and not fix_df.empty
     ]
-    for spec, (spec_words, spec_flags) in zip(specs, surviving):
+    for spec, (spec_words, spec_flags, spec_style) in zip(specs, surviving):
         spec["words"] = spec_words
         spec["flags"] = spec_flags
+        spec["style"] = spec_style
     dual = len(specs) > 1
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
@@ -4693,10 +4875,8 @@ def _render_scanpath_animation(
         )
         # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
         # default for variable-size scatter markers (VIZ-6).
-        marker["opacity"] = float(
-            fixation_opacity if fixation_opacity is not None else 1.0
-        )
-        if hollow_fixations:
+        marker["opacity"] = float(s["opacity"] if s["opacity"] is not None else 1.0)
+        if s["hollow"]:
             marker = _make_hollow(marker)
         return marker
 
@@ -4761,9 +4941,19 @@ def _render_scanpath_animation(
             else list(fixation_hover_fields)
         )
         s["customdata"], s["hovertemplate"] = _hover_payload(ordered, hover_fields)
-        s["order_text"] = [str(j + 1) for j in range(n_total)]
+        # The trial's own fixation numbers, as the static figure and the hover
+        # show them — never a 1..n renumbering of what survived the filters.
+        s["order_text"] = _fixation_order_labels(ordered)
         s["text_color"] = s["color"] if dual else order_font_color
-        s["sac_color"] = s["color"] if dual else saccade_color
+        # The co-animation draws each scanpath's saccades, opacity and hollow
+        # markers from its own style, as the static comparison does; a lone
+        # replay keeps the figure-wide settings.
+        style = s["style"]
+        s["sac_color"] = style["saccade_color"] if dual else saccade_color
+        s["sac_width"] = style["saccade_width"] if dual else saccade_width
+        s["sac_dash"] = style["saccade_style"] if dual else saccade_style
+        s["opacity"] = style["opacity"] if dual else fixation_opacity
+        s["hollow"] = bool(style["hollow"]) if dual else hollow_fixations
         s["curr_outline"] = s["color"] if dual else CURRENT_FIX_OUTLINE
         s["curr_outline_w"] = 2.5 if dual else 2
 
@@ -4821,7 +5011,7 @@ def _render_scanpath_animation(
                     y=sac_y,
                     mode="lines",
                     line=dict(
-                        color=s["sac_color"], width=saccade_width, dash=saccade_style
+                        color=s["sac_color"], width=s["sac_width"], dash=s["sac_dash"]
                     ),
                     showlegend=False,
                     legendgroup=s["label"],
@@ -5030,8 +5220,8 @@ def _render_scanpath_animation(
                         mode="lines",
                         line=dict(
                             color=s["sac_color"],
-                            width=saccade_width,
-                            dash=saccade_style,
+                            width=s["sac_width"],
+                            dash=s["sac_dash"],
                         ),
                     )
                 )
@@ -5974,9 +6164,9 @@ def _make_split_comparison_figure(
     # byte-identical to the pre-CMP-8 figure.
     canvas_b = settings.canvas_b or (canvas_width, canvas_height)
     panel_canvas = [(canvas_width, canvas_height), (int(canvas_b[0]), int(canvas_b[1]))]
-    # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
-    # size word labels true-to-scale within each panel. Per-panel rather than one
-    # value, since the two panels may be on different-sized screens.
+    # Each panel's share of its screen, for the preliminary fit that picks the
+    # figure's size. The word labels are *not* sized from it: they are sized
+    # from the subplot space each panel finally gets (round-8 review, finding 5).
     panel_widths = [w if is_stacked else w // 2 for w, _ in panel_canvas]
     # B's stimulus page. Inheriting A's is right for a same-dataset pair (two
     # readings of the same text) and *wrong* across datasets — a PoTeC panel with
@@ -6086,6 +6276,66 @@ def _make_split_comparison_figure(
         if show_legend
         else None
     )
+
+    # Each panel's own axis ranges, from its trial's words + fixations (CMP-8).
+    panel_ranges = []
+    for idx, spec in enumerate(trial_specs):
+        panel_cw, panel_ch = panel_canvas[idx]
+        x_range, y_range, *_ = _compute_axis_ranges(
+            panel_cw,
+            panel_ch,
+            (spec["trial_fix"], "x", "y"),
+            (spec["raw_gaze"], "x", "y"),
+            word_frames=[spec["trial_words"]] if not spec["trial_words"].empty else [],
+            fit_to_monitor=fit_to_monitor,
+        )
+        panel_ranges.append((x_range, y_range))
+    panel_fits = [
+        _fit_display_size(
+            panel_widths[idx], panel_canvas[idx][1], x_range, y_range, spatial_axes=True
+        )
+        for idx, (x_range, y_range) in enumerate(panel_ranges)
+    ]
+
+    # The figure's size, chosen before anything is sized against it. Two panels
+    # that share a screen reuse the last panel's fit — which keeps every
+    # same-dataset figure the size it always was. Two *different* screens can't
+    # be reconciled that way: the panels then get the widest / tallest fit of the
+    # pair, so neither is clipped. (Which is also why the caption in
+    # `tabs._render_comparison_figure` says sizes are not comparable across
+    # panels — each panel is true-to-scale on its own monitor.)
+    if settings.canvas_b is None:
+        panel_w, panel_h = panel_fits[-1]
+    else:
+        panel_w = max(fit[0] for fit in panel_fits)
+        panel_h = max(fit[1] for fit in panel_fits)
+    if is_stacked:
+        total_width = panel_w
+        total_height = panel_h * 2 + 40
+    else:  # side-by-side
+        total_width = panel_w * 2
+        total_height = panel_h
+    # A colour bar gets its own reserved band — below the panels when horizontal
+    # (VIZ-23), to their right when vertical — so the figure grows by it rather
+    # than Plotly's automargin shrinking the panels under text already sized for
+    # them (the single-trial figure's `_decoration_margins` rule).
+    has_colorbar = _comparison_metric_colorbar(
+        fixations, color_by, show_colorbars
+    ) or bool(show_heatmap and show_colorbars and any(heatmap_maps))
+    colorbar_horizontal = colorbar_orientation == "Horizontal"
+    bottom_px = _COLORBAR_BOTTOM_PX if (has_colorbar and colorbar_horizontal) else 0
+    right_px = _COLORBAR_RESERVE_PX if (has_colorbar and not colorbar_horizontal) else 0
+    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
+    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
+    # The t band was the (now-removed) title; keep a slim band only for the
+    # optional legend.
+    top_px = (_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0
+    figure_width = total_width + grid_left + right_px
+    figure_height = total_height + bottom_px + grid_bottom
+    plot_area = (
+        max(figure_width - grid_left - right_px, 1),
+        max(figure_height - top_px - bottom_px - grid_bottom, 1),
+    )
     if is_stacked:
         fig = make_subplots(
             rows=2,
@@ -6101,8 +6351,29 @@ def _make_split_comparison_figure(
             subplot_titles=subplot_titles,
         )
 
+    # Each panel's data→screen scale, from the subplot space it actually gets
+    # in the final figure: its domain's share of the plot area, then the
+    # equal-aspect constraint, which shrinks whichever side has room to spare.
+    panel_displays = []
+    for idx, (x_range, y_range) in enumerate(panel_ranges):
+        suffix = "" if idx == 0 else str(idx + 1)
+        x_domain = fig.layout[f"xaxis{suffix}"].domain
+        y_domain = fig.layout[f"yaxis{suffix}"].domain
+        scale = _display_scale(
+            x_range,
+            y_range,
+            (x_domain[1] - x_domain[0]) * plot_area[0],
+            (y_domain[1] - y_domain[0]) * plot_area[1],
+        )
+        panel_displays.append(
+            (
+                scale,
+                round((x_range[1] - x_range[0]) * scale),
+                round((y_range[0] - y_range[1]) * scale),
+            )
+        )
+
     all_shapes: list = []
-    panel_fits: list = []
     for idx, spec in enumerate(trial_specs):
         if is_stacked:
             row, col = idx + 1, 1
@@ -6114,17 +6385,8 @@ def _make_split_comparison_figure(
         yref = f"y{axis_suffix}"
         trial_words = spec["trial_words"]
         trial_fix = spec["trial_fix"]
-        panel_cw, panel_ch = panel_canvas[idx]
-        panel_fit_w = panel_widths[idx]
-
-        x_range, y_range, *_ = _compute_axis_ranges(
-            panel_cw,
-            panel_ch,
-            (trial_fix, "x", "y"),
-            (spec["raw_gaze"], "x", "y"),
-            word_frames=[trial_words] if not trial_words.empty else [],
-            fit_to_monitor=fit_to_monitor,
-        )
+        x_range, y_range = panel_ranges[idx]
+        panel_scale, panel_display_w, panel_display_h = panel_displays[idx]
 
         # Stimulus-page background image (VIZ-4/23), one per panel, UNDER every
         # trace — `row`/`col` bind it to this panel's axes. B may carry its own
@@ -6212,14 +6474,7 @@ def _make_split_comparison_figure(
             category_colors=category_colors[idx],
         )
 
-        panel_fits.append(
-            _fit_display_size(
-                panel_fit_w, panel_ch, x_range, y_range, spatial_axes=True
-            )
-        )
         if show_word_labels:
-            pf_w, pf_h = panel_fits[idx]
-            panel_scale = _display_scale(x_range, y_range, pf_w, pf_h)
             _add_word_label_trace(
                 fig,
                 trial_words,
@@ -6267,8 +6522,8 @@ def _make_split_comparison_figure(
             spacing=coordinate_grid_spacing,
             x_range=x_range,
             y_range=y_range,
-            rendered_width=panel_fit_w,
-            rendered_height=panel_ch,
+            rendered_width=panel_display_w,
+            rendered_height=panel_display_h,
         )
         fig.update_layout(**{xaxis_key: xaxis, yaxis_key: yaxis})
 
@@ -6285,51 +6540,11 @@ def _make_split_comparison_figure(
         )
     _add_category_legend(fig, category_legend, category_label or "")
 
-    # Fit the figure to the data aspect just like the single-trial plot.
-    # `x_range` / `y_range` from the inner loop are per-trial; the two trials
-    # being compared usually share the paragraph (same canvas), so re-using
-    # the last loop iteration's fit is fine — and keeps every same-dataset
-    # figure byte-identical to the pre-CMP-8 one.
-    #
-    # Two *different* screens can't be reconciled that way: the panels then get
-    # the widest / tallest fit of the pair, so neither is clipped. (Which is also
-    # why the caption in `tabs._render_comparison_figure` says sizes are not
-    # comparable across panels — each panel is true-to-scale on its own monitor.)
-    if settings.canvas_b is None:
-        panel_w, panel_h = panel_fits[-1]
-    else:
-        panel_w = max(fit[0] for fit in panel_fits)
-        panel_h = max(fit[1] for fit in panel_fits)
-    if is_stacked:
-        total_width = panel_w
-        total_height = panel_h * 2 + 40
-    else:  # side-by-side
-        total_width = panel_w * 2
-        total_height = panel_h
-    # A horizontal colorbar (VIZ-23) sits under the panels, so it gets its own
-    # reserved band instead of overlapping them. Vertical keeps today's layout.
-    bottom_px = (
-        _COLORBAR_BOTTOM_PX
-        if (
-            colorbar_orientation == "Horizontal"
-            and _comparison_metric_colorbar(fixations, color_by, show_colorbars)
-        )
-        else 0
-    )
-    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
-    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     fig.update_layout(
-        height=total_height + bottom_px + grid_bottom,
-        width=total_width + grid_left,
+        height=figure_height,
+        width=figure_width,
         autosize=False,
-        # The t=40 band was the (now-removed) title; keep a slim band only for the
-        # optional legend.
-        margin=dict(
-            l=grid_left,
-            r=0,
-            t=(_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0,
-            b=bottom_px + grid_bottom,
-        ),
+        margin=dict(l=grid_left, r=right_px, t=top_px, b=bottom_px + grid_bottom),
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -7774,8 +7989,6 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "illustration_reasons",
         "trial_labels",
         "layout",
-        "style_a",
-        "style_b",
         # CMP-8 §4 — B-side geometry, read only by the split comparison layouts.
         "canvas_b",
         "background_image_b",
@@ -7869,10 +8082,34 @@ def build_scanpath_replay(
             fixations_b=fixations_b,
             words_b=words_b,
         )
-    _maybe_add_duration_key(
-        fig, resolved, resolved.marker_size_range, fixations, fixations_b
-    )
+    size_range = replay_size_key_range(resolved, fixations, fixations_b)
+    if size_range is not None:
+        _maybe_add_duration_key(fig, resolved, size_range, fixations, fixations_b)
     return fig, frame_step_ms
+
+
+def replay_size_key_range(
+    settings: FigureSettings,
+    fixations: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None = None,
+) -> tuple[int, int] | None:
+    """The size range a replay's duration key draws, or ``None`` for no key.
+
+    A lone replay's is the figure's ``marker_size_range``. A co-animation sizes
+    each scanpath in its own style's range, and one key serves both only while
+    those agree — as on the static comparison."""
+    dual = all(f is not None and not f.empty for f in (fixations, fixations_b))
+    if not dual:
+        return tuple(settings.marker_size_range)
+    ranges = {
+        tuple(
+            _comparison_scanpath_style(
+                idx, style, default_marker_size_range=settings.marker_size_range
+            )["marker_size_range"]
+        )
+        for idx, style in enumerate((settings.style_a, settings.style_b))
+    }
+    return ranges.pop() if len(ranges) == 1 else None
 
 
 def _require_one_screen_per_reading(

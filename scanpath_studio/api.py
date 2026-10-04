@@ -2326,7 +2326,16 @@ def animate_scanpath(
     CMP-24: in a co-animation ``fix_index_range`` windows A only (the app's
     rule — A's slider never cuts B), ``fix_index_range_b`` windows B, and
     ``fixation_flags_b`` gives B flags of its own (``None``: A's
-    ``fixation_flags``).
+    ``fixation_flags``, or the ``fixation_flags`` of ``style_b`` when it
+    names some).
+
+    ``style_a`` / ``style_b`` style the two scanpaths of a co-animation as they
+    style [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]' — the
+    same keys (``fix_color``, ``marker_size_range``, ``opacity``, ``hollow``,
+    ``saccade_color``, ``saccade_style``, ``saccade_width``), resolved the same
+    way, so the replay and the static comparison draw each reading alike. The
+    replay has no saccade-class filter, so a style naming ``saccade_classes``
+    raises ``ValueError``. A lone replay ignores both.
 
     ``trial_b=(participant, trial)`` co-animates a second reading on the same
     clock, like the app's Animate + Compare. It is looked up in ``words_b`` /
@@ -2393,6 +2402,14 @@ def animate_scanpath(
             f"Options not supported by the animation: {sorted(unknown)}. "
             f"Valid overrides: {sorted(valid)}."
         )
+    for side in ("style_a", "style_b"):
+        style = animation_overrides.get(side)
+        if isinstance(style, dict) and style.get("saccade_classes") is not None:
+            raise ValueError(
+                f"{side}['saccade_classes'] filters a comparison figure's "
+                "saccades; the co-animation has no saccade-class filter. Drop "
+                "it, or draw the pair with compare_scanpaths."
+            )
     named = {k: v for k, v in animation_overrides.items() if k in explicit}
     # Same defaults as the static figure for every option both builders share, so
     # `plot_scanpath` and `animate_scanpath` don't render the same trial

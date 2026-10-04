@@ -1,0 +1,1 @@
+Side-by-side and stacked comparisons size each panel's word labels from the space that panel finally gets, so text stays in proportion to its boxes when the two readings come from different screens, and a colour bar no longer shrinks the panels under it.

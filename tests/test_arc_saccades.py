@@ -191,3 +191,141 @@ class TestArcFigureSmoke:
         assert list(arrows[0].y) == pytest.approx(arced[1])
         assert arced[0] == pytest.approx(straight[0])
         assert np.all(np.asarray(arced[1]) < np.asarray(straight[1]))
+
+
+# ---------------------------------------------------------------------------
+# Arc + Snap to word: the headroom follows the coordinates the arc is drawn from
+# ---------------------------------------------------------------------------
+
+
+def _snap_trial(
+    word_x: list[float],
+    word_y: list[float],
+    word_w: list[float],
+    fix_x: list[float],
+    fix_y: list[float],
+    word_ids: list | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Words + one fixation per word (or ``word_ids``), in reading order."""
+    n_words = len(word_x)
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p"] * n_words,
+            "trial_id": ["t"] * n_words,
+            "text_id": ["text"] * n_words,
+            "word_id": list(range(1, n_words + 1)),
+            "text": [f"w{i}" for i in range(n_words)],
+            "x": word_x,
+            "y": word_y,
+            "width": word_w,
+            "height": [20.0] * n_words,
+            "line_idx": [0] * n_words,
+        }
+    )
+    n_fix = len(fix_x)
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p"] * n_fix,
+            "trial_id": ["t"] * n_fix,
+            "text_id": ["text"] * n_fix,
+            "x": fix_x,
+            "y": fix_y,
+            "duration_ms": [200.0] * n_fix,
+            "timestamp_ms": [100.0 * i for i in range(n_fix)],
+            "fixation_id": list(range(1, n_fix + 1)),
+            "order_in_trial": list(range(1, n_fix + 1)),
+            "word_id": word_ids if word_ids is not None else list(range(1, n_fix + 1)),
+        }
+    )
+    return words, fixations
+
+
+def _arc_figure(words, fixations, **overrides) -> go.Figure:
+    kwargs = dict(
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        show_words=True,
+        scale_text_to_boxes=False,
+        duration_size_legend=False,
+        saccade_render_mode="Arc",
+    )
+    kwargs.update(overrides)
+    return make_scanpath_figure(words, fixations, **kwargs)
+
+
+def _curve_top(fig: go.Figure) -> float:
+    """Smallest drawn y (highest point — the axis is inverted) of the saccades."""
+    curve = next(t for t in fig.data if t.name == "saccades")
+    return min(float(y) for y in curve.y if y is not None)
+
+
+def _view_top(fig: go.Figure) -> float:
+    return float(fig.layout.yaxis.range[1])
+
+
+class TestSnappedArcFitsTheView:
+    """Arc + Snap used to reserve headroom from the recorded fixations but draw
+    from the snapped ones, so the apex left the plot (round-8 review, finding 3)."""
+
+    def test_wide_boxes_near_shared_edge(self):
+        # The review's repro: two 250-px boxes, fixations 2 px apart at their
+        # shared edge, snapped 250 px apart at the box centres.
+        words, fix = _snap_trial(
+            [100.0, 350.0], [100.0, 100.0], [250.0, 250.0], [349.0, 351.0], [110, 110]
+        )
+        fig = _arc_figure(words, fix, fixation_snap_to_word=True)
+        assert _curve_top(fig) >= _view_top(fig)
+
+    def test_different_endpoint_heights(self):
+        # Two lines of wide words: the snap lifts each endpoint to its box top
+        # and widens the jump, so the steep arc crests above the higher one.
+        words, fix = _snap_trial(
+            [50.0, 450.0], [100.0, 160.0], [300.0, 300.0], [345.0, 455.0], [118, 178]
+        )
+        fig = _arc_figure(words, fix, fixation_snap_to_word=True)
+        assert _curve_top(fig) >= _view_top(fig)
+
+    def test_unsnapped_arc_is_unchanged(self):
+        # Snap off: the headroom still comes from the recorded positions — a
+        # 2-px saccade barely arches, so Arc reserves only its 2 % margin.
+        words, fix = _snap_trial(
+            [100.0, 350.0], [100.0, 100.0], [250.0, 250.0], [349.0, 351.0], [110, 110]
+        )
+        fig = _arc_figure(words, fix)
+        straight = _arc_figure(words, fix, saccade_render_mode="Straight")
+        assert _curve_top(fig) >= _view_top(fig)
+        margin = 0.02 * abs(straight.layout.yaxis.range[0] - _view_top(straight))
+        apex = _curve_top(fig)
+        assert _view_top(fig) == pytest.approx(
+            min(_view_top(straight), apex - margin), abs=0.5
+        )
+
+    def test_unassigned_fixations_keep_their_recorded_position(self):
+        # word_id NaN: the snap leaves the fixation where it was, so the arc and
+        # its headroom are the unsnapped ones.
+        words, fix = _snap_trial(
+            [100.0, 350.0],
+            [100.0, 100.0],
+            [250.0, 250.0],
+            [20.0, 700.0],
+            [110, 110],
+            word_ids=[np.nan, np.nan],
+        )
+        snapped = _arc_figure(words, fix, fixation_snap_to_word=True)
+        unsnapped = _arc_figure(words, fix)
+        assert list(snapped.layout.yaxis.range) == list(unsnapped.layout.yaxis.range)
+        assert _curve_top(snapped) == pytest.approx(_curve_top(unsnapped))
+        assert _curve_top(snapped) >= _view_top(snapped)
+
+    def test_whole_monitor_shows_the_screen_and_never_clips_the_arc(self):
+        # Words on the screen's first line: the snapped arc rises past the top
+        # edge, so the whole-monitor view grows above 0 instead of cutting it.
+        words, fix = _snap_trial(
+            [0.0, 400.0], [10.0, 10.0], [400.0, 400.0], [395.0, 405.0], [20, 20]
+        )
+        fig = _arc_figure(words, fix, fixation_snap_to_word=True, fit_to_monitor=True)
+        assert fig.layout.yaxis.range[0] == 600
+        assert _view_top(fig) < 0
+        assert _curve_top(fig) >= _view_top(fig)
+        assert list(fig.layout.xaxis.range) == [0, 800]

@@ -271,6 +271,7 @@ from scanpath_studio.multipart import (
     screen_canvas_size,
 )
 from scanpath_studio.plots import (
+    COMPARE_FILTER_STYLE_KEYS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _discard_flagged_fixations,
@@ -297,6 +298,7 @@ from scanpath_studio.plots import (
     make_word_profile_figure,
     make_word_rate_figure,
     replay_page,
+    replay_size_key_range,
     set_replay_clock,
 )
 from scanpath_studio.session_keys import (
@@ -4776,6 +4778,34 @@ def _release_animation_task(task_key: tuple) -> None:
         st.session_state.pop(ANIM_TASK_KEY, None)
 
 
+# The figure-wide marker and saccade look a co-animation never reads (each
+# scanpath draws in its own style), at the builder's defaults.
+_DUAL_UNREAD_STYLE = {
+    field.name: field.default
+    for field in dataclass_fields(FigureSettings)
+    if field.name
+    in {
+        "fixation_color",
+        "fixation_opacity",
+        "hollow_fixations",
+        "marker_size_range",
+        "order_font_color",
+        "saccade_color",
+        "saccade_style",
+        "saccade_width",
+    }
+}
+
+
+def _replay_style(style: dict | None) -> dict | None:
+    """A per-scanpath comparison style as the co-animation takes it: its look
+    only, without the filters (`COMPARE_FILTER_STYLE_KEYS`) `_plan_replay`
+    hands the replay another way."""
+    if not style:
+        return None
+    return {k: v for k, v in style.items() if k not in COMPARE_FILTER_STYLE_KEYS}
+
+
 @dataclass(frozen=True)
 class _ReplayPlan:
     """What one replay is built from, worked out before its card opens (UX-169).
@@ -4855,6 +4885,12 @@ def _plan_replay(
         autoplay=viz_settings.get("anim_autoplay", True),
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
+        # The co-animation wears the rail's per-scanpath styles, as the static
+        # comparison does. Their filters are left behind: B's flags already
+        # reach the replay as `fixation_flags_b`, and the replay has no
+        # saccade-class filter — so they would only split the cache key.
+        style_a=_replay_style(viz_settings.get("compare_style_a")) if dual else None,
+        style_b=_replay_style(viz_settings.get("compare_style_b")) if dual else None,
     )
     # PERF-15: the frames depend on neither the speed nor autoplay (BUG-93), nor
     # on the Illustration reasons (the builder never reads them — but a non-1×
@@ -4872,6 +4908,14 @@ def _plan_replay(
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
+        # A co-animation wears `style_a` / `style_b` (the rail always fills
+        # every key), so the figure-wide look is never read — pinned, it can't
+        # split the key over a value last set in another mode.
+        **(
+            _DUAL_UNREAD_STYLE
+            if dual and animation_settings.style_a and animation_settings.style_b
+            else {}
+        ),
     )
     anim_inputs = {
         field.name: getattr(frame_settings, field.name)
@@ -4974,13 +5018,18 @@ def _build_and_render_animation(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
         add_illustration_label(fig, reasons)
-        _maybe_add_duration_key(
-            fig,
-            animation_settings,
-            animation_settings.marker_size_range,
-            trial_fixations,
-            anim_inputs["fixations_b"],
+        # A co-animation whose two size ranges differ has no one key.
+        key_range = replay_size_key_range(
+            animation_settings, trial_fixations, anim_inputs["fixations_b"]
         )
+        if key_range is not None:
+            _maybe_add_duration_key(
+                fig,
+                animation_settings,
+                key_range,
+                trial_fixations,
+                anim_inputs["fixations_b"],
+            )
         _annotate_preprocessing(fig, preprocessing)
         if title or caption:
             annotate_figure(fig, title=title, caption=caption)

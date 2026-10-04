@@ -3417,7 +3417,15 @@ the replay timing was changed. <code>illustration_label</code> accepts <code>"au
 <p>CMP-24: in a co-animation <code>fix_index_range</code> windows A only (the app's
 rule — A's slider never cuts B), <code>fix_index_range_b</code> windows B, and
 <code>fixation_flags_b</code> gives B flags of its own (<code>None</code>: A's
-<code>fixation_flags</code>).</p>
+<code>fixation_flags</code>, or the <code>fixation_flags</code> of <code>style_b</code> when it
+names some).</p>
+<p><code>style_a</code> / <code>style_b</code> style the two scanpaths of a co-animation as they
+style <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compare_scanpaths&lt;/span&gt;" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>' — the
+same keys (<code>fix_color</code>, <code>marker_size_range</code>, <code>opacity</code>, <code>hollow</code>,
+<code>saccade_color</code>, <code>saccade_style</code>, <code>saccade_width</code>), resolved the same
+way, so the replay and the static comparison draw each reading alike. The
+replay has no saccade-class filter, so a style naming <code>saccade_classes</code>
+raises <code>ValueError</code>. A lone replay ignores both.</p>
 <p><code>trial_b=(participant, trial)</code> co-animates a second reading on the same
 clock, like the app's Animate + Compare. It is looked up in <code>words_b</code> /
 <code>fixations_b</code> when given, else in <code>words</code> / <code>fixations</code> — the way
@@ -4188,13 +4196,13 @@ settings against what it would get::</p>
 <td><code>style_a</code></td>
 <td><code>None</code></td>
 <td><code>--style-a</code></td>
-<td>compare</td>
+<td>animate, compare</td>
 </tr>
 <tr>
 <td><code>style_b</code></td>
 <td><code>None</code></td>
 <td><code>--style-b</code></td>
-<td>compare</td>
+<td>animate, compare</td>
 </tr>
 <tr>
 <td><code>text_color</code></td>

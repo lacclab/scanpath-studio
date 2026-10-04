@@ -358,7 +358,9 @@ With `autoplay` (default `True`) the saved interactive HTML auto-starts the repl
 
 When `playback_speed` is not `1`, the automatic Illustration label says the replay timing was changed. `illustration_label` accepts `"auto"`, `"show"`, or `"hide"` like plot_scanpath.
 
-CMP-24: in a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`).
+CMP-24: in a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`, or the `fixation_flags` of `style_b` when it names some).
+
+`style_a` / `style_b` style the two scanpaths of a co-animation as they style compare_scanpaths' — the same keys (`fix_color`, `marker_size_range`, `opacity`, `hollow`, `saccade_color`, `saccade_style`, `saccade_width`), resolved the same way, so the replay and the static comparison draw each reading alike. The replay has no saccade-class filter, so a style naming `saccade_classes` raises `ValueError`. A lone replay ignores both.
 
 `trial_b=(participant, trial)` co-animates a second reading on the same clock, like the app's Animate + Compare. It is looked up in `words_b` / `fixations_b` when given, else in `words` / `fixations` — the way compare_scanpaths takes it. Without `trial_b`, `words_b` / `fixations_b` must hold one trial; B frames holding several raise `ValueError` rather than drawing them all. A multipart B is drawn at `screen_b` — looked up in B's own trial — or at its first recorded screen without it, as A is with `screen`.
 
@@ -572,8 +574,8 @@ Every keyword the figure builders take, with the default it renders with, the `r
 | `show_word_labels`          | `True`                                         | `--no-labels`                                             | all three        |
 | `show_words`                | `True`                                         | `--no-words`                                              | all three        |
 | `span_border_color`         | `'#000000'`                                    | `--span-border-color`                                     | plot, compare    |
-| `style_a`                   | `None`                                         | `--style-a`                                               | compare          |
-| `style_b`                   | `None`                                         | `--style-b`                                               | compare          |
+| `style_a`                   | `None`                                         | `--style-a`                                               | animate, compare |
+| `style_b`                   | `None`                                         | `--style-b`                                               | animate, compare |
 | `text_color`                | `'#000000'`                                    | `--text-color`                                            | all three        |
 | `word_heatmap_col`          | `None`                                         | `--word-heatmap-col`                                      | plot, compare    |
 | `word_heatmap_title`        | `None`                                         | `--word-heatmap-title`                                    | plot, compare    |

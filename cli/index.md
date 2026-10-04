@@ -121,7 +121,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | declare the screens                   | `--canvas WxH`, `--compare-canvas WxH`                                                          |
 | co-animate both readings              | add `--animate` (HTML output)                                                                   |
 
-`--label-a` / `--label-b` also label the `--animate` co-animation.
+`--label-a` / `--label-b` also label the `--animate` co-animation, and `--style-a` / `--style-b` (below) style it as they style the comparison.
 
 `--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under Fixations and Saccades), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and `saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
 

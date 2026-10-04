@@ -1,1 +1,0 @@
-The word-box heatmap's colour range is now bounded by dwell time per word, not by the longest single fixation, so a pinned range keeps refixated words apart and an upper endpoint beyond one fixation can be set.

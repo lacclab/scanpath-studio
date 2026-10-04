@@ -1,1 +1,0 @@
-Edit dataset's Save setup now writes the mapping in your files' own column names (and a table being added under the add screen's keys), so restoring it over the original files maps them the same way; anything a restore cannot redo is listed beside the button.

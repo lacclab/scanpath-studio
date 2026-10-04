@@ -1,1 +1,0 @@
-Duplicate rows in a participant, trial or text table that do not disagree are now combined field by field, so a value that only a later row holds is kept, and the table's status line says how many rows were combined.

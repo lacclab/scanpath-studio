@@ -1,1 +1,0 @@
-The demo's synthesized raw gaze is labelled beside the figure whenever it is drawn and recorded in the exported settings, and switching Raw gaze on for a trial or screen without samples now says why nothing is drawn.

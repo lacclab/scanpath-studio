@@ -1,1 +1,0 @@
-The trial filters' annotation section is now titled By trial annotation: its tag pickers offer only tags used on whole trials, and when a dataset has screen annotations it says those are not used by the filters and are listed on Data Management → Annotations.

@@ -1,1 +1,0 @@
-Loading files through the Python API or the command line no longer merges readers, trials, texts or screens whose ids differ only by leading zeros (reader 1 and reader 01 stay two readers), in the data, raw gaze and metadata tables alike.

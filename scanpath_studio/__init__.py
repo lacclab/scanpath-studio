@@ -42,7 +42,7 @@ __all__ = [
     "save_figure_layers",
     "trial_summary",
 ]
-__version__ = "0.32.1"
+__version__ = "0.33.0"
 
 # Public headless API (see api.py / datasets.py / eyegenbench.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/

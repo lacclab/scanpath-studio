@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.33.0] - 2026-10-04
+
+### Added
+- `scanpath-studio check` and `check_data_health`: a *Data checks* line on the Data page flags impossible values (≤ 0 ms fixations, missing positions, zero-area word boxes). ([#339](https://github.com/lacclab/scanpath-studio/issues/339))
+- Compare draws raw gaze, and each reading's word-box outline can be recoloured. ([#311](https://github.com/lacclab/scanpath-studio/issues/311), [#345](https://github.com/lacclab/scanpath-studio/issues/345))
+- Export bundles list their files in `index.csv`, preview their size before building, can be stopped, and can be saved as self-contained offline HTML. ([#337](https://github.com/lacclab/scanpath-studio/issues/337))
+- Edit dataset previews mapping changes before saving, can add a raw-gaze table, and lets you set your own recording setup for built-in corpora. ([#337](https://github.com/lacclab/scanpath-studio/issues/337))
+- Corpus Analysis shows which filters apply, explains each measure in place, and saves a JSON recipe beside every table download. ([#328](https://github.com/lacclab/scanpath-studio/issues/328), [#335](https://github.com/lacclab/scanpath-studio/issues/335))
+- Add dataset offers downloadable example tables; Color by offers any numeric column a dataset kept. ([#328](https://github.com/lacclab/scanpath-studio/issues/328), [#339](https://github.com/lacclab/scanpath-studio/issues/339))
+- Public datasets download into one folder you choose; OneStop is now four datasets, one per reading regime. ([#288](https://github.com/lacclab/scanpath-studio/issues/288), [#295](https://github.com/lacclab/scanpath-studio/issues/295))
+
+### Changed
+- The app, API and exports name columns as they are in your files; `load_scanpath_data(names="canonical")` gives the internal names. ([#333](https://github.com/lacclab/scanpath-studio/issues/333), [#338](https://github.com/lacclab/scanpath-studio/issues/338))
+- Fixation markers use one fixed duration scale by default, so a duration is the same size in every figure. ([#335](https://github.com/lacclab/scanpath-studio/issues/335))
+- Word boxes have their own rail section with outline and fill colours. ([#343](https://github.com/lacclab/scanpath-studio/issues/343))
+- Faster: plot setting changes on large datasets (~3×), the animated replay (~3×), and switching back to the previous dataset. ([#289](https://github.com/lacclab/scanpath-studio/issues/289), [#339](https://github.com/lacclab/scanpath-studio/issues/339), [#342](https://github.com/lacclab/scanpath-studio/issues/342))
+- Edit dataset holds every change until Save changes and opens below the dataset list; the Data tab is now Data Management. ([#319](https://github.com/lacclab/scanpath-studio/issues/319), [#337](https://github.com/lacclab/scanpath-studio/issues/337))
+- Trial chips are a compact table (two rows in Compare) and trial ids read part by part. ([#303](https://github.com/lacclab/scanpath-studio/issues/303), [#305](https://github.com/lacclab/scanpath-studio/issues/305), [#313](https://github.com/lacclab/scanpath-studio/issues/313), [#326](https://github.com/lacclab/scanpath-studio/issues/326))
+- Public corpora download at a pinned, size-checked version. ([#321](https://github.com/lacclab/scanpath-studio/issues/321))
+- Shorter docs with fresh screenshots; the app uses its Material icons throughout. ([#285](https://github.com/lacclab/scanpath-studio/issues/285), [#302](https://github.com/lacclab/scanpath-studio/issues/302))
+
+### Removed
+- Corpus Analysis → Groups no longer runs significance tests; it reports group means and their difference. ([#335](https://github.com/lacclab/scanpath-studio/issues/335))
+
+### Fixed
+- Compare: each reading keeps its own screen, canvas and stimulus image; categorical colouring and Animate + Compare work in every layout. ([#337](https://github.com/lacclab/scanpath-studio/issues/337), [#339](https://github.com/lacclab/scanpath-studio/issues/339), [#340](https://github.com/lacclab/scanpath-studio/issues/340))
+- IDs no longer merge: zero-padded ids, underscores in composite ids, and PoTeC's trial id (now reader + text). ([#291](https://github.com/lacclab/scanpath-studio/issues/291), [#335](https://github.com/lacclab/scanpath-studio/issues/335), [#337](https://github.com/lacclab/scanpath-studio/issues/337))
+- Corpus Analysis measures are counted correctly: skip / regression rates, reading speed without timestamps, per-screen sentences, and Groups cohorts. ([#324](https://github.com/lacclab/scanpath-studio/issues/324), [#335](https://github.com/lacclab/scanpath-studio/issues/335))
+- Edit dataset's Cancel, Estimate, Save setup and added tables behave as expected. ([#291](https://github.com/lacclab/scanpath-studio/issues/291), [#337](https://github.com/lacclab/scanpath-studio/issues/337))
+- Heatmaps, colour bars, GIF/MP4 frames, arc saccades and word labels draw correctly in more cases. ([#294](https://github.com/lacclab/scanpath-studio/issues/294), [#339](https://github.com/lacclab/scanpath-studio/issues/339), [#340](https://github.com/lacclab/scanpath-studio/issues/340))
+- Share links and settings files restore Compare and Animate state, and say why when a reading can't be opened. ([#337](https://github.com/lacclab/scanpath-studio/issues/337), [#339](https://github.com/lacclab/scanpath-studio/issues/339))
+- A damaged dataset in the recovery cache no longer blocks the others; a corrected large table no longer reloads its old values. ([#314](https://github.com/lacclab/scanpath-studio/issues/314), [#339](https://github.com/lacclab/scanpath-studio/issues/339))
+- The macOS folder button no longer crashes the app; icon-only buttons have screen-reader names. ([#298](https://github.com/lacclab/scanpath-studio/issues/298), [#324](https://github.com/lacclab/scanpath-studio/issues/324), [#328](https://github.com/lacclab/scanpath-studio/issues/328))
+
+### Security
+- Figures no longer offer Plotly's "Share chart…" button, which uploaded data to Plotly Cloud. ([#310](https://github.com/lacclab/scanpath-studio/issues/310))
+
 ## [0.32.1] - 2026-10-01
 
 ### Added

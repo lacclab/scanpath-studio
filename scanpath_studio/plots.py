@@ -2560,18 +2560,40 @@ def _render_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
+    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
+    # so the saccade layer AND the fixation markers below draw from the snapped
+    # positions. Off by default. The axis ranges above and the heatmaps below keep
+    # the RECORDED positions (raw gaze density); only the drawn connectors and
+    # markers move — and the Arc headroom just below, which must follow them.
+    render_fix = fixations
+    if (
+        fixation_snap_to_word
+        and spatial_axes
+        and not fixations.empty
+        and not words.empty
+    ):
+        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
+
     # VIZ-9 arc mode: the saccade arches rise ABOVE the fixations, so reserve
     # headroom at the top of the view (smaller y — the axis is inverted) or a wide
     # top-line saccade's apex gets clipped. Computed from the exact Bézier apex of
     # each segment so it's tight; only in Arc mode, so the default view is
-    # unchanged.
+    # unchanged. The apexes come from ``render_fix`` — the coordinates the
+    # connectors are actually drawn from — because Snap to word can both widen a
+    # saccade (two near-edge fixations jump to their words' centres) and lift its
+    # endpoints (to the box tops), so an arc over the recorded positions would
+    # under-reserve and clip the snapped curve.
+    # Whole-monitor view (``fit_to_monitor``): the range still starts as the full
+    # screen, and this only ever *grows* it — past the screen's top edge when an
+    # arc would reach it — so a schematic arc is never silently cut off; the
+    # screen itself is always shown whole.
     if (
         spatial_axes
         and saccade_render_mode == "Arc"
         and show_saccades
-        and len(fixations) > 1
+        and len(render_fix) > 1
     ):
-        fo = fixations.sort_values("timestamp_ms")
+        fo = render_fix.sort_values("timestamp_ms")
         fxv = pd.to_numeric(fo[x_field], errors="coerce").to_numpy(dtype=float)
         fyv = pd.to_numeric(fo[y_field], errors="coerce").to_numpy(dtype=float)
         apex = np.inf
@@ -2782,18 +2804,6 @@ def _render_scanpath_figure(
                     heatmap_norm=heatmap_norm,
                     colorbar_style=cb_style,
                 )
-
-    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
-    # so the saccade layer AND the fixation markers below draw from the snapped
-    # positions (the heatmap above keeps the raw gaze density). Off by default.
-    render_fix = fixations
-    if (
-        fixation_snap_to_word
-        and spatial_axes
-        and not fixations.empty
-        and not words.empty
-    ):
-        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
 
     # Saccade lines + optional direction arrowheads (drawn before the fixation
     # markers so the dots sit on top).

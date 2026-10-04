@@ -427,7 +427,7 @@ def get_app_css() -> str:
         gap: 0.4rem !important;
         width: 100%;
         box-sizing: border-box;
-        padding: 0.8rem 1rem 0.75rem;
+        padding: 0.8rem 1rem 0.6rem;
         border: 1px solid var(--sps-border);
         border-radius: 12px;
         background: var(--sps-page-bg);
@@ -453,6 +453,10 @@ def get_app_css() -> str:
     }
     /* A card with no area to hold sits where it is written, like its neighbours. */
     [class*="st-key-sps_card_"]:not(.st-key-sps_card_page):not(:has(.sps-size-box)) > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-sps_cardbody_"]) { justify-self: start; }
+    /* The reveal marker is an empty element in the body's flex column; hidden, it
+       still counts for the gap, leaving a blank strip under the last row. It
+       stays in the DOM, so the `:has(.sps-reveal)` rules keep matching. */
+    [class*="st-key-sps_cardbody_"] > [data-testid="stElementContainer"]:has(.sps-reveal) { display: none !important; }
     .sps-size-box { width: 100%; pointer-events: none; }
     [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box {
         border-radius: 8px;
@@ -461,7 +465,9 @@ def get_app_css() -> str:
             color-mix(in srgb, var(--sps-page-bg) 60%, transparent);
         animation: sps-sk-pulse 1.6s ease-in-out infinite;
     }
-    .sps-card-head { display: flex; align-items: center; gap: 0.55rem; }
+    /* Streamlit pulls every markdown block 1rem up (margin-bottom: -1rem on its
+       container), so the head and the step list add it back to keep a gap. */
+    .sps-card-head { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1.2rem; }
     .sps-card-title { font-weight: 600; flex: 1; min-width: 0; }
     /* Spoken, not drawn: the current step in the card's live region, which the
        detail line or step list already shows (loading.head_html). */
@@ -486,7 +492,7 @@ def get_app_css() -> str:
         animation: sps-spin 0.8s linear infinite;
     }
     .sps-steps {
-        list-style: none; margin: 0; padding: 0;
+        list-style: none; margin: 0 0 1.3rem; padding: 0;
         display: flex; flex-direction: column; gap: 0.3rem;
     }
     .sps-step { display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; margin: 0 !important; }
@@ -497,6 +503,8 @@ def get_app_css() -> str:
     .sps-bar { height: 4px; border-radius: 2px; overflow: hidden; background: var(--sps-accent-soft); }
     .sps-bar > span { display: block; height: 100%; background: var(--sps-accent); transition: width 0.25s ease; }
     .sps-bar-indeterminate > span { width: 35%; animation: sps-slide 1.3s ease-in-out infinite; }
+    /* Breathing room between the bar and the card's Cancel button. */
+    [class*="st-key-sps_cancel_"] { margin-top: 0.75rem; }
     /* The page card: a skeleton of the view with the card over it. While it
        shows, everything else in the view's area — the previous page, or the
        new one being laid out underneath — stays hidden. */

@@ -402,6 +402,9 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "saccade_color": "global_saccade_color",
     # UX-86: raw gaze's own style.
     "raw_gaze_color": "global_raw_gaze_color",
+    # ⬚ Word boxes' outline and fill colours (the fill's opacity is a float).
+    "word_box_color": "global_word_box_color",
+    "word_box_fill_color": "global_word_box_fill_color",
     # VIZ-8: colour-by-reading-type mode + the five class colours.
     "saccade_color_mode": "global_saccade_color_mode",
     "saccade_color_forward": "global_saccade_class_color_forward",
@@ -461,6 +464,8 @@ _SHARE_COLOR_PARAMS = (
     "fixation_color",
     "saccade_color",
     "raw_gaze_color",
+    "word_box_color",
+    "word_box_fill_color",
     "saccade_color_forward",
     "saccade_color_skip",
     "saccade_color_refixation",
@@ -516,6 +521,7 @@ _SHARE_FLOAT_PARAMS = {
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
+    "word_box_fill_opacity": "global_word_box_fill_opacity",
     # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
     # a link without it reopened a figure that disclosed something else.
     "playback_speed": "single_playback_speed",
@@ -659,6 +665,8 @@ _URL_BOUNDED = {
     # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
     "global_raw_gaze_opacity": (0.1, 1.0),
+    # 0 is a real choice here — outlines only, no fill.
+    "global_word_box_fill_opacity": (0.0, 1.0),
     # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
     # a `number_input` with only a minimum, capped at a minute here so a link
     # cannot carry a number no fixation reaches.
@@ -2428,6 +2436,24 @@ def _restore_plot_config(
     ):
         if cfg_key in raw_gaze:
             put_float(raw_gaze[cfg_key], state_key, *_URL_BOUNDED[state_key], label)
+
+    # ⬚ Word boxes' style. Absent in a config saved before the section had one,
+    # which keeps the seeded defaults — additive, so no schema bump.
+    word_boxes = section("word_boxes")
+    for cfg_key, state_key in (
+        ("color", "global_word_box_color"),
+        ("fill_color", "global_word_box_fill_color"),
+    ):
+        col = word_boxes.get(cfg_key)
+        if isinstance(col, str) and _HEX_COLOR.fullmatch(col):
+            put(state_key, col)
+    if "fill_opacity" in word_boxes:
+        put_float(
+            word_boxes["fill_opacity"],
+            "global_word_box_fill_opacity",
+            *_URL_BOUNDED["global_word_box_fill_opacity"],
+            "word box fill opacity",
+        )
 
     # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
     # Validated against the segmented controls' exact options for the same

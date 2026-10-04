@@ -54,6 +54,9 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     SELF_SCALED_HEATMAP_STYLES,
     UNIFORM_COLOR_FIELD,
+    WORD_BOX_COLOR,
+    WORD_BOX_FILL_COLOR,
+    WORD_BOX_FILL_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
@@ -759,6 +762,10 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_raw_gaze_color": "#888888",
     "global_raw_gaze_marker_size": 4.0,
     "global_raw_gaze_opacity": 0.6,
+    # ⬚ Word boxes' own style — previously fixed in `plots.build_word_boxes`.
+    "global_word_box_color": WORD_BOX_COLOR,
+    "global_word_box_fill_color": WORD_BOX_FILL_COLOR,
+    "global_word_box_fill_opacity": WORD_BOX_FILL_OPACITY,
     "global_show_stimulus_image": False,
     # VIZ-4: image-based stimuli. Opacity dims a busy stimulus image so the AOIs /
     # scanpath read over it (round-trips in Share / Save & restore, since it also
@@ -4663,11 +4670,12 @@ def _collect_viz_settings(
     show_fix = bool(ss.get("global_show_fix"))
     show_saccades = bool(ss.get("global_show_saccades"))
     show_heatmap = bool(ss.get("global_show_heatmap"))
-    # UX-128: the 📄 Stimulus section's master switch — ANDed into its three
+    # UX-128: the 📄 Stimulus section's master switch — ANDed into its two
     # layers' *effective* values below, rather than read by the figure
-    # builders directly, so it stays a pure display gate: `global_show_words`/
-    # `global_show_labels`/`global_show_stimulus_image` still hold whatever
-    # the user configured, for the moment this is turned back on.
+    # builders directly, so it stays a pure display gate: `global_show_labels`/
+    # `global_show_stimulus_image` still hold whatever the user configured, for
+    # the moment this is turned back on. Word boxes left the section for one of
+    # their own, so this switch no longer gates them.
     show_stimulus = bool(ss.get("global_show_stimulus", True))
     show_labels = show_stimulus and bool(ss.get("global_show_labels"))
     color_by = ss.get("global_color_by")
@@ -4728,7 +4736,12 @@ def _collect_viz_settings(
         )
 
     return dict(
-        show_words=show_stimulus and bool(ss.get("global_show_words")),
+        show_words=bool(ss.get("global_show_words")),
+        word_box_color=ss.get("global_word_box_color") or WORD_BOX_COLOR,
+        word_box_fill_color=ss.get("global_word_box_fill_color") or WORD_BOX_FILL_COLOR,
+        word_box_fill_opacity=float(
+            ss.get("global_word_box_fill_opacity", WORD_BOX_FILL_OPACITY)
+        ),
         show_labels=show_labels,
         show_fix=show_fix,
         show_order=bool(ss.get("global_show_order")),
@@ -5438,15 +5451,15 @@ def render_plot_controls(
         persist_state="session",
         disabled=not has_fixations,
     )
-    # UX-128: a master switch for the section's three layers (text, boxes,
-    # image), matching Fixations/Saccades. Earlier this was name-only — each
-    # layer carried its own toggle and nothing gated all three at once — on
+    # UX-128: a master switch for the section's layers (text, image),
+    # matching Fixations/Saccades. Earlier this was name-only — each
+    # layer carried its own toggle and nothing gated all of them at once — on
     # the reasoning that a master switch would have to remember which of the
-    # three were on to restore them. It doesn't: this toggle never touches
-    # `global_show_words`/`global_show_labels`/`global_show_stimulus_image`
-    # themselves, so each keeps whatever the user set. It only ANDs into the
-    # *effective* values `_collect_viz_settings` returns — turning it back on
-    # reveals exactly what was configured before, with nothing to restore.
+    # layers were on to restore them. It doesn't: this toggle never touches
+    # `global_show_labels`/`global_show_stimulus_image` themselves, so each
+    # keeps whatever the user set. It only ANDs into the *effective* values
+    # `_collect_viz_settings` returns — turning it back on reveals exactly what
+    # was configured before, with nothing to restore.
     show_stimulus, stim_grp = _rail_section(
         viz,
         f"{ICONS['stimulus']} **Stimulus**",
@@ -5454,6 +5467,20 @@ def render_plot_controls(
         name="Stimulus",
         key="global_show_stimulus",
         persist_state="session",
+    )
+    # Word boxes were a third layer inside 📄 Stimulus; they are a section of
+    # their own now, with a style (outline + fill) that the Stimulus popover had
+    # no room for. The switch keeps its `global_show_words` key, so links and
+    # saved configs are unchanged — only the Stimulus master no longer gates it.
+    show_word_boxes, boxes_grp = _rail_section(
+        viz,
+        f"{ICONS['word_boxes']} **Word boxes**",
+        slug="boxes",
+        name="Word boxes",
+        key="global_show_words",
+        persist_state="session",
+        # No word boxes: the popover body's own `_layer_off` caption says it.
+        disabled=not has_words,
     )
     # UX-86: Overlays dissolved — Heatmap and Raw gaze are now peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
@@ -5883,23 +5910,6 @@ def render_plot_controls(
             help=_tip,
             label_visibility="collapsed",
         )
-        # Honoured by all three render paths (static, animation, and — since the
-        # comparison builders now take `fixation_hover_fields` too — Compare),
-        # so this one carries no `_mode_gate`.
-        hover_names = _rail_names()
-        fix_hover = hover_names.sort_options(hover_field_options(trial_fixations))
-        fix_hover_labels = hover_names.option_labels(fix_hover)
-        _labeled(
-            st,
-            "multiselect",
-            "Hover fields",
-            options=fix_hover,
-            format_func=fix_hover_labels.__getitem__,
-            key="global_fixation_hover_fields",
-            persist_state="session",
-            help="Fields shown when hovering a fixation. Choose any retained "
-            "fixation column; order here is tooltip order.",
-        )
         # "Snap above words" is the fixation half of VIZ-9 (its
         # partner is Saccades → Style → Line shape → Arc). Keep the control
         # for saved-view compatibility, but do not give it a separate
@@ -6181,11 +6191,12 @@ def render_plot_controls(
         )
 
     # --- Stimulus ---------------------------------------------------------
-    # UX-163: the Fixations layout (UX-158). Each of the section's three layers
-    # is a `label | ☑ Show` row — *Text*, *Word boxes*, *Image* — with what it
-    # governs as captioned rows under it, greyed while it is off (UX-97) rather
-    # than hidden; the span highlight is a *Highlight* row of its own, and the
-    # word hover fields close the popover as 👁️ Fixations' do.
+    # UX-163: the Fixations layout (UX-158). Each of the section's layers is a
+    # `label | ☑ Show` row — *Text*, *Image* — with what it governs as
+    # captioned rows under it, greyed while it is off (UX-97) rather than
+    # hidden; the span highlight is a *Highlight* row of its own. Word boxes
+    # have their own section now, and the hover fields moved to
+    # 📐 Figure & canvas → Hover.
     #
     # UX-128: the layer switches and their settings stay live while the
     # section's master switch is off, so a user can set up what they want shown
@@ -6319,14 +6330,6 @@ def render_plot_controls(
                 label_visibility="collapsed",
             )
 
-        _check_row(
-            "Word boxes",
-            key="global_show_words",
-            persist_state="session",
-            help="Outline each word's interest area — its bounding box, exactly "
-            "as the data gives it.",
-        )
-
         # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
         # per-trial `image_path`) OR be uploaded here for any dataset (a
         # full-monitor screenshot of the reading screen). The upload's `data:`
@@ -6437,24 +6440,6 @@ def render_plot_controls(
                 help=scale_help,
                 field_host=_sub_row("Scale", caption_help=scale_help),
             )
-
-        # Honoured by all three render paths (static, animation, and — since
-        # the comparison builders take `word_hover_fields` too — Compare), so
-        # this one carries no `_mode_gate`.
-        word_names = cn.active(st.session_state, "words")
-        word_hover = word_names.sort_options(hover_field_options(words, words=True))
-        word_hover_labels = word_names.option_labels(word_hover)
-        _labeled(
-            st,
-            "multiselect",
-            "Hover fields",
-            options=word_hover,
-            format_func=word_hover_labels.__getitem__,
-            key="global_word_hover_fields",
-            persist_state="session",
-            help="Fields shown when hovering a word: identity, any reading "
-            "measure, linguistic feature, or retained metadata column.",
-        )
 
     # --- Heatmap ----------------------------------------------------------
     # Compare supports a shared word-box scale: overlay splits each box into
@@ -6723,13 +6708,89 @@ def render_plot_controls(
                 "Opacity", caption_help=_layer_gate(False, opacity_help)[1]
             ),
         )
+    # --- Word boxes -------------------------------------------------------
+    # The interest areas' outline and fill. One *Box* group, as raw gaze's
+    # *Marker* (UX-161). All three render paths draw the boxes; a comparison
+    # outlines each reading's in its scanpath colour (the A/B cue), so only the
+    # line colour is greyed there — the fill applies everywhere.
+    with (
+        boxes_grp,
+        _layer_off(
+            f"{ICONS['word_boxes']} Word boxes",
+            off=not show_word_boxes or not has_words,
+            reason=None
+            if has_words
+            else f"{ICONS['warning']} This trial has no word boxes to draw.",
+        ),
+        _popover_rows("boxes"),
+    ):
+        # The co-animation (Compare + Animate) draws one set of boxes in this
+        # colour, so only the static comparison greys it.
+        per_reading_outline = comparing and not animating
+        line_disabled, line_help = _layer_gate(
+            per_reading_outline,
+            _gated_help(
+                "Colour of each word box's outline.",
+                f"{ICONS['warning']} In **Compare** mode each reading's boxes are "
+                "outlined in its scanpath colour, so A and B stay apart. Your "
+                "value is kept and applies again once the mode is off."
+                if per_reading_outline
+                else "",
+            ),
+        )
+        _sub_row(
+            "Line",
+            section="Box",
+            section_help="How each word's interest area is drawn — exactly the "
+            "bounding box the data gives, outlined and filled.",
+            caption_help=line_help,
+        ).color_picker(
+            "Line color",
+            key="global_word_box_color",
+            persist_state="session",
+            disabled=line_disabled,
+            help=line_help,
+            label_visibility="collapsed",
+        )
+        fill_disabled, fill_help = _layer_gate(
+            False, "Colour the inside of each box is filled with."
+        )
+        _sub_row("Fill", caption_help=fill_help).color_picker(
+            "Fill color",
+            key="global_word_box_fill_color",
+            persist_state="session",
+            disabled=fill_disabled,
+            help=fill_help,
+            label_visibility="collapsed",
+        )
+        fill_opacity_help = (
+            "How strongly the fill shows. Keep it low so the text, fixations "
+            "and image under the boxes still read; 0 draws outlines only."
+        )
+        _numeric_slider(
+            st,
+            "Fill opacity",
+            key="global_word_box_fill_opacity",
+            persist_state="session",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+            number_format="%.2f",
+            help=fill_opacity_help,
+            field_host=_sub_row(
+                "Opacity", caption_help=_layer_gate(False, fill_opacity_help)[1]
+            ),
+        )
+
     # --- Figure & canvas --------------------------------------------------
-    # UX-80/81: one popover, three named groups inside it and nothing nested —
+    # UX-80/81: one popover, four named groups inside it and nothing nested —
     #
     #   🖥️ Screen & framing   Show full monitor + the monitor's pixel size
     #                         (`canvas_renderer`, screen half only)
     #   📊 Axes & grid        the coordinate grid, colour bar, axis fields
     #   🏷️ Title & labels     the Illustration disclosure + the EXP-5 title
+    #   💬 Hover              the word and fixation tooltip fields (moved here
+    #                         from 📄 Stimulus and 👁️ Fixations)
     #
     # 🔤 Text & fonts is **not** here any more: it describes the stimulus text,
     # so it moved to 📄 Stimulus → Text (UX-81), beside the layer it draws. The
@@ -6742,6 +6803,7 @@ def render_plot_controls(
     screen_group = _rail_subsection(figure_grp, f"{ICONS['screen']} Screen & framing")
     axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
     labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
+    hover = _rail_subsection(figure_grp, f"{ICONS['hover']} Hover")
     # UX-163: each block's rows take the popover layout (`_popover_rows`) — the
     # framing switch, the grid and the colour bar become `label | ☑ Show | …`
     # rows carrying what they govern (greyed while off), the monitor size and
@@ -6985,6 +7047,44 @@ def render_plot_controls(
                 label_left=True,
             )
             render_pattern_help(box, _title_caption_fields)
+
+    # The tooltips' fields, for words and for fixations — figure-wide rather
+    # than one layer's, so they sit together here instead of closing the
+    # 📄 Stimulus and 👁️ Fixations popovers. Both are honoured by all three
+    # render paths (the comparison builders take them too), so neither carries
+    # a `_mode_gate`; and neither greys with its layer, since a hidden layer's
+    # tooltip choice is still the one it shows when switched back on.
+    with hover, _popover_rows("fig_hover"):
+        word_names = cn.active(st.session_state, "words")
+        word_hover = word_names.sort_options(hover_field_options(words, words=True))
+        word_hover_labels = word_names.option_labels(word_hover)
+        _labeled(
+            st,
+            "multiselect",
+            "Word hover fields",
+            display="Words",
+            options=word_hover,
+            format_func=word_hover_labels.__getitem__,
+            key="global_word_hover_fields",
+            persist_state="session",
+            help="Fields shown when hovering a word: identity, any reading "
+            "measure, linguistic feature, or retained metadata column.",
+        )
+        fix_names = _rail_names()
+        fix_hover = fix_names.sort_options(hover_field_options(trial_fixations))
+        fix_hover_labels = fix_names.option_labels(fix_hover)
+        _labeled(
+            st,
+            "multiselect",
+            "Fixation hover fields",
+            display="Fixations",
+            options=fix_hover,
+            format_func=fix_hover_labels.__getitem__,
+            key="global_fixation_hover_fields",
+            persist_state="session",
+            help="Fields shown when hovering a fixation. Choose any retained "
+            "fixation column; order here is tooltip order.",
+        )
 
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when

@@ -41,6 +41,10 @@ from types import MappingProxyType
 # config (the recording setup below the divider only since EXP-19).
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
+# The ⬚ Word boxes section's style: outline, fill, fill opacity.
+GLOBAL_WORD_BOX_COLOR = "global_word_box_color"
+GLOBAL_WORD_BOX_FILL_COLOR = "global_word_box_fill_color"
+GLOBAL_WORD_BOX_FILL_OPACITY = "global_word_box_fill_opacity"
 GLOBAL_SHOW_LABELS = "global_show_labels"
 # UX-128: the 📄 Stimulus section's master switch.
 GLOBAL_SHOW_STIMULUS = "global_show_stimulus"
@@ -443,6 +447,8 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "heatmap_colorscale": GLOBAL_HEATMAP_COLORSCALE,
         "saccade_color": GLOBAL_SACCADE_COLOR,
         "raw_gaze_color": GLOBAL_RAW_GAZE_COLOR,
+        "word_box_color": GLOBAL_WORD_BOX_COLOR,
+        "word_box_fill_color": GLOBAL_WORD_BOX_FILL_COLOR,
         "saccade_color_mode": GLOBAL_SACCADE_COLOR_MODE,
         "saccade_color_forward": GLOBAL_SACCADE_CLASS_COLOR_FORWARD,
         "saccade_color_skip": GLOBAL_SACCADE_CLASS_COLOR_SKIP,
@@ -533,6 +539,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
+        "word_box_fill_opacity": GLOBAL_WORD_BOX_FILL_OPACITY,
         # EXP-18.
         "playback_speed": SINGLE_PLAYBACK_SPEED,
         # EXP-19.
@@ -738,6 +745,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_COORDINATE_GRID_SPACING,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
+        GLOBAL_WORD_BOX_FILL_OPACITY,
         GLOBAL_COLORBAR_TICKANGLE,
         GLOBAL_COLORBAR_TICKFONT_SIZE,
         GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
@@ -933,6 +941,10 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_RAW_GAZE_COLOR,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
+        # word_boxes
+        GLOBAL_WORD_BOX_COLOR,
+        GLOBAL_WORD_BOX_FILL_COLOR,
+        GLOBAL_WORD_BOX_FILL_OPACITY,
     }
 )
 

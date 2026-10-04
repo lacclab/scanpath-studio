@@ -197,6 +197,7 @@ B's frames directly.
 | use Gaussian duration mass | `--heatmap-style duration-mass --duration-mass-sigma 1.0` |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
 | export editable layers | `--separable-layers` |
+| style the word boxes | `--word-box-color`, `--word-box-fill-color`, `--word-box-fill-opacity` (0 draws outlines only) |
 | draw the raw gaze | `--raw-gaze PATH…` (or `--sample-raw-gaze` with `--sample`), `--raw-gaze-schema JSON`, `--raw-gaze-color`, `--raw-gaze-marker-size`, `--raw-gaze-opacity`; `--no-raw-gaze` loads the table but hides the layer |
 | size the figure | `--width`, `--height`, `--scale` |
 | title and caption it | `--title`, `--caption` |

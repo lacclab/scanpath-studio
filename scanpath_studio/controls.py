@@ -4244,9 +4244,11 @@ def _compare_opacity_slider(idx: int) -> None:
 #: "Opacity" is not cut to "Opa…".
 _COMPARE_SECTION_SHARE = 0.62
 
+#: The tooltip already leads with the group's title ("Scanpath A — …"), so
+#: these start at what follows it.
 _COMPARE_SCANPATH_HELP = {
-    0: "Scanpath A — the selected trial.",
-    1: "Scanpath B — the trial it is compared with.",
+    0: "The selected trial.",
+    1: "The trial it is compared with.",
 }
 
 

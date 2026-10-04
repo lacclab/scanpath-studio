@@ -541,6 +541,11 @@ def _restore_config_app():
         },
         # VIZ-43 — raw gaze's own style (`available`/`points` are read-only).
         "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
+        "word_boxes": {
+            "color": "#112233",
+            "fill_color": "#445566",
+            "fill_opacity": 0.2,
+        },
         # CMP-24 — B's entry carries B's own filters too.
         "compare": [
             compare_entry,

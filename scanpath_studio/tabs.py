@@ -144,6 +144,9 @@ from scanpath_studio.constants import (
     TRIAL_IDENTITY_FULL_KEY,
     UNIFORM_COLOR_FIELD,
     UPLOAD_FILE_TYPES,
+    WORD_BOX_COLOR,
+    WORD_BOX_FILL_COLOR,
+    WORD_BOX_FILL_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     derived_analysis_tables_enabled,
@@ -1645,6 +1648,13 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         raw_gaze_color=viz_settings.get("raw_gaze_color", "#888888"),
         raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
         raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
+        word_box_color=viz_settings.get("word_box_color", WORD_BOX_COLOR),
+        word_box_fill_color=viz_settings.get(
+            "word_box_fill_color", WORD_BOX_FILL_COLOR
+        ),
+        word_box_fill_opacity=viz_settings.get(
+            "word_box_fill_opacity", WORD_BOX_FILL_OPACITY
+        ),
         color_by=viz_settings["color_by"],
         heatmap_metric=(
             viz_settings["heatmap_metric"]
@@ -3996,6 +4006,14 @@ def _build_studio_config(
             "color": viz_settings.get("raw_gaze_color", "#888888"),
             "marker_size": float(viz_settings.get("raw_gaze_marker_size", 4.0)),
             "opacity": float(viz_settings.get("raw_gaze_opacity", 0.6)),
+        },
+        # The ⬚ Word boxes section's style (its switch is `layers.words`).
+        "word_boxes": {
+            "color": viz_settings.get("word_box_color", WORD_BOX_COLOR),
+            "fill_color": viz_settings.get("word_box_fill_color", WORD_BOX_FILL_COLOR),
+            "fill_opacity": float(
+                viz_settings.get("word_box_fill_opacity", WORD_BOX_FILL_OPACITY)
+            ),
         },
         # Per-scanpath styling for the two-trial comparison (None when the caller
         # didn't collect it). Each entry holds raw widget values so it restores 1:1.

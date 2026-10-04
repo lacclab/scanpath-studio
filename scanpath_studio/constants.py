@@ -224,6 +224,10 @@ MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
+#: The word boxes' fill, drawn translucent (``WORD_BOX_FILL_OPACITY``) so it
+#: tints the interest area without hiding the text, fixations or image under it.
+WORD_BOX_FILL_COLOR = "#646464"
+WORD_BOX_FILL_OPACITY = 0.05
 # VIZ-32: black, matching the colourblind-safe default palette.
 WORD_LABEL_COLOR = "#000000"
 # Default colour for highlighted ("Mark text") reading text — vermillion,
@@ -1037,6 +1041,7 @@ ICONS: dict[str, str] = {
     "fixations": ":material/blur_on:",
     "saccades": ":material/arrow_outward:",
     "stimulus": ":material/article:",
+    "word_boxes": ":material/crop_square:",
     "heatmap": ":material/local_fire_department:",
     "raw_gaze": ":material/grain:",
     "plot_filter": ":material/cleaning_services:",
@@ -1044,6 +1049,7 @@ ICONS: dict[str, str] = {
     "screen": ":material/desktop_windows:",
     "axes": ":material/grid_on:",
     "labels": ":material/title:",
+    "hover": ":material/ads_click:",
     "designs": ":material/palette:",
     "plot_controls": ":material/tune:",
     "animate": ":material/movie:",

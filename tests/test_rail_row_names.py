@@ -36,6 +36,7 @@ SPLIT_ROW_TOGGLES = (
     "global_show_fix",
     "global_show_saccades",
     "global_show_stimulus",
+    "global_show_words",
     "global_show_heatmap",
     "global_show_raw_gaze",
 )

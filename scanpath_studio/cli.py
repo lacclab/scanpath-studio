@@ -99,6 +99,20 @@ def _colorscale_name(value: str) -> str:
     return str(value)
 
 
+def _fill_color(value: str) -> str:
+    """Validate ``--word-box-fill-color`` — an argparse ``type=`` like
+    :func:`_colorscale_name`. The fill is drawn at its own opacity, so it needs
+    a colour with RGB channels to put that alpha on; a name such as ``red``
+    would otherwise fail only once the figure was being built."""
+    from .plots import color_with_alpha
+
+    try:
+        color_with_alpha(value, 1.0)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc))
+    return str(value).strip()
+
+
 #: The API keyword each schema flag stands for (EXP-13; the raw-gaze one EXP-20).
 _SCHEMA_FLAGS = {
     "word_schema": "--word-schema",
@@ -1169,6 +1183,25 @@ def _render_parser() -> argparse.ArgumentParser:
         "recognised.",
     )
     viz.add_argument(
+        "--word-box-color",
+        metavar="COLOR",
+        help="Word-box outline colour (default: #6c757d). A comparison outlines "
+        "each reading's boxes in its scanpath colour instead.",
+    )
+    viz.add_argument(
+        "--word-box-fill-color",
+        metavar="COLOR",
+        type=_fill_color,
+        help="Word-box fill colour, drawn at --word-box-fill-opacity: #rrggbb, "
+        "#rgb or rgb(r, g, b) (default: #646464).",
+    )
+    viz.add_argument(
+        "--word-box-fill-opacity",
+        type=float,
+        metavar="O",
+        help="Word-box fill opacity, 0–1; 0 draws outlines only (default: 0.05).",
+    )
+    viz.add_argument(
         "--raw-gaze-color",
         metavar="COLOR",
         help="Raw-gaze sample colour (default: #888888). A comparison draws "
@@ -1475,6 +1508,9 @@ _DIRECT_OPTION_FLAGS = (
     "y_field",
     "colorbar_tickangle",
     "colorbar_tickfont_size",
+    "word_box_color",
+    "word_box_fill_color",
+    "word_box_fill_opacity",
     "raw_gaze_color",
     "raw_gaze_marker_size",
     "raw_gaze_opacity",

@@ -6,6 +6,7 @@ import base64
 import copy
 import html
 import math
+import re
 import struct
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -54,6 +55,8 @@ from .constants import (
     TRENDLINE_COLOR,
     UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
+    WORD_BOX_FILL_COLOR,
+    WORD_BOX_FILL_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
@@ -84,6 +87,12 @@ class FigureSettings:
     x_field: str = "x"
     y_field: str = "y"
     show_words: bool = True
+    #: The word boxes' outline colour, and their fill — a colour drawn at
+    #: ``word_box_fill_opacity``. A comparison outlines each reading's boxes in
+    #: its scanpath colour instead, so ``word_box_color`` is static/replay only.
+    word_box_color: str = WORD_BOX_COLOR
+    word_box_fill_color: str = WORD_BOX_FILL_COLOR
+    word_box_fill_opacity: float = WORD_BOX_FILL_OPACITY
     show_word_labels: bool = True
     show_fixations: bool = True
     show_order: bool = True
@@ -1625,16 +1634,53 @@ def _saccade_arrow_markers(
     return mid_x, mid_y, angles
 
 
-def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
+_RGB_FUNCTION = re.compile(
+    r"rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,[^)]*)?\)"
+)
+
+
+def color_with_alpha(color: str, alpha: float) -> str:
+    """``color`` as ``rgba(r,g,b,alpha)`` — a fill drawn at its own opacity.
+
+    Takes ``#rrggbb``, ``#rgb`` or ``rgb(…)`` / ``rgba(…)`` (whose own alpha is
+    replaced). Anything else raises ``ValueError`` naming it, rather than
+    quietly drawing some other colour.
+    """
+    text = str(color).strip()
+    match = re.fullmatch(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})", text)
+    if match:
+        digits = match.group(1)
+        if len(digits) == 3:
+            digits = "".join(c * 2 for c in digits)
+        r, g, b = (int(digits[i : i + 2], 16) for i in (0, 2, 4))
+        return f"rgba({r},{g},{b},{alpha})"
+    match = _RGB_FUNCTION.fullmatch(text)
+    if match and all(int(v) <= 255 for v in match.groups()):
+        r, g, b = match.groups()
+        return f"rgba({r},{g},{b},{alpha})"
+    raise ValueError(
+        f"{color!r} is not a colour a fill can take: use #rrggbb, #rgb or rgb(r, g, b)."
+    )
+
+
+def build_word_boxes(
+    words: pd.DataFrame,
+    color: str = WORD_BOX_COLOR,
+    fill_color: str = WORD_BOX_FILL_COLOR,
+    fill_opacity: float = WORD_BOX_FILL_OPACITY,
+) -> list:
     """Rectangles for the word interest areas.
 
     Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles
     (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
     assigns against. On a tiling corpus each outline therefore runs on across
     the space after its word, and the word *label* is centred in it (BUG-97).
+    ``color`` is the outline; the fill is ``fill_color`` at ``fill_opacity``
+    (0 = no fill), which leaves the outline itself fully opaque.
     """
     from .measures import word_box_bounds
 
+    fill = color_with_alpha(fill_color, fill_opacity)
     shapes = []
     for x0, y0, x1, y1 in zip(*word_box_bounds(words)):
         shapes.append(
@@ -1645,7 +1691,7 @@ def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
                 x1=x1,
                 y1=y1,
                 line=dict(color=color, width=1),
-                fillcolor="rgba(100,100,100,0.05)",
+                fillcolor=fill,
                 # VIZ-5: tag the layer so split_scanpath_layers can separate the
                 # word boxes from the (visually similar) heatmap rects.
                 name=_shape_layer_tag("word_boxes"),
@@ -2709,7 +2755,16 @@ def _render_scanpath_figure(
         # Word-box grid (the "Bounding boxes" layer) and the "Mark border" span
         # overlay are independent: the span borders show even when the boxes are
         # off (then only the span outline is drawn).
-        shapes = build_word_boxes(words) if show_words else []
+        shapes = (
+            build_word_boxes(
+                words,
+                color=settings.word_box_color,
+                fill_color=settings.word_box_fill_color,
+                fill_opacity=settings.word_box_fill_opacity,
+            )
+            if show_words
+            else []
+        )
         if has_highlight and critical_span_style == "Mark border":
             shapes = shapes + build_critical_span_overlay(
                 words, highlight_column, color=span_border_color
@@ -4659,7 +4714,12 @@ def _render_scanpath_animation(
     ):
         stimulus_words = words_b
     shapes = (
-        build_word_boxes(stimulus_words)
+        build_word_boxes(
+            stimulus_words,
+            color=settings.word_box_color,
+            fill_color=settings.word_box_fill_color,
+            fill_opacity=settings.word_box_fill_opacity,
+        )
         if show_words and not stimulus_words.empty
         else []
     )
@@ -6417,7 +6477,12 @@ def _make_split_comparison_figure(
             )
 
         if show_words and not trial_words.empty:
-            for box in build_word_boxes(trial_words, color=spec["color"]):
+            for box in build_word_boxes(
+                trial_words,
+                color=spec["color"],
+                fill_color=settings.word_box_fill_color,
+                fill_opacity=settings.word_box_fill_opacity,
+            ):
                 box = dict(box)
                 box["xref"] = xref
                 box["yref"] = yref
@@ -6835,7 +6900,12 @@ def _render_comparison_figure(
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
             fig.update_layout(
                 shapes=existing
-                + build_word_boxes(spec["trial_words"], color=spec["color"])
+                + build_word_boxes(
+                    spec["trial_words"],
+                    color=spec["color"],
+                    fill_color=settings.word_box_fill_color,
+                    fill_opacity=settings.word_box_fill_opacity,
+                )
             )
         if show_word_labels and draws_stimulus[_idx]:
             _add_word_label_trace(

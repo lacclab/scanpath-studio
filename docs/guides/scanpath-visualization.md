@@ -29,11 +29,12 @@ and a **▾** with its settings.
 | --- | --- |
 | :material/blur_on: Fixations | markers: size, colour, order |
 | :material/arrow_outward: Saccades | lines and arrows, coloured by direction or reading type |
-| :material/article: Stimulus | text, word boxes, stimulus image, font and background |
+| :material/article: Stimulus | text, span highlight, stimulus image, font and background |
+| :material/crop_square: Word boxes | each word's interest area: outline colour, fill colour and opacity |
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |
 | :material/cleaning_services: Filter | which fixations and saccades are drawn |
-| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels |
+| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields |
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it
 fixed as you step through trials and filters, so they stay comparable; its

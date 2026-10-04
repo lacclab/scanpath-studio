@@ -705,6 +705,63 @@ class TestBuildWordBoxes:
         shapes = build_word_boxes(empty_df)
         assert shapes == []
 
+    def test_default_style_is_the_grey_outline_and_faint_fill(
+        self, normalized_words_df
+    ):
+        shape = build_word_boxes(normalized_words_df)[0]
+        assert shape["line"]["color"] == "#6c757d"
+        assert shape["fillcolor"] == "rgba(100,100,100,0.05)"
+
+    def test_outline_and_fill_are_styled_independently(self, normalized_words_df):
+        shape = build_word_boxes(
+            normalized_words_df,
+            color="#ff0000",
+            fill_color="#0000ff",
+            fill_opacity=0.25,
+        )[0]
+        # The fill's opacity is its own: the outline stays fully opaque.
+        assert shape["line"]["color"] == "#ff0000"
+        assert shape["fillcolor"] == "rgba(0,0,255,0.25)"
+
+    @pytest.mark.parametrize(
+        "color, expected",
+        [
+            ("#0af", "rgba(0,170,255,0.5)"),
+            ("rgb(1, 2, 3)", "rgba(1,2,3,0.5)"),
+            ("rgba(1,2,3,0.9)", "rgba(1,2,3,0.5)"),
+        ],
+    )
+    def test_the_fill_takes_any_rgb_spelling(
+        self, normalized_words_df, color, expected
+    ):
+        shape = build_word_boxes(
+            normalized_words_df, fill_color=color, fill_opacity=0.5
+        )[0]
+        assert shape["fillcolor"] == expected
+
+    def test_a_fill_it_cannot_read_is_an_error_not_grey(self, normalized_words_df):
+        with pytest.raises(ValueError, match="'red'"):
+            build_word_boxes(normalized_words_df, fill_color="red")
+
+    def test_the_figure_draws_the_word_box_settings(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            show_words=True,
+            word_box_color="#123456",
+            word_box_fill_color="#abcdef",
+            word_box_fill_opacity=0.0,
+        )
+        boxes = [s for s in fig.layout.shapes if "word_boxes" in str(s.name)]
+        assert boxes
+        assert {s.line.color for s in boxes} == {"#123456"}
+        assert {s.fillcolor for s in boxes} == {"rgba(171,205,239,0.0)"}
+
 
 class TestMakeScanpathFigure:
     """Tests for make_scanpath_figure function."""

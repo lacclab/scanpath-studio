@@ -51,11 +51,21 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    release a failing tree.
 7. **Commit + PR** — commit the changes (the three files plus the deleted fragments) with message `Release v<version>`
    (no AI co-author trailer — repo rule), push the branch, and open a PR to
-   `main`. Wait for CI to pass and for the PR to merge; do not tag the branch.
-8. **Tag on main** — once merged: `git fetch origin`, check that
+   `main`, and turn on auto-merge so it lands once CI is green. Do not tag the
+   branch.
+8. **Hand off** — stop here and end your turn with the PR link and this ask
+   to the user, since the tag push is theirs to approve:
+
+   > **Your call:** once the PR has merged, tell me and I'll tag
+   > `v<version>` on `origin/main` and push the tag. Pushing it publishes to
+   > PyPI and builds the desktop apps.
+
+   Don't poll CI or wait on the merge in the meantime.
+9. **Tag on main** — when the user says go: `git fetch origin`, check that
+   the PR has merged and that
    `origin/main`'s `scanpath_studio/__init__.py` holds the new version, then
-   `git tag v<version> origin/main` and `git push origin v<version>`. Confirm
-   with the user immediately before the push: pushing a `v*` tag triggers the
+   `git tag v<version> origin/main` and `git push origin v<version>`. The
+   user's go-ahead from step 8 is the confirmation: pushing a `v*` tag triggers the
    `Publish to PyPI` workflow (`.github/workflows/publish.yml`, Trusted
    Publishing) and the `Desktop builds` workflow
    (`.github/workflows/desktop.yml`), which attaches per-OS bundles to the

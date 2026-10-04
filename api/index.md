@@ -394,6 +394,8 @@ The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(par
 
 `compare_stimulus` picks whose word boxes and text an **overlay** draws — `"both"` (default), `"a"` or `"b"`. Two datasets' AOIs coincide only when the text is identical. Split layouts ignore it; each panel owns its own stimulus.
 
+**Per-scanpath style.** `style_a` / `style_b` restyle one scanpath: `fix_color`, `marker_size_range`, `opacity`, `hollow`, `saccade_color`, `saccade_style`, `saccade_width` and `box_color` — the outline of that reading's word boxes, its `fix_color` when left out. `box_color` is this figure's only: the co-animation draws one set of boxes, in `word_box_color`, and ignores it.
+
 **Filters, per scanpath (CMP-24).** `fixation_flags` and `saccade_classes` filter both scanpaths, as they filter plot_scanpath's one; the same two keys in `style_a` / `style_b` give that scanpath its own, overriding them — e.g. `style_b={"fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80}}, "saccade_classes": ["regression"]}`. The app's Compare mode draws A under the rail's filters and B under B's own. `fix_index_range` windows both scanpaths; `fix_index_range_b` gives B a window of its own (the app's B slider).
 
 **Raw gaze (VIZ-48).** `raw_gaze` is a frame from load_raw_gaze; each reading's samples are drawn under its scanpath, in that scanpath's colour (`raw_gaze_marker_size` / `raw_gaze_opacity` style them). It serves both readings of a same-dataset comparison; across datasets it is A's, and `raw_gaze_b` is B's. Passing either turns the layer on; `show_raw_gaze=False` keeps it off.

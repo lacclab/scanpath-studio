@@ -1908,6 +1908,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>Color by now also offers the other numeric fixation columns a dataset kept (a pupil size, say), under the dataset's own names, after the familiar fields; load_scanpath_data(keep_columns=...) and render --keep-columns carry such a column through headless loading, and the Share code snippet keeps it. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
 <li>The Data page has a Data checks line that flags fixations lasting 0 ms or less, positions that are missing or infinite, and word boxes with no area, with the rows and trials affected, your own column names, example rows and what the app does with them; check_data_health runs the same checks from Python. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
 <li>A numeric trial filter, including one from a participant, trial or text table, now has a Keep unknown values choice that can leave out the records with no value, and says how many records that concerns. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
+<li>In Compare, each reading's word-box outline can be recoloured (Word boxes → Line A / Line B, <code>box_color</code> in <code>--style-a</code> / <code>--style-b</code>, <code>style_a</code> / <code>style_b</code> and the share link); it still follows the scanpath's colour until you pick one. (<a href="https://github.com/lacclab/scanpath-studio/issues/345">#345</a>)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
@@ -1943,6 +1944,7 @@ behind each line, and the releases before 0.28.0, are in
 <li>The animated replay builds about three times faster on a long trial, most of all with heart or hollow fixations or colour by a value. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
 <li>The duration-weighted word heatmap's colour bar is titled Dwell time per word (ms), so it is not mistaken for a fixation-duration colour bar beside it. (<a href="https://github.com/lacclab/scanpath-studio/issues/339">#339</a>)</li>
 <li>Word boxes have their own section on the plot rail, with an outline colour, a fill colour and a fill opacity (also <code>--word-box-color</code> / <code>--word-box-fill-color</code> / <code>--word-box-fill-opacity</code> and the matching <code>word_box_*</code> API options), and the word and fixation hover fields moved together under Figure &amp; canvas → Hover. (<a href="https://github.com/lacclab/scanpath-studio/issues/343">#343</a>)</li>
+<li>In Compare, the Fixations popover's Marker group is scanpath A's — its colour, size and opacity set A directly — with scanpath B's group right under it, instead of greyed figure-wide rows above two separate per-scanpath groups. (<a href="https://github.com/lacclab/scanpath-studio/issues/345">#345</a>)</li>
 </ul>
 <p><strong>Removed</strong></p>
 <ul>

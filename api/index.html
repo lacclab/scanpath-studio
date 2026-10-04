@@ -3523,6 +3523,12 @@ since sharing a dataset says nothing about sharing a page.</p>
 <code>"both"</code> (default), <code>"a"</code> or <code>"b"</code>. Two datasets' <abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr> coincide only
 when the text is identical. Split layouts ignore it; each panel owns its own
 stimulus.</p>
+<p><strong>Per-scanpath style.</strong> <code>style_a</code> / <code>style_b</code> restyle one scanpath:
+<code>fix_color</code>, <code>marker_size_range</code>, <code>opacity</code>, <code>hollow</code>,
+<code>saccade_color</code>, <code>saccade_style</code>, <code>saccade_width</code> and <code>box_color</code> —
+the outline of that reading's word boxes, its <code>fix_color</code> when left out.
+<code>box_color</code> is this figure's only: the co-animation draws one set of boxes,
+in <code>word_box_color</code>, and ignores it.</p>
 <p><strong>Filters, per scanpath (CMP-24).</strong> <code>fixation_flags</code> and
 <code>saccade_classes</code> filter both scanpaths, as they filter
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>'s one; the same two keys

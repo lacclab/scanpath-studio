@@ -1,0 +1,1 @@
+GIF and MP4 exports keep the figure's caption, duration key and Illustration label in every frame, with the elapsed-time readout added beside them instead of written over them, and keep the margins that hold a title, caption, colour bar or coordinate-grid labels.

@@ -24,7 +24,7 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
-from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
+from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME, SAMPLE_INDEX
 from .multipart import (
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
@@ -3507,14 +3507,20 @@ def normalize_raw_gaze(
         df["word_id"] = raw_gaze[schema["word_id"]]
     df["x"] = _to_number(raw_gaze[schema["x"]])
     df["y"] = _to_number(raw_gaze[schema["y"]])
+    skip = _schema_source_columns(schema)
     if schema.get("timestamp"):
         onset = schema["timestamp"]
         df["timestamp_ms"] = _as_ms(_to_number(raw_gaze[onset]), onset)  # DATA-40
     else:
-        # Each row represents one millisecond, so use row index within trial as timestamp
-        df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
+        # No clock: the samples keep their order (1, 2, … per trial) and no
+        # time. Nothing says how far apart they were recorded, so a made-up
+        # `timestamp_ms` would be a sampling rate the data never stated — and
+        # it would reach the plot's colour scale, hover and the exports as ms.
+        df[SAMPLE_INDEX] = df.groupby(list(PARENT_KEY), sort=False).cumcount() + 1
+        # A kept extra named `timestamp_ms` would be read as that clock again.
+        skip = skip | {"timestamp_ms"}
     if keep_columns is not None:
-        _carry_extra_columns(df, raw_gaze, keep_columns, _schema_source_columns(schema))
+        _carry_extra_columns(df, raw_gaze, keep_columns, skip)
     df = _preserve_composite_columns(df, raw_gaze, schema["trial"])
     return df
 
@@ -5604,6 +5610,7 @@ def filter_trials(
     participants: list | None = None,
     metadata: dict[str, set] | None = None,
     ranges: dict[str, tuple[float, float]] | None = None,
+    drop_unknown: Iterable[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Narrow words + fixations by participant and by trial metadata.
 
@@ -5619,8 +5626,11 @@ def filter_trials(
     a narrowing control, so a reader missing a comprehension score is not what
     the user asked to exclude — and pandas compares ``NaN`` as ``False``, so the
     obvious bare ``.between()`` would silently drop every one of them.
+    ``drop_unknown`` names the ranged columns whose researcher unticked *Keep
+    unknown values*: there, a row with no value is left out with the rest.
     """
     w, f = words, fixations
+    dropping = set(drop_unknown or ())
     # `None` is "no constraint"; an **empty list is a constraint that nothing
     # satisfies** and must empty the pool. The two were conflated while every
     # producer could only emit None-or-non-empty, but DATA-20's metadata
@@ -5650,7 +5660,9 @@ def filter_trials(
             if col not in frame.columns:
                 continue
             values = pd.to_numeric(frame[col], errors="coerce")
-            mask = values.between(lo, hi) | values.isna()
+            mask = values.between(lo, hi)
+            if col not in dropping:
+                mask |= values.isna()
             if frame_name == "w":
                 w = w[mask]
             else:

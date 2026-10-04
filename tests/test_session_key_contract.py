@@ -433,7 +433,11 @@ def _restore_config_app():
 
     from scanpath_studio.constants import SACCADE_CLASS_EDITABLE
     from scanpath_studio.controls import color_field_options, numeric_field_options
-    from scanpath_studio.url_state import _PLOT_CONFIG_LAYER_KEYS, _restore_plot_config
+    from scanpath_studio.url_state import (
+        _PLOT_CONFIG_LAYER_KEYS,
+        _restore_plot_config,
+        apply_pending_preprocessing,
+    )
     from scanpath_studio.utils import build_combo_options
 
     fixations = pd.DataFrame(st.session_state["_fix"])
@@ -555,11 +559,20 @@ def _restore_config_app():
         # list above. Both fields are validated against the segmented controls'
         # options, so placeholders would be skipped rather than written.
         "compare_view": {"layout": "Stacked", "stimulus": "A", "legend": True},
-        "selection": {"participant_id": "p1", "trial_id": "t1"},
+        "selection": {
+            "participant_id": "p1",
+            "trial_id": "t1",
+            # Schema 6 — scanpath B by identity, in the same dataset.
+            "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
+        },
+        "mode": {"animate": True, "compare": True},
         "annotations": [],
     }
     before = set(st.session_state.keys())
     applied, skipped = _restore_plot_config(config, combos, fixations)
+    # With the Preprocessing panel shown its keys are staged for the next run,
+    # which applies them before those widgets render; do that step here too.
+    apply_pending_preprocessing()
     st.session_state["_written"] = sorted(
         set(st.session_state.keys()) - before - {"_written", "_applied", "_skipped"}
     )

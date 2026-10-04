@@ -302,6 +302,7 @@ from scanpath_studio.plots import (
 from scanpath_studio.session_keys import (
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_ANIMATE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
@@ -1038,16 +1039,6 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
         "isn't meaningful. Compare two readings of the same text, or switch to a "
         "side-by-side layout."
     )
-
-
-def _trial_text_id(trial_words: pd.DataFrame) -> str | None:
-    """Best-available text identifier for a trial's words (for same-text checks)."""
-    for col in ("unique_text_id", "text_id"):
-        if col in trial_words.columns and not trial_words.empty:
-            value = trial_words[col].iloc[0]
-            if pd.notna(value):
-                return str(value)
-    return None
 
 
 _MIME_FOR_FORMAT = {
@@ -2390,12 +2381,18 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         participants=filters["participants"],
         metadata=filters["metadata"],
         ranges=filters.get("ranges"),
+        drop_unknown=filters.get("ranges_drop_unknown"),
     )
     assign_derived(
         (words, fixations),
         "filter_trials",
         (source.words, source.fixations),
-        (filters["participants"], filters["metadata"], filters.get("ranges")),
+        (
+            filters["participants"],
+            filters["metadata"],
+            filters.get("ranges"),
+            tuple(filters.get("ranges_drop_unknown") or ()),
+        ),
     )
     selected_keys = filters.get("trial_keys")
     if selected_keys is not None:
@@ -2705,6 +2702,15 @@ def _render_compare_selector(
         wanted = respell_reading(*wanted, identity_to_label)
         if wanted in identity_to_label:
             st.session_state[sel_key] = identity_to_label[wanted]
+        else:
+            # A link or settings file named a B this pool cannot answer — say
+            # so, rather than let the default candidate pass for the pair.
+            st.warning(
+                f"Couldn't restore scanpath B: reader {wanted[0]}'s trial "
+                f"{wanted[1]} is not among B's trials. Showing another reading "
+                "instead.",
+                icon=ICONS["warning"],
+            )
 
     # CMP-13 (the "B suddenly skips to a different trial" report): the widget key
     # holds a *label*, and the labels are rebuilt relative to A — the 📄 same-text
@@ -3719,6 +3725,27 @@ def _build_studio_config(
             return {}
         return {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
 
+    # Schema 6: the *requested* mode (the switches), as a link records it.
+    animate_on = bool(st.session_state.get(SINGLE_ANIMATE, False))
+    compare_on = bool(st.session_state.get(SINGLE_COMPARE_TOGGLE, False))
+    published = (st.session_state.get("_share_selection") or {}).get("compare")
+    compare_b = (
+        {
+            "participant_id": str(published["participant_id"]),
+            "trial_id": str(published["trial_id"]),
+            "source": published.get("source") or None,
+            "screen_id": (
+                str(published["screen_id"])
+                if published.get("screen_id") not in (None, "")
+                else None
+            ),
+        }
+        if compare_on
+        and isinstance(published, dict)
+        and published.get("trial_id") not in (None, "")
+        else None
+    )
+
     return {
         # Schema 4 (UX-179) = the figure only; older files still restore
         # through the same reader, which ignores what they carry beyond it.
@@ -3736,7 +3763,13 @@ def _build_studio_config(
                 if st.session_state.get("single_screen_id") not in (None, "")
                 else {}
             ),
+            # Schema 6: scanpath B by identity — reader, trial, dataset (None
+            # = A's) and screen — as the figure last published it for Share.
+            **({"compare": compare_b} if compare_b else {}),
         },
+        # Schema 6: the mode the figure was saved in. Written both ways, so a
+        # static file restores as static rather than leaving a replay running.
+        "mode": {"animate": animate_on, "compare": compare_on},
         "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
         "experimental_setup": {
             "monitor_width_mm": float(
@@ -4793,8 +4826,9 @@ def _plan_replay(
     animation_settings = settings.with_overrides(
         playback_speed=playback_speed,
         # Drift correction colours the replay by assigned line, exactly as the
-        # static figure does once an algorithm is picked.
-        color_by_line=bool(settings.color_by_line or drift_corrected),
+        # static figure does once an algorithm is picked. Not the co-animation:
+        # it colours like the comparison figure, which keeps the rail's choice.
+        color_by_line=bool(settings.color_by_line or (drift_corrected and not dual)),
         # The replay has no border-overlay layer, so only the text-marking mode
         # carries a highlight column.
         highlight_column=_marked_text_column(viz_settings),
@@ -7214,8 +7248,8 @@ def render_single_trial_tab(
                 # A co-replay is always one coordinate space (`requested_layout`
                 # is forced to overlay above), so the overlay wording applies.
                 text_note = _different_texts_note(
-                    _trial_text_id(trial_words),
-                    _trial_text_id(compare_meta["words"]),
+                    _trial_text_id(trial_words, trial_fixations),
+                    _trial_text_id(compare_meta["words"], compare_meta["fixations"]),
                 )
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])
@@ -11760,14 +11794,32 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     id) into a single passage string. Cached on a cheap content fingerprint of
     the words frame (the frame itself is passed un-hashed via the underscore
     arg) so a rerun that doesn't change the data reuses the result.
+
+    A multipart text is read screen by screen, and its word ids (and lines)
+    may start again on every screen: a word is ``(screen, word id)`` there, the
+    screens go in their ``screen_index`` order (the earliest any reader saw
+    each, since MultiplEYE shuffles question screens per reader), and every
+    screen of a text with more than one opens with its own ``[screen id]``
+    marker — naming the screen's kind when the data has one — with a
+    *# Screens* column beside.
     """
     empty = pd.DataFrame(columns=["Text ID", "# Words", "Text"])
     if _words.empty or "text_id" not in _words.columns or "text" not in _words.columns:
         return empty
 
+    multipart = SCREEN_ID in _words.columns
     cols = [
         c
-        for c in ("text_id", "unique_text_id", "word_id", "line_idx", "text")
+        for c in (
+            "text_id",
+            "unique_text_id",
+            SCREEN_ID,
+            SCREEN_INDEX,
+            "screen_kind",
+            "word_id",
+            "line_idx",
+            "text",
+        )
         if c in _words.columns
     ]
     sub = _words[cols].copy()
@@ -11775,15 +11827,34 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     if sub.empty:
         return empty
 
-    # Collapse identical word rows coming from multiple participants (stimulus
-    # AoIs are shared by every reader; per-participant tables repeat them).
-    if "word_id" in sub.columns:
-        sub = sub.drop_duplicates(subset=["text_id", "word_id"])
-    else:
-        sub = sub.drop_duplicates()
+    if multipart:
+        sub[SCREEN_ID] = sub[SCREEN_ID].astype("string").fillna("")
+        # One position per screen of a text: the earliest any reader had it.
+        position = (
+            pd.to_numeric(sub[SCREEN_INDEX], errors="coerce")
+            if SCREEN_INDEX in sub.columns
+            else pd.Series(np.nan, index=sub.index)
+        )
+        sub["_screen_order"] = position.groupby(
+            [sub["text_id"], sub[SCREEN_ID]], dropna=False
+        ).transform("min")
 
-    sort_cols = ["text_id"] + [c for c in ("line_idx", "word_id") if c in sub.columns]
-    sub = sub.sort_values(sort_cols, kind="stable")
+    # Collapse identical word rows coming from multiple participants (stimulus
+    # AoIs are shared by every reader; per-participant tables repeat them). On
+    # a multipart text a word is only the same word on the same screen.
+    word_key = ["text_id", *([SCREEN_ID] if multipart else [])]
+    if "word_id" in sub.columns:
+        sub = sub.drop_duplicates(subset=[*word_key, "word_id"])
+    else:
+        sub = sub.drop_duplicates(subset=[c for c in sub.columns if c != SCREEN_INDEX])
+
+    screen_sort = ["_screen_order", SCREEN_ID] if multipart else []
+    sort_cols = (
+        ["text_id"]
+        + screen_sort
+        + [c for c in ("line_idx", "word_id") if c in sub.columns]
+    )
+    sub = sub.sort_values(sort_cols, kind="stable", na_position="last")
 
     # Only surface unique_text_id as its own column when it actually differs
     # from text_id (after the unique_paragraph_id fallback they're identical).
@@ -11791,14 +11862,31 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
         sub["unique_text_id"].astype(str).eq(sub["text_id"].astype(str)).all()
     )
 
+    def _words_of(frame: pd.DataFrame) -> list[str]:
+        return [w for w in frame["text"].astype(str).tolist() if w and w != "nan"]
+
+    def _screen_marker(screen_id: str, frame: pd.DataFrame) -> str:
+        label = screen_id or "(no screen id)"
+        if "screen_kind" in frame.columns:
+            kinds = frame["screen_kind"].dropna().astype(str).unique().tolist()
+            if len(kinds) == 1 and kinds[0].lower() not in label.lower():
+                label = f"{label} · {kinds[0]}"
+        return f"[{label}]"
+
     rows = []
     for text_id, grp in sub.groupby("text_id", sort=False):
-        words_list = [w for w in grp["text"].astype(str).tolist() if w and w != "nan"]
-        row = {
-            "Text ID": text_id,
-            "# Words": len(words_list),
-            "Text": " ".join(words_list),
-        }
+        words_list = _words_of(grp)
+        n_screens = grp[SCREEN_ID].nunique() if multipart else 1
+        if n_screens > 1:
+            text = " ".join(
+                " ".join([_screen_marker(str(screen), page), *_words_of(page)])
+                for screen, page in grp.groupby(SCREEN_ID, sort=False)
+            )
+        else:
+            text = " ".join(words_list)
+        row = {"Text ID": text_id, "# Words": len(words_list), "Text": text}
+        if multipart:
+            row["# Screens"] = n_screens
         if has_unique:
             uniques = grp["unique_text_id"].dropna().astype(str).unique().tolist()
             row["Unique Text ID"] = ", ".join(uniques)
@@ -11808,6 +11896,8 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
     ordered = ["Text ID"]
     if has_unique:
         ordered.append("Unique Text ID")
+    if multipart:
+        ordered.append("# Screens")
     ordered += ["# Words", "Text"]
     return result[[c for c in ordered if c in result.columns]]
 
@@ -12395,6 +12485,7 @@ def _participant_metadata_body(
         # caption + colored banner this used to be.
         parts = [f"~{id_count:,} identified" if id_count is not None else None]
         parts.append(f"{matched:,} joined")
+        parts.append(_combined_rows_note(report))
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-20 — zero matches is the same silent trap the trial table had
@@ -12626,6 +12717,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         # caption + colored banner this used to be.
         parts = [f"~{id_count:,} identified" if id_count is not None else None]
         parts.append(f"{matched:,} joined")
+        parts.append(_combined_rows_note(report))
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # DATA-29 — nothing matched. This used to read as a quiet blue
@@ -12833,12 +12925,28 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         # caption + colored banner this used to be.
         parts = [f"~{id_count:,} identified" if id_count is not None else None]
         parts.append(f"{matched:,} joined")
+        parts.append(_combined_rows_note(report))
         status_host.caption(" · ".join(p for p in parts if p))
     else:
         # Loud on purpose — unlike the line above, this stays a real alert
         # (DATA-20/29's "a metadata table that joins to nothing says so").
         with status_host:
             _render_key_mismatch(attached, report, "text")
+
+
+def _combined_rows_note(report) -> str | None:
+    """``combined 2 compatible duplicate rows`` — or ``None`` when none were.
+
+    Rows that repeat a key without disagreeing are folded into one, each field
+    taking the one value they hold (`metadata._merge_duplicates`); the status
+    line says so, so a table shorter than its file is not a surprise.
+    """
+    combined = int(getattr(report, "combined_rows", 0) or 0)
+    if not combined:
+        return None
+    return (
+        f"combined {combined:,} compatible duplicate row{'s' if combined != 1 else ''}"
+    )
 
 
 def _render_key_mismatch(attached, report, grain: str) -> None:
@@ -15437,6 +15545,90 @@ def render_dataset_capabilities(
             + (" · whole dataset, before the trial filters" if filtered else "")
         )
         st.caption("  \n".join(lines))
+
+
+@st.cache_data(show_spinner=False)
+def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
+    """`data_health.check_data_health`, once per dataset (keyed on fingerprints)."""
+    from .data_health import check_data_health
+
+    return check_data_health(_words, _fixations, _raw_gaze)
+
+
+#: How a health finding names the rows of each table.
+_HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "AOI", "raw_gaze": "raw-gaze"}
+
+
+def render_data_health(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+    *,
+    filtered: bool = False,
+) -> None:
+    """*Data checks* under *Available with this dataset*: values that parsed but
+    cannot be right — a fixation of 0 ms or less, a position that is not a finite
+    number, a word box with no area (`data_health`).
+
+    Runs on the whole dataset, before the trial filters, cached per dataset, so
+    a rerun costs a fingerprint lookup. Each finding names the dataset's own
+    columns (DATA-66), counts rows and trials, quotes a few rows and says what
+    the app does with them. Nothing is removed or changed.
+    """
+    from .column_names import active
+
+    findings = _c_data_health(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+    with st.container(key="dataset_health"):
+        st.caption(
+            "**Data checks**"
+            + (" · whole dataset, before the trial filters" if filtered else "")
+        )
+        if not findings:
+            st.caption(
+                "No fixation lasts 0 ms or less, every position is a finite "
+                "number, and every word box has an area."
+            )
+            return
+        lines: dict[str, list[str]] = {"warning": [], "note": []}
+        for finding in findings:
+            names = active(st.session_state, finding.table)
+            columns = ", ".join(f"`{names.label(c)}`" for c in finding.columns)
+            kinds = ", ".join(f"{n:,} {k}" for k, n in finding.breakdown.items())
+            noun = _HEALTH_ROW_NOUN.get(finding.table, finding.table)
+            trials = f"{finding.trials:,} trial" + ("" if finding.trials == 1 else "s")
+            lines[finding.severity].append(
+                f"**{finding.title}** — {finding.rows:,} of {finding.total_rows:,} "
+                f"{noun} rows, in {trials} ({kinds}); from {columns}."
+            )
+        if lines["warning"]:
+            st.warning("  \n".join(lines["warning"]), icon=ICONS["warning"])
+        if lines["note"]:
+            st.caption("  \n".join(lines["note"]))
+        with st.expander("What the data checks found", expanded=False):
+            st.caption(
+                "Nothing is removed or changed: these rows stay in every table "
+                "and export. What each one does in the app:"
+            )
+            for finding in findings:
+                names = active(st.session_state, finding.table)
+                st.markdown(f"**{finding.title}**")
+                st.caption(finding.consequence)
+                if finding.examples:
+                    example = pd.DataFrame(list(finding.examples))
+                    st.dataframe(
+                        example.rename(columns=names.label),
+                        hide_index=True,
+                        width="stretch",
+                    )
 
 
 def render_data_inspection_tab(

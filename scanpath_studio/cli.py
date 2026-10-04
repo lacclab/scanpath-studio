@@ -108,7 +108,8 @@ _SCHEMA_FLAGS = {
 
 
 def _add_schema_flags(group) -> None:
-    """``--word-schema`` / ``--fix-schema`` on ``render`` and ``analyze``."""
+    """``--word-schema`` / ``--fix-schema`` / ``--keep-columns`` on ``render``
+    and ``analyze`` — the loader's own options."""
     for flag, table in (("--word-schema", "--words"), ("--fix-schema", "--fixations")):
         group.add_argument(
             flag,
@@ -120,6 +121,17 @@ def _add_schema_flags(group) -> None:
             "api.load_scanpath_data takes. Needed only when a column isn't "
             "recognised; the error then prints a mapping to start from.",
         )
+    group.add_argument(
+        "--keep-columns",
+        nargs="+",
+        metavar="COLUMN",
+        default=None,
+        help="Further columns of your own to carry through loading under their "
+        "own names (e.g. a pupil size), from whichever table has them — "
+        "normalization keeps only the mapped and recognised fields otherwise. "
+        "A kept fixation column can then be --color-by, an axis or a hover "
+        "field. The keep_columns= of api.load_scanpath_data.",
+    )
 
 
 def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
@@ -1690,6 +1702,18 @@ def _compare_setup_snapshot(canvas: tuple | None):
     )
 
 
+def _print_combined_rows(report) -> None:
+    """Say how many duplicate rows a metadata table folded together."""
+    combined = int(getattr(report, "combined_rows", 0) or 0)
+    if combined:
+        print(
+            f"  combined {combined} compatible duplicate row"
+            f"{'s' if combined != 1 else ''} (each field keeps the one value "
+            "they hold)",
+            file=sys.stderr,
+        )
+
+
 def _format_trial_key(key) -> str:
     """One trial-metadata report key as text (DATA-29).
 
@@ -2425,6 +2449,7 @@ def render(argv: list[str]) -> None:
                     image_root=args.image_root,
                     image_pattern=args.image_pattern,
                     trial_parts_manifest=manifest,
+                    keep_columns=args.keep_columns,
                     names="canonical",
                 )
             except (ValueError, OSError) as exc:
@@ -2494,6 +2519,7 @@ def render(argv: list[str]) -> None:
         ):
             if ids:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
+        _print_combined_rows(report)
 
     # DATA-29: the same, one grain down. A trial table's report is worth more
     # than the participant one, not less: getting the *key* wrong is silent
@@ -2529,6 +2555,7 @@ def render(argv: list[str]) -> None:
                 # code page prints the single glyph as a replacement mark.
                 more = "" if len(keys) <= 20 else f", ... (+{len(keys) - 20})"
                 print(f"  {len(keys)} {label}: {shown}{more}", file=sys.stderr)
+        _print_combined_rows(report)
     elif args.trial_metadata_reader_column:
         raise SystemExit(
             "--trial-metadata-reader-column needs --trial-metadata: it names a "
@@ -2558,6 +2585,7 @@ def render(argv: list[str]) -> None:
         ):
             if ids:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
+        _print_combined_rows(report)
 
     if args.list_trials:
         combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
@@ -3271,6 +3299,7 @@ def analyze(argv: list[str]) -> None:
             word_schema=word_schema,
             fix_schema=fix_schema,
             trial_parts_manifest=manifest,
+            keep_columns=args.keep_columns,
         )
     except (ValueError, OSError) as exc:
         raise SystemExit(_load_error_message(exc)) from exc
@@ -3482,7 +3511,10 @@ def cache(argv: list[str]) -> None:
         print("Stored:  nothing")
         return
     if not status["readable"]:
-        print("Stored:  unreadable (wrong schema or incomplete) — ignored on startup")
+        print(
+            "Stored:  unreadable (wrong schema or incomplete) — the app opens "
+            "without it and leaves it as it is"
+        )
         print(f"Size:    {_human_size(status['bytes'])}")
         return
     names = ", ".join(entry["name"] for entry in status["datasets"]) or "none"
@@ -3497,9 +3529,160 @@ def cache(argv: list[str]) -> None:
         f"{status.get('metadata', 0)} metadata table(s) · "
         f"{status['settings']} setting(s)"
     )
+    # A stored dataset the app cannot restore (a file gone, an entry damaged):
+    # the app holds it back, restores the rest, and keeps it in the cache.
+    for entry in status.get("damaged") or []:
+        print(f"Damaged: {entry['name']} — {entry['reason']} (kept; not restored)")
     print(f"Size:    {_human_size(status['bytes'])}")
     print(f"Written: {status['saved_at']}")
     print("Delete with `scanpath-studio cache --clear`.")
+
+
+def _check_parser() -> argparse.ArgumentParser:
+    """The `check` parser (see `_analyze_parser`)."""
+    parser = argparse.ArgumentParser(
+        prog="scanpath-studio check",
+        description="Run the Data page's Data checks on your tables without "
+        "launching the app: fixations lasting 0 ms or less, fixations and "
+        "raw-gaze samples with no finite position, and word boxes with no "
+        "area. Reports what it finds and changes nothing; the exit status is 0 "
+        "whatever it finds (an unreadable table is an error).",
+    )
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Check the bundled OneStop demo instead of your own tables.",
+    )
+    parser.add_argument("--words", nargs="+", help="Words/IA table(s), as for render.")
+    parser.add_argument(
+        "--fixations", nargs="+", help="Fixations table(s), as for render."
+    )
+    parser.add_argument(
+        "--raw-gaze",
+        nargs="+",
+        metavar="PATH",
+        help="Raw (sample-level) gaze table(s), as for render.",
+    )
+    parser.add_argument(
+        "--raw-gaze-schema",
+        metavar="JSON",
+        help="Column mapping for the --raw-gaze table, replacing auto-detection "
+        "(same shape as --fix-schema).",
+    )
+    parser.add_argument(
+        "--trial-parts-manifest",
+        help="JSON manifest assigning source rows to ordered screens.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the findings as JSON (the rows api.check_data_health returns).",
+    )
+    _add_schema_flags(parser)
+    return parser
+
+
+def _health_report(findings, counts: dict[str, int]) -> str:
+    """The data-check findings as plain text for a terminal."""
+    checked = ", ".join(f"{name} {n:,} rows" for name, n in counts.items())
+    if not findings:
+        return f"Data checks: every check passed ({checked})."
+    lines = [f"Data checks: {len(findings)} finding(s) ({checked})."]
+    for f in findings:
+        trials = f" in {f.trials:,} trial(s)" if f.trials else ""
+        label = "note" if f.severity == "note" else "warning"
+        lines += [
+            "",
+            f"[{label}] {f.title} — {f.table}.{'/'.join(f.columns)}: "
+            f"{f.rows:,} of {f.total_rows:,} rows{trials}",
+        ]
+        if f.breakdown:
+            kinds = ", ".join(f"{n:,} {k}" for k, n in f.breakdown.items())
+            lines.append(f"  by kind: {kinds}")
+        for example in f.examples:
+            row = ", ".join(f"{k}={v}" for k, v in example.items())
+            lines.append(f"  e.g. {row}")
+        lines.append(f"  in the app: {f.consequence}")
+    return "\n".join(lines)
+
+
+def check(argv: list[str]) -> None:
+    """Run the data-health checks on loaded tables (the Data page's *Data checks*).
+
+    Loads the tables the way ``render`` / ``analyze`` do and prints
+    ``api.check_data_health``'s findings. Findings are information, not a
+    failure: nothing is dropped from the tables, so the exit status stays 0.
+    """
+    args = _check_parser().parse_args(argv)
+    if args.sample and (args.words or args.fixations or args.raw_gaze):
+        raise SystemExit("Pass --sample or your own tables, not both.")
+    if not (args.sample or args.words or args.fixations or args.raw_gaze):
+        raise SystemExit(
+            "Nothing to check: pass --words and/or --fixations (and/or "
+            "--raw-gaze), or --sample."
+        )
+    if args.raw_gaze_schema and not args.raw_gaze:
+        raise SystemExit(
+            "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
+        )
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
+    raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+
+    from . import api
+
+    words = fixations = raw_gaze = None
+    if args.sample:
+        words, fixations = api.load_sample_data()
+    elif args.words or args.fixations:
+        manifest = None
+        if args.trial_parts_manifest:
+            try:
+                manifest = json.loads(
+                    Path(args.trial_parts_manifest).read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError) as exc:
+                raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+        try:
+            words, fixations = api.load_scanpath_data(
+                args.words,
+                args.fixations,
+                word_schema=word_schema,
+                fix_schema=fix_schema,
+                trial_parts_manifest=manifest,
+                keep_columns=args.keep_columns,
+            )
+        except (ValueError, OSError) as exc:
+            raise SystemExit(_load_error_message(exc)) from exc
+        # A table that was not given loads as an empty canonical frame; it was
+        # not checked, so it is not reported as checked.
+        if not args.words:
+            words = None
+        if not args.fixations:
+            fixations = None
+    if args.raw_gaze:
+        try:
+            raw_gaze = api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+        except (ValueError, OSError) as exc:
+            raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
+
+    findings = api._health_findings(words, fixations, raw_gaze)
+    if args.json:
+        from .data_health import findings_frame
+
+        records = findings_frame(findings).to_dict("records")
+        print(json.dumps(records, indent=2, default=str))
+        return
+    counts = {
+        name: len(frame)
+        for name, frame in (
+            ("words", words),
+            ("fixations", fixations),
+            ("raw_gaze", raw_gaze),
+        )
+        if frame is not None
+    }
+    print(_health_report(findings, counts))
 
 
 _HELP = f"""scanpath-studio {__version__} — visualize eye-tracking-while-reading scanpaths
@@ -3517,6 +3700,7 @@ usage:
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family
   scanpath-studio corpus …         render a styled corpus-analysis figure
+  scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio --version        print the version
 
@@ -3528,7 +3712,7 @@ SCANPATH_LOCAL_FS=1."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.
-_COMMANDS = ("run", "render", "analyze", "corpus", "cache")
+_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache")
 
 
 def _refuse_unknown_command(word: str) -> None:
@@ -3563,6 +3747,8 @@ def main(argv: list[str] | None = None) -> None:
         analyze(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
+    elif argv[0] == "check":
+        check(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
     elif argv[0] in ("-h", "--help"):

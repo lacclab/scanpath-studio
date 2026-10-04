@@ -1,0 +1,1 @@
+A settings file from Share → File now restores whether the figure was animated or a comparison, and which reading it was compared with (dataset, reader, trial and screen); a static file turns a running replay or comparison off, and a second reading that cannot be found here is reported instead of replaced.

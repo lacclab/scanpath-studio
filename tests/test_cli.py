@@ -819,6 +819,28 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
     assert "Nothing stored" in capsys.readouterr().out
 
 
+def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):
+    """A stored dataset whose file is gone is listed as damaged — the app holds
+    it back and keeps it — beside the ones that restore."""
+    import json as json_module
+
+    from scanpath_studio import persistence
+
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    _seed_cache(tmp_path)
+    slug = persistence._dataset_slug("Corpus")
+    (tmp_path / "datasets" / f"{slug}-words.parquet").unlink()
+
+    cli.main(["cache"])
+    out = capsys.readouterr().out
+    assert "Damaged: Corpus — a stored file is missing" in out
+
+    cli.main(["cache", "--json"])
+    status = json_module.loads(capsys.readouterr().out)
+    assert status["datasets"] == []
+    assert [entry["name"] for entry in status["damaged"]] == ["Corpus"]
+
+
 def test_cache_path_and_json_output(tmp_path, monkeypatch, capsys):
     import json as json_module
 
@@ -1960,3 +1982,67 @@ def test_the_toolbar_mode_is_set_on_every_launch_path():
     assert config["client"]["toolbarMode"] == "viewer"
     launcher = (root / "desktop" / "launcher.py").read_text("utf-8")
     assert '"--client.toolbarMode=viewer"' in launcher
+
+
+def _health_tables(tmp_path):
+    """A words + fixations pair with one 0 ms and one -40 ms fixation."""
+    import pandas as pd
+
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "trial_id": ["t1", "t1"],
+            "word_id": [0, 1],
+            "word": ["a", "b"],
+            "x": [100.0, 140.0],
+            "y": [50.0, 50.0],
+            "width": [40.0, 40.0],
+            "height": [30.0, 30.0],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"] * 3,
+            "trial_id": ["t1"] * 3,
+            "x": [110.0, 150.0, 120.0],
+            "y": [60.0, 60.0, 60.0],
+            "duration": [0.0, -40.0, 200.0],
+        }
+    )
+    words_path, fix_path = tmp_path / "ia.csv", tmp_path / "fix.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fix_path, index=False)
+    return str(words_path), str(fix_path)
+
+
+def test_check_reports_what_the_data_page_reports(tmp_path, capsys):
+    words, fixations = _health_tables(tmp_path)
+    cli.main(["check", "--words", words, "--fixations", fixations])
+    out = capsys.readouterr().out
+    assert "Data checks: 1 finding(s)" in out
+    assert "Fixations lasting 0 ms or less" in out
+    assert "2 of 3 rows in 1 trial(s)" in out
+    assert "1 zero" in out and "1 negative" in out
+    assert "in the app:" in out
+
+
+def test_check_json_is_the_api_table(tmp_path, capsys):
+    import json
+
+    words, fixations = _health_tables(tmp_path)
+    cli.main(["check", "--words", words, "--fixations", fixations, "--json"])
+    records = json.loads(capsys.readouterr().out)
+    assert [r["check"] for r in records] == ["fixation_duration"]
+    assert records[0]["rows"] == 2
+
+
+def test_check_passes_the_sample(capsys):
+    cli.main(["check", "--sample"])
+    assert "every check passed" in capsys.readouterr().out
+
+
+def test_check_needs_an_input():
+    with pytest.raises(SystemExit):
+        cli.main(["check"])
+    with pytest.raises(SystemExit):
+        cli.main(["check", "--sample", "--words", "w.csv"])

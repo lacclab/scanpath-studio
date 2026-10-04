@@ -1,0 +1,1 @@
+One damaged dataset in the on-device recovery cache no longer stops the others, your settings and your annotations from coming back, and the next save no longer drops it: the app names it with Retry and Remove from cache, and a cache that can't be read at all is left as it is instead of overwritten.

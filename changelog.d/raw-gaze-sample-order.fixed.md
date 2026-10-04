@@ -1,0 +1,1 @@
+Raw gaze imported without a timestamp is no longer given made-up millisecond times: its samples are numbered in order, coloured by that order under a Sample order legend title, shown as sample n on hover, and exported with the sample number.

@@ -113,10 +113,11 @@ class TestMarkerSymbol:
         )
         assert any(t.name == "Fixation index" for t in fig.data)
 
-    def test_the_animation_falls_back_rather_than_raising_on_a_glyph(
+    def test_the_animation_draws_a_glyph_trail(
         self, normalized_words_df, normalized_fixations_df
     ):
-        """The trail restates a Plotly marker per frame, which can't take ♥."""
+        """The replay's trail is drawn as the glyph too, frame by frame, and
+        never hands Plotly a ``heart`` marker symbol it would reject."""
         fig = api.animate_scanpath(
             normalized_words_df,
             normalized_fixations_df,
@@ -127,6 +128,14 @@ class TestMarkerSymbol:
             getattr(t.marker, "symbol", None) for t in fig.data if hasattr(t, "marker")
         }
         assert "heart" not in symbols
+        trail = next(t for t in fig.data if t.name == "Scanpath A")
+        assert trail.mode == "text" and set(trail.text) == {"♥"}
+        assert len(trail.textfont.size) == len(trail.x)
+        index = list(fig.data).index(trail)
+        frame = fig.frames[-1]
+        restated = frame.data[list(frame.traces).index(index)]
+        assert set(restated.text) == {"♥"}
+        assert all(x is not None for x in restated.x)
 
     def test_animation_honours_the_symbol(
         self, normalized_words_df, normalized_fixations_df

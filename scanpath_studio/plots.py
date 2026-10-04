@@ -89,7 +89,8 @@ class FigureSettings:
     show_words: bool = True
     #: The word boxes' outline colour, and their fill — a colour drawn at
     #: ``word_box_fill_opacity``. A comparison outlines each reading's boxes in
-    #: its scanpath colour instead, so ``word_box_color`` is static/replay only.
+    #: its scanpath's ``box_color`` style (its fixation colour by default)
+    #: instead, so ``word_box_color`` is static/replay only.
     word_box_color: str = WORD_BOX_COLOR
     word_box_fill_color: str = WORD_BOX_FILL_COLOR
     word_box_fill_opacity: float = WORD_BOX_FILL_OPACITY
@@ -6299,6 +6300,9 @@ def _make_split_comparison_figure(
                 display_name=display_name,
                 style=style,
                 color=style["fix_color"],
+                # The word-box outline: the scanpath's own colour unless its
+                # style names one (`box_color`).
+                box_color=style.get("box_color") or style["fix_color"],
             )
         )
 
@@ -6479,7 +6483,7 @@ def _make_split_comparison_figure(
         if show_words and not trial_words.empty:
             for box in build_word_boxes(
                 trial_words,
-                color=spec["color"],
+                color=spec["box_color"],
                 fill_color=settings.word_box_fill_color,
                 fill_opacity=settings.word_box_fill_opacity,
             ):
@@ -6782,6 +6786,9 @@ def _render_comparison_figure(
                 display_name=display_name,
                 style=style,
                 color=style["fix_color"],
+                # The word-box outline: the scanpath's own colour unless its
+                # style names one (`box_color`).
+                box_color=style.get("box_color") or style["fix_color"],
             )
         )
 
@@ -6902,7 +6909,7 @@ def _render_comparison_figure(
                 shapes=existing
                 + build_word_boxes(
                     spec["trial_words"],
-                    color=spec["color"],
+                    color=spec["box_color"],
                     fill_color=settings.word_box_fill_color,
                     fill_opacity=settings.word_box_fill_opacity,
                 )

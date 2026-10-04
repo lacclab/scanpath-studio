@@ -2948,6 +2948,13 @@ def compare_scanpaths(
     when the text is identical. Split layouts ignore it; each panel owns its own
     stimulus.
 
+    **Per-scanpath style.** ``style_a`` / ``style_b`` restyle one scanpath:
+    ``fix_color``, ``marker_size_range``, ``opacity``, ``hollow``,
+    ``saccade_color``, ``saccade_style``, ``saccade_width`` and ``box_color`` —
+    the outline of that reading's word boxes, its ``fix_color`` when left out.
+    ``box_color`` is this figure's only: the co-animation draws one set of boxes,
+    in ``word_box_color``, and ignores it.
+
     **Filters, per scanpath (CMP-24).** ``fixation_flags`` and
     ``saccade_classes`` filter both scanpaths, as they filter
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s one; the same two keys

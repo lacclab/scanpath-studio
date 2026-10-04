@@ -594,3 +594,42 @@ def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layou
     )
     opacities = [t.marker.opacity for t in fig.data if t.mode and "markers" in t.mode]
     assert opacities == [seeded["cmp0_opacity"], seeded["cmp1_opacity"]]
+
+
+class TestBoxOutline:
+    """Each reading's word boxes are outlined in its fixation colour unless its
+    style names a `box_color` — the Compare rail's *Line A* / *Line B*."""
+
+    @staticmethod
+    def _outlines(**styles) -> set:
+        from scanpath_studio.plots import _shape_layer
+
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            show_words=True,
+            **styles,
+        )
+        return {
+            shape.line.color
+            for shape in fig.layout.shapes
+            if _shape_layer(shape) == "word_boxes"
+        }
+
+    def test_the_default_is_each_scanpaths_colour(self):
+        outlines = self._outlines(
+            style_a={"fix_color": "#aa0000"}, style_b={"fix_color": "#0000aa"}
+        )
+        assert outlines == {"#aa0000", "#0000aa"}
+
+    def test_a_box_color_overrides_it_per_scanpath(self):
+        outlines = self._outlines(
+            style_a={"fix_color": "#aa0000", "box_color": "#123456"},
+            style_b={"fix_color": "#0000aa"},
+        )
+        assert outlines == {"#123456", "#0000aa"}

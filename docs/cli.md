@@ -146,12 +146,15 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 `--style-a` / `--style-b` (below) style it as they style the comparison.
 
 `--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows
-under :material/blur_on: Fixations and :material/arrow_outward: Saccades), `compare_scanpaths`'s `style_a` / `style_b`:
-a comma-separated `KEY=VALUE` list, repeatable, with `fix_color` and
-`saccade_color` (`#RRGGBB`), `saccade_style` (`solid`, `dash`, `dot`,
-`dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity`
-(0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's
-default.
+under :material/blur_on: Fixations, :material/arrow_outward: Saccades and the
+word boxes' *Line A* / *Line B*), `compare_scanpaths`'s `style_a` / `style_b`:
+a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`,
+`saccade_color` and `box_color` (`#RRGGBB`; `box_color` outlines that reading's
+word boxes, its `fix_color` when left out — static comparison only, the
+`--animate` co-animation draws one set of boxes), `saccade_style` (`solid`, `dash`,
+`dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`),
+`opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that
+scanpath's default.
 
 ```bash
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \

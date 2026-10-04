@@ -2046,3 +2046,13 @@ def test_check_needs_an_input():
         cli.main(["check"])
     with pytest.raises(SystemExit):
         cli.main(["check", "--sample", "--words", "w.csv"])
+
+
+def test_style_spec_reads_a_box_color():
+    from scanpath_studio.cli import _parse_style_spec
+
+    assert _parse_style_spec(["box_color=#abcdef"], "--style-a") == {
+        "box_color": "#abcdef"
+    }
+    with pytest.raises(SystemExit):
+        _parse_style_spec(["box_color=red"], "--style-a")

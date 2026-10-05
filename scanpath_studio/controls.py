@@ -57,6 +57,7 @@ from .constants import (
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
+    WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
@@ -764,6 +765,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_raw_gaze_opacity": 0.6,
     # ⬚ Word boxes' own style — previously fixed in `plots.build_word_boxes`.
     "global_word_box_color": WORD_BOX_COLOR,
+    "global_word_box_line_opacity": WORD_BOX_LINE_OPACITY,
     "global_word_box_fill_color": WORD_BOX_FILL_COLOR,
     "global_word_box_fill_opacity": WORD_BOX_FILL_OPACITY,
     "global_show_stimulus_image": False,
@@ -785,7 +787,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # "Log" maps to log1p(value), compressing heavy-tailed dwell times so a few
     # very-hot words don't wash out the rest.
     "global_heatmap_norm": "Linear",
-    "global_show_colorbars": False,
+    "global_show_colorbars": True,
     # Frame the view to the whole presentation monitor (scanpath sits at its true
     # on-screen position) rather than cropping to the data extent. Default on.
     "global_fit_to_monitor": True,
@@ -4299,6 +4301,35 @@ def _render_compare_saccade_styles() -> None:
         )
 
 
+#: ``colour | opacity slider + box`` inside one ⬚ Word boxes row: the swatch
+#: takes only what it needs and the opacity fills the rest of the line.
+_COLOR_OPACITY_W = (1.0, 4.5)
+
+
+def _box_opacity(
+    host, *, key: str, label: str, help: str, persist_state: str | None = None
+) -> None:
+    """One ⬚ Word boxes opacity (outline or fill), drawn beside its colour."""
+    _numeric_slider(
+        st,
+        label,
+        key=key,
+        persist_state=persist_state,
+        min_value=0.0,
+        max_value=1.0,
+        step=0.01,
+        number_format="%.2f",
+        help=help,
+        field_host=host,
+    )
+
+
+_LINE_OPACITY_HELP = (
+    "How strongly the outline shows; 1 draws it solid, 0 hides it and leaves "
+    "only the fill."
+)
+
+
 def _render_compare_box_lines(section_help: str) -> None:
     """The word-box outline per scanpath, for the static comparison.
 
@@ -4329,12 +4360,22 @@ def _render_compare_box_lines(section_help: str) -> None:
             f"Colour of {name}'s word-box outlines — its fixation colour until "
             "you pick another. Pick that colour again to go back to following it.",
         )
-        _sub_row(
+        color_col, opacity_col = _sub_row(
             f"Line {name[-1]}",
             section="Box" if idx == 0 else None,
             section_help=section_help,
             caption_help=line_help,
-        ).color_picker(
+        ).columns(_COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center")
+        # One outline opacity for both readings, on the first row.
+        if idx == 0:
+            _box_opacity(
+                opacity_col,
+                key="global_word_box_line_opacity",
+                persist_state="session",
+                label="Line opacity",
+                help=f"{_LINE_OPACITY_HELP} Applies to both scanpaths' outlines.",
+            )
+        color_col.color_picker(
             f"{name} — word box line color",
             key=pick_key,
             on_change=_apply,
@@ -4825,6 +4866,9 @@ def _collect_viz_settings(
     return dict(
         show_words=bool(ss.get("global_show_words")),
         word_box_color=ss.get("global_word_box_color") or WORD_BOX_COLOR,
+        word_box_line_opacity=float(
+            ss.get("global_word_box_line_opacity", WORD_BOX_LINE_OPACITY)
+        ),
         word_box_fill_color=ss.get("global_word_box_fill_color") or WORD_BOX_FILL_COLOR,
         word_box_fill_opacity=float(
             ss.get("global_word_box_fill_opacity", WORD_BOX_FILL_OPACITY)
@@ -6846,12 +6890,13 @@ def render_plot_controls(
             line_disabled, line_help = _layer_gate(
                 False, "Colour of each word box's outline."
             )
-            _sub_row(
+            color_col, opacity_col = _sub_row(
                 "Line",
                 section="Box",
                 section_help=box_section_help,
                 caption_help=line_help,
-            ).color_picker(
+            ).columns(_COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center")
+            color_col.color_picker(
                 "Line color",
                 key="global_word_box_color",
                 persist_state="session",
@@ -6859,10 +6904,23 @@ def render_plot_controls(
                 help=line_help,
                 label_visibility="collapsed",
             )
+            _box_opacity(
+                opacity_col,
+                key="global_word_box_line_opacity",
+                persist_state="session",
+                label="Line opacity",
+                help=_LINE_OPACITY_HELP,
+            )
         fill_disabled, fill_help = _layer_gate(
-            False, "Colour the inside of each box is filled with."
+            False,
+            "Colour the inside of each box is filled with, at the opacity beside "
+            "it. Keep that low so the text, fixations and image under the boxes "
+            "still read; 0 draws outlines only.",
         )
-        _sub_row("Fill", caption_help=fill_help).color_picker(
+        color_col, opacity_col = _sub_row("Fill", caption_help=fill_help).columns(
+            _COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        color_col.color_picker(
             "Fill color",
             key="global_word_box_fill_color",
             persist_state="session",
@@ -6870,23 +6928,12 @@ def render_plot_controls(
             help=fill_help,
             label_visibility="collapsed",
         )
-        fill_opacity_help = (
-            "How strongly the fill shows. Keep it low so the text, fixations "
-            "and image under the boxes still read; 0 draws outlines only."
-        )
-        _numeric_slider(
-            st,
-            "Fill opacity",
+        _box_opacity(
+            opacity_col,
             key="global_word_box_fill_opacity",
             persist_state="session",
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-            number_format="%.2f",
-            help=fill_opacity_help,
-            field_host=_sub_row(
-                "Opacity", caption_help=_layer_gate(False, fill_opacity_help)[1]
-            ),
+            label="Fill opacity",
+            help="How strongly the fill shows; 0 draws outlines only.",
         )
 
     # --- Figure & canvas --------------------------------------------------

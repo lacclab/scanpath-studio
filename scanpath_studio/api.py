@@ -160,6 +160,7 @@ _ANIMATION_FIGURE_PARAMS = (
 _CANONICAL_OPTION_NAMES = {
     "show_words",
     "word_box_color",
+    "word_box_line_opacity",
     "word_box_fill_color",
     "word_box_fill_opacity",
     "show_word_labels",

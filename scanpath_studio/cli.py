@@ -1125,27 +1125,27 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Frame the axes on the data instead of the whole --canvas monitor.",
     )
     viz.add_argument(
-        "--colorbars",
+        "--no-colorbars",
         dest="show_colorbars",
-        action="store_true",
-        help="Draw the colour bars for --color-by and the heatmap.",
+        action="store_false",
+        help="Leave out the colour bars for --color-by and the heatmap.",
     )
     viz.add_argument(
         "--colorbar-orientation",
         choices=["vertical", "horizontal"],
-        help="With --colorbars: beside the plot (vertical, default) or below it.",
+        help="With the colour bars on: beside the plot (vertical, default) or below it.",
     )
     viz.add_argument(
         "--colorbar-tickangle",
         type=int,
         metavar="DEG",
-        help="With --colorbars: tick-label angle, -90–90 (default: 0).",
+        help="With the colour bars on: tick-label angle, -90–90 (default: 0).",
     )
     viz.add_argument(
         "--colorbar-tickfont-size",
         type=int,
         metavar="PX",
-        help="With --colorbars: tick-label size (default: 12).",
+        help="With the colour bars on: tick-label size (default: 12).",
     )
     viz.add_argument(
         "--raw-gaze",
@@ -1187,6 +1187,13 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="COLOR",
         help="Word-box outline colour (default: #6c757d). A comparison outlines "
         "each reading's boxes in its scanpath colour instead.",
+    )
+    viz.add_argument(
+        "--word-box-line-opacity",
+        type=float,
+        metavar="O",
+        help="Word-box outline opacity, 0–1; 0 draws the fill only (default: 1). "
+        "Below 1 the outline colour must be #rrggbb, #rgb or rgb(r, g, b).",
     )
     viz.add_argument(
         "--word-box-fill-color",
@@ -1511,6 +1518,7 @@ _DIRECT_OPTION_FLAGS = (
     "colorbar_tickangle",
     "colorbar_tickfont_size",
     "word_box_color",
+    "word_box_line_opacity",
     "word_box_fill_color",
     "word_box_fill_opacity",
     "raw_gaze_color",
@@ -1531,7 +1539,7 @@ _NONE_WHEN_EMPTY = frozenset(
 _SWITCH_OPTION_FLAGS = {
     "hollow_fixations": True,
     "color_by_line": True,
-    "show_colorbars": True,
+    "show_colorbars": False,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
     "duration_size_legend": False,

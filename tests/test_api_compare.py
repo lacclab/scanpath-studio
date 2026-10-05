@@ -592,7 +592,12 @@ def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layou
     fig = api.compare_scanpaths(
         words, fixations, ("p1", "t1"), ("p2", "t1"), layout=layout
     )
-    opacities = [t.marker.opacity for t in fig.data if t.mode and "markers" in t.mode]
+    # The heatmap colour bar's carrier trace (no points) is not a scanpath.
+    opacities = [
+        t.marker.opacity
+        for t in fig.data
+        if t.mode and "markers" in t.mode and t.name != "comparison heatmap colorbar"
+    ]
     assert opacities == [seeded["cmp0_opacity"], seeded["cmp1_opacity"]]
 
 

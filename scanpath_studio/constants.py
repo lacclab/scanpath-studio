@@ -189,7 +189,9 @@ COLORSCALES = [
 # `controls._popover_selectbox` (explicit `index=`) / `_pin` + `persist_state`, so a
 # non-index-0 default here still keeps the picker and the figure in sync.
 DEFAULT_FIXATION_COLORSCALE = "Viridis"
-DEFAULT_HEATMAP_COLORSCALE = "Viridis"
+#: The heatmap opens in Blues: one hue, light to dark, so it reads as "more
+#: dwell" over the text without competing with Viridis-coloured fixations.
+DEFAULT_HEATMAP_COLORSCALE = "Blues"
 #: Heatmap styles that scale their smoothed density to each figure's own peak
 #: (`plots._add_interpolated_heatmap`), so a ``heatmap_range`` does nothing to
 #: them: the rail greys the range for these, and the code snippet omits it.
@@ -224,6 +226,8 @@ MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
+#: The outline's opacity; 1 draws it solid, as before the setting existed.
+WORD_BOX_LINE_OPACITY = 1.0
 #: The word boxes' fill, drawn translucent (``WORD_BOX_FILL_OPACITY``) so it
 #: tints the interest area without hiding the text, fixations or image under it.
 WORD_BOX_FILL_COLOR = "#646464"
@@ -423,8 +427,8 @@ PALETTES: dict[str, dict] = {
     # uniform and safe across the common deficiencies. VIZ-32: this is the
     # default a fresh session opens with, not just an opt-in choice.
     "Default (colourblind-safe)": {
-        "description": "Okabe–Ito hues + Viridis scales; safe for deuteran-, "
-        "protan- and tritanopia.",
+        "description": "Okabe–Ito hues, a Viridis fixation scale and a Blues "
+        "heatmap; safe for deuteran-, protan- and tritanopia.",
         "fixation_color": DEFAULT_FIXATION_COLOR,
         "fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
         "heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,

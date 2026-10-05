@@ -523,6 +523,7 @@ _SHARE_FLOAT_PARAMS = {
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
+    "word_box_line_opacity": "global_word_box_line_opacity",
     "word_box_fill_opacity": "global_word_box_fill_opacity",
     # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
     # a link without it reopened a figure that disclosed something else.
@@ -667,7 +668,8 @@ _URL_BOUNDED = {
     # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
     "global_raw_gaze_opacity": (0.1, 1.0),
-    # 0 is a real choice here — outlines only, no fill.
+    # 0 is a real choice for both — outlines only / fill only.
+    "global_word_box_line_opacity": (0.0, 1.0),
     "global_word_box_fill_opacity": (0.0, 1.0),
     # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
     # a `number_input` with only a minimum, capped at a minute here so a link
@@ -2449,13 +2451,12 @@ def _restore_plot_config(
         col = word_boxes.get(cfg_key)
         if isinstance(col, str) and _HEX_COLOR.fullmatch(col):
             put(state_key, col)
-    if "fill_opacity" in word_boxes:
-        put_float(
-            word_boxes["fill_opacity"],
-            "global_word_box_fill_opacity",
-            *_URL_BOUNDED["global_word_box_fill_opacity"],
-            "word box fill opacity",
-        )
+    for cfg_key, state_key, label in (
+        ("line_opacity", "global_word_box_line_opacity", "word box line opacity"),
+        ("fill_opacity", "global_word_box_fill_opacity", "word box fill opacity"),
+    ):
+        if cfg_key in word_boxes:
+            put_float(word_boxes[cfg_key], state_key, *_URL_BOUNDED[state_key], label)
 
     # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
     # Validated against the segmented controls' exact options for the same

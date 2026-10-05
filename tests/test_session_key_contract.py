@@ -544,6 +544,7 @@ def _restore_config_app():
         "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
         "word_boxes": {
             "color": "#112233",
+            "line_opacity": 0.6,
             "fill_color": "#445566",
             "fill_opacity": 0.2,
         },

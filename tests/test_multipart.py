@@ -104,6 +104,8 @@ def test_explicit_columns_auto_normalize_and_headless_api_selects_one_screen():
         normalized_fixations,
         "synthetic",
         "multipart_demo",
+        # The canvas alone: a colour bar would widen the figure by its margin.
+        show_colorbars=False,
     )
     second = api.plot_scanpath(
         normalized_words,
@@ -111,6 +113,7 @@ def test_explicit_columns_auto_normalize_and_headless_api_selects_one_screen():
         "synthetic",
         "multipart_demo",
         screen="question",
+        show_colorbars=False,
     )
     assert first.layout.width == 640
     assert second.layout.width == 800

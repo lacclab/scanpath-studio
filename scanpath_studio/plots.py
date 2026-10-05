@@ -57,6 +57,7 @@ from .constants import (
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
+    WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
@@ -87,11 +88,13 @@ class FigureSettings:
     x_field: str = "x"
     y_field: str = "y"
     show_words: bool = True
-    #: The word boxes' outline colour, and their fill — a colour drawn at
-    #: ``word_box_fill_opacity``. A comparison outlines each reading's boxes in
-    #: its scanpath's ``box_color`` style (its fixation colour by default)
-    #: instead, so ``word_box_color`` is static/replay only.
+    #: The word boxes' outline colour at ``word_box_line_opacity``, and their
+    #: fill — a colour drawn at ``word_box_fill_opacity``. A comparison outlines
+    #: each reading's boxes in its scanpath's ``box_color`` style (its fixation
+    #: colour by default) instead, so ``word_box_color`` is static/replay only;
+    #: the line opacity applies to every outline.
     word_box_color: str = WORD_BOX_COLOR
+    word_box_line_opacity: float = WORD_BOX_LINE_OPACITY
     word_box_fill_color: str = WORD_BOX_FILL_COLOR
     word_box_fill_opacity: float = WORD_BOX_FILL_OPACITY
     show_word_labels: bool = True
@@ -117,7 +120,7 @@ class FigureSettings:
     duration_size_legend: bool = True
     order_font_size: int | None = 10
     order_font_color: str = "#111111"
-    show_colorbars: bool = False
+    show_colorbars: bool = True
     fixation_color_range: tuple[float, float] | None = None
     heatmap_range: tuple[float, float] | None = None
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE
@@ -1669,6 +1672,7 @@ def build_word_boxes(
     color: str = WORD_BOX_COLOR,
     fill_color: str = WORD_BOX_FILL_COLOR,
     fill_opacity: float = WORD_BOX_FILL_OPACITY,
+    line_opacity: float = WORD_BOX_LINE_OPACITY,
 ) -> list:
     """Rectangles for the word interest areas.
 
@@ -1676,12 +1680,16 @@ def build_word_boxes(
     (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
     assigns against. On a tiling corpus each outline therefore runs on across
     the space after its word, and the word *label* is centred in it (BUG-97).
-    ``color`` is the outline; the fill is ``fill_color`` at ``fill_opacity``
-    (0 = no fill), which leaves the outline itself fully opaque.
+    ``color`` is the outline, drawn at ``line_opacity`` (0 = no outline); the
+    fill is ``fill_color`` at ``fill_opacity`` (0 = no fill). Each is its own
+    alpha, so one never fades the other. A fully opaque outline keeps ``color``
+    as given, so any colour Plotly accepts still works there.
     """
     from .measures import word_box_bounds
 
     fill = color_with_alpha(fill_color, fill_opacity)
+    if line_opacity < 1:
+        color = color_with_alpha(color, line_opacity)
     shapes = []
     for x0, y0, x1, y1 in zip(*word_box_bounds(words)):
         shapes.append(
@@ -2762,6 +2770,7 @@ def _render_scanpath_figure(
                 color=settings.word_box_color,
                 fill_color=settings.word_box_fill_color,
                 fill_opacity=settings.word_box_fill_opacity,
+                line_opacity=settings.word_box_line_opacity,
             )
             if show_words
             else []
@@ -4720,6 +4729,7 @@ def _render_scanpath_animation(
             color=settings.word_box_color,
             fill_color=settings.word_box_fill_color,
             fill_opacity=settings.word_box_fill_opacity,
+            line_opacity=settings.word_box_line_opacity,
         )
         if show_words and not stimulus_words.empty
         else []
@@ -6486,6 +6496,7 @@ def _make_split_comparison_figure(
                 color=spec["box_color"],
                 fill_color=settings.word_box_fill_color,
                 fill_opacity=settings.word_box_fill_opacity,
+                line_opacity=settings.word_box_line_opacity,
             ):
                 box = dict(box)
                 box["xref"] = xref
@@ -6912,6 +6923,7 @@ def _render_comparison_figure(
                     color=spec["box_color"],
                     fill_color=settings.word_box_fill_color,
                     fill_opacity=settings.word_box_fill_opacity,
+                    line_opacity=settings.word_box_line_opacity,
                 )
             )
         if show_word_labels and draws_stimulus[_idx]:

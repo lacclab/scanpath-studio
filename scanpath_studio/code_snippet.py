@@ -1211,13 +1211,14 @@ _CLI_EMITTERS: dict[str, Any] = {
     # true only while the figure *was* fitted; one that wasn't reproduced
     # framed on the monitor anyway.
     "fit_to_monitor": _flag_when("--no-full-monitor", False),
-    "show_colorbars": _flag_when("--colorbars", True),
+    "show_colorbars": _flag_when("--no-colorbars", False),
     "colorbar_orientation": _mapped(
         "--colorbar-orientation", {"Vertical": "vertical", "Horizontal": "horizontal"}
     ),
     "colorbar_tickangle": _int_valued("--colorbar-tickangle"),
     "colorbar_tickfont_size": _int_valued("--colorbar-tickfont-size"),
     "word_box_color": _valued("--word-box-color"),
+    "word_box_line_opacity": _valued("--word-box-line-opacity"),
     "word_box_fill_color": _valued("--word-box-fill-color"),
     "word_box_fill_opacity": _valued("--word-box-fill-opacity"),
     "raw_gaze_color": _valued("--raw-gaze-color"),

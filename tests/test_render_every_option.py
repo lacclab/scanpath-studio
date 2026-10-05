@@ -102,7 +102,7 @@ NON_DEFAULT = {
     "coordinate_grid_spacing": 250.0,
     "line_spacing": 2.5,
     "scale_text_to_boxes": False,
-    "show_colorbars": True,
+    "show_colorbars": False,
     "colorbar_orientation": "Horizontal",
     "colorbar_tickangle": 30,
     "colorbar_tickfont_size": 14,
@@ -116,6 +116,7 @@ NON_DEFAULT = {
     "word_box_color": "#777777",
     "word_box_fill_color": "#888888",
     "word_box_fill_opacity": 0.3,
+    "word_box_line_opacity": 0.4,
     # The replay's own.
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,
@@ -272,7 +273,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
         (["--no-full-monitor"], "fit_to_monitor", False),
-        (["--colorbars"], "show_colorbars", True),
+        (["--no-colorbars"], "show_colorbars", False),
         (
             ["--colorbar-orientation", "horizontal"],
             "colorbar_orientation",
@@ -286,6 +287,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--word-box-color", "#777777"], "word_box_color", "#777777"),
         (["--word-box-fill-color", "#888888"], "word_box_fill_color", "#888888"),
         (["--word-box-fill-opacity", "0.3"], "word_box_fill_opacity", 0.3),
+        (["--word-box-line-opacity", "0.4"], "word_box_line_opacity", 0.4),
         (
             ["--word-heatmap-col", "gpt2_surprisal"],
             "word_heatmap_col",
@@ -492,6 +494,8 @@ STATIC_FLAGS = [
     "#888888",
     "--word-box-fill-opacity",
     "0.3",
+    "--word-box-line-opacity",
+    "0.4",
     "--fixation-opacity",
     "0.5",
     "--hollow-fixations",
@@ -523,7 +527,7 @@ STATIC_FLAGS = [
     "--word-hover-measure",
     "first_fixation_ms",
     "--no-full-monitor",
-    "--colorbars",
+    "--no-colorbars",
     "--colorbar-orientation",
     "horizontal",
     "--colorbar-tickangle",
@@ -538,7 +542,7 @@ STATIC_FLAGS = [
 
 def test_every_new_static_option_round_trips(monkeypatch, capsys):
     first, second, printed = _round_trip(monkeypatch, capsys, STATIC_FLAGS)
-    for flag in ("--sample-raw-gaze", "--no-full-monitor", "--colorbars"):
+    for flag in ("--sample-raw-gaze", "--no-full-monitor", "--no-colorbars"):
         assert flag in printed
     assert "Raw gaze" in {trace.name for trace in first.data}
     assert first.to_json() == second.to_json()

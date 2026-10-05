@@ -147,6 +147,7 @@ from scanpath_studio.constants import (
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
+    WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     derived_analysis_tables_enabled,
@@ -1649,6 +1650,9 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
         raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
         word_box_color=viz_settings.get("word_box_color", WORD_BOX_COLOR),
+        word_box_line_opacity=viz_settings.get(
+            "word_box_line_opacity", WORD_BOX_LINE_OPACITY
+        ),
         word_box_fill_color=viz_settings.get(
             "word_box_fill_color", WORD_BOX_FILL_COLOR
         ),
@@ -4010,6 +4014,9 @@ def _build_studio_config(
         # The ⬚ Word boxes section's style (its switch is `layers.words`).
         "word_boxes": {
             "color": viz_settings.get("word_box_color", WORD_BOX_COLOR),
+            "line_opacity": float(
+                viz_settings.get("word_box_line_opacity", WORD_BOX_LINE_OPACITY)
+            ),
             "fill_color": viz_settings.get("word_box_fill_color", WORD_BOX_FILL_COLOR),
             "fill_opacity": float(
                 viz_settings.get("word_box_fill_opacity", WORD_BOX_FILL_OPACITY)

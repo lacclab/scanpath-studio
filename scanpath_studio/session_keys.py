@@ -41,8 +41,9 @@ from types import MappingProxyType
 # config (the recording setup below the divider only since EXP-19).
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
-# The ⬚ Word boxes section's style: outline, fill, fill opacity.
+# The ⬚ Word boxes section's style: outline + its opacity, fill + its opacity.
 GLOBAL_WORD_BOX_COLOR = "global_word_box_color"
+GLOBAL_WORD_BOX_LINE_OPACITY = "global_word_box_line_opacity"
 GLOBAL_WORD_BOX_FILL_COLOR = "global_word_box_fill_color"
 GLOBAL_WORD_BOX_FILL_OPACITY = "global_word_box_fill_opacity"
 GLOBAL_SHOW_LABELS = "global_show_labels"
@@ -541,6 +542,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
+        "word_box_line_opacity": GLOBAL_WORD_BOX_LINE_OPACITY,
         "word_box_fill_opacity": GLOBAL_WORD_BOX_FILL_OPACITY,
         # EXP-18.
         "playback_speed": SINGLE_PLAYBACK_SPEED,
@@ -748,6 +750,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_COORDINATE_GRID_SPACING,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
+        GLOBAL_WORD_BOX_LINE_OPACITY,
         GLOBAL_WORD_BOX_FILL_OPACITY,
         GLOBAL_COLORBAR_TICKANGLE,
         GLOBAL_COLORBAR_TICKFONT_SIZE,
@@ -947,6 +950,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_RAW_GAZE_OPACITY,
         # word_boxes
         GLOBAL_WORD_BOX_COLOR,
+        GLOBAL_WORD_BOX_LINE_OPACITY,
         GLOBAL_WORD_BOX_FILL_COLOR,
         GLOBAL_WORD_BOX_FILL_OPACITY,
     }

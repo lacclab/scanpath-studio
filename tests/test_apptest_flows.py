@@ -767,9 +767,10 @@ class TestRecoveryCachePanelFlow:
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
 
-    def test_clear_what_is_saved_lists_then_deletes(self, tmp_path, monkeypatch):
+    def test_clear_what_is_saved_lists_then_starts_over(self, tmp_path, monkeypatch):
         """#374 F33: the confirmation names what goes, and a confirmed clear
-        stays cleared — the run that follows does not write it all back."""
+        starts the app over — the session is emptied too, so the run that
+        follows cannot write the old work back."""
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
         assert (tmp_path / "manifest.json").is_file()
@@ -784,12 +785,15 @@ class TestRecoveryCachePanelFlow:
 
         at.session_state[app.CLEAR_SAVED_REQUEST_KEY] = True
         at.button(key="saved_here_clear_confirm").click()
-        _rerun(at, view=VIEW_DATA)
-        _rerun(at, view=VIEW_DATA)
-        assert at.session_state["_local_persistence_cleared"] is True
-        assert not (tmp_path / "manifest.json").is_file()
-        captions = " ".join(str(c.value) for c in at.caption)
-        assert "saves nothing more" in captions
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        # A first visit: the dataset picked before is gone with the session…
+        assert at.session_state["data_source_choice"] != SYNTHETIC_SOURCE
+        assert "Cleared what was saved" in " ".join(str(t.value) for t in at.toast)
+        # …and what is saved now is the fresh session's, not the old work.
+        from scanpath_studio import persistence
+
+        assert persistence.cache_status(tmp_path)["datasets"] == []
 
     def test_the_section_is_only_on_the_data_page(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")

@@ -452,8 +452,9 @@ def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monke
     assert save_local_state(session, "http://localhost:8501")
 
 
-def test_clear_saved_work_stays_cleared_for_the_session(tmp_path, monkeypatch):
-    """#374 F33: the Data page's clear must not be undone by the next run."""
+def test_clear_saved_work_starts_over(tmp_path, monkeypatch):
+    """#374 F33: the Data page's clear empties the session too, so the next
+    run's save cannot write the old work back."""
     import scanpath_studio.persistence as module
 
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
@@ -462,10 +463,8 @@ def test_clear_saved_work_stays_cleared_for_the_session(tmp_path, monkeypatch):
     save_local_state(session, "http://localhost:8501")
 
     assert module.clear_saved_work(session)
-    assert module.saved_work_cleared(session)
-    assert not save_local_state(session, "http://localhost:8501")
     assert not (tmp_path / "manifest.json").exists()
-    assert session["_datasets"], "what is open stays open"
+    assert session == {}, "the session starts over"
 
 
 def test_clear_local_state_survives_an_undeletable_cache(tmp_path, monkeypatch):

@@ -270,7 +270,6 @@ from scanpath_studio.persistence import (
     retry_failed_datasets,
     retry_failed_metadata,
     save_local_state,
-    saved_work_cleared,
     server_bound_to_loopback,
 )
 from scanpath_studio.session_keys import (
@@ -1217,11 +1216,6 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "or incomplete).",
             icon=ICONS["warning"],
         )
-    elif saved_work_cleared(st.session_state):
-        host.caption(
-            "Cleared. This tab keeps what it has open, but saves nothing more; "
-            "the next session starts saving afresh."
-        )
     elif not status["exists"]:
         host.caption("Nothing saved yet — the first change you make is saved here.")
     render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
@@ -1232,8 +1226,8 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "Clear what is saved…",
             icon=ICONS["delete"],
             key="saved_here_clear",
-            help="Delete everything listed above from this computer, after a "
-            "confirmation.",
+            help="Delete everything listed above from this computer and start "
+            "over, after a confirmation.",
             on_click=_arm_clear_saved,
         )
         if st.session_state.pop(CLEAR_SAVED_REQUEST_KEY, False):
@@ -1251,6 +1245,34 @@ def _render_saved_here_section(app_url: str, host) -> None:
 #: #374 F33 — *Clear what is saved…*'s request flag, served right under the
 #: button (the section is the last thing a run draws, so nothing waits on it).
 CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
+#: Set by :func:`_clear_and_start_over` on the emptied session, so the first run
+#: of the fresh start says what happened.
+STARTED_OVER_KEY = "_started_over"
+#: What survives starting over: dismissing the welcome tour is not "your work".
+_KEPT_ON_START_OVER = ("_tour_dismissed",)
+
+
+def _clear_and_start_over() -> None:
+    """*Clear what is saved…* → Delete: the files, then the session (#374 F33).
+
+    A callback, so it runs before anything else in the rerun. The link's
+    parameters go too, or they would seed the fresh session again."""
+    kept = {
+        k: st.session_state[k] for k in _KEPT_ON_START_OVER if k in st.session_state
+    }
+    clear_saved_work(st.session_state)
+    st.session_state.update(kept)
+    st.session_state[STARTED_OVER_KEY] = True
+    st.query_params.clear()
+
+
+def announce_start_over() -> None:
+    """Say, once, that the app started over after *Clear what is saved…*."""
+    if st.session_state.pop(STARTED_OVER_KEY, False):
+        st.toast(
+            "Cleared what was saved on this computer. The app started over.",
+            icon=ICONS["recovery"],
+        )
 
 
 def _arm_clear_saved() -> None:
@@ -1283,8 +1305,8 @@ def _clear_saved_dialog(app_url: str) -> None:
         + "\n".join(f"- {item}" for item in saved_items(cache_status(url=app_url)))
     )
     st.caption(
-        "This tab keeps what it has open until you close it, but saves nothing "
-        "more. Your original files are not touched. There is no undo."
+        "The app then starts over, as on a first visit. Your original files are "
+        "not touched. There is no undo."
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
@@ -1297,10 +1319,9 @@ def _clear_saved_dialog(app_url: str) -> None:
         type="primary",
         key="saved_here_clear_confirm",
         width="stretch",
-        on_click=clear_saved_work,
-        args=(st.session_state,),
+        on_click=_clear_and_start_over,
     )
-    if saved_work_cleared(st.session_state):
+    if st.session_state.get(STARTED_OVER_KEY):
         st.rerun()  # the whole page, which closes this dialog
 
 
@@ -9035,6 +9056,7 @@ def _run_app() -> None:
     install_log_capture()
     # #374 F9: before any widget, so a write a closed popover would undo holds.
     reassert_pending_writes()
+    announce_start_over()
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
     # `?source=...&participant=...&trial=...&...` to land on a specific trial

@@ -1315,6 +1315,13 @@ def _select_trial_none_mode(
     # picker's linked ◀ ▶ can step this picker without rebuilding its ordering.
     if trial_id_key:
         st.session_state[trial_options_snapshot_key(key_prefix)] = list(trial_options)
+        # #374 F10: the browser identifies the picked option by its *label*, and
+        # a label carries the trial's ★ 🏷️ 📝 marks. Written only when it moved,
+        # the browser kept the label from that run; a tag added later renamed the
+        # option, the old label matched nothing, and the view fell back to trial
+        # 1. Written every run (as the slider is), the browser always holds the
+        # label it was last shown, which the next run can still read back.
+        st.session_state[trial_id_key] = current_label
 
     option_labels.update({opt: _option_label(opt) for opt in trial_options})
 

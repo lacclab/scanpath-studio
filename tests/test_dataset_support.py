@@ -128,6 +128,49 @@ def test_read_table_zip_multiple_members_concatenates():
     assert set(df["source_file"]) == {"reader0", "reader1"}
 
 
+def test_read_table_zip_same_stem_in_different_folders_stays_distinct():
+    """Round 11 #1: two readers' ``fixations.csv`` must not become one."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("reader-a/fixations.csv", "trial_id,x,y,duration_ms\nt1,1,2,100\n")
+        zf.writestr("reader-b\\fixations.csv", "trial_id,x,y,duration_ms\nt1,3,4,120\n")
+        zf.writestr("words.csv", "trial_id,x,y,duration_ms\nt2,5,6,90\n")
+    raw = data_module.read_table(_NamedBytesIO(buf.getvalue(), "readers.zip"))
+    assert raw["source_file"].tolist() == [
+        "reader-a/fixations",
+        "reader-b/fixations",
+        "words",
+    ]
+    schema = data_module.propose_fix_schema(raw)
+    schema["participant"] = data_module.SOURCE_FILE_COLUMN
+    normalized = data_module.normalize_fixations(raw, schema)
+    readings = normalized[["participant_id", "trial_id"]].drop_duplicates()
+    assert len(readings) == 3
+
+
+@pytest.mark.parametrize(
+    ("paths", "expected"),
+    [
+        (["a.csv", "b.tsv"], ["a", "b"]),
+        (["x/a/f.csv", "y/a/f.csv", "z/b/f.csv"], ["x/a/f", "y/a/f", "b/f"]),
+        (["a/f.csv", "a/f.tsv"], ["a/f.csv", "a/f.tsv"]),
+        (["f.csv", "f.csv"], ["f#1", "f#2"]),
+        (["./a/f.csv", "a\\g.csv"], ["f", "g"]),
+    ],
+)
+def test_source_labels(paths, expected):
+    assert data_module.source_labels(paths) == expected
+    assert len(set(data_module.source_labels(paths))) == len(paths)
+
+
+def test_read_tables_same_name_in_different_folders(tmp_path):
+    for reader in ("r1", "r2"):
+        (tmp_path / reader).mkdir()
+        _write_fix_csv(tmp_path / reader / "fix.csv", "p", "t")
+    df = data_module.read_tables(str(tmp_path / "*" / "fix.csv"))
+    assert sorted(df["source_file"].unique()) == ["r1/fix", "r2/fix"]
+
+
 def test_read_table_zip_mixed_formats_concatenates():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

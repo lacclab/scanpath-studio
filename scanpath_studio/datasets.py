@@ -2532,7 +2532,8 @@ def _multipleye_fixations_from_frame(
         return pd.DataFrame()
     groups: dict = {}
     for stem, group in fixations_df.groupby(SOURCE_FILE_COLUMN, sort=False):
-        info = _multipleye_parse_filename(str(stem))
+        # A shared file name is qualified by its folders (`data.source_labels`).
+        info = _multipleye_parse_filename(str(stem).rsplit("/", 1)[-1])
         if info is None:
             continue
         key = (info["session"], info["trial_num"], info["stimulus"])
@@ -2619,6 +2620,7 @@ def multipleye_frames_from_uploads(
     question_aoi: dict = {}
     versions = _multipleye_layout_versions(versions_df)
     for stem, group in aoi_df.groupby(SOURCE_FILE_COLUMN, sort=False):
+        stem = str(stem).rsplit("/", 1)[-1]
         if _multipleye_is_versions_upload(str(stem), group):
             versions = versions or _multipleye_layout_versions(group)
             continue

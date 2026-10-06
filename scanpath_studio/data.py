@@ -2959,6 +2959,51 @@ def read_mapped_table(
     return read_table(file_like_or_path, plan=plan)
 
 
+def source_labels(paths: Sequence[str]) -> list[str]:
+    """The ``source_file`` label for each path — its stem, unless that stem
+    is shared with another path.
+
+    ``reader-a/fixations.csv`` and ``reader-b/fixations.csv`` both have the
+    stem ``fixations``, and a label is mapped as participant or trial identity,
+    so two readers would silently become one. A shared stem is qualified by
+    the fewest trailing folders that tell its paths apart
+    (``reader-a/fixations``), then by the extension, then by a ``#n``
+    occurrence number for paths that are the same. Backslashes count as folder
+    separators, so a zip made on Windows labels as one made elsewhere."""
+    parts = [
+        [p for p in str(path).replace("\\", "/").split("/") if p not in ("", ".")]
+        or [str(path)]
+        for path in paths
+    ]
+
+    def candidate(i: int, depth: int) -> str:
+        folders, name = parts[i][:-1], parts[i][-1]
+        stem = Path(name).stem if depth <= len(folders) + 1 else name
+        return "/".join(
+            [*folders[len(folders) - min(depth, len(folders) + 1) + 1 :], stem]
+        )
+
+    labels = [candidate(i, 1) for i in range(len(parts))]
+    depth = 1
+    while True:
+        counts: dict[str, int] = {}
+        for label in labels:
+            counts[label] = counts.get(label, 0) + 1
+        clashing = [i for i, label in enumerate(labels) if counts[label] > 1]
+        if not clashing or depth > max(len(parts[i]) for i in clashing):
+            break
+        depth += 1
+        for i in clashing:
+            labels[i] = candidate(i, depth)
+    seen: dict[str, int] = {}
+    for i, label in enumerate(labels):
+        if counts.get(label, 0) > 1:
+            base = candidate(i, len(parts[i]))
+            seen[base] = seen.get(base, 0) + 1
+            labels[i] = f"{base}#{seen[base]}"
+    return labels
+
+
 def _tag_and_concat(
     frames: list[pd.DataFrame],
     labels: list[str],
@@ -3142,7 +3187,8 @@ def _read_zipped_table(
     Each member is dispatched on its own extension, so a zip may wrap any
     supported format. A multi-member archive is concatenated just like a
     multi-file upload — every member's rows tagged with its stem in
-    ``source_file``. pandas infers compression only from string paths, not from
+    ``source_file`` (qualified by its folders when two members share a stem,
+    :func:`source_labels`). pandas infers compression only from string paths, not from
     uploaded file-like objects, so we open the archive ourselves. Raises
     ``ValueError`` if the archive holds no data file (macOS ``__MACOSX``/dotfile
     cruft is ignored), or if it would decompress past the DATA-16 size limits
@@ -3214,8 +3260,8 @@ def _read_zipped_table(
                             _read_by_extension(buf, name, member_plan, sep=sep)
                         )
             remaining -= stream.consumed
-            labels.append(Path(member).stem)
-    return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
+            labels.append(member)
+    return _tag_and_concat(frames, source_labels(labels), SOURCE_FILE_COLUMN)
 
 
 # BUG-5: guard the memory-constrained hosted demo against a too-large upload.
@@ -3297,7 +3343,8 @@ def read_tables(
     list mixing those (a ``.zip`` member counts as a file too). ``plan_for`` is
     called with each file's column names and returns the :class:`ReadPlan` to
     read it under (PERF-6); omit it to parse every column. Each part gets a
-    ``source_file`` column holding the file's stem (unless the data already has
+    ``source_file`` column holding the file's stem — qualified by its folders
+    when two files share one (:func:`source_labels`) — (unless the data already has
     that column, or ``source_column=None``) — *including a single file*, so
     datasets that key identity in the filename can recover it (the upload wizard
     maps ``source_file`` as the trial / participant id). Columns are aligned by
@@ -3311,8 +3358,10 @@ def read_tables(
         # file hasn't got, which `usecols` raises on.
         plan = plan_for(read_table_columns(item)) if plan_for is not None else None
         frames.append(read_table(item, plan=plan))
-        labels.append(Path(getattr(item, "name", str(item))).stem)
-    return _tag_and_concat(frames, labels, source_column, always_tag=True)
+        labels.append(getattr(item, "name", str(item)))
+    return _tag_and_concat(
+        frames, source_labels(labels), source_column, always_tag=True
+    )
 
 
 def _load_bundled(name: str) -> pd.DataFrame:

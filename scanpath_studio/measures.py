@@ -331,7 +331,9 @@ def assign_fixations_to_words(
     # trial's words.
     keys = grouping_columns(out)
     if keys != grouping_columns(words):
-        raise ValueError("Words and fixations use different multipart identities.")
+        raise ValueError(
+            "Screen ID is set in only one table; set it in both or neither."
+        )
     groups = out[need_idx].groupby(keys, sort=False)
     word_groups = words.groupby(keys, sort=False)
 

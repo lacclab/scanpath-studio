@@ -1825,6 +1825,7 @@ def _wizard_restore_config(host) -> None:
         host.warning("That file isn't a saved setup (not valid JSON).")
         return
     _setup_sections = (
+        "data_source",
         "column_mapping",
         "experimental_setup",
         "filename_derive",
@@ -2714,7 +2715,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
     participant_df = app._read_uploaded_frame(
         uploader_label="participant_data.csv (optional)",
-        upload_help="Reader metadata (age / gender / languages…) → Trial Info chips.",
+        upload_help="Participant metadata (age / gender / languages…) → Trial Info chips.",
         state_prefix="mpe_participant",
         multi=False,
         container=body,
@@ -2846,7 +2847,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             else " · no AOI boxes (upload *_aoi.csv for word boxes)"
         )
         body.success(
-            f"~**{fixations_norm['participant_id'].nunique()}** readers · "
+            f"~**{fixations_norm['participant_id'].nunique()}** participants · "
             f"**{fixations_norm['trial_id'].nunique()}** page-trials" + boxes_msg
         )
         st.session_state["_wizard_finalize_payload"] = {
@@ -2987,7 +2988,7 @@ def _wizard_name_header(host, active: bool) -> None:
     box.text_area(
         "Description",
         key="wizard_dataset_description",
-        placeholder="Optional — what this dataset is: the readers, the texts, "
+        placeholder="Optional — what this dataset is: the participants, the texts, "
         "the language.",
         help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=68,
@@ -3467,7 +3468,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         inline_field_label(
             meta_heading,
             "Metadata",
-            "Optional per-reader, per-trial and per-text tables. Once "
+            "Optional per-participant, per-trial and per-text tables. Once "
             "attached, their columns behave like fields in the data: "
             "filters, chips, trial sorting, inspection and export.",
             emphasis=True,
@@ -4298,10 +4299,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # of tables that share every trial but spell the readers differently
         # passed it — and every scanpath then drew over no text.
         s6.warning(
-            f"{ICONS['warning']} The two tables share trial ids but no reader: no fixation's "
+            f"{ICONS['warning']} The two tables share Trial IDs but no participant: no fixation's "
             "participant + trial has word boxes, so every scanpath would be "
             "drawn without its text. Check that **Participant ID** names the "
-            "same readers, spelled the same way, in both tables."
+            "same participants, spelled the same way, in both tables."
         )
 
     raw_gaze_norm = pd.DataFrame()

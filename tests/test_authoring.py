@@ -129,7 +129,7 @@ def test_only_a_row_without_xy_or_valid_target_is_unusable():
     events = default_events(words)
     events.loc[1, ["word_id", "x", "y"]] = [99, None, None]
     assert unusable_event_rows(words, events) == [2]
-    assert "Row 2" in " ".join(event_problems(words, events))
+    assert "row 2" in " ".join(event_problems(words, events))
     assert len(authored_fixations(words, events)) == 1
 
 
@@ -198,5 +198,5 @@ def test_an_authoring_file_with_a_malformed_event_list_is_refused_cleanly():
         payload = json.dumps({"schema": 2, "text": "alpha", "fixations": fixations})
         with pytest.raises(ValueError, match="Authored fixation"):
             parse_authoring_document(payload)
-    with pytest.raises(ValueError, match="Not a Scanpath Studio authoring file"):
+    with pytest.raises(ValueError, match="isn't an authoring file"):
         parse_authoring_document("[1, 2]")

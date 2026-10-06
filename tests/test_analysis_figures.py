@@ -363,13 +363,13 @@ class TestPerReaderFigures:
     @pytest.mark.parametrize("kind,expected", [("violin", "violin"), ("box", "box")])
     def test_distribution_figure(self, demo, kind, expected):
         groups = reader_vs_cohort_values(demo.fixations, demo.participant, _FIX_DUR)
-        assert set(groups) == {"This reader", "Cohort"}
+        assert set(groups) == {"This participant", "Cohort"}
         fig = plots.make_distribution_figure(
             groups, metric_label=_FIX_DUR.axis_label, kind=kind, **_FW
         )
         assert [t.type for t in fig.data] == [expected, expected]
-        assert [t.name for t in fig.data] == ["This reader", "Cohort"]
-        assert len(fig.data[0].y) == groups["This reader"].size
+        assert [t.name for t in fig.data] == ["This participant", "Cohort"]
+        assert len(fig.data[0].y) == groups["This participant"].size
         assert fig.layout.yaxis.title.text == _FIX_DUR.axis_label
         assert fig.layout.showlegend is False
 

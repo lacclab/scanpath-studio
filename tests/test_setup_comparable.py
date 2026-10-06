@@ -84,12 +84,12 @@ def test_assumed_screen_is_allowed_but_cautioned():
         allowed, note = setups_comparable(*pair)
         assert allowed is True
         assert note, "an unrecorded screen must still be disclosed"
-        assert "1920x1080" in note
+        assert "1920×1080" in note
 
     # Grammar differs between one unknown side and two — both are user-facing.
     assert setups_comparable(assumed, assumed)[1].startswith("Neither dataset")
-    assert setups_comparable(measured, assumed)[1].startswith("The second dataset")
-    assert setups_comparable(assumed, measured)[1].startswith("The first dataset")
+    assert setups_comparable(measured, assumed)[1].startswith("Scanpath B's dataset")
+    assert setups_comparable(assumed, measured)[1].startswith("Scanpath A's dataset")
 
 
 def test_a_differing_canvas_is_the_only_hard_refusal():

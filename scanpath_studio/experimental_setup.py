@@ -342,27 +342,27 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
     """
     if a.canvas != b.canvas:
         return False, (
-            f"These readings were recorded on different screens — "
-            f"{a.canvas_width}x{a.canvas_height} and "
-            f"{b.canvas_width}x{b.canvas_height}. Overlaying them would pool two "
-            f"unrelated pixel spaces."
+            f"These trials were recorded on different screens — "
+            f"{a.canvas_width}×{a.canvas_height} and "
+            f"{b.canvas_width}×{b.canvas_height} px — so their positions can't "
+            f"share axes."
         )
     unknown = [
         name
-        for name, snapshot in (("first", a), ("second", b))
+        for name, snapshot in (("A", a), ("B", b))
         if snapshot.screen_provenance not in _REAL_SCREEN_PROVENANCE
     ]
     if unknown:
         subject = (
             "Neither dataset records"
             if len(unknown) == 2
-            else f"The {unknown[0]} dataset does not record"
+            else f"Scanpath {unknown[0]}'s dataset does not record"
         )
         return True, (
             f"{subject} its screen, so the matching "
-            f"{a.canvas_width}x{a.canvas_height} canvas is a shared default "
-            f"rather than proof the two were shown on the same display. Check "
-            f"they were before reading positions across the overlay."
+            f"{a.canvas_width}×{a.canvas_height} canvas may be a default, not "
+            f"proof both were shown on one display. Check before reading "
+            f"positions across the overlay."
         )
     return True, ""
 

@@ -3595,8 +3595,8 @@ class TestSetupWizard:
         ids no longer read as a mapping error."""
         at = self._text_level_upload(monkeypatch)
         captions = " ".join(e.value for e in at.caption)
-        assert "Words attach to readings by Text ID" in captions, captions
-        assert "all 4 readings have word boxes" in captions, captions
+        assert "Words attach to trials by Text ID" in captions, captions
+        assert "all 4 trials have word boxes" in captions, captions
         warn_text = " ".join(e.value for e in at.warning)
         assert "No trial ids are shared" not in warn_text, warn_text
         assert not [e.value for e in at.error]
@@ -3610,9 +3610,9 @@ class TestSetupWizard:
         """DATA-49 round 4: a join worth acting on is never shown as success."""
         at = self._text_level_upload(monkeypatch, text_ids=("1_1_Ele", "nope"))
         warn_text = " ".join(e.value for e in at.warning)
-        assert "2 of 4 readings have word boxes" in warn_text, warn_text
+        assert "2 of 4 trials have word boxes" in warn_text, warn_text
         captions = " ".join(e.value for e in at.caption)
-        assert "Words attach to readings" not in captions, captions
+        assert "Words attach to trials" not in captions, captions
 
     def test_an_aoi_table_nothing_joins_blocks_the_add(self, monkeypatch):
         """DATA-49: no shared trial id and no shared Text ID stops the wizard

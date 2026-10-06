@@ -208,7 +208,7 @@ def test_a_download_that_ends_early_is_an_error_and_leaves_no_file(
         _serving(_Response(b"x" * 100, promised=200)),
     )
     dest = tmp_path / "report.csv.zip"
-    with pytest.raises(OSError, match="ended early: 100 of 200 bytes"):
+    with pytest.raises(OSError, match="stopped at 100 of 200 bytes"):
         datasets._fetch_to_file("https://example.invalid/r", dest, detail="IA report")
     assert not dest.exists()
     assert not dest.with_name(dest.name + ".part").exists()
@@ -220,7 +220,7 @@ def test_an_archive_that_ends_early_is_an_error(monkeypatch):
         "urlopen",
         _serving(_Response(b"x" * 100, promised=200)),
     )
-    with pytest.raises(OSError, match="ended early: 100 of 200 bytes"):
+    with pytest.raises(OSError, match="stopped at 100 of 200 bytes"):
         datasets._fetch_bytes("https://example.invalid/z", detail="archive")
 
 

@@ -35,8 +35,8 @@ RECIPE_VERSION = 1
 #: What the recipe deliberately leaves out, written into every one.
 EXCLUDES = {
     "figure_settings": (
-        "Palette, canvas and fonts are not recorded here. Save them with "
-        "Share → File, which holds no trial filters."
+        "Palette, canvas and fonts live in the settings file (Scanpath → "
+        "Share → File), which holds no trial filters."
     ),
     "data": (
         "No table rows and no annotation notes. The dataset is referenced by "
@@ -133,7 +133,7 @@ def analysis_choices(
     if normalize is not None:
         rate = bool(getattr(measure, "is_rate", False))
         out["normalization"] = (
-            "z-score within reader" if normalize and not rate else "none"
+            "z-score per participant" if normalize and not rate else "none"
         )
     if spread:
         out["spread"] = spread

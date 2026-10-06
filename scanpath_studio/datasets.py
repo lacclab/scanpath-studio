@@ -101,8 +101,8 @@ def _check_download_size(got: int, pin: OsfFile, detail: str) -> None:
     """Refuse a download that is not the pinned file (DATA-65)."""
     if got != pin.size:
         raise OSError(
-            f"{detail}: OSF sent {got:,} bytes where version {pin.version} of "
-            f"{pin.resource} is {pin.size:,} — not the file this release pins."
+            f"{detail}: OSF sent a different file ({got:,} bytes, expected "
+            f"{pin.size:,}). Try again later."
         )
 
 
@@ -164,10 +164,12 @@ def _read_body(response, write: Callable[[bytes], object], *, detail: str) -> No
             progress.report(done, total, unit="bytes", detail=detail)
     except http.client.HTTPException as exc:
         raise ConnectionError(
-            f"the download ended early after {done:,} bytes ({exc})"
+            f"the download stopped after {done:,} bytes; try again"
         ) from exc
     if total is not None and done < total:
-        raise ConnectionError(f"the download ended early: {done:,} of {total:,} bytes")
+        raise ConnectionError(
+            f"the download stopped at {done:,} of {total:,} bytes; try again"
+        )
 
 
 def _fetch_bytes(url: str, *, detail: str) -> bytes:
@@ -204,7 +206,7 @@ def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
 def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
     """Download the PoTeC files :func:`load_potec` needs into ``root``.
 
-    Fetches the per-trial eye-tracking archive (~45 MB zip) from PoTeC's OSF
+    Fetches the per-trial eye-tracking archive (~10 MB zip) from PoTeC's OSF
     repository and the 24 per-text AOI files (word boxes + character boxes)
     from the PoTeC GitHub repo. Skips anything already present, so it's safe
     to call repeatedly (and it's a no-op on a full clone of the PoTeC repo
@@ -262,7 +264,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
             # UX-168: a damaged archive — opened or extracted — is a data error
             # both ⬇ Download buttons report, not a raw traceback.
             raise ValueError(
-                f"The PoTeC archive from {pin.url} isn't a readable zip file ({exc})."
+                "The downloaded PoTeC archive is damaged; download it again."
             ) from exc
         finally:
             shutil.rmtree(staging, ignore_errors=True)
@@ -481,7 +483,7 @@ def load_potec(
 
     ``root`` is a clone of the PoTeC repo (with the eye-tracking data
     downloaded) or any folder; with ``download=True`` the needed files are
-    fetched into it on first use (~45 MB). Narrow the load with ``readers``
+    fetched into it on first use (~10 MB). Narrow the load with ``readers``
     (e.g. ``[0, 1]``) and/or ``texts`` (e.g. ``["b0", "p3"]``) — the full
     corpus is 75 readers × 12 texts = 900 trials.
 
@@ -1109,9 +1111,8 @@ def load_onestop(
         pid, tid = sps.list_trials(words, fixations).iloc[0]  # one reading
         fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 
-    OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation lives in
-    `scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS`'s ``"onestop"`` entry (Berzak
-    et al. 2025, Methods → Apparatus); pass that as ``canvas_size`` to
+    OneStop's presentation monitor was 2560×1440 px (Dell U2715H; Berzak et al.
+    2025, Methods → Apparatus); pass that as ``canvas_size`` to
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
     The reports already match the bundled demo's schema, so this reuses the generic
     auto-detect → normalize path (no OneStop-specific column mapping).

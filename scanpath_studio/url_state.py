@@ -90,6 +90,7 @@ from .controls import (
     palette_state,
 )
 from .data import composite_respelling_map, respell_reading
+from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
@@ -291,9 +292,8 @@ def _parse_playback_speed(v) -> float:
     raise ValueError(f"not a playback speed the slider offers: {v!r}")
 
 
-#: #374 F28 — Export → Current figure's Width and DPI boxes take these.
-PRINT_WIDTH_BOUNDS = (1.0, 2000.0)
-PRINT_DPI_BOUNDS = (50, 2400)
+# #374 F28: Export → Current figure's Width and DPI boxes take
+# `PRINT_WIDTH_BOUNDS` / `PRINT_DPI_BOUNDS` (from export, shared by every surface).
 
 
 def _parse_print_unit(v) -> str:

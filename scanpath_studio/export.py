@@ -106,6 +106,11 @@ def _local_stamp() -> str:
 PRINT_UNITS = {"mm": 1.0, "in": 25.4}
 #: The resolution a print width is drawn at when none is named.
 DEFAULT_PRINT_DPI = 300
+#: #374 F28 — the print width and dpi every surface accepts: Export → Current
+#: figure's boxes, a link or settings file (clamped), `render` and `save_figure`
+#: (refused outside them).
+PRINT_WIDTH_BOUNDS = (1.0, 2000.0)
+PRINT_DPI_BOUNDS = (50, 2400)
 #: What the app's Export → Current figure PNG is drawn at without a print width
 #: (`tabs._PNG_EXPORT_SCALE`): three pixels per figure pixel.
 SCREEN_PNG_SCALE = 3
@@ -118,6 +123,12 @@ def print_width_px(width: float, unit: str = "mm", dpi: int = DEFAULT_PRINT_DPI)
         raise ValueError(f"Unknown width unit {unit!r}; use 'mm' or 'in'.")
     if not width or width <= 0 or not dpi or dpi <= 0:
         raise ValueError("A print width and its dpi must both be positive.")
+    low, high = PRINT_WIDTH_BOUNDS
+    if not low <= float(width) <= high:
+        raise ValueError(f"A print width must be {low:g}–{high:g} {unit}.")
+    low, high = PRINT_DPI_BOUNDS
+    if not low <= float(dpi) <= high:
+        raise ValueError(f"A print dpi must be {low}–{high}.")
     return max(1, round(float(width) * PRINT_UNITS[unit] / 25.4 * float(dpi)))
 
 

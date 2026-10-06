@@ -2180,6 +2180,19 @@ _WIZARD_GUIDE_STEPS = [
 ]
 
 
+#: While the setup guide is open on a wide screen, the page keeps a gutter the
+#: card's width on the right, so the card sits beside the wizard instead of over
+#: its upload rows and the mappings that open to their right. A narrow screen
+#: has no room for one, and keeps the card floating over the page.
+_WIZARD_GUIDE_GUTTER_CSS = """
+@media (min-width: 1100px) {
+    [data-testid="stMainBlockContainer"] {
+        padding-right: calc(410px + 2.5rem) !important;
+    }
+}
+"""
+
+
 def _wizard_guide_go(step_idx: int) -> None:
     """Move the guide to ``step_idx`` and open the wizard step it describes.
 
@@ -2239,6 +2252,7 @@ def render_spotlight_wizard_guide() -> None:
         "<style>"
         + _CARD_CSS
         + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
+        + _WIZARD_GUIDE_GUTTER_CSS
         + _highlight_css(selector, accent)
         + "</style>",
         unsafe_allow_html=True,
@@ -2250,7 +2264,16 @@ def render_spotlight_wizard_guide() -> None:
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
         st.markdown(f"## {title}")
         st.markdown(body)
-        st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
+        # Counted in the screen's own parts ("2 · Upload data tables" is part 2
+        # of 3), not in cards: the overview card is not a part, and "Step 3 of
+        # 4" under a "2 ·" heading contradicted the "three parts" it opens with.
+        n_parts = n - 1
+        st.progress(
+            (step_idx + 1) / n,
+            text=f"Part {step_idx} of {n_parts}"
+            if step_idx
+            else f"Overview · {n_parts} parts",
+        )
         # UX-110: same placement rule as the welcome tour's own opt-out — only
         # where a user decides they're done with the guide (the first step,
         # bailing out now, or the last, got it, don't greet me again), so the

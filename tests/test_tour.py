@@ -1167,3 +1167,20 @@ def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
     assert ".st-key-tour_card" in script  # removes itself once the card is gone
     # The instant hide on Done / ✕ hides the ring with the card.
     assert tour._GROUP_RING_ID in tour._dismiss_listener_script(NAV_SELECTOR)
+
+
+def test_the_setup_guide_counts_the_parts_it_names():
+    """The guide's overview says "three parts" and each part card is headed
+    "1 ·", "2 ·", "3 ·" — so it counts parts, not cards ("Step 3 of 4" under
+    "2 · Upload data tables" contradicted both)."""
+    from scanpath_studio import tour
+
+    intro, *parts = tour._WIZARD_GUIDE_STEPS
+    assert "three parts" in intro["body"]
+    assert len(parts) == 3
+    for number, part in enumerate(parts, start=1):
+        assert part["title"].startswith(f"{number} · ")
+    import inspect
+
+    source = inspect.getsource(tour.render_spotlight_wizard_guide)
+    assert 'f"Part {step_idx} of {n_parts}"' in source

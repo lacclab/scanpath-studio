@@ -1258,7 +1258,8 @@ def _render_save_plot_button(
 
 
 def _html_self_contained() -> bool:
-    """The Export subtab's *HTML files* choice (`_render_html_files_choice`)."""
+    """The Export subtab's *Self-contained HTML* choice
+    (`_render_html_files_choice`)."""
     return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
 
 
@@ -1271,15 +1272,14 @@ def _render_html_files_choice() -> None:
         st,
         "checkbox",
         "Self-contained HTML (opens offline, larger file)",
-        display="HTML files",
+        display="Self-contained HTML",
         value=False,
         key=HTML_SELF_CONTAINED_KEY,
         persist_state="session",
-        help="On: each HTML file carries the Plotly library, so it opens "
-        "offline and contacts no other host; it is about 4.8 MB larger. Off: "
-        "the file loads the library from cdn.plot.ly when opened, which needs "
-        "an internet connection. Applies to the figure, the replay and the "
-        "bundles' HTML.",
+        help="Tick to make every HTML file you download here open without an "
+        "internet connection: it carries the Plotly library, about 4.8 MB "
+        "more. Unticked, it loads the library from cdn.plot.ly when opened. "
+        "Other formats are unaffected.",
     )
 
 
@@ -1390,10 +1390,10 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
             key="anim_export_html",
             on_click="ignore",
             # ENG-64: a saved file has no app server to load plotly.js from,
-            # so it embeds it or loads it from the CDN — the *HTML files*
+            # so it embeds it or loads it from the CDN — the *Self-contained HTML*
             # choice above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
-            "interactivity. *HTML files* above decides whether it opens "
+            "interactivity. *Self-contained HTML* above decides whether it opens "
             "offline or loads the Plotly library from cdn.plot.ly.",
         )
         return
@@ -7650,7 +7650,7 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
-    # The subtab's *HTML files* choice, in `options` so it is in the cache key.
+    # The subtab's *Self-contained HTML* choice, in `options` so it is in the cache key.
     options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze

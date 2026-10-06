@@ -1,7 +1,8 @@
 """The Data page's *Data checks*: values that parsed but cannot be right.
 
-Negative or zero fixation durations, positions that are not finite numbers
-(fixations and raw gaze) and word boxes with no area are counted, quoted and
+Negative or zero fixation durations, infinite durations and onsets, positions
+that are not finite numbers (fixations and raw gaze), word boxes with no area or
+at infinity and unusable per-screen screen sizes are counted, quoted and
 explained — under the dataset's own column names — and never removed.
 """
 
@@ -77,6 +78,35 @@ class TestChecks:
         found = _by_check(check_data_health(_words(), None))["word_box_size"]
         assert (found.rows, found.trials) == (2, 1)
         assert found.breakdown == {"width ≤ 0": 1, "height ≤ 0": 1}
+
+    def test_word_boxes_at_infinity(self):
+        words = _words().assign(width=[40.0, 30.0, 30.0], height=[20.0] * 3)
+        words.loc[0, "y"] = -np.inf
+        found = _by_check(check_data_health(words, None))["word_box_size"]
+        assert found.breakdown == {"infinite position": 1}
+
+    def test_infinite_durations_and_onsets(self):
+        fixations = _fixations().assign(
+            duration_ms=[200.0, np.inf, 180.0, -np.inf, 210.0],
+            timestamp_ms=[0.0, 250.0, np.inf, 0.0, 0.0],
+        )
+        found = _by_check(check_data_health(None, fixations))["fixation_timing"]
+        assert found.breakdown == {"infinite duration": 2, "infinite onset": 1}
+        assert (found.rows, found.trials) == (3, 2)
+        assert "replay" in found.consequence
+
+    @pytest.mark.parametrize("table", ["words", "fixations"])
+    def test_per_screen_sizes_that_cannot_be_used(self, table):
+        frame = (_words() if table == "words" else _fixations()).assign(
+            canvas_width=1920.0, canvas_height=1080.0
+        )
+        frame.loc[0, "canvas_width"] = np.inf
+        frame.loc[1, "canvas_height"] = 0.0
+        frames = (frame, None) if table == "words" else (None, frame)
+        found = _by_check(check_data_health(*frames))
+        key = "word_canvas" if table == "words" else "fixation_canvas"
+        assert found[key].breakdown == {"infinite": 1, "0 or less": 1}
+        assert "Recording setup" in found[key].consequence
 
     def test_raw_gaze_gaps_are_a_note_and_infinity_a_warning(self):
         found = _by_check(check_data_health(None, None, _raw_gaze()))

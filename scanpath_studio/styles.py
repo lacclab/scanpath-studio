@@ -817,7 +817,7 @@ def get_app_css() -> str:
         > div:not(:has([data-testid="stPopover"])) {
         min-width: 0;
         flex: 1 1 auto;
-        padding-right: 0.45rem;
+        padding-right: 0.35rem;
     }
     /* UX-153 — a rail row with no switch (🧹 Filter, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
@@ -927,8 +927,10 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
         justify-content: stretch;
-        flex: 0 0 2.8rem;
-        min-width: 2.8rem;
+        /* 2.6rem, not 2.8: at a 1280px window the rail's longest layer name,
+           "Word boxes", missed by 2px (round 9) — the ▾ needs no more. */
+        flex: 0 0 2.6rem;
+        min-width: 2.6rem;
         border-left: 1px solid var(--sps-border);
         border-radius: 0 0.6rem 0.6rem 0;
     }

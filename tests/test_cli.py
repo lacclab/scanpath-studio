@@ -188,6 +188,58 @@ def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
     assert captured["heatmap_norm"] == "Log"
 
 
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        # v0.33.0's `--colorbars` asked for what is now the default.
+        (["--colorbars"], {}),
+        (
+            ["--colorbars", "--no-heatmap-colorbar"],
+            {"show_heatmap_colorbar": False},
+        ),
+        # A shared `--colorbar-*` sets both bars; a bar's own flag wins.
+        (
+            ["--colorbar-orientation", "horizontal", "--colorbar-tickangle", "45"],
+            {
+                "fixation_colorbar_orientation": "Horizontal",
+                "heatmap_colorbar_orientation": "Horizontal",
+                "fixation_colorbar_tickangle": 45,
+                "heatmap_colorbar_tickangle": 45,
+            },
+        ),
+        (
+            [
+                "--fixation-colorbar-tickfont-size",
+                "9",
+                "--colorbar-tickfont-size",
+                "14",
+            ],
+            {
+                "fixation_colorbar_tickfont_size": 9,
+                "heatmap_colorbar_tickfont_size": 14,
+            },
+        ),
+    ],
+)
+def test_render_keeps_the_v0_33_colorbar_flags(tmp_path, monkeypatch, flags, expected):
+    """Round 9, finding 4: a command written for v0.33.0 still runs."""
+    from scanpath_studio import api
+
+    captured = {}
+
+    def fake_plot(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "plot_scanpath", fake_plot)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(["render", "--sample", *flags, "-o", str(tmp_path / "x.html")])
+    bars = {k: v for k, v in captured.items() if "colorbar" in k}
+    assert bars == expected
+    help_text = cli._render_parser().format_help()
+    assert "--colorbars" not in help_text and "--colorbar-tickangle" not in help_text
+
+
 def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
     # VIZ-9: --saccade-arcs / --snap-fixations reach the figure builder.
     from scanpath_studio import api

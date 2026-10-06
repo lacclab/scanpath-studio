@@ -30,7 +30,7 @@ and a **▾** with its settings.
 | :material/blur_on: Fixations | markers: size, colour, order |
 | :material/arrow_outward: Saccades | lines and arrows, coloured by direction or reading type |
 | :material/article: Stimulus | text, span highlight, stimulus image, font and background |
-| :material/crop_square: Word boxes | each word's interest area: outline colour, fill colour and opacity |
+| :material/crop_square: Word boxes | each word's interest area: outline colour and opacity; fill colour and opacity |
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |
 | :material/cleaning_services: Filter | which fixations and saccades are drawn |

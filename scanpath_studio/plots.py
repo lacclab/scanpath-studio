@@ -315,6 +315,45 @@ def _make_hollow(marker: dict) -> dict:
     return m
 
 
+#: The numeric columns a figure places, sizes or times things by.
+_PLOTTED_NUMBERS = ("x", "y", "width", "height", "duration_ms", "timestamp_ms")
+#: A word whose box has an infinite edge has no box to draw.
+_WORD_BOX_COLUMNS = ("x", "y", "width", "height")
+
+
+def _finite_for_plotting(
+    frame: pd.DataFrame | None,
+    extra: Iterable[str] = (),
+    *,
+    drop_on: Iterable[str] = (),
+) -> pd.DataFrame | None:
+    """``frame`` with ±inf in its plotted numbers read as missing.
+
+    Data checks reports such rows and keeps them in every table; the figure
+    cannot place, size or time them, so it draws them as it draws a missing
+    value — no marker and no saccade to or from them, the smallest marker for a
+    duration, a replay timed by durations. A row infinite in a ``drop_on``
+    column is left out (a word box). Copies only when there is one."""
+    if frame is None or frame.empty:
+        return frame
+    numbers = {
+        c: pd.to_numeric(frame[c], errors="coerce").astype(float)
+        for c in dict.fromkeys((*_PLOTTED_NUMBERS, *extra))
+        if c in frame.columns
+    }
+    infinite = {c: np.isinf(v) for c, v in numbers.items()}
+    infinite = {c: m for c, m in infinite.items() if m.any()}
+    if not infinite:
+        return frame
+    out = frame.copy()
+    drop = pd.Series(False, index=frame.index)
+    for column, mask in infinite.items():
+        out[column] = numbers[column].mask(mask)
+        if column in drop_on:
+            drop |= mask
+    return out[~drop] if drop.any() else out
+
+
 def _compute_axis_ranges(
     canvas_width: int,
     canvas_height: int,
@@ -2002,10 +2041,12 @@ def _plotly_literal(value: str) -> str:
     Plotly reads a text or hover string as its pseudo-HTML, so a stimulus
     token ``<b>bold</b>`` drew bold and ``x<br>y`` broke the line (round-8
     review, finding 6). Escaping ``&``, ``<`` and ``>`` — the entities Plotly
-    decodes back — keeps the dataset's characters on screen. Applied once, to
-    data values only, at the figure boundary: the tables, exports and the
-    app's own markup (a hover's ``<br>``) are left as they are."""
-    return html.escape(value, quote=False)
+    decodes back — keeps the dataset's characters on screen, and ``%{`` is
+    written ``&#37;{`` so a name placed in a hover template is not read as a
+    template field (round 9). Applied once, to data values and user text only,
+    at the figure boundary: the tables, exports and the app's own markup (a
+    hover's ``<br>``) are left as they are."""
+    return html.escape(value, quote=False).replace("%{", "&#37;{")
 
 
 def _plotly_literal_values(series: pd.Series) -> pd.Series:
@@ -2919,7 +2960,7 @@ def _render_scanpath_figure(
                 heatmap_range=heatmap_range,
                 show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
-                colorbar_title=word_heatmap_title or "Value",
+                colorbar_title=_plotly_literal(word_heatmap_title or "Value"),
                 colorbar_style=cb_style,
             )
         else:
@@ -3335,7 +3376,8 @@ def add_illustration_label(
         yref="paper",
         xanchor="right",
         yanchor="bottom",
-        text=str(text).strip() or "Illustration · " + "; ".join(reasons),
+        text=_plotly_literal(str(text).strip())
+        or "Illustration · " + "; ".join(reasons),
         showarrow=False,
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",
@@ -4699,8 +4741,9 @@ def _render_scanpath_animation(
     word_hover_fields = settings.word_hover_fields
     fixation_hover_fields = settings.fixation_hover_fields
     background_color = settings.background_color
-    label_a = settings.label_a
-    label_b = settings.label_b
+    # Drawn as written: a label is a name, not Plotly markup (round 9).
+    label_a = _plotly_literal(settings.label_a)
+    label_b = _plotly_literal(settings.label_b)
     show_legend = settings.show_legend
     line_spacing = settings.line_spacing
     scale_text_to_boxes = settings.scale_text_to_boxes
@@ -5506,6 +5549,8 @@ def _resolve_trial_display_name(
     trial_labels: tuple[str, str] | None,
     idx: int,
 ) -> str:
+    """Scanpath ``idx``'s name as written; the builders make it literal
+    (:func:`_plotly_literal`) where they draw it."""
     if trial_labels is not None and len(trial_labels) > idx:
         return trial_labels[idx]
     text_id = None
@@ -6330,8 +6375,10 @@ def _make_split_comparison_figure(
             (fixations["participant_id"] == participant)
             & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
-        display_name = _resolve_trial_display_name(
-            participant, trial_id, trial_words, trial_labels, idx
+        display_name = _plotly_literal(
+            _resolve_trial_display_name(
+                participant, trial_id, trial_words, trial_labels, idx
+            )
         )
         style = _comparison_scanpath_style(
             idx,
@@ -6832,8 +6879,10 @@ def _render_comparison_figure(
             (fixations["participant_id"] == participant)
             & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
-        display_name = _resolve_trial_display_name(
-            participant, trial_id, trial_words, trial_labels, idx
+        display_name = _plotly_literal(
+            _resolve_trial_display_name(
+                participant, trial_id, trial_words, trial_labels, idx
+            )
         )
         style = _comparison_scanpath_style(
             idx, overrides[idx], default_marker_size_range=marker_size_range
@@ -8161,6 +8210,10 @@ def make_scanpath_figure(
     object can flow unchanged through UI, export, and headless surfaces.
     """
     resolved = _resolve_figure_settings(settings, overrides)
+    fields_xy = (resolved.x_field, resolved.y_field)
+    words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
+    fixations = _finite_for_plotting(fixations, fields_xy)
+    raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):
         fig = _render_scanpath_figure(
             words,
@@ -8220,6 +8273,10 @@ def build_scanpath_replay(
             "word_hover_measure": None,
         },
     )
+    words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
+    words_b = _finite_for_plotting(words_b, drop_on=_WORD_BOX_COLUMNS)
+    fixations = _finite_for_plotting(fixations)
+    fixations_b = _finite_for_plotting(fixations_b)
     with _labelled_columns(resolved.column_labels):
         fig, frame_step_ms = _render_scanpath_animation(
             words,
@@ -8323,6 +8380,9 @@ def make_comparison_figure(
             "heatmap_metric": "duration_ms",
         },
     )
+    words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
+    fixations = _finite_for_plotting(fixations)
+    raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):
         fig = _render_comparison_figure(
             words,

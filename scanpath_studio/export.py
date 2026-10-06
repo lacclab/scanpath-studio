@@ -77,6 +77,7 @@ from .plots import (
     SCANPATH_LAYER_ORDER,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
+    _plotly_literal,
     make_scanpath_figure,
     split_scanpath_layers,
 )
@@ -649,7 +650,8 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
 
     The figure grows by the height of each band and its margin grows to match, so
     the plotting area — and therefore the true-to-scale text — is byte-identical
-    to the untitled figure.
+    to the untitled figure. Both are drawn as written: ``<b>`` in a title shows
+    as ``<b>``, and only a real newline starts a new caption line.
     """
     if not title and not caption:
         return
@@ -662,7 +664,7 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
             fig.layout.height = height
         fig.update_layout(
             title=dict(
-                text=title,
+                text=_plotly_literal(title),
                 x=0.5,
                 xanchor="center",
                 y=1.0,
@@ -680,7 +682,7 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
         # Anchored to the plot's bottom edge and pushed into the space just
         # added, so it never overlaps whatever already lived in that margin.
         fig.add_annotation(
-            text=caption.replace("\n", "<br>"),
+            text=_plotly_literal(caption).replace("\n", "<br>"),
             xref="paper",
             yref="paper",
             x=0,

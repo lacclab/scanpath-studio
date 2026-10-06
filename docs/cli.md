@@ -274,8 +274,10 @@ print(cli_reference("corpus"))
 ## Data checks
 
 `check` runs the **:material/database: Data** page's **Data checks** on your
-tables without opening the app: fixations lasting 0 ms or less, fixations and
-raw-gaze samples with no finite position, and word boxes with no area. Each
+tables without opening the app: fixations lasting 0 ms or less or with an
+infinite duration or onset, fixations and raw-gaze samples with no finite
+position, word boxes with no area or no finite position, and per-screen screen
+sizes that are not finite and positive. Each
 finding gives the rows and trials affected, a few example rows, and what the
 app does with them. It changes nothing, and it exits 0 whatever it finds;
 `--json` prints the table

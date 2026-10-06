@@ -15647,8 +15647,9 @@ def render_data_health(
     filtered: bool = False,
 ) -> None:
     """*Data checks* under *Available with this dataset*: values that parsed but
-    cannot be right — a fixation of 0 ms or less, a position that is not a finite
-    number, a word box with no area (`data_health`).
+    cannot be right — a fixation of 0 ms or less, a duration, onset or position
+    that is not a finite number, a word box with no area, a per-screen screen
+    size that cannot be used (`data_health`).
 
     Runs on the whole dataset, before the trial filters, cached per dataset, so
     a rerun costs a fingerprint lookup. Each finding names the dataset's own
@@ -15674,8 +15675,9 @@ def render_data_health(
         )
         if not findings:
             st.caption(
-                "No fixation lasts 0 ms or less, every position is a finite "
-                "number, and every word box has an area."
+                "No fixation lasts 0 ms or less, every duration, onset and "
+                "position is a finite number, every word box has an area, and "
+                "every per-screen screen size is usable."
             )
             return
         lines: dict[str, list[str]] = {"warning": [], "note": []}

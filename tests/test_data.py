@@ -891,6 +891,12 @@ class TestOpaqueAndBlankIds:
         assert words.tolist() == ["1", "1.0", "2"]
         assert fixations.tolist() == ["1.0", "2"]
 
+    def test_repeated_index_labels_do_not_break_a_mixed_column(self):
+        """Two frames concatenated as they were repeat their labels; the mixed
+        object column's float cells are found by position, not by label."""
+        ids = pd.Series([1, 2, 2.0, "t3"], index=[0, 1, 0, 1], dtype=object)
+        assert data_module.stable_id(ids).tolist() == ["1", "2", "2", "t3"]
+
     def test_a_column_of_decimals_still_loses_its_point_zero(self):
         ids = data_module.stable_id(pd.Series([101.0, 102.0, np.nan]))
         assert ids.tolist()[:2] == ["101", "102"]

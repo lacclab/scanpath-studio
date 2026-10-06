@@ -1002,11 +1002,13 @@ def stable_id(series: pd.Series) -> pd.Series:
     two tables of the same shape decide alike.
     """
     text = series.astype(str).str.strip()
-    collapsed = text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
-    if pd.api.types.is_float_dtype(series):
-        return collapsed
-    pointed = collapsed.ne(text) & text.notna()
+    # A full match and a slice rather than a backreferenced `re.sub`, which
+    # pandas runs per element in Python (5x slower per million rows).
+    pointed = text.str.fullmatch(_WHOLE_FLOAT_ID).fillna(False).astype(bool)
     if not pointed.any():
+        return text
+    collapsed = text.mask(pointed, text.str.slice(stop=-2))
+    if pd.api.types.is_float_dtype(series):
         return collapsed
     whole = text.str.fullmatch(r"-?\d+(?:\.0)?").fillna(False).astype(bool)
     if bool(pointed[whole].all()):
@@ -1014,9 +1016,10 @@ def stable_id(series: pd.Series) -> pd.Series:
     if series.dtype != object:
         return text
     # A mixed object column: a real float cell is a number, the rest are text.
-    real_float = series[pointed].map(lambda value: isinstance(value, float))
-    keep = pointed.copy()
-    keep[real_float.index] = ~real_float.astype(bool)
+    # By position, never by label — a concatenated frame repeats its labels.
+    mask = pointed.to_numpy()
+    keep = mask.copy()
+    keep[mask] = [not isinstance(value, float) for value in series.to_numpy()[mask]]
     return collapsed.mask(keep, text)
 
 
@@ -2457,9 +2460,19 @@ def _drop_rows_missing_identity(source: pd.DataFrame, schema: dict) -> pd.DataFr
     return source if keep.all() else source.loc[keep]
 
 
-def identity_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
-    """A warning for rows that hold data but no participant or trial id."""
-    _, unkeyed = _rows_missing_identity(raw, schema)
+def identity_issues(
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    unkeyed: pd.Series | None = None,
+) -> list[str]:
+    """A warning for rows that hold data but no participant or trial id.
+
+    ``unkeyed`` is :func:`_rows_missing_identity`'s second mask, when the
+    caller already has it."""
+    if unkeyed is None:
+        _, unkeyed = _rows_missing_identity(raw, schema)
     count = int(unkeyed.sum())
     if not count:
         return []
@@ -3503,9 +3516,11 @@ def normalize_raw_gaze(
     """
     # Samples with no participant or trial id belong to no trial (BUG-56's
     # rule for the other two tables, round 10).
-    for issue in identity_issues(raw_gaze, schema, table="Raw gaze"):
+    blank, unkeyed = _rows_missing_identity(raw_gaze, schema)
+    for issue in identity_issues(raw_gaze, schema, table="Raw gaze", unkeyed=unkeyed):
         warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=2)
-    raw_gaze = _drop_rows_missing_identity(raw_gaze, schema)
+    if (blank | unkeyed).any():
+        raw_gaze = raw_gaze.loc[~(blank | unkeyed)]
     df = pd.DataFrame(index=raw_gaze.index)
     if schema.get("participant"):
         # str or list (a composite participant id), joined like normalize_words —

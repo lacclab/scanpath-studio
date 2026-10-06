@@ -5929,13 +5929,6 @@ def render_plot_controls(
                 reason=metric_reason,
                 help="The values at the two ends of the colour scale.",
             )
-        # The fixations' own colour bar — idle unless the colour-by column is
-        # numeric, since a discrete palette has no scale to show.
-        _render_colorbar_rows(
-            "fixation",
-            disabled=metric_disabled or raw_cmin is None,
-            reason=metric_reason,
-        )
         # VIZ-15: shape survives greyscale printing where hue doesn't, and
         # VIZ-23 made it a true global — the one marker property Compare does
         # NOT override per scanpath.
@@ -6001,6 +5994,13 @@ def render_plot_controls(
                 ),
                 field_host=_sub_row("Opacity", caption_help=opac_help),
             )
+        # The fixations' own colour bar, after the marker groups — idle unless the colour-by column is
+        # numeric, since a discrete palette has no scale to show.
+        _render_colorbar_rows(
+            "fixation",
+            disabled=metric_disabled or raw_cmin is None,
+            reason=metric_reason,
+        )
         # PRE-3: vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"
         # leaves the raw coordinates. VIZ-23 hoisted the correction above the

@@ -41,7 +41,6 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
-    PALETTES,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
@@ -125,6 +124,16 @@ def _drift_algorithm(value: str) -> str:
             f"unknown algorithm {value!r}; choose one of {', '.join(ALGORITHMS)}."
         )
     return name
+
+
+def _palette_name(value: str) -> str:
+    """``--palette``: a short name (``print``) or the app's (#374)."""
+    from .plots import normalize_palette
+
+    try:
+        return normalize_palette(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def _colorscale_name(value: str) -> str:
@@ -663,7 +672,8 @@ def _render_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--list-trials",
         action="store_true",
-        help="Print the trials (participant, trial and text ids) and exit.",
+        help="Print every trial (participant, trial and text id) and exit; "
+        "pass the trial id to -t.",
     )
     parser.add_argument(
         "--list-parts",
@@ -953,10 +963,12 @@ def _render_parser() -> argparse.ArgumentParser:
         viz.set_defaults(drift_correction=None, drift_connectors=False)
     viz.add_argument(
         "--palette",
-        choices=list(PALETTES),
-        help="Colour palette for the marks: Default (colourblind-safe) "
-        "(Okabe–Ito), Print / greyscale (hue-free, survives a B&W print), or "
-        "High contrast. Individual --*-color flags override it.",
+        type=_palette_name,
+        metavar="{default,print,high-contrast}",
+        help="Colour palette for the marks (the app's Palette): default "
+        "(colourblind-safe, Okabe–Ito), print (greyscale, survives a B&W print) "
+        "or high-contrast. The app's own names work too. Individual "
+        "--*-color flags override it.",
     )
     viz.add_argument(
         "--color-by",

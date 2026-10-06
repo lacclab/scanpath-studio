@@ -58,7 +58,6 @@ from .constants import (  # noqa: E402
     DEFAULT_ORDER_FONT_COLOR,
     EXPERIMENTAL_ENV_VAR,
     FONT_FAMILY,
-    PALETTES,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
@@ -92,6 +91,7 @@ from .plots import (  # noqa: E402
     make_word_profile_figure,
     normalize_option_value,
     normalize_option_values,
+    normalize_palette,
     replay_page,
     split_scanpath_layers,
 )
@@ -1897,10 +1897,7 @@ def _expand_palette(overrides: dict) -> dict:
     name = overrides.get("palette")
     if name is None:
         return overrides
-    if name not in PALETTES:
-        raise ValueError(
-            f"Unknown palette {name!r}; choose one of {', '.join(PALETTES)}."
-        )
+    name = normalize_palette(name)  # "print", "high-contrast", any case
     expanded = dict(overrides)
     expanded.pop("palette")
     # `word_label_color` is `text_color` on the figure builders.

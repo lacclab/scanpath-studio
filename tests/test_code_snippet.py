@@ -16,6 +16,7 @@ import pytest
 
 from scanpath_studio import api, cli, url_state
 from scanpath_studio import code_snippet as cs
+from scanpath_studio.plots import palette_slug
 from tests.conftest import APP_SCRIPT
 
 
@@ -779,7 +780,7 @@ def test_a_palette_choice_reproduces_through_the_cli(
     printed = capsys.readouterr().out
     assert "--saccade-type-color" not in printed
     assert "No `render` flag" not in printed
-    assert shlex.quote(palette) in printed
+    assert f"--palette {palette_slug(palette)}" in printed  # #374: no quotes
     replay = shlex.split(printed.strip().replace(" \\\n", " "))[1:]
     first, second = _rendered_figures(
         monkeypatch, [original[:-4] + original[-2:], replay]

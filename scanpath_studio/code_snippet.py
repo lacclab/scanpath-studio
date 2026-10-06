@@ -1868,7 +1868,9 @@ def cli_snippet(
     palette, palette_colors = _matching_palette(state.settings, state.kind)
     kwargs = figure_kwargs(state.settings, state.kind, explicit=explicit)
     if palette:
-        argv += ["--palette", palette]
+        from .plots import palette_slug
+
+        argv += ["--palette", palette_slug(palette)]  # no shell quotes
         kwargs = _restate_against_palette(
             kwargs, state.settings, state.kind, palette_colors
         )

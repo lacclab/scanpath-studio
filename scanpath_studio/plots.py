@@ -323,6 +323,46 @@ def normalize_option_value(name: str, value: object) -> object:
     raise ValueError(f"Unknown {name} {value!r}; choose one of {', '.join(choices)}.")
 
 
+#: The palettes' short names (#374): no spaces or brackets, so a shell needs
+#: no quotes — `render --palette print`. The app's own names work too.
+PALETTE_SLUGS = {
+    "default": "Default (colourblind-safe)",
+    "print": "Print / greyscale",
+    "high-contrast": "High contrast",
+}
+_PALETTE_ALIASES = {
+    "colourblindsafe": "Default (colourblind-safe)",
+    "colorblindsafe": "Default (colourblind-safe)",
+    "greyscale": "Print / greyscale",
+    "grayscale": "Print / greyscale",
+}
+
+
+def normalize_palette(value: object) -> str:
+    """The palette ``value`` names — its app name, short name (``print``) or
+    any spelling of either — else ``ValueError`` listing them."""
+    from .constants import PALETTES
+
+    key = _choice_key(value)
+    for name in PALETTES:
+        if _choice_key(name) == key:
+            return name
+    for slug, name in PALETTE_SLUGS.items():
+        if _choice_key(slug) == key:
+            return name
+    if key in _PALETTE_ALIASES:
+        return _PALETTE_ALIASES[key]
+    raise ValueError(
+        f"Unknown palette {value!r}; choose one of {', '.join(PALETTE_SLUGS)} "
+        f"({', '.join(PALETTES)})."
+    )
+
+
+def palette_slug(name: str) -> str:
+    """A palette's short name, for a command line."""
+    return next((slug for slug, full in PALETTE_SLUGS.items() if full == name), name)
+
+
 def normalize_option_values(options: Mapping[str, Any]) -> dict[str, Any]:
     """``options`` with every enumerated value read by
     `normalize_option_value` (inside ``style_a`` / ``style_b`` too)."""

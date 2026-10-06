@@ -88,3 +88,22 @@ def test_figure_options_lists_the_accepted_values():
     every = set(options) | set(comparison)
     # `compare_stimulus` is a named parameter of `compare_scanpaths`.
     assert set(plots.FIGURE_OPTION_CHOICES) - {"compare_stimulus"} <= every
+
+
+@pytest.mark.parametrize(
+    ("spelling", "name"),
+    [
+        ("print", "Print / greyscale"),
+        ("greyscale", "Print / greyscale"),
+        ("high-contrast", "High contrast"),
+        ("High contrast", "High contrast"),
+        ("default", "Default (colourblind-safe)"),
+    ],
+)
+def test_palettes_take_their_short_names(spelling, name):
+    assert plots.normalize_palette(spelling) == name
+
+
+def test_an_unknown_palette_lists_the_short_names():
+    with pytest.raises(ValueError, match="choose one of default, print, high-contrast"):
+        plots.normalize_palette("sepia")

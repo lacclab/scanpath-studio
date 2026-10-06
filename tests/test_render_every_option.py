@@ -229,7 +229,7 @@ def test_a_palette_is_named_only_when_the_figure_wears_it():
     assert "--text-color" in command
     settings["fixation_color"] = greyscale["fixation_color"]
     command, _ = cs.cli_snippet(DEMO, cs.FigureState(kind="static", settings=settings))
-    assert "--palette 'Print / greyscale'" in command
+    assert "--palette print" in command
     assert "--fixation-color" not in command and "--text-color" not in command
 
 

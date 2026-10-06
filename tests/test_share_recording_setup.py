@@ -342,7 +342,7 @@ def test_numbers_are_clamped_to_their_widgets():
 )
 def test_a_value_the_widget_refuses_is_ignored_with_a_warning(param, value):
     at = _open_link(**{param: value})
-    assert any(f"?{param}=" in w.value for w in at.warning), [
+    assert any(f"invalid {param}=" in w.value for w in at.warning), [
         w.value for w in at.warning
     ]
 

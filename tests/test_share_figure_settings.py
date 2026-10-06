@@ -118,7 +118,7 @@ def test_a_value_the_widget_refuses_is_ignored_with_a_warning(param, value):
     at.query_params[param] = value
     at.run(timeout=30)
     assert not at.exception, at.exception
-    assert any(f"?{param}=" in w.value for w in at.warning), [
+    assert any(f"invalid {param}=" in w.value for w in at.warning), [
         w.value for w in at.warning
     ]
 

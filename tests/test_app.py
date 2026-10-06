@@ -523,7 +523,7 @@ class TestBuildShareQuery:
         assert ss["author_text"] == "alpha beta"
         assert "_authored_events_frame" not in ss
         assert "_author_text_for_events" not in ss
-        assert any("malformed authored-fixation" in str(w) for w in fake_st.warnings)
+        assert any("unreadable hand-made scanpath" in str(w) for w in fake_st.warnings)
 
 
 class TestExplicitReaderIsBinding:
@@ -559,8 +559,8 @@ class TestExplicitReaderIsBinding:
         }
         message = _apply_pending_trial_selection(self._COMBOS)
         assert message == (
-            "Couldn't open that reading: reader requested-reader's trial trial-1 "
-            "is not in the current trial pool."
+            "Couldn't open that trial: participant requested-reader's trial "
+            "trial-1 isn't in the filtered trials."
         )
         assert PENDING_TRIAL_KEY not in fake_st.session_state
         assert "single_trial_id" not in fake_st.session_state
@@ -633,8 +633,8 @@ class TestApplyUrlTrialSelection:
         fake_st.query_params = {"participant": "p9", "trial_id": "t1"}
         message = _apply_url_trial_selection(self._combos())
         assert message == (
-            "The link's reading couldn't be opened: reader p9's trial t1 is not "
-            "in the current trial pool."
+            "The link's trial couldn't be opened: participant p9's trial t1 "
+            "isn't in the filtered trials."
         )
         assert "single_trial_id" not in fake_st.session_state
         assert fake_st.session_state["_url_trial_applied"] is True
@@ -644,7 +644,7 @@ class TestApplyUrlTrialSelection:
         fake_st.query_params = {"trial_id": "t1"}
         combos = pd.DataFrame({"participant_id": ["p1", "p2"], "trial_id": ["t1"] * 2})
         message = _apply_url_trial_selection(combos)
-        assert message is not None and "belongs to 2 readers" in message
+        assert message is not None and "belongs to 2 participants" in message
         assert "single_trial_id" not in fake_st.session_state
 
     def test_applies_only_once(self, fake_st):

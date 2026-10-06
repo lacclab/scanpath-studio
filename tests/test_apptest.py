@@ -3483,8 +3483,8 @@ class TestSetupWizard:
         # differing coverage reads as two different numbers side by side rather
         # than as a sentence about them in a banner.
         captions = [e.value for e in at.caption]
-        assert any("3 trials" in c for c in captions), captions
-        assert any("2 trials" in c for c in captions), captions
+        assert any("3 Trial IDs" in c for c in captions), captions
+        assert any("2 Trial IDs" in c for c in captions), captions
 
     def test_disjoint_trial_ids_warn(self, monkeypatch):
         """Group C.1c: when the tables share no trial ids at all (a likely mapping
@@ -4886,7 +4886,7 @@ class TestOpenTrialFromCorpusTable:
         assert at.session_state["single_trial_id"] == booted_on
         assert PENDING_TRIAL_KEY not in at.session_state
         assert any(
-            "Couldn't open that reading" in str(w.value)
+            "Couldn't open that trial" in str(w.value)
             and "a-reader-who-is-not-here" in str(w.value)
             for w in at.warning
         ), [w.value for w in at.warning]
@@ -5166,8 +5166,8 @@ class TestDeepLinkToAFilteredOutReader:
         at.run(timeout=180)
         assert not at.exception, at.exception
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "The link's reading couldn't be opened" in warnings
-        assert f"reader {participant}'s trial {trial}" in warnings
+        assert "The link's trial couldn't be opened" in warnings
+        assert f"participant {participant}'s trial {trial}" in warnings
         assert at.session_state["_url_trial_applied"] is True
 
         # The reader comes back into the pool: the consumed link stays put.
@@ -5176,7 +5176,7 @@ class TestDeepLinkToAFilteredOutReader:
         assert not at.exception, at.exception
         assert at.session_state["single_trial_id"] != trial
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "The link's reading couldn't be opened" not in warnings
+        assert "The link's trial couldn't be opened" not in warnings
 
 
 @pytest.mark.timeout(180)

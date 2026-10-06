@@ -1077,10 +1077,8 @@ class TestAuthoringEditorFlow:
         at = at.run(timeout=60)
         _clean(at, "with an unusable authoring row:")
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "finite X/Y" in warnings, (
-            "an undrawable row was dropped without saying so"
-        )
-        assert "Row 2" in warnings
+        assert "no X/Y" in warnings, "an undrawable row was dropped without saying so"
+        assert "row 2" in warnings
 
     def _linked(self, events: str) -> AppTest:
         at = AppTest.from_file(APP_SCRIPT)
@@ -1094,7 +1092,7 @@ class TestAuthoringEditorFlow:
         drew its navigation — now it is ignored with the existing warning."""
         at = self._linked('[{"x":100},1]')
         _clean(at, "with a malformed authored link:")
-        assert any("malformed authored-fixation" in str(w.value) for w in at.warning)
+        assert any("unreadable hand-made scanpath" in str(w.value) for w in at.warning)
         assert at.session_state["author_text"] == "alpha beta"
 
     def test_valid_authored_link_events_survive_the_first_render(self):

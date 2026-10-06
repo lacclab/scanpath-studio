@@ -450,7 +450,7 @@ def test_the_plot_camera_saves_the_export_png(monkeypatch):
 
     embedded: list[str] = []
     monkeypatch.setattr(
-        tabs, "_embed_html_iframe", lambda html, height: embedded.append(html)
+        tabs, "_embed_html_iframe", lambda html, height, **_: embedded.append(html)
     )
     at = AppTest.from_function(_true_scale_chart_app).run(timeout=30)
 
@@ -488,7 +488,7 @@ def test_an_unnamed_chart_keeps_plotlys_file_name(monkeypatch):
 
     embedded: list[str] = []
     monkeypatch.setattr(
-        tabs, "_embed_html_iframe", lambda html, height: embedded.append(html)
+        tabs, "_embed_html_iframe", lambda html, height, **_: embedded.append(html)
     )
     at = AppTest.from_function(_unnamed_true_scale_chart_app).run(timeout=30)
 

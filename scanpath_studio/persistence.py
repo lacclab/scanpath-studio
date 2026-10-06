@@ -917,8 +917,12 @@ def _restorable_session(stored: Any) -> dict:
             # design rather than all-or-nothing.
             # One saved before the fixed duration scale keeps the relative one.
             if isinstance(value, dict):
+                from .controls import sanitize_design
+
                 clean[key] = {
-                    str(name): keep_legacy_marker_scale(rename_legacy_keys(design))
+                    str(name): sanitize_design(
+                        keep_legacy_marker_scale(rename_legacy_keys(design))
+                    )[0]
                     for name, design in value.items()
                     if isinstance(design, dict)
                 }

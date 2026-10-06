@@ -106,6 +106,12 @@ _FAILED_DATASETS_KEY = "_local_persistence_failed_datasets"
 #: exists but cannot be read pauses saving, so this session cannot replace it;
 #: an absent or cleared cache saves normally.
 _CACHE_FAILURE_KEY = "_local_persistence_cache_failure"
+#: The metadata tables' file, when the manifest points at it and it would not
+#: read (round 10): ``{"pointer": …, "reason": …}``. Held back like a dataset —
+#: every save keeps the pointer and leaves the file as it is — until
+#: :func:`retry_failed_metadata` reads it or :func:`discard_failed_metadata`
+#: removes it.
+_FAILED_METADATA_KEY = "_local_persistence_failed_metadata"
 _FRAME_KEYS = ("words", "fixations", "raw_gaze")
 #: DATA-38 — the attached metadata tables live beside the manifest, not in it,
 #: and are rewritten only when their content changes: the manifest is rewritten
@@ -445,6 +451,13 @@ def _save_metadata(
     """
     from . import metadata as metadata_mod
 
+    held = session.get(_FAILED_METADATA_KEY)
+    if isinstance(held, dict):
+        # Round 10: the stored tables did not read back. Writing this session's
+        # (often none) would replace or delete them, so the file and the
+        # manifest's pointer stay as they are until a retry or a discard.
+        pointer = held.get("pointer")
+        return dict(pointer) if isinstance(pointer, dict) else None
     path = root / METADATA_FILE
     if not signature:
         path.unlink(missing_ok=True)
@@ -919,18 +932,91 @@ def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) ->
     """DATA-38 — re-attach the tables :func:`_save_metadata` wrote; how many.
 
     DATA-47: they come back into the per-dataset store, each dataset's own, and
-    reach the session keys when that dataset is selected. Its own error boundary: a missing or unreadable sidecar costs the tables,
-    never the datasets and settings the rest of the manifest restores.
+    reach the session keys when that dataset is selected. Its own error
+    boundary: a missing or unreadable sidecar costs the tables, never the
+    datasets and settings the rest of the manifest restores — and it is held
+    back (:func:`failed_metadata`), so no save replaces it (round 10).
     """
     if not isinstance(pointer, dict) or not pointer.get("file"):
         return 0
-    try:
-        payloads = json.loads((root / str(pointer["file"])).read_text("utf-8"))
-    except (OSError, ValueError):
-        return 0
     from . import metadata as metadata_mod
 
-    return metadata_mod.restore_dataset_payloads(session, payloads)
+    try:
+        payloads = _read_metadata_file(root, pointer)
+        return metadata_mod.restore_dataset_payloads(session, payloads)
+    except Exception as exc:  # any failure costs the tables, nothing more
+        session[_FAILED_METADATA_KEY] = {
+            "pointer": _json_safe(pointer),
+            "reason": _metadata_failure_reason(exc),
+        }
+        _LOGGER.warning("Could not restore the cached metadata tables: %s", exc)
+        return 0
+
+
+def _read_metadata_file(root: Path, pointer: Any) -> Any:
+    """The metadata sidecar's JSON, from inside the cache folder only."""
+    name = str(_as_mapping(pointer).get("file") or "")
+    path = (root / name).resolve()
+    if path.parent != root.resolve():
+        raise ValueError(f"it names a file outside the cache folder ({name})")
+    return json.loads(path.read_text("utf-8"))
+
+
+def _metadata_failure_reason(exc: BaseException) -> str:
+    if isinstance(exc, json.JSONDecodeError):
+        return "its file is not valid JSON"
+    if isinstance(exc, FileNotFoundError):
+        return f"its file is missing ({METADATA_FILE})"
+    return _failure_reason(exc)
+
+
+def failed_metadata(session) -> str | None:
+    """Why the cached metadata tables did not read back, or ``None``."""
+    held = session.get(_FAILED_METADATA_KEY)
+    return str(held.get("reason", "")) if isinstance(held, dict) else None
+
+
+def retry_failed_metadata(session, root: Path | None = None) -> str | None:
+    """Read the held-back metadata tables again; the reason if they still fail.
+
+    Tables that read join the store (a dataset holding tables of its own keeps
+    them), and saving them resumes.
+    """
+    held = session.get(_FAILED_METADATA_KEY)
+    if not isinstance(held, dict):
+        return None
+    directory = state_directory() if root is None else root
+    from . import metadata as metadata_mod
+
+    with _STATE_LOCK:
+        try:
+            payloads = _read_metadata_file(directory, held.get("pointer"))
+            metadata_mod.restore_dataset_payloads(session, payloads)
+        except Exception as exc:  # still unreadable: it stays held back
+            reason = _metadata_failure_reason(exc)
+            session[_FAILED_METADATA_KEY] = {**held, "reason": reason}
+            return reason
+        session.pop(_FAILED_METADATA_KEY, None)
+        # Written afresh on the next save, from the store as it now stands.
+        session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
+    return None
+
+
+def discard_failed_metadata(session, root: Path | None = None) -> bool:
+    """Delete the held-back metadata tables' file; saving them resumes.
+
+    Only that copy: the datasets, their annotations and the tables attached
+    this session are left alone, and the next save writes the latter.
+    """
+    held = session.pop(_FAILED_METADATA_KEY, None)
+    if not isinstance(held, dict):
+        return False
+    directory = state_directory() if root is None else root
+    with _STATE_LOCK:
+        _unlink_quietly(directory / METADATA_FILE)
+        session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
+        session.pop(_LAST_METADATA_POINTER_KEY, None)
+    return True
 
 
 def forget_state(root: Path) -> None:
@@ -1185,6 +1271,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             # Nothing is left to protect or to retry: a cleared cache saves
             # normally, like one that never existed.
             _FAILED_DATASETS_KEY,
+            _FAILED_METADATA_KEY,
             _CACHE_FAILURE_KEY,
             _PAUSED_KEY,
         ):

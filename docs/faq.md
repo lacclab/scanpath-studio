@@ -86,7 +86,8 @@ so export your annotations and settings before you leave
 
 If one saved dataset's files go missing or are damaged, the rest of the
 session still comes back. The app names the dataset that didn't, keeps its
-saved copy as it is, and offers **Retry** and **Remove from cache**. If the
+saved copy as it is, and offers **Retry** and **Remove from cache**. Saved
+metadata tables that can't be read are kept the same way. If the
 whole recovery copy can't be read, the app opens without it and stops saving
 over it until you retry or clear it.
 

@@ -74,7 +74,7 @@ loaded*), so a corpus read *Loaded* until you opened it and found its files
 gone; the count headers' help says it now (`COUNTS_EXPLANATION`). A new
 downloadable corpus needs a `files_present` in its entry, or its row says
 *Available* while it is not. Rename and edit are not on the rows: **Edit dataset**
-sits at the end of the *What's in…* heading (`app.render_dataset_inspection_head`),
+sits under the *What's in…* overview, above its subtabs (`app.render_dataset_edit_button`),
 and the editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
 and **Description**. An upload's name is applied by ✅ Save changes
 (`tabs._apply_remap`, via `EDITOR_PENDING_NAME_KEY`) because every editor

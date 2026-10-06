@@ -1409,7 +1409,7 @@ def test_render_animate_compare_reads_an_unstated_screen_off_the_data(tmp_path):
             ]
         )
     message = str(excinfo.value)
-    assert "different screens — 1680x1050 and " in message
+    assert "different screens — 1680×1050 and " in message
     assert "--compare-layout side-by-side" in message
     # B's screen was only inferred, so the refusal names the flag that states it.
     assert "read off its data" in message and "--compare-canvas" in message

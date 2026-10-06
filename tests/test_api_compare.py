@@ -254,7 +254,7 @@ class TestCrossDataset:
                 canvas_size=(1920, 1080),
             )
         message = str(excinfo.value)
-        assert "400x300" in message
+        assert "400×300" in message
         assert "B's screen was read off its data" in message
         assert "setup_b=" in message
 
@@ -505,7 +505,7 @@ class TestCoAnimationAcrossTwoDatasets:
         it (400x300 for these frames), never assumed to be A's."""
         from scanpath_studio.experimental_setup import IncomparableScreensError
 
-        with pytest.raises(IncomparableScreensError, match="400x300") as excinfo:
+        with pytest.raises(IncomparableScreensError, match="400×300") as excinfo:
             self._animate(dataset_b="PoTeC", canvas_size=(1920, 1080))
         # …and the refusal says the screen was inferred, and how to state it.
         message = str(excinfo.value)

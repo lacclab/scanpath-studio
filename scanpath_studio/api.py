@@ -2973,7 +2973,7 @@ def _refuse_co_animation_across_screens(
     if not comparable:
         hint = _inferred_screen_hint(a_inferred=a_inferred, b_inferred=setup_b is None)
         raise IncomparableScreensError(
-            f"{note} A co-animation replays both readings on one clock in one "
+            f"{note} A co-animation replays both trials on one clock in one "
             "coordinate space, so none was drawn; compare them with "
             "compare_scanpaths(layout='side_by_side') (or 'stacked'), each drawn "
             f"to its own screen.{hint}",

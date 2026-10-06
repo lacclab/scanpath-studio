@@ -534,99 +534,6 @@ def _tour_optout_script(opted_out: bool) -> str:
     )
 
 
-#: UX-85 — one cookie holding a comma-joined *set* of dismissed tutorial ids,
-#: rather than one cookie per tutorial. Separate from #UX-12's single
-#: `TOUR_OPTOUT_COOKIE`: that one gates only the automatic welcome card.
-TUTORIAL_OPTOUT_COOKIE = "sps_tutorial_optout"
-
-
-def _dismissed_tutorial_ids() -> set[str]:
-    """Tutorial ids marked "don't auto-show" in this browser (UX-85).
-
-    Session state's own set wins within a session — same rule as
-    :func:`tour_opted_out` — seeded from the cookie the first time it's read.
-    Defensive about ``st.context`` for the same reason: bare-mode / AppTest
-    runs have no request behind them.
-    """
-    if "_tutorial_dismissed_ids" not in st.session_state:
-        try:
-            raw = st.context.cookies.get(TUTORIAL_OPTOUT_COOKIE) or ""
-        except Exception:
-            raw = ""
-        st.session_state["_tutorial_dismissed_ids"] = {p for p in raw.split(",") if p}
-    return st.session_state["_tutorial_dismissed_ids"]
-
-
-def _tutorial_optout_script(dismissed: set[str]) -> str:
-    """A same-origin script writing (or clearing) the dismissed-id cookie."""
-    if dismissed:
-        joined = ",".join(sorted(dismissed))
-        value = f"{TUTORIAL_OPTOUT_COOKIE}={joined}; max-age={_TOUR_OPTOUT_MAX_AGE}"
-    else:
-        value = f"{TUTORIAL_OPTOUT_COOKIE}=; max-age=0"
-    return (
-        "<script>window.parent.document.cookie = "
-        f'"{value}; path=/; SameSite=Lax";</script>'
-    )
-
-
-def _render_tutorial_optout(tutorial_id: str, host, *, key_suffix: str = "") -> None:
-    """The per-tutorial "Don't auto-show this one" checkbox (UX-85, UX-110).
-
-    Two independent call sites share this one preference: the 🧭 Tutorials
-    picker card (``key_suffix=""``) and the running tutorial's own footer
-    (:func:`render_use_case_tutorial`, ``key_suffix="_running"``) — distinct
-    widget keys because a tutorial can be actively open *while* its own card
-    is also visible in the picker (opening 🧭 Tutorials does not close a
-    tutorial already in progress), which would otherwise collide as two
-    widgets sharing one key in the same run.
-
-    Pulls in the shared truth on render, but only when nothing has touched
-    *this* widget since the last time it agreed with it — ``_synced_key``
-    remembers what this specific checkbox last matched. Seeding the key
-    unconditionally on every run (an earlier version of this did) is wrong in
-    a subtler way than the usual "value= is ignored once the key exists"
-    trap: it would also stomp a check/uncheck AppTest (or a real click)
-    already wrote into this exact key for *this* run, before the widget ever
-    got to read it back — the box would silently refuse to respond to its own
-    click. Comparing against the last-synced snapshot is what tells "the
-    other checkbox moved the shared set" apart from "this one was just
-    clicked", so a fresh click always wins over a stale pull.
-
-    Read directly (no fragment-scoping hazard): the picker card sits in a
-    ``st.dialog`` body, which re-executes on its own widgets' interactions the
-    same as a plain script rerun would, and the running-tutorial footer's own
-    ``@st.fragment`` scope is exactly where its own checkbox needs to take
-    effect. Nothing outside either surface needs to see the toggle in the same
-    run — unlike Start/Resume next to it, which hand off to a different view.
-    Cross-surface agreement (checking one shows checked on the *other*) still
-    needs that other surface to render again — the next time the picker
-    dialog opens, or the next fragment rerun of the running tutorial's own
-    footer — same as any other Streamlit UI reacting to state it doesn't own.
-    """
-    dismissed = _dismissed_tutorial_ids()
-    key = f"tutorial_dont_autoshow_{tutorial_id}{key_suffix}"
-    synced_key = f"_{key}_synced"
-    shared_truth = tutorial_id in dismissed
-    if key not in st.session_state or (
-        st.session_state.get(synced_key) == st.session_state[key]
-        and st.session_state[key] != shared_truth
-    ):
-        st.session_state[key] = shared_truth
-    checked = host.checkbox(
-        f"{ICONS['mute']} Don't auto-show this one",
-        key=key,
-        help="Stops this tutorial from offering itself automatically. It "
-        "stays listed here, and Start / Resume work exactly the same.",
-    )
-    st.session_state[synced_key] = checked
-    if checked:
-        dismissed.add(tutorial_id)
-    else:
-        dismissed.discard(tutorial_id)
-    embed_html_iframe(_tutorial_optout_script(dismissed), height=0)
-
-
 def _render_tour_optout(host=st, *, key_suffix: str = "") -> None:
     """The "Don't show this again" checkbox + the cookie write that backs it.
 
@@ -636,8 +543,7 @@ def _render_tour_optout(host=st, *, key_suffix: str = "") -> None:
     picker's Welcome tour card (``host=<that card's container>``,
     ``key_suffix="_picker"``). Both can be on screen in the same run — the
     picker can be reopened while the tour it started is still settling onto
-    screen — so they need distinct widget keys, synced the same way
-    :func:`_render_tutorial_optout` syncs its own pair: seeded from
+    screen — so they need distinct widget keys, synced as a pair: seeded from
     :func:`tour_opted_out` only when nothing has touched *this* particular
     checkbox since it last agreed with that shared truth (``_synced_key``),
     not via ``value=``, which Streamlit only consults before a widget's key
@@ -1803,7 +1709,6 @@ def _tutorial_library_dialog() -> None:
                 if because
                 else f"{ICONS['warning']} Unavailable — {reason.lower()}"
             )
-        _render_tutorial_optout(tutorial.id, card)
 
 
 @st.fragment
@@ -1901,12 +1806,6 @@ def render_use_case_tutorial() -> None:
                 _open_tutorial_surface(step)
                 _finish_use_case(tutorial.id)
                 st.rerun()
-
-        # UX-110: the same "don't auto-show this one" preference the 🧭
-        # Tutorials picker card already offers, reachable from the running
-        # tutorial too — checking it here needs no trip back to the picker,
-        # and the two stay in sync (see _render_tutorial_optout's docstring).
-        _render_tutorial_optout(tutorial.id, st, key_suffix="_running")
 
         # A Streamlit popover is client-side state, so its server callback can
         # start a tutorial but cannot close the chooser that contained the

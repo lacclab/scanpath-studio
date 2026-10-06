@@ -1003,6 +1003,35 @@ class TestDatasetTable:
         assert after.set_index("_token").loc[other, "_active"]
         assert not after.set_index("_token").loc[self.NAME, "_active"]
 
+    def test_a_corpus_this_server_cannot_fetch_says_so_instead_of_opening(
+        self, monkeypatch
+    ):
+        """On the hosted demo, a public corpus that isn't on the server used to
+        open as the bundled demo, under a note that the files were missing. The
+        click now leaves the open dataset alone and says where it does open."""
+        from scanpath_studio import datasets
+        from scanpath_studio.app import _UNREACHABLE_DATASET_KEY
+
+        monkeypatch.setattr(datasets, "potec_present", lambda root: False)
+        monkeypatch.setenv("SCANPATH_LOCAL_FS", "0")
+        at = self._at()
+        self._click(at, f"dataset_open_{self._slug(self.POTEC)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == self.NAME
+        assert at.session_state[_UNREACHABLE_DATASET_KEY] == self.POTEC
+        assert any("desktop app" in str(m.value) for m in at.markdown)
+
+    def test_a_local_install_still_opens_a_corpus_it_can_download(self, monkeypatch):
+        from scanpath_studio import datasets
+        from scanpath_studio.app import _UNREACHABLE_DATASET_KEY
+
+        monkeypatch.setattr(datasets, "potec_present", lambda root: False)
+        at = self._at()
+        self._click(at, f"dataset_open_{self._slug(self.POTEC)}")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == self.POTEC
+        assert _UNREACHABLE_DATASET_KEY not in at.session_state
+
     def test_a_sorted_table_opens_the_row_that_was_clicked(self):
         """The row controls are keyed by dataset, so a sort cannot shift them."""
         from scanpath_studio.app import _DATASET_TABLE_SORT_KEY

@@ -1194,8 +1194,11 @@ If you use the bundled demo data, also cite
         f"""
 Cross-check results before publishing.
 
-If something looks wrong — or if you have a feature request or suggestion —
-[open an issue]({CITATION["url"]}/issues) ↗.
+{ICONS["bug"]} Something looks wrong? [Report a bug]({CITATION["bug_report_url"]}) ↗
+with the version above, your operating system, and how you run the app.
+
+{ICONS["question"]} Questions go to [Discussions → Q&A]({CITATION["questions_url"]}) ↗,
+and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 """
     )
 
@@ -1843,16 +1846,17 @@ def _dataset_access_status(
     # the corpus has to be placed by whoever runs it.
     if not local_filesystem_enabled():
         cfg.caption(
-            "Downloading is disabled on this deployment — ask whoever runs it to "
-            "place the corpus in the configured data location, or, on a trusted "
-            "network, to start it with `SCANPATH_LOCAL_FS=1`."
+            "This server doesn't download datasets. Open it in the desktop app "
+            "or a pip install, where it downloads in one click. Running this "
+            "server yourself? Place the corpus in its data location, or, on a "
+            "trusted network, start it with `SCANPATH_LOCAL_FS=1`."
         )
         _note_dataset_unavailable(
             label=label,
-            reason="it isn't present in the server's data location.",
-            action="This deployment can't fetch corpora itself — ask whoever runs "
-            "it to place the files listed under **Expected files**",
-            root=root,
+            reason="this server doesn't download datasets.",
+            action=f"Open it in the [desktop app]({CITATION['desktop_url']}) ↗ "
+            "or a pip install (`pip install scanpath-studio`), where it "
+            "downloads in one click",
         )
         return False
     _note_dataset_unavailable(
@@ -4228,8 +4232,9 @@ def _read_uploaded_frame(
         host.warning(
             f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
             "parsing a corpus this large can exhaust memory and crash the app. "
-            "For big corpora, run locally (`pip install scanpath-studio`) or "
-            "upload a subset (e.g. a few participants)."
+            f"For big corpora, use the [desktop app]({CITATION['desktop_url']}) "
+            "or `pip install scanpath-studio`, or upload a subset (e.g. a few "
+            "participants)."
         )
         if not host.checkbox(
             "Load it anyway",
@@ -6179,6 +6184,66 @@ def _dataset_status(spec: Mapping | None, *, stood_in_for: bool = False) -> str:
     return dataset_table.NEEDS_SETUP
 
 
+#: The corpus whose row was clicked on a server that cannot fetch it, while
+#: `_unreachable_dataset_dialog` explains why it did not open.
+_UNREACHABLE_DATASET_KEY = "_dataset_unreachable_here"
+
+
+def _unreachable_here(token: str) -> bool:
+    """Whether ``token`` is a corpus this deployment can neither find nor fetch.
+
+    The hosted demo (any server other machines can reach, `local_filesystem_enabled`)
+    downloads nothing and takes no folder, so a corpus whose files are not
+    already on it can never open there.
+    """
+    if local_filesystem_enabled():
+        return False
+    status = _dataset_status(public_dataset_registry().get(token))
+    return status in (dataset_table.NEEDS_DOWNLOAD, dataset_table.NEEDS_SETUP)
+
+
+def _dismiss_unreachable_dataset() -> None:
+    st.session_state.pop(_UNREACHABLE_DATASET_KEY, None)
+
+
+@st.dialog(
+    f"{ICONS['desktop']} Open it on your own computer",
+    on_dismiss=_dismiss_unreachable_dataset,
+)
+def _unreachable_dataset_dialog(token: str) -> None:
+    """Why a public corpus did not open here, and where it does.
+
+    Handled by the button's return value, as in `_delete_confirmation_dialog`
+    (BUG-36): a dialog body is a fragment.
+    """
+    registry = public_dataset_registry()
+    name = _dataset_display_name(token, registry)
+    if (registry.get(token) or {}).get("downloadable"):
+        st.markdown(
+            f"**{name}** downloads the first time you open it, and this server "
+            "doesn't download datasets. In the desktop app or a pip install it "
+            "downloads once, with one click, and stays on your computer."
+        )
+    else:
+        st.markdown(
+            f"**{name}** is read from a folder on the computer running the app, "
+            "and this server can't be pointed at one. Open it in the desktop "
+            "app or a pip install instead."
+        )
+    st.markdown(
+        f"{ICONS['desktop']} [Get the desktop app]({CITATION['desktop_url']}) ↗ "
+        "(Windows, macOS, Linux), or install it with pip:"
+    )
+    st.code("pip install scanpath-studio\nscanpath-studio", language="bash")
+    st.caption(
+        "Running this server yourself? Place the files in its data location, "
+        "or, on a trusted network, start it with `SCANPATH_LOCAL_FS=1`."
+    )
+    if st.button("OK", key="dataset_unreachable_ok", type="primary"):
+        _dismiss_unreachable_dataset()
+        st.rerun(scope="app")
+
+
 def _open_dataset_row(token: str) -> None:
     """UX-78 — a click anywhere on a dataset's row opens it.
 
@@ -6187,6 +6252,11 @@ def _open_dataset_row(token: str) -> None:
     unsaved, else through the editor's own *Leave without saving?*.
     """
     if token == st.session_state.get("data_source_choice"):
+        return
+    if _unreachable_here(token):
+        # Opening it would only show the demo in its place, under a note
+        # saying the files are missing. Say so before anything changes.
+        st.session_state[_UNREACHABLE_DATASET_KEY] = token
         return
     st.session_state[_TABLE_NEEDS_APP_RERUN] = True
     if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
@@ -6587,6 +6657,8 @@ def render_dataset_table(
         )
 
     _render_delete_confirmation(box, tokens, uploaded)
+    if unreachable := st.session_state.get(_UNREACHABLE_DATASET_KEY):
+        _unreachable_dataset_dialog(unreachable)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
 

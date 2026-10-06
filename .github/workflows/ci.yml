@@ -80,13 +80,45 @@ jobs:
         run: pytest -q -n auto --cov
 
       # The number in the PR, without needing a third-party service: the Docs
-      # workflow publishes the browsable report + the README badge on push to
-      # main (ENG-37).
+      # workflow publishes the browsable report + the README badge with each
+      # release (ENG-37).
       - name: Summarize
         if: always()
         run: |
           echo '## Coverage' >> "$GITHUB_STEP_SUMMARY"
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+  # The app in a real browser (tests/test_browser_smoke.py): it loads, the
+  # true-scale figure draws, a rail popover opens. AppTest runs no frontend, so
+  # this is the one check that sees the app's CSS and page scripts against the
+  # Streamlit release pip resolves today. The test skips without Playwright,
+  # which is why the other jobs collect it harmlessly.
+  browser:
+    name: Browser smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      # Pinned like the other CI tools; bump it deliberately.
+      - name: Install package + test deps + Playwright
+        run: uv pip install --system -e ".[test]" playwright==1.63.0
+
+      - name: Install Chromium
+        run: playwright install --with-deps chromium
+
+      - name: Run the browser smoke test
+        run: pytest -q tests/test_browser_smoke.py
 
   lint:
     name: Lint

@@ -1,32 +1,26 @@
 name: Docs
 
-# Build and publish the MkDocs site to GitHub Pages on every push to main.
+# Build and publish the MkDocs site to GitHub Pages for each release, so the
+# site describes what `pip install scanpath-studio` gives. It used to follow
+# every push to main, which documented features PyPI did not have yet.
+# Every pull request still runs the same strict build (ci.yml → Docs build).
 # Enable Pages once in repo Settings → Pages → Build and deployment → "Deploy
-# from a branch" → branch `gh-pages` / root (mkdocs gh-deploy pushes there).
+# from a branch" → branch `gh-pages` / root.
 on:
   push:
-    branches: [main]
-    paths:
-      - docs/**
-      - mkdocs.yml
-      - scanpath_studio/**
-      - tests/**
-      - pyproject.toml
-      # ENG-94: what the build reads besides docs/ — the generated references,
-      # the hooks, and the Changelog / Cite pages (with their Unreleased
-      # fragments). A change to only these used to leave the site stale.
-      - scripts/docs_support.py
-      - scripts/mkdocs_hooks.py
-      - scripts/changelog_fragments.py
-      - CHANGELOG.md
-      - changelog.d/**
-      - CITATION.cff
-      - .github/workflows/docs.yml
+    tags: ["v*"]
+  # A docs fix between releases: run this by hand. With no ref it rebuilds the
+  # latest release tag; name a branch or commit to publish that instead.
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag, branch or commit to publish (empty = the latest v* tag)"
+        required: false
+        default: ""
 
-# Two rapid pushes to main run gh-deploy concurrently and the force-pushes to
-# gh-pages collide (seen on the v0.25.0 release: the #97 merge and the release
-# commit raced, first run failed). Queue instead — last run still wins.
+# Two runs close together (a release tag and a manual rebuild) would deploy
+# concurrently, and their force-pushes to gh-pages collide (seen on the v0.25.0
+# release, when this still ran on every push). Queue instead — last run wins.
 concurrency:
   group: docs-deploy
   cancel-in-progress: false
@@ -48,6 +42,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Check out the release to publish
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          if [ -z "$REF" ]; then
+            REF="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          fi
+          echo "Publishing the docs from $REF"
+          git checkout --detach "$REF"
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

@@ -2,23 +2,11 @@
 
 ## 1. Install { #install }
 
-=== "Try online"
-
-    Open the [live demo](https://scanpath-studio.streamlit.app). Nothing to
-    install.
-
-=== "pip"
-
-    ```bash
-    pip install scanpath-studio
-    scanpath-studio
-    ```
-
-    Needs Python 3.11–3.14. The app opens at <http://localhost:8501>.
-
 === "Desktop app"
 
-    No Python needed. Download the build for your system, then:
+    The easiest way to work with your own data: no Python needed, your data
+    stays on your computer, and the public corpora download in one click.
+    Download the build for your system, then:
 
     - **macOS** (14 or later, Apple silicon):
       [`ScanpathStudio-macos-arm64.dmg`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg).
@@ -36,6 +24,22 @@
     The app opens in its own window. To quit, close that window on macOS, or
     the console window on Windows and Linux. On an Intel Mac or an older macOS,
     use pip instead.
+
+=== "pip"
+
+    ```bash
+    pip install scanpath-studio
+    scanpath-studio
+    ```
+
+    Needs Python 3.11–3.14. The app opens at <http://localhost:8501>.
+
+=== "Try online"
+
+    Open the [live demo](https://scanpath-studio.streamlit.app) to try the app
+    on its bundled data. Nothing to install. The demo has limited memory and
+    can't download the public corpora, so for your own data use the desktop
+    app or pip.
 
 ## 2. Explore the demo
 

@@ -943,8 +943,8 @@ class TestRound3App(TestScanpathView):
     def test_the_no_fixations_note_is_said_once_per_popover(self, raw_gaze):
         at = self._open(raw_gaze, demo_first=False)
         captions = [c.value for c in at.caption]
-        note = [c for c in captions if "so there is nothing here to draw" in c]
-        heat = [c for c in captions if "nothing for the heatmap to draw" in c]
+        note = [c for c in captions if "This trial has no fixations." in c]
+        heat = [c for c in captions if "no fixations and no word boxes" in c]
         # Fixations, Saccades and Filter: one each.
         assert len(note) == 3, note
         assert len(heat) == 1, heat

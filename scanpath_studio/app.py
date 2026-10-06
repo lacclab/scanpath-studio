@@ -7199,11 +7199,9 @@ def _rail_text_rows(
             section=section,
             section_help="How the reading text is drawn.",
             caption_help=tip(
-                "**Scale to boxes** sizes the text from the word-box height "
-                "(text height = box height ÷ line spacing), so it fills the real "
-                "line slot and scales with the figure. The spacing beside it is "
-                "how many line slots one box spans — OneStop uses 3. Untick to "
-                "set a fixed size below."
+                "**Scale to boxes**: size the text from the word-box height (box "
+                "height ÷ line spacing). Spacing: how many text lines one box "
+                "spans (OneStop: 3). Untick to set a fixed size below."
             ),
         )
         fit_col, spacing_cap_col, spacing_col = fit.columns(
@@ -7230,10 +7228,8 @@ def _rail_text_rows(
         size = _sub_row(
             "Size",
             caption_help=tip(
-                "With **Scale to boxes** on, this is the axis, legend and "
-                "fallback text size in px. Off, it is the reading text's size — "
-                "in px, or in points converted with the dataset DPI "
-                "(px = pt × DPI ÷ 72)."
+                "With **Scale to boxes** on: the size of the axis and legend text. "
+                "Off: the reading text's size, in px or pt (px = pt × DPI ÷ 72)."
             ),
         )
         unit_col, size_col = size.columns(
@@ -7278,10 +7274,9 @@ def _rail_text_rows(
         font = _sub_row(
             "Font",
             caption_help=tip(
-                "The font for the word labels — the exact font from your "
-                "experiment (e.g. 'Courier New') or a CSS fallback stack. "
-                "**Multilingual** fills in a CJK / Hebrew / Arabic-capable stack "
-                "(PRE-6)."
+                "The word labels' font: a font name (e.g. 'Courier New') or a CSS "
+                "font stack. **Multilingual** fills in a stack for CJK, Hebrew and "
+                "Arabic."
             ),
         )
         family_col, stack_col = font.columns(
@@ -7309,11 +7304,7 @@ def _rail_text_rows(
         _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
         color = _sub_row(
             "Color",
-            caption_help=tip(
-                "The reading text's colour, then the background of the plotting "
-                "area (and of exported figures) — with its own colour when "
-                "*Custom…* is picked."
-            ),
+            caption_help=tip("The reading text's colour, and the plot background."),
         )
         text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
             [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"

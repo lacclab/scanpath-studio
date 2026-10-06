@@ -6184,8 +6184,7 @@ def render_single_trial_tab(
                         _sub_row(
                             "Quality",
                             section="Frames",
-                            section_help="How the replay is sampled — which is what "
-                            "its smoothness, export size and render time are made of.",
+                            section_help="How often the replay samples the scanpath.",
                             caption_help=_gated_help(
                                 "Fine is smoother; Coarse renders faster. Custom sets "
                                 "the spacing and the limit below.",
@@ -6321,8 +6320,7 @@ def render_single_trial_tab(
                     # in its tooltip.
                     layout_gate = cmp_gate or (
                         f"{ICONS['warning']} An animated comparison replays "
-                        "both readings on one clock, in one coordinate space, "
-                        "so it always overlays."
+                        " An animated comparison is always an overlay."
                         if animate
                         else ""
                     )
@@ -6345,9 +6343,7 @@ def render_single_trial_tab(
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
-                            "Overlay both scanpaths on one canvas, or give "
-                            "each its own panel — side by side, or one above "
-                            "the other.",
+                            "Overlay both scanpaths, or give each its own panel.",
                             layout_gate,
                         ),
                     )
@@ -6372,10 +6368,8 @@ def render_single_trial_tab(
                     overlaid = animate or stored_layout == "Overlay"
                     if _compare_source_name() is not None and overlaid:
                         st.caption(
-                            "Overlay needs one coordinate space, so across "
-                            "datasets it applies only when both were recorded "
-                            "on the same screen. The caption under the plot "
-                            "says which you got."
+                            "Across datasets, Overlay needs both to be recorded on "
+                            "the same screen size."
                         )
                     # CMP-11: two datasets' AOIs coincide only when the text
                     # is identical, so an overlay can otherwise stack two
@@ -6396,9 +6390,7 @@ def render_single_trial_tab(
                         persist_state="session",
                         disabled=cmp_disabled or not overlaid,
                         help=_gated_help(
-                            "Which reading supplies the word boxes and text "
-                            "of an overlay (each panel of a split layout draws "
-                            "its own). Across datasets the two rarely line up."
+                            "Which reading's word boxes and text an overlay draws."
                             + (
                                 " A replay draws one stimulus layer, so "
                                 "**Both** means A's."

@@ -3063,6 +3063,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # Help, minus the "arm-then-bounce" dance that menu entries need).
         # "Setup help", not "Help": the nav's ❓ Help is on screen too, and this
         # one holds only the setup guide and the loading-data docs.
+        # Its two entries are menu rows — tertiary, icon + label, left-aligned
+        # — and the same kind of control as each other: a content-width
+        # button stacked over a stretched link button read as two unrelated
+        # widgets of two different widths.
         with help_col.popover(f"{ICONS['help']} Setup help", width="content"):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
@@ -3072,11 +3076,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # UX-66 r2: named for what it *is* rather than for the page it
                 # opens — "Data guide" reads like one more wizard step on a row
                 # of wizard controls, which is the one thing it is not.
-                f"{ICONS['docs']} More documentation ↗",
+                "More documentation ↗",
                 "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                icon=ICONS["docs"],
+                type="tertiary",
                 help="What your export needs, how this wizard maps it, and the "
                 "recording setup it asks for.",
-                width="stretch",
             )
         # The way out, on the row that stays on screen.
         #
@@ -3250,8 +3255,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
-                f"{ICONS['tip']} **Working with a large dataset?** It's faster — and keeps your "
-                "data on your own machine — to run Scanpath Studio locally:\n\n"
+                f"{ICONS['tip']} **Working with a large dataset?** Run Scanpath "
+                "Studio locally — it's faster, and handles much larger datasets "
+                "than this hosted copy:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 

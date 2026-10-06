@@ -8286,6 +8286,11 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     cols: list[str] = []
 
     def add(c: str) -> None:
+        # #374 F5: one chip per role — `unique_trial_id` beside `trial_id` would
+        # be a second "Trial", told apart only by an internal name.
+        role = cn.ROLE_LABELS.get(c)
+        if role is not None and any(cn.ROLE_LABELS.get(x) == role for x in cols):
+            return
         if c and c not in cols:
             cols.append(c)
 

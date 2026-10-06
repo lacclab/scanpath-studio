@@ -135,3 +135,26 @@ def test_a_full_screen_figure_says_how_to_zoom_to_the_text():
     assert note.startswith("Full 2560×1440 screen") and "Crop to data" in note
     assert tabs._full_screen_note({"fit_to_monitor": False}, 2560, 1440) == ""
     assert tabs._full_screen_note({}, None, None) == ""
+
+
+def test_the_chip_editor_offers_each_role_once():
+    """#374 F5: no second "Trial (unique_trial_id)" beside "Trial"."""
+    import pandas as pd
+
+    from scanpath_studio import controls
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "trial_id": ["t1"],
+            "unique_trial_id": ["t1"],
+            "text_id": ["a"],
+            "unique_text_id": ["a"],
+            "cond": ["x"],
+        }
+    )
+    level = set(fixations.columns)
+    options = controls._chip_field_options(fixations, fixations, level)
+    assert options.count("trial_id") + options.count("unique_trial_id") == 1
+    assert options.count("text_id") + options.count("unique_text_id") == 1
+    assert "cond" in options

@@ -2932,6 +2932,8 @@ def _wizard_name_header(host, active: bool) -> None:
         "the language.",
         help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=68,
+        # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
+        on_change="ignore",
     )
 
 

@@ -14087,6 +14087,8 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
         "Aggregate character AOIs into word boxes",
         key=aggregate_key(name),
         disabled=not adding,
+        # Streamlit 1.65: read only by Save changes (`_apply_remap`).
+        on_change="ignore",
         help="For interest-area tables with one row per *character* (e.g. CJK "
         "corpora): collapse the characters of each word (grouped by the Trial "
         "+ Word/IA id above) into one bounding box."

@@ -300,7 +300,7 @@ class TestNoNumberedPartIsLeftEmpty:
             inspect.getsource(_render_column_mapping_section_source()).split()
         )
         _head, _, tail = source.partition(
-            'st.info("No column mapping available for the current data source.")'
+            'st.info("No column mapping available for the current dataset.")'
         )
         assert tail, "the no-mapping branch moved — re-check this assertion"
         assert "_render_setup_provenance_note(host=setup_host)" in tail

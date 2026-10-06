@@ -555,7 +555,7 @@ def test_pdf_without_a_browser_warns_once_and_disables_download(monkeypatch):
 
     assert not at.exception, at.exception
     warnings = "\n".join(warning.value for warning in at.warning)
-    assert warnings.count(animation_export.CHROME_INSTALL_HINT) == 1
+    assert warnings.count("PDF export needs Chrome, Chromium or Edge") == 1
     (button,) = _download_buttons(at)
     assert button.disabled
 

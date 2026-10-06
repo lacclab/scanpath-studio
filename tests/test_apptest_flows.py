@@ -502,7 +502,7 @@ class TestBulkExportFlow:
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always
         # there since UX-150 (it renders on click), so look for the zip by label.
-        assert "Download zip" not in self._download_labels(at), (
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at), (
             "the zip download button must only appear after a build"
         )
 
@@ -585,7 +585,9 @@ class TestBulkExportFlow:
         # Streamlit 1.59 it is drivable, so click it rather than only asserting
         # it exists: that is what proves the button is wired to a live payload
         # and that the app survives serving it (ENG-36).
-        zip_button = [b for b in at.get("download_button") if b.label == "Download zip"]
+        zip_button = [
+            b for b in at.get("download_button") if b.label == "⬇ Download bundle (zip)"
+        ]
         assert zip_button, "the zip download button should render after a build"
         zip_button[0].click()
         at.run(timeout=60)
@@ -640,12 +642,12 @@ class TestBulkExportFlow:
         next(b for b in at.button if b.label == "Build export").click()
         at.run(timeout=120)
         assert not at.exception, at.exception
-        assert "Download zip" not in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
         at.run(timeout=60)
         _clean(at, "after the stopped build:")
         warnings = " ".join(str(w.value) for w in at.warning)
         assert "Export stopped" in warnings
-        assert "Download zip" not in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
         # The session is as it was: the choices that led to the build stand.
         assert at.radio(key="bulk_export_scope").value == "This trial"
         assert list(at.pills(key="bulk_export_figfmts").value) == ["HTML", "SVG"]
@@ -710,7 +712,7 @@ class TestBulkExportFlow:
         assert partial and "1 of 2 figures made · 1 failed" in partial[0]
         errors = next(e for e in at.expander if e.label.startswith("Export errors"))
         assert errors.proto.expanded is False
-        assert "Download zip" in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" in self._download_labels(at)
 
         at.pills(key="bulk_export_figfmts").set_value(["PNG"])
         at.run(timeout=60)
@@ -721,7 +723,7 @@ class TestBulkExportFlow:
         assert failed and failed[0].startswith("No figures were made")
         errors = next(e for e in at.expander if e.label.startswith("Export errors"))
         assert errors.proto.expanded is True
-        assert "Download zip" in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" in self._download_labels(at)
 
 
 @pytest.mark.timeout(180)
@@ -1219,7 +1221,7 @@ class TestCrossDatasetCompareFlow:
         (warning,) = [
             str(w.value) for w in at.warning if "animated comparison" in str(w.value)
         ]
-        assert warning.endswith("Showing only the first scanpath.")
+        assert warning.endswith("Only scanpath A is replayed.")
         assert "side by side" not in warning
         # And 🔗 Share's snippet reproduces what is drawn — A alone — rather than
         # a co-animation (`trial_b=` / `--compare-with`) the app just refused.

@@ -1071,7 +1071,7 @@ class TestGroupingEndToEnd:
         mark = "📋" if grain == "trial" else "📄"
         assert f"{mark} {md.field_label(field)}" in offered, sorted(offered)
         captions = [c.value for c in at.caption if "fixations in scope" in c.value]
-        assert captions and f"{expected} fixations in scope" in captions[0], captions
+        assert captions and f"{expected:,} fixations in scope" in captions[0], captions
 
 
 class TestTheWizardStep:

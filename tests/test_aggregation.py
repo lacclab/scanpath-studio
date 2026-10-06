@@ -1557,7 +1557,10 @@ def test_aoi_only_cohorts_count_their_readers():
     at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
     assert not at.exception, at.exception
     assert any(
-        c.value.startswith("**Adv**: 2 readers · **Ele**: 2 readers · **2 in both**")
+        c.value.startswith(
+            "**difficulty_level = Adv**: 2 participants · "
+            "**difficulty_level = Ele**: 2 participants · **2 in both**"
+        )
         for c in at.caption
     )
 

@@ -992,13 +992,21 @@ def stable_id(series: pd.Series) -> pd.Series:
     match, even though both name the same trial.
 
     Dropping a trailing ``.0`` off an otherwise-integer string is the one
-    collapse worth making here: it never changes what two *genuinely* different
-    ids look like (``"101"`` and ``"101.5"`` are untouched), and it is the
-    single spelling difference a real corpus never intends and a stray missing
-    cell always creates.
+    collapse worth making here: ``"101"`` and ``"101.5"`` are untouched, and it
+    is the single spelling difference a stray missing cell creates. Within one
+    column, though, an id is opaque: where the text ``"1"`` and the text
+    ``"1.0"`` both occur, they are two ids and keep their spellings (round 10).
+    A column read as decimals cannot hold both, so it always collapses.
     """
     text = series.astype(str).str.strip()
-    return text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
+    collapsed = text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
+    changed = collapsed.ne(text) & text.notna()
+    if not changed.any() or pd.api.types.is_float_dtype(series):
+        return collapsed
+    as_written = set(text[~changed].dropna())
+    clash = changed & collapsed.isin(as_written)
+    clash &= series.map(lambda value: isinstance(value, str)).astype(bool)
+    return collapsed.mask(clash, text) if clash.any() else collapsed
 
 
 _DIGITS_ONLY = re.compile(r"^\d+$")
@@ -2393,6 +2401,18 @@ def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
     return [c for c in dict.fromkeys(columns) if c in source.columns]
 
 
+def _id_missing(values: pd.Series) -> pd.Series:
+    """Cells that hold no id: missing, or text that is only whitespace — which
+    :func:`stable_id` would turn into an empty id, a trial named ``""``."""
+    missing = values.isna()
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return missing
+    # Tested per distinct value: an id column has few, and a corpus many rows.
+    distinct = pd.Series(values[~missing].unique())
+    blank = distinct[distinct.astype(str).str.strip().eq("")]
+    return missing | values.isin(blank) if len(blank) else missing
+
+
 def _rows_missing_identity(
     source: pd.DataFrame, schema: dict
 ) -> tuple[pd.Series, pd.Series]:
@@ -2402,12 +2422,13 @@ def _rows_missing_identity(
     load outright — one ``,,,,`` line, the blank row Excel leaves at the end of
     a sheet, made the whole dataset impossible to add (BUG-56). ``blank`` is the
     rows that hold nothing at all, which are not data and go quietly;
-    ``unkeyed`` is the rest, which hold data and are reported. Only the missing
-    rows are inspected cell by cell, so a clean table costs one ``isna`` per id
-    column.
+    ``unkeyed`` is the rest, which hold data and are reported. An id that is
+    only whitespace counts as missing (round 10). Only the missing rows are
+    inspected cell by cell, so a clean table costs one ``isna`` and one pass
+    over the distinct values per id column.
     """
     columns = _identity_columns(source, schema)
-    missing = source[columns].isna().any(axis=1) if columns else None
+    missing = source[columns].apply(_id_missing).any(axis=1) if columns else None
     none = pd.Series(False, index=source.index)
     if missing is None or not missing.any():
         return none, none
@@ -2432,7 +2453,9 @@ def identity_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]
     if not count:
         return []
     columns = [
-        c for c in _identity_columns(raw, schema) if raw.loc[unkeyed, c].isna().any()
+        c
+        for c in _identity_columns(raw, schema)
+        if _id_missing(raw.loc[unkeyed, c]).any()
     ]
     named = ", ".join(f"`{c}`" for c in columns)
     if count == 1:
@@ -3467,6 +3490,11 @@ def normalize_raw_gaze(
     ``saccade_amplitude`` does for fixations), so this only ever carries
     unclaimed columns, via :func:`_carry_extra_columns`.
     """
+    # Samples with no participant or trial id belong to no trial (BUG-56's
+    # rule for the other two tables, round 10).
+    for issue in identity_issues(raw_gaze, schema, table="Raw gaze"):
+        warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=2)
+    raw_gaze = _drop_rows_missing_identity(raw_gaze, schema)
     df = pd.DataFrame(index=raw_gaze.index)
     if schema.get("participant"):
         # str or list (a composite participant id), joined like normalize_words —

@@ -6963,14 +6963,27 @@ def render_plot_controls(
     # rows carrying what they govern (greyed while off), the monitor size and
     # the two axis fields one row each.
     with screen_group, _popover_rows("fig_screen"):
+        # The box reads "crop", the wire key "fit to monitor" — its inverse. The
+        # box is a shadow re-seeded from the key every run, so links, configs and
+        # presets that set the key move it, and only a click writes the key.
+        crop_key = "_rail_crop_to_data"
+        st.session_state[crop_key] = not st.session_state.get(
+            "global_fit_to_monitor", True
+        )
+
+        def _apply_crop() -> None:
+            if _shadow_key_missing(crop_key):  # BUG-18
+                return
+            st.session_state["global_fit_to_monitor"] = not st.session_state[crop_key]
+
         _check_row(
             "Frame",
-            key="global_fit_to_monitor",
-            persist_state="session",
-            check_label="Whole monitor",
+            key=crop_key,
+            on_change=_apply_crop,
+            check_label="Crop to data",
             check_share=0.6,
-            help="Frame the whole presentation monitor so the scanpath sits where "
-            "it appeared on screen. Off crops the view tightly to the data.",
+            help="Off: show the whole monitor. On: zoom to the fixations and word "
+            "boxes, plus a 5% margin.",
         )
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:

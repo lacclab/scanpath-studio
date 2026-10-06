@@ -7152,44 +7152,6 @@ _MULTILINGUAL_FONT_STACK = (
 )
 
 
-def _rail_monitor_row(host) -> tuple[int, int]:
-    """The monitor's pixel size as one ``Monitor | W × H px`` row (UX-163)."""
-    label_w = _label_w()
-    rest = 1.0 - label_w
-    label_col, width_col, times_col, height_col, unit_col = host.columns(
-        [label_w, rest * 0.4, rest * 0.08, rest * 0.4, rest * 0.12],
-        gap=_LABEL_GAP,
-        vertical_alignment="center",
-    )
-    _row_label(
-        label_col,
-        "Monitor",
-        "The presentation monitor's width × height in pixels. Keep it true to the "
-        "experiment's screen so coordinates and word boxes stay to scale.",
-    )
-    width = width_col.number_input(
-        "Monitor width (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        key="global_canvas_width",
-        persist_state="session",
-        label_visibility="collapsed",
-    )
-    _sub_caption(times_col, "×")
-    height = height_col.number_input(
-        "Monitor height (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        key="global_canvas_height",
-        persist_state="session",
-        label_visibility="collapsed",
-    )
-    _sub_caption(unit_col, "px")
-    return int(width), int(height)
-
-
 def _rail_text_rows(
     host,
     *,
@@ -7484,7 +7446,11 @@ def render_canvas_controls(
     screen = display
     text = text_host if (bare and text_host is not None) else display
     if bare:
-        canvas_width, canvas_height = _rail_monitor_row(screen)
+        # The monitor's size is the dataset's Recording setup, set on the 🗂️ Data
+        # page; the rail only frames the figure on it. `seed_canvas_state` has
+        # resolved both keys above, and no widget owns them here, so nothing can
+        # drop them at the end of a run.
+        canvas_width, canvas_height = int(seeded[0]), int(seeded[1])
     else:
         canvas_width = field(
             screen,
@@ -7565,21 +7531,16 @@ def render_canvas_controls(
             help="Used for point-to-pixel stimulus font conversion. The physical "
             f"width above implies {derived_dpi:.1f} DPI.",
         )
-    px_per_degree = pixels_per_degree(
-        float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
-    )
-    # Still said, because it is the one number the framing controls imply and
-    # cannot be read off them: where the geometry came from is the Data page's
-    # to explain, but what it *means* for this figure belongs beside the canvas.
-    screen.caption(
-        f"Geometry: **{px_per_degree:.1f} px/degree** · "
-        f"{1.0 / px_per_degree:.4f}° per pixel."
-        + (
-            f"  ·  set in {ICONS['view_data']} Data Management → Recording setup."
-            if bare
-            else ""
+    # The setup form (not the rail) says what the physical values imply; the
+    # rail draws no geometry, so it states no derived number either.
+    if not bare:
+        px_per_degree = pixels_per_degree(
+            float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
         )
-    )
+        screen.caption(
+            f"Geometry: **{px_per_degree:.1f} px/degree** · "
+            f"{1.0 / px_per_degree:.4f}° per pixel."
+        )
 
     # Text can be switched off while this function still supplies the screen
     # half to 📐 Figure & canvas. Before BUG-38, the caller passed an undefined

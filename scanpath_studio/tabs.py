@@ -11032,16 +11032,14 @@ def render_group_comparison_tab(
             "Aggregate",
             _AGG_OPTIONS,
             key="cmp20_agg",
-            help="How each measure's values are combined within each group: all its words or fixations together, across readers.",
+            help="How each measure's values are combined within each group: all its words or fixations together, across participants.",
         )
-        spread = c[1].selectbox(
-            "Error bars", _SPREAD_OPTIONS, index=1, key="cmp20_spread"
-        )
+        # #374 F2: no error bars this release — a spread over words pooled
+        # from the same few participants overstates how precise a bar is.
         c[0].caption(
             f"Each bar is the {agg} of all the group's values for that measure — "
-            "its words or fixations, pooled across readers."
+            "its words or fixations, pooled across participants."
         )
-        _spread_note(c[1], spread)
         measures = [MEASURES[labels[m]] for m in chosen]
         if not measures:
             st.info("Pick at least one measure.")
@@ -11052,13 +11050,12 @@ def render_group_comparison_tab(
             spec_a,
             spec_b,
             agg=agg,
-            spread=spread,
             label_a=label_a,
             label_b=label_b,
             words=words_filtered,
             fixations=fixations_filtered,
         )
-        _chart(make_paired_bars_figure(df, **fw))
+        _chart(make_paired_bars_figure(df, aggregate=agg, **fw))
         _download_tidy(
             st,
             df,
@@ -11072,7 +11069,6 @@ def render_group_comparison_tab(
                 ],
                 measures=measures,
                 aggregation=agg,
-                spread=spread,
                 counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
             ),
         )

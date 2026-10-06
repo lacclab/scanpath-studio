@@ -423,11 +423,12 @@ class TestGroupComparisonFigures:
             _FIX_DUR.label,
             _SACC.label,
         ]
+        assert all(t.error_y.array is None for t in fig.data)
+        assert fig.layout.title.text == "Group means per measure"
+        medians = plots.make_paired_bars_figure(df, aggregate="median", **_FW)
+        assert medians.layout.title.text == "Group medians per measure"
         # Each group is legended once, on the first subplot only.
         assert sum(bool(t.showlegend) for t in fig.data) == 2
-        for trace in fig.data:
-            assert trace.error_y.array[0] >= 0
-            assert trace.error_y.arrayminus[0] >= 0
 
     def test_difference_profile(self, demo):
         diff = group_word_difference(

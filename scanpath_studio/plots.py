@@ -7978,12 +7978,14 @@ def make_paired_bars_figure(
     base_font_size: int,
     font_family: str,
     height: int = 380,
+    aggregate: str = "mean",
 ) -> go.Figure:
-    """Side-by-side group-mean bars per measure with error bars (AN-20).
+    """Side-by-side group bars per measure (AN-20), no error bars (#374).
 
-    ``df`` is ``[measure, group, value, err_lo, err_hi]`` (see
-    ``aggregation.paired_group_summary``). One subplot per measure so differing
-    units keep their own scale.
+    ``df`` is ``[measure, group, value, …]`` (see
+    ``aggregation.paired_group_summary``); ``aggregate`` names what ``value``
+    is, for the title. One subplot per measure so differing units keep their
+    own scale.
     """
     from plotly.subplots import make_subplots
 
@@ -8014,12 +8016,6 @@ def make_paired_bars_figure(
                     marker_color=color,
                     legendgroup=group,
                     showlegend=(mi == 1),
-                    error_y=dict(
-                        type="data",
-                        symmetric=False,
-                        array=[row.get("err_hi", 0)],
-                        arrayminus=[row.get("err_lo", 0)],
-                    ),
                     hovertemplate=f"{group}<br>{measure}: %{{y:.2f}}<extra></extra>",
                 ),
                 row=1,
@@ -8032,7 +8028,7 @@ def make_paired_bars_figure(
         margin=dict(l=55, r=10, t=55, b=40),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title="Group means per measure",
+        title=f"Group {aggregate}s per measure",
         legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
         barmode="group",
     )

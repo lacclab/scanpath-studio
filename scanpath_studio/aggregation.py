@@ -1578,18 +1578,21 @@ def paired_group_summary(
     spec_b: Mapping,
     *,
     agg: str = "mean",
-    spread: str = "SEM",
     label_a: str = "Group A",
     label_b: str = "Group B",
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
     normalize: bool = False,
 ) -> pd.DataFrame:
-    """Per-measure group means + error for the paired bars (AN-20).
+    """Per-measure group summaries for the paired bars (AN-20).
 
-    Returns ``[measure, group, value, err_lo, err_hi, n]``. ``measures`` may mix
-    word- and fixation-level measures; pass ``words``/``fixations`` so each reads
-    its backing frame (``frame`` is the fallback).
+    Returns ``[measure, group, value, n_observations]``: ``value`` is ``agg``
+    over every word or fixation of the group pooled across participants, and
+    ``n_observations`` counts those pooled values. No error bars this release
+    (#374): a spread over pooled words from the same few participants reads as
+    a precision the data does not have. ``measures`` may mix word- and
+    fixation-level measures; pass ``words``/``fixations`` so each reads its
+    backing frame (``frame`` is the fallback).
     """
     label_a, label_b = distinct_group_labels(label_a, label_b)
     rows = []
@@ -1603,24 +1606,15 @@ def paired_group_summary(
             continue
         for spec, label in ((spec_a, label_a), (spec_b, label_b)):
             vals = measure_values(apply_group(src, spec), m, normalize=normalize)
-            center = aggregate_value(vals, agg)
-            lo, hi = spread_bounds(vals, center, spread, agg=agg)
             rows.append(
                 {
                     "measure": m.label,
                     "group": label,
-                    # Clamp to ≥0: an asymmetric band (e.g. mean + IQR on skewed
-                    # data) can put the centre outside [lo, hi], and a negative
-                    # Plotly error-bar length renders in the wrong direction.
-                    "value": center,
-                    "err_lo": max(center - lo, 0.0),
-                    "err_hi": max(hi - center, 0.0),
-                    "n": int(vals.size),
+                    "value": aggregate_value(vals, agg),
+                    "n_observations": int(vals.size),
                 }
             )
-    return pd.DataFrame(
-        rows, columns=["measure", "group", "value", "err_lo", "err_hi", "n"]
-    )
+    return pd.DataFrame(rows, columns=["measure", "group", "value", "n_observations"])
 
 
 def group_mean_difference(

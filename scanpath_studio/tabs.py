@@ -258,8 +258,8 @@ from scanpath_studio.export import (
     html_plotlyjs,
     pair_export,
     pattern_fields,
-    print_width_px,
     plan_from_counts,
+    print_width_px,
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
@@ -8578,7 +8578,7 @@ def _render_comparison_figure(
         )
     if dropped_metric:
         st.caption(
-            f"{ICONS['warning']} **{active_all(st.session_state).label(dropped_metric)}** "
+            f"{ICONS['warning']} **{active_all(st.session_state).field_label(dropped_metric)}** "
             "isn't in both datasets, so it can't colour "
             "this comparison. Your choice is kept for same-dataset comparisons."
         )
@@ -8718,8 +8718,9 @@ def _pretty_col(col: str) -> str:
         return f"{_META_GRAIN_MARKS[grain]} {md.field_label(name)}"
     if isinstance(col, tuple):
         return " × ".join(_pretty_col(part) for part in col)
-    # DATA-66: a data column is shown under the dataset's own name for it.
-    return active_all(st.session_state).label(col)
+    # #374: a mapped role is named by its role, as on the Scanpath view; its
+    # source column goes in the picker's tooltip (`field_help`).
+    return active_all(st.session_state).field_label(col)
 
 
 def _measure_picker(
@@ -9324,6 +9325,7 @@ def _render_filter_set(words, fixations, *, key, default_label):
             key=f"{key}_{col}",
             placeholder="All",
             persist_state="session",
+            help=field_help(col, active_all(st.session_state)) or None,
         )
         for column, values in _group_spec(col, sel, words, fixations).items():
             _merge_spec(spec, column, values)
@@ -9387,12 +9389,17 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
         # this Streamlit falls back to the first option silently and the cohort
         # on screen changes with no notice (`controls._drop_stale`'s job).
         _drop_stale(f"{key}_field", cols)
+        picked = st.session_state.get(f"{key}_field")
         col = host.selectbox(
             "Field",
             cols,
             key=f"{key}_field",
             format_func=_pretty_col,
             persist_state="session",
+            help=field_help(
+                picked if picked in cols else cols[0], active_all(st.session_state)
+            )
+            or None,
         )
         vals = _both_frame_values(words, fixations, col)
         if two_groups:
@@ -10339,7 +10346,7 @@ def render_per_text_tab(
             make_word_matrix_heatmap(
                 per,
                 row_col="participant_id",
-                row_label=active_all(st.session_state).label("participant_id"),
+                row_label=active_all(st.session_state).field_label("participant_id"),
                 measure_label=measure.axis_label,
                 colorscale=viz_settings.get(
                     "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
@@ -10726,7 +10733,7 @@ def render_per_reader_tab(
             "X axis",
             x_options,
             key="prdr9_x",
-            format_func=names.label,
+            format_func=names.field_label,
         )
         _measure_note(
             c[0],
@@ -10739,9 +10746,9 @@ def render_per_reader_tab(
             make_trend_figure(
                 df,
                 x_col="x",
-                x_label=names.label(by),
+                x_label=names.field_label(by),
                 y_label=measure.axis_label,
-                title=f"{measure.label} over {names.label(by)} — {pid}",
+                title=f"{measure.label} over {names.field_label(by)} — {pid}",
                 **fw,
             )
         )

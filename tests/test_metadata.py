@@ -866,7 +866,7 @@ class TestCorpusGroupingByTrialAndTextAttributes:
         tabs._warn_word_only_group_fields(
             host, self.FIX.drop(columns="trial_id"), pairs
         )
-        assert host.warned and "participant_id × trial_id" in host.warned[0]
+        assert host.warned and "Participant × Trial" in host.warned[0]
 
 
 class TestTheExportOptOut:

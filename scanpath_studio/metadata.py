@@ -1207,7 +1207,12 @@ def _classify(series: pd.Series) -> str:
 
 def _coerce(series: pd.Series, dtype: str) -> pd.Series:
     if dtype == _DTYPE_NUMERIC:
-        return pd.to_numeric(series, errors="coerce")
+        # An infinite value is no value (round 10): the record counts as
+        # unknown, which a range keeps unless *Keep unknown values* is off —
+        # and a slider never gets an infinite end. All three grains read here.
+        numbers = pd.to_numeric(series, errors="coerce")
+        infinite = np.isinf(numbers.astype(float))
+        return numbers.mask(infinite) if infinite.any() else numbers
     if dtype == _DTYPE_BOOLEAN:
         return series
     return series.astype("object").where(series.notna(), np.nan)

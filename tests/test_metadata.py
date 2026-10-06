@@ -124,6 +124,36 @@ class TestABlankRowIsNoOne:
         assert built.frame["text_id"].tolist() == ["a1_Adv"]
 
 
+class TestAnInfiniteValueIsUnknown:
+    """Round 10, finding 3: one ``inf`` in a numeric field became a slider end,
+    which Streamlit refuses — the whole filter panel failed. It is now no value,
+    at every grain, and the range covers the finite records."""
+
+    SCORES = [1.0, float("inf"), -float("inf"), 4.0]
+
+    def _built(self, grain):
+        if grain == "participant":
+            table = pd.DataFrame({"pid": list("abcd"), "score": self.SCORES})
+            return md.build_participant_metadata(
+                table, "pid", participants=list("abcd")
+            )
+        if grain == "trial":
+            table = pd.DataFrame({"trial": list("abcd"), "score": self.SCORES})
+            return md.build_trial_metadata(table, "trial")
+        table = pd.DataFrame({"text": list("abcd"), "score": self.SCORES})
+        return md.build_text_metadata(table, "text")
+
+    @pytest.mark.parametrize("grain", ["participant", "trial", "text"])
+    def test_the_extent_is_finite_and_the_rest_unknown(self, grain):
+        built = self._built(grain)
+        assert md.numeric_extent(built, "score") == (1.0, 4.0)
+        (field,) = [f for f in built.fields if f.name == "score"]
+        assert field.dtype == "numeric" and field.n_missing == 2
+
+    def test_an_integer_field_stays_integer(self, meta):
+        assert pd.api.types.is_integer_dtype(meta.frame["age"])
+
+
 class TestValidationNeverGuesses:
     def test_unmatched_ids_are_reported_on_both_sides(self, meta):
         assert meta.report.matched == ("p1", "p2")

@@ -249,7 +249,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Review one trial at a time",
-                "One picker for every dataset: the **Select Trial** dropdown, a scrubbing "
+                "One picker for every dataset: the **Select trial** dropdown, a scrubbing "
                 "slider showing *index / total*, and ◀ ▶ to step through the pool "
                 "you just narrowed.",
                 ".st-key-tour_grp_trial_picker",
@@ -708,7 +708,7 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_subtabs",
         "title": f"{ICONS['panels']} Per-trial panels",
-        "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & Context**, "
+        "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & context**, "
         f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export**, and "
         f"**{ICONS['share']} Share** (link, code or settings file).",
     },

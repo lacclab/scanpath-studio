@@ -11,7 +11,7 @@ The Scanpath view draws one reading on the screen it was recorded on.
 3. The trial's summary.
 4. The figure.
 5. Plot controls.
-6. Annotations, Stimulus & Context, Comparisons, Export and Share.
+6. Annotations, Stimulus & context, Comparisons, Export and Share.
 
 ## Choose a trial
 

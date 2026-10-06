@@ -12040,18 +12040,19 @@ def _count_by(
     return out
 
 
-def _with_trial_constants(
+def _with_constants(
     out: pd.DataFrame, frames: list[pd.DataFrame], keys: list[str]
 ) -> pd.DataFrame:
-    """Add every column that holds one value per trial to the trial rows.
+    """Add every column that holds one value per ``keys`` row to ``out``.
 
-    Conditions, answers, list or batch ids arrive repeated on each fixation (or
-    AOI) row of their trial; one value per trial is what makes them trial
-    facts. Fixations are read first, then the AOI rows for any column they do
-    not carry. A column with the same value in every trial says nothing about
-    any one of them and is left out, as is one that repeats a column already
-    shown (``unique_paragraph_id`` beside the text id). Local paths are cut
-    to their file name (S4).
+    Per trial: conditions, answers, list or batch ids arrive repeated on each
+    fixation (or AOI) row of their trial. Per reader: age, group, session or
+    list arrive the same way. One value per row of ``out`` is what makes them
+    facts about it. Fixations are read first, then the AOI rows for any column
+    they do not carry. A column with the same value in every row says nothing
+    about any one of them and is left out, as is one that repeats a column
+    already shown (``unique_paragraph_id`` beside the text id). Local paths
+    are cut to their file name (S4).
     """
     shown = {tuple(out[c].astype("string").fillna("").tolist()) for c in out.columns}
     for frame in frames:
@@ -12090,8 +12091,8 @@ def _ids_from_data(
     attached: the ids are in the fixation and AOI rows either way, so an empty
     tab read as "this dataset has none". Counts only — distinct ids and row
     counts, nothing computed from the eye movements — and, on the trial rows,
-    the data's own columns that hold one value per trial
-    (:func:`_with_trial_constants`).
+    the data's own columns that hold one value per trial or per reader
+    (:func:`_with_constants`).
     """
     frames = [_fixations, _words]
     pid, tid, xid = "participant_id", "trial_id", "text_id"
@@ -12104,6 +12105,7 @@ def _ids_from_data(
         texts = _entity_counts(frames, [pid, xid])
         out = _count_by(out, texts, [pid], "# Texts", lambda g: g.size())
         out = _count_by(out, _fixations, [pid], "# Fixations", lambda g: g.size())
+        out = _with_constants(out, frames, [pid])
         return out.sort_values(pid, ignore_index=True).rename(
             columns={pid: "Participant ID"}
         )
@@ -12123,7 +12125,7 @@ def _ids_from_data(
         out = _count_by(out, _fixations, [pid, tid], "# Fixations", lambda g: g.size())
         if "word_id" in _words.columns:
             out = _count_by(out, _words, [pid, tid], "# AOIs", lambda g: g.size())
-        out = _with_trial_constants(out, frames, [pid, tid])
+        out = _with_constants(out, frames, [pid, tid])
         return out.sort_values([pid, tid], ignore_index=True).rename(
             columns={pid: "Participant ID", tid: "Trial ID", xid: "Text ID"}
         )
@@ -12182,8 +12184,8 @@ def _render_raw_metadata_tab(
             f"{len(derived):,} {kind if len(derived) == 1 else label.lower()}, "
             "as named in the fixation and AOI data"
             + (
-                ", with every column that holds one value per trial"
-                if kind == "trial"
+                f", with every column that holds one value per {unit}"
+                if kind != "text"
                 else ""
             )
             + ". "

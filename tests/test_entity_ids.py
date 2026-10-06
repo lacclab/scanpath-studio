@@ -78,3 +78,15 @@ def test_trials_carry_their_constant_columns() -> None:
     assert out["image_path"].tolist() == ["a.png", "a.png", "b.png"]
     for gone in ("x", "eye", "unique_text_id"):
         assert gone not in out.columns
+
+
+def test_participants_carry_their_constant_columns() -> None:
+    words, fixations = _frames()
+    fixations = fixations.assign(
+        group=["L1", "L1", "L2", "L2", "L2"],  # one per reader: kept
+        difficulty=["Adv", "Adv", "Ele", "Ele", "Adv"],  # varies per reader
+        lab=["TAU"] * 5,  # the same for every reader: left out
+    )
+    out = _ids_from_data("participant", words, fixations, cache_key="pc")
+    assert out["group"].tolist() == ["L1", "L2"]
+    assert "difficulty" not in out.columns and "lab" not in out.columns

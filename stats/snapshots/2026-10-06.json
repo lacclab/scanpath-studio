@@ -1,0 +1,682 @@
+{
+ "date": "2026-10-06",
+ "pypistats": "unavailable (pypistats.org blocked by egress proxy)",
+ "pypi_json": {
+  "version": "0.34.0",
+  "urls": [
+   {
+    "comment_text": null,
+    "core-metadata": {
+     "sha256": "d7569e79d2e96a109685fa74de6bb0077971dd9c52a667969a92579614f967cc"
+    },
+    "digests": {
+     "blake2b_256": "924b86dab168cee7d8acf038a2c6d75aec5b4101932ce77a9262c1b4e1efda44",
+     "md5": "c413f0544f6cd21b6e28dee847c9284a",
+     "sha256": "c635c0954859dccb6f61e8c0985178dc1b57bcbf91e94bd42d5917e4b839a3e4"
+    },
+    "downloads": -1,
+    "filename": "scanpath_studio-0.34.0-py3-none-any.whl",
+    "has_sig": false,
+    "md5_digest": "c413f0544f6cd21b6e28dee847c9284a",
+    "packagetype": "bdist_wheel",
+    "python_version": "py3",
+    "requires_python": ">=3.11",
+    "size": 3092824,
+    "upload_time": "2026-10-06T08:43:49",
+    "upload_time_iso_8601": "2026-10-06T08:43:49.091106Z",
+    "url": "https://files.pythonhosted.org/packages/92/4b/86dab168cee7d8acf038a2c6d75aec5b4101932ce77a9262c1b4e1efda44/scanpath_studio-0.34.0-py3-none-any.whl",
+    "yanked": false,
+    "yanked_reason": null
+   },
+   {
+    "comment_text": null,
+    "core-metadata": false,
+    "digests": {
+     "blake2b_256": "538935d6aecbbbf84d1a4026eaa9f45b5a1325d798022f52dc08c087c02e4c8b",
+     "md5": "299339ea508c9b7cb2040239ff23ac8a",
+     "sha256": "80ed32a644cac906bb7688b786f433e75bea8317c3771da488b0dedcd1117ad6"
+    },
+    "downloads": -1,
+    "filename": "scanpath_studio-0.34.0.tar.gz",
+    "has_sig": false,
+    "md5_digest": "299339ea508c9b7cb2040239ff23ac8a",
+    "packagetype": "sdist",
+    "python_version": "source",
+    "requires_python": ">=3.11",
+    "size": 3042691,
+    "upload_time": "2026-10-06T08:43:51",
+    "upload_time_iso_8601": "2026-10-06T08:43:51.362378Z",
+    "url": "https://files.pythonhosted.org/packages/53/89/35d6aecbbbf84d1a4026eaa9f45b5a1325d798022f52dc08c087c02e4c8b/scanpath_studio-0.34.0.tar.gz",
+    "yanked": false,
+    "yanked_reason": null
+   }
+  ]
+ },
+ "repo": {
+  "stargazers_count": 8,
+  "forks_count": 0,
+  "subscribers_count": 0,
+  "open_issues_count": 27
+ },
+ "releases": [
+  {
+   "tag": "v0.34.0",
+   "published_at": "2026-10-06T08:43:54Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.dmg",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 1
+    }
+   ]
+  },
+  {
+   "tag": "v0.33.0",
+   "published_at": "2026-10-04T20:06:54Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 1
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.dmg",
+     "download_count": 3
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 1
+    }
+   ]
+  },
+  {
+   "tag": "v0.32.1",
+   "published_at": "2026-10-01T00:37:03Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.dmg",
+     "download_count": 3
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 1
+    }
+   ]
+  },
+  {
+   "tag": "v0.32.0",
+   "published_at": "2026-09-30T17:14:31Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.dmg",
+     "download_count": 9
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.31.2",
+   "published_at": "2026-09-27T06:45:01Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 1
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 2
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 2
+    }
+   ]
+  },
+  {
+   "tag": "v0.31.1",
+   "published_at": "2026-09-26T12:27:49Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.31.0",
+   "published_at": "2026-09-24T08:03:53Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 2
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 2
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 3
+    }
+   ]
+  },
+  {
+   "tag": "v0.30.1",
+   "published_at": "2026-08-28T09:09:14Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 1
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.30.0",
+   "published_at": "2026-08-28T07:47:25Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.29.0",
+   "published_at": "2026-08-21T17:59:30Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.28.0",
+   "published_at": "2026-08-08T10:20:39Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.27.2",
+   "published_at": "2026-08-05T08:20:54Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 1
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.27.1",
+   "published_at": "2026-08-04T10:59:55Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.27.0",
+   "published_at": "2026-08-04T09:53:08Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.26.0",
+   "published_at": "2026-08-02T12:34:18Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.25.0",
+   "published_at": "2026-07-16T05:39:48Z",
+   "assets": [
+    {
+     "name": "ScanpathStudio-linux-x86_64.tar.gz",
+     "download_count": 0
+    },
+    {
+     "name": "ScanpathStudio-macos-arm64.tar.gz",
+     "download_count": 2
+    },
+    {
+     "name": "ScanpathStudio-windows-x86_64.zip",
+     "download_count": 0
+    }
+   ]
+  },
+  {
+   "tag": "v0.24.0",
+   "published_at": "2026-07-03T14:12:36Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.23.0",
+   "published_at": "2026-06-24T09:01:35Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.22.0",
+   "published_at": "2026-06-18T22:48:48Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.21.0",
+   "published_at": "2026-06-18T07:37:24Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.20.0",
+   "published_at": "2026-06-17T15:49:13Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.19.1",
+   "published_at": "2026-06-14T10:37:08Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.19.0",
+   "published_at": "2026-06-13T08:12:47Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.18.0",
+   "published_at": "2026-06-12T23:08:36Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.17.0",
+   "published_at": "2026-06-12T23:08:34Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.16.3",
+   "published_at": "2026-06-12T23:08:33Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.16.2",
+   "published_at": "2026-06-12T23:08:32Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.16.1",
+   "published_at": "2026-06-12T23:08:31Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.16.0",
+   "published_at": "2026-06-09T15:16:34Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.15.1",
+   "published_at": "2026-06-12T23:08:56Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.15.0",
+   "published_at": "2026-06-06T13:08:22Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.14.0",
+   "published_at": "2026-06-06T09:38:52Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.13.0",
+   "published_at": "2026-06-06T08:28:37Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.12.0",
+   "published_at": "2026-06-12T23:08:30Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.11.0",
+   "published_at": "2026-06-12T23:08:29Z",
+   "assets": []
+  },
+  {
+   "tag": "v0.9.1",
+   "published_at": "2026-05-31T11:18:21Z",
+   "assets": []
+  }
+ ],
+ "traffic_views": {
+  "count": 468,
+  "uniques": 71,
+  "views": [
+   {
+    "timestamp": "2026-09-22T00:00:00Z",
+    "count": 0,
+    "uniques": 0
+   },
+   {
+    "timestamp": "2026-09-23T00:00:00Z",
+    "count": 79,
+    "uniques": 3
+   },
+   {
+    "timestamp": "2026-09-24T00:00:00Z",
+    "count": 78,
+    "uniques": 14
+   },
+   {
+    "timestamp": "2026-09-25T00:00:00Z",
+    "count": 6,
+    "uniques": 1
+   },
+   {
+    "timestamp": "2026-09-26T00:00:00Z",
+    "count": 140,
+    "uniques": 46
+   },
+   {
+    "timestamp": "2026-09-27T00:00:00Z",
+    "count": 40,
+    "uniques": 5
+   },
+   {
+    "timestamp": "2026-09-28T00:00:00Z",
+    "count": 16,
+    "uniques": 3
+   },
+   {
+    "timestamp": "2026-09-29T00:00:00Z",
+    "count": 4,
+    "uniques": 3
+   },
+   {
+    "timestamp": "2026-09-30T00:00:00Z",
+    "count": 63,
+    "uniques": 6
+   },
+   {
+    "timestamp": "2026-10-01T00:00:00Z",
+    "count": 7,
+    "uniques": 1
+   },
+   {
+    "timestamp": "2026-10-02T00:00:00Z",
+    "count": 14,
+    "uniques": 2
+   },
+   {
+    "timestamp": "2026-10-03T00:00:00Z",
+    "count": 12,
+    "uniques": 2
+   },
+   {
+    "timestamp": "2026-10-04T00:00:00Z",
+    "count": 3,
+    "uniques": 3
+   },
+   {
+    "timestamp": "2026-10-05T00:00:00Z",
+    "count": 6,
+    "uniques": 4
+   }
+  ]
+ },
+ "traffic_clones": {
+  "count": 5208,
+  "uniques": 760,
+  "clones": [
+   {
+    "timestamp": "2026-09-22T00:00:00Z",
+    "count": 3,
+    "uniques": 1
+   },
+   {
+    "timestamp": "2026-09-23T00:00:00Z",
+    "count": 140,
+    "uniques": 29
+   },
+   {
+    "timestamp": "2026-09-24T00:00:00Z",
+    "count": 261,
+    "uniques": 81
+   },
+   {
+    "timestamp": "2026-09-25T00:00:00Z",
+    "count": 122,
+    "uniques": 28
+   },
+   {
+    "timestamp": "2026-09-26T00:00:00Z",
+    "count": 944,
+    "uniques": 213
+   },
+   {
+    "timestamp": "2026-09-27T00:00:00Z",
+    "count": 219,
+    "uniques": 69
+   },
+   {
+    "timestamp": "2026-09-28T00:00:00Z",
+    "count": 147,
+    "uniques": 39
+   },
+   {
+    "timestamp": "2026-09-29T00:00:00Z",
+    "count": 102,
+    "uniques": 34
+   },
+   {
+    "timestamp": "2026-09-30T00:00:00Z",
+    "count": 1054,
+    "uniques": 203
+   },
+   {
+    "timestamp": "2026-10-01T00:00:00Z",
+    "count": 440,
+    "uniques": 98
+   },
+   {
+    "timestamp": "2026-10-02T00:00:00Z",
+    "count": 755,
+    "uniques": 151
+   },
+   {
+    "timestamp": "2026-10-03T00:00:00Z",
+    "count": 617,
+    "uniques": 156
+   },
+   {
+    "timestamp": "2026-10-04T00:00:00Z",
+    "count": 353,
+    "uniques": 94
+   },
+   {
+    "timestamp": "2026-10-05T00:00:00Z",
+    "count": 51,
+    "uniques": 25
+   }
+  ]
+ },
+ "referrers": [
+  {
+   "referrer": "github.com",
+   "count": 12,
+   "uniques": 3
+  },
+  {
+   "referrer": "lacclab.github.io",
+   "count": 6,
+   "uniques": 1
+  },
+  {
+   "referrer": "Google",
+   "count": 1,
+   "uniques": 1
+  }
+ ],
+ "paths": [
+  {
+   "path": "/lacclab/scanpath-studio",
+   "title": "Overview",
+   "count": 41,
+   "uniques": 5
+  },
+  {
+   "path": "/lacclab/scanpath-studio/issues",
+   "title": "/issues",
+   "count": 31,
+   "uniques": 3
+  },
+  {
+   "path": "/lacclab/scanpath-studio/issues/new",
+   "title": "/issues/new",
+   "count": 20,
+   "uniques": 1
+  },
+  {
+   "path": "/lacclab/scanpath-studio/pulls",
+   "title": "/pulls",
+   "count": 19,
+   "uniques": 3
+  },
+  {
+   "path": "/lacclab/scanpath-studio/tree/main",
+   "title": "/tree/main",
+   "count": 19,
+   "uniques": 2
+  },
+  {
+   "path": "/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md",
+   "title": "/blob/main/CONTRIBUTING.md",
+   "count": 8,
+   "uniques": 8
+  },
+  {
+   "path": "/lacclab/scanpath-studio/tree/eng-76-readme-landing",
+   "title": "/tree/eng-76-readme-landing",
+   "count": 8,
+   "uniques": 1
+  },
+  {
+   "path": "/lacclab/scanpath-studio/projects",
+   "title": "/projects",
+   "count": 7,
+   "uniques": 2
+  },
+  {
+   "path": "/lacclab/scanpath-studio/blob/main/CHANGELOG.md",
+   "title": "/blob/main/CHANGELOG.md",
+   "count": 6,
+   "uniques": 5
+  },
+  {
+   "path": "/lacclab/scanpath-studio/blob/main/README.md",
+   "title": "/blob/main/README.md",
+   "count": 6,
+   "uniques": 3
+  }
+ ]
+}

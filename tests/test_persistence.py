@@ -1324,12 +1324,19 @@ class TestMetadataTablesInTheRecoveryCache:
         sidecar.write_text("{not json", "utf-8")
         restored = {}
         restore_state(restored, tmp_path)
+        assert save_state(restored, tmp_path)  # held back: pointer kept
         assert persistence.retry_failed_metadata(restored, tmp_path)  # still bad
         assert persistence.discard_failed_metadata(restored, tmp_path)
         assert not sidecar.exists()
         assert persistence.failed_metadata(restored) is None
         assert "study" in restored["_datasets"]
+        # The removal reaches the manifest, so the next launch is clean.
         assert save_state(restored, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert "metadata" not in manifest
+        relaunched = {}
+        restore_state(relaunched, tmp_path)
+        assert persistence.failed_metadata(relaunched) is None
 
     def test_clearing_the_cache_removes_the_file(self, tmp_path):
         save_state(self._attached(), tmp_path)
@@ -1338,7 +1345,15 @@ class TestMetadataTablesInTheRecoveryCache:
 
     def test_cache_status_counts_the_tables(self, tmp_path):
         save_state(self._attached(), tmp_path)
-        assert cache_status(tmp_path, environ={})["metadata"] == 3
+        status = cache_status(tmp_path, environ={})
+        assert status["metadata"] == 3
+        assert status["damaged_metadata"] == ""
+
+    def test_cache_status_names_a_missing_tables_file(self, tmp_path):
+        save_state(self._attached(), tmp_path)
+        (tmp_path / persistence.METADATA_FILE).unlink()
+        status = cache_status(tmp_path, environ={})
+        assert "missing" in status["damaged_metadata"]
 
 
 def test_restoring_datasets_reports_each_one(tmp_path):

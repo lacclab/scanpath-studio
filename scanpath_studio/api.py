@@ -3503,9 +3503,11 @@ def cache_status() -> dict:
     reports that store without launching the app: ``enabled``, ``directory``,
     ``datasets`` (name + per-frame row counts), ``rows``, ``annotations``,
     ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
-    missing or unreadable manifest, and ``damaged`` (name + reason) for a stored
+    missing or unreadable manifest, ``damaged`` (name + reason) for a stored
     dataset whose entry or files are broken — the app restores the others and
-    keeps that one in the cache rather than dropping it. Delete it with
+    keeps that one in the cache rather than dropping it — and
+    ``damaged_metadata``, the reason the stored metadata tables would not
+    restore (``""`` when they would). Delete it with
     [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the
     app's 🗂️ Data Management → *Saved on this computer* section and in
     ``scanpath-studio cache``."""

@@ -312,7 +312,16 @@ def _state_fingerprint(
     # DATA-48: the live store by content, every other dataset's by revision.
     annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
-        [datasets, values, annotations, metadata_signature, sorted(_failed(session))],
+        [
+            datasets,
+            values,
+            annotations,
+            metadata_signature,
+            sorted(_failed(session)),
+            # Round 10: resolving held-back metadata tables changes what the
+            # manifest says, so it is a change worth saving.
+            failed_metadata(session),
+        ],
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -1341,6 +1350,8 @@ def cache_status(
         "saved_at": None,
         # Stored datasets the app cannot restore: ``[{"name", "reason"}]``.
         "damaged": [],
+        # Why the stored metadata tables cannot restore, or "" (round 10).
+        "damaged_metadata": "",
     }
     if not directory.is_dir():
         # The common hosted case: one stat, then out — no glob over a folder
@@ -1390,9 +1401,10 @@ def cache_status(
         )
         stored_session = dict(manifest.get("session", {}))
         status["designs"] = len(dict(stored_session.get(DESIGN_PRESETS, {})))
-        status["metadata"] = len(
-            list(dict(manifest.get("metadata") or {}).get("tables") or [])
-        )
+        pointer = dict(manifest.get("metadata") or {})
+        status["metadata"] = len(list(pointer.get("tables") or []))
+        if pointer:
+            status["damaged_metadata"] = _metadata_file_problem(directory, pointer)
         status["settings"] = len(stored_session)
         # A newer/unknown schema is present but will not restore — say so here
         # rather than let the panel claim the work is safely stored.
@@ -1400,6 +1412,19 @@ def cache_status(
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         status["readable"] = False
     return status
+
+
+def _metadata_file_problem(root: Path, pointer: dict) -> str:
+    """Why the manifest's metadata tables cannot restore, by a ``stat``; ``""``
+    when nothing is wrong that one can see (a corrupt file shows only when the
+    app reads it, as for datasets)."""
+    name = str(pointer.get("file") or "")
+    path = (root / name).resolve()
+    if not name or path.parent != root.resolve():
+        return "its entry in the manifest is damaged"
+    if not path.is_file():
+        return f"its file is missing ({name})"
+    return ""
 
 
 def _entry_problem(root: Path, entry: Any) -> str:

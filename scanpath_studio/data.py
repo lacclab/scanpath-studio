@@ -803,14 +803,15 @@ def load_onestop_server_bundle(
         # error and stop. Common cause: pid was excluded from the IA report
         # (no exported reading data), or shards haven't been generated yet.
         missing = [
-            p.name
+            f"{p.parent.name}/{p.name}"
             for p, ok in [(ia_shard, ia_present), (fix_shard, fix_present)]
             if not ok
         ]
         st.error(
             f"No data for participant {participant!r} on this server: they have "
-            f"no reading data, or the server's files ({', '.join(missing)}) need "
-            "regenerating by whoever runs it."
+            f"no reading data, or its files ({', '.join(missing)}) are missing. "
+            "Whoever runs the server can regenerate them with "
+            "`python -m scanpath_studio.onestop_shard --data-dir <ONESTOP_DATA_DIR>`."
         )
         st.stop()
 

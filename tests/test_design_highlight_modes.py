@@ -53,7 +53,7 @@ def test_a_mode_does_not_move_the_highlight(mode):
 def test_another_dataset_keeps_the_design():
     at = _app()
     picker = at.selectbox(key="data_source_picker")
-    other = next(i for i, o in enumerate(picker.options) if "Synthetic" in o)
+    other = next(i for i, o in enumerate(picker.options) if "Hand-drawn" in o)
     picker.select_index(other).run()
     assert not at.exception
     assert _highlight(at) == "scanpath"

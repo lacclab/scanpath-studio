@@ -397,6 +397,7 @@ def test_png_and_svg_are_saved_by_the_browser(monkeypatch, fmt, scale):
         "width": 640,
         "height": 480,
         "scale": scale,
+        "dpi": None,  # no print width is set
         "label": f"⬇ Download {fmt}",
     }
 

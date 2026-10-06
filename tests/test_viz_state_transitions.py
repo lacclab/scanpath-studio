@@ -318,3 +318,16 @@ def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
     assert controls._active_quick_view() == "heatmap"
     controls._apply_view_preset("scanpath")
     assert store["global_critical_span_style"] == "Mark text"
+
+
+@pytest.mark.timeout(180)
+def test_animate_says_why_layers_are_greyed():
+    """#374 F23: the reason is on screen under the Animate row, not only in
+    each greyed row's tooltip."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
+    at.run()
+    reason = "Replay draws its own fixations"
+    assert not any(reason in c.value for c in at.caption)
+    at.toggle(key="single_animate").set_value(True).run()
+    assert not at.exception
+    assert any(reason in c.value for c in at.caption)

@@ -1388,6 +1388,11 @@ class TestMakeScanpathAnimation:
         # "elapsed / total s" label on every step (meaningful for any reader count).
         assert all(" / " in s.label and s.label.endswith("s") for s in slider.steps)
         assert slider.currentvalue.visible
+        # #374 F23: the readout names its clock, and the transport is drawn in
+        # the app's font rather than the figure's stimulus font.
+        assert slider.currentvalue.prefix == "Trial time "
+        assert slider.currentvalue.font.family == "sans-serif"
+        assert fig.layout.updatemenus[0].font.family == "sans-serif"
         # Tick ruler hidden, and per-step labels drawn transparent.
         assert slider.ticklen == 0
         assert slider.minorticklen == 0

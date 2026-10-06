@@ -153,7 +153,12 @@ def test_read_table_zip_same_stem_in_different_folders_stays_distinct():
     [
         (["a.csv", "b.tsv"], ["a", "b"]),
         (["x/a/f.csv", "y/a/f.csv", "z/b/f.csv"], ["x/a/f", "y/a/f", "b/f"]),
-        (["a/f.csv", "a/f.tsv"], ["a/f.csv", "a/f.tsv"]),
+        (["a/f.csv", "a/f.tsv"], ["f.csv", "f.tsv"]),
+        (["x/f.csv", "x/f.tsv", "y/f.csv"], ["x/f.csv", "x/f.tsv", "y/f"]),
+        # Only folders that differ: an absolute path's shared prefix stays out.
+        (["/Users/me/data/a.csv", "/Users/me/data/a.parquet"], ["a.csv", "a.parquet"]),
+        (["/Users/me/d/a.csv", "/Users/me/d/a.csv"], ["a#1", "a#2"]),
+        (["/Users/me/r1/x/f.csv", "/Users/me/r2/x/f.csv"], ["r1/x/f", "r2/x/f"]),
         (["f.csv", "f.csv"], ["f#1", "f#2"]),
         (["./a/f.csv", "a\\g.csv"], ["f", "g"]),
     ],
@@ -161,6 +166,19 @@ def test_read_table_zip_same_stem_in_different_folders_stays_distinct():
 def test_source_labels(paths, expected):
     assert data_module.source_labels(paths) == expected
     assert len(set(data_module.source_labels(paths))) == len(paths)
+
+
+@pytest.mark.parametrize(
+    ("label", "name"),
+    [
+        ("r/001_x_fixation#2", "001_x_fixation"),
+        ("001_x_fixation.csv", "001_x_fixation"),
+        ("a/b/stim_aoi", "stim_aoi"),
+        ("v1.2_thing", "v1.2_thing"),
+    ],
+)
+def test_source_file_name(label, name):
+    assert data_module.source_file_name(label) == name
 
 
 def test_read_tables_same_name_in_different_folders(tmp_path):

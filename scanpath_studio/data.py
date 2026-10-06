@@ -24,7 +24,12 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
-from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME, SAMPLE_INDEX
+from .constants import (
+    DEFAULT_FIGURE_SIZE,
+    PACKAGE_NAME,
+    SAMPLE_INDEX,
+    UPLOAD_FILE_TYPES,
+)
 from .multipart import (
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
@@ -2966,42 +2971,66 @@ def source_labels(paths: Sequence[str]) -> list[str]:
     ``reader-a/fixations.csv`` and ``reader-b/fixations.csv`` both have the
     stem ``fixations``, and a label is mapped as participant or trial identity,
     so two readers would silently become one. A shared stem is qualified by
-    the fewest trailing folders that tell its paths apart
-    (``reader-a/fixations``), then by the extension, then by a ``#n``
-    occurrence number for paths that are the same. Backslashes count as folder
-    separators, so a zip made on Windows labels as one made elsewhere."""
-    parts = [
-        [p for p in str(path).replace("\\", "/").split("/") if p not in ("", ".")]
-        or [str(path)]
-        for path in paths
-    ]
+    the fewest trailing folders that tell it apart from the paths it clashes
+    with (``reader-a/fixations``) — only folders that *differ*, so the shared
+    part of an absolute path (``/Users/<name>/…``) never enters a label. Paths
+    in the same folder then keep their extension (``fix.csv`` / ``fix.tsv``),
+    and paths that are the same get a ``#n`` occurrence number. Backslashes
+    count as folder separators, so a zip made on Windows labels as one made
+    elsewhere.
 
-    def candidate(i: int, depth: int) -> str:
-        folders, name = parts[i][:-1], parts[i][-1]
-        stem = Path(name).stem if depth <= len(folders) + 1 else name
-        return "/".join(
-            [*folders[len(folders) - min(depth, len(folders) + 1) + 1 :], stem]
+    A browser upload carries no folders, so two same-named uploads read
+    ``fixations#1`` / ``fixations#2`` in the app where the same files read from
+    disk (API, CLI) get their folders. :func:`source_file_name` recovers the
+    file name from any of these forms.
+    """
+    split = []
+    for path in paths:
+        parts = [
+            p for p in str(path).replace("\\", "/").split("/") if p not in ("", ".")
+        ]
+        parts = parts or [str(path)]
+        split.append((tuple(parts[:-1]), parts[-1]))
+    stems = [Path(name).stem for _, name in split]
+
+    def shared_tail(a: tuple, b: tuple) -> int:
+        n = 0
+        while n < min(len(a), len(b)) and a[-1 - n] == b[-1 - n]:
+            n += 1
+        return n
+
+    labels = list(stems)
+    for i, (folders, name) in enumerate(split):
+        clashes = [j for j, stem in enumerate(stems) if j != i and stem == stems[i]]
+        if not clashes:
+            continue
+        others = [split[j][0] for j in clashes if split[j][0] != folders]
+        depth = min(
+            len(folders), max((shared_tail(folders, o) + 1 for o in others), default=0)
         )
-
-    labels = [candidate(i, 1) for i in range(len(parts))]
-    depth = 1
-    while True:
-        counts: dict[str, int] = {}
-        for label in labels:
-            counts[label] = counts.get(label, 0) + 1
-        clashing = [i for i, label in enumerate(labels) if counts[label] > 1]
-        if not clashing or depth > max(len(parts[i]) for i in clashing):
-            break
-        depth += 1
-        for i in clashing:
-            labels[i] = candidate(i, depth)
+        same_folder = any(split[j][0] == folders for j in clashes)
+        tail = Path(name).name if same_folder else stems[i]
+        if same_folder and any(split[j] == split[i] for j in clashes):
+            tail = stems[i]
+        labels[i] = "/".join([*folders[len(folders) - depth :], tail])
     seen: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label] = counts.get(label, 0) + 1
     for i, label in enumerate(labels):
-        if counts.get(label, 0) > 1:
-            base = candidate(i, len(parts[i]))
-            seen[base] = seen.get(base, 0) + 1
-            labels[i] = f"{base}#{seen[base]}"
+        if counts[label] > 1:
+            seen[label] = seen.get(label, 0) + 1
+            labels[i] = f"{label}#{seen[label]}"
     return labels
+
+
+def source_file_name(label: str) -> str:
+    """The file stem inside a :func:`source_labels` label — without the folders
+    that qualify it, its ``#n`` occurrence number or a kept extension — for
+    code that parses identity out of a file's name (MultiplEYE uploads)."""
+    name = re.sub(r"#\d+$", "", str(label).rsplit("/", 1)[-1])
+    stem = Path(name).stem
+    return stem if Path(name).suffix.lower().lstrip(".") in UPLOAD_FILE_TYPES else name
 
 
 def _tag_and_concat(

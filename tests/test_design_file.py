@@ -201,3 +201,25 @@ def test_applying_a_design_with_a_bad_value_does_not_raise():
     app = AppTest.from_function(_apply_bad_design_app, default_timeout=30).run()
     app.button[0].click().run()
     assert not app.exception
+
+
+def test_every_design_key_has_a_rule():
+    """Round 11: `sanitize_design` promises no bad value reaches a widget, so
+    every key a design can hold must reject a value no widget writes — and
+    accept its own default."""
+    from scanpath_studio import url_state
+
+    keys = {
+        k for k in controls._VIZ_WIDGET_DEFAULTS if controls._is_design_key(k)
+    } | set(controls._DESIGN_EXTRA_KEYS)
+    unruled = []
+    for key in sorted(keys):
+        try:
+            url_state.sanitize_session_value(key, object())
+        except (TypeError, ValueError):
+            pass
+        else:
+            unruled.append(key)
+        if key in controls._VIZ_WIDGET_DEFAULTS:
+            url_state.sanitize_session_value(key, controls._VIZ_WIDGET_DEFAULTS[key])
+    assert unruled == []

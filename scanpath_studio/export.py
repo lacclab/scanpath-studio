@@ -740,8 +740,10 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
 # corpus lives. The basename still identifies the stimulus, which is all the
 # column is used for downstream.
 #
-# `source_file` is deliberately NOT here: `data.read_tables` stores `Path(...).stem`,
-# so it never held a directory in the first place.
+# `source_file` is deliberately NOT here: it is an identity label, not a path.
+# `data.source_labels` stores the file's stem, qualified only by the trailing
+# folders that tell two same-named files apart — never the folders they share,
+# so an absolute path's `/Users/<name>/…` prefix does not reach it.
 _PATH_COLUMNS = ("image_path",)
 
 

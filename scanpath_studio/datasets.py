@@ -2526,14 +2526,14 @@ def _multipleye_fixations_from_frame(
     ``scanpaths/`` export is pre-filtered to reading pages. Returns an empty frame
     if nothing matched (the wizard then surfaces a problem rather than
     crashing)."""
-    from .data import SOURCE_FILE_COLUMN
+    from .data import SOURCE_FILE_COLUMN, source_file_name
 
     if SOURCE_FILE_COLUMN not in fixations_df.columns:
         return pd.DataFrame()
     groups: dict = {}
     for stem, group in fixations_df.groupby(SOURCE_FILE_COLUMN, sort=False):
-        # A shared file name is qualified by its folders (`data.source_labels`).
-        info = _multipleye_parse_filename(str(stem).rsplit("/", 1)[-1])
+        # A shared file name is qualified in its label (`data.source_labels`).
+        info = _multipleye_parse_filename(source_file_name(stem))
         if info is None:
             continue
         key = (info["session"], info["trial_num"], info["stimulus"])
@@ -2588,7 +2588,7 @@ def multipleye_frames_from_uploads(
     merged when provided. Reading measures + stimulus images need the directory
     tree, so they are not available on this path. Feed the result through
     :func:`load_multipleye_uploads`."""
-    from .data import SOURCE_FILE_COLUMN
+    from .data import SOURCE_FILE_COLUMN, source_file_name
 
     fixations = _multipleye_fixations_from_frame(
         fixations_df, include_question_screens=include_question_screens
@@ -2620,7 +2620,7 @@ def multipleye_frames_from_uploads(
     question_aoi: dict = {}
     versions = _multipleye_layout_versions(versions_df)
     for stem, group in aoi_df.groupby(SOURCE_FILE_COLUMN, sort=False):
-        stem = str(stem).rsplit("/", 1)[-1]
+        stem = source_file_name(stem)
         if _multipleye_is_versions_upload(str(stem), group):
             versions = versions or _multipleye_layout_versions(group)
             continue

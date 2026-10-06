@@ -2803,7 +2803,7 @@ class TestNonFiniteValues:
         assert anim.frames
         both_words = pd.concat([words, words.assign(participant_id="q")])
         both = pd.concat([fixations, fixations.assign(participant_id="q")])
-        for layout in ("Overlay", "Side by side", "Stacked"):
+        for layout in ("overlay", "side_by_side", "stacked"):
             make_comparison_figure(
                 both_words,
                 both,

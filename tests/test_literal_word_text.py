@@ -174,3 +174,44 @@ def test_exported_words_keep_the_original_strings():
     with zipfile.ZipFile(buffer) as zf:
         exported = pd.read_csv(zf.open("words.csv"))
     assert exported["text"].tolist() == SOURCE
+
+
+# Round 9, finding 3: the figure's chrome — title, caption and the names of the
+# two compared scanpaths — is user text too, and is drawn as written.
+LABELS = ("<b>Scanpath A</b>", "Scanpath<br>B %{x}")
+LABELS_LITERAL = ("&lt;b&gt;Scanpath A&lt;/b&gt;", "Scanpath&lt;br&gt;B &#37;{x}")
+
+
+def test_title_and_caption_are_drawn_as_written():
+    from scanpath_studio.export import annotate_figure
+
+    words, fixations = _frames()
+    fig = _static(words, fixations)
+    annotate_figure(fig, title="Literal <b>study</b>", caption="a<br>b\nR&D")
+    assert fig.layout.title.text == "Literal &lt;b&gt;study&lt;/b&gt;"
+    # A real newline is still a new line; a typed <br> is not.
+    assert fig.layout.annotations[-1].text == "a&lt;br&gt;b<br>R&amp;D"
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+def test_compare_labels_are_drawn_as_written(layout):
+    fig = _comparison(layout)(*_frames(), trial_labels=LABELS, show_legend=True)
+    names = {t.name for t in fig.data}
+    assert set(LABELS_LITERAL) <= names
+    templates = [t.hovertemplate or "" for t in fig.data]
+    assert not any(label in template for label in LABELS for template in templates)
+    assert any(LABELS_LITERAL[1] in template for template in templates)
+    if layout != "overlay":
+        titles = {a.text for a in fig.layout.annotations}
+        assert set(LABELS_LITERAL) <= titles
+
+
+def test_replay_labels_are_drawn_as_written():
+    words, fixations = _frames()
+    fig = plots.make_scanpath_animation(
+        words,
+        fixations,
+        fixations_b=fixations,
+        settings=_settings(label_a=LABELS[0], label_b=LABELS[1], show_legend=True),
+    )
+    assert set(LABELS_LITERAL) <= {t.name for t in fig.data}

@@ -2041,10 +2041,12 @@ def _plotly_literal(value: str) -> str:
     Plotly reads a text or hover string as its pseudo-HTML, so a stimulus
     token ``<b>bold</b>`` drew bold and ``x<br>y`` broke the line (round-8
     review, finding 6). Escaping ``&``, ``<`` and ``>`` — the entities Plotly
-    decodes back — keeps the dataset's characters on screen. Applied once, to
-    data values only, at the figure boundary: the tables, exports and the
-    app's own markup (a hover's ``<br>``) are left as they are."""
-    return html.escape(value, quote=False)
+    decodes back — keeps the dataset's characters on screen, and ``%{`` is
+    written ``&#37;{`` so a name placed in a hover template is not read as a
+    template field (round 9). Applied once, to data values and user text only,
+    at the figure boundary: the tables, exports and the app's own markup (a
+    hover's ``<br>``) are left as they are."""
+    return html.escape(value, quote=False).replace("%{", "&#37;{")
 
 
 def _plotly_literal_values(series: pd.Series) -> pd.Series:
@@ -4738,8 +4740,9 @@ def _render_scanpath_animation(
     word_hover_fields = settings.word_hover_fields
     fixation_hover_fields = settings.fixation_hover_fields
     background_color = settings.background_color
-    label_a = settings.label_a
-    label_b = settings.label_b
+    # Drawn as written: a label is a name, not Plotly markup (round 9).
+    label_a = _plotly_literal(settings.label_a)
+    label_b = _plotly_literal(settings.label_b)
     show_legend = settings.show_legend
     line_spacing = settings.line_spacing
     scale_text_to_boxes = settings.scale_text_to_boxes
@@ -5545,6 +5548,8 @@ def _resolve_trial_display_name(
     trial_labels: tuple[str, str] | None,
     idx: int,
 ) -> str:
+    """Scanpath ``idx``'s name as written; the builders make it literal
+    (:func:`_plotly_literal`) where they draw it."""
     if trial_labels is not None and len(trial_labels) > idx:
         return trial_labels[idx]
     text_id = None
@@ -6369,8 +6374,10 @@ def _make_split_comparison_figure(
             (fixations["participant_id"] == participant)
             & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
-        display_name = _resolve_trial_display_name(
-            participant, trial_id, trial_words, trial_labels, idx
+        display_name = _plotly_literal(
+            _resolve_trial_display_name(
+                participant, trial_id, trial_words, trial_labels, idx
+            )
         )
         style = _comparison_scanpath_style(
             idx,
@@ -6871,8 +6878,10 @@ def _render_comparison_figure(
             (fixations["participant_id"] == participant)
             & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
-        display_name = _resolve_trial_display_name(
-            participant, trial_id, trial_words, trial_labels, idx
+        display_name = _plotly_literal(
+            _resolve_trial_display_name(
+                participant, trial_id, trial_words, trial_labels, idx
+            )
         )
         style = _comparison_scanpath_style(
             idx, overrides[idx], default_marker_size_range=marker_size_range

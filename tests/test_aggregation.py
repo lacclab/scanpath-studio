@@ -1091,7 +1091,7 @@ class TestLandingPositions:
 
     def test_a_landing_outside_the_box_is_not_clipped_onto_its_edge(self):
         """BUG-83: a first fixation the word got although it lies beside the box
-        (the nearest-word fallback, or an imported ``word_id``) keeps its
+        (an imported ``word_id``) keeps its
         position. Clipping piled every such landing onto 0 or 1, where it read
         as a fixation on the first or last letter."""
         w = _tidy_words().head(2).copy()

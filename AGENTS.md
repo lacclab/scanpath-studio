@@ -142,10 +142,11 @@ converts to `x/y/width/height`), and they are used **exactly as given**:
 `measures.word_box_bounds` is the one accessor and returns `x .. x + width`
 unmodified (BUG-83 — on a tiling corpus such as the OneStop demo each box carries
 the space after its word, and a fixation there belongs to that word, as in
-EyeLink's report). The only thing derived from geometry is the
-**fixation→word assignment** in `measures.assign_fixations_to_words`: bounding-box
-containment, then nearest word-center within 50 px
-(`measures.LINE_MISREGISTRATION_PX`), else `word_id = NaN`. That
+EyeLink's report). The **fixation→word assignment** is the data's own when the
+fixation table maps a Word/IA ID — used exactly as given, a blank staying blank.
+Only when it has none does `measures.assign_fixations_to_words` derive it from
+geometry: bounding-box containment, else `word_id = NaN` (no snapping to a
+nearby word). That
 assignment feeds the reading measures and the "out-of-text" flag
 (`measures.fixation_in_text_mask`); "color by line" derives visual lines from
 word-box `y` clustering (`measures.cluster_word_lines`) because `line_idx` is

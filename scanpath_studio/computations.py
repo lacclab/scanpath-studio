@@ -308,30 +308,24 @@ REGISTER: tuple[Computation, ...] = (
             "(`measures.word_box_contains`), so a point on an edge two boxes "
             "share goes to the one that starts there — the next word, the line "
             "below — as EyeLink assigns it. "
-            "2. Otherwise the nearest word **center** within "
-            "`LINE_MISREGISTRATION_PX` = 50 px. "
-            "3. Otherwise `word_id = NaN` (out of text)."
+            "2. Otherwise `word_id = NaN` (out of text). There is no snapping "
+            "to a nearby word."
         ),
         code="scanpath_studio/measures.py:assign_fixations_to_words",
         output="word_id",
         grouping="(participant_id, trial_id[, screen_id]) — never across screens",
         missing="Unassignable fixations keep NaN and are excluded from word measures.",
         precedence=(
-            "An imported `word_id` is kept unless `overwrite=True` — so on the "
-            "bundled demo, whose fixation report carries EyeLink's "
-            "`CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow "
-            "EyeLink's assignment and geometry only fills the fixations it left "
-            "blank. #BUG-83: geometry now agrees with that column on all 3,208 "
-            "of the demo's EyeLink-assigned fixations (an earlier half-space "
-            "shift: 92.6%; closed containment on the shared edges: 99.1%)."
+            "Runs only when the fixations carry no word id. A mapped `word_id` "
+            "(on the bundled demo, EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`) is "
+            "used exactly as given, blanks included — nothing is computed and "
+            "no blank is filled — unless `overwrite=True`. #BUG-83: geometry "
+            "agrees with that column on all 3,208 of the demo's EyeLink-assigned "
+            "fixations (an earlier half-space shift: 92.6%; closed containment "
+            "on the shared edges: 99.1%)."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
-        reference=(
-            "The nearest-center fallback is common practice for line "
-            "misregistration; the 50 px radius is this app's choice, not a "
-            "standard."
-        ),
         consumers=(_UI, _API, _CLI, _EXPORT, _CORPUS),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
     ),
@@ -343,9 +337,9 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "The fixation falls inside some word box (`word_box_bounds`, tested "
             "half-open by `word_box_contains`, as `assign.fixation_to_word` "
-            "tests it). Box containment only — a fixation the 50 px "
-            "nearest-centre fallback of `assign.fixation_to_word` gives a word "
-            "still counts as out-of-text."
+            "tests it). Box containment only, so a fixation the data's own "
+            "`word_id` puts on a word but that lies outside every box still "
+            "counts as out-of-text."
         ),
         code="scanpath_studio/measures.py:fixation_in_text_mask",
         output="bool mask",
@@ -1198,7 +1192,7 @@ REGISTER: tuple[Computation, ...] = (
             "`[0, n / (n + 1))` and a landing on that space reads just below 1 "
             "— it used to be clipped onto exactly 1.0, where 15% of the demo's "
             "landings piled up. A first fixation assigned from outside the box "
-            "(the nearest-word fallback) reads below 0 or above 1 rather than "
+            "(by an imported `word_id`) reads below 0 or above 1 rather than "
             "being clipped onto an edge. The origin is the word's `x` and the "
             "scale is `geom.word_char_advance`."
         ),

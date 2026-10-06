@@ -48,20 +48,20 @@ class TestAssignFixationsToWords:
         assigned = assign_fixations_to_words(fix, four_word_layout, overwrite=True)
         assert list(assigned["word_id"]) == [1.0, 2.0, 3.0]
 
-    def test_nearest_fallback(self, four_word_layout):
-        # Out-of-box but within 50 px of word 2 (center=240, y=70).
-        fix = _make_fixations([(245, 110, 200, 0)])
-        assigned = assign_fixations_to_words(
-            fix, four_word_layout, overwrite=True, nearest_within_px=80
-        )
-        assert assigned["word_id"].iloc[0] == 2.0
+    def test_no_snapping_to_a_nearby_word(self, four_word_layout):
+        # Just below word 2's box (centre 240, 70): no box, so no word.
+        fix = _make_fixations([(245, 110, 200, 0), (1000, 1000, 200, 250)])
+        assigned = assign_fixations_to_words(fix, four_word_layout, overwrite=True)
+        assert assigned["word_id"].isna().all()
 
-    def test_far_fixation_unassigned(self, four_word_layout):
-        fix = _make_fixations([(1000, 1000, 200, 0)])
-        assigned = assign_fixations_to_words(
-            fix, four_word_layout, overwrite=True, nearest_within_px=20
-        )
-        assert pd.isna(assigned["word_id"].iloc[0])
+    def test_mapped_word_ids_are_used_as_given(self, four_word_layout):
+        # The data's own ids win, and its blank ("no word") stays blank even
+        # where the fixation sits inside a box.
+        fix = _make_fixations([(140, 70, 200, 0), (240, 70, 250, 250)])
+        fix["word_id"] = [3.0, np.nan]
+        assigned = assign_fixations_to_words(fix, four_word_layout)
+        assert assigned["word_id"].iloc[0] == 3.0
+        assert pd.isna(assigned["word_id"].iloc[1])
 
 
 class TestEnrichFixations:

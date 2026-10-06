@@ -221,8 +221,7 @@ downward. Times are milliseconds.
 {_column_notes(EXAMPLE_FIXATION_COLUMNS)}
 
 The fixation table has no word column: each fixation is assigned to the word
-box it falls in, else to the nearest word centre within 50 px. The fixation at
-(700, 700) is outside every box on purpose, and counts as out of text.
+box it falls in. The fixation at (700, 700) is outside every box on purpose, and counts as out of text.
 """
 
 

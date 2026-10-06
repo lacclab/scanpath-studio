@@ -1286,7 +1286,7 @@ def landing_positions(
     way the letter position is: counted from where the glyphs end.
 
     Not clipped: a first fixation the word got although it lies outside the box
-    horizontally (the 50 px nearest-word fallback, or an imported ``word_id``)
+    horizontally (an imported ``word_id``)
     reads below 0 or above 1, rather than piling onto an edge it did not land on.
     """
     from .measures import word_glyph_span

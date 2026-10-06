@@ -1918,6 +1918,15 @@ _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
+#: #374 F25 — Compare and Animate are ways of *viewing* a design, not part of
+#: it: switching one on leaves the design's highlight where it is. (A design
+#: still records whether Compare was on, so applying it restores that.)
+_VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
+#: The dataset the applied design's baseline was taken on; see
+#: `_sync_quick_view_state`.
+_QUICK_VIEW_DATASET = "_quick_view_dataset"
+
+
 def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 
@@ -1933,7 +1942,7 @@ def _design_drifted(applied: dict, current: dict) -> bool:
     with no default (an explicit colour range, VIZ-46) appearing *has*.
     """
     for key in applied.keys() | current.keys():
-        if _is_drift_mirror(key):
+        if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
             continue
         default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
         if applied.get(key, default) != current.get(key, default):
@@ -1954,9 +1963,9 @@ def _drift_to_custom(selected: str, applied: dict) -> str:
 def _returned_to_design() -> str | None:
     """The design a drift left, once the settings are back on its baseline.
 
-    Switching Compare (a design setting) on reads Custom; switching it off
-    again restores every setting the design had, so the highlight goes back to
-    it rather than staying Custom. Only the design that was left is checked —
+    Changing a setting reads Custom; changing it back restores every setting
+    the design had, so the highlight goes back to it rather than staying
+    Custom. Only the design that was left is checked —
     an explicit pick (`_apply_view_preset`, a save, Reset) forgets it.
     """
     ss = st.session_state
@@ -1979,6 +1988,31 @@ def _returned_to_design() -> str | None:
     return name
 
 
+def _link_departs_from(name: str) -> bool:
+    """Whether the open deep link sets a design value design ``name`` would not.
+
+    #374 F25: on a link's first run the highlight is inferred from the settings
+    the link restored. Matching a design's own few keys is not enough — a link
+    from a view with a hand-changed colour matched Scanpath — so every design
+    value the link carries is held against what the design would set (its own
+    value, else the widget default). Values with no default (the canvas size,
+    seeded per dataset) say nothing either way.
+    """
+    from .url_state import linked_state_keys
+
+    ss = st.session_state
+    preset = _VIEW_PRESETS[name]
+    for key in linked_state_keys():
+        if not _is_design_key(key) or key in _VIEW_MODE_KEYS or key not in ss:
+            continue
+        expected = preset.get(key, _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT))
+        if expected is _ABSENT:
+            continue
+        if _write_match_key(ss.get(key)) != _write_match_key(expected):
+            return True
+    return False
+
+
 def _sync_quick_view_state() -> str:
     """Keep the design-preset highlight in step with manual plot-control edits.
 
@@ -1988,6 +2022,16 @@ def _sync_quick_view_state() -> str:
     """
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    # #374 F25: another dataset re-seeds its own canvas size, highlight column
+    # and hover fields. That is the design meeting new data, not a departure
+    # from it, so a design that was in force stays highlighted: its baseline is
+    # retaken on the new dataset (the seeds have run by now).
+    dataset = (ss.get("data_source_choice"), ss.get("public_dataset_choice"))
+    if ss.get(_QUICK_VIEW_DATASET, dataset) != dataset and isinstance(
+        ss.get(_QUICK_VIEW_APPLIED_STATE), dict
+    ):
+        ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+    ss[_QUICK_VIEW_DATASET] = dataset
     # VIZ-39: a `design:<name>` selection is valid while that design still
     # exists, and from here on is treated exactly like a built-in — including
     # the drift check below, so editing any control drops the highlight.
@@ -2007,6 +2051,7 @@ def _sync_quick_view_state() -> str:
                 if all(
                     ss.get(key) == value for key, value in _VIEW_PRESETS[name].items()
                 )
+                and not _link_departs_from(name)
             ),
             _CUSTOM_VIEW,
         )

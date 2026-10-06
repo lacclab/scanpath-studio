@@ -53,9 +53,9 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
 
 @pytest.mark.parametrize("preset", ["scanpath", "heatmap", "illustration"])
-def test_compare_on_then_off_puts_the_preset_back(monkeypatch, preset):
-    """Switching Compare (a design setting) on reads Custom; switching it off
-    again returns every setting to the preset, so the badge must follow."""
+def test_compare_on_and_off_keeps_the_preset(monkeypatch, preset):
+    """#374 F25: Compare is a mode, not a design setting — switching it on or
+    off leaves the preset highlighted."""
     store = _viz_store()
     store["single_compare_toggle"] = False
     monkeypatch.setattr(controls.st, "session_state", store)
@@ -63,7 +63,7 @@ def test_compare_on_then_off_puts_the_preset_back(monkeypatch, preset):
     controls._apply_view_preset(preset)
     assert controls._active_quick_view() == preset
     store["single_compare_toggle"] = True
-    assert controls._active_quick_view() == "custom"
+    assert controls._active_quick_view() == preset
     store["single_compare_toggle"] = False
     assert controls._active_quick_view() == preset
     # Back on the preset, a later edit drifts from it as before.

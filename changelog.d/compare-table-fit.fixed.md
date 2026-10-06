@@ -1,0 +1,1 @@
+Compare's A/B trial table fits its column — a long trial id wraps instead of pushing the last columns out of view, and a table still too wide shows its scrollbar — and a value both scanpaths share is written in both rows instead of one merged cell that read as B's left blank.

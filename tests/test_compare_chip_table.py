@@ -3,8 +3,9 @@
 UX-190 replaced Compare mode's two chip strips: two strips of ``Field = Value``
 chips put A's value and B's in different rows at different horizontal offsets,
 so comparing them meant searching. The table gives each field one column — A's
-value directly above B's — and writes a value the two readings share once,
-across both rows. UX-195 drew the single trial's chips the same way, as a
+value directly above B's — and writes a value the two readings share in both
+rows, muted (it was once one cell spanning both rows, which read as B's cell
+left blank). UX-195 drew the single trial's chips the same way, as a
 one-row table.
 """
 
@@ -46,16 +47,16 @@ def _rows(html):
 
 
 class TestTheTable:
-    def test_a_shared_value_is_written_once_across_both_rows(self):
+    def test_a_shared_value_is_written_muted_in_both_rows(self):
         html = _table(
             [_entry("text", "2_2_2_Adv")], [_entry("text", "2_2_2_Adv")], ["text"]
         )
 
-        assert html.count("2_2_2_Adv") == 1
-        assert 'rowspan="2"' in html
+        assert "rowspan" not in html
         a_row, b_row = _rows(html)
-        assert "2_2_2_Adv" in a_row
-        assert "<td" not in b_row  # B's row has nothing left of its own
+        for row in (a_row, b_row):
+            assert "2_2_2_Adv" in row
+            assert "sps-ct-same" in row
 
     def test_differing_values_get_a_cell_each(self):
         html = _table(

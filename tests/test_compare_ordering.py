@@ -66,3 +66,46 @@ class TestOrderCompareOptions:
             )
             == options[:1]
         )
+
+
+def test_comparison_labels_stay_unique_when_the_qualified_form_is_taken():
+    """Round 11 #6: ``x [p2]`` as a real trial id must not swallow p2's ``x``."""
+    import pandas as pd
+
+    from scanpath_studio.utils import build_comparison_options
+
+    combos = pd.DataFrame(
+        [
+            {"participant_id": "p1", "trial_id": "x [p2]", "text_id": "a"},
+            {"participant_id": "p1", "trial_id": "x", "text_id": "b"},
+            {"participant_id": "p2", "trial_id": "x", "text_id": "c"},
+            {"participant_id": "p2", "trial_id": "x [p2]", "text_id": "d"},
+            {"participant_id": "p3", "trial_id": "x [p2] (2)", "text_id": "e"},
+        ]
+    )
+    options = build_comparison_options(
+        combos,
+        "All trials",
+        primary_participant="primary",
+        primary_trial="primary",
+        primary_text="primary",
+    )
+    labels = [opt[2] for opt in options]
+    assert len(set(labels)) == len(options)
+    label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in options}
+    assert set(label_to_trial.values()) == {
+        (p, t)
+        for p, t in combos[["participant_id", "trial_id"]].itertuples(index=False)
+    }
+
+
+def test_friendly_labels_stay_unique():
+    from scanpath_studio.utils import friendly_trial_label
+
+    used: set[str] = set()
+    labels = [
+        friendly_trial_label("p", "t", None, used),
+        friendly_trial_label("p", "t", None, used),
+        friendly_trial_label("p", "t", None, used),
+    ]
+    assert len(set(labels)) == 3

@@ -11,6 +11,7 @@ from scanpath_studio.export import (
     DEFAULT_PATH_PATTERN,
     DEFAULT_TITLE_PATTERN,
     annotate_figure,
+    path_structure_error,
     pattern_error,
     pattern_fields,
     render_pattern,
@@ -196,3 +197,23 @@ class TestAnnotateFigure:
         annotate_figure(fig, caption="below")
         note = fig.layout.annotations[0]
         assert note.y == 0 and note.yanchor == "top" and note.yshift < 0
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [DEFAULT_PATH_PATTERN, "{artifact}.{ext}", "figs/{trial_id}-{artifact}.{ext}"],
+)
+def test_ordinary_path_patterns_are_accepted(pattern):
+    assert path_structure_error(pattern) is None
+
+
+def test_a_value_cannot_make_a_path_leave_the_zip(fields):
+    """The second layer: a *value* of `..` or `` is one safe segment."""
+    path = resolve_export_path(
+        "{text_id}/{artifact}.{ext}",
+        {**fields, "text_id": ".."},
+        artifact="figure",
+        ext="png",
+        used=set(),
+    )
+    assert path == "_/figure.png"

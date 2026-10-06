@@ -121,6 +121,50 @@ class TestBulkExport:
             assert cfg["selection"]["participant_id"] == "p1"
             assert cfg["selection"]["trial_id"] == "t1"
 
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "",
+            "/abs/{artifact}.{ext}",
+            "../{artifact}.{ext}",
+            "a/../../{artifact}",
+            "...",
+            "..\\{artifact}.{ext}",
+            "C:{artifact}",
+            "a//{artifact}",
+            "{artifact}/",
+        ],
+    )
+    def test_a_path_pattern_that_leaves_the_zip_is_refused_up_front(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings, pattern
+    ):
+        """Round 10, finding 5: `../{artifact}.{ext}` wrote `../plot_config.json`,
+        and an empty pattern a member with no name."""
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_plot_config=True,
+            table_format="csv",
+            path_pattern=pattern,
+        )
+        progress = []
+        with pytest.raises(ValueError):
+            bulk_export(
+                minimal_combos,
+                minimal_words,
+                minimal_fixations,
+                canvas_width=800,
+                canvas_height=400,
+                base_font_size=14,
+                font_family="monospace",
+                x_field="x",
+                y_field="y",
+                settings=base_settings,
+                options=opts,
+                progress_callback=progress.append,
+            )
+        assert progress == []  # nothing was rendered first
+
     def test_full_analysis_family_export(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):

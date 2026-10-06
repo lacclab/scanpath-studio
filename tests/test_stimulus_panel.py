@@ -610,3 +610,12 @@ class TestValuesRenderLiterally:
         from scanpath_studio.tabs import _literal
 
         assert _literal("<img src=x>\r\n\nnext") == "&lt;img src=x&gt;<br><br>next"
+
+
+def test_the_context_fields_are_one_block():
+    """#374 F17: one element per field drew the lines on top of each other."""
+    from scanpath_studio import tabs
+
+    block = tabs._context_block_html(["<b>a:</b> 1", "<b>b:</b> 2"])
+    assert block.count('class="sps-context"') == 1
+    assert block.count('class="sps-context-line"') == 2

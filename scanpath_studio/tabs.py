@@ -3791,6 +3791,23 @@ def _no_fixations_note(
     )
 
 
+def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
+    """The caption under a figure framed on the whole screen (#374 F39), else
+    ``""``: the empty band is the screen, and where to zoom to the text."""
+    if not viz_settings.get("fit_to_monitor", True):
+        return ""
+    try:
+        width, height = int(canvas_width), int(canvas_height)
+    except (TypeError, ValueError):
+        return ""
+    if width <= 0 or height <= 0:
+        return ""
+    return (
+        f"Full {width}×{height} screen — **Figure & canvas → Crop to data** "
+        "zooms to the text."
+    )
+
+
 def _trial_duration_ms(trial_fixations: pd.DataFrame) -> float | None:
     """First fixation onset to last fixation offset, in ms — the span the
     replay's *Trial time* runs over (#374 F8). ``None`` without timestamps."""
@@ -7642,6 +7659,9 @@ def render_single_trial_tab(
                     key="single",
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
                 )
+            note = _full_screen_note(viz_settings, canvas_width, canvas_height)
+            if note:
+                st.caption(note)
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial
     # Info is gone — the chip strip above the plot now carries the trial's identity,

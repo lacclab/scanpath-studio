@@ -125,3 +125,13 @@ def test_the_picker_says_where_the_colours_are():
     # the buckets themselves are a `sort_items` component AppTest cannot read.
     source = " ".join(inspect.getsource(render_trial_chip_picker).split())
     assert 'set below the list."' in source
+
+
+def test_a_full_screen_figure_says_how_to_zoom_to_the_text():
+    """#374 F39: the empty band under the text is the screen, and says so."""
+    from scanpath_studio import tabs
+
+    note = tabs._full_screen_note({"fit_to_monitor": True}, 2560, 1440)
+    assert note.startswith("Full 2560×1440 screen") and "Crop to data" in note
+    assert tabs._full_screen_note({"fit_to_monitor": False}, 2560, 1440) == ""
+    assert tabs._full_screen_note({}, None, None) == ""

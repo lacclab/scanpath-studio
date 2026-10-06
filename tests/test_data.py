@@ -883,6 +883,14 @@ class TestOpaqueAndBlankIds:
         )
         assert sorted(set(fixations["participant_id"])) == ["1", "1.0"]
 
+    def test_two_tables_of_the_same_shape_decide_alike(self):
+        """A text table holding "1.0" beside other whole numbers keeps it,
+        whether or not that table also holds a "1"."""
+        words = data_module.stable_id(pd.Series(["1", "1.0", "2"]))
+        fixations = data_module.stable_id(pd.Series(["1.0", "2"]))
+        assert words.tolist() == ["1", "1.0", "2"]
+        assert fixations.tolist() == ["1.0", "2"]
+
     def test_a_column_of_decimals_still_loses_its_point_zero(self):
         ids = data_module.stable_id(pd.Series([101.0, 102.0, np.nan]))
         assert ids.tolist()[:2] == ["101", "102"]

@@ -992,21 +992,32 @@ def stable_id(series: pd.Series) -> pd.Series:
     match, even though both name the same trial.
 
     Dropping a trailing ``.0`` off an otherwise-integer string is the one
-    collapse worth making here: ``"101"`` and ``"101.5"`` are untouched, and it
-    is the single spelling difference a stray missing cell creates. Within one
-    column, though, an id is opaque: where the text ``"1"`` and the text
-    ``"1.0"`` both occur, they are two ids and keep their spellings (round 10).
-    A column read as decimals cannot hold both, so it always collapses.
+    collapse worth making here, and only where the ``.0`` is how *numbers* were
+    written (round 10): a column read as decimals, a float cell in a mixed
+    column, or a text column whose every whole number carries ``.0`` (an id
+    column a script wrote out as floats). A text column that spells some whole
+    numbers with ``.0`` and some without — ``"1"`` beside ``"1.0"`` — holds
+    opaque ids, and every spelling in it stays as written. The rule reads the
+    column's shape, not whether a ``"1"`` happens to sit beside a ``"1.0"``, so
+    two tables of the same shape decide alike.
     """
     text = series.astype(str).str.strip()
     collapsed = text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
-    changed = collapsed.ne(text) & text.notna()
-    if not changed.any() or pd.api.types.is_float_dtype(series):
+    if pd.api.types.is_float_dtype(series):
         return collapsed
-    as_written = set(text[~changed].dropna())
-    clash = changed & collapsed.isin(as_written)
-    clash &= series.map(lambda value: isinstance(value, str)).astype(bool)
-    return collapsed.mask(clash, text) if clash.any() else collapsed
+    pointed = collapsed.ne(text) & text.notna()
+    if not pointed.any():
+        return collapsed
+    whole = text.str.fullmatch(r"-?\d+(?:\.0)?").fillna(False).astype(bool)
+    if bool(pointed[whole].all()):
+        return collapsed  # every whole number written as a float
+    if series.dtype != object:
+        return text
+    # A mixed object column: a real float cell is a number, the rest are text.
+    real_float = series[pointed].map(lambda value: isinstance(value, float))
+    keep = pointed.copy()
+    keep[real_float.index] = ~real_float.astype(bool)
+    return collapsed.mask(keep, text)
 
 
 _DIGITS_ONLY = re.compile(r"^\d+$")

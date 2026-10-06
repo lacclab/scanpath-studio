@@ -1407,9 +1407,9 @@ def _start_tour() -> None:
 
 def _open_dataset_name() -> str | None:
     """The name of the dataset this session has open, as the picker shows it."""
-    from scanpath_studio.constants import PUBLIC_DATASETS_CHOICE
+    from scanpath_studio.constants import DEMO_CHOICE, PUBLIC_DATASETS_CHOICE
 
-    token = st.session_state.get("data_source_choice")
+    token = st.session_state.get("data_source_choice", DEMO_CHOICE)
     if token == PUBLIC_DATASETS_CHOICE:
         token = st.session_state.get("public_dataset_choice")
     if not token:

@@ -197,6 +197,9 @@ EXPORT_FIGURE_DPI = "export_figure_dpi"
 # widget keys, seeded before the picker renders.
 SINGLE_SELECT_TRIAL_MODE = "single_select_trial_mode"
 SINGLE_TRIAL_ID = "single_trial_id"
+#: #374 — one-shot: the trial a link or settings file chose, so the per-dataset
+#: trial memory never takes it for one carried over (`utils.select_trial`).
+SINGLE_TRIAL_CHOSEN = "_single_trial_chosen"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
@@ -1064,6 +1067,7 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
         SINGLE_TRIAL_ID,
+        SINGLE_TRIAL_CHOSEN,
         # CMP-11 — the compare view's own two settings, restored from the
         # config's `compare_view` section. They are not `global_*` keys (compare
         # mode owns them, not the rail), which is why they live here rather than

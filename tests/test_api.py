@@ -1044,7 +1044,7 @@ def test_color_by_line_draws_what_color_by_line_true_draws(builder):
     by_flag = build(words, fixations, *_EXP17_TRIAL, color_by_line=True)
     names = [trace.name for trace in by_value.data]
     assert names == [trace.name for trace in by_flag.data]
-    assert "line: Line 1" in names
+    assert "Line 1" in names
 
 
 # ---------------------------------------------------------------------------

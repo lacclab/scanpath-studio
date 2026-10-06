@@ -209,7 +209,11 @@ def _trails(fig) -> list:
 
 
 def _category_entries(fig) -> list:
-    return [t.name for t in fig.data if t.showlegend and ": " in str(t.name)]
+    return [
+        t.name
+        for t in fig.data
+        if t.showlegend and (": " in str(t.name) or str(t.name).startswith("Line "))
+    ]
 
 
 LAYOUTS = ["overlay", "side_by_side", "stacked"]
@@ -243,7 +247,7 @@ def test_compare_colours_by_line(layout):
     # The last fixation of each reading is on the second line.
     assert a.marker.color[0] == a.marker.color[2] != a.marker.color[3]
     assert list(a.marker.color) == list(b.marker.color)
-    assert _category_entries(fig) == ["line: Line 1", "line: Line 2"]
+    assert _category_entries(fig) == ["Line 1", "Line 2"]
 
 
 @pytest.mark.parametrize("layout", LAYOUTS)

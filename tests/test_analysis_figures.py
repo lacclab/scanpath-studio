@@ -108,7 +108,7 @@ class TestTrendFigures:
         assert len(band.x) == 2 * len(df)  # forward then reversed
         assert line.mode == "lines+markers"
         assert list(line.x) == list(df["trial_index"])
-        assert fig.layout.xaxis.title.text == "Trial Index"
+        assert fig.layout.xaxis.title.text == "Trial index"
         assert fig.layout.yaxis.title.text == "Fixation duration (ms)"
 
     def test_the_trend_breaks_at_a_filtered_out_trial(self):
@@ -193,7 +193,7 @@ class TestPerTextFigures:
             per, measure_label=_TFD.axis_label, max_panels=1, **_FW
         )
         assert len(fig.data) == 1  # no cohort overlay → one trace per panel
-        assert f"showing 1 of {len(demo.readers)} readers" in fig.layout.title.text
+        assert f"showing 1 of {len(demo.readers)} participants" in fig.layout.title.text
 
     def test_word_matrix_heatmap(self, demo):
         per = per_reader_word_measure(demo.words, demo.text_col, demo.text_id, _TFD)
@@ -235,7 +235,7 @@ class TestPerTextFigures:
         assert len(fig.data[0].x) == 2 * len(prof)
         assert list(fig.data[1].x) == list(prof.sort_values("word_id")["word_id"])
         assert fig.layout.showlegend is False
-        assert "cohort mean ± SD" in fig.layout.title.text
+        assert "cohort mean, SD band" in fig.layout.title.text
         assert fig.layout.xaxis.title.text == "Word (reading order)"
         assert fig.layout.yaxis.title.text == _TFD.axis_label
 

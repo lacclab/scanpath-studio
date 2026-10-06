@@ -156,6 +156,11 @@ def get_app_css() -> str:
         overflow-x: auto;
         gap: 0 !important;
     }
+    /* The page title sits straight above the table (UX-177): give the header
+       row a little air so the title does not read as part of it. */
+    .st-key-dataset_table {
+        margin-top: 0.75rem;
+    }
     .st-key-dataset_table_grid > div { margin-bottom: 0 !important; }
     .st-key-dataset_table_grid [class*="st-key-dsrow_"] {
         min-width: max-content;

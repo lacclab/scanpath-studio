@@ -941,15 +941,18 @@ class TestDatasetTable:
         assert int(row["Fixations"].iloc[0]) > 0
         assert row["Kind"].iloc[0] == "Private"
         assert set(frame["Kind"]) <= {"Demo", "Manual", "Private", "Public", ""}
-        # UX-174 r2: every row carries the same two controls, keyed by its
-        # dataset — the row-wide button that opens it, and Remove. Details and
-        # the ⋯ menu are gone: rename and edit live on the open dataset's
-        # section, under the table.
+        # UX-174 r2: every row carries the row-wide button that opens it,
+        # keyed by its dataset, and a dataset you added carries Remove too —
+        # the demo and the public corpora have nothing to remove, since Remove
+        # only hid them for the session with no way back. Details and the ⋯
+        # menu are gone: rename and edit live on the open dataset's section,
+        # under the table.
         keys = {b.key for b in at.button}
         for token in frame["_token"]:
             slug = self._slug(token)
-            for prefix in ("dataset_open_", "dataset_row_remove_"):
-                assert f"{prefix}{slug}" in keys, f"{prefix} missing for {token}"
+            assert f"dataset_open_{slug}" in keys, f"open missing for {token}"
+            removable = f"dataset_row_remove_{slug}" in keys
+            assert removable == (token == self.NAME), token
             for gone in (
                 "dataset_details_",
                 "dataset_row_edit_",

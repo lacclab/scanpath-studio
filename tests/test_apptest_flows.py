@@ -826,6 +826,21 @@ class TestRecoveryCachePanelFlow:
         body = " ".join(str(m.value) for m in at.markdown)
         assert "**Folder:**" not in body
 
+    def test_panel_says_saving_was_turned_off_in_plain_words(self, monkeypatch):
+        """Turned off at launch: the sentence says so for everyone, and the
+        variable is named only in the small line under it, for whoever starts
+        the app."""
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "0")
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at = _rerun(at, view=VIEW_DATA)
+        _clean(at, "turned-off cache panel:")
+        captions = [str(c.value) for c in at.caption]
+        lead = next(c for c in captions if "**Turned off.**" in c)
+        assert "SCANPATH_STUDIO_PERSIST" not in lead
+        assert any("`SCANPATH_STUDIO_PERSIST=0`" in c for c in captions)
+        assert not any("Not available here." in c for c in captions)
+
 
 class TestAddDatasetMenu:
     """UX-143: creation actions and placeholders cannot become real sources."""

@@ -989,18 +989,27 @@ def _render_saved_here_section(app_url: str, host) -> None:
     host.divider()
     host.subheader(f"{ICONS['recovery']} Saved on this computer")
     if not status["enabled"]:
+        turned_off = status["override"] == "off"
         host.caption(
-            "**Not available here.** This deployment keeps your work in memory "
-            "only — closing or refreshing the tab loses the datasets you "
+            (
+                "**Turned off.** Scanpath Studio was started with saving "
+                "switched off, so it keeps your work in memory only"
+                if turned_off
+                else "**Not available here.** This deployment keeps your work "
+                "in memory only"
+            )
+            + " — closing or refreshing the tab loses the datasets you "
             "uploaded, their column mappings and your annotations. Export the "
             "annotations from **Annotations** above, and the figure's settings "
             f"from {ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → **File**."
-            + (
-                f" Turned off by `{PERSIST_ENV_VAR}=0`."
-                if status["override"] == "off"
-                else ""
-            )
         )
+        if turned_off:
+            # The switch itself, for whoever launches the app — kept out of the
+            # sentence above, which is for everyone.
+            host.caption(
+                f"Started with `--no-persist` or `{PERSIST_ENV_VAR}=0`; start "
+                "it without either to save again."
+            )
         return
 
     host.caption(
@@ -6324,7 +6333,8 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
 
     The whole line opens the dataset: its first child is a button stretched
     over the row by CSS (`styles.py`, *UX-174 r2*), and the cells drawn above it
-    let a click through, except the one holding **Remove**.
+    let a click through, except the one holding **Remove** — drawn for the
+    datasets you added only.
     """
     slug = _dataset_row_slug(row.token)
     line = grid.container(
@@ -6400,6 +6410,12 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         horizontal_alignment="right",
         vertical_alignment="center",
     )
+    # Only a dataset you added can be removed. For the demo, a public corpus
+    # or a local bundle, Remove only hid the row for the rest of the session —
+    # nothing was deleted and nothing could bring it back — so they offer none.
+    # The empty cell keeps the columns lined up.
+    if row.token not in set(st.session_state.get("_data_source_uploaded") or []):
+        return
     actions.button(
         f"Remove {row.name}",
         icon=ICONS["delete"],
@@ -6407,7 +6423,8 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         type="tertiary",
         on_click=_arm_dataset_row,
         args=(PENDING_DELETE_KEY, row.token),
-        help=f"Remove {row.name} from this session, after a confirmation.",
+        help=f"Remove {row.name} and its tables from this session, after a "
+        "confirmation.",
     )
 
 

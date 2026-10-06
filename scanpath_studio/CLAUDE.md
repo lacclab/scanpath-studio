@@ -115,8 +115,9 @@ synthesized raw gaze, a benchmark corpus' geometry badge);
 `tests/test_dataset_published_counts.py::TestWhatTheDataPageSays` pins that. **A trial is a `(participant_id, trial_id)`
 pair** here and in the 🗂️ Data summary, not a distinct `trial_id`. It also
 pairs each Kind icon with its word (Demo / Manual / Private / Public),
-and Rename / Remove keep app-owned tokens stable (a display alias, or hidden
-for the session); uploads are really re-keyed/deleted. It
+and Rename keeps app-owned tokens stable (a display alias); uploads are really
+re-keyed. Only an upload has **Remove** (a confirmed delete): it used to hide an
+app-owned row for the session with no way back, so those rows have none. It
 names the active dataset in the **What's in…** heading and presents mappings in
 the add-dataset field-grid grammar. The page keeps a 3rem top inset so the fixed header does not clip the
 first row, while its bottom remains flush. The

@@ -94,13 +94,12 @@ def _render(speed: float = 1.0, *, autoplay: bool = True, **viz):
 
 
 def _shows(text: str, html: str) -> bool:
-    """Whether ``text`` is on the page, as written or as the figure JSON spells it.
+    """``text`` is in the page, raw or as Plotly's JSON escapes it.
 
-    The figure's JSON may escape non-ASCII (``×`` as ``\\u00d7``), which the
-    browser reads back as the same character.
+    Plotly writes non-ASCII as ``\\u00d7`` unless ``orjson`` is installed,
+    and nothing in ``[test]`` installs it.
     """
-    escaped = json.dumps(text)[1:-1]
-    return text in html or escaped in html
+    return text in html or json.dumps(text)[1:-1] in html
 
 
 class TestARerunShowsTheCachedView:

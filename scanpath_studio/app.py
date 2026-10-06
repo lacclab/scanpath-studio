@@ -5494,7 +5494,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     published-vs-loaded table, and a coordinate badge for every dataset. The
     table's Status already says whether its numbers are published or loaded.
 
-    Editing it is ✏️ **Edit dataset** on the heading's line (UX-178).
+    Editing it is ✏️ **Edit dataset**, under the overview (UX-178).
     """
     about = dataset_about(token, registry)
     text, own = dataset_description(token, registry)
@@ -5537,38 +5537,40 @@ def _annotation_trials(combos: pd.DataFrame | None) -> frozenset[tuple[str, str]
 
 
 def render_dataset_inspection_head(token: str) -> None:
-    """*What's in the `<name>` dataset*, with ✏️ **Edit dataset** at its end.
+    """*What's in the `<name>` dataset* and the overview under it.
 
-    UX-178: the section's one action is a button of its own on the heading's
-    line, not a link-weight one beside the description, so it reads as editing
-    the whole dataset — its name, its description and its setup, all on the
-    screen it opens. It does not apply to the add-dataset wizard's pending
-    dataset or to the authoring canvas, which are not rows of the table.
+    ✏️ **Edit dataset** is not on this line: it is drawn by
+    :func:`render_dataset_edit_button`, below the description and checks and
+    above the inspection subtabs.
     """
     label = _dataset_display_name(token).replace("`", "'")
-    head = st.container(
-        key="dataset_inspection_head",
-        horizontal=True,
-        vertical_alignment="center",
-        gap="small",
-    )
-    head.subheader(
-        f"{ICONS['search']} What's in the `{label}` dataset", width="stretch"
-    )
-    if token not in (UPLOAD_CHOICE, AUTHOR_CHOICE):
-        head.button(
-            "Edit dataset",
-            icon=ICONS["edit"],
-            key="dataset_edit_btn",
-            on_click=_edit_open_dataset,
-            args=(token,),
-            help="Open the authoring editor — change the text, drag fixations, "
-            "or edit their timing."
-            if token == MANUAL_SAMPLE_CHOICE
-            else "Its name, description, column mapping, recording setup, "
-            "location and metadata tables.",
-        )
+    st.subheader(f"{ICONS['search']} What's in the `{label}` dataset")
     _render_dataset_overview(token, registry=public_dataset_registry())
+
+
+def render_dataset_edit_button(token: str) -> None:
+    """✏️ **Edit dataset**, between the dataset's overview and its subtabs.
+
+    UX-178: the section's one action is a button of its own, not a link-weight
+    one beside the description, so it reads as editing the whole dataset — its
+    name, its description and its setup, all on the screen it opens. It does
+    not apply to the add-dataset wizard's pending dataset or to the authoring
+    canvas, which are not rows of the table.
+    """
+    if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
+        return
+    st.button(
+        "Edit dataset",
+        icon=ICONS["edit"],
+        key="dataset_edit_btn",
+        on_click=_edit_open_dataset,
+        args=(token,),
+        help="Open the authoring editor — change the text, drag fixations, "
+        "or edit their timing."
+        if token == MANUAL_SAMPLE_CHOICE
+        else "Its name, description, column mapping, recording setup, "
+        "location and metadata tables.",
+    )
 
 
 def _builtin_name_draft(token: str) -> str | None:
@@ -6267,7 +6269,7 @@ def _open_dataset_row(token: str) -> None:
 
 
 def _edit_open_dataset(token: str) -> None:
-    """✏️ **Edit dataset**, at the end of the open dataset's heading (UX-178).
+    """✏️ **Edit dataset**, under the open dataset's overview (UX-178).
 
     Raises ✏️ Edit dataset on it — the description, the column mapping, the
     recording setup, the source's options and location, the identity check and
@@ -10183,7 +10185,8 @@ def _run_app() -> None:
             # the corpus home link, the coordinate-provenance sentence and a
             # six-row published-vs-loaded table, all standing between the user
             # and the counts they came for. UX-174 r2 put Rename on the heading
-            # and Edit on the description line, off the table's rows.
+            # and Edit on the description line, off the table's rows; Edit now
+            # sits under the overview, above the subtabs.
             render_dataset_inspection_head(active_token)
             # DATA-67 — what the dataset supports, before any trial filter:
             # the first thing a newly added dataset's overview answers.
@@ -10195,6 +10198,7 @@ def _run_app() -> None:
             render_data_health(
                 words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
             )
+            render_dataset_edit_button(active_token)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

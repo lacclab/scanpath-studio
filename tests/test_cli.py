@@ -384,7 +384,7 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
             "render",
             "--sample",
             "--animate",
-            "--no-heatmap",
+            "--heatmap",
             "--saccade-arcs",
             # EXP-17: a real column — the demo's fixations carry no
             # `pass_index`, which this test used to colour by, silently flat.

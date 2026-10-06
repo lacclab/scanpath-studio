@@ -44,12 +44,12 @@ OTHER = ("l7_1090", "l7_1090_2_2_2_Adv_r0")
 #: asserts this covers `api.figure_options(kind)` for every kind, so adding an
 #: option means adding it here — and then giving it a `render` flag.
 NON_DEFAULT = {
-    "show_words": False,
+    "show_words": True,
     "show_word_labels": False,
     "show_fixations": False,
-    "show_order": False,
+    "show_order": True,
     "show_saccades": False,
-    "show_heatmap": False,
+    "show_heatmap": True,
     "show_saccade_arrows": True,
     "show_raw_gaze": True,
     "heatmap_style": "Interpolated",

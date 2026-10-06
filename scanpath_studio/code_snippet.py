@@ -823,6 +823,15 @@ def _flag_when(flag: str, wanted) -> Any:
     return emit
 
 
+def _switch(on: str, off: str) -> Any:
+    """A layer with a flag each way: ``on`` when drawn, ``off`` when not."""
+
+    def emit(value):
+        return [on] if value else [off]
+
+    return emit
+
+
 def _valued(flag: str) -> Any:
     def emit(value):
         return [] if value is None else [flag, str(value)]
@@ -1152,12 +1161,12 @@ _CLI_EMITTERS: dict[str, Any] = {
     # as one `labels=` pair rather than as figure options. Same two flags.
     "label_a": _valued("--label-a"),
     "label_b": _valued("--label-b"),
-    "show_words": _flag_when("--no-words", False),
-    "show_word_labels": _flag_when("--no-labels", False),
+    "show_words": _switch("--word-boxes", "--no-word-boxes"),
+    "show_word_labels": _flag_when("--no-text", False),
     "show_fixations": _flag_when("--no-fixations", False),
-    "show_order": _flag_when("--no-order", False),
+    "show_order": _switch("--fixation-index", "--no-fixation-index"),
     "show_saccades": _flag_when("--no-saccades", False),
-    "show_heatmap": _flag_when("--no-heatmap", False),
+    "show_heatmap": _switch("--heatmap", "--no-heatmap"),
     "show_saccade_arrows": _flag_when("--saccade-arrows", True),
     "show_coordinate_grid": _flag_when("--coordinate-grid", True),
     "coordinate_grid_spacing": _valued("--coordinate-grid-spacing"),

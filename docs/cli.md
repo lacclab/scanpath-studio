@@ -194,7 +194,8 @@ B's frames directly.
 
 | Goal | Option |
 | --- | --- |
-| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
+| add a layer | `--word-boxes`, `--fixation-index`, `--heatmap` (the default is the app's Scanpath design) |
+| hide a layer | `--no-text`, `--no-fixations`, `--no-saccades` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |

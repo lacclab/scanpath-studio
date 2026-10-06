@@ -48,7 +48,7 @@ app:
 
 ```bash
 # translate a render invocation you already have into Python
-scanpath-studio render --sample --no-heatmap --print-code python -o out.png
+scanpath-studio render --sample --heatmap --print-code python -o out.png
 ```
 
 From Python, `sps.figure_code(...)` returns the same snippet — see

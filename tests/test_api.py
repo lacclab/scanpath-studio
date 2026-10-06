@@ -319,7 +319,7 @@ def test_plot_scanpath_returns_figure(sample):
         words, fixations, {"participants": [pid], "trials": [tid]}
     )
     fig = sps.plot_scanpath(
-        words, fixations, pid, tid, canvas_size=(2560, 1440), show_heatmap=False
+        words, fixations, pid, tid, canvas_size=(2560, 1440), show_words=True
     )
     assert isinstance(fig, go.Figure)
     # One box shape per word of the trial, plus the plot-border rect — and the
@@ -345,14 +345,14 @@ def test_plot_scanpath_overrides(sample):
         fixations,
         pid,
         tid,
-        show_words=False,
-        show_heatmap=False,
+        show_words=True,
+        show_heatmap=True,
         heatmap_metric="counts",
     )
     assert isinstance(fig, go.Figure)
-    # Word boxes gone: only the canvas border rect remains, vs one shape per
-    # word (plus border) in the canonical default.
-    assert len(fig.layout.shapes or ()) < len(default_fig.layout.shapes)
+    # Word boxes drawn: one shape per word on top of the default's (#374 F21:
+    # the default is the app's Scanpath design, which has none).
+    assert len(fig.layout.shapes) > len(default_fig.layout.shapes or ())
 
 
 def test_plot_scanpath_saccade_color_by_type(sample):
@@ -382,6 +382,7 @@ def test_plot_scanpath_heatmap_log_norm(sample):
             tid,
             show_fixations=False,
             show_saccades=False,
+            show_heatmap=True,
             heatmap_norm=norm,
         )
         return [s.fillcolor for s in fig.layout.shapes if s.layer == "below"]
@@ -591,7 +592,8 @@ def test_figure_options_cover_every_builder_keyword():
     """`figure_options` is the parameter reference — it must be complete."""
     static = api.figure_options()
     assert set(static) == set(api._STATIC_FIGURE_PARAMS)
-    assert static["show_heatmap"] is True  # canonical override
+    assert static["show_heatmap"] is False  # the app's Scanpath design
+    assert static["show_words"] is False  # overrides the builder's True
     assert static["heatmap_style"] == "Word boxes"  # builder default, no override
     animation = api.figure_options("animation")
     assert set(animation) == set(api._ANIMATION_FIGURE_PARAMS)
@@ -718,12 +720,22 @@ def test_headless_defaults_match_the_app_for_every_non_layer_option(
         for key in api._STATIC_FIGURE_PARAMS - equivalent
         if effective(app_settings, key) != effective(headless, key)
     }
-    # The documented difference, and nothing else: the app opens on the core
-    # scanpath, the headless canonical figure draws every layer.
-    assert differing == {"show_words", "show_order", "show_heatmap"}
-    for key in differing:
-        assert effective(app_settings, key) is False
-        assert effective(headless, key) is True
+    # #374 F21: no difference at all — the headless default is the app's
+    # Scanpath design, layers included.
+    assert differing == set()
+
+
+def test_the_demo_is_drawn_on_its_recorded_screen():
+    """#374 F21: `plot_scanpath` on `load_sample_data()` frames uses the demo's
+    2560×1440 screen, as `render --sample` does, not an estimate."""
+    words, fixations = sps.load_sample_data()
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    assert tuple(fig.layout.xaxis.range) == (0, 2560)
+    assert tuple(fig.layout.yaxis.range) == (1440, 0)
+    # A slice keeps it (pandas carries `attrs` through filtering).
+    one = fixations[fixations.iloc[:, 0] == fixations.iloc[0, 0]]
+    assert api._recorded_screen(one) == (2560, 1440)
 
 
 def test_fit_to_monitor_default_frames_the_whole_canvas(sample):
@@ -953,7 +965,9 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
 
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
-    fig = sps.plot_scanpath(words, fixations, pid, tid, show_heatmap=True)
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, show_heatmap=True, show_words=True
+    )
 
     def fake_save(f, path, **kw):
         Path(path).write_text("x", encoding="utf-8")

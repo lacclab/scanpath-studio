@@ -3,10 +3,9 @@
 The Streamlit app and this module share one pipeline (``data`` → ``measures``
 → ``plots``), so a figure produced here goes through the exact same builders as
 the app and is pixel-identical *given the same settings*. The headless defaults
-(``CANONICAL_FIGURE_DEFAULTS``) render the full canonical figure; the interactive
-app instead opens on a more minimal first view (core scanpath only), so the two
-*default* outputs differ in which layers are on — everything else (marker
-opacity, index-label size, monitor framing …) is kept in sync with the app.
+(``CANONICAL_FIGURE_DEFAULTS``) are the app's default *Scanpath* design —
+fixations, saccades and the text — so a bare call draws the figure the app
+opens on.
 Typical use::
 
     import scanpath_studio as sps
@@ -18,7 +17,7 @@ Typical use::
 
 Every keyword accepted by :func:`plots.make_scanpath_figure` /
 :func:`plots.make_scanpath_animation` can be overridden through
-``plot_scanpath`` / ``animate_scanpath`` (e.g. ``show_heatmap=False``);
+``plot_scanpath`` / ``animate_scanpath`` (e.g. ``show_heatmap=True``);
 :func:`figure_options` lists them with their effective defaults. ``docs/agents.md``
 is the task-oriented guide to this module for scripted / agent use.
 """
@@ -135,17 +134,17 @@ def load_authored_scanpath(
 TableLike = pd.DataFrame | str | Path
 TablesLike = TableLike | list["TableLike"]
 
-# The headless "canonical" rendering — every core layer on. (The interactive app
-# instead starts minimal: word boxes / heatmap / fixation-index off by default —
-# see controls._VIZ_WIDGET_DEFAULTS — so the app's *default* first view differs;
-# override any layer via plot_scanpath kwargs.) `heatmap_metric="counts"` is
-# translated to the figure-level `None` in _figure_kwargs, like
-# tabs._build_figure_settings.
+# The headless rendering is the app's default *Scanpath* design (#374, F21):
+# fixations, saccades and the text, with word boxes, the heatmap and fixation
+# numbers off (controls._VIZ_WIDGET_DEFAULTS), so a bare `plot_scanpath` /
+# `render` draws the figure the app opens on. Turn a layer on with its keyword
+# (`show_heatmap=True`). `heatmap_metric="counts"` is translated to the
+# figure-level `None` in _figure_kwargs, like tabs._build_figure_settings.
 #
-# Everything that is NOT a layer toggle tracks the app's own default
-# (controls._VIZ_WIDGET_DEFAULTS → controls._collect_viz_settings →
-# tabs._build_figure_settings), so the same call renders the same picture
-# headless as on screen. `figure_options()` prints the merged result.
+# Every option tracks the app's own default (controls._VIZ_WIDGET_DEFAULTS →
+# controls._collect_viz_settings → tabs._build_figure_settings), so the same
+# call renders the same picture headless as on screen. `figure_options()`
+# prints the merged result.
 _FIGURE_CONTEXT_FIELDS = frozenset(
     {"canvas_width", "canvas_height", "base_font_size", "font_family"}
 )
@@ -230,7 +229,9 @@ _CANONICAL_OPTION_NAMES = {
 CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     _CANONICAL_OPTION_NAMES
 ) | dict(
-    show_heatmap=True,
+    show_words=False,
+    show_order=False,
+    show_heatmap=False,
     heatmap_metric="duration_ms",
     order_font_color=DEFAULT_ORDER_FONT_COLOR,
     saccade_classes=list(SACCADE_CLASS_ORDER),
@@ -1076,8 +1077,32 @@ def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """Return the bundled OneStop demo, normalized and ready to plot: two
     readers, twelve paragraphs each, every one of them with fixations. Under
     the demo's own column names; ``names="canonical"`` for the internal ones
-    (see [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data])."""
-    return load_scanpath_data(*_data.load_sample_data(), names=names)
+    (see [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]).
+
+    The frames carry the demo's recorded screen (OneStop's 2560×1440), so
+    `plot_scanpath` draws them on it without a ``canvas_size``, as
+    ``scanpath-studio render --sample`` does."""
+    from .code_snippet import SOURCE_DEMO, source_canvas
+
+    data = load_scanpath_data(*_data.load_sample_data(), names=names)
+    screen = source_canvas(SOURCE_DEMO)
+    for frame in data:
+        frame.attrs[RECORDED_SCREEN_ATTR] = screen
+    return data
+
+
+#: The `DataFrame.attrs` key a frame carries its dataset's recorded screen in,
+#: ``(width, height)`` px — read when no ``canvas_size`` is passed.
+RECORDED_SCREEN_ATTR = "scanpath_studio.recorded_screen"
+
+
+def _recorded_screen(*frames) -> tuple[int, int] | None:
+    """The recorded screen one of ``frames`` carries (`load_sample_data`)."""
+    for frame in frames:
+        screen = getattr(frame, "attrs", {}).get(RECORDED_SCREEN_ATTR)
+        if screen:
+            return int(screen[0]), int(screen[1])
+    return None
 
 
 def load_raw_gaze(
@@ -2178,7 +2203,7 @@ def plot_scanpath(
     column_names: dict | None = None,
     **figure_overrides,
 ) -> go.Figure:
-    """Build the canonical scanpath figure for one trial.
+    """Build one trial's scanpath figure (by default the app's Scanpath design).
 
     ``words`` / ``fixations`` are normalized frames from
     [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]. ``participant`` /
@@ -2209,7 +2234,7 @@ def plot_scanpath(
     pattern, since the caller already knows which trial this is.
 
     Remaining keywords override the app's defaults and are forwarded to
-    `plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
+    `plots.make_scanpath_figure` (e.g. ``show_heatmap=True``,
     ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword raises
     a ``TypeError`` naming the closest valid options, and
     [`figure_options`][scanpath_studio.api.figure_options] lists them all with their
@@ -2275,6 +2300,8 @@ def plot_scanpath(
         canvas_size = screen_canvas_size(trial_words)
         if canvas_size is None:
             canvas_size = screen_canvas_size(trial_fixations)
+        if canvas_size is None:
+            canvas_size = _recorded_screen(words, fixations)
         if canvas_size is None:
             # VIZ-45: a trial with no fixations is sized from its samples, as the
             # app sizes a raw-gaze-only dataset's canvas.
@@ -2923,6 +2950,8 @@ def _compare_setup(
         return setup
     provenance = Provenance.MEASURED
     if canvas_size is None:
+        canvas_size = _recorded_screen(words, fixations)
+    if canvas_size is None:
         provenance = Provenance.ESTIMATED
         canvas_size = screen_canvas_size(words) or screen_canvas_size(fixations)
         if canvas_size is None:
@@ -3425,7 +3454,7 @@ def figure_code(
     it returns the snippet that rebuilds that figure, rather than the figure::
 
         print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
-                              show_heatmap=False, flavor="cli"))
+                              show_heatmap=True, flavor="cli"))
 
     ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``, ``"files"``,
     ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``, ``"author"``, or

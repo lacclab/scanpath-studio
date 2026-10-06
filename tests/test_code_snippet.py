@@ -46,9 +46,9 @@ def figure_kwargs_of(state: cs.FigureState, **kwargs) -> dict:
 
 
 def test_only_the_changed_options_are_written():
-    state = _state(figure={"show_heatmap": False, "color_by": "duration_ms"})
+    state = _state(figure={"show_heatmap": True, "color_by": "duration_ms"})
     assert figure_kwargs_of(state) == {
-        "show_heatmap": False,
+        "show_heatmap": True,
         "color_by": "duration_ms",
     }
 
@@ -643,7 +643,7 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
         [
             "render",
             "--sample",
-            "--no-heatmap",
+            "--heatmap",
             "--color-by",
             "duration_ms",
             "--print-code",
@@ -654,8 +654,8 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
     )
     printed = capsys.readouterr().out
     assert "sps.plot_scanpath(" in printed
-    assert "show_heatmap=False" in printed
-    assert "--no-heatmap" in printed
+    assert "show_heatmap=True" in printed
+    assert "--heatmap" in printed
     # `--print-code` is additive: the figure is still rendered.
     assert out.exists()
 
@@ -874,15 +874,15 @@ def test_the_panel_says_what_to_do_before_a_figure_exists():
 def test_the_panel_writes_the_snippet_for_the_published_state():
     state = cs.FigureState(
         kind="static",
-        settings={**api.figure_options("static"), "show_heatmap": False},
+        settings={**api.figure_options("static"), "show_heatmap": True},
         participant="l7_101",
         trial="1_Adv_1",
         canvas=(2560, 1440),
     )
     at = _panel(**{cs.SNIPPET_STATE_KEY: state})
     code = at.session_state["_snippet_code_current"]
-    assert "show_heatmap=False" in code.python
-    assert "--no-heatmap" in code.cli
+    assert "show_heatmap=True" in code.python
+    assert "--heatmap" in code.cli
     # Python is the flavour on show by default; the CLI is one click away.
     assert at.code[0].language == "python"
 

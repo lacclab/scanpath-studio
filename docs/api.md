@@ -95,7 +95,7 @@ print(
     sps.figure_code(
         participant="l7_1090",
         trial="l7_1090_2_1_1_Ele_r0",
-        show_heatmap=False,
+        show_heatmap=True,
         color_by="duration_ms",
     )
 )

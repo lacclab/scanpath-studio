@@ -3373,6 +3373,7 @@ def _render_share_link_widget(query: str) -> None:
         # One control row plus the transient copy-status line. The previous
         # 110 px frame reserved a visibly empty block before the note below.
         height=76,
+        alt="Shareable link with a copy button",
     )
 
 

@@ -522,9 +522,27 @@ def _part_catalog_for_display(
         raise
 
 
-def _embed_html_iframe(html: str, *, height: int) -> None:
+def _embed_html_iframe(html: str, *, height: int, alt: str | None = None) -> None:
     """Backward-compatible local alias for the shared iframe helper."""
-    embed_html_iframe(html, height=height)
+    embed_html_iframe(html, height=height, alt=alt)
+
+
+def _figure_alt(fig, fallback: str) -> str:
+    """The alt text of a rendered figure: its title as plain text, else ``fallback``.
+
+    A figure whose title the user switched off still gets a description, which
+    is what ``fallback`` names."""
+    title = getattr(getattr(fig.layout, "title", None), "text", None)
+    return _plain_title(title) or fallback
+
+
+def _plain_title(title: str | None) -> str:
+    """A Plotly title as words for a screen reader: ``<br>`` / ``<sup>``
+    markup and entities removed."""
+    text = html.unescape(
+        re.sub(r"<br\s*/?>", " — ", str(title or ""), flags=re.IGNORECASE)
+    )
+    return " ".join(re.sub(r"<[^>]+>", "", text).split())
 
 
 # VIZ-zoom (MVP): Plotly's own zoom only rescales the *axes*, so the word boxes
@@ -932,6 +950,7 @@ def _render_true_scale_chart(
         height=int(fig.layout.height or 600),
         max_height=max_height,
         zoomable=zoomable,
+        alt=_figure_alt(fig, "Scanpath figure"),
     )
 
 
@@ -1005,6 +1024,7 @@ def _render_true_scale_plot(
     height: int,
     max_height: int | None = None,
     zoomable: bool = True,
+    alt: str | None = None,
 ) -> None:
     """Embed `_true_scale_plot_html`'s markup in the true-scale iframe."""
     # ENG-64: the installed plotly's own plotly.min.js, served by this app's
@@ -1019,7 +1039,7 @@ def _render_true_scale_plot(
     )
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height.
-    _embed_html_iframe(html, height=iframe_height)
+    _embed_html_iframe(html, height=iframe_height, alt=alt)
     # UX-167: the next figure under this key holds its area at this size.
     loading.record_plot_size(key, width, iframe_height)
 
@@ -5227,7 +5247,11 @@ def _build_and_render_animation(
         _finished_figure=finished_figure,
     )
     _render_true_scale_plot(
-        view.plot_html, key=plot_key, width=view.width, height=view.height
+        view.plot_html,
+        key=plot_key,
+        width=view.width,
+        height=view.height,
+        alt=": ".join(filter(None, ("Animated scanpath replay", _plain_title(title)))),
     )
     return view, save_slug, file_stem
 
@@ -9703,7 +9727,12 @@ def _render_per_sentence_tab(
 
 def _chart(fig) -> None:
     """Render a non-spatial Plotly figure stretched to the column width."""
-    st.plotly_chart(fig, width="stretch", config={**PLOTLY_CONFIG})
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        config={**PLOTLY_CONFIG},
+        alt=_figure_alt(fig, "Corpus analysis chart"),
+    )
 
 
 def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
@@ -11900,7 +11929,10 @@ def render_multiple_comparison_tab(
                 font_family=font_family,
             )
             st.plotly_chart(
-                fig_idx, width="stretch", config={**PLOTLY_CONFIG, "responsive": True}
+                fig_idx,
+                width="stretch",
+                config={**PLOTLY_CONFIG, "responsive": True},
+                alt=_figure_alt(fig_idx, "NLD convergence chart"),
             )
         with conv_cols[1]:
             fig_time = make_metric_convergence_figure(
@@ -11913,7 +11945,10 @@ def render_multiple_comparison_tab(
                 font_family=font_family,
             )
             st.plotly_chart(
-                fig_time, width="stretch", config={**PLOTLY_CONFIG, "responsive": True}
+                fig_time,
+                width="stretch",
+                config={**PLOTLY_CONFIG, "responsive": True},
+                alt=_figure_alt(fig_time, "NLD convergence chart"),
             )
 
 

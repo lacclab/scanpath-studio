@@ -63,7 +63,7 @@ def page(monkeypatch):
     tabs._cached_scanpath_animation.clear()
     record = {"embeds": [], "replay_loads": 0}
 
-    def embed(html, *, height):
+    def embed(html, *, height, alt=None):
         record["embeds"].append(html)
 
     real = tabs._cached_scanpath_animation

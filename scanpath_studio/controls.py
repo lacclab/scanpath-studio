@@ -4257,7 +4257,8 @@ def compare_style_defaults() -> dict:
     so it is listed here as the empty string it reads as; ``cmp{idx}_box_color``
     likewise, its absence being "the scanpath's own colour", and
     ``cmp{idx}_box_fill_color``, its absence being "the figure's fill", and
-    ``cmp{idx}_raw_gaze_color``, its absence being "the scanpath's own colour".
+    ``cmp{idx}_raw_gaze_color``, its absence being "the scanpath's own colour",
+    and ``cmp{idx}_heatmap_colorscale``, "the figure's colour scale".
     """
     defaults: dict = {}
     for idx, _ in _COMPARE_SCANPATHS:
@@ -4282,6 +4283,8 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_box_fill_color": "",
                 # The raw-gaze samples; empty follows `cmp{idx}_fix_color`.
                 f"cmp{idx}_raw_gaze_color": "",
+                # The heatmap's colour scale; empty follows the figure's.
+                f"cmp{idx}_heatmap_colorscale": "",
             }
         )
     # CMP-24 — scanpath B's own filters (A's are the rail's ordinary ones).
@@ -4305,7 +4308,13 @@ def _seed_compare_styles() -> None:
     where the popover isn't open (ENG-36)."""
     for key, default in compare_style_defaults().items():
         if not key.endswith(
-            ("_label_pattern", "_box_color", "_box_fill_color", "_raw_gaze_color")
+            (
+                "_label_pattern",
+                "_box_color",
+                "_box_fill_color",
+                "_raw_gaze_color",
+                "_heatmap_colorscale",
+            )
         ):
             _pin(key, default)
 
@@ -4723,6 +4732,51 @@ def _render_compare_box_groups(fill_help: str) -> None:
             )
 
 
+def _compare_heatmap_colorscale_row(
+    idx: int, *, disabled: bool, reason: str | None
+) -> None:
+    """One scanpath's group title and heatmap *Colors* row, for the comparison:
+    ``cmp{idx}_heatmap_colorscale``, the figure's colour scale until one is
+    picked. The metric, scaling and range above are shared, so A and B stay on
+    one scale; two different colour scales get a colour bar each.
+
+    Keyless, like the figure's own colour-scale picker (`_popover_selectbox`),
+    and a shadow like `_compare_follow_color_picker`: it shows the scale drawn,
+    and only a pick writes the override."""
+    name = _COMPARE_SCANPATHS[idx][1]
+    key = f"cmp{idx}_heatmap_colorscale"
+    follow = (
+        st.session_state.get("global_heatmap_colorscale") or DEFAULT_HEATMAP_COLORSCALE
+    )
+    shown = st.session_state.get(key) or follow
+    disabled, tip = _layer_gate(
+        disabled,
+        _gated_help(
+            f"{name}'s heatmap colour scale, on the range both share. Defaults to "
+            "the figure's.",
+            reason,
+        ),
+    )
+    picked = _sub_row(
+        "Colors",
+        section=name,
+        section_help=_COMPARE_SCANPATH_HELP[idx]
+        + (" Its colour scale is its own; the rest is shared." if idx == 0 else ""),
+        caption_help=tip,
+        section_share=_COMPARE_SECTION_SHARE,
+    ).selectbox(
+        f"{name} — heatmap colors",
+        COLORSCALES,
+        index=COLORSCALES.index(shown) if shown in COLORSCALES else 0,
+        disabled=disabled,
+        help=tip,
+        label_visibility="collapsed",
+    )
+    # A scale the picker cannot show (an API-only name) is left alone.
+    if not disabled and shown in COLORSCALES and picked != shown:
+        st.session_state[key] = "" if picked == follow else picked
+
+
 def _compare_raw_gaze_color_row(idx: int, *, disabled: bool) -> None:
     """One scanpath's group title and raw-gaze *Color* row, for the comparison:
     its samples' colour, ``cmp{idx}_raw_gaze_color`` — its fixation colour
@@ -4787,6 +4841,10 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 # None colours the samples in `fix_color`.
                 raw_gaze_color=(
                     st.session_state.get(f"cmp{idx}_raw_gaze_color") or None
+                ),
+                # None draws the heatmap in the figure's colour scale.
+                heatmap_colorscale=(
+                    st.session_state.get(f"cmp{idx}_heatmap_colorscale") or None
                 ),
             )
         )
@@ -7020,8 +7078,12 @@ def render_plot_controls(
             section_help="What the heatmap colours by and how.",
             caption_help=metric_help,
         )
-        metric_col, scale_col = field.columns(
-            [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
+        # In Compare each scanpath picks its own colour scale (its group,
+        # below), so the metric takes the whole row.
+        metric_col, scale_col = (
+            (field, None)
+            if comparing
+            else field.columns([0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center")
         )
         metric_labels = _rail_names().option_labels(
             ["duration_ms", "counts"], {"counts": "Fixation count"}
@@ -7039,18 +7101,19 @@ def render_plot_controls(
             help=metric_help,
             label_visibility="collapsed",
         )
-        # Keyless on purpose — see `_popover_selectbox`.
-        current_scale = st.session_state.get("global_heatmap_colorscale")
-        st.session_state["global_heatmap_colorscale"] = scale_col.selectbox(
-            "Colors",
-            COLORSCALES,
-            index=COLORSCALES.index(current_scale)
-            if current_scale in COLORSCALES
-            else 0,
-            disabled=metric_disabled_h,
-            help=metric_help,
-            label_visibility="collapsed",
-        )
+        if scale_col is not None:
+            # Keyless on purpose — see `_popover_selectbox`.
+            current_scale = st.session_state.get("global_heatmap_colorscale")
+            st.session_state["global_heatmap_colorscale"] = scale_col.selectbox(
+                "Colors",
+                COLORSCALES,
+                index=COLORSCALES.index(current_scale)
+                if current_scale in COLORSCALES
+                else 0,
+                disabled=metric_disabled_h,
+                help=metric_help,
+                label_visibility="collapsed",
+            )
         norm_disabled, norm_help = _layer_gate(
             heat_disabled,
             _gated_help(
@@ -7116,6 +7179,12 @@ def render_plot_controls(
                 field_host=_sub_row("Range", caption_help=range_text),
             )
 
+        if comparing:
+            # The per-scanpath groups, after the rows both share.
+            for idx, _ in _COMPARE_SCANPATHS:
+                _compare_heatmap_colorscale_row(
+                    idx, disabled=heat_disabled, reason=heat_reason
+                )
         _render_colorbar_rows("heatmap", disabled=heat_disabled, reason=heat_reason)
 
     # Raw gaze is drawn by the static and comparison builders. The toggle is on

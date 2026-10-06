@@ -509,6 +509,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
         "box_color",
         "box_fill_color",
         "raw_gaze_color",
+        "heatmap_colorscale",
     ),
     # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
     # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
@@ -630,6 +631,15 @@ _GATED_URL_PARAMS = {
     "align_connectors": drift_correction_enabled,
 }
 
+
+def _parse_colorscale(value: str) -> str:
+    """One of the app's colour scales, else ``ValueError`` (the reader's "Ignored
+    bad URL param" warning) rather than a name the rail's picker cannot show."""
+    if value not in COLORSCALES:
+        raise ValueError(f"not one of the app's colour scales: {value!r}")
+    return value
+
+
 _URL_PRESETS = {
     # Booleans (read side of _SHARE_TOGGLE_PARAMS) + the legacy aliases.
     "hide_fixation_numbers": ("global_show_order", lambda v: not _coerce_bool(v)),
@@ -664,6 +674,11 @@ _URL_PRESETS = {
     "caption_pattern": ("global_caption_pattern", _strip_markup),
     "illustration_text": ("global_illustration_text", _strip_markup),
     "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
+    # Compare's per-scanpath heatmap colour scale: an app colour scale only.
+    **{
+        param: (key, _parse_colorscale)
+        for param, key in _cmp_style_params("heatmap_colorscale").items()
+    },
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
     **{
@@ -1378,6 +1393,10 @@ _CHOICE_STATE_PARSERS = {
     "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
     "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
     "global_heatmap_colorscale": _closed_choice(tuple(COLORSCALES)),
+    # "" follows the figure's colour scale.
+    **{
+        f"cmp{i}_heatmap_colorscale": _closed_choice(("", *COLORSCALES)) for i in (0, 1)
+    },
     "global_saccade_style": _closed_choice(tuple(SACCADE_DASH_OPTIONS)),
     "global_saccade_render_mode": _closed_choice(("Straight", "Arc")),
     "global_saccade_color_mode": _closed_choice(tuple(SACCADE_COLOR_MODES)),
@@ -2703,6 +2722,14 @@ def _restore_plot_config(
                 rg == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", rg)
             ):
                 put(f"cmp{idx}_raw_gaze_color", rg)
+            # "" again follows: the figure's heatmap colour scale.
+            if "heatmap_colorscale" in entry:
+                put_valid(
+                    entry["heatmap_colorscale"] in ("", *COLORSCALES),
+                    f"cmp{idx}_heatmap_colorscale",
+                    entry["heatmap_colorscale"],
+                    f"scanpath {idx + 1} heatmap colour scale",
+                )
             if "saccade_style" in entry:
                 put_valid(
                     entry["saccade_style"] in SACCADE_DASH_OPTIONS,

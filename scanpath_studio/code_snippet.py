@@ -1091,6 +1091,7 @@ _STYLE_SPEC_KEYS = (
     "box_color",
     "box_fill_color",
     "raw_gaze_color",
+    "heatmap_colorscale",
     "saccade_style",
     "saccade_width",
     "marker_size_range",

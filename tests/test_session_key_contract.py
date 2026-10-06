@@ -459,6 +459,7 @@ def _restore_config_app():
         "box_color": "#333333",
         "box_fill_color": "#444444",
         "raw_gaze_color": "#555555",
+        "heatmap_colorscale": "Blues",
     }
     config = {
         "schema": st.session_state["_schema"],

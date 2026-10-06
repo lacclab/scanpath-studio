@@ -23,7 +23,7 @@ system before judging participants.
 
 ## 3. Replay the recording
 
-Turn on **Animate**. Look for long missing periods, repeated off-text points,
+Turn on **Animate**. Look for long missing periods, repeated points out of bounds,
 frequent interruptions, or a vertical shift that grows during the trial.
 
 Use **:material/cleaning_services: Flag fixations → :material/blur_on: Fixations** in the plot rail to **Highlight** short, long,

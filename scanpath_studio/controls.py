@@ -6824,7 +6824,7 @@ def render_plot_controls(
                 "leave."
                 if color_mode == "By type"
                 else "Skips, refixations and return sweeps count as forward; "
-                "off-text saccades are Other."
+                "saccades out of bounds are Other."
             )
             swatch_disabled, _ = _layer_gate(False, None)
             for start in range(0, len(classes), 3):

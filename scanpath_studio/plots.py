@@ -1146,7 +1146,7 @@ def _fixation_category_labels(
     """The discrete label each fixation is coloured by, or ``None`` when the
     colouring is not discrete (uniform, numeric, or a column the frame lacks).
 
-    The same labels the static figure draws: ``"Line N"`` / ``"(off-text)"``
+    The same labels the static figure draws: ``"Line N"`` / ``"Out of bounds"``
     for colour-by-line, against ``words``' own geometry; a categorical column's
     values as strings, ``"(missing)"`` for a gap. Aligned to ``fixations``.
     """
@@ -1159,7 +1159,7 @@ def _fixation_category_labels(
 
         line_ids = assign_fixation_lines(fixations, words)
         return line_ids.map(
-            lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+            lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
         )
     if (
         not color_by
@@ -3366,7 +3366,7 @@ def _render_scanpath_figure(
 
             line_ids = assign_fixation_lines(ordered, words)
             color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
             )
             color_label = "line"
             is_numeric_color = False
@@ -5256,7 +5256,7 @@ def _render_scanpath_animation(
 
             line_ids = assign_fixation_lines(ordered0, words)
             color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
             )
             color_label = "line"
             is_numeric_color = False

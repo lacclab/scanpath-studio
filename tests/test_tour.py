@@ -168,6 +168,44 @@ def _welcome_tour_replay_app():
     render_spotlight_tour()
 
 
+def _welcome_after_restore_app():
+    import streamlit as st
+
+    from scanpath_studio import persistence
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    st.session_state[persistence._RESTORED_PAYLOAD_KEY] = {"datasets": 0}
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+def _welcome_names_dataset_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    st.session_state["data_source_choice"] = "Dataset 1"
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+class TestWelcomeNamesWhatIsOpen:
+    """#374 F32: no "A demo dataset is loaded" over a returning user's data."""
+
+    def test_a_restored_session_does_not_open_the_tour(self):
+        at = AppTest.from_function(_welcome_after_restore_app).run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_seen"] is True
+        assert not any(b.key == "tour_sp_next" for b in at.button)
+
+    def test_the_welcome_names_the_open_dataset(self):
+        at = AppTest.from_function(_welcome_names_dataset_app).run()
+        assert not at.exception, at.exception
+        text = " ".join(m.value for m in at.markdown)
+        assert "**Dataset 1** is open; **Next**" in text
+        assert "demo dataset is loaded" not in text
+
+
 class TestTourOptOut:
     """UX-12: "Don't show this again", persisted in the ``sps_tour_optout`` cookie."""
 
@@ -498,6 +536,36 @@ class TestUseCaseTutorials:
         )
         assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
 
+    def test_the_filter_is_named_when_it_is_why_a_tutorial_cannot_start(self):
+        """#374 F31: "need two readings with the same text id" was wrong when
+        the dataset had them and a filter hid them."""
+        import pandas as pd
+
+        from scanpath_studio.tour import (
+            _TUTORIAL_BY_ID,
+            build_tutorial_context,
+            filtered_reason,
+        )
+
+        compare = _TUTORIAL_BY_ID["compare_readings"]
+        both = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["t1", "t2"],
+                "text_id": ["same", "same"],
+            }
+        )
+        words, fixations = pd.DataFrame({"w": [1]}), pd.DataFrame({"f": [1]})
+        narrowed = build_tutorial_context(words, fixations, both.iloc[:1])
+        assert filtered_reason(compare, narrowed) is None  # no snapshot: not filtered
+        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both)
+        assert filtered_reason(compare, narrowed) == (
+            "no two trials in the pool share a text."
+        )
+        # The dataset itself lacks the pair: the filter is not the cause.
+        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both.iloc[:1])
+        assert filtered_reason(compare, narrowed) is None
+
     def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
         """UX-83: starting a tutorial navigates to its first step's view right
         away, instead of leaving the card on the page you were already on and
@@ -602,6 +670,26 @@ class TestFaq:
         for question, answer in faq_items():
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
+
+    def test_where_data_goes_says_only_what_applies_here(self, monkeypatch):
+        """#374 F22: the hosted demo's FAQ must not claim uploads stay local."""
+        from scanpath_studio import persistence, tour
+
+        def answer() -> str:
+            (text,) = [a for q, a in tour.faq_items() if q == tour._WHERE_DATA_GOES]
+            return text
+
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
+        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: False)
+        hosted = answer()
+        assert hosted.startswith("To the server this app runs on")
+        assert "Nowhere" not in hosted and "not kept" in hosted
+
+        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: True)
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
+        local = answer()
+        assert local.startswith("Nowhere")
+        assert "recovery copy" in local and "server" not in local
 
     def test_no_entry_is_for_someone_editing_the_code(self):
         """BUG-85: docs/faq.md dropped "I edited the code and nothing changed?"

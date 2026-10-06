@@ -163,9 +163,18 @@ def labeled(
     row_label(label_col, display if display is not None else label, help)
     if kind in WRAPPING_KINDS:
         kwargs.setdefault("wrap", True)
+    # #374 F19: the collapsed label is only the accessible name, which a
+    # screen reader reads verbatim — so no icon shortcode or `**` in it.
     return getattr(field_col, kind)(
-        label, help=help, label_visibility="collapsed", **kwargs
+        accessible_name(label), help=help, label_visibility="collapsed", **kwargs
     )
+
+
+def accessible_name(label: str) -> str:
+    """``label`` as words: icon shortcodes and markdown bold removed (#374 F19).
+
+    Streamlit sets a widget's ``aria-label`` to its label string as written."""
+    return " ".join(re.sub(r":material/\w+:|\*\*", " ", label).split())
 
 
 def panel_field(host, kind: str, label: str, **kwargs):

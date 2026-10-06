@@ -280,7 +280,7 @@ def test_the_run_logs_its_computations_and_selections():
 
 
 def _boot_with_debug_open(**session) -> AppTest:
-    """Boot with the ❓ Help → Debug modal open (UX-179).
+    """Boot with the ❓ Help → About → Debug modal open (UX-179).
 
     Its widgets render only while it is open, and `arm_debug_dialog` has to be
     repeated before every run (AppTest replays the whole script rather than
@@ -322,25 +322,22 @@ def test_the_toggle_reveals_the_panel():
     assert "🐛 Debug" not in labels
 
 
-def test_the_help_menu_offers_debug():
-    """UX-179: the gate moved from the retired 💾 Session dialog to ❓ Help."""
-    from scanpath_studio import menu
+def test_debug_opens_from_about_not_the_help_menu():
+    """#374 F31: Debug left the ❓ Help menu for a button at the foot of About."""
+    from scanpath_studio import debug_log, menu
 
-    assert "help_debug" in menu._HELP_PAGES
+    assert "help_debug" not in menu._HELP_PAGES
 
     def script():
-        import streamlit as st
+        from scanpath_studio import app
 
-        from scanpath_studio import debug_log, menu
-
-        menu._arm_help_action("help_debug")
-        st.session_state["_armed"] = bool(
-            st.session_state.get(debug_log._DEBUG_DIALOG_KEY)
-        )
+        app._about_dialog()
 
     at = AppTest.from_function(script).run()
     assert not at.exception, at.exception
-    assert at.session_state["_armed"] is True
+    at.button(key="about_open_debug").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state[debug_log._DEBUG_DIALOG_KEY] is True
 
 
 def test_a_legacy_debug_url_param_still_arms_it():
@@ -383,7 +380,7 @@ class TestTheGroundTruthTrialIsAlwaysAvailable:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         assert at.session_state["data_source_choice"] == "Synthetic test trial"
-        picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        picker = next(s for s in at.selectbox if s.label.startswith("Select Trial"))
         assert list(picker.options) == ["synthetic_2line_demo"]
 
 

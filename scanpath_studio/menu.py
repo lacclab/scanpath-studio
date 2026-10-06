@@ -7,7 +7,7 @@ the full page width.
 **The nav** (:func:`render_nav`) is Streamlit's own
 ``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
 Analysis · 🗂️ Data — and a ❓ Help section of **action** entries (Tutorials,
-FAQ, About, Debug). Selecting an action arms a dialog and bounces the router
+FAQ, About; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
 **UX-179 retired 💾 Session**, the last top-level action entry. Its four blocks
@@ -72,10 +72,9 @@ _HELP_PAGES = {
     "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
     "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
     "help_about": ("About", ICONS["about"], "help-about"),
-    # UX-179 — the debug gate and log, which used to be the last block of the
-    # 💾 Session dialog. Help is where you go when something is wrong, and the
-    # log's use is attaching it to a bug report.
-    "help_debug": ("Debug", ICONS["debug"], "help-debug"),
+    # #374 F31: Debug is no longer an entry here — a developer tool listed
+    # beside Tutorials and FAQ read as something every user should open. It
+    # is a small button at the foot of About (`app._about_dialog`).
 }
 
 #: The nav section heading the four entries above collapse under.
@@ -193,10 +192,6 @@ def _arm_help_action(entry: str) -> None:
         tour._arm_tutorial_library()
     elif entry == "help_faq":
         tour._arm_faq()
-    elif entry == "help_debug":
-        from scanpath_studio.debug_log import _arm_debug
-
-        _arm_debug()
     elif entry == "help_about":
         from scanpath_studio import app
 

@@ -245,7 +245,7 @@ def picker_trial_id(option: str) -> str:
 
 
 def arm_debug_dialog(at) -> None:
-    """Ask for the ❓ Help → Debug modal on the *next* run (UX-179).
+    """Ask for the ❓ Help → About → Debug modal on the *next* run (UX-179).
 
     Call it before **every** ``at.run()`` in a flow that drives the dialog, not
     just the first. In a browser an interaction inside a dialog reruns only the

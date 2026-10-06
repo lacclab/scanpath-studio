@@ -145,3 +145,23 @@ def test_launch_app_respects_a_user_upload_cap_override(monkeypatch):
     argv = _run_launch(monkeypatch, ["--server.maxUploadSize=300"])
     assert "--server.maxUploadSize=5000" not in argv
     assert "--server.maxUploadSize=300" in argv
+
+
+def test_wordmark_has_a_transparent_dark_variant():
+    """#374 F37: no light tile behind the wordmark in dark mode.
+
+    Both images are transparent at the corners, and the dark variant is swapped
+    in by CSS that follows the theme (``light-dark()``), with the OS preference
+    as the fallback."""
+    from PIL import Image
+
+    from scanpath_studio import app as app_mod
+
+    for path in (app_mod.LOGO_PATH, app_mod.LOGO_DARK_PATH):
+        with Image.open(path) as im:
+            rgba = im.convert("RGBA")
+            assert rgba.getpixel((0, 0))[3] == 0, path.name
+            assert rgba.getpixel((rgba.width - 1, rgba.height - 1))[3] == 0
+    css = app_mod._logo_theme_css()
+    assert "light-dark(url(data:image/png" in css
+    assert "prefers-color-scheme: dark" in css

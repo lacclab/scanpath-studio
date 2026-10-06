@@ -84,6 +84,9 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
+#: #374 F33 — set by :func:`clear_saved_work`: this session cleared what was
+#: saved and does not write it back.
+_CLEARED_KEY = "_local_persistence_cleared"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -1232,6 +1235,14 @@ def restored_summary(session) -> dict:
     return dict(summary) if isinstance(summary, dict) else {}
 
 
+def session_was_restored(session) -> bool:
+    """Whether this session applied a saved manifest at all (#374 F32).
+
+    Wider than :func:`restored_from_cache`: settings alone count, since they
+    still say the app was used here before. The welcome tour reads it."""
+    return isinstance(session.get(_RESTORED_PAYLOAD_KEY), dict)
+
+
 def restored_from_cache(session) -> bool:
     """Whether this session got back something the user would recognise.
 
@@ -1290,6 +1301,25 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
         ):
             session.pop(key, None)
     return removed
+
+
+def clear_saved_work(session) -> bool:
+    """Delete what is saved on this computer, and stop this session saving.
+
+    The Data page's *Clear what is saved…* (#374 F33). :func:`clear_local_state`
+    alone is undone within a click: every run ends in ``save_local_state``,
+    which would write back the datasets, annotations and settings this tab still
+    holds. So this session stops saving; what it has open stays in memory, and
+    the next session saves afresh. Returns whether the files were removed.
+    """
+    removed = clear_local_state(session)
+    session[_CLEARED_KEY] = True
+    return removed
+
+
+def saved_work_cleared(session) -> bool:
+    """Whether this session cleared what was saved (:func:`clear_saved_work`)."""
+    return bool(session.get(_CLEARED_KEY))
 
 
 def _cache_files(root: Path) -> list:
@@ -1453,7 +1483,11 @@ def save_local_state(session, url: str) -> bool:
     # applied is not the kind that breaks the app — before any early return, since
     # a paused save still ran to here.
     _finish_restore(session)
-    if not persistence_enabled(url) or persistence_paused(session):
+    if (
+        not persistence_enabled(url)
+        or persistence_paused(session)
+        or saved_work_cleared(session)
+    ):
         return False
     try:
         return save_state(session, state_directory())

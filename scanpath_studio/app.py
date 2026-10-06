@@ -29,8 +29,10 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import copy
+import functools
 import hashlib
 import html
 import json
@@ -247,6 +249,7 @@ from scanpath_studio.persistence import (
     cache_failure,
     cache_status,
     clear_local_state,
+    clear_saved_work,
     consume_restore_skipped,
     discard_failed_dataset,
     discard_failed_metadata,
@@ -264,6 +267,7 @@ from scanpath_studio.persistence import (
     retry_failed_datasets,
     retry_failed_metadata,
     save_local_state,
+    saved_work_cleared,
     server_bound_to_loopback,
 )
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
@@ -526,6 +530,78 @@ _IFRAME_CLICK_CLOSES_POPOVER_SCRIPT = """
 """
 
 
+#: #374 F19: what a screen reader announces. Streamlit sets a widget's
+#: ``aria-label`` to its label string as written, so a switch labelled
+#: ``:material/movie: Animate`` was announced with the shortcode, and the
+#: ligature of every icon it draws (``restart_alt``, ``filter_alt``) was read
+#: as part of the button or tab around it. This strips shortcodes and ``**``
+#: from every ``aria-label`` and hides icon glyphs from assistive technology —
+#: unless the glyph is all that names its control. Labels are fixed at the
+#: source where they can be (`fields.accessible_name`); this covers the visible
+#: labels that keep an icon (toggles and checkboxes take no ``icon=``) and the
+#: glyphs Streamlit draws itself. Installed in the parent's realm once per page
+#: load, like the scripts above.
+_A11Y_NAMES_SCRIPT = """
+<script>
+(function () {
+    function install() {
+        var SHORTCODE = /:material\\/[a-z0-9_]+:/g;
+        var GLYPH = '[data-testid="stIconMaterial"], span[role="img"][translate="no"]';
+        var NAMED = 'button, a, [role="tab"], [role="button"], label, [role="option"]';
+        var pending = false;
+        function clean(value) {
+            return value.replace(SHORTCODE, " ").replace(/\\*\\*/g, "")
+                .replace(/\\s+/g, " ").trim();
+        }
+        function textWithout(el) {
+            var copy = el.cloneNode(true);
+            copy.querySelectorAll(GLYPH).forEach(function (g) { g.remove(); });
+            return (copy.textContent || "").trim();
+        }
+        function update() {
+            pending = false;
+            document.querySelectorAll('[aria-label*=":material/"], [aria-label*="**"]')
+                .forEach(function (el) {
+                    var value = el.getAttribute("aria-label");
+                    var fixed = clean(value);
+                    if (fixed !== value) { el.setAttribute("aria-label", fixed); }
+                });
+            document.querySelectorAll(GLYPH).forEach(function (g) {
+                if (g.getAttribute("aria-hidden") === "true") { return; }
+                var owner = g.closest(NAMED);
+                if (owner && !owner.getAttribute("aria-label")
+                        && !textWithout(owner)) { return; }
+                g.setAttribute("aria-hidden", "true");
+            });
+        }
+        function schedule() {
+            if (pending) { return; }
+            pending = true;
+            requestAnimationFrame(update);
+        }
+        new MutationObserver(schedule).observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["aria-label"],
+        });
+        update();
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsA11yNamesInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsA11yNamesInstalled = true;
+    } catch (e) {
+        /* Not same-origin: the labels fixed at the source still read right. */
+    }
+})();
+</script>
+"""
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -548,12 +624,46 @@ def configure_page() -> None:
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
+    embed_html_iframe(_A11Y_NAMES_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the
 #: package so it ships with a pip install — see `pyproject.toml`'s
 #: `package-data`, and `desktop/scanpath_studio.spec` for the frozen build.
 LOGO_PATH = Path(__file__).parent / "assets" / "scanpath_studio_title_logo.png"
+#: The same wordmark with light text, for the dark theme (#374 F37). Both are
+#: transparent, so neither theme draws a tile behind them.
+LOGO_DARK_PATH = LOGO_PATH.with_name("scanpath_studio_title_logo_dark.png")
+
+
+@functools.cache
+def _logo_theme_css() -> str:
+    """CSS that swaps the header wordmark for its dark variant in dark mode.
+
+    ``st.logo`` takes one image, and the server cannot tell the theme reliably
+    (``st.context.theme`` is wrong on first load and right after a switch). So
+    the swap happens in CSS: ``light-dark()`` follows the theme Streamlit puts
+    on the page, instantly; a browser without image support in ``light-dark()``
+    drops that line and falls back to the OS preference.
+    """
+    if not (LOGO_PATH.is_file() and LOGO_DARK_PATH.is_file()):
+        return ""
+
+    def _uri(path: Path) -> str:
+        return (
+            "url(data:image/png;base64,"
+            + base64.b64encode(path.read_bytes()).decode()
+            + ")"
+        )
+
+    light, dark = _uri(LOGO_PATH), _uri(LOGO_DARK_PATH)
+    sel = 'img[data-testid="stHeaderLogo"]'
+    return (
+        "<style>"
+        f"@media (prefers-color-scheme: dark) {{ {sel} {{ content: {dark}; }} }}"
+        f"{sel} {{ content: light-dark({light}, {dark}); }}"
+        "</style>"
+    )
 
 
 def render_app_logo() -> None:
@@ -574,6 +684,9 @@ def render_app_logo() -> None:
         )
         return
     st.logo(str(LOGO_PATH), size="large", link=CITATION["docs_url"])
+    if css := _logo_theme_css():
+        # A style-only `st.html` goes to Streamlit's event container: no block.
+        st.html(css)
 
 
 def _render_about_panel(host=None) -> None:
@@ -1015,12 +1128,12 @@ def _render_saved_here_section(app_url: str, host) -> None:
     dialog's first block; it lives here because its count is "datasets **you
     added**", which is the table above it.
 
-    UX-179 left it no controls. The *Save changes automatically* toggle, *Clear
-    recovery cache* and *Reset everything* are gone: opting out is a launch
-    choice (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ),
-    and clearing is ``scanpath-studio cache --clear`` or ``api.clear_cache``.
-    The one in-session pause left is BUG-71's, after a restore that crashed,
-    which the section names.
+    UX-179 left it no controls: opting out is a launch choice
+    (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ). #374 F33
+    gave it one back, **Clear what is saved…**, behind a confirmation listing
+    what goes (``persistence.clear_saved_work``) — the CLI's
+    ``scanpath-studio cache --clear`` was the only way before. BUG-71's pause,
+    after a restore that crashed, is the other in-session state it names.
 
     Drawn *after* this run's ``save_local_state`` (``main``'s
     ``_finish_page``), so the status line reports the write that just happened.
@@ -1056,7 +1169,9 @@ def _render_saved_here_section(app_url: str, host) -> None:
         return
 
     host.caption(
-        "Saved as you work, and reopened next time. Nothing is uploaded anywhere."
+        "Saved as you work and reopened next time — your added datasets, "
+        "annotations, designs, and the view, trial and plot settings you left. "
+        "Nothing is uploaded anywhere."
     )
     if restored_from_cache(st.session_state):
         host.success("Recovered when the app opened.", icon=ICONS["recovery"])
@@ -1088,10 +1203,27 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "or incomplete).",
             icon=ICONS["warning"],
         )
+    elif saved_work_cleared(st.session_state):
+        host.caption(
+            "Cleared. This tab keeps what it has open, but saves nothing more; "
+            "the next session starts saving afresh."
+        )
     elif not status["exists"]:
-        host.caption("Nothing saved yet. The first change creates the cache.")
+        host.caption("Nothing saved yet — the first change you make is saved here.")
     render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
     host.markdown(f"**Folder:** `{status['directory']}`")
+    # #374 F33. The unreadable-cache box keeps its own Clear button.
+    if status["exists"] and not cache_failure(st.session_state):
+        host.button(
+            "Clear what is saved…",
+            icon=ICONS["delete"],
+            key="saved_here_clear",
+            help="Delete everything listed above from this computer, after a "
+            "confirmation.",
+            on_click=_arm_clear_saved,
+        )
+        if st.session_state.pop(CLEAR_SAVED_REQUEST_KEY, False):
+            _clear_saved_dialog(app_url)
     if persistence_paused(st.session_state) and not cache_failure(st.session_state):
         # BUG-71 — the only pause left: the last launch never finished opening
         # with this cache, so this session neither restored nor overwrites it.
@@ -1100,6 +1232,62 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "was. Reload to try restoring it again, or delete it with "
             "`scanpath-studio cache --clear`."
         )
+
+
+#: #374 F33 — *Clear what is saved…*'s request flag, served right under the
+#: button (the section is the last thing a run draws, so nothing waits on it).
+CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
+
+
+def _arm_clear_saved() -> None:
+    st.session_state[CLEAR_SAVED_REQUEST_KEY] = True
+
+
+def saved_items(status: dict) -> list[str]:
+    """What *Clear what is saved…* deletes, one line each (#374 F33)."""
+    names = [str(entry["name"]) for entry in status.get("datasets") or []]
+    names += [str(entry["name"]) for entry in status.get("damaged") or []]
+    items = []
+    if names:
+        listed = ", ".join(f"`{name}`" for name in names)
+        items.append(f"{plural(len(names), 'dataset')} you added: {listed}")
+    if status.get("annotations"):
+        items.append(plural(int(status["annotations"]), "annotation"))
+    if status.get("designs"):
+        items.append(f"{plural(int(status['designs']), 'saved design')}")
+    if status.get("metadata"):
+        items.append(plural(int(status["metadata"]), "metadata table"))
+    items.append("the view, trial and plot settings you left")
+    return items
+
+
+@st.dialog(f"{ICONS['delete']} Clear what is saved?")
+def _clear_saved_dialog(app_url: str) -> None:
+    """Confirm *Clear what is saved…*, listing what it deletes (#374 F33)."""
+    st.markdown(
+        "This deletes from this computer:\n\n"
+        + "\n".join(f"- {item}" for item in saved_items(cache_status(url=app_url)))
+    )
+    st.caption(
+        "This tab keeps what it has open until you close it, but saves nothing "
+        "more. Your original files are not touched. There is no undo."
+    )
+    cancel, confirm = st.columns(2)
+    if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
+        st.rerun()
+    # A callback, so the delete happens before anything else in the rerun
+    # (the nav may rerun the script before this dialog is reached again).
+    confirm.button(
+        "Delete",
+        icon=ICONS["delete"],
+        type="primary",
+        key="saved_here_clear_confirm",
+        width="stretch",
+        on_click=clear_saved_work,
+        args=(st.session_state,),
+    )
+    if saved_work_cleared(st.session_state):
+        st.rerun()  # the whole page, which closes this dialog
 
 
 def _arm_about() -> None:
@@ -1202,6 +1390,19 @@ with the version above, your operating system, and how you run the app.
 and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 """
     )
+    # #374 F31: the Debug drawer opens from here, not from the ❓ Help menu.
+    # A full rerun closes this dialog; `maybe_show_debug` then opens the drawer.
+    if st.button(
+        "Debug",
+        icon=ICONS["debug"],
+        type="tertiary",
+        key="about_open_debug",
+        help="The debug log and a snapshot of what's loaded, for a bug report.",
+    ):
+        from scanpath_studio.debug_log import _arm_debug
+
+        _arm_debug()
+        st.rerun()
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------
@@ -4633,10 +4834,6 @@ def resolve_data_source(host=None) -> str:
     return choice
 
 
-# Picker-only sentinel: never a dataset, a comparison source or a share token.
-_MORE_DATASETS_PLACEHOLDER = "__more_datasets_coming_soon__"
-
-
 def _on_data_source_pick() -> None:
     """Route the main-view picker's choice through the pre-widget seam (UX-25).
 
@@ -4648,9 +4845,6 @@ def _on_data_source_pick() -> None:
     keep assigning the canonical key without the widget reconciling it away.
     """
     picked = st.session_state.get("data_source_picker")
-    if picked == _MORE_DATASETS_PLACEHOLDER:
-        st.session_state["data_source_picker"] = st.session_state["data_source_choice"]
-        return
     if picked:
         if picked == AUTHOR_CHOICE:
             _remember_authoring_return()
@@ -4904,8 +5098,6 @@ def render_data_source_picker(host=None) -> None:
     registry = public_dataset_registry()
 
     def _entry_label(token: str) -> str:
-        if token == _MORE_DATASETS_PLACEHOLDER:
-            return "More coming soon!"
         # Reads the `registry` snapshot resolved just above rather than calling
         # `public_dataset_registry()` per token: the added corpora can change at
         # runtime, so one run must format its options against one
@@ -4941,8 +5133,8 @@ def render_data_source_picker(host=None) -> None:
     if current in entries:
         st.session_state["data_source_picker"] = current
     box.selectbox(
-        "**Select Dataset**",
-        [*entries, _MORE_DATASETS_PLACEHOLDER],
+        "Select Dataset",
+        entries,
         format_func=_entry_label,
         key="data_source_picker",
         on_change=_on_data_source_pick,
@@ -4956,8 +5148,9 @@ def render_data_source_picker(host=None) -> None:
         width="content",
         help=(
             "Which dataset the app is showing. Use + to create a scanpath or "
-            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data Management page. "
-            "More coming soon! is a preview of future datasets."
+            "import files. Rename datasets, or remove the ones you added, on "
+            f"the {ICONS['view_data']} Data Management page. More public "
+            "datasets are planned."
         ),
     )
     # UX-200: named for screen readers; `styles.py` clips the name, so + is
@@ -8958,7 +9151,7 @@ def _run_app() -> None:
         maybe_show_faq()
         maybe_show_about()
         maybe_show_tutorial_library()
-        # UX-179 — ❓ Help → Debug, served early like its siblings.
+        # UX-179 — ❓ Help → About → Debug, served early like its siblings.
         maybe_show_debug()
 
     # `active_view` was already resolved above (including the BUG-31 wizard
@@ -10353,9 +10546,20 @@ def _run_app() -> None:
     #
     # 📚 Documentation left with the buttons: `st.Page` cannot be a URL, and the
     # UX-62 wordmark beside the nav already opens the docs site.
-    stash_tutorial_context(
-        build_tutorial_context(words_filtered, fixations_filtered, combos)
+    tutorial_context = build_tutorial_context(
+        words_filtered, fixations_filtered, combos
     )
+    if len(combos) != len(combos_all):
+        # #374 F31: while a filter narrows the pool, a cheap snapshot of the
+        # whole dataset lets the chooser say the filter is why a tutorial
+        # can't start (from the trial list alone — no frame is regrouped).
+        unfiltered = build_tutorial_context(None, None, combos_all)
+        unfiltered["has_words"] = words_all is not None and not words_all.empty
+        unfiltered["has_fixations"] = (
+            fixations_all is not None and not fixations_all.empty
+        )
+        tutorial_context["unfiltered"] = unfiltered
+    stash_tutorial_context(tutorial_context)
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)

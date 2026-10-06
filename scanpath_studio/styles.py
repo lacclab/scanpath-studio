@@ -716,15 +716,38 @@ def get_app_css() -> str:
     /* macOS hides an overlay scrollbar until you scroll, so a table wider than
        its column read as clipped columns, not as one to scroll. Styling the
        scrollbar keeps it drawn whenever the table overflows. */
-    .sps-chip-table-wrap::-webkit-scrollbar {
+    .sps-chip-table-wrap::-webkit-scrollbar,
+    .st-key-dataset_table_grid::-webkit-scrollbar {
         height: 6px;
     }
-    .sps-chip-table-wrap::-webkit-scrollbar-thumb {
+    .sps-chip-table-wrap::-webkit-scrollbar-thumb,
+    .st-key-dataset_table_grid::-webkit-scrollbar-thumb {
         background: color-mix(in srgb, currentColor 30%, transparent);
         border-radius: 3px;
     }
-    .sps-chip-table-wrap::-webkit-scrollbar-track {
+    .sps-chip-table-wrap::-webkit-scrollbar-track,
+    .st-key-dataset_table_grid::-webkit-scrollbar-track {
         background: transparent;
+    }
+    /* Firefox has no ::-webkit-scrollbar (and Chrome ignores those rules once
+       the standard properties are set, hence the guard). */
+    @supports not selector(::-webkit-scrollbar) {
+        .sps-chip-table-wrap,
+        .st-key-dataset_table_grid {
+            scrollbar-width: thin;
+        }
+    }
+    /* #374 F11 — and an edge shadow on the side that has more, so a cut
+       column reads as "scroll" even where scrollbars are hidden. The two
+       `local` covers scroll with the content and hide each shadow at its
+       end; the two `scroll` shadows stay at the edges. */
+    .sps-chip-table-wrap,
+    .st-key-dataset_table_grid {
+        background:
+            linear-gradient(to right, var(--sps-page-bg) 40%, transparent) left / 2rem 100% no-repeat local,
+            linear-gradient(to left, var(--sps-page-bg) 40%, transparent) right / 2rem 100% no-repeat local,
+            radial-gradient(farthest-side at 0 50%, rgba(128, 128, 128, 0.35), transparent) left / 0.7rem 100% no-repeat scroll,
+            radial-gradient(farthest-side at 100% 50%, rgba(128, 128, 128, 0.35), transparent) right / 0.7rem 100% no-repeat scroll;
     }
     .sps-chip-table-wrap table.sps-chip-table {
         width: auto;
@@ -894,13 +917,23 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /* #374 F19 — the picker and rail-switch names are bold here, not as `**`
+       in the label string: Streamlit reads a label verbatim as the widget's
+       accessible name, so the markdown was announced. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
+    .st-key-data_source_picker [data-testid="stWidgetLabel"] p,
+    .st-key-single_trial_id [data-testid="stWidgetLabel"] p,
+    .st-key-single_compare_trial [data-testid="stWidgetLabel"] p,
+    .st-key-cmp_dataset [data-testid="stWidgetLabel"] p {
+        font-weight: 600;
+    }
     /* UX-153 — every toggle in these rows takes `wrap=True`, which switches
        off Streamlit's truncate mode (and the native `title=` tooltip it
        stamps), and with it the `min-width: 0` chain that let the label
        shrink to an ellipsis. Both are put back here. The `p *` arm is for a
-       bold label's <strong>: the ≤1200px rule further down lets rail labels
-       wrap, which would break "Raw gaze" onto two lines in a row that is one
-       line by contract; this selector outranks it. */
+       bold label's <strong>, which must not wrap "Raw gaze" onto two lines in
+       a row that is one line by contract. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stWidgetLabel"] p * {
         white-space: nowrap;
@@ -2225,23 +2258,46 @@ def get_app_css() -> str:
         }
     }
 
-    /* Then: let the rail's labels wrap. They are `nowrap` above so short labels
-       don't break mid-word in the rail's normal width — but below ~1200px the
-       rail is narrow enough that no-wrap means the text simply runs out of the
-       card. Wrapping at spaces (never mid-word) is the lesser evil, and is what
-       keeps the AC's "no overlap or clipping" true. */
-    @media (max-width: 1200px) {
-        /* The `p *` arm matters: a bolded toggle label ("**Animate**") puts the
-           text in a <strong> that Streamlit gives `overflow-wrap: anywhere`,
-           which beats what this rule sets on the parent <p> — so without it the
-           rail still broke "Anima/te" and "Com/pare" mid-word here. */
-        .st-key-scanpath_rail h5,
-        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p,
-        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p * {
-            white-space: normal;
-            word-break: normal;
-            overflow-wrap: normal;
+    /* #374 F11 — the rail keeps a floor of 260px; the figure takes the rest
+       (it scales uniformly, so a narrower plot column costs nothing but
+       size). At a ⅕ share the rail fell to ~170px at 1024px, and its one-line
+       rows (UX-153) cut every name to "An…", "Fi…". Only side by side: below
+       640px Streamlit stacks the columns, and the rail is full width anyway.
+       This replaces a ≤1200px rule that let rail labels wrap, which never
+       took effect on the switch rows — UX-153 keeps those on one line. */
+    @media (min-width: 640px) {
+        [data-testid="stHorizontalBlock"]:has(
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail
+        ) {
+            /* The floor would otherwise wrap the rail under the figure: the
+               two flex bases (⅘ + 260px) no longer fit one line. */
+            flex-wrap: nowrap;
         }
+        [data-testid="stHorizontalBlock"]:has(
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail
+        ) > [data-testid="stColumn"]:first-child {
+            min-width: 0;
+        }
+        [data-testid="stColumn"]:has(
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > .st-key-scanpath_rail
+        ) {
+            min-width: 260px;
+        }
+    }
+    /* ...and where the floor bites, the 4rem gutter beside it gives 2.5rem
+       back to the picker row above the figure. */
+    @media (min-width: 640px) and (max-width: 1300px) {
+        [data-testid="stHorizontalBlock"]:has(
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail
+        ) {
+            column-gap: 1.5rem !important;
+        }
+    }
+    @media (max-width: 1200px) {
         .st-key-scanpath_rail { padding-left: 0.6rem; padding-right: 0.6rem; }
         /* A button label must never break mid-word ("Scanp/ath"). */
         .st-key-scanpath_rail button p {

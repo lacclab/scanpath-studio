@@ -732,9 +732,11 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": None,
         "title": f"{ICONS['app']} Welcome to Scanpath Studio",
+        # #374 F32: the dataset sentence is `_welcome_body`'s, from the one
+        # actually open — "A demo dataset is loaded" greeted users' own data.
         "body": "Visualize **eye movements in reading** — scanpaths drawn "
-        "true-to-scale over the text. A demo dataset is loaded; **Next** for a "
-        "quick tour, or **Skip tour** to start exploring.",
+        "true-to-scale over the text. **Next** for a quick tour, or **Skip "
+        "tour** to start exploring.",
     },
     {
         "selector": ".st-key-tour_grp_plot",
@@ -746,9 +748,9 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_data_source",
         "title": f"{ICONS['datasets']} Your datasets",
-        "body": "Your **data source** (demo or your own upload) sits at the left "
-        f"of the control line. Every dataset is listed on the {ICONS['view_data']} **Data Management** page — "
-        "click a row there to open it, **+ Add dataset** for your own.",
+        "body": "The **dataset** you're viewing is picked at the top left; "
+        f"{ICONS['view_data']} **Data Management** lists them all — click a row "
+        "there to open one, **+ Add dataset** for your own.",
     },
     # Picking comes before narrowing: the picker is the control a new reader
     # reaches for first, and narrowing only means something once they have seen
@@ -812,9 +814,10 @@ _SPOTLIGHT_STEPS = [
         # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
         "title": f"{ICONS['nav']} The nav",
-        "body": f"**{ICONS['view_scanpath']} Scanpath** is what you see now. "
-        f"**{ICONS['view_corpus']} Corpus Analysis** aggregates across readers; "
-        f"**{ICONS['view_data']} Data Management** sets one up. **{ICONS['help']} Help** opens over your work.",
+        "body": f"**{ICONS['view_scanpath']} Scanpath** is this view. "
+        f"**{ICONS['view_corpus']} Corpus Analysis** pools all participants; "
+        f"**{ICONS['view_data']} Data Management** lists your "
+        f"datasets and adds new ones. **{ICONS['help']} Help** opens over your work.",
     },
 ]
 
@@ -1291,7 +1294,7 @@ def render_spotlight_tour() -> None:
         # the page <h1>; an <h4> here would be an h1→h4 jump). Sized back down
         # to the original compact look via `.st-key-tour_card h2` in _CARD_CSS.
         st.markdown(f"## {step['title']}")
-        st.markdown(step["body"])
+        st.markdown(_welcome_body(step["body"]) if step_idx == 0 else step["body"])
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
         # UX-12: the opt-out sits on the two steps where a user decides they're
         # finished with the tour — the welcome (bail out now) and the last step
@@ -1403,6 +1406,29 @@ def _start_tour() -> None:
         _tour_dialog()
 
 
+def _open_dataset_name() -> str | None:
+    """The name of the dataset this session has open, as the picker shows it."""
+    from scanpath_studio.constants import DEMO_CHOICE, PUBLIC_DATASETS_CHOICE
+
+    token = st.session_state.get("data_source_choice", DEMO_CHOICE)
+    if token == PUBLIC_DATASETS_CHOICE:
+        token = st.session_state.get("public_dataset_choice")
+    if not token:
+        return None
+    from scanpath_studio.app import _dataset_display_name  # app imports tour
+
+    return _dataset_display_name(str(token))
+
+
+def _welcome_body(body: str) -> str:
+    """The welcome card's text, naming the dataset that is open (#374 F32)."""
+    name = _open_dataset_name()
+    if not name:
+        return body
+    lead, _, rest = body.partition("**Next**")
+    return f"{lead}**{name}** is open; **Next**{rest}" if rest else body
+
+
 def _arm_tour() -> None:
     """``on_click`` callback for the replay button: arm the tour from step 0.
 
@@ -1440,6 +1466,13 @@ def maybe_show_welcome_tour() -> None:
     if tour_opted_out():  # UX-12: "Don't show this again", persisted in a cookie
         return
     st.session_state["tour_seen"] = True  # before opening — see module docstring
+    # #374 F32: a session recovered from *Saved on this computer* belongs to
+    # someone who has used the app here before — a new browser, or cleared
+    # site data, cleared the cookie opt-out, not their experience.
+    from scanpath_studio.persistence import session_was_restored
+
+    if session_was_restored(st.session_state):
+        return
     _start_tour()
 
 
@@ -1514,6 +1547,32 @@ def tutorial_availability(
         available = bool(context.get("has_corpus_variation"))
         return available, "Need variation across trials, readers, or texts."
     return False, f"Unknown availability rule: {rule}."
+
+
+#: #374 F31 — what a rule lacks when the trial filters, not the dataset, are
+#: why a tutorial cannot start.
+_FILTERED_REASONS = {
+    "has_trials": "no trial is left in the pool.",
+    "has_visual_data": "the pool has no words or fixations.",
+    "has_comparable_readings": "no two trials in the pool share a text.",
+    "has_corpus_variation": "the pool holds one trial.",
+}
+
+
+def filtered_reason(
+    tutorial: TutorialDefinition, context: dict[str, object]
+) -> str | None:
+    """Why the **filters** keep ``tutorial`` from starting, or ``None``.
+
+    ``None`` unless the tutorial is unavailable on the filtered pool but would
+    be available on the whole dataset — the context's ``unfiltered`` snapshot,
+    which `app.main` stashes only while a filter narrows the pool."""
+    unfiltered = context.get("unfiltered")
+    if not isinstance(unfiltered, dict) or tutorial_availability(tutorial, context)[0]:
+        return None
+    if not tutorial_availability(tutorial, unfiltered)[0]:
+        return None
+    return _FILTERED_REASONS.get(tutorial.availability)
 
 
 def _tutorial_progress() -> dict[str, int]:
@@ -1735,7 +1794,12 @@ def _tutorial_library_dialog() -> None:
             _start_use_case(tutorial.id, restart=True)
             st.rerun(scope="app")
         if not available:
-            card.caption(f"{ICONS['warning']} Unavailable — {reason.lower()}")
+            because = filtered_reason(tutorial, context)
+            card.caption(
+                f"{ICONS['warning']} Unavailable with the current filters — {because}"
+                if because
+                else f"{ICONS['warning']} Unavailable — {reason.lower()}"
+            )
         _render_tutorial_optout(tutorial.id, card)
 
 
@@ -1749,7 +1813,12 @@ def render_use_case_tutorial() -> None:
     context = st.session_state.get("_tutorial_context") or {}
     available, reason = tutorial_availability(tutorial, context)
     if not available:
-        st.warning(f"Tutorial paused: {reason}")
+        because = filtered_reason(tutorial, context)
+        st.warning(
+            f"Tutorial paused: with the current filters, {because}"
+            if because
+            else f"Tutorial paused: {reason}"
+        )
         return
     step_index = min(
         int(_tutorial_progress().get(tutorial.id, 0)), len(steps_of(tutorial)) - 1
@@ -1904,6 +1973,8 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 
 # (question, markdown answer). Two-to-four lines each — anything longer belongs
 # on the docs page.
+_WHERE_DATA_GOES = "Where does my data go?"
+
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
@@ -1920,17 +1991,9 @@ _FAQ_ITEMS = [
         "the trial id, so map your item column as **Text ID** if trial order was "
         "randomised.",
     ),
-    (
-        "Where does my data go?",
-        "Nowhere off your machine — no accounts, no database, no analytics, no "
-        "upload. A local or desktop run also keeps a **recovery copy** here "
-        "(datasets, mappings, settings, annotations), so a refresh "
-        f"resumes where you left off; **{ICONS['view_data']} Data Management → Saved on this computer** says "
-        "what is stored and where. Two caveats: "
-        "`streamlit run` listens on your whole network (use "
-        "`--server.address=127.0.0.1`), and the online demo runs on "
-        "Streamlit's server, with no recovery.",
-    ),
+    # #374 F22: the answer depends on where the app runs — `faq_items` fills
+    # it in from `_where_data_goes`, so a hosted copy never says "nowhere".
+    (_WHERE_DATA_GOES, ""),
     (
         "My uploaded data vanished after a refresh.",
         "Local and desktop runs normally recover uploaded datasets, settings and "
@@ -1978,9 +2041,53 @@ _DRIFT_FAQ_ITEMS = [
 ]
 
 
+def _where_data_goes() -> str:
+    """ "Where does my data go?" for where this app is running (#374 F22).
+
+    Local means the server listens on loopback only — its own configuration,
+    which ENG-56 made the test for the recovery copy too — as ``scanpath-studio``
+    and the desktop app do. Anything else (the online demo, a bare
+    ``streamlit run``) processes an upload on a server other machines reach.
+    """
+    from scanpath_studio.persistence import (
+        persistence_enabled,
+        server_bound_to_loopback,
+    )
+
+    if not server_bound_to_loopback():
+        kept = (
+            "a recovery copy is kept there"  # opted in: SCANPATH_STUDIO_PERSIST=1
+            if persistence_enabled()
+            else "not kept"
+        )
+        return (
+            "To the server this app runs on, not your computer: a file you "
+            f"upload is processed there and {kept}. No accounts, no database, "
+            "no analytics — but don't upload identifiable data to a server you "
+            "don't control. Run it locally (`pip install scanpath-studio`, then "
+            "`scanpath-studio`) to keep it on your computer; a bare `streamlit "
+            "run` also needs `--server.address=127.0.0.1`."
+        )
+    answer = (
+        "Nowhere: it stays on your computer — no accounts, no database, no "
+        "analytics, no upload."
+    )
+    if persistence_enabled():
+        answer += (
+            " This run also keeps a **recovery copy** (datasets, mappings, "
+            "settings, annotations), so a refresh resumes where you left off; "
+            f"**{ICONS['view_data']} Data Management → Saved on this computer** "
+            "says what is stored and where."
+        )
+    return answer
+
+
 def faq_items() -> list:
     """The FAQ entries this build can honestly answer (PRE-21)."""
-    items = list(_FAQ_ITEMS)
+    items = [
+        (question, _where_data_goes() if question == _WHERE_DATA_GOES else answer)
+        for question, answer in _FAQ_ITEMS
+    ]
     if drift_correction_enabled():
         items.extend(_DRIFT_FAQ_ITEMS)
     return items

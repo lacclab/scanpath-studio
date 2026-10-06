@@ -3,10 +3,9 @@
 The Streamlit app and this module share one pipeline (``data`` → ``measures``
 → ``plots``), so a figure produced here goes through the exact same builders as
 the app and is pixel-identical *given the same settings*. The headless defaults
-(``CANONICAL_FIGURE_DEFAULTS``) render the full canonical figure; the interactive
-app instead opens on a more minimal first view (core scanpath only), so the two
-*default* outputs differ in which layers are on — everything else (marker
-opacity, index-label size, monitor framing …) is kept in sync with the app.
+(``CANONICAL_FIGURE_DEFAULTS``) are the app's default *Scanpath* design —
+fixations, saccades and the text — so a bare call draws the figure the app
+opens on.
 Typical use::
 
     import scanpath_studio as sps
@@ -18,7 +17,7 @@ Typical use::
 
 Every keyword accepted by :func:`plots.make_scanpath_figure` /
 :func:`plots.make_scanpath_animation` can be overridden through
-``plot_scanpath`` / ``animate_scanpath`` (e.g. ``show_heatmap=False``);
+``plot_scanpath`` / ``animate_scanpath`` (e.g. ``show_heatmap=True``);
 :func:`figure_options` lists them with their effective defaults. ``docs/agents.md``
 is the task-oriented guide to this module for scripted / agent use.
 """
@@ -59,7 +58,6 @@ from .constants import (  # noqa: E402
     DEFAULT_ORDER_FONT_COLOR,
     EXPERIMENTAL_ENV_VAR,
     FONT_FAMILY,
-    PALETTES,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
@@ -68,6 +66,7 @@ from .constants import (  # noqa: E402
     palette_settings,
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
+from . import export as _export  # noqa: E402
 from .export import annotate_figure  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
@@ -79,6 +78,7 @@ from .multipart import (  # noqa: E402
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     COMPARISON_FIGURE_OPTIONS,
+    FIGURE_OPTION_CHOICES,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _resolve_trial_display_name,
@@ -89,6 +89,9 @@ from .plots import (  # noqa: E402
     make_scanpath_animation,
     make_scanpath_figure,
     make_word_profile_figure,
+    normalize_option_value,
+    normalize_option_values,
+    normalize_palette,
     replay_page,
     split_scanpath_layers,
 )
@@ -132,17 +135,17 @@ def load_authored_scanpath(
 TableLike = pd.DataFrame | str | Path
 TablesLike = TableLike | list["TableLike"]
 
-# The headless "canonical" rendering — every core layer on. (The interactive app
-# instead starts minimal: word boxes / heatmap / fixation-index off by default —
-# see controls._VIZ_WIDGET_DEFAULTS — so the app's *default* first view differs;
-# override any layer via plot_scanpath kwargs.) `heatmap_metric="counts"` is
-# translated to the figure-level `None` in _figure_kwargs, like
-# tabs._build_figure_settings.
+# The headless rendering is the app's default *Scanpath* design (#374, F21):
+# fixations, saccades and the text, with word boxes, the heatmap and fixation
+# numbers off (controls._VIZ_WIDGET_DEFAULTS), so a bare `plot_scanpath` /
+# `render` draws the figure the app opens on. Turn a layer on with its keyword
+# (`show_heatmap=True`). `heatmap_metric="counts"` is translated to the
+# figure-level `None` in _figure_kwargs, like tabs._build_figure_settings.
 #
-# Everything that is NOT a layer toggle tracks the app's own default
-# (controls._VIZ_WIDGET_DEFAULTS → controls._collect_viz_settings →
-# tabs._build_figure_settings), so the same call renders the same picture
-# headless as on screen. `figure_options()` prints the merged result.
+# Every option tracks the app's own default (controls._VIZ_WIDGET_DEFAULTS →
+# controls._collect_viz_settings → tabs._build_figure_settings), so the same
+# call renders the same picture headless as on screen. `figure_options()`
+# prints the merged result.
 _FIGURE_CONTEXT_FIELDS = frozenset(
     {"canvas_width", "canvas_height", "base_font_size", "font_family"}
 )
@@ -227,7 +230,9 @@ _CANONICAL_OPTION_NAMES = {
 CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     _CANONICAL_OPTION_NAMES
 ) | dict(
-    show_heatmap=True,
+    show_words=False,
+    show_order=False,
+    show_heatmap=False,
     heatmap_metric="duration_ms",
     order_font_color=DEFAULT_ORDER_FONT_COLOR,
     saccade_classes=list(SACCADE_CLASS_ORDER),
@@ -1075,8 +1080,32 @@ def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """Return the bundled OneStop demo, normalized and ready to plot: two
     readers, twelve paragraphs each, every one of them with fixations. Under
     the demo's own column names; ``names="canonical"`` for the internal ones
-    (see [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data])."""
-    return load_scanpath_data(*_data.load_sample_data(), names=names)
+    (see [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]).
+
+    The frames carry the demo's recorded screen (OneStop's 2560×1440), so
+    `plot_scanpath` draws them on it without a ``canvas_size``, as
+    ``scanpath-studio render --sample`` does."""
+    from .code_snippet import SOURCE_DEMO, source_canvas
+
+    data = load_scanpath_data(*_data.load_sample_data(), names=names)
+    screen = source_canvas(SOURCE_DEMO)
+    for frame in data:
+        frame.attrs[RECORDED_SCREEN_ATTR] = screen
+    return data
+
+
+#: The `DataFrame.attrs` key a frame carries its dataset's recorded screen in,
+#: ``(width, height)`` px — read when no ``canvas_size`` is passed.
+RECORDED_SCREEN_ATTR = "scanpath_studio.recorded_screen"
+
+
+def _recorded_screen(*frames) -> tuple[int, int] | None:
+    """The recorded screen one of ``frames`` carries (`load_sample_data`)."""
+    for frame in frames:
+        screen = getattr(frame, "attrs", {}).get(RECORDED_SCREEN_ATTR)
+        if screen:
+            return int(screen[0]), int(screen[1])
+    return None
 
 
 def load_raw_gaze(
@@ -1861,14 +1890,16 @@ def _expand_palette(overrides: dict) -> dict:
     The palette itself isn't a figure kwarg, so it's consumed here rather than
     forwarded. Raises on an unknown name — a silent fallback to the default
     palette would quietly produce the wrong figure for a print run.
+
+    Every enumerated option is read here too (`plots.normalize_option_values`):
+    ``heatmap_norm="log"`` is ``"Log"``, and a value that is none of the
+    choices raises rather than drawing the default.
     """
+    overrides = normalize_option_values(overrides)
     name = overrides.get("palette")
     if name is None:
         return overrides
-    if name not in PALETTES:
-        raise ValueError(
-            f"Unknown palette {name!r}; choose one of {', '.join(PALETTES)}."
-        )
+    name = normalize_palette(name)  # "print", "high-contrast", any case
     expanded = dict(overrides)
     expanded.pop("palette")
     # `word_label_color` is `text_color` on the figure builders.
@@ -2037,8 +2068,15 @@ def _check_column_options(
         )
 
 
-def figure_options(kind: str = "static") -> dict:
+def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
     """Every figure keyword a builder accepts → the default it renders with.
+
+    With ``choices=True`` each name maps to ``{"default": …, "choices": …}``,
+    where ``choices`` is the tuple of values an enumerated option takes
+    (``heatmap_norm``: ``("Linear", "Log")``) and ``None`` for a free one. An
+    enumerated option takes any spelling of a choice — case, spaces, ``-`` and
+    ``_`` are ignored, so the CLI's ``"log"`` and ``"mark-border"`` work — and
+    raises ``ValueError`` listing them for anything else.
 
     ``kind="static"`` covers [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
     ``kind="animation"`` [`animate_scanpath`][scanpath_studio.api.animate_scanpath]
@@ -2078,6 +2116,11 @@ def figure_options(kind: str = "static") -> dict:
             options[name] = deepcopy(defaults[name])
         else:  # pragma: no cover - every option is a FigureSettings field
             options[name] = None
+    if choices:
+        return {
+            name: {"default": default, "choices": FIGURE_OPTION_CHOICES.get(name)}
+            for name, default in options.items()
+        }
     return options
 
 
@@ -2160,7 +2203,7 @@ def plot_scanpath(
     column_names: dict | None = None,
     **figure_overrides,
 ) -> go.Figure:
-    """Build the canonical scanpath figure for one trial.
+    """Build one trial's scanpath figure (by default the app's Scanpath design).
 
     ``words`` / ``fixations`` are normalized frames from
     [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]. ``participant`` /
@@ -2191,11 +2234,13 @@ def plot_scanpath(
     pattern, since the caller already knows which trial this is.
 
     Remaining keywords override the app's defaults and are forwarded to
-    `plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
+    `plots.make_scanpath_figure` (e.g. ``show_heatmap=True``,
     ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword raises
     a ``TypeError`` naming the closest valid options, and
     [`figure_options`][scanpath_studio.api.figure_options] lists them all with their
-    defaults. A ``color_by`` / ``highlight_column`` naming a column the trial's table
+    defaults (``choices=True`` adds the values each enumerated option takes; a
+    value is matched ignoring case, spaces, ``-`` and ``_``, and any other value
+    raises a ``ValueError``). A ``color_by`` / ``highlight_column`` naming a column the trial's table
     doesn't have raises a ``ValueError`` naming the closest ones, rather than drawing
     without it.
 
@@ -2255,6 +2300,8 @@ def plot_scanpath(
         canvas_size = screen_canvas_size(trial_words)
         if canvas_size is None:
             canvas_size = screen_canvas_size(trial_fixations)
+        if canvas_size is None:
+            canvas_size = _recorded_screen(words, fixations)
         if canvas_size is None:
             # VIZ-45: a trial with no fixations is sized from its samples, as the
             # app sizes a raw-gaze-only dataset's canvas.
@@ -2903,6 +2950,8 @@ def _compare_setup(
         return setup
     provenance = Provenance.MEASURED
     if canvas_size is None:
+        canvas_size = _recorded_screen(words, fixations)
+    if canvas_size is None:
         provenance = Provenance.ESTIMATED
         canvas_size = screen_canvas_size(words) or screen_canvas_size(fixations)
         if canvas_size is None:
@@ -3230,7 +3279,7 @@ def compare_scanpaths(
         base_font_size=int(base_font_size),
         font_family=font_family,
         layout=resolved_layout,
-        compare_stimulus=str(compare_stimulus),
+        compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
         style_a=style_a,
         style_b=style_b,
@@ -3272,17 +3321,41 @@ def save_figure(
     fig: go.Figure,
     path: str | Path,
     *,
-    scale: int = 2,
+    scale: float = 2,
     width: int | None = None,
     height: int | None = None,
+    width_mm: float | None = None,
+    width_in: float | None = None,
+    dpi: int | None = None,
 ) -> Path:
     """Save a figure by extension: ``.html`` (interactive, browser-free) or
     ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs a Chrome/Chromium;
     run ``plotly_get_chrome -y`` once if missing). ``width`` / ``height`` set the
     raster output size in px (overriding the figure's intrinsic layout size);
-    both ignored for ``.html``. Returns the written path."""
+    both ignored for ``.html``. Returns the written path.
+
+    ``width_mm`` or ``width_in`` with ``dpi`` (default 300) sizes a PNG for
+    print, as the app's Export → *Current figure* does: 180 mm at 600 dpi is
+    a 4,252 px wide PNG, its height following the figure's aspect, with the
+    dpi written into the file. They replace ``scale``."""
     path = Path(path)
     suffix = path.suffix.lower()
+    if width_mm is not None or width_in is not None:
+        if width_mm is not None and width_in is not None:
+            raise ValueError("Pass width_mm or width_in, not both.")
+        if suffix != ".png":
+            raise ValueError(
+                "width_mm / width_in / dpi size a PNG; save as .png, or set "
+                "width / height / scale for other formats."
+            )
+        dpi = int(dpi or _export.DEFAULT_PRINT_DPI)
+        unit, value = ("mm", width_mm) if width_mm is not None else ("in", width_in)
+        base = int(width or fig.layout.width or 700)
+        scale = _export.print_scale(base, float(value), unit, dpi)
+    elif dpi is not None:
+        raise ValueError(
+            "dpi is the resolution of a print width: pass width_mm or width_in too."
+        )
     if suffix == ".html":
         # BUG-93: an animation replays on the wall-clock player, which also
         # autoplays it at the configured speed when asked (VIZ-10). Plotly's own
@@ -3309,6 +3382,8 @@ def save_figure(
     if suffix in (".png", ".svg", ".pdf"):
         try:
             fig.write_image(str(path), scale=scale, width=width, height=height)
+            if dpi is not None:
+                _export.set_png_dpi(path, dpi)
         except OSError:
             raise  # filesystem problem — the original error says it best
         except Exception as exc:  # Kaleido raises various types
@@ -3405,7 +3480,7 @@ def figure_code(
     it returns the snippet that rebuilds that figure, rather than the figure::
 
         print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
-                              show_heatmap=False, flavor="cli"))
+                              show_heatmap=True, flavor="cli"))
 
     ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``, ``"files"``,
     ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``, ``"author"``, or

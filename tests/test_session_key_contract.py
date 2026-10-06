@@ -307,6 +307,8 @@ def test_deep_link_seeds_frozen_state_keys():
         # CMP-24 — B's flag modes, the same closed vocabulary.
         validated[f"cmp_b_fixclass_{category}_mode"] = "Discard"
     validated["cmp_b_saccade_classes"] = "forward,regression"
+    # #374 F28: the print width's unit.
+    validated["export_width_unit"] = "in"
     # EXP-19: a per-scanpath line style is the selectbox's own label.
     validated.update(
         {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}
@@ -515,6 +517,8 @@ def _restore_config_app():
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
+        # #374 F28 — Export → Current figure's print size.
+        "export": {"width": 180.0, "unit": "mm", "dpi": 600},
         "canvas_px": {"width": 1000, "height": 800},
         "axes": {
             "x_field": numeric[0],

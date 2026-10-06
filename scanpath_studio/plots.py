@@ -41,6 +41,7 @@ from .constants import (
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
+    FIXATION_SYMBOLS,
     FONT_FAMILY,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
@@ -50,6 +51,8 @@ from .constants import (
     SACCADE_CLASS_LABELS,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
+    SACCADE_COLOR_MODES,
+    SACCADE_DASH_OPTIONS,
     SACCADE_DIRECTION_CLASSES,
     SACCADE_DIRECTION_FOLD,
     SACCADE_DIRECTION_LABELS,
@@ -260,6 +263,119 @@ class FigureSettings:
             if field.default is not MISSING:
                 defaults[name] = field.default
         return defaults
+
+
+#: The figure options that take one of a fixed set of values → those values,
+#: spelt as the builders compare them. `normalize_option_values` reads any
+#: spelling of one (case, spaces, ``-`` / ``_`` and ``/`` ignored, so the CLI's
+#: ``word-boxes`` and ``mark-border`` work) and refuses anything else, so a
+#: script never gets the default drawn in place of a value it misspelt.
+FIGURE_OPTION_CHOICES: dict[str, tuple[str, ...]] = {
+    "heatmap_style": ("Word boxes", "Interpolated"),
+    "heatmap_norm": ("Linear", "Log"),
+    "critical_span_style": ("Mark text", "Mark border", "None"),
+    "saccade_color_mode": tuple(SACCADE_COLOR_MODES),
+    "saccade_render_mode": ("Straight", "Arc"),
+    "saccade_style": tuple(SACCADE_DASH_OPTIONS.values()),
+    "marker_size_scale": tuple(MARKER_SIZE_SCALES),
+    "fixation_symbol": tuple(FIXATION_SYMBOLS),
+    "fixation_colorbar_orientation": ("Vertical", "Horizontal"),
+    "heatmap_colorbar_orientation": ("Vertical", "Horizontal"),
+    "compare_stimulus": ("both", "a", "b"),
+}
+
+
+def _choice_key(value: object) -> str:
+    return "".join(ch for ch in str(value).casefold() if ch.isalnum())
+
+
+#: Other spellings a choice is known by: the CLI's flag names and the app's
+#: labels where they differ from the value (``Dashed`` is ``dash``).
+_CHOICE_ALIASES: dict[str, dict[str, str]] = {
+    "saccade_color_mode": {
+        "type": "By type",
+        "direction": "Forward / regression",
+        "bydirection": "Forward / regression",
+    },
+    "saccade_render_mode": {"arcs": "Arc"},
+    "saccade_style": {
+        _choice_key(label): value for label, value in SACCADE_DASH_OPTIONS.items()
+    },
+}
+
+
+def normalize_option_value(name: str, value: object) -> object:
+    """``value`` for the enumerated figure option ``name``, spelt as the
+    builders compare it; any other option's value is returned as it is.
+
+    Raises ``ValueError`` listing the choices for a value that is none of
+    them. ``critical_span_style=None`` is the app's "None" (no marking)."""
+    choices = FIGURE_OPTION_CHOICES.get(name)
+    if choices is None:
+        return value
+    if value is None and "None" in choices:
+        return "None"
+    key = _choice_key(value)
+    for choice in choices:
+        if _choice_key(choice) == key:
+            return choice
+    alias = _CHOICE_ALIASES.get(name, {}).get(key)
+    if alias is not None:
+        return alias
+    raise ValueError(f"Unknown {name} {value!r}; choose one of {', '.join(choices)}.")
+
+
+#: The palettes' short names (#374): no spaces or brackets, so a shell needs
+#: no quotes — `render --palette print`. The app's own names work too.
+PALETTE_SLUGS = {
+    "default": "Default (colourblind-safe)",
+    "print": "Print / greyscale",
+    "high-contrast": "High contrast",
+}
+_PALETTE_ALIASES = {
+    "colourblindsafe": "Default (colourblind-safe)",
+    "colorblindsafe": "Default (colourblind-safe)",
+    "greyscale": "Print / greyscale",
+    "grayscale": "Print / greyscale",
+}
+
+
+def normalize_palette(value: object) -> str:
+    """The palette ``value`` names — its app name, short name (``print``) or
+    any spelling of either — else ``ValueError`` listing them."""
+    from .constants import PALETTES
+
+    key = _choice_key(value)
+    for name in PALETTES:
+        if _choice_key(name) == key:
+            return name
+    for slug, name in PALETTE_SLUGS.items():
+        if _choice_key(slug) == key:
+            return name
+    if key in _PALETTE_ALIASES:
+        return _PALETTE_ALIASES[key]
+    raise ValueError(
+        f"Unknown palette {value!r}; choose one of {', '.join(PALETTE_SLUGS)} "
+        f"({', '.join(PALETTES)})."
+    )
+
+
+def palette_slug(name: str) -> str:
+    """A palette's short name, for a command line."""
+    return next((slug for slug, full in PALETTE_SLUGS.items() if full == name), name)
+
+
+def normalize_option_values(options: Mapping[str, Any]) -> dict[str, Any]:
+    """``options`` with every enumerated value read by
+    `normalize_option_value` (inside ``style_a`` / ``style_b`` too)."""
+    out = {name: normalize_option_value(name, value) for name, value in options.items()}
+    for side in ("style_a", "style_b"):
+        style = out.get(side)
+        if isinstance(style, Mapping):
+            out[side] = {
+                key: normalize_option_value(key, value) for key, value in style.items()
+            }
+    return out
 
 
 def _sample_colorscale_colors(

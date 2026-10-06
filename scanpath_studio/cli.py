@@ -41,7 +41,6 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
-    PALETTES,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
@@ -54,6 +53,58 @@ from .constants import (
     multipleye_enabled,
     palette_settings,
 )
+
+
+def _spell_color(argv: list[str]) -> list[str]:
+    """Every ``--…colour…`` flag as its ``--…color…`` name: the flags are
+    spelt American and the prose is not, so both spellings work."""
+    out = []
+    for token in argv:
+        if isinstance(token, str) and token.startswith("--") and "colour" in token:
+            flag, sep, value = token.partition("=")
+            token = flag.replace("colour", "color") + sep + value
+        out.append(token)
+    return out
+
+
+class _ShortErrorParser(argparse.ArgumentParser):
+    """#374 F21: a parser whose error is three lines at most — the error, a
+    "did you mean" for a misspelt flag, and where every option is listed —
+    instead of the usage block (``render``'s alone runs to ~125 lines). The
+    "did you mean" is our own difflib pass, so it works on 3.11–3.13 too."""
+
+    def parse_known_args(self, args=None, namespace=None):
+        args = sys.argv[1:] if args is None else list(args)
+        return super().parse_known_args(_spell_color(args), namespace)
+
+    def _suggestions(self, message: str) -> str:
+        import difflib
+
+        match = re.match(r"unrecognized arguments: (.*)", message)
+        if not match:
+            return ""
+        known = [
+            flag
+            for action in self._actions
+            for flag in action.option_strings
+            if flag.startswith("--")
+        ]
+        hints = []
+        for token in match.group(1).split():
+            if not token.startswith("--"):
+                continue
+            close = difflib.get_close_matches(token.split("=")[0], known, n=1)
+            if close:
+                hints.append(close[0])
+        return f"Did you mean {', '.join(hints)}?" if hints else ""
+
+    def error(self, message: str):
+        lines = [f"{self.prog}: error: {message}"]
+        hint = self._suggestions(message)
+        if hint:
+            lines.append(hint)
+        lines.append(f"`{self.prog} --help` lists every option.")
+        self.exit(2, "\n".join(lines) + "\n")
 
 
 def _drift_algorithm(value: str) -> str:
@@ -73,6 +124,16 @@ def _drift_algorithm(value: str) -> str:
             f"unknown algorithm {value!r}; choose one of {', '.join(ALGORITHMS)}."
         )
     return name
+
+
+def _palette_name(value: str) -> str:
+    """``--palette``: a short name (``print``) or the app's (#374)."""
+    from .plots import normalize_palette
+
+    try:
+        return normalize_palette(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def _colorscale_name(value: str) -> str:
@@ -394,7 +455,7 @@ def launch_app(extra_args: list[str]) -> None:
 def _render_parser() -> argparse.ArgumentParser:
     from .alignment import ALGORITHMS
 
-    parser = argparse.ArgumentParser(
+    parser = _ShortErrorParser(
         prog="scanpath-studio render",
         description=(
             "Render one trial's scanpath to a file without launching the app. "
@@ -611,7 +672,8 @@ def _render_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--list-trials",
         action="store_true",
-        help="Print the available (participant, trial) combos and exit.",
+        help="Print every trial (participant, trial and text id) and exit; "
+        "pass the trial id to -t.",
     )
     parser.add_argument(
         "--list-parts",
@@ -644,31 +706,56 @@ def _render_parser() -> argparse.ArgumentParser:
     )
 
     viz = parser.add_argument_group(
-        "visualization (renders the full canonical figure; use --no-* to hide layers)"
+        "visualization (draws the app's Scanpath design: fixations, saccades "
+        "and the text; add --word-boxes, --heatmap or --fixation-index, or "
+        "hide a layer with its --no-* flag)"
+    )
+    # #374 F21: every layer switch defaults to None — "not given" — so only a
+    # flag on the line overrides the API's default (the app's Scanpath design).
+    viz.add_argument(
+        "--word-boxes",
+        dest="show_words",
+        action="store_true",
+        default=None,
+        help="Draw the word boxes.",
     )
     viz.add_argument(
+        "--no-word-boxes",
         "--no-words",
         dest="show_words",
         action="store_false",
-        help="Hide word bounding boxes.",
+        default=None,
+        help="Hide the word boxes (the default).",
     )
     viz.add_argument(
+        "--no-text",
         "--no-labels",
         dest="show_word_labels",
         action="store_false",
+        default=None,
         help="Hide the reading text.",
     )
     viz.add_argument(
         "--no-fixations",
         dest="show_fixations",
         action="store_false",
+        default=None,
         help="Hide fixation markers.",
     )
     viz.add_argument(
+        "--fixation-index",
+        dest="show_order",
+        action="store_true",
+        default=None,
+        help="Number the fixations in reading order.",
+    )
+    viz.add_argument(
+        "--no-fixation-index",
         "--no-order",
         dest="show_order",
         action="store_false",
-        help="Hide fixation index labels.",
+        default=None,
+        help="Hide the fixation numbers (the default).",
     )
     viz.add_argument(
         "--word-hover-fields",
@@ -686,18 +773,28 @@ def _render_parser() -> argparse.ArgumentParser:
         "--no-saccades",
         dest="show_saccades",
         action="store_false",
+        default=None,
         help="Hide saccade lines.",
+    )
+    viz.add_argument(
+        "--heatmap",
+        dest="show_heatmap",
+        action="store_true",
+        default=None,
+        help="Draw the heatmap.",
     )
     viz.add_argument(
         "--no-heatmap",
         dest="show_heatmap",
         action="store_false",
-        help="Hide the heatmap overlay.",
+        default=None,
+        help="Hide the heatmap (the default).",
     )
     viz.add_argument(
         "--saccade-arrows",
         dest="show_saccade_arrows",
         action="store_true",
+        default=None,
         help="Draw saccade direction arrowheads.",
     )
     viz.add_argument(
@@ -866,10 +963,12 @@ def _render_parser() -> argparse.ArgumentParser:
         viz.set_defaults(drift_correction=None, drift_connectors=False)
     viz.add_argument(
         "--palette",
-        choices=list(PALETTES),
-        help="Colour palette for the marks: Default (colourblind-safe) "
-        "(Okabe–Ito), Print / greyscale (hue-free, survives a B&W print), or "
-        "High contrast. Individual --*-color flags override it.",
+        type=_palette_name,
+        metavar="{default,print,high-contrast}",
+        help="Colour palette for the marks (the app's Palette): default "
+        "(colourblind-safe, Okabe–Ito), print (greyscale, survives a B&W print) "
+        "or high-contrast. The app's own names work too. Individual "
+        "--*-color flags override it.",
     )
     viz.add_argument(
         "--color-by",
@@ -1295,6 +1394,26 @@ def _render_parser() -> argparse.ArgumentParser:
         default=2.0,
         metavar="X",
         help="Raster pixel-density multiplier (PNG/SVG/PDF; default: 2.0).",
+    )
+    # #374 F28 — the app's Export → Current figure Width + DPI.
+    print_width = viz.add_mutually_exclusive_group()
+    print_width.add_argument(
+        "--width-mm",
+        type=float,
+        metavar="MM",
+        help="Print width of a PNG in mm, drawn at --dpi (replaces --scale).",
+    )
+    print_width.add_argument(
+        "--width-in",
+        type=float,
+        metavar="IN",
+        help="Print width of a PNG in inches, drawn at --dpi.",
+    )
+    viz.add_argument(
+        "--dpi",
+        type=int,
+        metavar="N",
+        help="Resolution of --width-mm / --width-in (default: 300).",
     )
     viz.add_argument(
         "--font-size",
@@ -2116,13 +2235,11 @@ def _print_reproduction_code(
     # line and only a deliberate `--width` / `--scale` shows up.
     save_kwargs = {
         name: value
-        for name, value in (
-            ("scale", args.scale),
-            ("width", args.width),
-            ("height", args.height),
-        )
+        for name, value in _save_kwargs(args).items()
         if value is not None and not (name == "scale" and value == 2.0)
     }
+    if "width_mm" in save_kwargs or "width_in" in save_kwargs:
+        save_kwargs.pop("scale", None)  # the print width replaces it
     caveats = []
     if args.all_screens:
         caveats.append(
@@ -2312,12 +2429,31 @@ def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
                 setattr(args, f"{bar}_colorbar_{setting}", shared)
 
 
+def _save_kwargs(args) -> dict:
+    """`api.save_figure`'s size keywords from the render flags; the print
+    width only when one was given (#374, F28)."""
+    kwargs = {"scale": args.scale, "width": args.width, "height": args.height}
+    if args.width_mm is not None:
+        kwargs["width_mm"] = args.width_mm
+    if args.width_in is not None:
+        kwargs["width_in"] = args.width_in
+    if args.dpi is not None:
+        kwargs["dpi"] = args.dpi
+    return kwargs
+
+
 def render(argv: list[str]) -> None:
     # Bound, not inlined: DATA-27's --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
     parser = _render_parser()
     args = parser.parse_args(argv)
     _apply_shared_colorbar_flags(args)
+    # #374 F28: a print width sizes a PNG; say so before the data loads.
+    printed = args.width_mm is not None or args.width_in is not None
+    if args.dpi is not None and not printed:
+        parser.error("--dpi is the resolution of --width-mm / --width-in; add one.")
+    if printed and args.output and not str(args.output).lower().endswith(".png"):
+        parser.error("--width-mm / --width-in size a PNG; write to a .png file.")
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [
@@ -2764,6 +2900,26 @@ def render(argv: list[str]) -> None:
                         how="left",
                     )
                     combos = _metadata.project_texts(attached_texts, combos)
+        # #374 F21: the text id too — the id the app shows a trial by.
+        source = fixations if not fixations.empty else words
+        if (
+            "text_id" not in combos.columns
+            and source is not None
+            and {"participant_id", "trial_id", "text_id"} <= set(source.columns)
+        ):
+            combos = combos.merge(
+                source[["participant_id", "trial_id", "text_id"]].drop_duplicates(
+                    ["participant_id", "trial_id"]
+                ),
+                on=["participant_id", "trial_id"],
+                how="left",
+            )
+        print(
+            f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
+            "participant as -p and the trial as -t; the app shows a trial by "
+            "its participant and text.",
+            file=sys.stderr,
+        )
         # DATA-66: the ids under the dataset's own names.
         print(_listed(combos, column_names).to_string(index=False))
         return
@@ -2826,6 +2982,8 @@ def render(argv: list[str]) -> None:
             "show_heatmap",
             "show_saccade_arrows",
         )
+        # Only a flag on the line overrides the API's default (#374, F21).
+        if getattr(args, key) is not None
     }
     # VIZ-45: only when given — `plot_scanpath` turns the layer on for the
     # frame it is handed, and an override is the one thing that says off.
@@ -2955,16 +3113,9 @@ def render(argv: list[str]) -> None:
         )
         # BUG-85 review: an explicit flag wins over the preset, as it does over
         # `plot_scanpath(illustration=True, …)` — the preset used to overwrite
-        # `--color-by`, `--no-labels` and the rest set above. The layer switches
-        # always sit in `overrides`, so they count only when moved off default.
-        stated = {
-            key
-            for key in preset
-            if key in overrides
-            and (
-                not key.startswith("show_") or overrides[key] != parser.get_default(key)
-            )
-        }
+        # `--color-by`, `--no-labels` and the rest set above. A layer switch is
+        # in `overrides` only when its flag was given.
+        stated = {key for key in preset if key in overrides}
         overrides.update({k: v for k, v in preset.items() if k not in stated})
     # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
@@ -3093,9 +3244,8 @@ def render(argv: list[str]) -> None:
                 for key, value in overrides.items()
                 if key in animation_options or key == "palette"
             }
-            # `overrides` always carries the seven layer toggles, so a key the
-            # replay can't take is only worth a warning when it was moved off
-            # the static figure's default — `--no-heatmap`, not the bare run.
+            # A key the replay can't take is only worth a warning when it moves
+            # the static figure off its default — `--heatmap`, not the bare run.
             static_defaults = api.figure_options("static")
             ignored = [
                 key
@@ -3308,13 +3458,7 @@ def render(argv: list[str]) -> None:
                     f"{target.stem}__screen-{position:03d}-{safe_screen}{target.suffix}"
                 )
                 written.append(
-                    api.save_figure(
-                        screen_figure,
-                        screen_path,
-                        scale=args.scale,
-                        width=args.width,
-                        height=args.height,
-                    )
+                    api.save_figure(screen_figure, screen_path, **_save_kwargs(args))
                 )
             print(
                 f"Wrote {len(written)} screen figure(s): "
@@ -3322,9 +3466,7 @@ def render(argv: list[str]) -> None:
                 file=sys.stderr,
             )
             return
-        out = api.save_figure(
-            fig, args.output, scale=args.scale, width=args.width, height=args.height
-        )
+        out = api.save_figure(fig, args.output, **_save_kwargs(args))
         # VIZ-5: also drop a per-layer breakdown next to the output.
         layer_paths = None
         if args.separable_layers:
@@ -3359,7 +3501,7 @@ def render(argv: list[str]) -> None:
 def _analyze_parser() -> argparse.ArgumentParser:
     """The `analyze` parser — its own function so the docs' CLI reference is
     generated from it rather than restated (ENG-79)."""
-    parser = argparse.ArgumentParser(
+    parser = _ShortErrorParser(
         prog="scanpath-studio analyze",
         description="Write fixation, saccade, word, sentence, trial, reader, "
         "character, and cleaning-QA tables without launching the app.",
@@ -3522,7 +3664,7 @@ def analyze(argv: list[str]) -> None:
 
 def _corpus_parser() -> argparse.ArgumentParser:
     """The `corpus` parser (see `_analyze_parser`)."""
-    parser = argparse.ArgumentParser(
+    parser = _ShortErrorParser(
         prog="scanpath-studio corpus",
         description="Render a styled corpus figure from a tidy CSV you already "
         "have (api.plot_corpus_figure).",
@@ -3602,12 +3744,12 @@ def corpus(argv: list[str]) -> None:
 
 def _cache_parser() -> argparse.ArgumentParser:
     """The `cache` parser (see `_analyze_parser`)."""
-    parser = argparse.ArgumentParser(
+    parser = _ShortErrorParser(
         prog="scanpath-studio cache",
         description="Show what a local run has stored on this computer "
         "(uploaded datasets, mappings, view settings, saved designs, "
         "annotations), where it lives, and delete it. The hosted app stores "
-        "nothing.",
+        "nothing. Set SCANPATH_STUDIO_STATE_DIR to keep it somewhere else.",
     )
     parser.add_argument(
         "--path", action="store_true", help="print the cache folder and exit"
@@ -3617,6 +3759,13 @@ def _cache_parser() -> argparse.ArgumentParser:
         "--clear", action="store_true", help="delete the stored session"
     )
     return parser
+
+
+def _count(n: int, noun: str) -> str:
+    """``"1 setting"``, ``"205 settings"``, ``"no settings"`` (#374, F38)."""
+    if not n:
+        return f"no {noun}s"
+    return f"{n:,} {noun}" + ("" if n == 1 else "s")
 
 
 def cache(argv: list[str]) -> None:
@@ -3670,17 +3819,23 @@ def cache(argv: list[str]) -> None:
         )
         print(f"Size:    {_human_size(status['bytes'])}")
         return
-    names = ", ".join(entry["name"] for entry in status["datasets"]) or "none"
-    print(f"Stored:  {len(status['datasets'])} dataset(s): {names}")
+    datasets = [entry["name"] for entry in status["datasets"]]
+    print(
+        f"Stored:  {_count(len(datasets), 'dataset')}: {', '.join(datasets)}"
+        if datasets
+        else "Stored:  no datasets"
+    )
     # rows is None for a cache written before the manifest carried row counts
     # (the app backfills it on its next save) — don't print a false 0.
-    rows = f"{status['rows']:,} rows" if status["rows"] is not None else "rows unknown"
+    rows = (
+        _count(status["rows"], "row") if status["rows"] is not None else "rows unknown"
+    )
     print(
-        f"         {rows} · {status['annotations']} annotated "
-        f"trial(s) · {status['designs']} saved design(s) · "
+        f"         {rows} · {_count(status['annotations'], 'annotated trial')} · "
+        f"{_count(status['designs'], 'saved design')} · "
         # DATA-38 — the attached metadata tables, the panel's own count.
-        f"{status.get('metadata', 0)} metadata table(s) · "
-        f"{status['settings']} setting(s)"
+        f"{_count(status.get('metadata', 0), 'metadata table')} · "
+        f"{_count(status['settings'], 'setting')}"
     )
     # A stored dataset the app cannot restore (a file gone, an entry damaged):
     # the app holds it back, restores the rest, and keeps it in the cache.
@@ -3698,7 +3853,7 @@ def cache(argv: list[str]) -> None:
 
 def _check_parser() -> argparse.ArgumentParser:
     """The `check` parser (see `_analyze_parser`)."""
-    parser = argparse.ArgumentParser(
+    parser = _ShortErrorParser(
         prog="scanpath-studio check",
         description="Run the Data page's Data checks on your tables without "
         "launching the app: fixations lasting 0 ms or less or with an infinite "
@@ -3916,8 +4071,49 @@ def _refuse_unknown_command(word: str) -> None:
     )
 
 
+#: Flags of ours that `launch_app` takes before the Streamlit ones.
+_LAUNCH_FLAGS = ("--no-persist", "--download-dir")
+
+
+def _refuse_misplaced_options(argv: list[str]) -> None:
+    """#374 F21: ``scanpath-studio --sample render …`` (or a ``render`` flag
+    with no command) used to reach Streamlit and die on "No such option:
+    --sample". Say where the options go instead. A Streamlit flag
+    (``--server.port``) or one of ours is left alone."""
+    command = next((word for word in argv if word in _commands()), None)
+    if command is None:
+        flag = argv[0].split("=")[0]
+        if "." in flag or flag in _LAUNCH_FLAGS:
+            return
+        known = {
+            option
+            for action in _render_parser()._actions
+            for option in action.option_strings
+        }
+        if flag not in known:
+            return
+        command = "render"
+    rest = [word for word in argv if word != command]
+    raise SystemExit(
+        "scanpath-studio: put options after the command: "
+        f"scanpath-studio {command} {shlex.join(rest)}"
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = list(argv) if argv is not None else sys.argv[1:]
+    if (
+        argv
+        and argv[0].startswith("-")
+        and argv[0]
+        not in (
+            "-h",
+            "--help",
+            "-V",
+            "--version",
+        )
+    ):
+        _refuse_misplaced_options(argv)
     if not argv:
         launch_app([])
     elif argv[0] == "run":

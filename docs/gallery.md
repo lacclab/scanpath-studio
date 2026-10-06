@@ -24,10 +24,10 @@ pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
 
 ## A reading
 
-The full figure, as `plot_scanpath` draws it by default: each fixation where
-it landed, sized by its duration and numbered in order, the saccades between
-them, and every word tinted by the time spent on it, over the text at its
-recorded position. The orange words are the answer to the trial's question.
+The app's *Scanpath* design, which `plot_scanpath` draws by default: each
+fixation where it landed, sized by its duration, and the saccades between
+them, over the text at its recorded position. The orange words are the answer
+to the trial's question.
 
 ```python exec="true" html="true" source="below" session="gallery"
 fig = sps.plot_scanpath(words, fixations, pid, tid)
@@ -45,6 +45,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    show_heatmap=True,
     heatmap_style="Interpolated",
     show_fixations=False,
     show_saccades=False,
@@ -58,9 +59,7 @@ Each fixation coloured by the line of text it was assigned to: a quick check
 for vertical drift, which shows up as one line's colour creeping onto the next.
 
 ```python exec="true" html="true" source="below" session="gallery"
-fig = sps.plot_scanpath(
-    words, fixations, pid, tid, color_by_line=True, show_heatmap=False
-)
+fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
 print(embed(fig))  # markdown-exec: hide
 ```
 
@@ -77,7 +76,6 @@ fig = sps.plot_scanpath(
     tid,
     saccade_color_mode="By type",
     saccade_type_legend=False,
-    show_heatmap=False,
 )
 print(embed(fig, legend=saccade_class_legend()))  # markdown-exec: hide
 ```
@@ -97,7 +95,6 @@ fig = sps.plot_scanpath(
     fixation_snap_to_word=True,
     saccade_render_mode="Arc",
     fix_index_range=(124, 139),
-    show_heatmap=False,
 )
 print(embed(fig))  # markdown-exec: hide
 ```
@@ -115,7 +112,6 @@ fig = sps.compare_scanpaths(
     (pid, tid),
     ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
     fix_index_range=(1, 50),
-    show_heatmap=False,
     show_legend=True,
 )
 print(embed(fig))  # markdown-exec: hide
@@ -137,7 +133,6 @@ fig = sps.plot_scanpath(
     raw_gaze=raw_gaze,
     hollow_fixations=True,
     show_saccades=False,
-    show_heatmap=False,
 )
 print(embed(fig))  # markdown-exec: hide
 ```

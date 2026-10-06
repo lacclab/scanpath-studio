@@ -95,7 +95,7 @@ print(
     sps.figure_code(
         participant="l7_1090",
         trial="l7_1090_2_1_1_Ele_r0",
-        show_heatmap=False,
+        show_heatmap=True,
         color_by="duration_ms",
     )
 )
@@ -108,7 +108,10 @@ print(
 ## Figure options
 
 Every keyword the figure builders take, with the default it renders with, the
-`render` flag that sets it on the command line, and which builders accept it:
+values it takes when there is a fixed set (any case, and `-` or `_` for a
+space, so the CLI's `"log"` and `"mark-border"` work; anything else raises a
+`ValueError`), the `render` flag that sets it on the command line, and which
+builders accept it:
 `plot` is `plot_scanpath`, `animate` is `animate_scanpath`, `compare` is
 `compare_scanpaths`.
 

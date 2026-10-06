@@ -100,6 +100,7 @@ from .session_keys import (
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
     COMPARE_STYLE_PARAMS,
+    EXPORT_PARAMS,
     FIX_RANGE_PARAM,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
@@ -289,6 +290,16 @@ def _parse_playback_speed(v) -> float:
     raise ValueError(f"not a playback speed the slider offers: {v!r}")
 
 
+#: #374 F28 — Export → Current figure's Width and DPI boxes take these.
+PRINT_WIDTH_BOUNDS = (1.0, 2000.0)
+PRINT_DPI_BOUNDS = (50, 2400)
+
+
+def _parse_print_unit(v) -> str:
+    """``mm`` or ``in``, the Width box's two units."""
+    return _parse_choice(str(v).strip().lower(), ("mm", "in"), "width unit")
+
+
 def _parse_fixclass_mode(v) -> str:
     return _parse_choice(v, tuple(_FIXCLASS_MODES), "fixation-flag mode")
 
@@ -421,6 +432,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     **_cmp_style_params("hollow"),
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    # #374 F28: Export → Current figure's print size (only while a width is set).
+    "export_width_unit": "export_figure_width_unit",
     "preproc_short_policy": "global_preproc_short_policy",
     "color_by": "global_color_by",
     "heatmap_style": "global_heatmap_style",
@@ -546,6 +559,7 @@ _SHARE_COLOR_PARAMS = (
     ),
 )
 _SHARE_INT_PARAMS = {
+    "export_dpi": "export_figure_dpi",
     "order_font_size": "global_order_font_size",
     # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
     # says "look at this replay" should reproduce the same smoothness.
@@ -568,6 +582,7 @@ _SHARE_INT_PARAMS = {
     "cmp_b_fixclass_long_threshold_ms": "cmp1_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
+    "export_width": "export_figure_width",
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
     "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
     "line_spacing": "global_line_spacing",
@@ -674,6 +689,8 @@ _URL_PRESETS = {
     "caption_pattern": ("global_caption_pattern", _strip_markup),
     "illustration_text": ("global_illustration_text", _strip_markup),
     "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
+    # #374 F28 — a closed vocabulary, like the rest.
+    "export_width_unit": ("export_figure_width_unit", _parse_print_unit),
     # Compare's per-scanpath heatmap colour scale: an app colour scale only.
     **{
         param: (key, _parse_colorscale)
@@ -778,6 +795,9 @@ _URL_BOUNDED = {
     "global_monitor_width_mm": (100.0, 3000.0),
     "global_viewing_distance_mm": (100.0, 3000.0),
     "global_display_dpi": (20.0, 1000.0),
+    # #374 F28 — mirrors the Export subtab's number boxes.
+    "export_figure_width": PRINT_WIDTH_BOUNDS,
+    "export_figure_dpi": PRINT_DPI_BOUNDS,
     "global_stimulus_font_pt": (4.0, 144.0),
     **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
     **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
@@ -2445,6 +2465,24 @@ def _restore_plot_config(
         except (TypeError, ValueError):
             skipped.append("playback speed")
 
+    # #374 F28 — Export → Current figure's print size; a blank width is the
+    # screen-size PNG.
+    export = section("export")
+    if "width" in export:
+        if export["width"] in (None, ""):
+            put("export_figure_width", None)
+        else:
+            put_float(
+                export["width"], "export_figure_width", *PRINT_WIDTH_BOUNDS, "width"
+            )
+    if "unit" in export:
+        try:
+            put("export_figure_width_unit", _parse_print_unit(export["unit"]))
+        except (TypeError, ValueError):
+            skipped.append("width unit")
+    if "dpi" in export:
+        put_int(export["dpi"], "export_figure_dpi", *PRINT_DPI_BOUNDS, "DPI")
+
     canvas = section("canvas_px")
     if "width" in canvas:
         put_int(canvas["width"], "global_canvas_width", *_CANVAS_BOUNDS, "canvas width")
@@ -3196,6 +3234,11 @@ def _build_share_query(
         )
         if orphaned or restated:
             params.pop(url_key)
+    # #374 F28 — the print size travels only while a width is set; without
+    # one the PNG is drawn at the screen size, which needs nothing said.
+    if not st.session_state.get(EXPORT_PARAMS["export_width"]):
+        for url_key in EXPORT_PARAMS:
+            params.pop(url_key, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 
@@ -3639,6 +3682,18 @@ def _samples_only(stored: dict) -> bool:
     )
 
 
+def _snippet_save_kwargs() -> dict:
+    """`save_figure`'s size keywords for the PNG the Export subtab writes."""
+    from scanpath_studio.export import png_save_kwargs
+
+    ss = st.session_state
+    return png_save_kwargs(
+        ss.get(EXPORT_PARAMS["export_width"]),
+        ss.get(EXPORT_PARAMS["export_width_unit"]) or "mm",
+        ss.get(EXPORT_PARAMS["export_dpi"]),
+    )
+
+
 def _render_code_snippet_body(data_choice: str) -> None:
     """Render the **reproduce this figure in code** block of the Share subtab.
 
@@ -3674,11 +3729,14 @@ def _render_code_snippet_body(data_choice: str) -> None:
         "snippet stays readable. Tick this for the full explicit form — every "
         "figure option at its current value.",
     )
+    output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(
         _snippet_source(data_choice),
         state,
         explicit=bool(explicit),
-        output=_SNIPPET_OUTPUT.get(state.kind, "scanpath.png"),
+        output=output,
+        # #374 F28: the PNG Export → Current figure writes, at its pixel size.
+        save_kwargs=_snippet_save_kwargs() if output.endswith(".png") else None,
     )
     # Inspectable from AppTest without re-deriving it (same trick as
     # `_share_query_current` above).

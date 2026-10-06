@@ -194,7 +194,8 @@ B's frames directly.
 
 | Goal | Option |
 | --- | --- |
-| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
+| add a layer | `--word-boxes`, `--fixation-index`, `--heatmap` (the default is the app's Scanpath design) |
+| hide a layer | `--no-text`, `--no-fixations`, `--no-saccades` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |
@@ -208,6 +209,7 @@ B's frames directly.
 | style the word boxes | `--word-box-color`, `--word-box-line-opacity`, `--word-box-fill-color`, `--word-box-fill-opacity` (0 draws outlines only / fill only) |
 | draw the raw gaze | `--raw-gaze PATH…` (or `--sample-raw-gaze` with `--sample`), `--raw-gaze-schema JSON`, `--raw-gaze-color`, `--raw-gaze-marker-size`, `--raw-gaze-opacity`; `--no-raw-gaze` loads the table but hides the layer |
 | size the figure | `--width`, `--height`, `--scale` |
+| size a PNG for print | `--width-mm MM` or `--width-in IN`, with `--dpi N` (default 300) |
 | title and caption it | `--title`, `--caption` |
 | print the equivalent Python | `--print-code python` (or `cli` / `both`, plus `--print-code-explicit`) |
 

@@ -246,6 +246,7 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
+    DEFAULT_PRINT_DPI,
     HTML_SELF_CONTAINED_KEY,
     ComparisonSide,
     ExportOptions,
@@ -257,6 +258,7 @@ from scanpath_studio.export import (
     html_plotlyjs,
     pair_export,
     pattern_fields,
+    print_width_px,
     plan_from_counts,
     render_export_options,
     render_pattern,
@@ -271,7 +273,13 @@ from scanpath_studio.export_status import (
     export_signature,
     progress_caption,
 )
-from scanpath_studio.fields import labeled, panel_field
+from scanpath_studio.fields import (
+    LABEL_GAP,
+    PANEL_LABEL_W,
+    labeled,
+    panel_field,
+    row_label,
+)
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
@@ -317,6 +325,9 @@ from scanpath_studio.plots import (
 )
 from scanpath_studio.session_keys import (
     CORPUS_SUBTAB,
+    EXPORT_FIGURE_DPI,
+    EXPORT_FIGURE_WIDTH,
+    EXPORT_FIGURE_WIDTH_UNIT,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
@@ -1232,6 +1243,80 @@ def _image_download_component() -> Any:
     )
 
 
+def _print_size_setting() -> dict:
+    """Export → Current figure's print size (#374, F28): ``width`` (``None``
+    for the screen size), its ``unit`` and ``dpi`` — the settings file's
+    ``export`` section, read by `url_state._restore_plot_config`."""
+    ss = st.session_state
+    width = ss.get(EXPORT_FIGURE_WIDTH)
+    return {
+        "width": float(width) if width else None,
+        "unit": ss.get(EXPORT_FIGURE_WIDTH_UNIT) or "mm",
+        "dpi": int(ss.get(EXPORT_FIGURE_DPI) or DEFAULT_PRINT_DPI),
+    }
+
+
+def _png_scale(figure_width: int) -> float:
+    """The PNG's ``scale``: the print width at its dpi, else the screen size at
+    `_PNG_EXPORT_SCALE`."""
+    size = _print_size_setting()
+    if not size["width"]:
+        return _PNG_EXPORT_SCALE
+    return print_width_px(size["width"], size["unit"], size["dpi"]) / figure_width
+
+
+def _render_print_size(fig_width: int, fig_height: int) -> None:
+    """Width (mm or in) + DPI for the PNG (#374, F28). A blank width writes
+    the figure at three times its screen size, as before."""
+    ss = st.session_state
+    ss.setdefault(EXPORT_FIGURE_WIDTH, None)
+    ss.setdefault(EXPORT_FIGURE_WIDTH_UNIT, "mm")
+    ss.setdefault(EXPORT_FIGURE_DPI, DEFAULT_PRINT_DPI)
+    label_col, field_col = st.columns(
+        [PANEL_LABEL_W, 1.0 - PANEL_LABEL_W], gap=LABEL_GAP, vertical_alignment="center"
+    )
+    width_help = (
+        "The PNG's print width. Leave it blank for three times the size on screen."
+    )
+    row_label(label_col, "Width", width_help)
+    width_col, unit_col = field_col.columns([3, 2], vertical_alignment="center")
+    width_col.number_input(
+        "Width",
+        value=None,
+        min_value=1.0,
+        max_value=2000.0,
+        step=1.0,
+        placeholder="Screen size",
+        key=EXPORT_FIGURE_WIDTH,
+        help=width_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    unit_col.segmented_control(
+        "Width unit",
+        options=["mm", "in"],
+        key=EXPORT_FIGURE_WIDTH_UNIT,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    if not ss.get(EXPORT_FIGURE_WIDTH_UNIT):
+        ss[EXPORT_FIGURE_WIDTH_UNIT] = "mm"  # a deselected segment
+    panel_field(
+        st,
+        "number_input",
+        "DPI",
+        min_value=50,
+        max_value=2400,
+        step=50,
+        key=EXPORT_FIGURE_DPI,
+        disabled=not ss.get(EXPORT_FIGURE_WIDTH),
+        help="Pixels per inch of the print width; written into the PNG.",
+        persist_state="session",
+    )
+    scale = _png_scale(fig_width)
+    st.caption(f"{round(fig_width * scale):,} × {round(fig_height * scale):,} px")
+
+
 def _render_save_plot_button(
     fig,
     *,
@@ -1278,15 +1363,19 @@ def _render_save_plot_button(
     )
 
     if fmt in _BROWSER_IMAGE_FORMATS:
+        fig_width = int(fig.layout.width or canvas_width)
+        fig_height = int(fig.layout.height or canvas_height)
+        if fmt == "PNG":
+            _render_print_size(fig_width, fig_height)
         _image_download_component()(
             key=f"{key_prefix}_save_image",
             data={
                 "plot_id": _true_scale_plot_id(plot_key),
                 "format": fmt.lower(),
                 "filename": f"{file_stem}.{fmt.lower()}",
-                "width": int(fig.layout.width or canvas_width),
-                "height": int(fig.layout.height or canvas_height),
-                "scale": _PNG_EXPORT_SCALE if fmt == "PNG" else 1,
+                "width": fig_width,
+                "height": fig_height,
+                "scale": _png_scale(fig_width) if fmt == "PNG" else 1,
                 "label": f"⬇ Download {fmt}",
             },
             height="content",
@@ -4116,6 +4205,9 @@ def _build_studio_config(
                 st.session_state.get(SINGLE_PLAYBACK_SPEED, 1.0) or 1.0
             ),
         },
+        # #374 F28: Export → Current figure's print size (a blank width is the
+        # screen-size PNG).
+        "export": _print_size_setting(),
         "coloring": {
             "color_by": figure_settings["color_by"],
             "heatmap_metric": viz_settings["heatmap_metric"],
@@ -8141,7 +8233,7 @@ def _render_bulk_export(
         st.download_button(
             "Download zip",
             data=zip_bytes,
-            file_name=f"scanpath_export_{pd.Timestamp.now('UTC'):%Y%m%d_%H%M%S}.zip",
+            file_name=f"scanpath_export_{pd.Timestamp.now():%Y%m%d_%H%M%S}.zip",  # local time
             mime="application/zip",
             type="primary",
         )

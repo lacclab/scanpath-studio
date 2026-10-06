@@ -33,8 +33,10 @@ Open **Export → Current figure** and choose:
 PNG and SVG are saved by your browser from the figure on screen, and HTML
 needs nothing either (it loads Plotly from the internet when opened, or tick
 **Self-contained HTML** for a larger file that opens offline); PDF, GIF
-and MP4 need Chrome, Chromium or Edge. For a
-still figure, the plot's own camera button saves the same PNG.
+and MP4 need Chrome, Chromium or Edge. For print, give the PNG a **Width**
+(mm or in) and a **DPI**: 180 mm at 600 dpi is 4,252 px wide, and
+**Share → Code** writes the same size. Without a width, the plot's own camera
+button saves the same PNG.
 
 ## 3. Export a batch when needed
 

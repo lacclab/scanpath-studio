@@ -3037,8 +3037,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # Keyed so `styles.py` can pin it; the CSS is scoped to this key alone,
         # so only the add-dataset screen gets a sticky bar.
         bar = st.container(key="wiz_sticky_bar")
-        title_col, help_col, cancel_col = bar.columns(
-            [7.2, 2.2, 1.4], vertical_alignment="center"
+        # Help and Cancel sit together at the right, each as wide as its
+        # label: the help pill used to stretch over a column half again as wide
+        # as Cancel's, a long empty pill beside the way out.
+        title_col, actions_col = bar.columns([7.2, 3.6], vertical_alignment="center")
+        help_col = cancel_col = actions_col.container(
+            horizontal=True,
+            horizontal_alignment="right",
+            vertical_alignment="center",
+            gap="small",
         )
         title_col.markdown(
             '<div class="sps-wiz-title">Set up your dataset</div>',
@@ -3054,7 +3061,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # here (🧭 guide · 📖 docs) — a popover, not a dialog, since it is a
         # two-item chooser with no modal weight to it (matches #UX-65's nav
         # Help, minus the "arm-then-bounce" dance that menu entries need).
-        with help_col.popover(f"{ICONS['help']} Help", width="stretch"):
+        # "Setup help", not "Help": the nav's ❓ Help is on screen too, and this
+        # one holds only the setup guide and the loading-data docs.
+        with help_col.popover(f"{ICONS['help']} Setup help", width="content"):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
             # tab and so cannot lose an in-progress upload the way switching
@@ -3092,7 +3101,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # than as the other way out.
             type="primary",
             help="Leave the wizard and go back to the dataset you were on.",
-            width="stretch",
+            width="content",
         ):
             st.session_state[WIZARD_LEAVE_KEY] = _VIEW_DATA
         _render_leave_prompt(bar)

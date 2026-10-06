@@ -141,6 +141,55 @@ class TestADesignRecordsTheFilters:
         assert at.session_state["_quick_view_selection"] == "custom"
 
 
+class TestComingBackToTheDesign:
+    """Settings that return to the design that was left put its highlight back:
+    switching Compare on reads Custom, and switching it off again must not.
+
+    The app draws the Compare switch on every run, so its key is in the
+    baseline from the start; this harness has no switch, so it seeds it."""
+
+    @pytest.fixture()
+    def at(self, at):
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
+        return _run(at)
+
+    def test_compare_on_then_off_restores_a_saved_design(self, at):
+        """The built-ins are covered in test_viz_state_transitions: this harness
+        renders the rail without the app's palette sync, which a built-in needs."""
+        _do(at, "save:mine")
+        _do(at, "apply:mine")
+        _run(at)
+        assert at.session_state["_quick_view_selection"] == "design:mine"
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = True
+        _run(at)
+        assert at.session_state["_quick_view_selection"] == "custom"
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
+        _run(at)
+        assert at.session_state["_quick_view_selection"] == "design:mine"
+
+    def test_a_setting_still_changed_stays_custom(self, at):
+        _do(at, "save:mine")
+        _do(at, "apply:mine")
+        _run(at)
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = True
+        at.session_state["global_fixclass_short_mode"] = "Discard"
+        _run(at)
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
+        _run(at)
+        assert at.session_state["_quick_view_selection"] == "custom"
+
+    def test_picking_custom_forgets_the_design_left(self, at):
+        _do(at, "save:mine")
+        _do(at, "apply:mine")
+        _run(at)
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = True
+        _run(at)
+        _do(at, "apply:custom")
+        at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
+        _run(at)
+        assert at.session_state["_quick_view_selection"] == "custom"
+
+
 class TestTheFixationWindows:
     WINDOW = (2, 4)
 

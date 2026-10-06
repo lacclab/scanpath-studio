@@ -940,8 +940,8 @@ def _dismiss_listener_script(
         else ""
     )
     hide_css = (
-        ".st-key-tour_card, .tour-backdrop { display: none !important; } "
-        + outline_clear
+        ".st-key-tour_card, .tour-backdrop, "
+        f"#{_GROUP_RING_ID} {{ display: none !important; }} " + outline_clear
     )
     btn_selectors = [f".st-key-{k} button" for k in exit_keys]
     return f"""<script>
@@ -973,6 +973,14 @@ def _dismiss_listener_script(
     </script>"""
 
 
+#: Targets that match several elements which read as one control — the nav's
+#: links, one `stTopNavLinkContainer` each. Outlining every match drew a row of
+#: separate brackets, so these get one ring drawn around all of them instead
+#: (`_group_ring_script`), an element of its own the step's CSS styles.
+_GROUP_SELECTORS = frozenset({NAV_SELECTOR})
+_GROUP_RING_ID = "tour-group-ring"
+
+
 def _highlight_css(selector: str, accent: str) -> str:
     """The pulsing outline drawn around a tour/guide target.
 
@@ -980,9 +988,14 @@ def _highlight_css(selector: str, accent: str) -> str:
     highlight wizard steps with exactly the same treatment the welcome tour uses
     — the guide documented its own gap ("the steps are descriptive, not anchored
     to specific controls") while this machinery sat 800 lines above it.
+
+    A `_GROUP_SELECTORS` target outlines the one ring `_group_ring_script`
+    places around its matches, not each match.
     """
     if not selector:
         return ""
+    if selector in _GROUP_SELECTORS:
+        selector = f"#{_GROUP_RING_ID}"
     return f"""
 {selector} {{
     outline: 3px solid {accent};
@@ -995,6 +1008,90 @@ def _highlight_css(selector: str, accent: str) -> str:
     50% {{ box-shadow: 0 0 14px 7px color-mix(in srgb, {accent} 25%, transparent); }}
 }}
 """
+
+
+def _group_ring_script(selector: str) -> str:
+    """Place one ring around every visible match of a `_GROUP_SELECTORS` target.
+
+    The ring is a ``position: fixed`` box in the page, sized to the matches'
+    union (the nav's whole row, ❓ Help included, when they sit in Streamlit's
+    nav strip) and styled by the step's own `_highlight_css`. It is added to the
+    page by a script that runs in the page, not in this iframe, so it keeps
+    following the nav after the iframe is gone — and it removes itself once the
+    tour card has gone, or once the step's CSS no longer outlines it (the next
+    step, or the tour ended), so no ring can outlive its step.
+    """
+    page_js = f"""
+(function () {{
+    const win = window, doc = document;
+    if (win.__tourGroupRing) win.clearInterval(win.__tourGroupRing);
+    const selector = {selector!r};
+    const visible = (el) => {{
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return false;
+        const cs = win.getComputedStyle(el);
+        return cs.visibility !== "hidden" && cs.display !== "none"
+            && cs.opacity !== "0";
+    }};
+    let ticks = 0, styled = false;
+    const stop = () => {{
+        win.clearInterval(win.__tourGroupRing);
+        win.__tourGroupRing = null;
+        doc.getElementById({_GROUP_RING_ID!r})?.remove();
+    }};
+    const place = () => {{
+        ticks += 1;
+        let ring = doc.getElementById({_GROUP_RING_ID!r});
+        if (!ring) {{
+            ring = doc.createElement("div");
+            ring.id = {_GROUP_RING_ID!r};
+            // Above Streamlit's header (the nav lives in it), under popovers.
+            ring.style.cssText = "position:fixed;pointer-events:none;"
+                + "z-index:1000050;";
+            doc.body.appendChild(ring);
+        }}
+        const outlined = win.getComputedStyle(ring).outlineStyle !== "none";
+        styled = styled || outlined;
+        const cardGone = !doc.querySelector(".st-key-tour_card");
+        if ((styled && !outlined) || (ticks > 50 && (cardGone || !outlined))) {{
+            stop();
+            return;
+        }}
+        const matches = [...doc.querySelectorAll(selector)].filter(visible);
+        const strip = matches[0]?.closest(".rc-overflow");
+        const boxes = strip
+            ? [...strip.children].filter(visible)
+            : matches;
+        if (!boxes.length) {{
+            ring.style.display = "none";
+            return;
+        }}
+        const rects = boxes.map((el) => el.getBoundingClientRect());
+        const left = Math.min(...rects.map((r) => r.left));
+        const top = Math.min(...rects.map((r) => r.top));
+        const right = Math.max(...rects.map((r) => r.right));
+        const bottom = Math.max(...rects.map((r) => r.bottom));
+        Object.assign(ring.style, {{
+            display: "block",
+            left: left + "px",
+            top: top + "px",
+            width: right - left + "px",
+            height: bottom - top + "px",
+        }});
+    }};
+    place();
+    win.__tourGroupRing = win.setInterval(place, 200);
+}})();
+"""
+    return f"""<script>
+    (function () {{
+        const doc = window.parent.document;
+        const s = doc.createElement("script");
+        s.textContent = {page_js!r};
+        doc.head.appendChild(s);
+        s.remove();
+    }})();
+    </script>"""
 
 
 #: UX-101, measured live (Streamlit 1.62, 1440×900): a popover's panel is drawn
@@ -1253,6 +1350,8 @@ def render_spotlight_tour() -> None:
         if popover_script:
             embed_html_iframe(popover_script, height=0)
 
+        if step["selector"] in _GROUP_SELECTORS:
+            embed_html_iframe(_group_ring_script(step["selector"]), height=0)
         if step["selector"]:
             # Bring the highlighted section into view. Same-origin iframe
             # trick as _close_dialog_clientside; no-op if the selector is
@@ -1662,12 +1761,7 @@ def render_use_case_tutorial() -> None:
     theme = getattr(getattr(st, "context", None), "theme", None)
     is_dark = getattr(theme, "type", "light") == "dark"
     bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
-    highlight = (
-        f"{selector} {{ outline: 3px solid {accent}; outline-offset: 3px; "
-        "border-radius: .5rem; animation: tour-pulse 1.6s ease-in-out infinite; }}"
-        if selector
-        else ""
-    )
+    highlight = _highlight_css(selector or "", accent)
     st.markdown(
         "<style>"
         + _CARD_CSS
@@ -1678,6 +1772,9 @@ def render_use_case_tutorial() -> None:
         unsafe_allow_html=True,
     )
     with st.container(key="tour_card"):
+        if selector in _GROUP_SELECTORS:
+            # Inside the card, like every tour iframe (see render_spotlight_tour).
+            embed_html_iframe(_group_ring_script(selector), height=0)
         st.markdown(f"## {tutorial.title}")
         st.markdown(f"**{step.title}**")
         st.markdown(step.body)
@@ -2083,6 +2180,19 @@ _WIZARD_GUIDE_STEPS = [
 ]
 
 
+#: While the setup guide is open on a wide screen, the page keeps a gutter the
+#: card's width on the right, so the card sits beside the wizard instead of over
+#: its upload rows and the mappings that open to their right. A narrow screen
+#: has no room for one, and keeps the card floating over the page.
+_WIZARD_GUIDE_GUTTER_CSS = """
+@media (min-width: 1100px) {
+    [data-testid="stMainBlockContainer"] {
+        padding-right: calc(410px + 2.5rem) !important;
+    }
+}
+"""
+
+
 def _wizard_guide_go(step_idx: int) -> None:
     """Move the guide to ``step_idx`` and open the wizard step it describes.
 
@@ -2142,6 +2252,7 @@ def render_spotlight_wizard_guide() -> None:
         "<style>"
         + _CARD_CSS
         + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
+        + _WIZARD_GUIDE_GUTTER_CSS
         + _highlight_css(selector, accent)
         + "</style>",
         unsafe_allow_html=True,
@@ -2153,7 +2264,16 @@ def render_spotlight_wizard_guide() -> None:
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
         st.markdown(f"## {title}")
         st.markdown(body)
-        st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
+        # Counted in the screen's own parts ("2 · Upload data tables" is part 2
+        # of 3), not in cards: the overview card is not a part, and "Step 3 of
+        # 4" under a "2 ·" heading contradicted the "three parts" it opens with.
+        n_parts = n - 1
+        st.progress(
+            (step_idx + 1) / n,
+            text=f"Part {step_idx} of {n_parts}"
+            if step_idx
+            else f"Overview · {n_parts} parts",
+        )
         # UX-110: same placement rule as the welcome tour's own opt-out — only
         # where a user decides they're done with the guide (the first step,
         # bailing out now, or the last, got it, don't greet me again), so the

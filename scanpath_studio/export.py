@@ -176,7 +176,7 @@ class ExportOptions:
     text_metadata_fields: tuple[str, ...] | None = None
     # HTML figures embed the Plotly library (opens offline, ~4.8 MB more per
     # file) instead of loading it from cdn.plot.ly when opened. Off by default:
-    # the app's Export subtab sets it from its *HTML files* choice.
+    # the app's Export subtab sets it from its *Self-contained HTML* choice.
     html_self_contained: bool = False
     # When True, export operates on the whole loaded dataset, ignoring the
     # trial-filter funnel; the caller supplies the unfiltered frames.
@@ -260,7 +260,7 @@ class ExportSummary:
     expand_errors: bool
 
 
-#: Session key of the Export subtab's *HTML files* choice — every HTML file
+#: Session key of the Export subtab's *Self-contained HTML* choice — every HTML file
 #: the subtab writes (the figure, the replay, the bundles) follows it.
 HTML_SELF_CONTAINED_KEY = "export_html_self_contained"
 

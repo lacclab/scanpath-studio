@@ -7352,11 +7352,17 @@ def make_small_multiples_figure(
     n_total = len(readers)
     readers = readers[:max_panels]
     n = len(readers)
+    # Each panel's title (the reader id) sits in the gap above it, so the gap
+    # is sized in pixels from the font rather than as a fixed fraction of the
+    # figure: a fraction shrinks with few panels and the title lands on the
+    # panel above's lowest tick row.
+    title_gap_px = round(base_font_size * 2.2) + 6
+    plot_px = panel_height * n + title_gap_px * (n - 1)
     fig = make_subplots(
         rows=n,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=min(0.06, 1.5 / max(n, 1)),
+        vertical_spacing=title_gap_px / plot_px if n > 1 else 0.0,
         subplot_titles=[str(r) for r in readers],
     )
     cohort_xy = None
@@ -7401,11 +7407,13 @@ def make_small_multiples_figure(
     title = f"{measure_label} per reader (word profile)"
     if n_total > n:
         title += f" — showing {n} of {n_total} readers"
+    margin_top = 50 + title_gap_px
+    margin_bottom = 40
     fig.update_layout(
-        height=panel_height * n + 80,
+        height=plot_px + margin_top + margin_bottom,
         width=canvas_width,
         autosize=False,
-        margin=dict(l=55, r=10, t=50, b=40),
+        margin=dict(l=55, r=10, t=margin_top, b=margin_bottom),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
         title=title,

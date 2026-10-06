@@ -30,7 +30,7 @@ Open the **Export** subtab in the Scanpath view.
 
 HTML, and the current figure's PNG and SVG, always work. An HTML file from the
 app loads the Plotly library from the internet when opened, unless you tick
-**HTML files → Self-contained HTML**: then it carries the library (about 4.8 MB
+**Self-contained HTML**: then it carries the library (about 4.8 MB
 more) and opens offline. One written by the Python API or the CLI always
 embeds it. PDF, GIF, MP4 and the bundle's images
 need Chrome, Chromium or Edge installed ([FAQ](../faq.md#export-fails)); the

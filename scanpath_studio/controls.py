@@ -1093,6 +1093,10 @@ _PRE_ILLUSTRATION_STATE = "_quick_view_pre_illustration"
 _QUICK_VIEW_SELECTION_KEY = "_quick_view_selection"
 _QUICK_VIEW_CUSTOM_STATE = "_quick_view_custom_state"
 _QUICK_VIEW_APPLIED_STATE = "_quick_view_applied_state"
+#: The design a drift to Custom left, and its baseline: ``(selection, state)``.
+#: While the highlight reads Custom, settings that come back to that baseline
+#: (Compare switched on and off again) put the design's highlight back.
+_QUICK_VIEW_DRIFTED_FROM = "_quick_view_drifted_from"
 _CUSTOM_VIEW = "custom"
 
 #: VIZ-39 — the user's own saved designs: ``{name: {global_key: value}}``.
@@ -1157,6 +1161,7 @@ def save_design_preset(name: str) -> str | None:
     presets[clean] = _capture_quick_view_state()
     st.session_state[DESIGN_PRESETS_KEY] = presets
     st.session_state[_QUICK_VIEW_SELECTION_KEY] = _design_selection(clean)
+    st.session_state.pop(_QUICK_VIEW_DRIFTED_FROM, None)
     # Pop rather than snapshot, exactly as `_apply_view_preset` does. Saving runs
     # inside the dialog's fragment frame, where popovers that are open have their
     # `*__num` slider twins in session_state; those keys are collected the moment
@@ -1428,6 +1433,7 @@ def _apply_view_preset(name: str) -> None:
         raise ValueError(f"Unknown design preset: {name}")
 
     ss = st.session_state
+    ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
@@ -1884,6 +1890,44 @@ def _design_drifted(applied: dict, current: dict) -> bool:
     return False
 
 
+def _drift_to_custom(selected: str, applied: dict) -> str:
+    """Drop the highlight to Custom, remembering the design it left."""
+    ss = st.session_state
+    ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
+    ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+    ss[_QUICK_VIEW_DRIFTED_FROM] = (selected, applied)
+    ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+    return _CUSTOM_VIEW
+
+
+def _returned_to_design() -> str | None:
+    """The design a drift left, once the settings are back on its baseline.
+
+    Switching Compare (a design setting) on reads Custom; switching it off
+    again restores every setting the design had, so the highlight goes back to
+    it rather than staying Custom. Only the design that was left is checked —
+    an explicit pick (`_apply_view_preset`, a save, Reset) forgets it.
+    """
+    ss = st.session_state
+    drifted = ss.get(_QUICK_VIEW_DRIFTED_FROM)
+    if not (isinstance(drifted, tuple) and len(drifted) == 2):
+        return None
+    name, applied = drifted
+    saved = name.removeprefix(_DESIGN_SELECTION_PREFIX)
+    still_exists = name in _VIEW_PRESETS or (
+        name != saved and saved in design_presets()
+    )
+    if not still_exists or not isinstance(applied, dict):
+        ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
+        return None
+    if _design_drifted(applied, _capture_quick_view_state()):
+        return None
+    ss[_QUICK_VIEW_SELECTION_KEY] = name
+    ss[_QUICK_VIEW_APPLIED_STATE] = applied
+    ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
+    return name
+
+
 def _sync_quick_view_state() -> str:
     """Keep the design-preset highlight in step with manual plot-control edits.
 
@@ -1902,10 +1946,7 @@ def _sync_quick_view_state() -> str:
             ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
             return str(selected)
         if _design_drifted(applied, _capture_quick_view_state()):
-            ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
-            ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
-            ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
-            return _CUSTOM_VIEW
+            return _drift_to_custom(str(selected), applied)
         return str(selected)
     if selected not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
         selected = next(
@@ -1925,6 +1966,9 @@ def _sync_quick_view_state() -> str:
             ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
 
     if selected == _CUSTOM_VIEW:
+        returned = _returned_to_design()
+        if returned is not None:
+            return returned
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
         return _CUSTOM_VIEW
 
@@ -1933,10 +1977,7 @@ def _sync_quick_view_state() -> str:
         ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
         return str(selected)
     if _design_drifted(applied, _capture_quick_view_state()):
-        ss[_QUICK_VIEW_SELECTION_KEY] = _CUSTOM_VIEW
-        ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
-        ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
-        return _CUSTOM_VIEW
+        return _drift_to_custom(str(selected), applied)
     return str(selected)
 
 
@@ -7632,6 +7673,7 @@ def reset_viz_settings() -> None:
         _QUICK_VIEW_SELECTION_KEY,
         _QUICK_VIEW_CUSTOM_STATE,
         _QUICK_VIEW_APPLIED_STATE,
+        _QUICK_VIEW_DRIFTED_FROM,
     }
     # VIZ-39: `DESIGN_PRESETS_KEY` is deliberately NOT in that set. Reset puts
     # the *view* back to defaults; the user's saved designs are a library, not

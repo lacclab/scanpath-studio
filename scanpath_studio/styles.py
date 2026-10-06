@@ -156,6 +156,11 @@ def get_app_css() -> str:
         overflow-x: auto;
         gap: 0 !important;
     }
+    /* The page title sits straight above the table (UX-177): give the header
+       row a little air so the title does not read as part of it. */
+    .st-key-dataset_table {
+        margin-top: 0.75rem;
+    }
     .st-key-dataset_table_grid > div { margin-bottom: 0 !important; }
     .st-key-dataset_table_grid [class*="st-key-dsrow_"] {
         min-width: max-content;
@@ -691,15 +696,28 @@ def get_app_css() -> str:
        chip table and the rail reads as a tidy inspector panel. */
     /* UX-190 / UX-195 — the chips as a table, in place of the wrapping chip
        strip (UX-11): one column per field and one row per reading — Compare's
-       A above B, with a value they share once across both rows (quieter, so
-       what differs stands out). A value never wraps;
-       a header label does, but only once the table would otherwise be
-       wider than its column, and past that the table scrolls sideways rather
-       than push the plot down. The selectors are long on purpose — they must
+       A above B, with a value they share written in both rows, quieter, so
+       what differs stands out. A header label, and a text value at its
+       spaces, wrap only once the table would otherwise be wider than its
+       column; past that the table scrolls sideways (with a scrollbar that
+       stays drawn) rather than push the plot down. The selectors are long on purpose — they must
        beat the table styles Streamlit's markdown gives every table. */
     .sps-chip-table-wrap {
         overflow-x: auto;
         margin: 0.1rem 0 0.5rem;
+    }
+    /* macOS hides an overlay scrollbar until you scroll, so a table wider than
+       its column read as clipped columns, not as one to scroll. Styling the
+       scrollbar keeps it drawn whenever the table overflows. */
+    .sps-chip-table-wrap::-webkit-scrollbar {
+        height: 6px;
+    }
+    .sps-chip-table-wrap::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, currentColor 30%, transparent);
+        border-radius: 3px;
+    }
+    .sps-chip-table-wrap::-webkit-scrollbar-track {
+        background: transparent;
     }
     .sps-chip-table-wrap table.sps-chip-table {
         width: auto;
@@ -730,13 +748,20 @@ def get_app_css() -> str:
         line-height: 1.25;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
+    /* A long text value (Compare's "l37_1129 · 2_2_1_Adv" trial ids) may wrap
+       at its spaces, but only when the table would otherwise overflow its
+       column: an auto-width table wraps no more than it has to. Numbers and
+       tinted pills still never wrap. */
+    .sps-chip-table-wrap table.sps-chip-table tbody td:not(.sps-ct-num) {
+        white-space: normal;
+    }
     .sps-ct-tint {
+        white-space: nowrap;
         display: inline-block;
         padding: 0 0.45rem;
         border-radius: 999px;
     }
-    .sps-chip-table-wrap table.sps-chip-table tbody tr:last-child > *,
-    .sps-chip-table-wrap table.sps-chip-table td.sps-ct-same {
+    .sps-chip-table-wrap table.sps-chip-table tbody tr:last-child > * {
         border-bottom: none;
     }
     .sps-chip-table-wrap table.sps-chip-table th.sps-ct-side {

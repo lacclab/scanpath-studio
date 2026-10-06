@@ -81,7 +81,7 @@ connection, the desktop app included. A figure you download as **HTML** is
 different: a saved file has no app server behind it. By default it loads the
 library from **cdn.plot.ly** when you open it, which needs an internet
 connection and tells that host the file was opened (no data travels with the
-request). Tick **Export → HTML files → Self-contained HTML** and the figure,
+request). Tick **Export → Self-contained HTML** and the figure,
 replay and bundle HTML embed the library instead (about 4.8 MB more per file),
 open offline and make no request. HTML written headlessly (`save_figure`,
 `scanpath-studio render -o figure.html`) always embeds it.

@@ -1259,7 +1259,8 @@ def _render_save_plot_button(
 
 
 def _html_self_contained() -> bool:
-    """The Export subtab's *HTML files* choice (`_render_html_files_choice`)."""
+    """The Export subtab's *Self-contained HTML* choice
+    (`_render_html_files_choice`)."""
     return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
 
 
@@ -1272,15 +1273,14 @@ def _render_html_files_choice() -> None:
         st,
         "checkbox",
         "Self-contained HTML (opens offline, larger file)",
-        display="HTML files",
+        display="Self-contained HTML",
         value=False,
         key=HTML_SELF_CONTAINED_KEY,
         persist_state="session",
-        help="On: each HTML file carries the Plotly library, so it opens "
-        "offline and contacts no other host; it is about 4.8 MB larger. Off: "
-        "the file loads the library from cdn.plot.ly when opened, which needs "
-        "an internet connection. Applies to the figure, the replay and the "
-        "bundles' HTML.",
+        help="Tick to make every HTML file you download here open without an "
+        "internet connection: it carries the Plotly library, about 4.8 MB "
+        "more. Unticked, it loads the library from cdn.plot.ly when opened. "
+        "Other formats are unaffected.",
     )
 
 
@@ -1391,10 +1391,10 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
             key="anim_export_html",
             on_click="ignore",
             # ENG-64: a saved file has no app server to load plotly.js from,
-            # so it embeds it or loads it from the CDN — the *HTML files*
+            # so it embeds it or loads it from the CDN — the *Self-contained HTML*
             # choice above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
-            "interactivity. *HTML files* above decides whether it opens "
+            "interactivity. *Self-contained HTML* above decides whether it opens "
             "offline or loads the Plotly library from cdn.plot.ly.",
         )
         return
@@ -5587,8 +5587,9 @@ def _chip_table_html(
     column. Deliberately *not* differences first: the columns would reshuffle
     every time ◀ ▶ steps to a trial that differs elsewhere.
 
-    With two rows, a value both share is written once, in a cell spanning them,
-    and in a quieter weight, so what differs is what stands out. A value one
+    With two rows, a value both share is written in each row in a quieter
+    weight, so what differs is what stands out. (It used to be written once,
+    in a cell spanning both rows, which read as B's cell left blank.) A value one
     side lacks reads ``–``. Each value keeps its chip's tint, as a pill — the
     built-in condition colours and the ones picked in ✏️ (UX-28) — and a column
     whose values are all numbers is right-aligned so they line up.
@@ -5598,7 +5599,7 @@ def _chip_table_html(
     by_side = [{e.col: e for e in entries} for _name, _color, entries in sides]
     columns = [col for col in order if any(col in side for side in by_side)]
 
-    def cell(entry: ChipEntry | None, *, extra: str = "", attrs: str = "") -> str:
+    def cell(entry: ChipEntry | None, *, extra: str = "") -> str:
         classes = [extra] if extra else []
         if entry is None:
             classes.append("sps-ct-missing")
@@ -5616,7 +5617,7 @@ def _chip_table_html(
             if not entry.trial_level:
                 body = f"{icon_html('warning')} {body}"
         class_attr = f' class="{" ".join(classes)}"' if classes else ""
-        return f"<td{class_attr}{attrs}>{body}</td>"
+        return f"<td{class_attr}>{body}</td>"
 
     numeric = {
         col: all(_is_number(side[col].value) for side in by_side if col in side)
@@ -5636,23 +5637,19 @@ def _chip_table_html(
         for col in columns
     )
     rows = []
-    for index, ((name, color, _entries), side) in enumerate(zip(sides, by_side)):
+    for (name, color, _entries), side in zip(sides, by_side):
         cells = []
         for col in columns:
             num = "sps-ct-num" if numeric[col] else ""
             if not shared[col]:
                 cells.append(cell(side.get(col), extra=num))
-            elif index == 0:
+            else:
                 # Any side's warning mark says the shared value varies somewhere.
                 entry = side[col]
                 if any(not s[col].trial_level for s in by_side):
                     entry = replace(entry, trial_level=False)
                 cells.append(
-                    cell(
-                        entry,
-                        extra=" ".join(filter(None, (num, "sps-ct-same"))),
-                        attrs=f' rowspan="{len(sides)}"',
-                    )
+                    cell(entry, extra=" ".join(filter(None, (num, "sps-ct-same"))))
                 )
         label = ""
         if labelled:
@@ -7654,7 +7651,7 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
-    # The subtab's *HTML files* choice, in `options` so it is in the cache key.
+    # The subtab's *Self-contained HTML* choice, in `options` so it is in the cache key.
     options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze

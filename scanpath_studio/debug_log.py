@@ -282,7 +282,7 @@ def debug_enabled() -> bool:
 
 #: UX-100 — the toggle's own widget key, mirrored into :data:`DEBUG_STATE_KEY`.
 #: The two used to be the same key, which was fine while the toggle rendered on
-#: every run; it now lives in the ❓ Help → Debug **dialog**, whose body is a fragment
+#: every run; it now lives in the Debug **dialog**, whose body is a fragment
 #: that runs only while the modal is open — and Streamlit drops a widget's key at
 #: the end of any run in which it did not render, so debug mode switched itself
 #: off the moment the modal was dismissed. Splitting them makes the durable flag
@@ -297,7 +297,7 @@ def _mirror_debug_toggle() -> None:
 
 
 def render_debug_toggle(host=None) -> None:
-    """Render the "🐛 Debug mode" toggle into the ❓ Help → Debug dialog.
+    """Render the "🐛 Debug mode" toggle into the ❓ Help → About → Debug dialog.
 
     The single gate (**UX-37**). Flipping it on shows the log panel under it
     in the same dialog run (:func:`_debug_dialog`).
@@ -447,20 +447,20 @@ def render_debug_panel(host=None) -> None:
         )
 
 
-#: UX-179 — the ❓ Help → Debug nav entry's request flag. Same arm-then-serve
-#: shape as the entry's siblings: a nav selection cannot open a dialog itself
-#: (the router reruns), so ``menu._arm_help_action`` sets this and ``app.main``
-#: serves it early, beside FAQ and About.
+#: UX-179 — the Debug drawer's request flag. #374 F31 moved its way in from a
+#: ❓ Help nav entry to a button at the foot of About: one dialog cannot open
+#: another, so the button sets this and reruns, and ``app.main`` serves it
+#: early, beside FAQ and About.
 _DEBUG_DIALOG_KEY = "_debug_dialog_requested"
 
 
 def _arm_debug() -> None:
-    """Request the Debug dialog. Called by the nav entry (``menu.py``)."""
+    """Request the Debug dialog. Called by About's Debug button."""
     st.session_state[_DEBUG_DIALOG_KEY] = True
 
 
 def maybe_show_debug() -> None:
-    """Open the Debug dialog if the ❓ Help → Debug entry armed it."""
+    """Open the Debug dialog if About's Debug button armed it."""
     if st.session_state.pop(_DEBUG_DIALOG_KEY, False):
         _debug_dialog()
 

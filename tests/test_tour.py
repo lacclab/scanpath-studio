@@ -498,6 +498,36 @@ class TestUseCaseTutorials:
         )
         assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
 
+    def test_the_filter_is_named_when_it_is_why_a_tutorial_cannot_start(self):
+        """#374 F31: "need two readings with the same text id" was wrong when
+        the dataset had them and a filter hid them."""
+        import pandas as pd
+
+        from scanpath_studio.tour import (
+            _TUTORIAL_BY_ID,
+            build_tutorial_context,
+            filtered_reason,
+        )
+
+        compare = _TUTORIAL_BY_ID["compare_readings"]
+        both = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["t1", "t2"],
+                "text_id": ["same", "same"],
+            }
+        )
+        words, fixations = pd.DataFrame({"w": [1]}), pd.DataFrame({"f": [1]})
+        narrowed = build_tutorial_context(words, fixations, both.iloc[:1])
+        assert filtered_reason(compare, narrowed) is None  # no snapshot: not filtered
+        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both)
+        assert filtered_reason(compare, narrowed) == (
+            "no two trials in the pool share a text."
+        )
+        # The dataset itself lacks the pair: the filter is not the cause.
+        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both.iloc[:1])
+        assert filtered_reason(compare, narrowed) is None
+
     def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
         """UX-83: starting a tutorial navigates to its first step's view right
         away, instead of leaving the card on the page you were already on and

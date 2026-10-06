@@ -728,7 +728,6 @@ class TestDataInspectionTab:
             "help_tutorials",
             "help_faq",
             "help_about",
-            "help_debug",
         ]
 
 

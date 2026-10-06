@@ -1312,6 +1312,19 @@ with the version above, your operating system, and how you run the app.
 and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 """
     )
+    # #374 F31: the Debug drawer opens from here, not from the ❓ Help menu.
+    # A full rerun closes this dialog; `maybe_show_debug` then opens the drawer.
+    if st.button(
+        "Debug",
+        icon=ICONS["debug"],
+        type="tertiary",
+        key="about_open_debug",
+        help="The debug log and a snapshot of what's loaded, for a bug report.",
+    ):
+        from scanpath_studio.debug_log import _arm_debug
+
+        _arm_debug()
+        st.rerun()
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------
@@ -4743,10 +4756,6 @@ def resolve_data_source(host=None) -> str:
     return choice
 
 
-# Picker-only sentinel: never a dataset, a comparison source or a share token.
-_MORE_DATASETS_PLACEHOLDER = "__more_datasets_coming_soon__"
-
-
 def _on_data_source_pick() -> None:
     """Route the main-view picker's choice through the pre-widget seam (UX-25).
 
@@ -4758,9 +4767,6 @@ def _on_data_source_pick() -> None:
     keep assigning the canonical key without the widget reconciling it away.
     """
     picked = st.session_state.get("data_source_picker")
-    if picked == _MORE_DATASETS_PLACEHOLDER:
-        st.session_state["data_source_picker"] = st.session_state["data_source_choice"]
-        return
     if picked:
         if picked == AUTHOR_CHOICE:
             _remember_authoring_return()
@@ -5014,8 +5020,6 @@ def render_data_source_picker(host=None) -> None:
     registry = public_dataset_registry()
 
     def _entry_label(token: str) -> str:
-        if token == _MORE_DATASETS_PLACEHOLDER:
-            return "More coming soon!"
         # Reads the `registry` snapshot resolved just above rather than calling
         # `public_dataset_registry()` per token: the added corpora can change at
         # runtime, so one run must format its options against one
@@ -5052,7 +5056,7 @@ def render_data_source_picker(host=None) -> None:
         st.session_state["data_source_picker"] = current
     box.selectbox(
         "Select Dataset",
-        [*entries, _MORE_DATASETS_PLACEHOLDER],
+        entries,
         format_func=_entry_label,
         key="data_source_picker",
         on_change=_on_data_source_pick,
@@ -5066,8 +5070,9 @@ def render_data_source_picker(host=None) -> None:
         width="content",
         help=(
             "Which dataset the app is showing. Use + to create a scanpath or "
-            f"import files. Rename or remove datasets on the {ICONS['view_data']} Data Management page. "
-            "More coming soon! is a preview of future datasets."
+            "import files. Rename datasets, or remove the ones you added, on "
+            f"the {ICONS['view_data']} Data Management page. More public "
+            "datasets are planned."
         ),
     )
     # UX-200: named for screen readers; `styles.py` clips the name, so + is
@@ -9066,7 +9071,7 @@ def _run_app() -> None:
         maybe_show_faq()
         maybe_show_about()
         maybe_show_tutorial_library()
-        # UX-179 — ❓ Help → Debug, served early like its siblings.
+        # UX-179 — ❓ Help → About → Debug, served early like its siblings.
         maybe_show_debug()
 
     # `active_view` was already resolved above (including the BUG-31 wizard
@@ -10461,9 +10466,20 @@ def _run_app() -> None:
     #
     # 📚 Documentation left with the buttons: `st.Page` cannot be a URL, and the
     # UX-62 wordmark beside the nav already opens the docs site.
-    stash_tutorial_context(
-        build_tutorial_context(words_filtered, fixations_filtered, combos)
+    tutorial_context = build_tutorial_context(
+        words_filtered, fixations_filtered, combos
     )
+    if len(combos) != len(combos_all):
+        # #374 F31: while a filter narrows the pool, a cheap snapshot of the
+        # whole dataset lets the chooser say the filter is why a tutorial
+        # can't start (from the trial list alone — no frame is regrouped).
+        unfiltered = build_tutorial_context(None, None, combos_all)
+        unfiltered["has_words"] = words_all is not None and not words_all.empty
+        unfiltered["has_fixations"] = (
+            fixations_all is not None and not fixations_all.empty
+        )
+        tutorial_context["unfiltered"] = unfiltered
+    stash_tutorial_context(tutorial_context)
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)

@@ -1515,6 +1515,32 @@ def tutorial_availability(
     return False, f"Unknown availability rule: {rule}."
 
 
+#: #374 F31 — what a rule lacks when the trial filters, not the dataset, are
+#: why a tutorial cannot start.
+_FILTERED_REASONS = {
+    "has_trials": "no trial is left in the pool.",
+    "has_visual_data": "the pool has no words or fixations.",
+    "has_comparable_readings": "no two trials in the pool share a text.",
+    "has_corpus_variation": "the pool holds one trial.",
+}
+
+
+def filtered_reason(
+    tutorial: TutorialDefinition, context: dict[str, object]
+) -> str | None:
+    """Why the **filters** keep ``tutorial`` from starting, or ``None``.
+
+    ``None`` unless the tutorial is unavailable on the filtered pool but would
+    be available on the whole dataset — the context's ``unfiltered`` snapshot,
+    which `app.main` stashes only while a filter narrows the pool."""
+    unfiltered = context.get("unfiltered")
+    if not isinstance(unfiltered, dict) or tutorial_availability(tutorial, context)[0]:
+        return None
+    if not tutorial_availability(tutorial, unfiltered)[0]:
+        return None
+    return _FILTERED_REASONS.get(tutorial.availability)
+
+
 def _tutorial_progress() -> dict[str, int]:
     return st.session_state.setdefault("tutorial_progress", {})
 
@@ -1734,7 +1760,12 @@ def _tutorial_library_dialog() -> None:
             _start_use_case(tutorial.id, restart=True)
             st.rerun(scope="app")
         if not available:
-            card.caption(f"{ICONS['warning']} Unavailable — {reason.lower()}")
+            because = filtered_reason(tutorial, context)
+            card.caption(
+                f"{ICONS['warning']} Unavailable with the current filters — {because}"
+                if because
+                else f"{ICONS['warning']} Unavailable — {reason.lower()}"
+            )
         _render_tutorial_optout(tutorial.id, card)
 
 
@@ -1748,7 +1779,12 @@ def render_use_case_tutorial() -> None:
     context = st.session_state.get("_tutorial_context") or {}
     available, reason = tutorial_availability(tutorial, context)
     if not available:
-        st.warning(f"Tutorial paused: {reason}")
+        because = filtered_reason(tutorial, context)
+        st.warning(
+            f"Tutorial paused: with the current filters, {because}"
+            if because
+            else f"Tutorial paused: {reason}"
+        )
         return
     step_index = min(
         int(_tutorial_progress().get(tutorial.id, 0)), len(steps_of(tutorial)) - 1

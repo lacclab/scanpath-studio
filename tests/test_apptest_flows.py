@@ -957,25 +957,12 @@ class TestAddDatasetMenu:
         assert at.button(key="cancel_add_data")
         assert at.get("file_uploader")
 
-    def test_coming_soon_leaves_the_current_dataset_and_trial_selected(self):
-        from scanpath_studio import app
-
+    def test_the_picker_offers_only_datasets(self):
+        """#374 F31: no "More coming soon!" entry; its help says it instead."""
         at = _boot()
-        trial = next(s for s in at.selectbox if s.label.startswith("Select Trial"))
-        trial.select_index(2).run(timeout=60)
-        before_trial = at.selectbox(key=trial.key).value
-        before_source = at.session_state["data_source_choice"]
         picker = at.selectbox(key="data_source_picker")
-        assert "More coming soon!" in picker.options
-        picker.select(app._MORE_DATASETS_PLACEHOLDER).run(timeout=60)
-        _clean(at)
-        assert at.session_state["data_source_choice"] == before_source
-        assert at.selectbox(key="data_source_picker").value == before_source
-        assert at.selectbox(key=trial.key).value == before_trial
-        assert (
-            app._MORE_DATASETS_PLACEHOLDER
-            not in at.session_state["_data_source_entries"]
-        )
+        assert "More coming soon!" not in picker.options
+        assert len(picker.options) == len(at.session_state["_data_source_entries"])
 
 
 @pytest.mark.timeout(180)

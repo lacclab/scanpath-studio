@@ -197,7 +197,7 @@ B's frames directly.
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
-| use Gaussian duration mass | `--heatmap-style duration-mass --duration-mass-sigma 1.0` |
+| use a smoothed (Gaussian) heatmap | `--heatmap-style interpolated --heatmap-sigma 20` (σ in px; omit it for the automatic σ) |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
 | export editable layers | `--separable-layers` |
 | style the word boxes | `--word-box-color`, `--word-box-line-opacity`, `--word-box-fill-color`, `--word-box-fill-opacity` (0 draws outlines only / fill only) |

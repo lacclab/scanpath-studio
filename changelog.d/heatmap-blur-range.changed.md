@@ -1,0 +1,1 @@
+Heatmap: *Duration mass* is removed (links and settings files naming it open *Interpolated*); Interpolated gets a **Blur** row — Auto (showing the σ it uses) or a fixed σ in px (`heatmap_sigma_px`, `render --heatmap-sigma`); the colour range starts at 0 and is offered for Fixation count too.

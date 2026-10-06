@@ -107,7 +107,9 @@ class FigureSettings:
     show_saccade_arrows: bool = False
     heatmap_style: str = "Word boxes"
     heatmap_norm: str = "Linear"
-    duration_mass_sigma_chars: float = 1.0
+    #: The Interpolated heatmap's Gaussian σ in px; ``None`` picks it from the
+    #: data (`interpolated_sigma_px`).
+    heatmap_sigma_px: float | None = None
     marker_size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
     #: How duration maps onto ``marker_size_range`` — one of
     #: ``constants.MARKER_SIZE_SCALES``. The fixed scales ("sqrt", "linear",
@@ -2614,7 +2616,7 @@ def _render_scanpath_figure(
     show_saccade_arrows = settings.show_saccade_arrows
     heatmap_style = settings.heatmap_style
     heatmap_norm = settings.heatmap_norm
-    duration_mass_sigma_chars = settings.duration_mass_sigma_chars
+    heatmap_sigma_px = settings.heatmap_sigma_px
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
@@ -2853,43 +2855,22 @@ def _render_scanpath_figure(
         y_max = (
             y_max_data if y_max_data is not None else float(fixations[y_field].max())
         )
-        if heatmap_style in {"Interpolated", "Duration mass"}:
-            # Interpolated is fixation-centred. Duration mass first distributes
-            # dwell time onto the discrete character grid, then renders those
-            # character centres as the support surface.
-            sigma_px = None
-            heatmap_points = fixations
-            heatmap_weights = weights
-            heatmap_x_field, heatmap_y_field = x_field, y_field
-            if heatmap_style == "Duration mass" and not words.empty:
-                from .preprocessing import duration_mass_table
-
-                mass = duration_mass_table(
-                    words, fixations, sigma_chars=duration_mass_sigma_chars
-                )
-                if not mass.empty:
-                    heatmap_points = mass
-                    heatmap_weights = mass["duration_mass_ms"]
-                    heatmap_x_field, heatmap_y_field = "center_x", "center_y"
-                    char_width = pd.to_numeric(mass["width"], errors="coerce").median()
-                    if pd.notna(char_width):
-                        sigma_px = max(float(char_width) * 0.35, 1.0)
+        if heatmap_style == "Interpolated":
             _add_interpolated_heatmap(
                 fig,
-                heatmap_points,
-                x_field=heatmap_x_field,
-                y_field=heatmap_y_field,
+                fixations,
+                x_field=x_field,
+                y_field=y_field,
                 x_min=x_min,
                 x_max=x_max,
                 y_min=y_min,
                 y_max=y_max,
-                weights=heatmap_weights,
+                weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
-                sigma_px=sigma_px,
-                title="Duration mass" if heatmap_style == "Duration mass" else None,
+                sigma_px=heatmap_sigma_px,
             )
         elif not words.empty:
             _add_word_level_heatmap(
@@ -3511,7 +3492,8 @@ def _draw_word_value_heatmap(
     if not nonzero_rows:
         return
     vals = [v for _, v in nonzero_rows]
-    z_min_raw = heatmap_range[0] if heatmap_range else float(min(vals))
+    # Auto starts at 0: an empty word is the bottom of the scale.
+    z_min_raw = heatmap_range[0] if heatmap_range else 0.0
     z_max_raw = heatmap_range[1] if heatmap_range else float(max(vals))
     z_min = float(_apply_heatmap_norm(z_min_raw, heatmap_norm))
     z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
@@ -3706,6 +3688,14 @@ def _gaussian_blur_2d(
 _INTERP_GRID = 240  # cells along the wider axis
 _INTERP_SIGMA_FRAC = 0.02  # sigma as a fraction of the larger data span
 _INTERP_MIN_SIGMA_PX = 8.0
+
+
+def interpolated_sigma_px(x_span: float, y_span: float) -> float:
+    """The Interpolated heatmap's automatic Gaussian σ, in px: 2% of the data's
+    larger span (fixations, word boxes and shown raw gaze), at least 8 px."""
+    return max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
+
+
 _INTERP_OPACITY = 0.45
 _INTERP_FLOOR_FRAC = 0.02  # cells below this fraction of the peak render transparent
 _INTERP_MIN_CELLS = 10  # cells along the narrower axis, at least
@@ -3768,9 +3758,7 @@ def _add_interpolated_heatmap(
 
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
-    sigma_px = float(
-        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
-    )
+    sigma_px = float(sigma_px or interpolated_sigma_px(x_span, y_span))
     # An axis with (next to) no extent — coincident fixations, one row or one
     # column of a fixation-only import — is widened around its centre to the
     # blob's own size (±3 sigma), so the edges match the span the cells and the
@@ -6098,7 +6086,8 @@ def _comparison_word_heatmap_data(
     if heatmap_range is not None:
         raw_min, raw_max = map(float, heatmap_range)
     elif all_values:
-        raw_min, raw_max = min(all_values), max(all_values)
+        # Auto starts at 0, as the single-trial word heatmap does.
+        raw_min, raw_max = 0.0, max(all_values)
     else:
         raw_min, raw_max = 0.0, 1.0
     z_min = float(_apply_heatmap_norm(raw_min, heatmap_norm))
@@ -8127,7 +8116,7 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "heatmap_metric",
         "heatmap_style",
         "heatmap_norm",
-        "duration_mass_sigma_chars",
+        "heatmap_sigma_px",
         "heatmap_range",
         "heatmap_colorscale",
         "show_raw_gaze",

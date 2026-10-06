@@ -28,12 +28,14 @@ from .constants import (
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_HEATMAP_SIGMA_PX,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
+    HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
     MARKER_DURATION_BOUNDS,
@@ -756,7 +758,8 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_align_connectors": False,
     "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": False,
-    "global_duration_mass_sigma_chars": 1.0,
+    "global_heatmap_sigma_auto": True,
+    "global_heatmap_sigma_px": DEFAULT_HEATMAP_SIGMA_PX,
     "global_show_raw_gaze": False,
     # UX-86: raw gaze's own style — previously fixed in `plots._add_raw_gaze_layer`
     # (#888888, size 4, opacity 0.6) with no control at all.
@@ -3538,7 +3541,10 @@ _WORD_DWELL_KEYS = ("participant_id", "trial_id", "screen_id", "word_id")
 
 
 def heatmap_value_bounds(
-    fixations: pd.DataFrame | None, words: pd.DataFrame | None
+    fixations: pd.DataFrame | None,
+    words: pd.DataFrame | None,
+    *,
+    counts: bool = False,
 ) -> tuple[float, float] | None:
     """The span of the values a duration-weighted word-box heatmap maps, in ms.
 
@@ -3555,7 +3561,27 @@ def heatmap_value_bounds(
     ``total_fixation_duration_ms``, as the figure's fallback does. ``None``
     when there is nothing to map. One groupby over the pool, cached on its
     fingerprint by :func:`_heatmap_value_bounds_cached`.
+
+    ``counts`` gives the span of fixations per word instead (per reading
+    without a ``word_id``); the words-only fallback has no counts to give.
     """
+    if counts:
+        if fixations is None or fixations.empty:
+            return None
+        keys = [k for k in _WORD_DWELL_KEYS if k in fixations.columns]
+        if "word_id" in keys and fixations["word_id"].notna().any():
+            per_word = (
+                fixations[fixations["word_id"].notna()]
+                .groupby(keys, dropna=False, sort=False)
+                .size()
+            )
+        else:
+            per_word = fixations.groupby(
+                [k for k in keys if k != "word_id"] or [np.zeros(len(fixations))],
+                dropna=False,
+                sort=False,
+            ).size()
+        return (1.0, float(per_word.max())) if len(per_word) else None
     if (
         fixations is not None
         and not fixations.empty
@@ -3591,7 +3617,10 @@ def heatmap_value_bounds(
 
 
 def _heatmap_bounds_for_rail(
-    fixations: pd.DataFrame | None, words: pd.DataFrame | None
+    fixations: pd.DataFrame | None,
+    words: pd.DataFrame | None,
+    *,
+    counts: bool = False,
 ) -> tuple[float, float] | None:
     """:func:`heatmap_value_bounds`, cached on the frames it actually reads.
 
@@ -3609,6 +3638,7 @@ def _heatmap_bounds_for_rail(
     return _heatmap_value_bounds_cached(
         fixations,
         words,
+        counts,
         (
             frame_fingerprint(fixations),
             None if words is None else frame_fingerprint(words),
@@ -3616,14 +3646,19 @@ def _heatmap_bounds_for_rail(
     )
 
 
-def _cheap_heatmap_bounds(fixations: pd.DataFrame | None) -> tuple[float, float] | None:
+def _cheap_heatmap_bounds(
+    fixations: pd.DataFrame | None, *, counts: bool = False
+) -> tuple[float, float] | None:
     """Placeholder bounds for the greyed range while the heatmap is off.
 
     The shortest and longest single fixation — one vectorised pass and no
     groupby — or ``None`` when there is none (the range is then not drawn,
     as before). The heatmap's own bounds (:func:`_heatmap_bounds_for_rail`)
-    replace them once it is shown.
+    replace them once it is shown. For ``counts``, 1 to the fixation count.
     """
+    if counts:
+        n = 0 if fixations is None else len(fixations)
+        return (1.0, float(n)) if n else None
     if (
         fixations is not None
         and not fixations.empty
@@ -3638,9 +3673,9 @@ def _cheap_heatmap_bounds(fixations: pd.DataFrame | None) -> tuple[float, float]
 
 @st.cache_data(show_spinner=False, max_entries=8)
 def _heatmap_value_bounds_cached(
-    _fixations: pd.DataFrame | None, _words: pd.DataFrame | None, cache_key
+    _fixations: pd.DataFrame | None, _words: pd.DataFrame | None, counts, cache_key
 ) -> tuple[float, float] | None:
-    return heatmap_value_bounds(_fixations, _words)
+    return heatmap_value_bounds(_fixations, _words, counts=counts)
 
 
 def _render_color_range(
@@ -4309,6 +4344,80 @@ def _render_compare_saccade_styles() -> None:
         )
 
 
+def _render_heatmap_blur_row(
+    fixations: pd.DataFrame | None,
+    words: pd.DataFrame | None,
+    *,
+    disabled: bool,
+    reason: str | None,
+) -> None:
+    """``Blur | ☑ Auto | σ px``: the Interpolated heatmap's Gaussian σ.
+
+    The box always shows the σ in use: on Auto, the one the figure computes
+    from this trial (`plots.interpolated_sigma_px`, greyed); off, the fixed
+    one, ``global_heatmap_sigma_px``. It is a shadow of that key, so Auto's
+    value is never written over the user's own."""
+    from scanpath_studio.plots import _compute_axis_ranges, interpolated_sigma_px
+
+    help_text = _gated_help(
+        "The Gaussian blur's σ, in px. Auto: 2% of the larger span of the "
+        "fixations and word boxes, at least 8 px.",
+        reason,
+    )
+    auto, rest = _check_row(
+        "Blur",
+        key="global_heatmap_sigma_auto",
+        persist_state="session",
+        check_label="Auto",
+        disabled=disabled,
+        help=help_text,
+    )
+    view_key = "_heatmap_sigma_view"
+    if auto:
+        trial_words = (
+            _trial_rows(words, fixations)
+            if words is not None and fixations is not None
+            else None
+        )
+        *_, x_min, x_max, y_min, y_max = _compute_axis_ranges(
+            1,
+            1,
+            (fixations, "x", "y"),
+            word_frames=[] if trial_words is None else [trial_words],
+        )
+        shown = (
+            interpolated_sigma_px(x_max - x_min, y_max - y_min)
+            if x_min is not None
+            else DEFAULT_HEATMAP_SIGMA_PX
+        )
+    else:
+        shown = st.session_state.get(
+            "global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX
+        )
+    st.session_state[view_key] = round(float(shown), 1)
+
+    def _apply() -> None:
+        if _shadow_key_missing(view_key):  # BUG-18
+            return
+        st.session_state["global_heatmap_sigma_px"] = float(st.session_state[view_key])
+
+    box_col, unit_col = rest.columns(
+        [0.75, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
+    )
+    box_col.number_input(
+        "Blur σ (px)",
+        min_value=HEATMAP_SIGMA_BOUNDS[0],
+        max_value=HEATMAP_SIGMA_BOUNDS[1],
+        step=1.0,
+        format="%.1f",
+        key=view_key,
+        on_change=_apply,
+        disabled=_layer_gate(disabled or auto, None)[0],
+        label_visibility="collapsed",
+    )
+    _sub_caption(unit_col, "px")
+
+
 def _render_colorbar_rows(bar: str, *, disabled: bool, reason: str | None) -> None:
     """One colour scale's bar: ``Color bar | ☑ Show | orientation``, then the
     tick labels' angle and size — for ``bar`` ``"fixation"`` or ``"heatmap"``.
@@ -4939,9 +5048,9 @@ def _collect_viz_settings(
         # falls back instead of propagating None into the figure builders.
         heatmap_style=ss.get("global_heatmap_style") or "Word boxes",
         heatmap_norm=ss.get("global_heatmap_norm") or "Linear",
-        duration_mass_sigma_chars=float(
-            ss.get("global_duration_mass_sigma_chars", 1.0)
-        ),
+        heatmap_sigma_px=None
+        if ss.get("global_heatmap_sigma_auto", True)
+        else float(ss.get("global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX)),
         show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
         # UX-86: raw gaze's own style.
         raw_gaze_color=ss.get("global_raw_gaze_color") or "#888888",
@@ -6642,53 +6751,34 @@ def render_plot_controls(
             heat_disabled or comparing,
             _gated_help(
                 "Word boxes: colour each word box by its fixations. Interpolated: "
-                "a Gaussian-smoothed density of the fixations. Duration mass: each "
-                "fixation's duration spread over nearby characters (Spread, in "
-                "character widths). Compare always uses word boxes.",
+                "the fixations blurred with a Gaussian (Blur, below), scaled to "
+                "the figure's own peak. Compare always uses word boxes.",
                 "Comparison heatmaps use split word boxes."
                 if comparing
                 else heat_reason,
             ),
         )
-        label_w = _label_w()
-        rest = 1.0 - label_w
-        label_col, style_col, spread_cap_col, spread_col = st.columns(
-            [label_w, rest * 0.52, rest * 0.2, rest * 0.28],
-            gap=_LABEL_GAP,
-            vertical_alignment="center",
-        )
-        _row_label(label_col, "Style", style_help)
-        heat_style = style_col.selectbox(
+        heat_style = _sub_row(
             "Style",
-            options=["Word boxes", "Interpolated", "Duration mass"],
+            section="Style",
+            section_help="How the heatmap is drawn.",
+            caption_help=style_help,
+        ).selectbox(
+            "Style",
+            options=["Word boxes", "Interpolated"],
             key="global_heatmap_style",
             persist_state="session",
             disabled=style_disabled,
             help=style_help,
             label_visibility="collapsed",
         )
-        # Only `make_scanpath_figure` reads the spread; Compare always draws
-        # word boxes, which is why the Style picker beside it greys there too.
-        spread_disabled, spread_help = _layer_gate(
-            heat_disabled or comparing or heat_style != "Duration mass",
-            _gated_help(
-                "Gaussian spread, in character widths (Duration mass only).",
-                "Comparison heatmaps use split word boxes."
-                if comparing
-                else heat_reason,
-            ),
-        )
-        _sub_caption(spread_cap_col, "Spread")
-        spread_col.number_input(
-            "Spread (characters)",
-            min_value=0.25,
-            max_value=10.0,
-            step=0.25,
-            key="global_duration_mass_sigma_chars",
-            persist_state="session",
-            disabled=spread_disabled,
-            help=spread_help,
-            label_visibility="collapsed",
+        _render_heatmap_blur_row(
+            trial_fixations,
+            words,
+            disabled=heat_disabled or comparing or heat_style != "Interpolated",
+            reason="Comparison heatmaps use split word boxes."
+            if comparing
+            else heat_reason,
         )
         metric_disabled_h, metric_help = _layer_gate(
             heat_disabled,
@@ -6715,6 +6805,9 @@ def render_plot_controls(
             format_func=metric_labels.__getitem__,
             key="global_heatmap_metric",
             persist_state="session",
+            # A pinned range is in the old metric's units: back to auto.
+            on_change=forget_color_range,
+            args=("global_heatmap_color_range",),
             disabled=metric_disabled_h,
             help=metric_help,
             label_visibility="collapsed",
@@ -6756,22 +6849,22 @@ def render_plot_controls(
         # not by the longest single fixation, which refixations exceed.
         # The dwell groupby runs only while the heatmap is shown; switched off,
         # the greyed range is drawn from the single-fixation span instead.
+        counts = heatmap_metric == "counts"
         heat_bounds = (
-            (
-                _heatmap_bounds_for_rail(trial_fixations, words)
-                if show_heatmap
-                else _cheap_heatmap_bounds(trial_fixations)
-            )
-            if heatmap_metric == "duration_ms"
-            else None
+            _heatmap_bounds_for_rail(trial_fixations, words, counts=counts)
+            if show_heatmap
+            else _cheap_heatmap_bounds(trial_fixations, counts=counts)
         )
         if heat_bounds is not None:
-            hmin = float(math.floor(heat_bounds[0]))
+            # The scale starts at 0 (an empty word), as the figure's auto does.
+            hmin = 0.0
             hmax = float(math.ceil(heat_bounds[1]))
             hmax_eff = hmax if hmax > hmin else hmin + 1.0
             range_text = (
-                "Word dwell time (ms) at the two ends of the colour scale. You can "
-                "type values beyond the slider."
+                "Fixations per word" if counts else "Word dwell time (ms)"
+            ) + (
+                " at the two ends of the colour scale; auto runs from 0 to the "
+                "trial's highest. You can type values beyond the slider."
             )
             # Finding 12: the smoothed styles scale their density to their own
             # peak, so a range does nothing there — greyed, and kept for Word
@@ -6792,7 +6885,7 @@ def render_plot_controls(
                     else ""
                 ),
                 help=range_text,
-                slider_format="%d ms",
+                slider_format="%d" if counts else "%d ms",
                 field_host=_sub_row("Range", caption_help=range_text),
             )
 

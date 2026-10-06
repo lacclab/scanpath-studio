@@ -112,7 +112,7 @@ def _viz(**overrides) -> dict:
         "show_heatmap": False,
         "heatmap_style": "Word boxes",
         "heatmap_norm": "Linear",
-        "duration_mass_sigma_chars": 1.0,
+        "heatmap_sigma_px": None,
         "heatmap_metric": "counts",
         "heatmap_range": None,
         "heatmap_colorscale": "Viridis",

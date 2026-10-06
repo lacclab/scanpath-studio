@@ -111,7 +111,7 @@ class TestGaussianBlurShape:
 
 
 class TestHeatmapCoordinates:
-    @pytest.mark.parametrize("style", ["Interpolated", "Duration mass"])
+    @pytest.mark.parametrize("style", ["Interpolated"])
     def test_single_line_z_matches_its_coordinates(self, style):
         words = _single_line_words()
         trace = _heatmap_trace(words, _fixations([150, 250], [110, 110]), style)
@@ -188,3 +188,41 @@ class TestInterpolationGridBudget:
         row, col = np.unravel_index(np.argmax(z), z.shape)
         assert abs(trace.x[col] - 100) <= trace.x[1] - trace.x[0]
         assert abs(trace.y[row] - 300) <= trace.y[1] - trace.y[0]
+
+
+class TestTheBlur:
+    """The Interpolated heatmap's σ: automatic, or a fixed number of px."""
+
+    def _peak_width(self, sigma_px):
+        fig = plots.make_scanpath_figure(
+            _single_line_words(),
+            _fixations([400], [110]),
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=16,
+            show_heatmap=True,
+            heatmap_style="Interpolated",
+            heatmap_metric="duration_ms",
+            heatmap_sigma_px=sigma_px,
+        )
+        trace = next(t for t in fig.data if isinstance(t, go.Heatmap))
+        z = np.nan_to_num(np.asarray(trace.z, dtype=float))
+        row = z[np.unravel_index(np.argmax(z), z.shape)[0]]
+        step = trace.x[1] - trace.x[0]
+        return float((row > 0.5 * row.max()).sum() * step)
+
+    def test_a_larger_sigma_blurs_wider(self):
+        assert self._peak_width(40.0) > 2 * self._peak_width(10.0)
+
+    def test_auto_is_two_percent_of_the_span_at_least_8_px(self):
+        assert plots.interpolated_sigma_px(100, 50) == 8.0
+        assert plots.interpolated_sigma_px(2000, 500) == 40.0
+
+
+def test_a_link_naming_duration_mass_opens_interpolated():
+    from scanpath_studio.url_state import _parse_heatmap_style
+
+    assert _parse_heatmap_style("Duration mass") == "Interpolated"
+    assert _parse_heatmap_style("Word boxes") == "Word boxes"
+    with pytest.raises(ValueError):
+        _parse_heatmap_style("Contours")

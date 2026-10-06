@@ -117,6 +117,7 @@ from scanpath_studio.constants import (
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_HEATMAP_SIGMA_PX,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
@@ -1640,7 +1641,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_heatmap=viz_settings["show_heatmap"],
         heatmap_style=viz_settings.get("heatmap_style", "Word boxes"),
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
-        duration_mass_sigma_chars=viz_settings.get("duration_mass_sigma_chars", 1.0),
+        heatmap_sigma_px=viz_settings.get("heatmap_sigma_px"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
@@ -3874,8 +3875,14 @@ def _build_studio_config(
             "color_by": figure_settings["color_by"],
             "heatmap_metric": viz_settings["heatmap_metric"],
             "heatmap_style": figure_settings.get("heatmap_style", "Word boxes"),
-            "duration_mass_sigma_chars": float(
-                viz_settings.get("duration_mass_sigma_chars", 1.0)
+            # The Interpolated blur: Auto, and the fixed σ kept for when it is off.
+            "heatmap_sigma_auto": bool(
+                st.session_state.get("global_heatmap_sigma_auto", True)
+            ),
+            "heatmap_sigma_px": float(
+                st.session_state.get(
+                    "global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX
+                )
             ),
             "heatmap_norm": figure_settings.get("heatmap_norm", "Linear"),
             **{
@@ -5291,16 +5298,8 @@ def _render_export_panel(
     bulk_settings["preprocessing_report"] = (
         report.to_dict("records") if isinstance(report, pd.DataFrame) else []
     )
-    from scanpath_studio.experimental_setup import pixels_per_degree
-
-    try:
-        bulk_settings["pixels_per_degree"] = pixels_per_degree(
-            float(st.session_state.get("global_viewing_distance_mm", 800.0)),
-            float(canvas_width),
-            float(st.session_state.get("global_monitor_width_mm", 597.0)),
-        )
-    except (TypeError, ValueError):
-        pass
+    # No `pixels_per_degree`: the export's saccade table gives amplitudes in px
+    # only — a visual-angle conversion is not part of this release.
     # DATA-20: ship the participant table with the bundle, as its own file.
     #
     # The **fingerprint** goes in the settings dict, not the frame. `sig` below
@@ -15274,15 +15273,6 @@ def _render_setup_provenance_note(host=None) -> None:
             f'<div class="sps-readonly-map-note">{provenance}</div>'
             "</div>",
             unsafe_allow_html=True,
-        )
-    if snapshot.geometry_provenance is Provenance.SKIPPED:
-        box.caption(
-            "Visual-angle units are hidden for this dataset — the physical size "
-            "was skipped, so there is nothing honest to derive them from."
-        )
-    elif snapshot.px_per_degree is not None:
-        box.caption(
-            f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle."
         )
     _render_arrived_provenance_note(snapshot, host=box)
 

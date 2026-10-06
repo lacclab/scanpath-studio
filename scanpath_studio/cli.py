@@ -901,14 +901,15 @@ def _render_parser() -> argparse.ArgumentParser:
     )
     viz.add_argument(
         "--heatmap-style",
-        choices=["word-boxes", "interpolated", "duration-mass"],
+        choices=["word-boxes", "interpolated"],
         help="Heatmap geometry (default: word-boxes).",
     )
     viz.add_argument(
-        "--duration-mass-sigma",
+        "--heatmap-sigma",
         type=float,
-        metavar="CHARS",
-        help="Gaussian sigma in character widths for --heatmap-style duration-mass.",
+        metavar="PX",
+        help="Gaussian σ in px for --heatmap-style interpolated (default: 2%% of "
+        "the data's larger span, at least 8 px).",
     )
     viz.add_argument(
         "--heatmap-colorscale",
@@ -2799,10 +2800,9 @@ def render(argv: list[str]) -> None:
         overrides["heatmap_style"] = {
             "word-boxes": "Word boxes",
             "interpolated": "Interpolated",
-            "duration-mass": "Duration mass",
         }[args.heatmap_style]
-    if args.duration_mass_sigma is not None:
-        overrides["duration_mass_sigma_chars"] = args.duration_mass_sigma
+    if args.heatmap_sigma is not None:
+        overrides["heatmap_sigma_px"] = args.heatmap_sigma
     if args.heatmap_colorscale:
         overrides["heatmap_colorscale"] = args.heatmap_colorscale
     if args.heatmap_norm:

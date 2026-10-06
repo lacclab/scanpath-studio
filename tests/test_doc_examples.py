@@ -105,10 +105,10 @@ def test_the_api_docstrings_use_names_the_package_root_has():
     assert "sps.api." not in source
 
 
-def test_the_documented_duration_mass_spelling_parses():
-    """docs/cli.md spelled it `'Duration mass'` — the settings vocabulary, not
-    the flag's — which argparse rejects."""
+def test_the_documented_smoothed_heatmap_flags_parse():
+    """docs/cli.md's smoothed-heatmap recipe is flags `render` takes."""
     text = (DOCS / "cli.md").read_text(encoding="utf-8")
     fragment = re.search(r"`(--heatmap-style [^`]+)`", text).group(1)
     args = cli._render_parser().parse_args(["--sample", *shlex.split(fragment)])
-    assert args.heatmap_style == "duration-mass"
+    assert args.heatmap_style == "interpolated"
+    assert args.heatmap_sigma == 20

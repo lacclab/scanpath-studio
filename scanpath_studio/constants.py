@@ -194,7 +194,7 @@ DEFAULT_HEATMAP_COLORSCALE = "Blues"
 #: (`plots._add_interpolated_heatmap`), so a ``heatmap_range`` does nothing to
 #: them: the rail greys the range for these, and the code snippet omits it.
 #: Compare always draws word boxes, where the range applies again.
-SELF_SCALED_HEATMAP_STYLES = frozenset({"Interpolated", "Duration mass"})
+SELF_SCALED_HEATMAP_STYLES = frozenset({"Interpolated"})
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 # How fixation duration maps onto that size range. The three *fixed* scales map
@@ -274,6 +274,9 @@ SACCADE_DASH_OPTIONS = {
 # Saccade line width (px): default + the (min, max) the width slider allows.
 DEFAULT_SACCADE_WIDTH = 2.0
 SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
+#: The Interpolated heatmap's fixed blur σ (px): the box's limits and default.
+HEATMAP_SIGMA_BOUNDS = (1.0, 500.0)
+DEFAULT_HEATMAP_SIGMA_PX = 20.0
 
 # VIZ-8 · colour saccades by reading type. Each saccade (the segment from one
 # fixation to the next) is classified into one of these reading-schematic

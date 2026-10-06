@@ -91,7 +91,6 @@ from .experimental_setup import (
     Provenance,
     SetupSnapshot,
     font_pt_to_px,
-    pixels_per_degree,
 )
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
@@ -2332,11 +2331,6 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_distance_mm",
             **persist,
         )
-        if canvas_w and mon_mm > 0 and dist_mm > 0:
-            geom_host.caption(
-                f"→ **{pixels_per_degree(dist_mm, canvas_w, mon_mm):.1f} px** per "
-                "degree of visual angle."
-            )
     elif geom_mode == _GEOM_DEFAULT:
         mon_mm, dist_mm = 597.0, 800.0
         geom_host.caption("Recorded as **assumed** — typical lab values.")

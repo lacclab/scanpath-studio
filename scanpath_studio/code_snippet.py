@@ -1158,7 +1158,6 @@ _CLI_EMITTERS: dict[str, Any] = {
         {
             "Word boxes": "word-boxes",
             "Interpolated": "interpolated",
-            "Duration mass": "duration-mass",
         },
     ),
     "heatmap_norm": _mapped("--heatmap-norm", {"Linear": "linear", "Log": "log"}),
@@ -1168,7 +1167,7 @@ _CLI_EMITTERS: dict[str, Any] = {
         {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
     ),
     "fixation_flags": _fixation_flags,
-    "duration_mass_sigma_chars": _valued("--duration-mass-sigma"),
+    "heatmap_sigma_px": _valued("--heatmap-sigma"),
     "marker_size_range": _marker_size_range,
     "marker_size_scale": _valued("--marker-size-scale"),
     "marker_duration_range": _two_numbers("--marker-duration-range"),

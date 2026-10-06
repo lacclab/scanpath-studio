@@ -55,7 +55,7 @@ NON_DEFAULT = {
     "heatmap_style": "Interpolated",
     "heatmap_norm": "Log",
     "heatmap_metric": None,  # "counts" at the figure level
-    "duration_mass_sigma_chars": 2.0,
+    "heatmap_sigma_px": 15.0,
     "heatmap_colorscale": "Greens",
     "heatmap_range": (0.0, 900.0),
     "word_heatmap_col": "gpt2_surprisal",

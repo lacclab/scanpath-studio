@@ -298,6 +298,7 @@ def test_deep_link_seeds_frozen_state_keys():
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
     # EXP-18: the settings that joined the link are closed vocabularies too.
     validated["fixation_colorbar_orientation"] = "Horizontal"
+    validated["heatmap_style"] = "Interpolated"
     validated["heatmap_colorbar_orientation"] = "Horizontal"
     validated["marker_size_scale"] = "linear"
     for category in ("short", "long", "oob", "blink"):

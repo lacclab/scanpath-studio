@@ -232,7 +232,6 @@ from scanpath_studio.experimental_setup import (
     Provenance,
     SetupSnapshot,
     font_pt_to_px,
-    pixels_per_degree,
 )
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
@@ -7484,9 +7483,6 @@ def render_canvas_controls(
     # The wizard's standalone form still shows them: that *is* where they are set.
     if bare:
         monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
-        viewing_distance_mm = float(
-            st.session_state.get("global_viewing_distance_mm", 800.0)
-        )
         display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
     else:
         monitor_width_mm = field(
@@ -7501,7 +7497,7 @@ def render_canvas_controls(
             persist_state="session",
             help="Width of the visible display area, not the diagonal size.",
         )
-        viewing_distance_mm = field(
+        field(
             screen,
             "number_input",
             "Viewing distance (mm)",
@@ -7525,16 +7521,8 @@ def render_canvas_controls(
             help="Used for point-to-pixel stimulus font conversion. The physical "
             f"width above implies {derived_dpi:.1f} DPI.",
         )
-    # The setup form (not the rail) says what the physical values imply; the
-    # rail draws no geometry, so it states no derived number either.
-    if not bare:
-        px_per_degree = pixels_per_degree(
-            float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
-        )
-        screen.caption(
-            f"Geometry: **{px_per_degree:.1f} px/degree** · "
-            f"{1.0 / px_per_degree:.4f}° per pixel."
-        )
+    # No derived visual-angle figure (px/degree) is shown anywhere: nothing in
+    # this release draws in degrees.
 
     # Text can be switched off while this function still supplies the screen
     # half to 📐 Figure & canvas. Before BUG-38, the caller passed an undefined

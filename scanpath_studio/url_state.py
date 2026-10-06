@@ -47,8 +47,10 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     CUSTOM_PALETTE,
+    DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
+    HEATMAP_SIGMA_BOUNDS,
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
     MANUAL_SAMPLE_CHOICE,
@@ -279,6 +281,16 @@ def _parse_saccade_style_label(v) -> str:
     raise ValueError(f"unknown line style {name!r}")
 
 
+def _parse_heatmap_style(value) -> str:
+    """A heatmap style; the retired *Duration mass* opens as *Interpolated*,
+    the smoothed style it was a variant of."""
+    if value == "Duration mass":
+        return "Interpolated"
+    if value not in ("Word boxes", "Interpolated"):
+        raise ValueError(f"not one of the widget's options: {value!r}")
+    return value
+
+
 def _parse_colorbar_orientation(v) -> str:
     return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
 
@@ -358,6 +370,7 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     # `show_colorbars`, is read below as both (with the old style params).
     "show_fixation_colorbar": "global_show_fixation_colorbar",
     "show_heatmap_colorbar": "global_show_heatmap_colorbar",
+    "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
     "hollow_fixations": "global_hollow_fixations",
@@ -520,7 +533,8 @@ _SHARE_FLOAT_PARAMS = {
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
     "fixation_opacity": "global_fixation_opacity",
-    "duration_mass_sigma_chars": "global_duration_mass_sigma_chars",
+    # The Interpolated heatmap's fixed blur σ (px); its Auto switch is a toggle.
+    "heatmap_sigma_px": "global_heatmap_sigma_px",
     # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
     # sharing; the uploaded image itself can't ride a link).
     "stimulus_image_opacity": "global_stimulus_image_opacity",
@@ -610,6 +624,7 @@ _URL_PRESETS = {
     "title_pattern": ("global_title_pattern", _strip_markup),
     "caption_pattern": ("global_caption_pattern", _strip_markup),
     "illustration_text": ("global_illustration_text", _strip_markup),
+    "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
     **{
@@ -663,7 +678,7 @@ _MARKER_BOUNDS = (4, 40)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
     "global_preproc_merge_distance_chars": (0.25, 10.0),
-    "global_duration_mass_sigma_chars": (0.25, 10.0),
+    "global_heatmap_sigma_px": HEATMAP_SIGMA_BOUNDS,
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_order_font_size": (6, 72),
@@ -1301,9 +1316,7 @@ _CHOICE_STATE_PARSERS = {
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
-    "global_heatmap_style": _closed_choice(
-        ("Word boxes", "Interpolated", "Duration mass")
-    ),
+    "global_heatmap_style": _parse_heatmap_style,
     "global_heatmap_norm": _closed_choice(("Linear", "Log")),
     "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
     "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
@@ -2025,19 +2038,22 @@ def _restore_plot_config(
         put_valid(
             style in ("Word boxes", "Interpolated", "Duration mass"),
             "global_heatmap_style",
-            style,
+            "Interpolated" if style == "Duration mass" else style,
             "heatmap style",
         )
-    if "duration_mass_sigma_chars" in coloring:
-        put_float(
-            coloring["duration_mass_sigma_chars"],
-            "global_duration_mass_sigma_chars",
-            0.25,
-            10.0,
-            "duration-mass sigma",
+    # The Interpolated blur: Auto, and the fixed σ (px) used when it is off.
+    # Absent from a file written before it existed: automatic, as then.
+    if isinstance(config.get("coloring"), dict):
+        put(
+            "global_heatmap_sigma_auto",
+            bool(coloring.get("heatmap_sigma_auto", True)),
         )
-    elif isinstance(config.get("coloring"), dict):
-        put("global_duration_mass_sigma_chars", 1.0)
+        put_float(
+            coloring.get("heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX),
+            "global_heatmap_sigma_px",
+            *HEATMAP_SIGMA_BOUNDS,
+            "heatmap blur",
+        )
     if "heatmap_norm" in coloring:
         put_valid(
             coloring["heatmap_norm"] in ("Linear", "Log"),

@@ -70,7 +70,9 @@ GLOBAL_HOLLOW_FIXATIONS = "global_hollow_fixations"
 GLOBAL_SCALE_TEXT_TO_BOXES = "global_scale_text_to_boxes"
 GLOBAL_COLOR_BY = "global_color_by"
 GLOBAL_HEATMAP_STYLE = "global_heatmap_style"
-GLOBAL_DURATION_MASS_SIGMA_CHARS = "global_duration_mass_sigma_chars"
+# The Interpolated heatmap's blur: automatic, or a fixed σ in px.
+GLOBAL_HEATMAP_SIGMA_AUTO = "global_heatmap_sigma_auto"
+GLOBAL_HEATMAP_SIGMA_PX = "global_heatmap_sigma_px"
 GLOBAL_HEATMAP_NORM = "global_heatmap_norm"
 GLOBAL_HEATMAP_METRIC = "global_heatmap_metric"
 GLOBAL_CRITICAL_SPAN_STYLE = "global_critical_span_style"
@@ -432,6 +434,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_raw_gaze": GLOBAL_SHOW_RAW_GAZE,
         "show_fixation_colorbar": GLOBAL_SHOW_FIXATION_COLORBAR,
         "show_heatmap_colorbar": GLOBAL_SHOW_HEATMAP_COLORBAR,
+        "heatmap_sigma_auto": GLOBAL_HEATMAP_SIGMA_AUTO,
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
         "show_title": GLOBAL_SHOW_TITLE,
@@ -555,7 +558,7 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "line_spacing": GLOBAL_LINE_SPACING,
-        "duration_mass_sigma_chars": GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        "heatmap_sigma_px": GLOBAL_HEATMAP_SIGMA_PX,
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         "preproc_merge_distance_chars": GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         "saccade_width": GLOBAL_SACCADE_WIDTH,
@@ -775,7 +778,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         GLOBAL_STIMULUS_IMAGE_SCALE,
-        GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        GLOBAL_HEATMAP_SIGMA_PX,
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_COORDINATE_GRID_SPACING,
@@ -881,7 +884,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_PALETTE,
         GLOBAL_COLOR_BY,
         GLOBAL_HEATMAP_STYLE,
-        GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        GLOBAL_HEATMAP_SIGMA_PX,
+        GLOBAL_HEATMAP_SIGMA_AUTO,
         GLOBAL_HEATMAP_NORM,
         GLOBAL_HEATMAP_METRIC,
         GLOBAL_SHOW_FIXATION_COLORBAR,

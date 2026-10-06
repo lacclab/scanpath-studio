@@ -728,8 +728,8 @@ _DILI = "https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people"
 _FILTER_GROUP_LABELS = {
     "participants": "Participant",
     "favorites": "★ Favorites only",
-    "required_tags": "Required tags",
-    "excluded_tags": "Excluded tags",
+    "required_tags": "With any of these tags",
+    "excluded_tags": "Excluding tags",
 }
 
 
@@ -753,9 +753,9 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
         label = f"{_FILTER_GROUP_LABELS['participants']} ({len(chosen)} selected)"
         if meta_keys:
             label = (
-                "By reader"
+                "By participant"
                 if not st.session_state.get("filter_participants")
-                else f"{label} + by reader"
+                else f"{label} + by participant"
             )
         steps.append(
             (
@@ -789,7 +789,7 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
     # pool and has to be named in the diagnosis alongside the categorical ones.
     dropping = set(trial_filters.get("ranges_drop_unknown") or ())
     for col, bounds in (trial_filters.get("ranges") or {}).items():
-        label = f"{names[col]} between {bounds[0]:g} and {bounds[1]:g}"
+        label = f"{names[col]} between {bounds[0]:,.10g} and {bounds[1]:,.10g}"
         if col in dropping:
             label += " (unknown values excluded)"
         steps.append(
@@ -864,8 +864,8 @@ def _render_empty_after_filtering(
         with st.container(border=True, key="empty_state_panel"):
             st.markdown("#### This dataset has no trials to show")
             st.markdown(
-                "Pick another **Data source**, or check the column mapping on "
-                f"the {ICONS['view_data']} **Data Management** page."
+                "Open another dataset, or check this one's column mapping "
+                f"under {ICONS['view_data']} **Data Management → Edit dataset**."
             )
         return
 
@@ -876,7 +876,7 @@ def _render_empty_after_filtering(
     with st.container(border=True, key="empty_state_panel"):
         st.markdown(
             f"#### No trials match your filters\n"
-            f"**0** of the **{total:,} trials** in this dataset get through."
+            f"**0** of the **{plural(total, 'trial')}** in this dataset get through."
         )
         rows = culprits or report
         if culprits:
@@ -911,7 +911,7 @@ def _render_empty_after_filtering(
             key="clear_all_trial_filters",
             type="primary",
             on_click=clear_trial_filters,
-            help="Reset every Narrow-by, condition and annotation filter.",
+            help="Reset every trial filter.",
         )
 
 
@@ -1043,13 +1043,13 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     - **a dataset** whose files are missing or unreadable. The rest restored;
       this one is held back, and kept in the cache — every save writes it back
       as it was — so **Retry** can read it once its file is back, and **Remove
-      from cache** deletes it.
+      saved copy** deletes it.
     - **the cache as a whole** (a manifest that cannot be read). Saving is
       paused so this session cannot replace it; **Retry** reads it again and
-      **Clear the cache** deletes it, after which saving resumes.
+      **Delete saved data** deletes it, after which saving resumes.
 
     The metadata tables' file is held back the same way as a dataset (round
-    10): kept as it is until **Retry** reads it or **Remove from cache**
+    10): kept as it is until **Retry** reads it or **Remove saved copy**
     deletes that copy alone.
 
     Returns whether anything was drawn.
@@ -1062,9 +1062,8 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     box = host.container(border=True)
     if failure:
         box.warning(
-            f"The recovery cache on this computer couldn't be read — {failure}. "
-            "Nothing was restored from it, and saving is paused so it stays as it "
-            "is.",
+            f"What was saved on this computer couldn't be read — {failure}. "
+            "Nothing was restored, and saving is paused so it stays as it is.",
             icon=ICONS["warning"],
         )
         row = box.container(horizontal=True)
@@ -1076,17 +1075,18 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
             args=(app_url,),
         )
         row.button(
-            "Clear the cache",
+            "Delete saved data",
             icon=ICONS["delete"],
             key=f"{key}_clear_cache",
             on_click=_clear_unreadable_cache,
-            help="Delete the stored session. Saving resumes.",
+            help="Permanently delete everything saved on this computer. Saving "
+            "resumes.",
         )
         return True
     if metadata_failure is not None:
         box.warning(
             "The metadata tables saved on this computer couldn't be restored — "
-            f"{metadata_failure}. They are kept in the cache as they are until "
+            f"{metadata_failure}. They are kept as they are until "
             "you retry or remove them; tables you attach meanwhile are not saved.",
             icon=ICONS["warning"],
         )
@@ -1098,7 +1098,7 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
             on_click=_retry_cached_metadata,
         )
         row.button(
-            "Remove from cache",
+            "Remove saved copy",
             icon=ICONS["delete"],
             key=f"{key}_remove_metadata",
             on_click=_remove_cached_metadata,
@@ -1108,10 +1108,10 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     if not failed:
         return True
     box.warning(
-        f"{len(failed)} dataset{'s' if len(failed) != 1 else ''} saved on this "
-        "computer couldn't be restored. Everything else came back. "
-        f"{'They are' if len(failed) != 1 else 'It is'} kept in the cache until "
-        "you retry or remove it.",
+        f"{plural(len(failed), 'dataset')} saved on this computer couldn't be "
+        "restored. Everything else came back. "
+        f"{'They are' if len(failed) != 1 else 'It is'} kept until you retry or "
+        f"remove {'them' if len(failed) != 1 else 'it'}.",
         icon=ICONS["warning"],
     )
     for index, (name, reason) in enumerate(sorted(failed.items())):
@@ -1124,7 +1124,7 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
             on_click=_retry_cached_datasets,
         )
         row.button(
-            "Remove from cache",
+            "Remove saved copy",
             icon=ICONS["delete"],
             key=f"{key}_remove_{index}",
             on_click=_remove_cached_dataset,
@@ -1169,7 +1169,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
                 "in memory only"
             )
             + " — closing or refreshing the tab loses the datasets you "
-            "uploaded, their column mappings and your annotations. Export the "
+            "uploaded, their column mappings, your annotations and designs. Export the "
             "annotations from **Annotations** above, and the figure's settings "
             f"from {ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → **File**."
         )
@@ -1213,7 +1213,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
         )
     elif status["exists"] and not cache_failure(st.session_state):
         host.warning(
-            "The stored session can't be read (written by a different version, "
+            "What was saved here can't be read (written by a different version, "
             "or incomplete).",
             icon=ICONS["warning"],
         )
@@ -1487,10 +1487,10 @@ def _onestop_structure_md(regime: str) -> str:
         for kind in ("ia", "fixations")
     )
     return f"""\
-**Expected files** — the OSF reports for every part of this regime, placed
-directly in the folder (or fetched by **Download**). Only *Paragraph* is
-regime-split on OSF; the other parts come from the all-regimes full release,
-which the four OneStop datasets share, and are cut to this regime when read:
+**Expected files** — this dataset's OSF reports, two per screen, placed
+directly in the folder (or fetched by **Download**). Only the *Paragraph*
+reports are published per reading regime; the other screens' reports are shared
+by the four OneStop datasets and cut to this one when read:
 ```
 <dir>/
 {listing}
@@ -1979,8 +1979,8 @@ def _render_dataset_unavailable() -> None:
     with st.container(border=True, key="dataset_unavailable_panel"):
         st.markdown(
             f"#### {ICONS['missing_bundle']} {note['label']} isn't here yet\n"
-            f"{note['reason'].rstrip('.')} — **showing the bundled demo corpus** "
-            f"meanwhile."
+            f"{note['reason'][:1].upper()}{note['reason'][1:].rstrip('.')} — "
+            "**showing the bundled demo** meanwhile."
         )
         details = [f"{note['action'].rstrip('.')}{size}"]
         if note["root"]:
@@ -2011,8 +2011,8 @@ def _render_dataset_unavailable() -> None:
                 )
             except (OSError, ValueError) as exc:
                 st.error(
-                    f"Download failed: {exc}\n\nIf you're offline, download the "
-                    "files on another machine and point the folder above at them."
+                    f"Download failed: {exc}\n\nOffline? Download the files on "
+                    "another computer and copy them into the folder named above."
                 )
                 return
             st.rerun()
@@ -2080,7 +2080,7 @@ def _dataset_access_status(
     _note_dataset_unavailable(
         label=label,
         reason="it hasn't been downloaded yet.",
-        action="Fetch it once and it's cached on disk for every later load",
+        action="Download it once; later loads read it from disk",
         root=root,
         size_hint=size_hint,
         download=download,
@@ -2097,7 +2097,7 @@ def _dataset_access_status(
                 download_slot, download, root, label=label, key=key_prefix
             )
         except (OSError, ValueError) as exc:
-            cfg.error(f"Download failed: {exc}")
+            cfg.error(f"Download failed: {exc}. Check your connection and retry.")
             return False
         st.rerun()
     return False
@@ -2139,8 +2139,8 @@ def _load_potec_source(
     root = _dataset_dir_input(
         loc,
         default_dir=_download_target(POTEC_DEFAULT_DIR),
-        dir_help="Folder holding (or to download) the PoTeC files. A clone of "
-        "github.com/DiLi-Lab/PoTeC works, or any empty folder with Download.",
+        dir_help="The folder that holds the PoTeC files, or that **Download** "
+        "fills. A clone of github.com/DiLi-Lab/PoTeC works.",
         structure_md=_POTEC_STRUCTURE_MD,
         key_prefix="potec",
     )
@@ -2158,7 +2158,10 @@ def _load_potec_source(
     try:
         return _cached_potec_raw_frames(root)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        loc.error(f"Couldn't load PoTeC from `{root}`: {exc}")
+        loc.error(
+            f"Couldn't load PoTeC from `{root}`: {exc}. Check it holds the "
+            "**Expected files**."
+        )
         return pd.DataFrame(), pd.DataFrame()
 
 
@@ -2285,7 +2288,7 @@ def _load_onestop_regime_source(
         loc,
         # UX-184: under the one Download folder every public corpus shares.
         default_dir=_download_target(ONESTOP_PUBLIC_DEFAULT_DIR),
-        dir_help="Folder to download the OneStop reports into (cached on disk, so "
+        dir_help="Folder to download the OneStop reports into (kept there, so "
         "only the first load fetches them). The four OneStop datasets can share it.",
         structure_md=_onestop_structure_md(regime),
         key_prefix="onestop_public",
@@ -2299,14 +2302,17 @@ def _load_onestop_regime_source(
         size_hint=f"{2 * len(parts)} OSF reports, hundreds of MB each",
         # Per regime: two regimes' Download buttons must not share a key.
         key_prefix=f"onestop_{regime}",
-        label=ONESTOP_REGIME_CHOICES[regime],
+        label=picker_name_for(ONESTOP_REGIME_CHOICES[regime]),
     )
     if not ready:
         return load_sample_data()
     try:
         return _cached_onestop_raw_frames(root, regime, tuple(parts), "public")
     except (FileNotFoundError, ValueError, OSError) as exc:
-        loc.error(f"Couldn't load OneStop from `{root}`: {exc}")
+        loc.error(
+            f"Couldn't load OneStop from `{root}`: {exc}. Check it holds the "
+            "**Expected files**."
+        )
         return pd.DataFrame(), pd.DataFrame()
 
 
@@ -2429,10 +2435,10 @@ def geometry_badge(entry) -> str:
     elif recorded_y > 0:
         y_note = (
             f"Recorded fixation y for {recorded_y:.0%}; other y positions use "
-            "word-box centres."
+            "word-box centers."
         )
     else:
-        y_note = "Fixation y uses word-box centres."
+        y_note = "Fixation y uses word-box centers."
     return f"{badge} {y_note}"
 
 
@@ -2515,7 +2521,7 @@ def _benchmark_short_name(name: str) -> str:
 
 
 def _benchmark_size_caption(entry) -> str:
-    """``"84 readers · 55 texts · 219,556 fixations"`` from a manifest entry.
+    """``"84 participants · 55 texts · 219,556 fixations"`` from a manifest entry.
 
     Counts that don't parse are simply left out of the caption — via the same
     `entry_count` the geometry note reads, rather than a second hand-rolled
@@ -2525,7 +2531,7 @@ def _benchmark_size_caption(entry) -> str:
 
     parts = []
     for key, singular in (
-        ("n_readers", "reader"),
+        ("n_readers", "participant"),
         ("n_texts", "text"),
         ("n_fixations", "fixation"),
     ):
@@ -2549,7 +2555,7 @@ def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
         f"schema — the same corpus as this app's own {name} entry, prepared for "
         "cross-corpus comparison rather than the publisher's own geometry."
         if harmonised_overlap
-        else f"{name} — a public reading corpus, harmonised by EyeGenBench to "
+        else f"{name} — a public reading corpus, harmonized by EyeGenBench to "
         "one common schema."
     )
     tail = []
@@ -2739,7 +2745,7 @@ def _onestop_regime_entry(regime: str) -> dict:
         short=f"OneStop · {label}",
         onestop_regime=regime,
         language="English (L1)",
-        size=f"{label} · every trial part, from the OSF release",
+        size=f"{label} · all screens, from the OSF release",
         description=f"OneStop Eye Movements, {label.lower()} — "
         f"{_ONESTOP_REGIME_DESCRIPTIONS[regime]}",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
@@ -2757,7 +2763,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
         monitor=(1680, 1050),  # DELL P2210
         short="PoTeC",
         language="German",
-        size="75 readers · 12 texts",
+        size="75 participants · 12 texts",
         description="Potsdam Textbook Corpus — German readers, experts and "
         "novices, reading biology and physics textbook passages.",
         link="https://github.com/DiLi-Lab/PoTeC",
@@ -2770,9 +2776,9 @@ PUBLIC_DATASET_REGISTRY: dict = {
             "Fixations": 404420,
         },
         published_counts_source=(
-            "PoTeC's own README for readers, texts and trials. Words and "
+            "PoTeC's own README for participants, texts and trials. Words and "
             "fixations were measured from the released corpus; the fixation "
-            "total agrees with the harmonised bundle's manifest to the row."
+            "total agrees with the harmonized bundle's manifest to the row."
         ),
         # Word boxes come from the corpus' own `.ias` character files, but the
         # release discards the recorded screen (x, y) — `datasets._potec_fixations`
@@ -2781,7 +2787,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
         # the one said on the Data page.
         reading_note="Fixation positions are reconstructed, not recorded: "
         "PoTeC's release keeps no screen coordinates, so each fixation is drawn "
-        "at the centre of the character it landed on.",
+        "at the center of the character it landed on.",
     ),
     MULTIPLEYE_PUBLIC_CHOICE: dict(
         loader=_load_multipleye_source,
@@ -2868,8 +2874,8 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
     ),
     SYNTHETIC_CHOICE: dict(
         language="English",
-        description="A hand-built six-word English trial whose every reading "
-        "measure is known, for checking what a measure or plot option does.",
+        description="A hand-built six-word English trial, for checking what a "
+        "plot option does.",
         published_counts={
             "Participants": 1,
             "Texts": 1,
@@ -3050,7 +3056,7 @@ def _load_public_dataset(
     if facts:
         desc.caption(facts)
     if spec.get("link"):
-        desc.markdown(f"[Dataset home ↗]({spec['link']})")
+        desc.markdown(f"[Home page ↗]({spec['link']})")
     return spec["loader"](options_host, location_host)
 
 
@@ -3292,8 +3298,8 @@ WORDS_JOIN_NOTHING_WARNING = (
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
     "tables — for instance one carried over from another dataset with the same "
-    f"columns. Check it on {ICONS['view_data']} **Data Management → Column mapping**, or start again from "
-    "**↩️ Reset to the auto-detected mapping**."
+    f"columns. Check those two rows under {ICONS['view_data']} **Data Management → "
+    "Edit dataset**."
 )
 
 
@@ -3376,8 +3382,8 @@ def load_words_and_fixations(
                     else "the export files aren't in `$ONESTOP_DATA_DIR`."
                 ),
                 action="Point the `ONESTOP_DATA_DIR` environment variable at a "
-                "OneStop export folder and restart the app, or pick **Public "
-                "datasets → OneStop** to download the reports instead.",
+                "OneStop export folder and restart the app, or open a **OneStop · "
+                "…** dataset to download the reports instead.",
                 root=str(onestop_data_dir() or ""),
             )
             return load_sample_data()
@@ -3393,8 +3399,7 @@ def load_words_and_fixations(
                 label="MultiplEYE bundle",
                 reason="its session folders weren't found.",
                 action="Point `MULTIPLEYE_DATA_DIR` at a MultiplEYE session set "
-                "and restart the app, or load it from **Public datasets → "
-                "MultiplEYE**.",
+                "and restart the app.",
                 root=str(multipleye_bundle_dir() or ""),
             )
             return load_sample_data()
@@ -3476,7 +3481,7 @@ def _normalize_pair_uncached(
             if _fix_schema is not None
             else empty_fixations_frame()
         )
-        progress.report(2, 3, detail="cross-checks")
+        progress.report(2, 3, detail="matching tables")
         # The join the fixups actually made, after BUG-59's zero padding — never
         # a plan of the frames before it, which can disagree. DATA-66: and the
         # columns whose values they changed, for the column-name map.
@@ -3535,7 +3540,7 @@ def _normalize_pair(
     # 0.5 s, so a cache hit still never flashes it, and `loading.spinner` stays
     # silent under the dataset card, which lists normalization as a step.
     with loading.spinner(
-        f"Normalizing {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
+        f"Mapping {len(words_df):,} word rows and {len(fixations_df):,} fixations…"
     ):
         words_norm, fixations_norm, join, rewrites = frame_cache(
             "normalized_pair",
@@ -3628,6 +3633,13 @@ def mapping_failure_problem(exc: Exception) -> str:
     logging.getLogger("scanpath_studio").exception(
         "Normalizing with the current column mapping failed."
     )
+    if not isinstance(exc, ValueError):
+        # A KeyError or pandas TypeError reads as a bare repr (``'x'``); the
+        # traceback is in the log above.
+        return (
+            f"{MAPPING_FAILURE_LEAD}: a column it names holds values the app "
+            "can't read (details in Help → Debug)"
+        )
     return f"{MAPPING_FAILURE_LEAD}: {exc}"
 
 
@@ -3809,8 +3821,8 @@ def _render_builtin_editor_footer(host, *, mapping: bool = True) -> None:
 #: Label + tooltip of the off-page signpost's "known-good state" button.
 DEMO_RESET_LABEL = f"{ICONS['demo']} Load the bundled demo"
 DEMO_RESET_HELP = (
-    "Switches to the demo corpus and re-detects its column mapping. Your "
-    "uploaded datasets stay in the source list."
+    "Switches to the bundled demo and re-detects its column mapping. Your "
+    "uploaded datasets stay in the list."
 )
 
 
@@ -4078,7 +4090,9 @@ def _render_raw_preview(label: str, df: pd.DataFrame) -> None:
     """Show one uploaded table's columns + a sample so the user can map it."""
     if df is None or df.empty:
         return
-    st.markdown(f"#### {label} — {len(df):,} rows × {df.shape[1]} columns")
+    st.markdown(
+        f"#### {label} — {plural(len(df), 'row')} × {plural(df.shape[1], 'column')}"
+    )
     st.caption("Columns: " + ", ".join(str(c) for c in df.columns))
     st.dataframe(df.head(200), width="stretch", height=320)
 
@@ -4115,9 +4129,9 @@ def _render_unmapped_view(
         )
     else:
         st.warning(
-            "**Finish the column mapping to draw scanpaths.** Map the missing "
-            "field(s) in **2 · Data tables & column mapping** above — the raw data is "
-            "shown below to help you choose. "
+            "**Finish the column mapping to draw scanpaths.** Map what is missing "
+            "in **2 · Data tables & column mapping** above — the raw data below "
+            "helps you choose. "
             "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
         )
     if (raw_words_df is None or raw_words_df.empty) and (
@@ -4144,7 +4158,7 @@ def _render_dataset_load_failure(name: str, problems: list) -> None:
             for problem in rejected:
                 reason = problem.removeprefix(MAPPING_FAILURE_LEAD).lstrip(": ")
                 st.error(
-                    f"**{name} didn't load.** Normalizing its tables failed: {reason}",
+                    f"**{name} didn't load.** Its column mapping doesn't fit: {reason}",
                     icon=ICONS["error"],
                 )
         else:
@@ -4521,7 +4535,10 @@ def _read_uploaded_frame(
         st.session_state.pop(f"{state_prefix}_header", None)
         files = uploaded if multi else [uploaded]
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
-        host.error(f"Couldn't read **{names}**: {exc}")
+        host.error(
+            f"Couldn't read **{names}**: {exc}. Check it is a table file with one "
+            "header row."
+        )
         return pd.DataFrame()
     # BUG-103: this upload's own ID, before the wizard derives anything from it.
     adopt_source(frame)
@@ -4639,14 +4656,14 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                 "raw_gaze", raw_gaze_schema, load_sample_raw_gaze().columns
             )
         elif unmappable:
-            warn.warning("Could not infer raw gaze schema from sample data")
+            warn.warning("The bundled demo's raw-gaze samples couldn't be read.")
     else:
         uploaded_raw_gaze = cfg.file_uploader(
             "Raw gaze table (optional)",
             type=["csv", "parquet", "feather", "zip"],
             help=(
-                "Optional: one row per gaze sample with participant_id, trial_id, "
-                "x, y and, if recorded, a timestamp."
+                "Optional: one row per gaze sample — participant, trial, x, y "
+                "and, if recorded, a timestamp."
             ),
             max_upload_size=upload_limit_mb(),
         )
@@ -5192,7 +5209,7 @@ def render_data_source_picker(host=None) -> None:
     if current in entries:
         st.session_state["data_source_picker"] = current
     box.selectbox(
-        "Select Dataset",
+        "Select dataset",
         entries,
         format_func=_entry_label,
         key="data_source_picker",
@@ -5258,6 +5275,14 @@ DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
 
 
+#: #374 — the built-in sources' names as shown. The tokens are a wire format
+#: (links, saved state), so only the display changes.
+_BUILTIN_DISPLAY_NAMES = {
+    DEMO_CHOICE: "Bundled demo",
+    MANUAL_SAMPLE_CHOICE: "Hand-drawn sample",
+}
+
+
 def _dataset_display_name(token: str, registry: dict | None = None) -> str:
     """User-facing dataset name without changing the source's stable token."""
     alias = (st.session_state.get(DATASET_ALIASES_KEY) or {}).get(token)
@@ -5265,6 +5290,8 @@ def _dataset_display_name(token: str, registry: dict | None = None) -> str:
         return str(alias)
     if token == AUTHOR_CHOICE:
         return "My scanpath"
+    if token in _BUILTIN_DISPLAY_NAMES:
+        return _BUILTIN_DISPLAY_NAMES[token]
     registry = public_dataset_registry() if registry is None else registry
     return picker_name_for(token, registry) if token in registry else token
 
@@ -5561,13 +5588,13 @@ def _delete_confirmation_dialog(
             else " and column mapping"
         )
         st.warning(
-            f"Remove **{_dataset_display_name(token)}**? Its tables{taken} "
-            "leave this session — there is no undo."
+            f"Remove **{_dataset_display_name(token)}**? Its tables{taken} are "
+            "deleted here and from this computer's saved copy — no undo."
         )
         if count:
             st.caption(
-                "To keep a copy, **Export** from the dataset's **Annotations** "
-                "tab first."
+                "To keep the annotations, open it and **Export** them from "
+                "**Annotations** first."
             )
     else:
         st.caption(
@@ -5723,7 +5750,7 @@ def render_description_field(host, token: str) -> None:
     host.text_area(
         "Description",
         key=key,
-        placeholder="What this dataset is — the readers, the texts, the language.",
+        placeholder="What this dataset is — the participants, the texts, the language.",
         help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
         f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
         height=80,
@@ -5940,8 +5967,9 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     st.caption(
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
-        "scanpath with a lot of regressions. The full evidence is on the "
-        f"{ICONS['view_data']} Data Management page, under **4 · Trial identity**."
+        "scanpath with a lot of regressions. The full evidence is under "
+        f"{ICONS['view_data']} Data Management → **Edit dataset** → **4 · Trial "
+        "identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
     if edit_col.button(
@@ -5957,8 +5985,8 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "Keep it as is",
         key="trial_identity_alert_keep",
         width="stretch",
-        help=f"Dismiss. Nothing changes, and the verdict stays on the {ICONS['view_data']} Data Management "
-        "page under 4 · Trial identity.",
+        help=f"Dismiss. Nothing changes; the verdict stays under {ICONS['view_data']} "
+        "Data Management → Edit dataset → 4 · Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
@@ -6292,7 +6320,7 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
         with bar:
             embed_html_iframe(_SCROLL_TO_EDITOR_SCRIPT, height=0)
     bar.caption(
-        "How this dataset is read and measured — where its files are, how its "
+        "How this dataset is read — where its files are, how its "
         "columns map onto the app's fields, the screen it was recorded on, and "
         "any metadata tables attached to it. The same questions the "
         "add-dataset screen asks, for a dataset that already exists."
@@ -6688,6 +6716,7 @@ def _render_dataset_table_head(grid, sort) -> None:
         for label in (
             dataset_table.NOT_LOADED,
             dataset_table.NOT_REPORTED,
+            dataset_table.NOT_APPLICABLE,
             dataset_table.UNKNOWN,
         )
     )
@@ -6778,9 +6807,9 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
             "More than published",
             icon=ICONS["warning"],
             color="orange",
-            help="This session loaded **more** than the corpus publishes for "
-            f"{', '.join(row.exceeds_published)} — a corpus cannot be larger "
-            "when loaded than it is, so the published figure is the one to fix.",
+            help="This session loaded **more** than the published figure for "
+            f"{', '.join(row.exceeds_published)}. A lab export can hold more "
+            "than the public release; otherwise the figure is out of date.",
         )
 
     status = line.container(key=f"dsc_status_{slug}", width=_DATASET_STATUS_W)
@@ -6827,8 +6856,8 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         type="tertiary",
         on_click=_arm_dataset_row,
         args=(PENDING_DELETE_KEY, row.token),
-        help=f"Remove {row.name} and its tables from this session, after a "
-        "confirmation.",
+        help=f"Delete {row.name}, its tables and annotations, after a "
+        "confirmation. Your original files are not touched.",
     )
 
 
@@ -7726,7 +7755,7 @@ def _rail_text_rows(
         _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
         color = _sub_row(
             "Color",
-            caption_help=tip("The reading text's colour, and the plot background."),
+            caption_help=tip("The reading text's color, and the plot background."),
         )
         text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
             [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
@@ -7757,8 +7786,7 @@ def _rail_text_rows(
 
         if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
             st.caption(
-                "↔ RTL script detected. Landing positions are measured from the "
-                "logical word start; browser bidi shaping is used for labels."
+                "↔ Right-to-left script detected — labels are laid out by the browser."
             )
         hint = _stimulus_font_install_hint(font_css)
         if hint is not None:
@@ -8081,8 +8109,7 @@ def render_canvas_controls(
     )
     if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
         text.caption(
-            "↔ RTL script detected. Landing positions are measured from the "
-            "logical word start; browser bidi shaping is used for labels."
+            "↔ Right-to-left script detected — labels are laid out by the browser."
         )
     # When the dataset declares its stimulus typeface (MultiplEYE), the overlaid
     # text only lines up with the stimulus image if that exact font is installed
@@ -8139,7 +8166,7 @@ def render_canvas_controls(
             text,
             "color_picker",
             "Custom background color",
-            display="Custom colour",
+            display="Custom color",
             key="global_bg_custom",
             persist_state="session",
         )
@@ -8212,17 +8239,17 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     header.subheader(
         f"{ICONS['author']} "
         + (
-            "Edit synthetic sample"
+            "Edit the hand-drawn sample"
             if source == MANUAL_SAMPLE_CHOICE
             else "Author a scanpath"
         )
     )
     header.button("Cancel", key="cancel_authoring", on_click=_cancel_authoring)
     st.caption(
-        "Write the stimulus, then click or drag directly on the canvas. X/Y are "
-        "the primary authored values; the optional target word is useful for "
-        "measures but does not constrain where a fixation can be placed. The "
-        "numeric table remains a complete keyboard-accessible editor."
+        "Write the stimulus, then click or drag on the canvas to place "
+        "fixations. A fixation is drawn at its X/Y; its optional target word "
+        "never moves it. The **Fixation table** edits the same fixations from "
+        "the keyboard."
     )
     restored = st.file_uploader(
         "Restore authoring file",
@@ -8237,7 +8264,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             try:
                 document = parse_authoring_document(restored.getvalue().decode("utf-8"))
             except (ValueError, UnicodeDecodeError) as exc:
-                st.error(str(exc))
+                st.error(f"Couldn't restore this file: {exc}")
             else:
                 # The draft it replaces becomes the previous draft at the end
                 # of this run, so Restore previous draft brings it back.
@@ -8265,9 +8292,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         else:
             line_count = int(words["line_idx"].max()) + 1
             st.caption(
-                f"{len(words)} {'word' if len(words) == 1 else 'words'} across "
-                f"{line_count} {'line' if line_count == 1 else 'lines'} · word ids are "
-                "1-based; line indices are 0-based. Explicit blank lines are retained."
+                f"{plural(len(words), 'word')} across {plural(line_count, 'line')} "
+                "· words are numbered from 1, lines from 0; blank lines are kept."
             )
             st.dataframe(
                 words[["text", "word_id", "line_idx", "x", "y", "width", "height"]],
@@ -8309,7 +8335,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         "One row per fixation. **Fixation id** is stable; **Order** controls the "
         "reading sequence. X/Y place the marker in screen pixels. **Target word** "
         f"is optional (1–{last_word}) and may be edited independently; blank X/Y "
-        "fall back to that word's centre."
+        "fall back to that word's center."
     )
     # BUG-19: the editor's own key holds the edits as a delta against `seed`, so
     # `seed` must stay the STABLE base — it is reseeded only when the stimulus
@@ -8327,7 +8353,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             "fixation_id": st.column_config.NumberColumn(
                 "Fixation id",
                 disabled=True,
-                help="Stable marker identity used to synchronize canvas and table edits.",
+                help="The fixation's fixed number, shared by the canvas and this table.",
             ),
             "order_in_trial": st.column_config.NumberColumn(
                 "Order",
@@ -8341,8 +8367,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
                 max_value=last_word,
                 step=1,
                 help=(
-                    "Optional measure target, counting from 1. It does not move "
-                    "the marker or change X/Y."
+                    "Optional: the word this fixation belongs to, counting from 1. "
+                    "It does not move the marker."
                 ),
             ),
             "x": st.column_config.NumberColumn(
@@ -8364,7 +8390,9 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     try:
         effective_events, selected = reconcile_event_table(events, selected)
     except ValueError as exc:
-        st.error(f"Fix the event table before these edits can be drawn or saved: {exc}")
+        st.error(
+            f"Fix the Fixation table before these edits can be drawn or saved: {exc}"
+        )
         effective_events, selected = reconcile_event_table(seed, selected)
         events_valid = False
     else:
@@ -8377,7 +8405,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     dropped = unusable_event_rows(words, events)
     if dropped:
         st.caption(
-            "Rows without finite X/Y or a valid target are not drawn until corrected."
+            "Rows with no X/Y and no valid target word aren't drawn, and block "
+            "**Save dataset**."
         )
     stale_entries = st.session_state.get(_AUTHOR_STALE_TARGETS_KEY, {}).get(source, {})
     stale = unresolved_targets(stale_entries, words, effective_events)
@@ -8431,7 +8460,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
                 selected_fixation_id=selected,
             )
         except ValueError as exc:
-            st.error(str(exc))
+            st.error(f"That canvas edit couldn't be applied: {exc}")
         else:
             st.session_state["_authored_events_frame"] = updated
             st.session_state["_author_selected_fixation"] = selected
@@ -8447,7 +8476,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     name_key = f"author_dataset_name_{source}"
     st.text_input(
         "Dataset name",
-        value="Synthetic sample (edited)"
+        value="Hand-drawn sample (edited)"
         if source == MANUAL_SAMPLE_CHOICE
         else "My scanpath",
         key=name_key,
@@ -8504,7 +8533,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         ),
     )
     actions.button(
-        "Reset fixations to the text",
+        "Reset to one fixation per word",
         key=f"author_reset_fixations_{source}",
         disabled=words.empty,
         on_click=_reset_author_fixations,
@@ -8787,8 +8816,8 @@ def _render_backup_reminder(host, active_view: str) -> None:
     box = host.container(key="sps_backup_reminder", border=True)
     box.markdown(
         f"{ICONS['warning']} **This deployment saves nothing.** Closing or "
-        "refreshing the tab loses the datasets you added, their column mappings "
-        "and your annotations. Keep the files you uploaded, and export your "
+        "refreshing the tab loses the datasets you added, their column mappings, "
+        "your annotations and designs. Keep the files you uploaded, and export your "
         f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
         "dataset's mapping from "
         f"{ICONS['edit']} **Edit dataset → Save setup**. "
@@ -8797,7 +8826,7 @@ def _render_backup_reminder(host, active_view: str) -> None:
     row = box.container(horizontal=True, gap="small")
     if active_view != _VIEW_DATA:
         row.button(
-            "Open Data Management",
+            "Go to Data Management",
             key="sps_backup_reminder_go",
             icon=ICONS["view_data"],
             on_click=_go_data,
@@ -8884,7 +8913,7 @@ def _open_dataset_card(
     steps = (
         ("Building the trial list",)
         if stored
-        else ("Reading files", "Normalizing", "Building the trial list")
+        else ("Reading files", "Mapping columns", "Building the trial list")
     )
     # UX-166: the dataset already on screen, run again — a filter change on a
     # big corpus, a re-normalization — is an update, not a load: titled so, with
@@ -9124,7 +9153,7 @@ def _run_app() -> None:
             # (DATA-55): the app no longer discovers corpora, and until DATA-56's
             # add-from-a-folder flow nothing in it adds one.
             page_notices.warning(
-                f"This link opens the corpus `{slug}`, which isn't available "
+                f"This link opens the dataset `{slug}`, which isn't available "
                 "here. The link's view settings still apply to whatever you open."
             )
     elif url_source == "upload":
@@ -9530,7 +9559,7 @@ def _run_app() -> None:
                 key="create_manual_scanpath_btn",
                 on_click=_enter_manual_dataset,
                 help="Write a text and place its fixations by hand. Saved "
-                "scanpaths are listed below like any other dataset.",
+                "scanpaths join the list of datasets.",
                 width="stretch",
             )
             st.button(
@@ -9839,7 +9868,7 @@ def _run_app() -> None:
             else:
                 dataset_card.step(
                     1,
-                    f"Normalizing {len(raw_words_df):,} word rows and "
+                    f"Mapping {len(raw_words_df):,} word rows and "
                     f"{len(raw_fixations_df):,} fixations",
                 )
         declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
@@ -9922,8 +9951,8 @@ def _run_app() -> None:
                 "Filename pattern",
                 key="stimulus_image_pattern",
                 value="{text_id}.png",
-                help="Use table fields such as {text_id}, {trial_id}, or "
-                "{participant_id}; subfolders are supported.",
+                help="Use the app's field names in braces — {text_id}, {trial_id} "
+                "or {participant_id}. Subfolders work too.",
             ).strip()
             if image_root:
                 try:
@@ -9937,9 +9966,9 @@ def _run_app() -> None:
                         _rows_with_local_images(frame)
                         for frame in (words_df, fixations_df)
                     )
-                    st.caption(f"Matched {int(found):,} table rows to local images.")
+                    st.caption(f"Found a local image for {plural(int(found), 'row')}.")
                 except ValueError as exc:
-                    st.error(str(exc))
+                    st.error(f"Couldn't use this folder or pattern: {exc}")
 
     # Optional raw gaze: the Upload source already mapped + normalized it above;
     # every other source loads it here (bundled demo sample, OneStop uploader).
@@ -10440,9 +10469,9 @@ def _run_app() -> None:
             inline_field_label(
                 meta_heading_row[0].container(key="wiz_map_meta_heading_edit"),
                 "Metadata",
-                "Optional per-reader, per-trial and per-text tables. Once "
+                "Optional per-participant, per-trial and per-text tables. Once "
                 "attached, their columns behave like fields in the data: "
-                "filters, chips, trial sorting, inspection and export.",
+                "filters, trial labels, sorting, inspection and export.",
                 emphasis=True,
             )
             for slug, renderer, ids in (

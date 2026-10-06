@@ -1071,7 +1071,7 @@ class TestDatasetTable:
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         asks = [w.value for w in at.warning if "Remove" in str(w.value)]
-        assert asks and "its 1 annotation leave" in asks[0]
+        assert asks and "its 1 annotation are deleted" in asks[0]
 
     def test_an_uploads_new_name_is_applied_by_save_changes(self):
         """UX-178: renaming is the editor's **Name** field. An upload's editor
@@ -2234,7 +2234,7 @@ class TestUnmappedRawDataView:
         captions = " ".join(c.value for c in at.caption)
         # R35: the manifest's ISO code renders as a display name.
         assert "English" in captions
-        assert "84 readers" in captions
+        assert "84 participants" in captions
         # R34: full coverage → the plain badge.
         assert "measured word boxes." in captions
         assert "of 55 texts" not in captions

@@ -369,7 +369,7 @@ class TestTrialFilterFlow:
         body = " ".join(m.value for m in at.markdown)
         assert "No trials match your filters" in body
         # The count has to say what it counts; "(dataset has 1)" did not.
-        assert "**0** of the **1 trials** in this dataset get through." in body
+        assert "**0** of the **1 trial** in this dataset get through." in body
         assert "★ Favorites only" in body
         assert _trial_ids(at) == []
         assert [b for b in at.button if b.key == "clear_all_trial_filters"], (
@@ -933,7 +933,7 @@ class TestAddDatasetMenu:
         _clean(at)
         assert _dataset_names(at)
         assert "My scanpath" not in _dataset_names(at)
-        assert MANUAL_SAMPLE_CHOICE in _dataset_names(at)
+        assert "Hand-drawn sample" in _dataset_names(at)
         at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
         _clean(at)
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
@@ -1052,7 +1052,7 @@ class TestAuthoringEditorFlow:
         )
         assert any("target word" in str(w.value) for w in at.warning)
         next(
-            b for b in at.button if b.label == "Reset fixations to the text"
+            b for b in at.button if b.label == "Reset to one fixation per word"
         ).click().run(timeout=60)
         _clean(at, "after resetting the fixations:")
         after = at.session_state["_authored_events_frame"]

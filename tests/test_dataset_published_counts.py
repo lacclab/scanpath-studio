@@ -317,7 +317,7 @@ def test_a_onestop_regime_publishes_only_its_own_measured_figures(regime):
     """DATA-63: the corpus publishes whole-release figures, not per regime, so a
     regime never quotes them. DATA-65 pinned the reports, which makes a regime's
     own count stable enough to publish: a counted regime shows exactly what was
-    measured, and one not yet counted says *Not loaded* until it is opened."""
+    measured, and one not yet counted says *Not counted* until it is opened."""
     published = app.published_dataset_counts(app.ONESTOP_REGIME_CHOICES[regime])
     assert published == app._ONESTOP_REGIME_COUNTS.get(regime, {})
     if published:
@@ -353,14 +353,14 @@ class TestTheTableItself:
         assert (row["Participants"], row["Texts"], row["Trials"]) == (75, 12, 900)
 
     def test_the_open_dataset_shows_what_it_loaded(self, table):
-        row = table.set_index("Dataset").loc["Bundled Demo"]
+        row = table.set_index("Dataset").loc["Bundled demo"]
         assert row["Counts"] == "Loaded"
         assert row["Participants"] == 2
 
     def test_the_manual_sample_is_counted_without_being_opened(self, table):
         """It is built in memory, so it is counted even with no recovery cache
         to remember it — as on Streamlit Community Cloud."""
-        row = table.set_index("Dataset").loc["Synthetic sample"]
+        row = table.set_index("Dataset").loc["Hand-drawn sample"]
         assert row["Counts"] == "Loaded"
         assert row["Participants"] == 1
         assert row["Fixations"] > 0
@@ -372,7 +372,7 @@ class TestTheTableItself:
         assert row["Counts"] == ""
         assert pd.isna(row["Participants"])
         # UX-174: and the cell says why, rather than showing a blank or a 0.
-        assert row["_cells"]["Participants"] == "Not loaded"
+        assert row["_cells"]["Participants"] == "Not counted"
 
 
 class TestWhatTheDataPageSays:

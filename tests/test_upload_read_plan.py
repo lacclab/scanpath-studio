@@ -194,7 +194,9 @@ class TestTheHeaderPassReadsEachFileOnce:
         assert calls == ["words.xls"]
 
     def test_a_new_file_is_read(self, monkeypatch):
-        monkeypatch.setattr(app, "read_table_columns", lambda source, kind=None: [source.name])
+        monkeypatch.setattr(
+            app, "read_table_columns", lambda source, kind=None: [source.name]
+        )
         app._upload_columns_cached.clear()
         first = app._upload_header(self._Upload("a.xls", "perf-header-2"), multi=False)
         second = app._upload_header(self._Upload("b.xls", "perf-header-3"), multi=False)

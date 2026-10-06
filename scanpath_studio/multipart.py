@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 PARENT_KEY = ("participant_id", "trial_id")
@@ -300,7 +301,10 @@ def apply_trial_parts_manifest(
 
 
 def screen_canvas_size(frame: pd.DataFrame) -> tuple[int, int] | None:
-    """Per-screen canvas metadata when both dimensions are present."""
+    """Per-screen canvas metadata when both dimensions are present.
+
+    ``None`` — the caller's own screen size — unless each dimension holds one
+    finite, positive value."""
     if frame is None or frame.empty:
         return None
     values = []
@@ -308,7 +312,7 @@ def screen_canvas_size(frame: pd.DataFrame) -> tuple[int, int] | None:
         if column not in frame.columns:
             return None
         numeric = pd.to_numeric(frame[column], errors="coerce").dropna().unique()
-        if len(numeric) != 1 or numeric[0] <= 0:
+        if len(numeric) != 1 or not np.isfinite(numeric[0]) or numeric[0] <= 0:
             return None
         values.append(int(numeric[0]))
     return values[0], values[1]

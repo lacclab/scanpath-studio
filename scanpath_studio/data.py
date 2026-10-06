@@ -6211,7 +6211,8 @@ def compute_canvas_size(
         value = _to_number(frame[position])
         if size is not None and size in frame.columns:
             value = value + _to_number(frame[size])
-        return float(value.max())
+        value = value.astype(float)
+        return float(value[np.isfinite(value)].max())
 
     if words is not None and not words.empty and "x" in words.columns:
         x_candidates.append(extent(words, "x", "width"))

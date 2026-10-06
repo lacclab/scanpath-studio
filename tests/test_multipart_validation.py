@@ -282,8 +282,9 @@ class TestScreenCanvasSize:
             _frame(canvas_width=[100] * 4),  # height missing
             _frame(canvas_width=[100, 200, 100, 100], canvas_height=[50] * 4),
             _frame(canvas_width=[0] * 4, canvas_height=[50] * 4),
+            _frame(canvas_width=[float("inf")] * 4, canvas_height=[50] * 4),
         ],
-        ids=["empty", "one-dimension", "not-constant", "non-positive"],
+        ids=["empty", "one-dimension", "not-constant", "non-positive", "infinite"],
     )
     def test_anything_less_reports_nothing(self, frame):
         assert screen_canvas_size(frame) is None

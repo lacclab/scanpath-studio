@@ -727,8 +727,8 @@ class TestBulkExportFlow:
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
     """ENG-30 → UX-179 — 🗂️ Data → *Saved on this computer* is the on-device
-    cache's only in-app surface, so it has to report the real store. It is a
-    read-out: clearing is `scanpath-studio cache --clear` / `api.clear_cache`.
+    cache's only in-app surface, so it has to report the real store. #374 F33
+    gave it one control back: *Clear what is saved…*, behind a confirmation.
     """
 
     @staticmethod
@@ -759,11 +759,35 @@ class TestRecoveryCachePanelFlow:
         # Working in the app writes the cache — the panel's own claim.
         assert (tmp_path / "manifest.json").is_file()
         assert persistence.cache_status(tmp_path)["settings"] > 0
-        # UX-179: a read-out — no saving toggle, no Clear, no Reset.
+        # UX-179: no saving toggle, no Reset.
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         labels = {p.proto.popover.label for p in at.get("popover")}
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
+
+    def test_clear_what_is_saved_lists_then_deletes(self, tmp_path, monkeypatch):
+        """#374 F33: the confirmation names what goes, and a confirmed clear
+        stays cleared — the run that follows does not write it all back."""
+        at = self._boot_local(tmp_path, monkeypatch)
+        _clean(at, "cache panel:")
+        assert (tmp_path / "manifest.json").is_file()
+        at.button(key="saved_here_clear").click()
+        _rerun(at, view=VIEW_DATA)
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "the view, trial and plot settings you left" in body
+        assert (tmp_path / "manifest.json").is_file(), "nothing goes before Delete"
+        # A dialog's click reruns only the dialog in a browser; AppTest replays
+        # the script, so re-arm it as `conftest.arm_debug_dialog` does.
+        from scanpath_studio import app
+
+        at.session_state[app.CLEAR_SAVED_REQUEST_KEY] = True
+        at.button(key="saved_here_clear_confirm").click()
+        _rerun(at, view=VIEW_DATA)
+        _rerun(at, view=VIEW_DATA)
+        assert at.session_state["_local_persistence_cleared"] is True
+        assert not (tmp_path / "manifest.json").is_file()
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "saves nothing more" in captions
 
     def test_the_section_is_only_on_the_data_page(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")

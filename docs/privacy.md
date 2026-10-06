@@ -21,9 +21,10 @@ server other machines can reach stores nothing: a hosted deployment, and a bare
 
 The cache is visible from inside the app: **Saved on this computer**, at the
 foot of the **:material/database: Data** page, reports what is stored, how large it is and the
-folder it is in. To run without it, start the app with
-`scanpath-studio run --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`. To see
-or delete it, use a terminal, with the app closed:
+folder it is in, and **Clear what is saved…** deletes it after a
+confirmation that lists what goes. To run without it, start the app with
+`scanpath-studio run --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`. From a
+terminal, with the app closed:
 
 ```bash
 scanpath-studio cache                       # what is stored, where, how big

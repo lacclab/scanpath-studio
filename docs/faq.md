@@ -97,7 +97,8 @@ over it until you retry or clear it.
 ### How do I turn the recovery copy off, or delete it?
 
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
-delete what is saved, close the app and run `scanpath-studio cache --clear`.
+delete what is saved, use **Clear what is saved…** under **Saved on this
+computer**, or close the app and run `scanpath-studio cache --clear`.
 See [Recovery cache](cli.md#recovery-cache).
 
 ## Help and versions

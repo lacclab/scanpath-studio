@@ -248,6 +248,7 @@ from scanpath_studio.persistence import (
     cache_failure,
     cache_status,
     clear_local_state,
+    clear_saved_work,
     consume_restore_skipped,
     discard_failed_dataset,
     discard_failed_metadata,
@@ -265,6 +266,7 @@ from scanpath_studio.persistence import (
     retry_failed_datasets,
     retry_failed_metadata,
     save_local_state,
+    saved_work_cleared,
     server_bound_to_loopback,
 )
 from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
@@ -1125,12 +1127,12 @@ def _render_saved_here_section(app_url: str, host) -> None:
     dialog's first block; it lives here because its count is "datasets **you
     added**", which is the table above it.
 
-    UX-179 left it no controls. The *Save changes automatically* toggle, *Clear
-    recovery cache* and *Reset everything* are gone: opting out is a launch
-    choice (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ),
-    and clearing is ``scanpath-studio cache --clear`` or ``api.clear_cache``.
-    The one in-session pause left is BUG-71's, after a restore that crashed,
-    which the section names.
+    UX-179 left it no controls: opting out is a launch choice
+    (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ). #374 F33
+    gave it one back, **Clear what is saved…**, behind a confirmation listing
+    what goes (``persistence.clear_saved_work``) — the CLI's
+    ``scanpath-studio cache --clear`` was the only way before. BUG-71's pause,
+    after a restore that crashed, is the other in-session state it names.
 
     Drawn *after* this run's ``save_local_state`` (``main``'s
     ``_finish_page``), so the status line reports the write that just happened.
@@ -1166,7 +1168,9 @@ def _render_saved_here_section(app_url: str, host) -> None:
         return
 
     host.caption(
-        "Saved as you work, and reopened next time. Nothing is uploaded anywhere."
+        "Saved as you work and reopened next time — your added datasets, "
+        "annotations, designs, and the view, trial and plot settings you left. "
+        "Nothing is uploaded anywhere."
     )
     if restored_from_cache(st.session_state):
         host.success("Recovered when the app opened.", icon=ICONS["recovery"])
@@ -1198,10 +1202,27 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "or incomplete).",
             icon=ICONS["warning"],
         )
+    elif saved_work_cleared(st.session_state):
+        host.caption(
+            "Cleared. This tab keeps what it has open, but saves nothing more; "
+            "the next session starts saving afresh."
+        )
     elif not status["exists"]:
-        host.caption("Nothing saved yet. The first change creates the cache.")
+        host.caption("Nothing saved yet — the first change you make is saved here.")
     render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
     host.markdown(f"**Folder:** `{status['directory']}`")
+    # #374 F33. The unreadable-cache box keeps its own Clear button.
+    if status["exists"] and not cache_failure(st.session_state):
+        host.button(
+            "Clear what is saved…",
+            icon=ICONS["delete"],
+            key="saved_here_clear",
+            help="Delete everything listed above from this computer, after a "
+            "confirmation.",
+            on_click=_arm_clear_saved,
+        )
+        if st.session_state.pop(CLEAR_SAVED_REQUEST_KEY, False):
+            _clear_saved_dialog(app_url)
     if persistence_paused(st.session_state) and not cache_failure(st.session_state):
         # BUG-71 — the only pause left: the last launch never finished opening
         # with this cache, so this session neither restored nor overwrites it.
@@ -1210,6 +1231,62 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "was. Reload to try restoring it again, or delete it with "
             "`scanpath-studio cache --clear`."
         )
+
+
+#: #374 F33 — *Clear what is saved…*'s request flag, served right under the
+#: button (the section is the last thing a run draws, so nothing waits on it).
+CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
+
+
+def _arm_clear_saved() -> None:
+    st.session_state[CLEAR_SAVED_REQUEST_KEY] = True
+
+
+def saved_items(status: dict) -> list[str]:
+    """What *Clear what is saved…* deletes, one line each (#374 F33)."""
+    names = [str(entry["name"]) for entry in status.get("datasets") or []]
+    names += [str(entry["name"]) for entry in status.get("damaged") or []]
+    items = []
+    if names:
+        listed = ", ".join(f"`{name}`" for name in names)
+        items.append(f"{plural(len(names), 'dataset')} you added: {listed}")
+    if status.get("annotations"):
+        items.append(plural(int(status["annotations"]), "annotation"))
+    if status.get("designs"):
+        items.append(f"{plural(int(status['designs']), 'saved design')}")
+    if status.get("metadata"):
+        items.append(plural(int(status["metadata"]), "metadata table"))
+    items.append("the view, trial and plot settings you left")
+    return items
+
+
+@st.dialog(f"{ICONS['delete']} Clear what is saved?")
+def _clear_saved_dialog(app_url: str) -> None:
+    """Confirm *Clear what is saved…*, listing what it deletes (#374 F33)."""
+    st.markdown(
+        "This deletes from this computer:\n\n"
+        + "\n".join(f"- {item}" for item in saved_items(cache_status(url=app_url)))
+    )
+    st.caption(
+        "This tab keeps what it has open until you close it, but saves nothing "
+        "more. Your original files are not touched. There is no undo."
+    )
+    cancel, confirm = st.columns(2)
+    if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
+        st.rerun()
+    # A callback, so the delete happens before anything else in the rerun
+    # (the nav may rerun the script before this dialog is reached again).
+    confirm.button(
+        "Delete",
+        icon=ICONS["delete"],
+        type="primary",
+        key="saved_here_clear_confirm",
+        width="stretch",
+        on_click=clear_saved_work,
+        args=(st.session_state,),
+    )
+    if saved_work_cleared(st.session_state):
+        st.rerun()  # the whole page, which closes this dialog
 
 
 def _arm_about() -> None:

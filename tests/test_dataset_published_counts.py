@@ -357,6 +357,14 @@ class TestTheTableItself:
         assert row["Counts"] == "Loaded"
         assert row["Participants"] == 2
 
+    def test_the_manual_sample_is_counted_without_being_opened(self, table):
+        """It is built in memory, so it is counted even with no recovery cache
+        to remember it — as on Streamlit Community Cloud."""
+        row = table.set_index("Dataset").loc["Synthetic sample"]
+        assert row["Counts"] == "Loaded"
+        assert row["Participants"] == 1
+        assert row["Fixations"] > 0
+
     def test_a_source_that_publishes_nothing_stays_blank(self, table):
         """MultiplEYE reads whatever session folders are on this machine, so no
         figure would be true of the next person's copy."""

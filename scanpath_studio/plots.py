@@ -6399,6 +6399,10 @@ def _make_split_comparison_figure(
                 # The word-box outline: the scanpath's own colour unless its
                 # style names one (`box_color`).
                 box_color=style.get("box_color") or style["fix_color"],
+                # Its fill: the figure's unless the style names one.
+                box_fill_color=(
+                    style.get("box_fill_color") or settings.word_box_fill_color
+                ),
             )
         )
 
@@ -6586,7 +6590,7 @@ def _make_split_comparison_figure(
             for box in build_word_boxes(
                 trial_words,
                 color=spec["box_color"],
-                fill_color=settings.word_box_fill_color,
+                fill_color=spec["box_fill_color"],
                 fill_opacity=settings.word_box_fill_opacity,
                 line_opacity=settings.word_box_line_opacity,
             ):
@@ -6901,6 +6905,10 @@ def _render_comparison_figure(
                 # The word-box outline: the scanpath's own colour unless its
                 # style names one (`box_color`).
                 box_color=style.get("box_color") or style["fix_color"],
+                # Its fill: the figure's unless the style names one.
+                box_fill_color=(
+                    style.get("box_fill_color") or settings.word_box_fill_color
+                ),
             )
         )
 
@@ -7022,7 +7030,7 @@ def _render_comparison_figure(
                 + build_word_boxes(
                     spec["trial_words"],
                     color=spec["box_color"],
-                    fill_color=settings.word_box_fill_color,
+                    fill_color=spec["box_fill_color"],
                     fill_opacity=settings.word_box_fill_opacity,
                     line_opacity=settings.word_box_line_opacity,
                 )

@@ -603,7 +603,8 @@ def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layou
 
 class TestBoxOutline:
     """Each reading's word boxes are outlined in its fixation colour unless its
-    style names a `box_color` — the Compare rail's *Line A* / *Line B*."""
+    style names a `box_color` — the *Line* row of the Compare rail's per-scanpath
+    word-box groups."""
 
     @staticmethod
     def _outlines(**styles) -> set:
@@ -638,3 +639,40 @@ class TestBoxOutline:
             style_b={"fix_color": "#0000aa"},
         )
         assert outlines == {"#123456", "#0000aa"}
+
+
+class TestBoxFill:
+    """Each reading's word boxes are filled with the figure's fill colour unless
+    its style names a `box_fill_color` — the Compare rail's per-scanpath *Fill*."""
+
+    @staticmethod
+    def _fills(**kwargs) -> set:
+        from scanpath_studio.plots import _shape_layer
+
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            show_words=True,
+            word_box_fill_opacity=0.3,
+            **kwargs,
+        )
+        return {
+            shape.fillcolor
+            for shape in fig.layout.shapes
+            if _shape_layer(shape) == "word_boxes"
+        }
+
+    def test_the_default_is_the_figures_fill(self):
+        assert len(self._fills(word_box_fill_color="#00aa00")) == 1
+
+    def test_a_box_fill_color_overrides_it_per_scanpath(self):
+        same = self._fills(word_box_fill_color="#00aa00")
+        split = self._fills(
+            word_box_fill_color="#00aa00", style_b={"box_fill_color": "#aa00aa"}
+        )
+        assert len(split) == 2 and same < split

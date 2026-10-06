@@ -48,6 +48,7 @@ STYLES_SENT = {
     "cmp0_hollow": True,
     "cmp0_label_pattern": "A: {trial_id}",
     "cmp0_box_color": "#cc6600",
+    "cmp0_box_fill_color": "#ccee00",
     "cmp1_fix_color": "#0000aa",
     "cmp1_saccade_color": "#aa00aa",
     "cmp1_saccade_style": "Dotted",
@@ -57,6 +58,7 @@ STYLES_SENT = {
     "cmp1_hollow": True,
     "cmp1_label_pattern": "B: {participant_id}",
     "cmp1_box_color": "#6600cc",
+    "cmp1_box_fill_color": "#00eecc",
     # CMP-24 — B's own filters ride the same group.
     "cmp1_fixclass_short_mode": "Discard",
     "cmp1_fixclass_short_threshold_ms": 90,

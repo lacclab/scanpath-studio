@@ -3322,6 +3322,7 @@ def column_mapping_ui(
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",
+                select_all=False,  # an id is a few columns, never all (#374)
                 persist_state="session",
                 on_change=_mark_field_touched,
                 args=(state_key,),

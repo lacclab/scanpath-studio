@@ -2395,5 +2395,51 @@ def mapping_menu_css() -> str:
            needs; keep it on one line so the virtualizer's row height holds. */
         white-space: nowrap;
     }
+    /* #374 F13 — a mapped column's chip wraps instead of being cut to a stub
+       ("T…", "RECORDI…"): the mapping cells are a seventh of the row, less
+       with the setup guide open, and the chip is the user's one check that the
+       detection is right. Hovering still shows the full name (`title`). */
+    [class*="st-key-col_map_"][class*="_cell"] {
+        container-type: inline-size;
+    }
+    [class*="st-key-col_map_"][class*="_cell"] [data-tag] {
+        height: auto;
+        max-width: 100%;
+    }
+    [class*="st-key-col_map_"][class*="_cell"] [data-tag] > span[title] {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        line-height: 1.25;
+    }
+    /* Narrow (the guide open, or a small window): the clear-all ⊗ goes — each
+       chip has its own × — and the caret floats over the corner, so the chips
+       get the cell's whole width rather than the third of it left beside two
+       buttons. */
+    @container (max-width: 190px) {
+        [class*="st-key-col_map_"][class*="_cell"] [data-testid="stMultiSelect"]
+            button[aria-label="Clear all"] {
+            display: none;
+        }
+        [class*="st-key-col_map_"][class*="_cell"] [data-testid="stMultiSelect"]
+            [role="group"] {
+            position: relative;
+        }
+        [class*="st-key-col_map_"][class*="_cell"] [data-testid="stMultiSelect"]
+            button[aria-label="Open"] {
+            position: absolute;
+            right: 0;
+            top: 0.25rem;
+        }
+        [class*="st-key-col_map_"][class*="_cell"]
+            [data-testid="stMultiSelectTagsContainer"] {
+            flex: 1 1 100%;
+            min-width: 0;
+            padding-right: 1.1rem;
+        }
+        [class*="st-key-col_map_"][class*="_cell"] [data-tag] > span[title] {
+            font-size: 0.8rem;
+        }
+    }
     </style>
     """

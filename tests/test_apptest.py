@@ -575,7 +575,7 @@ class TestDataInspectionTab:
         subheaders = [s.value for s in at.subheader]
         # UX-177: the list of datasets opens the page with no heading of its own.
         assert f"{ICONS['datasets']} Available datasets" not in subheaders
-        section = f"{ICONS['search']} What's in the `Synthetic test trial` dataset"
+        section = f"{ICONS['search']} What's in **Synthetic test trial**"
         assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
             str(m.value)
@@ -593,7 +593,12 @@ class TestDataInspectionTab:
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
         tab_labels = [t.label for t in at.tabs]
-        for tab in (f"{ICONS['stats']} Stats", "Fixations", "AOIs", "Raw gaze"):
+        for tab in (
+            f"{ICONS['stats']} Stats",
+            "Fixations",
+            "Words (interest areas)",
+            "Raw gaze",
+        ):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
         # The counts are the section's opening answer, so they kept no heading.
         assert "Dataset statistics" not in subheaders
@@ -5014,7 +5019,7 @@ class TestLazySubtabBodiesStillRender:
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         headings = " ".join(s.value for s in at.subheader)
-        assert "What's in the" in headings or at.dataframe
+        assert "What's in" in headings or at.dataframe
 
 
 class TestAnimationExportRasterBranch:

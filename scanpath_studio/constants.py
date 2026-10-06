@@ -1028,6 +1028,10 @@ TRIAL_IDENTITY_FULL_KEY = "_trial_identity_full_scan"
 #: button can name the right screen: ``"add"`` or ``"edit"``.
 TRIAL_IDENTITY_CHECK_KEY = "_trial_identity_check_after"
 
+#: #374 F30 — the name of the dataset ✅ Add dataset just stored, popped by
+#: ``app.main`` once its frames are loaded to confirm what arrived.
+DATASET_ADDED_KEY = "_dataset_added_name"
+
 
 # --- UX-138 · the icon vocabulary ---------------------------------------------
 # One Material Symbols (Rounded) icon per *concept* the app draws as chrome — a

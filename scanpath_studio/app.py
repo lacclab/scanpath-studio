@@ -90,6 +90,7 @@ from scanpath_studio.constants import (
     DATA_OVERVIEW_KEY,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
+    DATASET_ADDED_KEY,
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
@@ -199,6 +200,7 @@ from scanpath_studio.data import (
     raw_gaze_in_pool,
     read_table,
     read_table_columns,
+    read_table_sample,
     read_tables,
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
@@ -214,6 +216,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
     vouch_for_frames,
+    zip_member_split,
 )
 from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
@@ -270,7 +273,11 @@ from scanpath_studio.persistence import (
     saved_work_cleared,
     server_bound_to_loopback,
 )
-from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
+from scanpath_studio.session_keys import (
+    COLUMN_MAPPING_PREFIX,
+    PARAM_CORPUS,
+    PARAM_DATASET,
+)
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
@@ -320,8 +327,10 @@ from scanpath_studio.url_state import (
     _render_share_body,
     apply_pending_preprocessing,
     corpus_choice_for_slug,
+    link_dataset_notice,
     link_sets,
     link_setup_keys_for,
+    resolve_link_dataset,
     scope_link_setup,
 )
 
@@ -1848,6 +1857,8 @@ def _benchmark_files_present(dataset: str) -> bool:
 # value so the loaders can keep falling back to the demo corpus and the app
 # stays usable.
 _UNAVAILABLE_KEY = "_dataset_unavailable"
+#: #374 F14 — the added dataset a `?dataset=` link opened, so it is opened once.
+_LINK_DATASET_OPENED_KEY = "_link_dataset_opened"
 #: UX-174: whether this run is showing the demo *in place of* the selected
 #: corpus. Cleared at the start of every full run and set with the note above
 #: (which is consumed before the dataset table draws), so it describes this run
@@ -3276,7 +3287,7 @@ def _cached_words_join_nothing(
 
 #: BUG-32 — said once per page, in the notices strip, while it holds.
 WORDS_JOIN_NOTHING_WARNING = (
-    f"{ICONS['warning']} **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    f"{ICONS['warning']} **No fixation has word boxes.** A Words table was loaded, but none "
     "of its participant + trial pairs is in the fixations, so every trial draws "
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
@@ -3969,7 +3980,7 @@ def prepare_data(
         if allow_override:
             word_schema = column_mapping_ui(
                 words_df,
-                table_label="Words/IA",
+                table_label="Words (interest areas)",
                 state_key_prefix="col_map_words",
                 field_specs=WORD_FIELD_SPECS,
                 proposed=word_proposed,
@@ -3991,7 +4002,7 @@ def prepare_data(
             word_schema = word_proposed
         word_problems = validate_word_schema(word_schema)
         if word_problems:
-            problems.append("Words/IA: " + "; ".join(word_problems))
+            problems.append("Words table: " + "; ".join(word_problems))
 
     if has_fixations:
         fix_proposed = _apply_declared_schema(
@@ -4113,7 +4124,7 @@ def _render_unmapped_view(
         raw_fixations_df is None or raw_fixations_df.empty
     ):
         st.info("No data loaded yet.")
-    _render_raw_preview("Words / IA", raw_words_df)
+    _render_raw_preview("Words (interest areas)", raw_words_df)
     _render_raw_preview("Fixations", raw_fixations_df)
 
 
@@ -4262,12 +4273,13 @@ def _read_uploaded_table_cached(
         return stamp_source(read_table(_uploaded))
     # PERF-6: parse only the columns the mapping, the registry and the user's
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
-    # a new column simply re-reads the file under the new plan.
-    header = read_table_columns(_uploaded)
+    # a new column simply re-reads the file under the new plan. `kind` also
+    # picks a mixed zip's members (#374 F3).
+    header = read_table_columns(_uploaded, kind=kind)
     plan = upload_read_plan(
         header, kind, chosen=chosen, text_column=text_column, identity=identity
     )
-    return stamp_source(read_table(_uploaded, plan=plan))
+    return stamp_source(read_table(_uploaded, plan=plan, kind=kind))
 
 
 @st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
@@ -4287,7 +4299,7 @@ def _read_uploaded_tables_cached(
                 header, kind, chosen=chosen, text_column=text_column, identity=identity
             )
 
-    return stamp_source(read_tables(list(_uploaded_list), plan_for=plan_for))
+    return stamp_source(read_tables(list(_uploaded_list), plan_for=plan_for, kind=kind))
 
 
 #: Session keys naming a source column the user has picked: every mapping
@@ -4344,7 +4356,7 @@ def upload_read_plan(
     )
 
 
-def _upload_header(uploaded, *, multi: bool) -> list:
+def _upload_header(uploaded, *, multi: bool, kind: str | None = None) -> list:
     """Every column name across an upload, in first-seen order (PERF-6).
 
     The *union*, not the first file's: one upload is commonly one file per
@@ -4357,13 +4369,13 @@ def _upload_header(uploaded, *, multi: bool) -> list:
     sources = list(uploaded) if multi else [uploaded]
     header: list = []
     for source in sources:
-        columns = _upload_columns_cached(source, _uploaded_file_key(source))
+        columns = _upload_columns_cached(source, _uploaded_file_key(source), kind)
         header.extend(c for c in columns if c not in header)
     return header
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def _upload_columns_cached(_uploaded, file_key) -> list:
+def _upload_columns_cached(_uploaded, file_key, kind: str | None = None) -> list:
     """One uploaded file's column names, read once per file (PERF-6's header pass).
 
     Keyed like the planned read. A delimited file's header is cheap, but a
@@ -4372,7 +4384,49 @@ def _upload_columns_cached(_uploaded, file_key) -> list:
     re-parsed the file on every rerun of the wizard: 1.4 s a click on a full
     ``.xls`` sheet, and a second decompressed copy of a large zip held at once.
     """
-    return read_table_columns(_uploaded)
+    return read_table_columns(_uploaded, kind=kind)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _zip_split_cached(_uploaded, file_key, kind: str | None) -> str:
+    """The note an upload row shows when its zip mixes fixation and
+    interest-area reports (#374 F3): which members it used, which it left out.
+    Empty for anything else."""
+    try:
+        return zip_member_split(_uploaded, kind).message()
+    except Exception:  # the read itself reports an unreadable archive
+        return ""
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
+def _upload_sample_cached(_uploaded, file_key, kind: str | None) -> pd.DataFrame:
+    """The first rows of one upload, every column parsed (#374 F13)."""
+    return read_table_sample(_uploaded, kind=kind)
+
+
+def upload_sample(state_prefix: str, kind: str | None) -> pd.DataFrame:
+    """A sample of the first file uploaded under ``state_prefix`` — what the
+    wizard judges a column the planned read left out by. Empty without one."""
+    uploaded = st.session_state.get(f"{state_prefix}_upload")
+    files = uploaded if isinstance(uploaded, (list, tuple)) else [uploaded]
+    first = next((f for f in files if f is not None), None)
+    if first is None or not hasattr(first, "read"):
+        return pd.DataFrame()
+    return _upload_sample_cached(first, _uploaded_file_key(first), kind)
+
+
+def upload_zip_notes(uploaded, kind: str | None) -> list[str]:
+    """One note per zip in an upload that left members out for ``kind``."""
+    if kind is None or not uploaded:
+        return []
+    files = uploaded if isinstance(uploaded, (list, tuple)) else [uploaded]
+    notes = []
+    for f in files:
+        if str(getattr(f, "name", "")).lower().endswith(".zip"):
+            note = _zip_split_cached(f, _uploaded_file_key(f), kind)
+            if note:
+                notes.append(note)
+    return notes
 
 
 def _uploaded_header(state_prefix: str) -> list:
@@ -4481,7 +4535,7 @@ def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFr
     text_column = None
     identity: tuple = ()
     if kind is not None:
-        header = _upload_header(uploaded, multi=multi)
+        header = _upload_header(uploaded, multi=multi, kind=kind)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
         # BUG-53: the word-text column the user mapped by hand (the mapping
         # widget's own key) is the one to read verbatim, not the proposed one.
@@ -5179,7 +5233,7 @@ def render_data_source_picker(host=None) -> None:
             "Import files",
             icon=ICONS["upload"],
             key="import_dataset_btn",
-            help="Add your fixation and word/AOI tables with the setup wizard.",
+            help="Add your Fixations and Words (interest areas) tables.",
             on_click=_enter_add_data_wizard,
             width="stretch",
         )
@@ -5742,8 +5796,9 @@ def render_dataset_inspection_head(token: str) -> None:
     :func:`render_dataset_edit_button`, below the description and checks and
     above the inspection subtabs.
     """
-    label = _dataset_display_name(token).replace("`", "'")
-    st.subheader(f"{ICONS['search']} What's in the `{label}` dataset")
+    # #374 F30: the name alone — "the `Dataset 1` dataset" said it twice.
+    label = _dataset_display_name(token).replace("*", r"\*")
+    st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
 
 
@@ -5844,6 +5899,25 @@ def _open_mapping_editor() -> None:
         st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
+
+
+def dataset_added_message(
+    name: str, words: pd.DataFrame, fixations: pd.DataFrame
+) -> str:
+    """The toast ✅ Add dataset ends with (#374 F30): "**Dataset 1** added —
+    24 trials, 2 participants." The counts are left out when there are none
+    (a raw-gaze-only dataset counts its trials elsewhere)."""
+    readers: set = set()
+    for frame in (words, fixations):
+        if frame is not None and "participant_id" in frame.columns:
+            readers |= set(frame["participant_id"].dropna().astype(str))
+    readers.discard("")  # a stimulus-level word table's placeholder
+    trials = count_trials(words, fixations)
+    shown = name.replace("*", r"\*")
+    head = f"**{shown}** added"
+    if not trials:
+        return f"{head}."
+    return f"{head} — {plural(trials, 'trial')}, {plural(len(readers), 'participant')}."
 
 
 @st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
@@ -6738,8 +6812,13 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     # Only a dataset you added can be removed. For the demo, a public corpus
     # or a local bundle, Remove only hid the row for the rest of the session —
     # nothing was deleted and nothing could bring it back — so they offer none.
-    # The empty cell keeps the columns lined up.
+    # The empty cell keeps the columns lined up — drawn with a space in it, as
+    # the header's is, because an empty container is not drawn at all and the
+    # row's numbers then sat right of an added dataset's (#374 F30).
     if row.token not in set(st.session_state.get("_data_source_uploaded") or []):
+        actions.markdown(
+            '<span aria-hidden="true">&nbsp;</span>', unsafe_allow_html=True
+        )
         return
     actions.button(
         f"Remove {row.name}",
@@ -8913,7 +8992,12 @@ def _run_app() -> None:
     # for the full URL schema. External tools can deep-link into this app with
     # `?source=...&participant=...&trial=...&...` to land on a specific trial
     # with the reviewer's preferred viz settings.
+    keys_before_link = set(st.session_state.keys())
     url_source = _apply_url_preset()
+    # #374 F14: what the link seeded, to take back if it names a dataset that
+    # isn't here (`resolve_link_dataset`, after the recovery cache restores).
+    link_seeded = set(st.session_state.keys()) - keys_before_link
+    links_dataset = bool(st.query_params.get(PARAM_DATASET))
     # ENG-26: desktop/localhost installs remember uploaded datasets, annotations,
     # mappings and view settings across browser refreshes and process restarts.
     # Public deployments never opt in implicitly (there is no user identity with
@@ -9045,6 +9129,19 @@ def _run_app() -> None:
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
+    elif links_dataset:
+        # #374 F14: `?dataset=` names a dataset the sender added. Opened when
+        # this session holds one of that name — once, on the run that read the
+        # link, so the picker stays the user's afterwards — and otherwise the
+        # link is set aside whole, with a notice naming what is missing.
+        current = st.session_state.get("data_source_choice")
+        if (name := resolve_link_dataset(link_seeded, current)) is not None:
+            linked_choice = name
+            if st.session_state.get(_LINK_DATASET_OPENED_KEY) != name:
+                st.session_state[_LINK_DATASET_OPENED_KEY] = name
+                st.session_state["_pending_source_choice"] = name
+    if notice := link_dataset_notice(st.session_state.get("data_source_choice")):
+        page_notices.warning(notice, icon=ICONS["warning"])
     # EXP-19: the canvas / font a link seeded belong to the source it names.
     # Scope their protection from the source snap to that source — or drop it
     # when the link named none this app can open, so the fallback source still
@@ -9441,7 +9538,7 @@ def _run_app() -> None:
                 icon=ICONS["upload"],
                 key="add_data_btn",
                 on_click=_enter_add_data_wizard,
-                help="Add your fixation and word/AOI tables with the setup wizard.",
+                help="Add your Fixations and Words (interest areas) tables.",
                 width="stretch",
             )
     # UX-178 — part 1's headline on every run, like the other parts (the editor
@@ -9957,6 +10054,13 @@ def _run_app() -> None:
     # set `TRIAL_IDENTITY_CHECK_KEY`; the report they are asking about is the one
     # just computed above, on the frames those buttons produced.
     asked_by = st.session_state.pop(TRIAL_IDENTITY_CHECK_KEY, None)
+    added = st.session_state.pop(DATASET_ADDED_KEY, None)
+    if added:
+        # #374 F30: ✅ Add dataset ended with no word — say what arrived.
+        st.toast(
+            dataset_added_message(str(added), words_all, fixations_all),
+            icon=ICONS["success"],
+        )
     if asked_by and identity_warning:
         try:
             _trial_identity_alert_dialog(str(asked_by), identity_warning)

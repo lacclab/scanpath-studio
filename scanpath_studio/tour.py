@@ -2268,7 +2268,8 @@ _WIZARD_GUIDE_STEPS = [
         "title": "2 · Upload data tables",
         "body": (
             "Every table uploads and maps in its own row here — Fixations, "
-            "Words / IA, Raw gaze, then Participant/Trial/Text metadata. "
+            "Words (interest areas), Raw gaze, then Participant/Trial/Text "
+            "metadata. "
             "Under each mapping, pick which extra columns to keep. "
             "Anything still missing is listed "
             f"above **{ICONS['confirm']} Add dataset**."
@@ -2280,8 +2281,9 @@ _WIZARD_GUIDE_STEPS = [
         "title": "3 · Recording setup",
         "body": (
             "Say how you know the screen, physical size and text size the "
-            "data was recorded with — there is no default, because a wrong "
-            "guess here silently rescales every figure."
+            "data was recorded with. Pick one answer for each — nothing is "
+            "chosen for you, because a wrong guess here silently rescales "
+            "every figure."
         ),
         "selector": ".st-key-wiz_part_setup",
         "step_id": "setup",

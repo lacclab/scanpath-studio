@@ -227,7 +227,7 @@ scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 
 ## Data checks
 
-`check` runs the **Data** page's **Data checks** on your tables without opening the app: fixations lasting 0 ms or less, fixations and raw-gaze samples with no finite position, and word boxes with no area. Each finding gives the rows and trials affected, a few example rows, and what the app does with them. It changes nothing, and it exits 0 whatever it finds; `--json` prints the table [`api.check_data_health`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.check_data_health) returns.
+`check` runs the **Data** page's **Data checks** on your tables without opening the app: fixations lasting 0 ms or less or with an infinite duration or onset, fixations and raw-gaze samples with no finite position, word boxes with no area or no finite position, and per-screen screen sizes that are not finite and positive. Each finding gives the rows and trials affected, a few example rows, and what the app does with them. It changes nothing, and it exits 0 whatever it finds; `--json` prints the table [`api.check_data_health`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.check_data_health) returns.
 
 ```
 scanpath-studio check --words ia.csv --fixations fixations.csv

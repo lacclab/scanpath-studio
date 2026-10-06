@@ -269,7 +269,7 @@ check_data_health(words: DataFrame | None = None, fixations: DataFrame | None = 
 
 Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
 
-Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixations lasting 0 ms or less, fixations and raw-gaze samples whose position is missing or infinite, and word boxes with no area. One row per check that found anything: `table`, `check`, `problem`, the `columns` it read (in the names the frames carry), `rows` of `of_rows`, the `trials` they fall in, a `breakdown` by kind, `severity` (`"note"` for raw-gaze gaps, which blinks and track loss make ordinary), `what_happens` to those rows in the app, and a few `examples`. An empty frame means every check passed. Nothing is changed or dropped::
+Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixations lasting 0 ms or less or with an infinite duration or onset, fixations and raw-gaze samples whose position is missing or infinite, word boxes with no area or no finite position, and per-screen screen sizes that are not finite and positive. One row per check that found anything: `table`, `check`, `problem`, the `columns` it read (in the names the frames carry), `rows` of `of_rows`, the `trials` they fall in, a `breakdown` by kind, `severity` (`"note"` for raw-gaze gaps, which blinks and track loss make ordinary), `what_happens` to those rows in the app, and a few `examples`. An empty frame means every check passed. Nothing is changed or dropped::
 
 ```
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")

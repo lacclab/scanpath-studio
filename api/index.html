@@ -3194,8 +3194,10 @@ trials have fixations.</p>
 <p>Checks the normalized tables (from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a> /
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>) for fixations lasting
-0 ms or less, fixations and raw-gaze samples whose position is missing or
-infinite, and word boxes with no area. One row per check that found
+0 ms or less or with an infinite duration or onset, fixations and raw-gaze
+samples whose position is missing or infinite, word boxes with no area or no
+finite position, and per-screen screen sizes that are not finite and
+positive. One row per check that found
 anything: <code>table</code>, <code>check</code>, <code>problem</code>, the <code>columns</code> it read (in the
 names the frames carry),
 <code>rows</code> of <code>of_rows</code>, the <code>trials</code> they fall in, a <code>breakdown</code> by

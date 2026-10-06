@@ -1909,6 +1909,7 @@ behind each line, and the releases before 0.28.0, are in
 <ul>
 <li>The Illustration label's text can be edited (rail, link, settings file, <code>render --illustration-text</code>, <code>illustration_text=</code>), and title and caption have their own switches. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
 <li>Word boxes: the outline has its own opacity (rail, share link, <code>--word-box-line-opacity</code>, <code>word_box_line_opacity=</code>), and each opacity now sits beside its colour. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Data checks also report infinite fixation durations and onsets, word boxes at infinity, and per-screen screen sizes that are infinite or 0 or less. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
@@ -1922,6 +1923,13 @@ behind each line, and the releases before 0.28.0, are in
 <p><strong>Removed</strong></p>
 <ul>
 <li>The px-per-degree figure is no longer shown in the Recording setup forms, and the export's saccade table no longer converts amplitudes to degrees. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+</ul>
+<p><strong>Fixed</strong></p>
+<ul>
+<li><code>render</code> accepts v0.33.0's <code>--colorbars</code> and shared <code>--colorbar-orientation</code> / <code>--colorbar-tickangle</code> / <code>--colorbar-tickfont-size</code> again, the last three setting both colour bars unless a bar's own flag is given. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
+<li>A figure's title, caption, Illustration label, word-heatmap title and the names of compared scanpaths are drawn as written: angle brackets, <code>&amp;</code> and <code>%{…}</code> no longer act as Plotly markup, and only a real newline starts a new caption line. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
+<li>An infinite position, duration, onset or word-box size no longer stretches a figure's axes or crashes it or its replay; the figure leaves such a row out (or times it by duration), and a per-screen screen size that is not finite and positive falls back to the dataset's own. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
+<li>The plot rail shows "Word boxes" in full at a 1280-pixel window. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
 </ul>
 <h2 id="0330-2026-10-04">0.33.0 — 2026-10-04<a class="headerlink" href="#0330-2026-10-04" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

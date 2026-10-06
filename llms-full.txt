@@ -319,7 +319,7 @@ Describe the screen the data was **recorded** on, not the one you are using now.
 
 **Data Management** lists every dataset with its counts; click a row to open it. **Edit dataset** opens under the list, below the open dataset's counts and tables, and changes its name, description, column mapping, recording setup and metadata tables, or adds a table it is missing (fixations, AOIs or raw gaze); its mapped fields show the same value preview. On an added dataset, changing an ID or coordinate column shows a few values as they are now and as they will be after saving, and **Count trials and check joins** says whether readings would merge or the word boxes or a metadata table would stop matching. Its **Save setup** writes the mapping in your files' own column names, so whoever has the same files can restore it on the add screen; anything a restore cannot redo by itself is listed beside the button. For the demo and the public corpora, a recording setup you save is your own for that dataset alone: the setup the corpus declares is kept, and **Reset to source setup** goes back to it. Nothing applies until you click **Save changes**; **Cancel** discards all of it. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
 
-Above the open dataset's tables, **Data checks** looks for values that loaded as numbers but cannot be right: fixations lasting 0 ms or less, fixations or raw-gaze samples whose position is missing or infinite, and word boxes with no width or height. Each finding gives the rows and trials affected, the columns they came from, a few example rows, and what the app does with them. Nothing is removed: the rows stay in every table and export. `check_data_health` runs the same checks from Python, and `scanpath-studio check` from the terminal.
+Above the open dataset's tables, **Data checks** looks for values that loaded as numbers but cannot be right: fixations lasting 0 ms or less or with an infinite duration or onset, fixations or raw-gaze samples whose position is missing or infinite, word boxes with no width or height or at infinity, and per-screen screen sizes that are infinite or 0 or less. Each finding gives the rows and trials affected, the columns they came from, a few example rows, and what the app does with them. Nothing is removed: the rows stay in every table and export. `check_data_health` runs the same checks from Python, and `scanpath-studio check` from the terminal.
 
 Columns are named as they are in your files: in the tables, the plot controls, the trial chips, filters and sort, Corpus Analysis, the figure's hover and colour bar, and the setup screens, a column you uploaded as `CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one Scanpath Studio made, such as a reading measure your data did not bring.
 
@@ -377,16 +377,16 @@ Pick a trial above the plot. The **filter funnel** beside it narrows the list by
 
 The **Plot controls** rail starts with **Animate**, **Compare**, four design presets and a palette. Below them, each section is one line: a switch, and a **▾** with its settings.
 
-| Section         | What it controls                                                   |
-| --------------- | ------------------------------------------------------------------ |
-| Fixations       | markers: size, colour, order                                       |
-| Saccades        | lines and arrows, coloured by direction or reading type            |
-| Stimulus        | text, span highlight, stimulus image, font and background          |
-| Word boxes      | each word's interest area: outline colour, fill colour and opacity |
-| Heatmap         | where fixations concentrate, by count or duration                  |
-| Raw gaze        | the gaze samples as recorded                                       |
-| Filter          | which fixations and saccades are drawn                             |
-| Figure & canvas | screen framing, axes and grid, title and labels, hover fields      |
+| Section         | What it controls                                                               |
+| --------------- | ------------------------------------------------------------------------------ |
+| Fixations       | markers: size, colour, order                                                   |
+| Saccades        | lines and arrows, coloured by direction or reading type                        |
+| Stimulus        | text, span highlight, stimulus image, font and background                      |
+| Word boxes      | each word's interest area: outline colour and opacity; fill colour and opacity |
+| Heatmap         | where fixations concentrate, by count or duration                              |
+| Raw gaze        | the gaze samples as recorded                                                   |
+| Filter          | which fixations and saccades are drawn                                         |
+| Figure & canvas | screen framing, axes and grid, title and labels, hover fields                  |
 
 Colour ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials and filters, so they stay comparable; its number boxes take any endpoint, beyond the data shown too. The word-box heatmap's range is in dwell time per word (ms), the summed duration of the fixations in each box, or in fixations per word; on Auto it runs from 0 to the trial's highest. **Interpolated** blurs the fixations with a Gaussian (its **Blur** row: Auto, or a σ in px) and scales to each figure's own peak, so its range is greyed; it is kept for Word boxes and Compare, which always draws word boxes.
 
@@ -832,7 +832,7 @@ check_data_health(words: DataFrame | None = None, fixations: DataFrame | None = 
 
 Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
 
-Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixations lasting 0 ms or less, fixations and raw-gaze samples whose position is missing or infinite, and word boxes with no area. One row per check that found anything: `table`, `check`, `problem`, the `columns` it read (in the names the frames carry), `rows` of `of_rows`, the `trials` they fall in, a `breakdown` by kind, `severity` (`"note"` for raw-gaze gaps, which blinks and track loss make ordinary), `what_happens` to those rows in the app, and a few `examples`. An empty frame means every check passed. Nothing is changed or dropped::
+Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixations lasting 0 ms or less or with an infinite duration or onset, fixations and raw-gaze samples whose position is missing or infinite, word boxes with no area or no finite position, and per-screen screen sizes that are not finite and positive. One row per check that found anything: `table`, `check`, `problem`, the `columns` it read (in the names the frames carry), `rows` of `of_rows`, the `trials` they fall in, a `breakdown` by kind, `severity` (`"note"` for raw-gaze gaps, which blinks and track loss make ordinary), `what_happens` to those rows in the app, and a few `examples`. An empty frame means every check passed. Nothing is changed or dropped::
 
 ```
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
@@ -1432,7 +1432,7 @@ scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 
 ## Data checks
 
-`check` runs the **Data** page's **Data checks** on your tables without opening the app: fixations lasting 0 ms or less, fixations and raw-gaze samples with no finite position, and word boxes with no area. Each finding gives the rows and trials affected, a few example rows, and what the app does with them. It changes nothing, and it exits 0 whatever it finds; `--json` prints the table [`api.check_data_health`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.check_data_health) returns.
+`check` runs the **Data** page's **Data checks** on your tables without opening the app: fixations lasting 0 ms or less or with an infinite duration or onset, fixations and raw-gaze samples with no finite position, word boxes with no area or no finite position, and per-screen screen sizes that are not finite and positive. Each finding gives the rows and trials affected, a few example rows, and what the app does with them. It changes nothing, and it exits 0 whatever it finds; `--json` prints the table [`api.check_data_health`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.check_data_health) returns.
 
 ```
 scanpath-studio check --words ia.csv --fixations fixations.csv

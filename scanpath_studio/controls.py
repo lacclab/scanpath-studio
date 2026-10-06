@@ -7529,8 +7529,9 @@ def _trials_missing_column(_df: pd.DataFrame, column: str, cache_key) -> int:
 def _column_present_bools(_df: pd.DataFrame, column: str, cache_key) -> frozenset:
     if column not in _df.columns:
         return frozenset()
-    # Round 11: by meaning, not truthiness — `astype(bool)` read "False" as
-    # True and left one class, hiding the filter.
+    # Callers pass only bool-dtype columns today (a string "True"/"False"
+    # column takes the categorical path); read by meaning anyway, never by
+    # truthiness, so a future caller can't hide a class (round 11).
     flags = coerce_bool_or_na(pd.Series(_df[column])).dropna()
     return frozenset(bool(v) for v in flags.unique())
 

@@ -4973,6 +4973,10 @@ _MISSING_FLAG_STRINGS = {"", ".", "na", "nan", "n/a", "-", "none", "null", "<na>
 
 _TRUE_FLAG_SPELLINGS = {"true", "t", "yes", "y", "1", "1.0"}
 _FALSE_FLAG_SPELLINGS = {"false", "f", "no", "n", "0", "0.0"}
+_FLAG_SPELLINGS = {
+    **dict.fromkeys(_TRUE_FLAG_SPELLINGS, True),
+    **dict.fromkeys(_FALSE_FLAG_SPELLINGS, False),
+}
 
 
 def coerce_bool_or_na(col: pd.Series) -> pd.Series:
@@ -4986,30 +4990,19 @@ def coerce_bool_or_na(col: pd.Series) -> pd.Series:
     """
     if pd.api.types.is_bool_dtype(col):
         return col.astype("boolean")
+    if pd.api.types.is_numeric_dtype(col):
+        return (col != 0).astype("boolean").mask(col.isna())
     out = pd.Series(pd.NA, index=col.index, dtype="boolean")
-    numeric = pd.to_numeric(col, errors="coerce")
-    is_number = numeric.notna() & ~col.map(lambda v: isinstance(v, str))
-    out[is_number.to_numpy()] = (numeric[is_number] != 0).to_numpy()
-    rest = ~is_number & col.notna()
-    if rest.any():
-        spelled = col[rest].map(
-            lambda v: v if isinstance(v, bool) else str(v).strip().lower()
-        )
-        out[rest.to_numpy()] = (
-            spelled.map(
-                lambda v: (
-                    v
-                    if isinstance(v, bool)
-                    else True
-                    if v in _TRUE_FLAG_SPELLINGS
-                    else False
-                    if v in _FALSE_FLAG_SPELLINGS
-                    else pd.NA
-                )
-            )
-            .astype("boolean")
-            .to_numpy()
-        )
+    is_str = col.map(type).eq(str).to_numpy()
+    is_bool = col.map(type).eq(bool).to_numpy()
+    if is_bool.any():
+        out[is_bool] = col[is_bool].astype(bool).to_numpy()
+    numeric = pd.to_numeric(col.where(~is_str & ~is_bool), errors="coerce")
+    is_number = numeric.notna().to_numpy()
+    out[is_number] = (numeric[is_number] != 0).to_numpy()
+    if is_str.any():
+        spelled = col[is_str].str.strip().str.lower()
+        out[is_str] = spelled.map(_FLAG_SPELLINGS).astype("boolean").to_numpy()
     return out
 
 

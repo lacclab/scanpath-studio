@@ -4938,6 +4938,8 @@ def _plan_replay(
         playback_speed=1.0,
         autoplay=True,
         illustration_reasons=None,
+        # Stamped after the frames, by `finished_figure`; the view keys on it.
+        illustration_text="",
         # The duration-size key is layout only — no frame draws it — so it is
         # stamped onto the cached replay in `finished_figure`, and toggling it
         # costs no frame rebuild.
@@ -6829,6 +6831,9 @@ def render_single_trial_tab(
     )
     viz_settings["illustration_reasons"] = label_reasons
     figure_settings["illustration_reasons"] = label_reasons
+    # No label drawn: the text is a no-op, so it must not bust the figure cache.
+    if not label_reasons:
+        figure_settings["illustration_text"] = ""
     render_settings = FigureSettings.from_mapping(
         figure_settings,
         canvas_width=int(canvas_width),

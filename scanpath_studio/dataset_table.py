@@ -88,7 +88,7 @@ NEEDS_SETUP = "Needs setup"
 
 #: What each value of the **Status** column means, for its hover text.
 STATUS_EXPLANATIONS: Mapping[str, str] = {
-    LOADED: "Read this session: opens at once.",
+    LOADED: "Read this session, so it usually opens quickly.",
     AVAILABLE: "Its files are here; opening it reads them, which can take a "
     "while for a large dataset.",
     NEEDS_DOWNLOAD: "Its files are not in its folder yet: open it to download them.",

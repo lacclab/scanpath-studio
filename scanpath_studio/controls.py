@@ -7132,16 +7132,24 @@ def render_plot_controls(
         _sel_fix = (
             fix_range_fixations if fix_range_fixations is not None else pd.DataFrame()
         )
-        _title_caption_fields = pattern_fields(
-            "p01",
-            "t01",
-            _trial_rows(words, _sel_fix),
-            _sel_fix,
-            {},
-            dataset_name=current_dataset_name(),
-            metadata_rows=_selected_metadata_rows(_sel_fix),
-            # DATA-66: the field list offers the dataset's own names too.
-            column_names=_rail_names(),
+        # Read only while one is shown: with both off, the greyed boxes ask
+        # nothing of the fields (`preview=False`), so the default rerun does no
+        # title/caption work at all (PERF-7's rule).
+        _title_caption_fields = (
+            pattern_fields(
+                "p01",
+                "t01",
+                _trial_rows(words, _sel_fix),
+                _sel_fix,
+                {},
+                dataset_name=current_dataset_name(),
+                metadata_rows=_selected_metadata_rows(_sel_fix),
+                # DATA-66: the field list offers the dataset's own names too.
+                column_names=_rail_names(),
+            )
+            if st.session_state.get("global_show_title")
+            or st.session_state.get("global_show_caption")
+            else {}
         )
         any_shown = False
         for name, show_key, pattern_key, default, help_text in (

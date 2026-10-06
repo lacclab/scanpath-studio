@@ -215,3 +215,25 @@ def test_replay_labels_are_drawn_as_written():
         settings=_settings(label_a=LABELS[0], label_b=LABELS[1], show_legend=True),
     )
     assert set(LABELS_LITERAL) <= {t.name for t in fig.data}
+
+
+def test_illustration_text_and_word_heatmap_title_are_drawn_as_written():
+    words, fixations = _frames()
+    fig = _static(words, fixations)
+    plots.add_illustration_label(fig, ["snapped"], text="<b>Schematic</b>")
+    texts = {a.text for a in fig.layout.annotations}
+    assert "&lt;b&gt;Schematic&lt;/b&gt;" in texts
+    # The words-only heatmap (AN-4's "word difficulty on the stimulus").
+    fig = _static(
+        words,
+        fixations.iloc[0:0],
+        show_heatmap=True,
+        word_heatmap_col="word_id",
+        word_heatmap_title="a<br>b",
+    )
+    titles = [
+        t.marker.colorbar.title.text
+        for t in fig.data
+        if getattr(t, "marker", None) is not None and t.marker.colorbar.title.text
+    ]
+    assert "a&lt;br&gt;b" in titles

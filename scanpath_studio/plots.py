@@ -2960,7 +2960,7 @@ def _render_scanpath_figure(
                 heatmap_range=heatmap_range,
                 show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
-                colorbar_title=word_heatmap_title or "Value",
+                colorbar_title=_plotly_literal(word_heatmap_title or "Value"),
                 colorbar_style=cb_style,
             )
         else:
@@ -3376,7 +3376,8 @@ def add_illustration_label(
         yref="paper",
         xanchor="right",
         yanchor="bottom",
-        text=str(text).strip() or "Illustration · " + "; ".join(reasons),
+        text=_plotly_literal(str(text).strip())
+        or "Illustration · " + "; ".join(reasons),
         showarrow=False,
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",

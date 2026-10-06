@@ -5855,11 +5855,14 @@ def apply_editor_restore() -> None:
         return
     if snapshot.get("owner") != st.session_state.get(metadata_mod.OWNER_KEY):
         return
-    for grain in _metadata_grains_changed(snapshot):
+    changed = _metadata_grains_changed(snapshot)
+    if changed:
+        # The uploader still holds the cancelled edit's file in the browser.
+        metadata_mod.reset_uploads(st.session_state)
+    for grain in changed:
         before = snapshot["grains"][grain]
         key, raw, file = metadata_mod.grain_keys(grain)
         for name in (
-            f"{grain}_metadata_upload",
             f"{grain}_metadata_id_column",
             f"{grain}_metadata_keep_fields",
         ):

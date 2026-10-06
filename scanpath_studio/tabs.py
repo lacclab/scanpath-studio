@@ -12362,7 +12362,7 @@ def _clear_participant_metadata() -> None:
     # And the uploader's own key: without it the widget still holds the file on
     # the next run, the (now absent) signature check reads as "new file", and
     # the table re-attaches itself immediately.
-    st.session_state.pop("participant_metadata_upload", None)
+    st.session_state.pop(md.upload_key("participant"), None)
 
 
 def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
@@ -12474,7 +12474,7 @@ def _participant_metadata_body(
     upload = stats_host.file_uploader(
         "Participant metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
-        key="participant_metadata_upload",
+        key=md.upload_key("participant"),
         # No `persist_state` — `st.file_uploader` does not take it. It does
         # not need it either: the parsed frame is kept in session state under
         # `md.RAW_SESSION_KEY`, so the attached table survives even if the
@@ -12640,7 +12640,7 @@ def _clear_trial_metadata() -> None:
     # the (now absent) signature check reads as "new file", and the table
     # re-attaches itself immediately. Detaching a trial table therefore looked
     # like it had done nothing, and the table came back on the next visit.
-    st.session_state.pop("trial_metadata_upload", None)
+    st.session_state.pop(md.upload_key("trial"), None)
 
 
 def render_trial_metadata_section(
@@ -12697,7 +12697,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     upload = stats_host.file_uploader(
         "Trial metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
-        key="trial_metadata_upload",
+        key=md.upload_key("trial"),
         help=_tm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
@@ -12868,7 +12868,7 @@ def _clear_text_metadata() -> None:
         "text_metadata_id_column",
     ):
         st.session_state.pop(key, None)
-    st.session_state.pop("text_metadata_upload", None)
+    st.session_state.pop(md.upload_key("text"), None)
 
 
 def render_text_metadata_section(
@@ -12918,7 +12918,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
     upload = stats_host.file_uploader(
         "Text metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
-        key="text_metadata_upload",
+        key=md.upload_key("text"),
         help=_txm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),

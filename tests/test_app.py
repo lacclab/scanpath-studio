@@ -242,6 +242,46 @@ class TestBuildShareQuery:
         assert parsed["tab"] == ["animation"]
         assert caveats == []
 
+    @pytest.mark.parametrize(
+        ("participant", "trial", "screen"),
+        [
+            ("p2", "t2", None),
+            ("cohort:reader-7", "passage:trial-2", "page:1"),
+            ("a\\b:", "50% & co/ü", "s 1"),
+        ],
+    )
+    def test_compared_ids_round_trip_whatever_they_hold(
+        self, fake_st, participant, trial, screen
+    ):
+        """Round 10, finding 2: B's ids travel in one `compare=` value, so a
+        colon inside one must not move the split."""
+        from scanpath_studio.url_state import PENDING_COMPARE_STATE_KEY
+
+        compare = {"participant_id": participant, "trial_id": trial}
+        fake_st.session_state = {
+            "_share_selection": {
+                "participant_id": "p1",
+                "trial_id": "t1",
+                "compare": {**compare, "screen_id": screen},
+            },
+        }
+        query, _ = _build_share_query(DEMO_CHOICE)
+        fake_st.session_state = {}
+        fake_st.query_params = {k: v[0] for k, v in parse_qs(query).items()}
+        _apply_url_preset()
+        assert fake_st.session_state[PENDING_COMPARE_STATE_KEY] == compare
+        assert fake_st.session_state.get("single_compare_screen_id") == screen
+
+    def test_an_older_compare_link_still_restores(self, fake_st):
+        from scanpath_studio.url_state import PENDING_COMPARE_STATE_KEY
+
+        fake_st.query_params = {"compare": "p2:t2"}
+        _apply_url_preset()
+        assert fake_st.session_state[PENDING_COMPARE_STATE_KEY] == {
+            "participant_id": "p2",
+            "trial_id": "t2",
+        }
+
     def test_uploaded_source_warns_and_omits_source(self, fake_st):
         fake_st.session_state = {
             "_share_selection": {"participant_id": "p1", "trial_id": "t1"},

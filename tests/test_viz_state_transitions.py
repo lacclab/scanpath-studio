@@ -52,6 +52,25 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
     assert controls._PRE_ILLUSTRATION_STATE not in store
 
 
+@pytest.mark.parametrize("preset", ["scanpath", "heatmap", "illustration"])
+def test_compare_on_then_off_puts_the_preset_back(monkeypatch, preset):
+    """Switching Compare (a design setting) on reads Custom; switching it off
+    again returns every setting to the preset, so the badge must follow."""
+    store = _viz_store()
+    store["single_compare_toggle"] = False
+    monkeypatch.setattr(controls.st, "session_state", store)
+
+    controls._apply_view_preset(preset)
+    assert controls._active_quick_view() == preset
+    store["single_compare_toggle"] = True
+    assert controls._active_quick_view() == "custom"
+    store["single_compare_toggle"] = False
+    assert controls._active_quick_view() == preset
+    # Back on the preset, a later edit drifts from it as before.
+    store["global_fixation_opacity"] = 0.33
+    assert controls._active_quick_view() == "custom"
+
+
 def test_leaving_illustration_does_not_leak_an_intervening_edit(monkeypatch):
     store = _viz_store()
     monkeypatch.setattr(controls.st, "session_state", store)

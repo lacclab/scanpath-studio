@@ -7132,8 +7132,10 @@ def render_plot_controls(
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
             _gated_help(
-                "The fixation columns plotted on the X and Y axes (by default, "
-                "the fixation's position on the screen).",
+                "The fixation columns on the X and Y axes. Only x / y (screen "
+                "position) is fully supported: with any other field the plot "
+                "shows fixation markers only: no word boxes, text, saccades, "
+                "heatmap or coordinate grid.",
                 axis_reason,
             ),
         )
@@ -7166,6 +7168,15 @@ def render_plot_controls(
             disabled=axis_disabled,
             label_visibility="collapsed",
         )
+        if (
+            st.session_state.get("global_x_field", "x"),
+            st.session_state.get("global_y_field", "y"),
+        ) != ("x", "y"):
+            st.caption(
+                f"{ICONS['warning']} Limited support: the plot shows fixation "
+                "markers only — no word boxes, text, saccades, heatmap or "
+                "coordinate grid."
+            )
 
     # EXP-5: title/caption on the figure — moved here from being Export-only
     # (EXP-2), so it's visible live rather than a setting a user has to remember

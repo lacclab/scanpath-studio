@@ -1307,15 +1307,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspect-and-measure" class="md-nav__link">
+  <a href="#inspect" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspect and measure
+        Inspect
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Inspect and measure">
+    <nav class="md-nav" aria-label="Inspect">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1345,61 +1345,6 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_data_health
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.compute_word_metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;compute_word_metrics
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.preprocess_data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;preprocess_data
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.analysis_tables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;analysis_tables
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.trial_summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;trial_summary
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.reader_summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;reader_summary
       
     </span>
   </a>
@@ -2202,15 +2147,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspect-and-measure" class="md-nav__link">
+  <a href="#inspect" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspect and measure
+        Inspect
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Inspect and measure">
+    <nav class="md-nav" aria-label="Inspect">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2240,61 +2185,6 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_data_health
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.compute_word_metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;compute_word_metrics
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.preprocess_data" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;preprocess_data
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.analysis_tables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;analysis_tables
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.trial_summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;trial_summary
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scanpath_studio.api.reader_summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;reader_summary
       
     </span>
   </a>
@@ -2608,18 +2498,17 @@ steps print this (run when the docs are built):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">measures</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">compute_word_metrics</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"IA_ID"</span><span class="p">,</span> <span class="s2">"IA_LABEL"</span><span class="p">,</span> <span class="s2">"IA_FIRST_FIXATION_DURATION"</span><span class="p">,</span> <span class="s2">"IA_DWELL_TIME"</span><span class="p">]</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">measures</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"IA_ID"</span><span class="p">,</span> <span class="s2">"IA_LABEL"</span><span class="p">,</span> <span class="s2">"IA_FIRST_FIXATION_DURATION"</span><span class="p">,</span> <span class="s2">"IA_DWELL_TIME"</span><span class="p">]</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">words</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>  participant_id        unique_trial_id
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>0       l37_1129  l37_1129_2_1_1_Ele_r0
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>1       l37_1129  l37_1129_2_1_2_Ele_r0
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>2       l37_1129  l37_1129_2_1_3_Adv_r0
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>0      0    Robert                        32.0            387
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>1      1  Myslajek                       170.0            785
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>2      2     stops                       290.0           1330
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>0      0    Robert                          32            387
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>1      1  Myslajek                         170            785
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>2      2     stops                         290           1330
 </code></pre></div>
 <h2 id="load">Load<a class="headerlink" href="#load" title="Permanent link">&para;</a></h2>
 
@@ -2638,7 +2527,7 @@ steps print this (run when the docs are built):</p>
     <div class="doc doc-contents first">
 
         <p>Load and normalize a words/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> table and/or a fixations table.</p>
-<p>The columns keep the names your files give them (DATA-66):
+<p>The columns keep the names your files give them:
 <code>CURRENT_FIX_DURATION</code>, not <code>duration_ms</code>. A column Scanpath Studio
 built, converted, computed or changed keeps its internal name, and
 <code>data.column_names</code> (a <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;scanpath_studio.api.ScanpathData&lt;/span&gt;" href="#scanpath_studio.api.ScanpathData"><code>ScanpathData</code></a>)
@@ -2654,8 +2543,7 @@ a <code>source_file</code> column. Column schemas are auto-detected (EyeLink, Ga
 Tobii, SMI, Pupil Labs, and snake_case names); pass <code>word_schema</code> /
 <code>fix_schema</code> mappings (field → column name; see
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.propose_schema&lt;/span&gt;" href="#scanpath_studio.api.propose_schema"><code>propose_schema</code></a>)
-to override detection. For per-word reading measures, pass the result to
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compute_word_metrics&lt;/span&gt;" href="#scanpath_studio.api.compute_word_metrics"><code>compute_word_metrics</code></a>.</p>
+to override detection.</p>
 <p><code>trial_parts_manifest</code> accepts a nested parent-trial/parts definition for
 datasets whose source tables identify screens through arbitrary selector
 columns; explicit <code>screen_id</code> / <code>screen_index</code> columns can instead be
@@ -3123,7 +3011,7 @@ auto-detect → normalize path (no OneStop-specific column mapping).</p>
 
     </div>
 
-</div><h2 id="inspect-and-measure">Inspect and measure<a class="headerlink" href="#inspect-and-measure" title="Permanent link">&para;</a></h2>
+</div><h2 id="inspect">Inspect<a class="headerlink" href="#inspect" title="Permanent link">&para;</a></h2>
 
 
 <div class="doc doc-object doc-function">
@@ -3146,7 +3034,7 @@ data. <code>raw_gaze</code> (a frame from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>) adds the trials that
 only its samples cover — every trial, for a dataset recorded as raw gaze
 alone (pass <code>None</code> for <code>words</code> and <code>fixations</code> then). The id columns
-take the names the frames carry (DATA-66).</p>
+take the names the frames carry.</p>
 
 
     </div>
@@ -3208,117 +3096,6 @@ or dropped::</p>
 <div class="highlight"><pre><span></span><code>words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
 print(sps.check_data_health(words, fixations))
 </code></pre></div>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="scanpath_studio.api.compute_word_metrics" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.compute_word_metrics</span>
-
-
-<a href="#scanpath_studio.api.compute_word_metrics" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_word_metrics</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span>
-</code></pre></div>
-
-    <div class="doc doc-contents first">
-
-        <p>Per-word reading measures (<abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>/<abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>/<abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr>/<abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr>, skips, regressions, …).</p>
-<p>Pre-aggregated columns in <code>words</code> (EyeLink <abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> exports) are preserved; anything
-missing is computed from fixations + word bounding boxes. Takes the normalized
-frames from <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>,
-and answers in the names they carry.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="scanpath_studio.api.preprocess_data" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.preprocess_data</span>
-
-
-<a href="#scanpath_studio.api.preprocess_data" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">preprocess_data</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">short_policy</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="s1">'Off'</span><span class="p">,</span> <span class="n">short_threshold_ms</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">=</span> <span class="mf">80.0</span><span class="p">,</span> <span class="n">merge_distance_chars</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">discard_blink_adjacent</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple">tuple</a></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">]</span>
-</code></pre></div>
-
-    <div class="doc doc-contents first">
-
-        <p>Apply the optional preprocessing stage and return words/fixations/QA.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="scanpath_studio.api.analysis_tables" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.analysis_tables</span>
-
-
-<a href="#scanpath_studio.api.analysis_tables" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">analysis_tables</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pixels_per_degree</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">raw_gaze</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">]</span>
-</code></pre></div>
-
-    <div class="doc doc-contents first">
-
-        <p>The tables <code>scanpath-studio analyze</code> writes, as a dict of frames.</p>
-<p><code>fixations</code>, <code>saccades</code>, <code>word_measures</code>, <code>sentence_measures</code>,
-<code>trial_summary</code>, <code>reader_summary</code>, <code>characters</code> and <code>cleaning_qa</code>.</p>
-<p><code>word_measures</code> is the words table with the reading measures it
-<em>brought</em> (AN-32 / EXP-23): none are computed here, and a words table that
-carries none leaves <code>word_measures</code> out. Call
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compute_word_metrics&lt;/span&gt;" href="#scanpath_studio.api.compute_word_metrics"><code>compute_word_metrics</code></a> first
-to add the app's own.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="scanpath_studio.api.trial_summary" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.trial_summary</span>
-
-
-<a href="#scanpath_studio.api.trial_summary" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">trial_summary</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span>
-</code></pre></div>
-
-    <div class="doc doc-contents first">
-
-        <p>Exportable one-row-per-trial reading summary.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="scanpath_studio.api.reader_summary" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.reader_summary</span>
-
-
-<a href="#scanpath_studio.api.reader_summary" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reader_summary</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></span>
-</code></pre></div>
-
-    <div class="doc doc-contents first">
-
-        <p>Exportable one-row-per-reader reading summary.</p>
 
 
     </div>
@@ -3416,7 +3193,7 @@ always plays from its first frame.</p>
 <p>When <code>playback_speed</code> is not <code>1</code>, the automatic Illustration label says
 the replay timing was changed. <code>illustration_label</code> accepts <code>"auto"</code>,
 <code>"show"</code>, or <code>"hide"</code> like <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
-<p>CMP-24: in a co-animation <code>fix_index_range</code> windows A only (the app's
+<p>In a co-animation <code>fix_index_range</code> windows A only (the app's
 rule — A's slider never cuts B), <code>fix_index_range_b</code> windows B, and
 <code>fixation_flags_b</code> gives B flags of its own (<code>None</code>: A's
 <code>fixation_flags</code>, or the <code>fixation_flags</code> of <code>style_b</code> when it
@@ -3531,7 +3308,7 @@ stimulus.</p>
 the outline of that reading's word boxes, its <code>fix_color</code> when left out.
 <code>box_color</code> is this figure's only: the co-animation draws one set of boxes,
 in <code>word_box_color</code>, and ignores it.</p>
-<p><strong>Filters, per scanpath (CMP-24).</strong> <code>fixation_flags</code> and
+<p><strong>Filters, per scanpath.</strong> <code>fixation_flags</code> and
 <code>saccade_classes</code> filter both scanpaths, as they filter
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>'s one; the same two keys
 in <code>style_a</code> / <code>style_b</code> give that scanpath its own, overriding them —
@@ -3540,7 +3317,7 @@ e.g. <code>style_b={"fixation_flags": {"short": {"mode": "Discard",
 Compare mode draws A under the rail's filters and B under B's own.
 <code>fix_index_range</code> windows both scanpaths; <code>fix_index_range_b</code> gives B a
 window of its own (the app's B slider).</p>
-<p><strong>Raw gaze (VIZ-48).</strong> <code>raw_gaze</code> is a frame from
+<p><strong>Raw gaze.</strong> <code>raw_gaze</code> is a frame from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>; each reading's samples
 are drawn under its scanpath, in that scanpath's colour (<code>raw_gaze_marker_size</code>
 / <code>raw_gaze_opacity</code> style them). It serves both readings of a
@@ -4453,7 +4230,7 @@ Chrome/Chromium.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 4, 2026 06:44:27 UTC">October 4, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 08:03:27 UTC">October 6, 2026</span>
   </span>
 
     

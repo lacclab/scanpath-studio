@@ -1286,17 +1286,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-measures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reading measures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#the-same-thing-from-the-shell" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1798,17 +1787,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-measures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reading measures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#the-same-thing-from-the-shell" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2078,7 +2056,7 @@ are carried through when present.</p>
 </tr>
 <tr>
 <td><code>word_id</code></td>
-<td>Source word/<abbr title="Area of interest: here, a word's bounding box">AOI</abbr> assignment, carried through when the export has one — otherwise <code>NaN</code>. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside <code>compute_word_metrics</code> and the plots that need it.</td>
+<td>Source word/<abbr title="Area of interest: here, a word's bounding box">AOI</abbr> assignment, carried through when the export has one — otherwise <code>NaN</code>. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside the plots that need it.</td>
 </tr>
 <tr>
 <td><code>order_in_trial</code></td>
@@ -2258,22 +2236,12 @@ unknown name raises rather than silently falling back.</p>
 default, while the app opens on the core scanpath only. Every other default
 (marker opacity, index-label size, monitor framing, colours) is the app's.</p>
 </div>
-<h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">metrics</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">compute_word_metrics</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span>
-</code></pre></div>
-<p>One row per <code>(participant_id, trial_id, word_id)</code> with <code>first_fixation_ms</code>
-(<abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>), <code>first_pass_gaze_duration_ms</code> (<abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>), <code>regression_path_duration_ms</code>
-(<abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr> / go-past), <code>total_fixation_duration_ms</code> (<abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr>), <code>n_fixations</code>, <code>skip_flag</code>,
-<code>regression_in_flag</code>, <code>regression_out_flag</code>. Pre-aggregated columns already in
-the words table (EyeLink <abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> exports) win; the rest are computed from the
-fixations and word boxes. Every definition is in
-<a href="../computations/">Computations &amp; methodology</a>.</p>
 <h2 id="the-same-thing-from-the-shell">The same thing from the shell<a class="headerlink" href="#the-same-thing-from-the-shell" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span><span class="s1">'ia/*.csv'</span><span class="w"> </span>--fixations<span class="w"> </span><span class="s1">'fix/*.csv'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>-o<span class="w"> </span>figure.png
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--animate<span class="w"> </span>--playback-speed<span class="w"> </span><span class="m">4</span><span class="w"> </span>-o<span class="w"> </span>replay.html
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span><span class="s1">'ia/*.csv'</span><span class="w"> </span>--fixations<span class="w"> </span><span class="s1">'fix/*.csv'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>-o<span class="w"> </span>figure.png
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--animate<span class="w"> </span>--playback-speed<span class="w"> </span><span class="m">4</span><span class="w"> </span>-o<span class="w"> </span>replay.html
 </code></pre></div>
 <p>Without <code>-p</code> / <code>-t</code>, <code>render</code> draws the first available trial instead of
 raising. Every flag is in the <a href="../cli/">CLI reference</a>.</p>
@@ -2355,13 +2323,13 @@ raising. Every flag is in the <a href="../cli/">CLI reference</a>.</p>
 (Kaleido + Chrome; ffmpeg rides along with <code>imageio-ffmpeg</code>). The clip lasts
 what the replay does — the reading time over <code>playback_speed</code> — unless you pass
 <code>frame_duration_ms</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">playback_speed</span><span class="o">=</span><span class="mf">4.0</span><span class="p">)</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">clip</span> <span class="o">=</span> <span class="n">export_animation</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">)</span>  <span class="c1"># or "gif"; lasts reading time / 4</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">clip</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">playback_speed</span><span class="o">=</span><span class="mf">4.0</span><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">clip</span> <span class="o">=</span> <span class="n">export_animation</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">)</span>  <span class="c1"># or "gif"; lasts reading time / 4</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">clip</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="ground-rules">Ground rules<a class="headerlink" href="#ground-rules" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2392,7 +2360,7 @@ what the replay does — the reading time over <code>playback_speed</code> — u
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 06:36:08 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 08:03:27 UTC">October 6, 2026</span>
   </span>
 
     

@@ -26,7 +26,7 @@ The app limits how far a `.zip` may decompress (32 GB per file, 64 GB in total).
 
 ### Does the app compute reading measures?
 
-Not in the app. Corpus Analysis and Export show the measures your interest-area report provides, as they are. The Python function compute_word_metrics does compute them from fixations and word boxes; [Computations](https://lacclab.github.io/scanpath-studio/computations/index.md) defines each one.
+No. Corpus Analysis and Export show the measures your interest-area report provides, as they are; [Computations](https://lacclab.github.io/scanpath-studio/computations/index.md) defines each one.
 
 ### Does Filter change my data?
 

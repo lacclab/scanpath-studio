@@ -17,78 +17,80 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 
 Tier B is largely absent, on purpose
 
-Comparing against an independent implementation is [VAL-4](https://github.com/lacclab/scanpath-studio/issues/130), which is on hold. Scientific measures therefore read *Partially verified* even where their hand oracle is exact. The one real exception is the drift-correction port, which was written against a published reference.
+Comparing against an independent implementation [is planned](https://github.com/lacclab/scanpath-studio/issues/130). Scientific measures therefore read *Partially verified* even where their hand oracle is exact.
+
+Entries marked *experimental* are not computed by the default build: they need `SCANPATH_EXPERIMENTAL=1`. They are listed so that their definitions are on record.
 
 ## Summary
 
-| ID                                                        | Name                                     | Category                        | Unit                                                                                             | Status                 |
-| --------------------------------------------------------- | ---------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- |
-| [`norm.words`](#norm-words)                               | Word table normalization                 | Normalization / inference       | —                                                                                                | Partially verified     |
-| [`norm.fixations`](#norm-fixations)                       | Fixation table normalization             | Normalization / inference       | —                                                                                                | Partially verified     |
-| [`norm.box_edges`](#norm-box-edges)                       | Word box from edges                      | Normalization / inference       | px (screen coordinates, y increasing downwards)                                                  | Verified               |
-| [`norm.trial_id_composite`](#norm-trial-id-composite)     | Composite trial identity                 | Normalization / inference       | —                                                                                                | Partially verified     |
-| [`norm.flags`](#norm-flags)                               | Flag coercion                            | Normalization / inference       | —                                                                                                | Verified               |
-| [`norm.stimulus_broadcast`](#norm-stimulus-broadcast)     | Stimulus-level word broadcast            | Normalization / inference       | —                                                                                                | Partially verified     |
-| [`norm.aoi_center_placement`](#norm-aoi-center-placement) | AoI-only fixation placement              | Normalization / inference       | px                                                                                               | Verified               |
-| [`norm.participant_metadata`](#norm-participant-metadata) | Participant metadata join                | Normalization / inference       | —                                                                                                | Verified               |
-| [`assign.fixation_to_word`](#assign-fixation-to-word)     | Fixation → word assignment               | Assignment / classification     | —                                                                                                | Partially verified     |
-| [`assign.in_text`](#assign-in-text)                       | Out-of-text flag                         | Assignment / classification     | —                                                                                                | Verified               |
-| [`assign.line_cluster`](#assign-line-cluster)             | Visual line clustering                   | Assignment / classification     | —                                                                                                | Partially verified     |
-| [`assign.runs`](#assign-runs)                             | Runs and passes                          | Assignment / classification     | —                                                                                                | Partially verified     |
-| [`assign.progression`](#assign-progression)               | Progression and regression flags         | Assignment / classification     | —                                                                                                | Verified               |
-| [`assign.saccade_class`](#assign-saccade-class)           | Saccade reading class                    | Assignment / classification     | —                                                                                                | Partially verified     |
-| [`measure.ffd`](#measure-ffd)                             | First fixation duration (FFD)            | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`measure.fprt`](#measure-fprt)                           | First-pass gaze duration (FPRT)          | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`measure.rpd`](#measure-rpd)                             | Regression-path duration (RPD / go-past) | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`measure.tfd`](#measure-tfd)                             | Total fixation duration (TFD)            | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`measure.nfix`](#measure-nfix)                           | Fixations per word                       | Scientific measure              | —                                                                                                | Verified               |
-| [`measure.skip`](#measure-skip)                           | Skip flag / skip rate                    | Scientific measure              | rate when aggregated (0–1)                                                                       | Verified               |
-| [`measure.regressions`](#measure-regressions)             | Regression in/out flags                  | Scientific measure              | rate when aggregated (0–1)                                                                       | Partially verified     |
-| [`measure.landing_position`](#measure-landing-position)   | Initial landing position                 | Scientific measure              | letters                                                                                          | Partially verified     |
-| [`measure.landing_distance`](#measure-landing-distance)   | Centred landing distance                 | Scientific measure              | letters (0 = word centre, negative = left of centre)                                             | Partially verified     |
-| [`measure.second_pass`](#measure-second-pass)             | Second-pass duration                     | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`measure.single_fix`](#measure-single-fix)               | Single-fixation duration                 | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`measure.reg_in_count`](#measure-reg-in-count)           | Regressions into word                    | Scientific measure              | —                                                                                                | Partially verified     |
-| [`fix.saccade_amplitude`](#fix-saccade-amplitude)         | Saccade amplitude                        | Scientific measure              | px                                                                                               | Verified               |
-| [`fix.angles`](#fix-angles)                               | Saccade angles                           | Scientific measure              | degrees (−180, 180\]                                                                             | Verified               |
-| [`fix.rebased_onsets`](#fix-rebased-onsets)               | Rebased fixation onsets                  | Scientific measure              | ms                                                                                               | Partially verified     |
-| [`pre.merge_short`](#pre-merge-short)                     | Short-fixation merging                   | Preprocessing                   | ms threshold, characters distance                                                                | Partially verified     |
-| [`pre.exclude_short`](#pre-exclude-short)                 | Short/long fixation exclusion            | Preprocessing                   | ms                                                                                               | Partially verified     |
-| [`pre.blink_adjacent`](#pre-blink-adjacent)               | Blink-adjacent exclusion                 | Preprocessing                   | —                                                                                                | Partially verified     |
-| [`pre.cleaning_report`](#pre-cleaning-report)             | Cleaning QA report                       | Preprocessing                   | —                                                                                                | Partially verified     |
-| [`pre.sentence_measures`](#pre-sentence-measures)         | Sentence-level measures                  | Preprocessing                   | ms, counts                                                                                       | Partially verified     |
-| [`pre.saccade_table`](#pre-saccade-table)                 | Saccade table                            | Preprocessing                   | px, deg (when geometry is known), ms                                                             | Partially verified     |
-| [`pre.character_grid`](#pre-character-grid)               | Character grid                           | Preprocessing                   | px                                                                                               | Intentional convention |
-| [`pre.rtl`](#pre-rtl)                                     | Right-to-left detection                  | Preprocessing                   | —                                                                                                | Verified               |
-| [`pre.sensitivity`](#pre-sensitivity)                     | Measure sensitivity                      | Preprocessing                   | —                                                                                                | Partially verified     |
-| [`align.algorithms`](#align-algorithms)                   | Vertical drift correction                | Preprocessing                   | —                                                                                                | Partially verified     |
-| [`agg.measure_values`](#agg-measure-values)               | Measure value extraction                 | Statistical aggregation         | —                                                                                                | Partially verified     |
-| [`agg.aggregate_value`](#agg-aggregate-value)             | Central tendency                         | Statistical aggregation         | —                                                                                                | Verified               |
-| [`agg.spread`](#agg-spread)                               | Spread band                              | Statistical aggregation         | —                                                                                                | Verified               |
-| [`agg.bootstrap_ci`](#agg-bootstrap-ci)                   | Bootstrap confidence interval            | Statistical aggregation         | same as the measure                                                                              | Verified               |
-| [`agg.effect_size`](#agg-effect-size)                     | Group means and difference               | Statistical aggregation         | —                                                                                                | Partially verified     |
-| [`agg.group_mask`](#agg-group-mask)                       | Group definition                         | Statistical aggregation         | —                                                                                                | Verified               |
-| [`agg.word_profile`](#agg-word-profile)                   | Per-word cohort profile                  | Statistical aggregation         | —                                                                                                | Partially verified     |
-| [`agg.word_rates`](#agg-word-rates)                       | Skip / regression rate profile           | Statistical aggregation         | proportion                                                                                       | Partially verified     |
-| [`agg.reader_summary`](#agg-reader-summary)               | Per-reader summary                       | Statistical aggregation         | ms, px, counts, proportions                                                                      | Partially verified     |
-| [`agg.trial_summary`](#agg-trial-summary)                 | Per-trial summary                        | Statistical aggregation         | ms, counts                                                                                       | Partially verified     |
-| [`agg.normalize`](#agg-normalize)                         | Normalized measure column                | Statistical aggregation         | —                                                                                                | Partially verified     |
-| [`agg.landing_curve`](#agg-landing-curve)                 | Landing-position curve                   | Statistical aggregation         | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified     |
-| [`agg.over_time`](#agg-over-time)                         | Trend over time                          | Statistical aggregation         | —                                                                                                | Partially verified     |
-| [`sim.nld`](#sim-nld)                                     | Normalized Levenshtein distance          | Similarity                      | dimensionless (0–1)                                                                              | Verified               |
-| [`sim.aoi_sequence`](#sim-aoi-sequence)                   | AoI sequence                             | Similarity                      | —                                                                                                | Verified               |
-| [`sim.windowed`](#sim-windowed)                           | NLD by fixation index / time             | Similarity                      | —                                                                                                | Partially verified     |
-| [`geom.pixels_per_degree`](#geom-pixels-per-degree)       | Pixels per degree of visual angle        | Unit / coordinate conversion    | px / degree                                                                                      | Verified               |
-| [`geom.font_pt_to_px`](#geom-font-pt-to-px)               | Font point size to pixels                | Unit / coordinate conversion    | px                                                                                               | Verified               |
-| [`geom.word_box_bounds`](#geom-word-box-bounds)           | Word interest-area edges                 | Unit / coordinate conversion    | px                                                                                               | Partially verified     |
-| [`geom.word_box_space_px`](#geom-word-box-space-px)       | Inter-word padding baked into each box   | Unit / coordinate conversion    | px                                                                                               | Verified               |
-| [`geom.word_char_advance`](#geom-word-char-advance)       | Character advance within a word          | Unit / coordinate conversion    | px / character                                                                                   | Verified               |
-| [`geom.word_glyph_span`](#geom-word-glyph-span)           | Where a word's glyphs are                | Unit / coordinate conversion    | px                                                                                               | Partially verified     |
-| [`disp.marker_sizes`](#disp-marker-sizes)                 | Fixation marker sizing                   | Display / export transformation | px (marker diameter)                                                                             | Intentional convention |
-| [`disp.axis_ranges`](#disp-axis-ranges)                   | Axis ranges and inversion                | Display / export transformation | px                                                                                               | Intentional convention |
-| [`disp.true_scale`](#disp-true-scale)                     | True-scale text rendering                | Display / export transformation | —                                                                                                | Intentional convention |
-| [`disp.animation_timing`](#disp-animation-timing)         | Animation timing                         | Display / export transformation | ms (recorded) → ms (playback)                                                                    | Intentional convention |
-| [`disp.illustration`](#disp-illustration)                 | Illustration disclosure                  | Display / export transformation | —                                                                                                | Verified               |
+| ID                                                        | Name                                     | Category                        | Unit                                                                                             | Status                                |
+| --------------------------------------------------------- | ---------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| [`norm.words`](#norm-words)                               | Word table normalization                 | Normalization / inference       | —                                                                                                | Partially verified                    |
+| [`norm.fixations`](#norm-fixations)                       | Fixation table normalization             | Normalization / inference       | —                                                                                                | Partially verified                    |
+| [`norm.box_edges`](#norm-box-edges)                       | Word box from edges                      | Normalization / inference       | px (screen coordinates, y increasing downwards)                                                  | Verified                              |
+| [`norm.trial_id_composite`](#norm-trial-id-composite)     | Composite trial identity                 | Normalization / inference       | —                                                                                                | Partially verified                    |
+| [`norm.flags`](#norm-flags)                               | Flag coercion                            | Normalization / inference       | —                                                                                                | Verified                              |
+| [`norm.stimulus_broadcast`](#norm-stimulus-broadcast)     | Stimulus-level word broadcast            | Normalization / inference       | —                                                                                                | Partially verified                    |
+| [`norm.aoi_center_placement`](#norm-aoi-center-placement) | AoI-only fixation placement              | Normalization / inference       | px                                                                                               | Verified                              |
+| [`norm.participant_metadata`](#norm-participant-metadata) | Participant metadata join                | Normalization / inference       | —                                                                                                | Verified                              |
+| [`assign.fixation_to_word`](#assign-fixation-to-word)     | Fixation → word assignment               | Assignment / classification     | —                                                                                                | Partially verified                    |
+| [`assign.in_text`](#assign-in-text)                       | Out-of-text flag                         | Assignment / classification     | —                                                                                                | Verified                              |
+| [`assign.line_cluster`](#assign-line-cluster)             | Visual line clustering                   | Assignment / classification     | —                                                                                                | Partially verified                    |
+| [`assign.runs`](#assign-runs)                             | Runs and passes                          | Assignment / classification     | —                                                                                                | Partially verified                    |
+| [`assign.progression`](#assign-progression)               | Progression and regression flags         | Assignment / classification     | —                                                                                                | Verified                              |
+| [`assign.saccade_class`](#assign-saccade-class)           | Saccade reading class                    | Assignment / classification     | —                                                                                                | Partially verified                    |
+| [`measure.ffd`](#measure-ffd)                             | First fixation duration (FFD)            | Scientific measure              | ms                                                                                               | Partially verified · experimental     |
+| [`measure.fprt`](#measure-fprt)                           | First-pass gaze duration (FPRT)          | Scientific measure              | ms                                                                                               | Partially verified · experimental     |
+| [`measure.rpd`](#measure-rpd)                             | Regression-path duration (RPD / go-past) | Scientific measure              | ms                                                                                               | Partially verified · experimental     |
+| [`measure.tfd`](#measure-tfd)                             | Total fixation duration (TFD)            | Scientific measure              | ms                                                                                               | Partially verified · experimental     |
+| [`measure.nfix`](#measure-nfix)                           | Fixations per word                       | Scientific measure              | —                                                                                                | Verified · experimental               |
+| [`measure.skip`](#measure-skip)                           | Skip flag / skip rate                    | Scientific measure              | rate when aggregated (0–1)                                                                       | Verified · experimental               |
+| [`measure.regressions`](#measure-regressions)             | Regression in/out flags                  | Scientific measure              | rate when aggregated (0–1)                                                                       | Partially verified · experimental     |
+| [`measure.landing_position`](#measure-landing-position)   | Initial landing position                 | Scientific measure              | letters                                                                                          | Partially verified · experimental     |
+| [`measure.landing_distance`](#measure-landing-distance)   | Centred landing distance                 | Scientific measure              | letters (0 = word centre, negative = left of centre)                                             | Partially verified · experimental     |
+| [`measure.second_pass`](#measure-second-pass)             | Second-pass duration                     | Scientific measure              | ms                                                                                               | Partially verified · experimental     |
+| [`measure.single_fix`](#measure-single-fix)               | Single-fixation duration                 | Scientific measure              | ms                                                                                               | Partially verified · experimental     |
+| [`measure.reg_in_count`](#measure-reg-in-count)           | Regressions into word                    | Scientific measure              | —                                                                                                | Partially verified · experimental     |
+| [`fix.saccade_amplitude`](#fix-saccade-amplitude)         | Saccade amplitude                        | Scientific measure              | px                                                                                               | Verified                              |
+| [`fix.angles`](#fix-angles)                               | Saccade angles                           | Scientific measure              | degrees (−180, 180\]                                                                             | Verified                              |
+| [`fix.rebased_onsets`](#fix-rebased-onsets)               | Rebased fixation onsets                  | Scientific measure              | ms                                                                                               | Partially verified                    |
+| [`pre.merge_short`](#pre-merge-short)                     | Short-fixation merging                   | Preprocessing                   | ms threshold, characters distance                                                                | Partially verified · experimental     |
+| [`pre.exclude_short`](#pre-exclude-short)                 | Short/long fixation exclusion            | Preprocessing                   | ms                                                                                               | Partially verified · experimental     |
+| [`pre.blink_adjacent`](#pre-blink-adjacent)               | Blink-adjacent exclusion                 | Preprocessing                   | —                                                                                                | Partially verified · experimental     |
+| [`pre.cleaning_report`](#pre-cleaning-report)             | Cleaning QA report                       | Preprocessing                   | —                                                                                                | Partially verified · experimental     |
+| [`pre.sentence_measures`](#pre-sentence-measures)         | Sentence-level measures                  | Preprocessing                   | ms, counts                                                                                       | Partially verified · experimental     |
+| [`pre.saccade_table`](#pre-saccade-table)                 | Saccade table                            | Preprocessing                   | px, deg (when geometry is known), ms                                                             | Partially verified · experimental     |
+| [`pre.character_grid`](#pre-character-grid)               | Character grid                           | Preprocessing                   | px                                                                                               | Intentional convention · experimental |
+| [`pre.rtl`](#pre-rtl)                                     | Right-to-left detection                  | Preprocessing                   | —                                                                                                | Verified                              |
+| [`pre.sensitivity`](#pre-sensitivity)                     | Measure sensitivity                      | Preprocessing                   | —                                                                                                | Partially verified · experimental     |
+| [`align.algorithms`](#align-algorithms)                   | Vertical drift correction                | Preprocessing                   | —                                                                                                | Partially verified · experimental     |
+| [`agg.measure_values`](#agg-measure-values)               | Measure value extraction                 | Statistical aggregation         | —                                                                                                | Partially verified                    |
+| [`agg.aggregate_value`](#agg-aggregate-value)             | Central tendency                         | Statistical aggregation         | —                                                                                                | Verified                              |
+| [`agg.spread`](#agg-spread)                               | Spread band                              | Statistical aggregation         | —                                                                                                | Verified                              |
+| [`agg.bootstrap_ci`](#agg-bootstrap-ci)                   | Bootstrap confidence interval            | Statistical aggregation         | same as the measure                                                                              | Verified                              |
+| [`agg.effect_size`](#agg-effect-size)                     | Group means and difference               | Statistical aggregation         | —                                                                                                | Partially verified                    |
+| [`agg.group_mask`](#agg-group-mask)                       | Group definition                         | Statistical aggregation         | —                                                                                                | Verified                              |
+| [`agg.word_profile`](#agg-word-profile)                   | Per-word cohort profile                  | Statistical aggregation         | —                                                                                                | Partially verified                    |
+| [`agg.word_rates`](#agg-word-rates)                       | Skip / regression rate profile           | Statistical aggregation         | proportion                                                                                       | Partially verified                    |
+| [`agg.reader_summary`](#agg-reader-summary)               | Per-reader summary                       | Statistical aggregation         | ms, px, counts, proportions                                                                      | Partially verified · experimental     |
+| [`agg.trial_summary`](#agg-trial-summary)                 | Per-trial summary                        | Statistical aggregation         | ms, counts                                                                                       | Partially verified · experimental     |
+| [`agg.normalize`](#agg-normalize)                         | Normalized measure column                | Statistical aggregation         | —                                                                                                | Partially verified                    |
+| [`agg.landing_curve`](#agg-landing-curve)                 | Landing-position curve                   | Statistical aggregation         | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False` | Partially verified · experimental     |
+| [`agg.over_time`](#agg-over-time)                         | Trend over time                          | Statistical aggregation         | —                                                                                                | Partially verified                    |
+| [`sim.nld`](#sim-nld)                                     | Normalized Levenshtein distance          | Similarity                      | dimensionless (0–1)                                                                              | Verified · experimental               |
+| [`sim.aoi_sequence`](#sim-aoi-sequence)                   | AoI sequence                             | Similarity                      | —                                                                                                | Verified · experimental               |
+| [`sim.windowed`](#sim-windowed)                           | NLD by fixation index / time             | Similarity                      | —                                                                                                | Partially verified · experimental     |
+| [`geom.pixels_per_degree`](#geom-pixels-per-degree)       | Pixels per degree of visual angle        | Unit / coordinate conversion    | px / degree                                                                                      | Verified                              |
+| [`geom.font_pt_to_px`](#geom-font-pt-to-px)               | Font point size to pixels                | Unit / coordinate conversion    | px                                                                                               | Verified                              |
+| [`geom.word_box_bounds`](#geom-word-box-bounds)           | Word interest-area edges                 | Unit / coordinate conversion    | px                                                                                               | Partially verified                    |
+| [`geom.word_box_space_px`](#geom-word-box-space-px)       | Inter-word padding baked into each box   | Unit / coordinate conversion    | px                                                                                               | Verified                              |
+| [`geom.word_char_advance`](#geom-word-char-advance)       | Character advance within a word          | Unit / coordinate conversion    | px / character                                                                                   | Verified                              |
+| [`geom.word_glyph_span`](#geom-word-glyph-span)           | Where a word's glyphs are                | Unit / coordinate conversion    | px                                                                                               | Partially verified                    |
+| [`disp.marker_sizes`](#disp-marker-sizes)                 | Fixation marker sizing                   | Display / export transformation | px (marker diameter)                                                                             | Intentional convention                |
+| [`disp.axis_ranges`](#disp-axis-ranges)                   | Axis ranges and inversion                | Display / export transformation | px                                                                                               | Intentional convention                |
+| [`disp.true_scale`](#disp-true-scale)                     | True-scale text rendering                | Display / export transformation | —                                                                                                | Intentional convention                |
+| [`disp.animation_timing`](#disp-animation-timing)         | Animation timing                         | Display / export transformation | ms (recorded) → ms (playback)                                                                    | Intentional convention                |
+| [`disp.illustration`](#disp-illustration)                 | Illustration disclosure                  | Display / export transformation | —                                                                                                | Verified                              |
 
 ## Normalization / inference
 
@@ -100,7 +102,7 @@ Map an arbitrary word/IA export onto the canonical word columns.
 
 |                          |                                                                       |
 | ------------------------ | --------------------------------------------------------------------- |
-| **Output**               | participant_id, trial_id, text_id, word_id, text, x, y, width, height |
+| **Output**               | Participant_id, trial_id, text_id, word_id, text, x, y, width, height |
 | **Missing & edge cases** | A missing *required* field raises with the columns it looked for.     |
 | **Precedence & caveats** | An explicit user mapping always beats auto-detection.                 |
 | **Code**                 | `scanpath_studio/data.py:normalize_words`                             |
@@ -116,7 +118,7 @@ Map an arbitrary fixation report onto the canonical columns.
 
 |                          |                                                                |
 | ------------------------ | -------------------------------------------------------------- |
-| **Output**               | participant_id, trial_id, x, y, duration_ms, timestamp_ms, …   |
+| **Output**               | Participant_id, trial_id, x, y, duration_ms, timestamp_ms, …   |
 | **Grouping / ordering**  | (participant_id, trial_id[, screen_id])                        |
 | **Missing & edge cases** | Rows with no coordinates survive when a word/AoI id is mapped. |
 | **Code**                 | `scanpath_studio/data.py:normalize_fixations`                  |
@@ -128,11 +130,11 @@ Map an arbitrary fixation report onto the canonical columns.
 
 Convert EyeLink IA edges to origin+size.
 
-**Formula.** x = IA_LEFT · y = IA_TOP · width = IA_RIGHT − IA_LEFT · height = IA_BOTTOM − IA_TOP.
+**Formula.** X = IA_LEFT · y = IA_TOP · width = IA_RIGHT − IA_LEFT · height = IA_BOTTOM − IA_TOP.
 
 |                  |                                                 |
 | ---------------- | ----------------------------------------------- |
-| **Output**       | x, y, width, height                             |
+| **Output**       | X, y, width, height                             |
 | **Unit**         | px (screen coordinates, y increasing downwards) |
 | **Code**         | `scanpath_studio/data.py:normalize_words`       |
 | **Consumers**    | UI, API, CLI, Export                            |
@@ -147,7 +149,7 @@ Build one unique trial id from several columns.
 
 |                          |                                                                    |
 | ------------------------ | ------------------------------------------------------------------ |
-| **Output**               | trial_id                                                           |
+| **Output**               | Trial_id                                                           |
 | **Missing & edge cases** | A row missing any component keeps the literal string of that part. |
 | **Code**                 | `scanpath_studio/data.py:trial_id_series`                          |
 | **Consumers**            | UI, API, CLI                                                       |
@@ -156,13 +158,13 @@ Build one unique trial id from several columns.
 
 ### `norm.flags` — Flag coercion
 
-Read EyeLink's string booleans as booleans (BUG-7).
+Read EyeLink's string booleans as booleans.
 
 **Formula.** Numbers go by `!= 0`. Strings are matched case-insensitively against `{'', '.', '0', '0.0', 'false', 'f', 'no', 'n', 'na', 'nan', '-'}` → False; anything else → True.
 
 |                          |                                                                                                                                                                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | bool                                                                                                                                                                                                                                              |
+| **Output**               | Bool                                                                                                                                                                                                                                              |
 | **Missing & edge cases** | NaN → False for an operational flag (blink, excluded). A supplied reading-measure flag (skip, regression in / out) keeps it missing instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA (`coerce_measure_flag`, a nullable boolean). |
 | **Reference**            | Guards the `'.'`-as-missing convention in EyeLink IA reports.                                                                                                                                                                                     |
 | **Code**                 | `scanpath_studio/data.py:coerce_flag`                                                                                                                                                                                                             |
@@ -174,7 +176,7 @@ Read EyeLink's string booleans as booleans (BUG-7).
 
 Share one stimulus' word boxes across every reader of it.
 
-**Formula.** Words with no participant column are copied once per reading (participant × trial [× screen]) in the fixations, stamped with that reading's ids. Per reading, the boxes are those of the first words trial found by its trial ID, then its trial ID before a repeat's \_r2 suffix, then its Text ID (only a Text ID the fixations map, and never one the words give to more than one trial). A trial-ID match always stands; mapped Text IDs that disagree with it are warned about (DATA-49).
+**Formula.** Words with no participant column are copied once per reading (participant × trial [× screen]) in the fixations, stamped with that reading's ids. Per reading, the boxes are those of the first words trial found by its trial ID, then its trial ID before a repeat's \_r2 suffix, then its Text ID (only a Text ID the fixations map, and never one the words give to more than one trial). A trial-ID match always stands; mapped Text IDs that disagree with it are warned about.
 
 |                          |                                                                                                                                                                                                                  |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -188,7 +190,7 @@ Share one stimulus' word boxes across every reader of it.
 
 Place a fixation with no x/y at its word box's center.
 
-**Formula.** x = word.x + width/2 · y = word.y + height/2.
+**Formula.** X = word.x + width/2 · y = word.y + height/2.
 
 |                          |                                                            |
 | ------------------------ | ---------------------------------------------------------- |
@@ -202,7 +204,7 @@ Place a fixation with no x/y at its word box's center.
 
 ### `norm.participant_metadata` — Participant metadata join
 
-Attach a participant-level table without broadcasting it (DATA-20).
+Attach a participant-level table without broadcasting it.
 
 **Formula.** Left join on string `participant_id`. Duplicate ids that agree are combined field by field (each field keeps the one non-missing value the rows hold); duplicate ids that **disagree** are dropped and reported, so no `groupby.first()` winner is ever invented. A field is projected onto the per-trial frame, never onto word/fixation rows.
 
@@ -224,17 +226,17 @@ The single highest-risk step: which word a fixation counts for.
 
 **Formula.** 1. Bounding-box containment against the trial's word boxes — the experiment's own rectangles (`geom.word_box_bounds`), so on a tiling corpus a fixation on the space *after* a word is credited to that word, as EyeLink's interest-area report credits it. Boxes are half-open, `x0 ≤ x < x1` and `y0 ≤ y < y1` (`measures.word_box_contains`), so a point on an edge two boxes share goes to the one that starts there — the next word, the line below — as EyeLink assigns it. 2. Otherwise the nearest word **center** within `LINE_MISREGISTRATION_PX` = 50 px. 3. Otherwise `word_id = NaN` (out of text).
 
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | word_id                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Grouping / ordering**  | (participant_id, trial_id[, screen_id]) — never across screens                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Missing & edge cases** | Unassignable fixations keep NaN and are excluded from word measures.                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Precedence & caveats** | An imported `word_id` is kept unless `overwrite=True` — so on the bundled demo, whose fixation report carries EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow EyeLink's assignment and geometry only fills the fixations it left blank. #BUG-83: geometry now agrees with that column on all 3,208 of the demo's EyeLink-assigned fixations (BUG-11's half-space shift: 92.6%; closed containment on the shared edges: 99.1%). |
-| **Reference**            | The nearest-center fallback is common practice for line misregistration; the 50 px radius is this app's choice, not a standard.                                                                                                                                                                                                                                                                                                                      |
-| **Code**                 | `scanpath_studio/measures.py:assign_fixations_to_words`                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Consumers**            | UI, API, CLI, Export, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Tests**                | `tests/test_measures.py`, `tests/test_synthetic.py`                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                                   |
+|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | Word_id                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Grouping / ordering**  | (participant_id, trial_id[, screen_id]) — never across screens                                                                                                                                                                                                                                                                                                                                                                                |
+| **Missing & edge cases** | Unassignable fixations keep NaN and are excluded from word measures.                                                                                                                                                                                                                                                                                                                                                                          |
+| **Precedence & caveats** | An imported `word_id` is kept unless `overwrite=True` — so on the bundled demo, whose fixation report carries EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow EyeLink's assignment and geometry only fills the fixations it left blank. Geometry now agrees with that column on all 3,208 of the demo's EyeLink-assigned fixations (an earlier half-space shift: 92.6%; closed containment on the shared edges: 99.1%). |
+| **Reference**            | The nearest-center fallback is common practice for line misregistration; the 50 px radius is this app's choice, not a standard.                                                                                                                                                                                                                                                                                                               |
+| **Code**                 | `scanpath_studio/measures.py:assign_fixations_to_words`                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Consumers**            | UI, API, CLI, Export, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Tests**                | `tests/test_measures.py`, `tests/test_synthetic.py`                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### `assign.in_text` — Out-of-text flag
 
@@ -244,7 +246,7 @@ Whether a fixation landed on any word of the stimulus.
 
 |                  |                                                     |
 | ---------------- | --------------------------------------------------- |
-| **Output**       | bool mask                                           |
+| **Output**       | Bool mask                                           |
 | **Code**         | `scanpath_studio/measures.py:fixation_in_text_mask` |
 | **Consumers**    | UI, API, Corpus Analysis                            |
 | **Tests**        | `tests/test_synthetic.py`                           |
@@ -258,7 +260,7 @@ Derive text lines from word-box geometry, not from `line_idx`.
 
 |                  |                                                     |
 | ---------------- | --------------------------------------------------- |
-| **Output**       | line index per word                                 |
+| **Output**       | Line index per word                                 |
 | **Code**         | `scanpath_studio/measures.py:cluster_word_lines`    |
 | **Consumers**    | UI, API, Corpus Analysis                            |
 | **Tests**        | `tests/test_measures.py`, `tests/test_synthetic.py` |
@@ -266,13 +268,13 @@ Derive text lines from word-box geometry, not from `line_idx`.
 
 ### `assign.runs` — Runs and passes
 
-Trial run, line run, and per-word visit/pass indices (PRE-16).
+Trial run, line run, and per-word visit/pass indices.
 
 **Formula.** Consecutive fixations on the same word form one *visit*; the n-th visit to a word is its n-th pass. Line runs break whenever the assigned line changes.
 
 |                          |                                                     |
 | ------------------------ | --------------------------------------------------- |
-| **Output**               | run, linerun, word_runid, pass_index                |
+| **Output**               | Run, linerun, word_runid, pass_index                |
 | **Grouping / ordering**  | Ordered by `timestamp_ms` within a trial            |
 | **Precedence & caveats** | An imported `pass_index` / `reread` column is kept. |
 | **Code**                 | `scanpath_studio/measures.py:materialize_runs`      |
@@ -284,11 +286,11 @@ Trial run, line run, and per-word visit/pass indices (PRE-16).
 
 Whether the *outgoing* saccade moves forward in the text.
 
-**Formula.** `progression = sign(next word_id − word_id)`. `is_regression = word_id < running max word_id in the trial` — i.e. relative to the furthest word reached, not to the previous fixation.
+**Formula.** `progression = sign(next word_id − word_id)`. `is_regression = word_id < running max word_id in the trial` — i.e. Relative to the furthest word reached, not to the previous fixation.
 
 |                          |                                                     |
 | ------------------------ | --------------------------------------------------- |
-| **Output**               | progression ∈ {−1, 0, 1}, is_regression             |
+| **Output**               | Progression ∈ {−1, 0, 1}, is_regression             |
 | **Grouping / ordering**  | Per trial, in timestamp order                       |
 | **Missing & edge cases** | Unassigned fixations give progression 0.            |
 | **Code**                 | `scanpath_studio/measures.py:enrich_fixations`      |
@@ -298,13 +300,13 @@ Whether the *outgoing* saccade moves forward in the text.
 
 ### `assign.saccade_class` — Saccade reading class
 
-Label each outgoing saccade by its reading role (VIZ-8).
+Label each outgoing saccade by its reading role.
 
 **Formula.** From the word and text line of the two fixations, in this order: refixation (same word), regression (up to an earlier line, or back within a line), return sweep (down to a later line), forward (the next word on the line), skip (two or more words ahead on the line); `other` when either fixation has no assigned word.
 
 |                          |                                                            |
 | ------------------------ | ---------------------------------------------------------- |
-| **Output**               | saccade_type                                               |
+| **Output**               | Saccade_type                                               |
 | **Precedence & caveats** | An imported `saccade_type` / `NEXT_SAC_DIRECTION` is kept. |
 | **Code**                 | `scanpath_studio/measures.py:classify_saccades`            |
 | **Consumers**            | UI, API, Export                                            |
@@ -315,112 +317,140 @@ Label each outgoing saccade by its reading role (VIZ-8).
 
 ### `pre.merge_short` — Short-fixation merging
 
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
 Fold a short fixation into a neighbour within a character distance.
 
 **Formula.** A fixation below the short threshold is merged into the nearer adjacent fixation when that neighbour is within the merge distance, expressed in characters and converted to px via `geom.word_char_advance`. Durations add; position follows the survivor.
 
-|                          |                                                                                                                                                                                                                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | A reduced fixation frame                                                                                                                                                                                                                                                               |
-| **Unit**                 | ms threshold, characters distance                                                                                                                                                                                                                                                      |
-| **Missing & edge cases** | Off by default; original rows stay available.                                                                                                                                                                                                                                          |
-| **Precedence & caveats** | #BUG-27: the conversion reads the shared letter scale. It used to divide by `len(text)`, so on a tiling corpus "within 1 character" meant 1.25 characters for a four-letter word and 1.07 for a fifteen-letter one — a threshold whose meaning varied with the word it was applied to. |
-| **Reference**            | A common cleaning step; thresholds are the user's choice.                                                                                                                                                                                                                              |
-| **Code**                 | `scanpath_studio/preprocessing.py:merge_short_fixations`                                                                                                                                                                                                                               |
-| **Consumers**            | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export                                                                                                                                                                                                 |
-| **Tests**                | `tests/test_preprocessing.py`                                                                                                                                                                                                                                                          |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                     |
+|                          |                                                                                                                                                                                                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | A reduced fixation frame                                                                                                                                                                                                                                                      |
+| **Unit**                 | ms threshold, characters distance                                                                                                                                                                                                                                             |
+| **Missing & edge cases** | Off by default; original rows stay available.                                                                                                                                                                                                                                 |
+| **Precedence & caveats** | The conversion reads the shared letter scale. It used to divide by `len(text)`, so on a tiling corpus "within 1 character" meant 1.25 characters for a four-letter word and 1.07 for a fifteen-letter one — a threshold whose meaning varied with the word it was applied to. |
+| **Reference**            | A common cleaning step; thresholds are the user's choice.                                                                                                                                                                                                                     |
+| **Code**                 | `scanpath_studio/preprocessing.py:merge_short_fixations`                                                                                                                                                                                                                      |
+| **Consumers**            | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export                                                                                                                                                                                                 |
+| **Tests**                | `tests/test_preprocessing.py`                                                                                                                                                                                                                                                 |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                            |
 
 ### `pre.exclude_short` — Short/long fixation exclusion
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 Soft-exclude fixations outside a duration window.
 
 **Formula.** Drop fixations shorter than / longer than the chosen bounds.
 
-|                          |                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| **Unit**                 | ms                                                                                     |
-| **Missing & edge cases** | Soft: excluded rows are reported, not deleted from the source.                         |
-| **Code**                 | `scanpath_studio/preprocessing.py:preprocess_fixations`                                |
-| **Consumers**            | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export |
-| **Tests**                | `tests/test_preprocessing.py`                                                          |
-| **Verification**         | tier C — **Partially verified**                                                        |
+|                          |                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| **Unit**                 | ms                                                                            |
+| **Missing & edge cases** | Soft: excluded rows are reported, not deleted from the source.                |
+| **Code**                 | `scanpath_studio/preprocessing.py:preprocess_fixations`                       |
+| **Consumers**            | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export |
+| **Tests**                | `tests/test_preprocessing.py`                                                 |
+| **Verification**         | tier C — **Partially verified**                                               |
 
 ### `pre.blink_adjacent` — Blink-adjacent exclusion
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 Drop fixations immediately before/after a blink.
 
 **Formula.** Exclude the fixations neighbouring any row flagged `is_blink`.
 
-|                          |                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| **Missing & edge cases** | No blink column ⇒ the option has no effect.                                            |
-| **Code**                 | `scanpath_studio/preprocessing.py:preprocess_fixations`                                |
-| **Consumers**            | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export |
-| **Tests**                | `tests/test_preprocessing.py`                                                          |
-| **Verification**         | tier C — **Partially verified**                                                        |
+|                          |                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| **Missing & edge cases** | No blink column ⇒ the option has no effect.                                   |
+| **Code**                 | `scanpath_studio/preprocessing.py:preprocess_fixations`                       |
+| **Consumers**            | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export |
+| **Tests**                | `tests/test_preprocessing.py`                                                 |
+| **Verification**         | tier C — **Partially verified**                                               |
 
 ### `pre.cleaning_report` — Cleaning QA report
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 What the preprocessing pass would remove, and why.
 
 **Formula.** Counts per exclusion reason over the unfiltered frame.
 
-|                  |                                                                                                                                                                      |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**       | Cleaning QA table                                                                                                                                                    |
-| **Code**         | `scanpath_studio/preprocessing.py:cleaning_report`                                                                                                                   |
-| **Consumers**    | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22), API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
-| **Tests**        | `tests/test_preprocessing.py`                                                                                                                                        |
-| **Verification** | tier C — **Partially verified**                                                                                                                                      |
+|                  |                                                                                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**       | Cleaning QA table                                                                                                                                  |
+| **Code**         | `scanpath_studio/preprocessing.py:cleaning_report`                                                                                                 |
+| **Consumers**    | UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1) |
+| **Tests**        | `tests/test_preprocessing.py`                                                                                                                      |
+| **Verification** | tier C — **Partially verified**                                                                                                                    |
 
 ### `pre.sentence_measures` — Sentence-level measures
 
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
 Per-sentence reading time and counts.
 
-**Formula.** Words are grouped into sentences by `infer_sentence_ids` (terminal punctuation). Each sentence's durations, fixation and run counts, go-past times and skip flag are then derived from the fixations on its words; the supplied word measures are not used, so a sentence with no fixations reads as skipped (why AN-33 holds Corpus Analysis → Per sentence back).
+**Formula.** Words are grouped into sentences by `infer_sentence_ids` (terminal punctuation). Each sentence's durations, fixation and run counts, go-past times and skip flag are then derived from the fixations on its words; the supplied word measures are not used, so a sentence with no fixations reads as skipped (which is why Corpus Analysis → Per sentence is held back).
 
-|                          |                                                                                                                 |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| **Output**               | Sentences table                                                                                                 |
-| **Unit**                 | ms, counts                                                                                                      |
-| **Missing & edge cases** | Sentence inference is textual, not annotated — approximate.                                                     |
-| **Code**                 | `scanpath_studio/preprocessing.py:sentence_measures`                                                            |
-| **Consumers**            | Corpus Analysis, API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
-| **Tests**                | `tests/test_preprocessing.py`                                                                                   |
-| **Verification**         | tier C — **Partially verified**                                                                                 |
+|                          |                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Output**               | Sentences table                                                                                        |
+| **Unit**                 | ms, counts                                                                                             |
+| **Missing & edge cases** | Sentence inference is textual, not annotated — approximate.                                            |
+| **Code**                 | `scanpath_studio/preprocessing.py:sentence_measures`                                                   |
+| **Consumers**            | Corpus Analysis, API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1) |
+| **Tests**                | `tests/test_preprocessing.py`                                                                          |
+| **Verification**         | tier C — **Partially verified**                                                                        |
 
 ### `pre.saccade_table` — Saccade table
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 One row per saccade, with amplitude, angle and class.
 
 **Formula.** Consecutive fixation pairs within a trial; amplitude in px, and in degrees only when `pixels_per_degree` is supplied.
 
-|                          |                                                                                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Output**               | Saccades table                                                                                 |
-| **Unit**                 | px, deg (when geometry is known), ms                                                           |
-| **Missing & edge cases** | Assumed geometry ⇒ the degree columns inherit that assumption.                                 |
-| **Code**                 | `scanpath_studio/preprocessing.py:saccade_table`                                               |
-| **Consumers**            | API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126) |
-| **Tests**                | `tests/test_preprocessing.py`                                                                  |
-| **Verification**         | tier C — **Partially verified**                                                                |
+|                          |                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| **Output**               | Saccades table                                                                        |
+| **Unit**                 | px, deg (when geometry is known), ms                                                  |
+| **Missing & edge cases** | Assumed geometry ⇒ the degree columns inherit that assumption.                        |
+| **Code**                 | `scanpath_studio/preprocessing.py:saccade_table`                                      |
+| **Consumers**            | API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1) |
+| **Tests**                | `tests/test_preprocessing.py`                                                         |
+| **Verification**         | tier C — **Partially verified**                                                       |
 
 ### `pre.character_grid` — Character grid
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 Per-character boxes derived from word boxes.
 
 **Formula.** Character `k` of a word spans `x + (k−1) × advance` to `x + k × advance`, where the advance is `geom.word_char_advance`.
 
-|                          |                                                                                                                                                                                                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px                                                                                                                                                                                                                                                        |
-| **Missing & edge cases** | Proportional fonts make this an approximation.                                                                                                                                                                                                            |
-| **Precedence & caveats** | #BUG-27: the advance is the shared letter scale, not `width / len(text)` — which on a tiling corpus stretched the glyph row across the trailing inter-word padding, so each character box after the first sat progressively further right than its glyph. |
-| **Code**                 | `scanpath_studio/preprocessing.py:character_grid`                                                                                                                                                                                                         |
-| **Consumers**            | API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126)                                                                                                                                                            |
-| **Tests**                | `tests/test_preprocessing.py`                                                                                                                                                                                                                             |
-| **Verification**         | tier A, C — **Intentional convention**                                                                                                                                                                                                                    |
+|                          |                                                                                                                                                                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Unit**                 | px                                                                                                                                                                                                                                               |
+| **Missing & edge cases** | Proportional fonts make this an approximation.                                                                                                                                                                                                   |
+| **Precedence & caveats** | The advance is the shared letter scale, not `width / len(text)` — which on a tiling corpus stretched the glyph row across the trailing inter-word padding, so each character box after the first sat progressively further right than its glyph. |
+| **Code**                 | `scanpath_studio/preprocessing.py:character_grid`                                                                                                                                                                                                |
+| **Consumers**            | API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1)                                                                                                                                                            |
+| **Tests**                | `tests/test_preprocessing.py`                                                                                                                                                                                                                    |
+| **Verification**         | tier A, C — **Intentional convention**                                                                                                                                                                                                           |
 
 ### `pre.rtl` — Right-to-left detection
 
@@ -430,7 +460,7 @@ Whether a word's script runs right to left.
 
 |                  |                                                         |
 | ---------------- | ------------------------------------------------------- |
-| **Output**       | right_to_left                                           |
+| **Output**       | Right_to_left                                           |
 | **Code**         | `scanpath_studio/preprocessing.py:detect_right_to_left` |
 | **Consumers**    | UI, API, Corpus Analysis                                |
 | **Tests**        | `tests/test_preprocessing.py`                           |
@@ -438,22 +468,30 @@ Whether a word's script runs right to left.
 
 ### `pre.sensitivity` — Measure sensitivity
 
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
 How much the word measures move under different line assignments.
 
-**Formula.** Each trial's fixations are line-assigned by every method in `methods` (default `attach`, `slice`, `consensus`), FFD / FPRT / RPD / TFD are recomputed per method, and each word's spread (max − min across methods) is reported beside a per-trial correction report (PRE-18).
+**Formula.** Each trial's fixations are line-assigned by every method in `methods` (default `attach`, `slice`, `consensus`), FFD / FPRT / RPD / TFD are recomputed per method, and each word's spread (max − min across methods) is reported beside a per-trial correction report.
 
 |                  |                                                        |
 | ---------------- | ------------------------------------------------------ |
 | **Code**         | `scanpath_studio/preprocessing.py:measure_sensitivity` |
-| **Consumers**    | API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21)   |
+| **Consumers**    | API (raises unless SCANPATH_EXPERIMENTAL=1)            |
 | **Tests**        | `tests/test_preprocessing.py`                          |
 | **Verification** | tier C — **Partially verified**                        |
 
 ### `align.algorithms` — Vertical drift correction
 
-Line-assignment algorithms, ported natively (PRE-3).
+Experimental
 
-**Formula.** The ten Carr et al. algorithms — `attach`, `chain`, `cluster`, `compare`, `merge`, `regress`, `segment`, `split`, `stretch`, `warp` — plus `slice` and a `consensus` vote over them. Each reassigns fixation *y* to a text line. Hidden unless `SCANPATH_EXPERIMENTAL=1` (#PRE-21).
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
+Line-assignment algorithms, ported natively.
+
+**Formula.** The ten Carr et al. Algorithms — `attach`, `chain`, `cluster`, `compare`, `merge`, `regress`, `segment`, `split`, `stretch`, `warp` — plus `slice` and a `consensus` vote over them. Each reassigns fixation *y* to a text line. Hidden unless `SCANPATH_EXPERIMENTAL=1`.
 
 |                          |                                                                                                                                                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -469,35 +507,43 @@ Line-assignment algorithms, ported natively (PRE-3).
 
 ### `measure.ffd` — First fixation duration (FFD)
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Duration of the first fixation on a word.
 
 **Formula.** Duration of the word's first fixation, whenever it comes — as EyeLink's `IA_FIRST_FIXATION_DURATION`, so a computed and an imported value mean the same. Not conditioned on first pass: a word first reached by a regression has an FFD and `skip_flag = True`; filter on `skip_flag` for first-pass-only analyses.
 
-|                          |                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------- |
-| **Output**               | first_fixation_ms                                                                               |
-| **Unit**                 | ms                                                                                              |
-| **Grouping / ordering**  | (participant, trial, word)                                                                      |
-| **Missing & edge cases** | Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no fixations is blanked too (BUG-63). |
-| **Precedence & caveats** | A precomputed `IA_FIRST_FIXATION_DURATION` wins.                                                |
-| **Reference**            | Rayner (1998), standard reading-measure definitions.                                            |
-| **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                         |
-| **Consumers**            | UI, API                                                                                         |
-| **Tests**                | `tests/test_measures.py`, `tests/test_synthetic.py`                                             |
-| **Verification**         | tier A, D — **Partially verified**                                                              |
+|                          |                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| **Output**               | First_fixation_ms                                                                      |
+| **Unit**                 | ms                                                                                     |
+| **Grouping / ordering**  | (participant, trial, word)                                                             |
+| **Missing & edge cases** | Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no fixations is blanked too. |
+| **Precedence & caveats** | A precomputed `IA_FIRST_FIXATION_DURATION` wins.                                       |
+| **Reference**            | Rayner (1998), standard reading-measure definitions.                                   |
+| **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                |
+| **Consumers**            | UI, API                                                                                |
+| **Tests**                | `tests/test_measures.py`, `tests/test_synthetic.py`                                    |
+| **Verification**         | tier A, D — **Partially verified**                                                     |
 
 ### `measure.fprt` — First-pass gaze duration (FPRT)
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Sum of first-pass fixations on a word.
 
-**Formula.** Sum of every fixation in the word's **first** run, i.e. before the gaze leaves the word for the first time — whenever that run starts (EyeLink's `IA_FIRST_RUN_DWELL_TIME`; not conditioned on first pass, as `measure.ffd`). A fixation outside every word ends the run (BUG-66), as it does for `measure.second_pass`.
+**Formula.** Sum of every fixation in the word's **first** run, i.e. Before the gaze leaves the word for the first time — whenever that run starts (EyeLink's `IA_FIRST_RUN_DWELL_TIME`; not conditioned on first pass, as `measure.ffd`). A fixation outside every word ends the run, as it does for `measure.second_pass`.
 
 |                          |                                                         |
 | ------------------------ | ------------------------------------------------------- |
-| **Output**               | first_pass_gaze_duration_ms                             |
+| **Output**               | First_pass_gaze_duration_ms                             |
 | **Unit**                 | ms                                                      |
 | **Grouping / ordering**  | (participant, trial, word)                              |
-| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63). |
+| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked).         |
 | **Precedence & caveats** | A precomputed IA gaze duration wins.                    |
 | **Reference**            | Rayner (1998).                                          |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -507,23 +553,31 @@ Sum of first-pass fixations on a word.
 
 ### `measure.rpd` — Regression-path duration (RPD / go-past)
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 First entry to the word until the gaze passes it to the right.
 
-**Formula.** Total time from the word's first fixation until the first fixation on a **later** word — every fixation in between, including a first visit to an earlier, skipped word during the regression (BUG-61). Matches EyeLink's `IA_REGRESSION_PATH_DURATION` on 1779 of the bundled demo's 1780 fixated words. Fixations outside every word neither extend nor close the window.
+**Formula.** Total time from the word's first fixation until the first fixation on a **later** word — every fixation in between, including a first visit to an earlier, skipped word during the regression. Matches EyeLink's `IA_REGRESSION_PATH_DURATION` on 1779 of the bundled demo's 1780 fixated words. Fixations outside every word neither extend nor close the window.
 
-|                          |                                                                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Output**               | regression_path_duration_ms                                                                                                                      |
-| **Unit**                 | ms                                                                                                                                               |
-| **Grouping / ordering**  | (participant, trial, word)                                                                                                                       |
-| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).                                                                                          |
-| **Reference**            | Definitions differ across toolkits (go-past vs regression path); #PRE-4 names `eyekit` as the intended comparison. Unresolved until #VAL-4 runs. |
-| **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                                                                          |
-| **Consumers**            | UI, API                                                                                                                                          |
-| **Tests**                | `tests/test_measures.py`, `tests/test_synthetic.py`                                                                                              |
-| **Verification**         | tier A — **Partially verified**                                                                                                                  |
+|                          |                                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | Regression_path_duration_ms                                                                                                                        |
+| **Unit**                 | ms                                                                                                                                                 |
+| **Grouping / ordering**  | (participant, trial, word)                                                                                                                         |
+| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked).                                                                                                    |
+| **Reference**            | Definitions differ across toolkits (go-past vs regression path); `eyekit` is the intended comparison. Unresolved until that cross-validation runs. |
+| **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                                                                            |
+| **Consumers**            | UI, API                                                                                                                                            |
+| **Tests**                | `tests/test_measures.py`, `tests/test_synthetic.py`                                                                                                |
+| **Verification**         | tier A — **Partially verified**                                                                                                                    |
 
 ### `measure.tfd` — Total fixation duration (TFD)
+
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
 
 All time spent on a word across the whole trial.
 
@@ -531,7 +585,7 @@ All time spent on a word across the whole trial.
 
 |                          |                                                               |
 | ------------------------ | ------------------------------------------------------------- |
-| **Output**               | total_fixation_duration_ms                                    |
+| **Output**               | Total_fixation_duration_ms                                    |
 | **Unit**                 | ms                                                            |
 | **Missing & edge cases** | Never fixated ⇒ 0 (the word *was* read past; it got no time). |
 | **Precedence & caveats** | A precomputed IA dwell time wins.                             |
@@ -542,13 +596,17 @@ All time spent on a word across the whole trial.
 
 ### `measure.nfix` — Fixations per word
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Count of fixations assigned to a word.
 
 **Formula.** Row count of the word's assigned fixations.
 
 |                          |                                                         |
 | ------------------------ | ------------------------------------------------------- |
-| **Output**               | n_fixations                                             |
+| **Output**               | N_fixations                                             |
 | **Missing & edge cases** | Never fixated ⇒ 0.                                      |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers**            | UI, API                                                 |
@@ -557,13 +615,17 @@ Count of fixations assigned to a word.
 
 ### `measure.skip` — Skip flag / skip rate
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Whether a word received no first-pass fixation.
 
 **Formula.** `skip_flag = no fixation in the word's first pass`.
 
 |                          |                                                                 |
 | ------------------------ | --------------------------------------------------------------- |
-| **Output**               | skip_flag                                                       |
+| **Output**               | Skip_flag                                                       |
 | **Unit**                 | rate when aggregated (0–1)                                      |
 | **Missing & edge cases** | A word fixated only after a regression still counts as skipped. |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`         |
@@ -573,13 +635,17 @@ Whether a word received no first-pass fixation.
 
 ### `measure.regressions` — Regression in/out flags
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Whether a word was returned to, or left backwards.
 
-**Formula.** `regression_in_flag` — some later fixation lands on this word after the gaze had moved past it. `regression_out_flag` — a regression to an earlier word is made from this word during first pass, before the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`, BUG-64); a regression from it later in the trial does not count.
+**Formula.** `regression_in_flag` — some later fixation lands on this word after the gaze had moved past it. `regression_out_flag` — a regression to an earlier word is made from this word during first pass, before the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`); a regression from it later in the trial does not count.
 
 |                          |                                                         |
 | ------------------------ | ------------------------------------------------------- |
-| **Output**               | regression_in_flag, regression_out_flag                 |
+| **Output**               | Regression_in_flag, regression_out_flag                 |
 | **Unit**                 | rate when aggregated (0–1)                              |
 | **Precedence & caveats** | Precomputed IA regression flags win (see `norm.flags`). |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -589,31 +655,39 @@ Whether a word was returned to, or left backwards.
 
 ### `measure.landing_position` — Initial landing position
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Where in the word the first fixation landed, in letters.
 
-**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + n·advance − first_fix_x` (RTL, BUG-27); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus the box's last cell is the space after the word, which belongs to it (#BUG-83), so a first fixation there reads `n + 1` to `n + 2`.
+**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + n·advance − first_fix_x` (RTL); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus the box's last cell is the space after the word, which belongs to it, so a first fixation there reads `n + 1` to `n + 2`.
 
-|                          |                                                                                                                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | initial_landing_position                                                                                                                                                                                                                  |
-| **Unit**                 | letters                                                                                                                                                                                                                                   |
-| **Missing & edge cases** | Never fixated, zero width, or no text ⇒ NaN. Measured from the word's first fixation, first pass or not (as `measure.ffd`).                                                                                                               |
-| **Precedence & caveats** | VAL-5: the scale is `geom.word_char_advance`, not the local `width / len(text)` this used before — on a tiling corpus that divided a box of `n + 1` advances by `n` characters, reporting every landing ~`(n+1)/n` too far into the word. |
-| **Reference**            | Assumes a monospaced advance within the word box — exact for the app's monospace default, approximate for proportional fonts.                                                                                                             |
-| **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                                                                                                                                                                   |
-| **Consumers**            | UI, API                                                                                                                                                                                                                                   |
-| **Tests**                | `tests/test_measures.py`                                                                                                                                                                                                                  |
-| **Verification**         | tier A — **Partially verified**                                                                                                                                                                                                           |
+|                          |                                                                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output**               | Initial_landing_position                                                                                                                                                                                                           |
+| **Unit**                 | letters                                                                                                                                                                                                                            |
+| **Missing & edge cases** | Never fixated, zero width, or no text ⇒ NaN. Measured from the word's first fixation, first pass or not (as `measure.ffd`).                                                                                                        |
+| **Precedence & caveats** | The scale is `geom.word_char_advance`, not the local `width / len(text)` this used before — on a tiling corpus that divided a box of `n + 1` advances by `n` characters, reporting every landing ~`(n+1)/n` too far into the word. |
+| **Reference**            | Assumes a monospaced advance within the word box — exact for the app's monospace default, approximate for proportional fonts.                                                                                                      |
+| **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                                                                                                                                                            |
+| **Consumers**            | UI, API                                                                                                                                                                                                                            |
+| **Tests**                | `tests/test_measures.py`                                                                                                                                                                                                           |
+| **Verification**         | tier A — **Partially verified**                                                                                                                                                                                                    |
 
 ### `measure.landing_distance` — Centred landing distance
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Landing position relative to the word's centre.
 
-**Formula.** `landing_position − (1 + len(text) / 2)` — the glyphs span `[1, n + 1)`, so that is the word's centre (BUG-65). The centre of the *letters*, not of the box: a tiling box's trailing space (#BUG-83) would move it half a letter right.
+**Formula.** `landing_position − (1 + len(text) / 2)` — the glyphs span `[1, n + 1)`, so that is the word's centre. The centre of the *letters*, not of the box: a tiling box's trailing space would move it half a letter right.
 
 |                          |                                                         |
 | ------------------------ | ------------------------------------------------------- |
-| **Output**               | initial_landing_distance                                |
+| **Output**               | Initial_landing_distance                                |
 | **Unit**                 | letters (0 = word centre, negative = left of centre)    |
 | **Missing & edge cases** | As `measure.landing_position`.                          |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -623,13 +697,17 @@ Landing position relative to the word's centre.
 
 ### `measure.second_pass` — Second-pass duration
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 Time spent on the word during its second visit.
 
 **Formula.** Sum of the fixations in the word's second run.
 
 |                          |                                                                                                                                                               |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | second_pass_duration_ms                                                                                                                                       |
+| **Output**               | Second_pass_duration_ms                                                                                                                                       |
 | **Unit**                 | ms                                                                                                                                                            |
 | **Missing & edge cases** | Fewer than two runs ⇒ 0 — an imported blank `IA_SECOND_RUN_DWELL_TIME` is filled with 0 too, so the mean means the same whichever source the value came from. |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures`                                                                                                       |
@@ -639,13 +717,17 @@ Time spent on the word during its second visit.
 
 ### `measure.single_fix` — Single-fixation duration
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 First-pass duration when the first pass was exactly one fixation.
 
 **Formula.** FFD when the word's first run has length 1, else NaN.
 
 |                          |                                                                |
 | ------------------------ | -------------------------------------------------------------- |
-| **Output**               | single_fixation_duration_ms                                    |
+| **Output**               | Single_fixation_duration_ms                                    |
 | **Unit**                 | ms                                                             |
 | **Missing & edge cases** | A first run of more than one fixation, or never fixated ⇒ NaN. |
 | **Reference**            | Rayner (1998).                                                 |
@@ -656,13 +738,17 @@ First-pass duration when the first pass was exactly one fixation.
 
 ### `measure.reg_in_count` — Regressions into word
 
+Experimental
+
+Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.
+
 How many times the gaze came back to this word.
 
 **Formula.** Number of regressions into the word — entries from a later word (EyeLink's `IA_REGRESSION_IN_COUNT`). A re-entry from an *earlier* word is a new run but not a regression in.
 
 |                          |                                                         |
 | ------------------------ | ------------------------------------------------------- |
-| **Output**               | number_of_regressions_in                                |
+| **Output**               | Number_of_regressions_in                                |
 | **Missing & edge cases** | Never regressed into ⇒ 0.                               |
 | **Code**                 | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers**            | UI, API                                                 |
@@ -671,18 +757,18 @@ How many times the gaze came back to this word.
 
 ### `fix.saccade_amplitude` — Saccade amplitude
 
-Distance between consecutive fixations — always pixels (BUG-25).
+Distance between consecutive fixations — always pixels.
 
 **Formula.** `sqrt(dx² + dy²)` between consecutive fixations in the trial.
 
 |                          |                                                                                                                                                                                                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | saccade_amplitude                                                                                                                                                                                                                                                                                       |
+| **Output**               | Saccade_amplitude                                                                                                                                                                                                                                                                                       |
 | **Unit**                 | px                                                                                                                                                                                                                                                                                                      |
 | **Grouping / ordering**  | Per trial, in timestamp order; the first fixation has none.                                                                                                                                                                                                                                             |
 | **Missing & edge cases** | First fixation of a trial ⇒ NaN.                                                                                                                                                                                                                                                                        |
 | **Precedence & caveats** | A source column literally named `saccade_amplitude` is assumed to be pixels and kept. EyeLink's **degree**-valued `NEXT_SAC_AMPLITUDE` / `PREVIOUS_SAC_AMPLITUDE` normalize to `next_/prev_saccade_amplitude_deg` and never reach this column — they are different quantities *and* different saccades. |
-| **Reference**            | #BUG-25: before the fix, one column meant px or deg depending on which columns the export carried (~78x apart on the bundled demo) under a hard-coded 'px' label.                                                                                                                                       |
+| **Reference**            | Before the fix, one column meant px or deg depending on which columns the export carried (~78x apart on the bundled demo) under a hard-coded 'px' label.                                                                                                                                                |
 | **Code**                 | `scanpath_studio/measures.py:enrich_fixations`                                                                                                                                                                                                                                                          |
 | **Consumers**            | UI, API, Export, Corpus Analysis                                                                                                                                                                                                                                                                        |
 | **Tests**                | `tests/test_measures.py`                                                                                                                                                                                                                                                                                |
@@ -696,7 +782,7 @@ Incoming and outgoing saccade direction.
 
 |                          |                                                |
 | ------------------------ | ---------------------------------------------- |
-| **Output**               | angle_incoming, angle_outgoing                 |
+| **Output**               | Angle_incoming, angle_outgoing                 |
 | **Unit**                 | degrees (−180, 180\]                           |
 | **Missing & edge cases** | Trial edges ⇒ NaN.                             |
 | **Code**                 | `scanpath_studio/measures.py:enrich_fixations` |
@@ -710,15 +796,15 @@ Trial-relative onset times for animation and time series.
 
 **Formula.** Cumulative onsets rebased so the trial starts at 0, from `timestamp_ms` where present, else by accumulating durations.
 
-|                          |                                                          |
-| ------------------------ | -------------------------------------------------------- |
-| **Output**               | onset array                                              |
-| **Unit**                 | ms                                                       |
-| **Missing & edge cases** | A backwards clock restarts the accumulation (see VAL-7). |
-| **Code**                 | `scanpath_studio/measures.py:rebased_fixation_onsets`    |
-| **Consumers**            | UI, API, CLI                                             |
-| **Tests**                | `tests/test_measures.py`                                 |
-| **Verification**         | tier A, C — **Partially verified**                       |
+|                          |                                                       |
+| ------------------------ | ----------------------------------------------------- |
+| **Output**               | Onset array                                           |
+| **Unit**                 | ms                                                    |
+| **Missing & edge cases** | A backwards clock restarts the accumulation.          |
+| **Code**                 | `scanpath_studio/measures.py:rebased_fixation_onsets` |
+| **Consumers**            | UI, API, CLI                                          |
+| **Tests**                | `tests/test_measures.py`                              |
+| **Verification**         | tier A, C — **Partially verified**                    |
 
 ## Statistical aggregation
 
@@ -773,7 +859,7 @@ Percentile bootstrap CI of the chosen aggregate.
 |                          |                                                            |
 | ------------------------ | ---------------------------------------------------------- |
 | **Unit**                 | same as the measure                                        |
-| **Missing & edge cases** | n < 2 ⇒ a degenerate interval at the point estimate.       |
+| **Missing & edge cases** | N < 2 ⇒ a degenerate interval at the point estimate.       |
 | **Precedence & caveats** | Seeded (`seed=0`) — the same data gives the same interval. |
 | **Reference**            | Percentile bootstrap; no bias correction.                  |
 | **Code**                 | `scanpath_studio/aggregation.py:bootstrap_ci`              |
@@ -783,15 +869,15 @@ Percentile bootstrap CI of the chosen aggregate.
 
 ### `agg.effect_size` — Group means and difference
 
-Two groups' means, their difference and Cohen's d (AN-21).
+Two groups' means, their difference and Cohen's d.
 
 **Formula.** Each value is one reader's mean of the measure (pooled observations when the data names no readers). `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and is shown only when the groups share no reader.
 
 |                          |                                                                                                                                               |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | mean_a, mean_b, mean_diff, cohen_d, n_a, n_b                                                                                                  |
-| **Grouping / ordering**  | one value per reader in each group                                                                                                            |
-| **Missing & edge cases** | n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
+| **Output**               | Mean_a, mean_b, mean_diff, cohen_d, n_a, n_b                                                                                                  |
+| **Grouping / ordering**  | One value per reader in each group                                                                                                            |
+| **Missing & edge cases** | N < 2 in either group ⇒ NaN *d*. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference. |
 | **Reference**            | **Descriptive only** — no significance test. A reader in both groups contributes to both means, so the groups are not independent samples.    |
 | **Code**                 | `scanpath_studio/aggregation.py:group_mean_difference`                                                                                        |
 | **Consumers**            | Corpus Analysis, API                                                                                                                          |
@@ -843,9 +929,13 @@ Rate measures per word.
 
 ### `agg.reader_summary` — Per-reader summary
 
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
 One row per reader: totals, means and rates.
 
-**Formula.** Counts and NaN-skipping means over that reader's rows. `mean_saccade_px` is the mean of `fix.saccade_amplitude` and is genuinely pixels since #BUG-25.
+**Formula.** Counts and NaN-skipping means over that reader's rows. `mean_saccade_px` is the mean of `fix.saccade_amplitude` and is in pixels.
 
 |                  |                                                       |
 | ---------------- | ----------------------------------------------------- |
@@ -857,6 +947,10 @@ One row per reader: totals, means and rates.
 | **Verification** | tier C, D — **Partially verified**                    |
 
 ### `agg.trial_summary` — Per-trial summary
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 One row per trial: reading time, counts, rates.
 
@@ -888,18 +982,22 @@ Rescale a measure for cross-reader comparison.
 
 ### `agg.landing_curve` — Landing-position curve
 
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
 Distribution of initial landing positions by word length.
 
 **Formula.** Histogram of the landing position as a *fraction of the word's interest area* — `(first_fix_x − word.x) / width` over the experiment's own box, i.e. `(measure.landing_position − 1)` over the box's `width / geom.word_char_advance` character cells (RTL counted from where the glyphs end, as the letter position is). Unclipped — binned per word length.
 
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Unit**                 | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Precedence & caveats** | #BUG-83: on a glyph-tight corpus the box is the glyph run, so 0 is the first letter's edge and 1 the last's. On a tiling corpus the box's last cell is the space after the word, so the glyphs fill `[0, n / (n + 1))` and a landing on that space reads just below 1 — it used to be clipped onto exactly 1.0, where 15% of the demo's landings piled up. A first fixation assigned from outside the box (the nearest-word fallback) reads below 0 or above 1 rather than being clipped onto an edge. #BUG-27 put the origin at the word's `x` and the scale on `geom.word_char_advance`. |
-| **Code**                 | `scanpath_studio/aggregation.py:landing_positions`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Consumers**            | Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Tests**                | `tests/test_aggregation.py`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Verification**         | tier C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | fraction of the interest area (0–1 for a landing inside the box), or px with `as_fraction=False`                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Precedence & caveats** | On a glyph-tight corpus the box is the glyph run, so 0 is the first letter's edge and 1 the last's. On a tiling corpus the box's last cell is the space after the word, so the glyphs fill `[0, n / (n + 1))` and a landing on that space reads just below 1 — it used to be clipped onto exactly 1.0, where 15% of the demo's landings piled up. A first fixation assigned from outside the box (the nearest-word fallback) reads below 0 or above 1 rather than being clipped onto an edge. The origin is the word's `x` and the scale is `geom.word_char_advance`. |
+| **Code**                 | `scanpath_studio/aggregation.py:landing_positions`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Consumers**            | Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Tests**                | `tests/test_aggregation.py`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Verification**         | tier C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ### `agg.over_time` — Trend over time
 
@@ -919,7 +1017,11 @@ A measure by trial index or fixation index.
 
 ### `sim.nld` — Normalized Levenshtein distance
 
-Scanpath similarity over AoI sequences (gated by PRE-21).
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
+Scanpath similarity over AoI sequences.
 
 **Formula.** `levenshtein(a, b) / max(len(a), len(b))` ∈ [0, 1]; 0 is identical. Two empty sequences give 0.
 
@@ -935,6 +1037,10 @@ Scanpath similarity over AoI sequences (gated by PRE-21).
 
 ### `sim.aoi_sequence` — AoI sequence
 
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+
 The symbol string an NLD comparison runs on.
 
 **Formula.** Assigned `word_id`s in fixation order, with unassigned fixations dropped and (optionally) immediate repeats collapsed.
@@ -948,6 +1054,10 @@ The symbol string an NLD comparison runs on.
 | **Verification**         | tier A, C — **Verified**                                     |
 
 ### `sim.windowed` — NLD by fixation index / time
+
+Experimental
+
+Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
 
 Similarity restricted to a window of the scanpath.
 
@@ -996,16 +1106,16 @@ Typography conversion for true-scale text rendering.
 
 Where one word's interest area ends and the next begins.
 
-**Formula.** `x .. x + width` by `y .. y + height` — the experiment's own rectangles, unmodified. On a tiling corpus each box includes the space after its word.
+**Formula.** `x .. X + width` by `y .. Y + height` — the experiment's own rectangles, unmodified. On a tiling corpus each box includes the space after its word.
 
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Unit**                 | px                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Precedence & caveats** | The boundary *between* words, for everything that tests a point against a box or draws one: `assign.fixation_to_word`, `assign.in_text`, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position *inside* a word goes through `geom.word_char_advance` instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centred in the box (#BUG-97). #BUG-83 reverted BUG-11, which pulled every tiling boundary back half a space to mid-whitespace and so disagreed with EyeLink's own interest-area assignment on 7.4% of the demo's fixations. |
-| **Code**                 | `scanpath_studio/measures.py:word_box_bounds`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Consumers**            | UI, API, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **Tests**                | `tests/test_word_box_geometry.py`, `tests/test_word_id_offset.py`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | px                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Precedence & caveats** | The boundary *between* words, for everything that tests a point against a box or draws one: `assign.fixation_to_word`, `assign.in_text`, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position *inside* a word goes through `geom.word_char_advance` instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centred in the box. An earlier version pulled every tiling boundary back half a space to mid-whitespace, and so disagreed with EyeLink's own interest-area assignment on 7.4% of the demo's fixations. |
+| **Code**                 | `scanpath_studio/measures.py:word_box_bounds`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Consumers**            | UI, API, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Tests**                | `tests/test_word_box_geometry.py`, `tests/test_word_id_offset.py`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### `geom.word_box_space_px` — Inter-word padding baked into each box
 
@@ -1013,15 +1123,15 @@ Detects a tiling layout that carries one trailing space per box.
 
 **Formula.** Median of `width / (len(text) + 1)` across one trial's words — the advance — reported only when the boxes are consistently that wide **and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. 'these AOIs are glyph-tight — each box is its glyph run'.
 
-|                          |                                                                                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px                                                                                                                                        |
-| **Missing & edge cases** | No usable words ⇒ 0.0 (glyph-tight), never a guess.                                                                                       |
-| **Precedence & caveats** | Never moves a box edge (#BUG-83); it only tells `geom.word_char_advance` and `geom.word_glyph_span` how many character cells a box holds. |
-| **Code**                 | `scanpath_studio/measures.py:word_box_space_px`                                                                                           |
-| **Consumers**            | UI, API, Export                                                                                                                           |
-| **Tests**                | `tests/test_measures.py`                                                                                                                  |
-| **Verification**         | tier A, C — **Verified**                                                                                                                  |
+|                          |                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | px                                                                                                                              |
+| **Missing & edge cases** | No usable words ⇒ 0.0 (glyph-tight), never a guess.                                                                             |
+| **Precedence & caveats** | Never moves a box edge; it only tells `geom.word_char_advance` and `geom.word_glyph_span` how many character cells a box holds. |
+| **Code**                 | `scanpath_studio/measures.py:word_box_space_px`                                                                                 |
+| **Consumers**            | UI, API, Export                                                                                                                 |
+| **Tests**                | `tests/test_measures.py`                                                                                                        |
+| **Verification**         | tier A, C — **Verified**                                                                                                        |
 
 ### `geom.word_char_advance` — Character advance within a word
 
@@ -1029,15 +1139,15 @@ How wide one letter is — the scale for every within-word position.
 
 **Formula.** `width / (len(text) + 1)` when `geom.word_box_space_px` finds trailing padding, else `width / len(text)`.
 
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px / character                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Missing & edge cases** | No `text`/`width` ⇒ NaN, and the letter measures report NaN.                                                                                                                                                                                                                                                                                                                                              |
-| **Precedence & caveats** | The single accessor for the letter scale, as `geom.word_box_bounds` is for the boundary between words: `measure.landing_position`, `measure.landing_distance`, `agg.landing_curve` and the saccade table's launch/landing letter all read it. #BUG-27 — before that each derived its own `width / len(text)`, which is one advance too wide on a tiling corpus, by a factor that varied with word length. |
-| **Code**                 | `scanpath_studio/measures.py:word_char_advance`                                                                                                                                                                                                                                                                                                                                                           |
-| **Consumers**            | UI, API, Export, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                          |
-| **Tests**                | `tests/test_measures.py`                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                                                                                                                                                                                  |
+|                          |                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | px / character                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Missing & edge cases** | No `text`/`width` ⇒ NaN, and the letter measures report NaN.                                                                                                                                                                                                                                                                                                                                    |
+| **Precedence & caveats** | The single accessor for the letter scale, as `geom.word_box_bounds` is for the boundary between words: `measure.landing_position`, `measure.landing_distance`, `agg.landing_curve` and the saccade table's launch/landing letter all read it. Before that each derived its own `width / len(text)`, which is one advance too wide on a tiling corpus, by a factor that varied with word length. |
+| **Code**                 | `scanpath_studio/measures.py:word_char_advance`                                                                                                                                                                                                                                                                                                                                                 |
+| **Consumers**            | UI, API, Export, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                |
+| **Tests**                | `tests/test_measures.py`                                                                                                                                                                                                                                                                                                                                                                        |
+| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### `geom.word_glyph_span` — Where a word's glyphs are
 
@@ -1045,14 +1155,14 @@ The glyph run inside a word's box — where its letters are.
 
 **Formula.** Starts at `x` and runs `len(text) × geom.word_char_advance`: the whole box on a glyph-tight corpus, one advance short of it on a tiling one. No `text` ⇒ the box width.
 
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Unit**                 | px                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. The drawn word label and the linear-reading snap used to sit on it (BUG-30). #BUG-97 measured OneStop's own Experiment Builder screens: each tiling box is centred on its word, half a space either side, so the run's `x` start is half an advance early there; the label and snap moved to the box centre, the landing measures have not. |
-| **Code**                 | `scanpath_studio/measures.py:word_glyph_span`                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Consumers**            | UI, API, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **Tests**                | `tests/test_word_box_geometry.py`                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Verification**         | tier A — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                            |
+|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | px                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. The drawn word label and the linear-reading snap used to sit on it. Measured against OneStop's own Experiment Builder screens: each tiling box is centred on its word, half a space either side, so the run's `x` start is half an advance early there; the label and snap moved to the box centre, the landing measures have not. |
+| **Code**                 | `scanpath_studio/measures.py:word_glyph_span`                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Consumers**            | UI, API, Corpus Analysis                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Tests**                | `tests/test_word_box_geometry.py`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Verification**         | tier A — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Display / export transformation
 
@@ -1106,14 +1216,14 @@ How recorded time maps to playback time.
 
 **Formula.** Frames sit on a uniform reading-time grid over `fix.rebased_onsets`; the frame at reading time t is on screen once t / playback speed of wall time has passed, so a replay lasts reading span / speed. The player keeps that clock itself, skipping frames a display is too slow to show, and a GIF/MP4 lasts the same. A multipart replay changes screen at the boundary and draws no connector across canvases.
 
-|                          |                                                                                                                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | ms (recorded) → ms (playback)                                                                                                                                                                   |
-| **Precedence & caveats** | Plotly's own frame queue is never the clock: it rounds every frame up to whole display ticks and the error accumulates (BUG-93). Without the player (`fig.show()`) the figure falls back to it. |
-| **Code**                 | `scanpath_studio/plots.py:make_scanpath_animation`                                                                                                                                              |
-| **Consumers**            | UI, API, CLI, Export                                                                                                                                                                            |
-| **Tests**                | `tests/test_replay_player.py`, `tests/test_animation_export.py`                                                                                                                                 |
-| **Verification**         | tier C, D — **Intentional convention**                                                                                                                                                          |
+|                          |                                                                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit**                 | ms (recorded) → ms (playback)                                                                                                                                                          |
+| **Precedence & caveats** | Plotly's own frame queue is never the clock: it rounds every frame up to whole display ticks and the error accumulates. Without the player (`fig.show()`) the figure falls back to it. |
+| **Code**                 | `scanpath_studio/plots.py:make_scanpath_animation`                                                                                                                                     |
+| **Consumers**            | UI, API, CLI, Export                                                                                                                                                                   |
+| **Tests**                | `tests/test_replay_player.py`, `tests/test_animation_export.py`                                                                                                                        |
+| **Verification**         | tier C, D — **Intentional convention**                                                                                                                                                 |
 
 ### `disp.illustration` — Illustration disclosure
 

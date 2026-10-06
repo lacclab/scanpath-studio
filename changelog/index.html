@@ -1919,10 +1919,12 @@ behind each line, and the releases before 0.28.0, are in
 <li>Heatmap: <em>Duration mass</em> is removed (links and settings files naming it open <em>Interpolated</em>); Interpolated gets a <strong>Blur</strong> row — Auto (showing the σ it uses) or a fixed σ in px (<code>heatmap_sigma_px</code>, <code>render --heatmap-sigma</code>); the colour range starts at 0 and is offered for Fixation count too. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
 <li>The fixations and the heatmap each have their own colour bar settings (show, orientation, tick angle and size), under their layer in the rail; <code>render</code> takes <code>--no-fixation-colorbar</code> / <code>--fixation-colorbar-*</code> and the heatmap equivalents, and links or settings files using the old shared settings apply them to both. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
 <li>Shorter help texts throughout the plot controls. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>The command-line help, API reference, error messages and computation register no longer show internal tracker IDs. (<a href="https://github.com/lacclab/scanpath-studio/issues/354">#354</a>)</li>
 </ul>
 <p><strong>Removed</strong></p>
 <ul>
 <li>The px-per-degree figure is no longer shown in the Recording setup forms, and the export's saccade table no longer converts amplitudes to degrees. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Measures the app computes itself are held back until validated: the reading-measure, summary, preprocessing and analysis-table API functions, the <code>analyze</code> command, the export bundle's measure family, and the computed Corpus Analysis views (Reading summary, Progressive vs regressive, Landing-position curve, Reader summary table) now need <code>SCANPATH_EXPERIMENTAL=1</code>. (<a href="https://github.com/lacclab/scanpath-studio/issues/354">#354</a>)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
@@ -1930,6 +1932,8 @@ behind each line, and the releases before 0.28.0, are in
 <li>A figure's title, caption, Illustration label, word-heatmap title and the names of compared scanpaths are drawn as written: angle brackets, <code>&amp;</code> and <code>%{…}</code> no longer act as Plotly markup, and only a real newline starts a new caption line. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
 <li>An infinite position, duration, onset or word-box size no longer stretches a figure's axes or crashes it or its replay; the figure leaves such a row out (or times it by duration), and a per-screen screen size that is not finite and positive falls back to the dataset's own. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
 <li>The plot rail shows "Word boxes" in full at a 1280-pixel window. (<a href="https://github.com/lacclab/scanpath-studio/issues/351">#351</a>)</li>
+<li><code>scanpath-studio cache</code> no longer prints Streamlit's "No runtime found" warnings, the CLI docs list the <code>check</code> command, and the MultiplEYE and benchmark-corpus loaders are no longer advertised in the package's public names. (<a href="https://github.com/lacclab/scanpath-studio/issues/354">#354</a>)</li>
+<li>Corpus Analysis › Per reader › Fixation duration over time opens on a per-fixation measure instead of an empty notice. (<a href="https://github.com/lacclab/scanpath-studio/issues/354">#354</a>)</li>
 </ul>
 <h2 id="0330-2026-10-04">0.33.0 — 2026-10-04<a class="headerlink" href="#0330-2026-10-04" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

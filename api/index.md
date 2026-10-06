@@ -22,9 +22,8 @@ Columns keep the names your files give them. The demo's word table calls its wor
 words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head(3))
 
-measures = sps.compute_word_metrics(words, fixations)
 columns = ["IA_ID", "IA_LABEL", "IA_FIRST_FIXATION_DURATION", "IA_DWELL_TIME"]
-print(measures[columns].head(3))
+print(words[columns].head(3))
 ```
 
 ```
@@ -33,9 +32,9 @@ print(measures[columns].head(3))
 1       l37_1129  l37_1129_2_1_2_Ele_r0
 2       l37_1129  l37_1129_2_1_3_Adv_r0
    IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-0      0    Robert                        32.0            387
-1      1  Myslajek                       170.0            785
-2      2     stops                       290.0           1330
+0      0    Robert                          32            387
+1      1  Myslajek                         170            785
+2      2     stops                         290           1330
 ```
 
 ## Load
@@ -48,9 +47,9 @@ load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None
 
 Load and normalize a words/IA table and/or a fixations table.
 
-The columns keep the names your files give them (DATA-66): `CURRENT_FIX_DURATION`, not `duration_ms`. A column Scanpath Studio built, converted, computed or changed keeps its internal name, and `data.column_names` (a ScanpathData) records what every column was called. Every API function takes these frames, and every column option (`color_by=`, hover fields …) takes either name. `names="canonical"` returns the internal names instead — the same for every dataset, for code that works across them.
+The columns keep the names your files give them: `CURRENT_FIX_DURATION`, not `duration_ms`. A column Scanpath Studio built, converted, computed or changed keeps its internal name, and `data.column_names` (a ScanpathData) records what every column was called. Every API function takes these frames, and every column option (`color_by=`, hover fields …) takes either name. `names="canonical"` returns the internal names instead — the same for every dataset, for code that works across them.
 
-`words` / `fixations` may be DataFrames, paths to `.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` / `.xls` files (or a `.zip` of them), glob patterns, or lists of paths — multi-file datasets (one file per participant and/or text) are concatenated, with each file's stem kept in a `source_file` column. Column schemas are auto-detected (EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake_case names); pass `word_schema` / `fix_schema` mappings (field → column name; see propose_schema) to override detection. For per-word reading measures, pass the result to compute_word_metrics.
+`words` / `fixations` may be DataFrames, paths to `.csv` / `.tsv` / `.txt` / `.tab` / `.parquet` / `.feather` / `.xlsx` / `.xls` files (or a `.zip` of them), glob patterns, or lists of paths — multi-file datasets (one file per participant and/or text) are concatenated, with each file's stem kept in a `source_file` column. Column schemas are auto-detected (EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake_case names); pass `word_schema` / `fix_schema` mappings (field → column name; see propose_schema) to override detection.
 
 `trial_parts_manifest` accepts a nested parent-trial/parts definition for datasets whose source tables identify screens through arbitrary selector columns; explicit `screen_id` / `screen_index` columns can instead be mapped directly in each schema. Either table may be omitted for datasets that ship only one report: the missing side comes back as an empty canonical frame and the plots simply skip that layer. Words without a participant column (stimulus-level AoIs) are copied onto every reading in the fixations — each reading matched by its trial id, else the trial id it had before a repeat's `_r2` suffix, else its `text_id` (trial ids that embed the reader), with a `data.StimulusJoinWarning` (a `UserWarning`) when some readings match none — and fixations without x/y but with a word/AoI ID are placed at word-box centers. Columns named in `data.INTERNAL_COLUMNS` are the pipeline's bookkeeping (`data.drop_internal_columns` removes them).
 
@@ -239,7 +238,7 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 
 OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation lives in `scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS`'s `"onestop"` entry (Berzak et al. 2025, Methods → Apparatus); pass that as `canvas_size` to plot_scanpath for true-to-scale rendering. The reports already match the bundled demo's schema, so this reuses the generic auto-detect → normalize path (no OneStop-specific column mapping).
 
-## Inspect and measure
+## Inspect
 
 ### scanpath_studio.api.list_trials
 
@@ -249,7 +248,7 @@ list_trials(words: DataFrame | None = None, fixations: DataFrame | None = None, 
 
 Plottable `(participant_id, trial_id)` combos.
 
-Combos present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), combos from whichever frame has data. `raw_gaze` (a frame from load_raw_gaze) adds the trials that only its samples cover — every trial, for a dataset recorded as raw gaze alone (pass `None` for `words` and `fixations` then). The id columns take the names the frames carry (DATA-66).
+Combos present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), combos from whichever frame has data. `raw_gaze` (a frame from load_raw_gaze) adds the trials that only its samples cover — every trial, for a dataset recorded as raw gaze alone (pass `None` for `words` and `fixations` then). The id columns take the names the frames carry.
 
 ### scanpath_studio.api.list_parts
 
@@ -275,52 +274,6 @@ Checks the normalized tables (from load_scanpath_data / load_raw_gaze) for fixat
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
 print(sps.check_data_health(words, fixations))
 ```
-
-### scanpath_studio.api.compute_word_metrics
-
-```
-compute_word_metrics(words: DataFrame, fixations: DataFrame) -> DataFrame
-```
-
-Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).
-
-Pre-aggregated columns in `words` (EyeLink IA exports) are preserved; anything missing is computed from fixations + word bounding boxes. Takes the normalized frames from load_scanpath_data, and answers in the names they carry.
-
-### scanpath_studio.api.preprocess_data
-
-```
-preprocess_data(words: DataFrame, fixations: DataFrame, *, enabled: bool = False, short_policy: str = 'Off', short_threshold_ms: float = 80.0, merge_distance_chars: float = 1.0, discard_blink_adjacent: bool = False) -> tuple[DataFrame, DataFrame, DataFrame]
-```
-
-Apply the optional preprocessing stage and return words/fixations/QA.
-
-### scanpath_studio.api.analysis_tables
-
-```
-analysis_tables(words: DataFrame, fixations: DataFrame, *, pixels_per_degree: float | None = None, raw_gaze: DataFrame | None = None) -> dict[str, DataFrame]
-```
-
-The tables `scanpath-studio analyze` writes, as a dict of frames.
-
-`fixations`, `saccades`, `word_measures`, `sentence_measures`, `trial_summary`, `reader_summary`, `characters` and `cleaning_qa`.
-
-`word_measures` is the words table with the reading measures it *brought* (AN-32 / EXP-23): none are computed here, and a words table that carries none leaves `word_measures` out. Call compute_word_metrics first to add the app's own.
-
-### scanpath_studio.api.trial_summary
-
-```
-trial_summary(words: DataFrame, fixations: DataFrame) -> DataFrame
-```
-
-Exportable one-row-per-trial reading summary.
-
-### scanpath_studio.api.reader_summary
-
-```
-reader_summary(words: DataFrame, fixations: DataFrame) -> DataFrame
-```
-
-Exportable one-row-per-reader reading summary.
 
 ## Plot
 
@@ -358,7 +311,7 @@ With `autoplay` (default `True`) the saved interactive HTML auto-starts the repl
 
 When `playback_speed` is not `1`, the automatic Illustration label says the replay timing was changed. `illustration_label` accepts `"auto"`, `"show"`, or `"hide"` like plot_scanpath.
 
-CMP-24: in a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`, or the `fixation_flags` of `style_b` when it names some).
+In a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`, or the `fixation_flags` of `style_b` when it names some).
 
 `style_a` / `style_b` style the two scanpaths of a co-animation as they style compare_scanpaths' — the same keys (`fix_color`, `marker_size_range`, `opacity`, `hollow`, `saccade_color`, `saccade_style`, `saccade_width`), resolved the same way, so the replay and the static comparison draw each reading alike. The replay has no saccade-class filter, so a style naming `saccade_classes` raises `ValueError`. A lone replay ignores both.
 
@@ -396,9 +349,9 @@ The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(par
 
 **Per-scanpath style.** `style_a` / `style_b` restyle one scanpath: `fix_color`, `marker_size_range`, `opacity`, `hollow`, `saccade_color`, `saccade_style`, `saccade_width` and `box_color` — the outline of that reading's word boxes, its `fix_color` when left out. `box_color` is this figure's only: the co-animation draws one set of boxes, in `word_box_color`, and ignores it.
 
-**Filters, per scanpath (CMP-24).** `fixation_flags` and `saccade_classes` filter both scanpaths, as they filter plot_scanpath's one; the same two keys in `style_a` / `style_b` give that scanpath its own, overriding them — e.g. `style_b={"fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80}}, "saccade_classes": ["regression"]}`. The app's Compare mode draws A under the rail's filters and B under B's own. `fix_index_range` windows both scanpaths; `fix_index_range_b` gives B a window of its own (the app's B slider).
+**Filters, per scanpath.** `fixation_flags` and `saccade_classes` filter both scanpaths, as they filter plot_scanpath's one; the same two keys in `style_a` / `style_b` give that scanpath its own, overriding them — e.g. `style_b={"fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80}}, "saccade_classes": ["regression"]}`. The app's Compare mode draws A under the rail's filters and B under B's own. `fix_index_range` windows both scanpaths; `fix_index_range_b` gives B a window of its own (the app's B slider).
 
-**Raw gaze (VIZ-48).** `raw_gaze` is a frame from load_raw_gaze; each reading's samples are drawn under its scanpath, in that scanpath's colour (`raw_gaze_marker_size` / `raw_gaze_opacity` style them). It serves both readings of a same-dataset comparison; across datasets it is A's, and `raw_gaze_b` is B's. Passing either turns the layer on; `show_raw_gaze=False` keeps it off.
+**Raw gaze.** `raw_gaze` is a frame from load_raw_gaze; each reading's samples are drawn under its scanpath, in that scanpath's colour (`raw_gaze_marker_size` / `raw_gaze_opacity` style them). It serves both readings of a same-dataset comparison; across datasets it is A's, and `raw_gaze_b` is B's. Passing either turns the layer on; `show_raw_gaze=False` keeps it off.
 
 Remaining keywords are forwarded to `plots.make_comparison_figure` (e.g. `show_words=False`, `color_by="duration_ms"`); an unknown one raises `TypeError` naming the closest valid options; `figure_options("comparison")` lists the accepted keywords. Column names follow plot_scanpath's rule: A's names (or `column_names`) name the options and the figure's text, and either dataset's frames may come under their own names.
 

@@ -19,7 +19,7 @@ scanpath-studio --server.address 0.0.0.0
 
 Served on a network, the app also turns off everything that reads or writes the server's own folders — the data-location box, the folder picker, ⬇ Download for the public corpora and stimulus-image folders — since any visitor could use them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1` (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
 
-Additional launch flags are forwarded to Streamlit. A word that is not one of the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that names the closest one, rather than an argument handed to Streamlit.
+Additional launch flags are forwarded to Streamlit. A word that is not one of the commands (`run`, `render`, `corpus`, `check`, `cache`) is an error that names the closest one, rather than an argument handed to Streamlit.
 
 ## Render
 
@@ -51,7 +51,7 @@ HTML is interactive and browser-free. PNG, SVG, and PDF require Chrome/Chromium 
 
 ### When a column isn't recognised
 
-Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and snake_case spellings). When one isn't, `render` stops and prints which field it could not find, the names it looked for, the columns your table has, and a mapping to start from. Pass that mapping back as JSON — inline, or as a path to a `.json` file — with `--word-schema` (the `--words` table) and/or `--fix-schema` (the `--fixations` table). `analyze` takes the same two flags.
+Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and snake_case spellings). When one isn't, `render` stops and prints which field it could not find, the names it looked for, the columns your table has, and a mapping to start from. Pass that mapping back as JSON — inline, or as a path to a `.json` file — with `--word-schema` (the `--words` table) and/or `--fix-schema` (the `--fixations` table). `check` takes the same two flags.
 
 ```
 scanpath-studio render --words ia.csv --fixations fix.csv \
@@ -175,35 +175,6 @@ scanpath-studio render --raw-gaze gaze_samples.csv --list-trials
 scanpath-studio render --raw-gaze gaze_samples.csv -t t3 -o samples.png
 ```
 
-## Analyze
-
-The `analyze` command writes the full tabular family without opening the app:
-
-```
-scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir analysis
-```
-
-This writes fixation, saccade, word, sentence, trial, reader, character and cleaning-QA tables as CSV, plus `run_config.json`. It takes the same `--words` / `--fixations` (several paths each), `--trial-parts-manifest`, `--word-schema` and `--fix-schema` as `render`, plus the optional preprocessing stage ([`api.preprocess_data`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.preprocess_data)), which is off unless a flag below turns it on and never deletes a row — excluded fixations keep `excluded` / `excluded_reason`:
-
-**Options**
-
-| Option                     | Value                                    | Default  | Description                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------- | ---------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--words`                  | `WORDS [WORDS ...]`                      | required | Words/IA table(s), as for render.                                                                                                                                                                                                                                                                                                                               |
-| `--fixations`              | `FIXATIONS [FIXATIONS ...]`              | required | Fixations table(s), as for render.                                                                                                                                                                                                                                                                                                                              |
-| `--trial-parts-manifest`   | `TRIAL_PARTS_MANIFEST`                   | —        | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                         |
-| `--output-dir`             | `OUTPUT_DIR`                             | required | Folder for the CSV tables and run_config.json (created if missing).                                                                                                                                                                                                                                                                                             |
-| `--short-policy`           | `{off,merge,merge-then-discard,discard}` | `off`    | Fixations shorter than `--short-threshold-ms`: merge folds each into its nearer neighbour within `--merge-distance-chars` (a short last fixation that cannot merge is excluded); merge-then-discard also excludes every other one that cannot merge; discard excludes them all. Excluded rows are marked, never dropped (default: off).                         |
-| `--short-threshold-ms`     | `SHORT_THRESHOLD_MS`                     | `80.0`   | What counts as a short fixation, in ms (default: 80).                                                                                                                                                                                                                                                                                                           |
-| `--merge-distance-chars`   | `MERGE_DISTANCE_CHARS`                   | `1.0`    | How close, in character widths, a neighbour must be for a short fixation to merge into it (default: 1.0).                                                                                                                                                                                                                                                       |
-| `--discard-blink-adjacent` | switch                                   | —        | Exclude blinks and the fixations either side of one.                                                                                                                                                                                                                                                                                                            |
-| `--pixels-per-degree`      | `PIXELS_PER_DEGREE`                      | —        | Screen pixels per degree of visual angle; adds degree-valued amplitudes to the saccade table.                                                                                                                                                                                                                                                                   |
-| `--word-schema`            | `JSON`                                   | —        | Column mapping for the `--words` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from.     |
-| `--fix-schema`             | `JSON`                                   | —        | Column mapping for the `--fixations` table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognised; the error then prints a mapping to start from. |
-| `--keep-columns`           | `COLUMN [COLUMN ...]`                    | —        | Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — normalization keeps only the mapped and recognised fields otherwise. A kept fixation column can then be `--color-by`, an axis or a hover field. The keep_columns= of api.load_scanpath_data.                                    |
-
-The preprocessing settings and `--pixels-per-degree` are recorded in `run_config.json`.
-
 ## Corpus figures
 
 `scanpath-studio corpus` goes the other way: it reads a tidy CSV you already have and renders a styled corpus figure ([`api.plot_corpus_figure`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.plot_corpus_figure)):
@@ -286,7 +257,6 @@ usage:
                                    the Data Management page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
-  scanpath-studio analyze …        export preprocessing + the full measure family
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
@@ -478,4 +448,4 @@ SCANPATH_LOCAL_FS=1.
 | `--json`  | switch | —       | Print the status as JSON        |
 | `--clear` | switch | —       | Delete the stored session       |
 
-`analyze`, `corpus` and `check` are listed in full in their own sections above.
+`corpus` and `check` are listed in full in their own sections above.

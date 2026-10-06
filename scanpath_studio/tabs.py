@@ -310,6 +310,7 @@ from scanpath_studio.plots import (
     set_replay_clock,
 )
 from scanpath_studio.session_keys import (
+    CORPUS_SUBTAB,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
@@ -9589,8 +9590,12 @@ def _render_corpus_analysis_body(
             # (uncached, masking the whole fixation frame per sentence) was
             # recomputed on every click anywhere in this view: 26 s per click at
             # 16× the demo. Keyed + `on_change="rerun"`, only the open tab runs.
-            key="corpus_subtab",
+            #
+            # Streamlit 1.65: bound to the URL, so `?corpus_subtab=Per+reader`
+            # opens that section and the address bar names the one on screen.
+            key=CORPUS_SUBTAB,
             on_change="rerun",
+            bind="query-params",
         )
         opened = dict(zip(names, panes, strict=True))
     text_tab, reader_tab, groups_tab = (

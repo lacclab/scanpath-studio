@@ -73,6 +73,7 @@ from .data import (
     INTERNAL_COLUMNS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    coerce_bool_or_na,
     frame_fingerprint,
     mapping_value_preview,
     user_columns,
@@ -1229,13 +1230,41 @@ def designs_to_json(designs: dict[str, dict]) -> str:
     )
 
 
-def designs_from_json(text: str) -> dict[str, dict]:
+def sanitize_design(values: dict) -> tuple[dict, list[str]]:
+    """A design's settings as they may be applied, and the keys that were not.
+
+    Keeps the keys :func:`_is_design_key` names, each through the typed,
+    bounded rule a link or the recovery cache is read with
+    (``url_state.sanitize_session_value``): numbers clamped to their widget's
+    bounds, colours ``#rrggbb``, switches booleans, choices from their
+    vocabulary. A value that fails is left out and its key returned, so one bad
+    setting never reaches a widget or ``_collect_viz_settings``.
+    """
+    from .url_state import sanitize_session_value
+
+    clean: dict = {}
+    skipped: list[str] = []
+    for key, value in values.items():
+        key = str(key)
+        if not _is_design_key(key):
+            continue
+        try:
+            clean[key] = sanitize_session_value(key, value)
+        except (TypeError, ValueError, OverflowError):
+            skipped.append(key)
+    return clean, skipped
+
+
+def designs_from_json(text: str, *, report: list[str] | None = None) -> dict[str, dict]:
     """Parse an Export file into ``{name: settings}`` (pure — no Streamlit).
 
     Keeps only what a design can hold — the keys :func:`_is_design_key` names,
-    as `_apply_view_preset` applies them — and gives a name that collides with a
-    built-in the same ``" (mine)"`` suffix :func:`save_design_preset` does.
-    Raises ``ValueError`` for anything that is not a designs file.
+    as `_apply_view_preset` applies them, each validated by
+    :func:`sanitize_design` — and gives a name that collides with a built-in
+    the same ``" (mine)"`` suffix :func:`save_design_preset` does. What was
+    left out is appended to ``report`` as one line per design (and one for a
+    file written by a newer version). Raises ``ValueError`` for anything that
+    is not a designs file.
     """
     data = json.loads(text)
     if not isinstance(data, dict) or data.get("kind") != DESIGNS_FILE_KIND:
@@ -1245,21 +1274,33 @@ def designs_from_json(text: str) -> dict[str, dict]:
         raise ValueError("the file holds no designs")
     try:
         schema = int(data.get("schema", 1))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         schema = 1
+    notes = report if report is not None else []
+    if schema > DESIGNS_FILE_SCHEMA:
+        notes.append(
+            f"the file is from a newer version (schema {schema}); settings this "
+            "version doesn't know were skipped"
+        )
     designs: dict[str, dict] = {}
     for name, values in raw.items():
         clean = " ".join(str(name).split())[:60]
         if not clean or not isinstance(values, dict):
+            if clean:
+                notes.append(f"{clean}: not a design, skipped")
             continue
         if clean in _VIEW_PRESETS:
             clean = f"{clean} (mine)"
         design = {
             str(key): value for key, value in values.items() if _is_design_key(key)
         }
-        designs[clean] = keep_legacy_marker_scale(design) if schema < 2 else design
+        if schema < 2:
+            design = keep_legacy_marker_scale(design)
         # A design saved before a key was renamed holds the old name.
-        designs[clean] = rename_legacy_keys(designs[clean])
+        design, skipped = sanitize_design(rename_legacy_keys(design))
+        designs[clean] = design
+        if skipped:
+            notes.append(f"{clean}: skipped invalid {', '.join(sorted(skipped))}")
     return designs
 
 
@@ -1272,16 +1313,18 @@ def _import_designs() -> None:
     uploaded = st.session_state.get(_DESIGN_IMPORT_KEY)
     if uploaded is None:
         return
+    report: list[str] = []
     try:
-        incoming = designs_from_json(uploaded.getvalue().decode("utf-8"))
+        incoming = designs_from_json(uploaded.getvalue().decode("utf-8"), report=report)
     except (ValueError, UnicodeDecodeError) as exc:
         st.session_state[_DESIGN_IMPORT_NOTE_KEY] = f"error:Couldn't import it: {exc}."
         return
     st.session_state[DESIGN_PRESETS_KEY] = {**design_presets(), **incoming}
     count = len(incoming)
-    st.session_state[_DESIGN_IMPORT_NOTE_KEY] = (
-        f"Imported {count} design{'' if count == 1 else 's'}."
-    )
+    note = f"Imported {count} design{'' if count == 1 else 's'}."
+    if report:
+        note = f"warning:{note} " + "; ".join(report) + "."
+    st.session_state[_DESIGN_IMPORT_NOTE_KEY] = note
 
 
 def _render_design_file_row(host, saved: dict[str, dict]) -> None:
@@ -1289,6 +1332,8 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
     note = st.session_state.pop(_DESIGN_IMPORT_NOTE_KEY, None)
     if note and note.startswith("error:"):
         host.error(note.removeprefix("error:"), icon=ICONS["error"])
+    elif note and note.startswith("warning:"):
+        host.warning(note.removeprefix("warning:"), icon=ICONS["warning"])
     elif note:
         host.success(note, icon=ICONS["confirm"])
     row = host.container(horizontal=True, gap="small", key="design_file_row")
@@ -1450,9 +1495,11 @@ def _apply_view_preset(name: str) -> None:
         for key, value in _VIZ_WIDGET_DEFAULTS.items():
             if _is_design_key(key):
                 ss[key] = deepcopy(value)
-        for key, value in saved[name].items():
-            if _is_design_key(key):
-                ss[key] = deepcopy(value)
+        # Validated again here: a design can also come from the recovery
+        # cache or an older session, and a bad value must cost that setting,
+        # not the rerun (round 11).
+        for key, value in sanitize_design(saved[name])[0].items():
+            ss[key] = deepcopy(value)
         ss.pop("_canvas_seeded_for", None)
         ss.pop("_font_seeded_for", None)
         ss.pop("_palette_picked", None)
@@ -7482,9 +7529,11 @@ def _trials_missing_column(_df: pd.DataFrame, column: str, cache_key) -> int:
 def _column_present_bools(_df: pd.DataFrame, column: str, cache_key) -> frozenset:
     if column not in _df.columns:
         return frozenset()
-    return frozenset(
-        bool(v) for v in pd.Series(_df[column]).dropna().astype(bool).unique()
-    )
+    # Callers pass only bool-dtype columns today (a string "True"/"False"
+    # column takes the categorical path); read by meaning anyway, never by
+    # truthiness, so a future caller can't hide a class (round 11).
+    flags = coerce_bool_or_na(pd.Series(_df[column])).dropna()
+    return frozenset(bool(v) for v in flags.unique())
 
 
 def _bool_metadata_filter(

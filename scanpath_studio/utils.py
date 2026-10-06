@@ -1533,6 +1533,20 @@ SAME_TEXT_MARKER = (
 SAME_PARTICIPANT_MARKER = "👤"  # same participant as the primary trial
 
 
+def _allocate_label(label: str, qualified: str, used_labels: set[str]) -> str:
+    """``label`` if unused, else ``qualified``, else ``qualified (n)`` for the
+    first free ``n`` — always a label no earlier option holds (round 11: the
+    qualified form itself could already be taken, by a trial id that reads
+    like it, and the later option then overwrote the earlier one's identity)."""
+    candidate = label if label not in used_labels else qualified
+    n = 2
+    while candidate in used_labels:
+        candidate = f"{qualified} ({n})"
+        n += 1
+    used_labels.add(candidate)
+    return candidate
+
+
 def _compare_option_label(
     participant_id: str,
     trial_id: str,
@@ -1542,15 +1556,14 @@ def _compare_option_label(
     """Selectbox label for a comparison option: ``"<markers> <trial_id>"``.
 
     De-duplicates on ``trial_id`` (two participants can share one) by appending
-    the participant in brackets, so the label stays a unique selectbox option /
-    dict key in ``tabs._render_compare_selector``."""
+    the participant in brackets — and a counter when even that is taken — so the
+    label stays a unique selectbox option / dict key in
+    ``tabs._render_compare_selector``."""
     trial_str = str(trial_id) if trial_id is not None else ""
     prefix = f"{markers} " if markers else ""
-    label = f"{prefix}{trial_str}"
-    if label in used_labels:
-        label = f"{prefix}{trial_str} [{participant_id}]"
-    used_labels.add(label)
-    return label
+    return _allocate_label(
+        f"{prefix}{trial_str}", f"{prefix}{trial_str} [{participant_id}]", used_labels
+    )
 
 
 def friendly_trial_label(
@@ -1583,11 +1596,9 @@ def friendly_trial_label(
     else:
         base = f"{trial_str} · {participant_id}" if trial_str else participant_id
 
-    label = f"{prefix}{base}"
-    if label in existing_labels:
-        label = f"{prefix}{base} [{trial_str or 'trial'}]"
-    existing_labels.add(label)
-    return label
+    return _allocate_label(
+        f"{prefix}{base}", f"{prefix}{base} [{trial_str or 'trial'}]", existing_labels
+    )
 
 
 def build_comparison_options(

@@ -24,7 +24,12 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
-from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME, SAMPLE_INDEX
+from .constants import (
+    DEFAULT_FIGURE_SIZE,
+    PACKAGE_NAME,
+    SAMPLE_INDEX,
+    UPLOAD_FILE_TYPES,
+)
 from .multipart import (
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
@@ -2959,6 +2964,75 @@ def read_mapped_table(
     return read_table(file_like_or_path, plan=plan)
 
 
+def source_labels(paths: Sequence[str]) -> list[str]:
+    """The ``source_file`` label for each path — its stem, unless that stem
+    is shared with another path.
+
+    ``reader-a/fixations.csv`` and ``reader-b/fixations.csv`` both have the
+    stem ``fixations``, and a label is mapped as participant or trial identity,
+    so two readers would silently become one. A shared stem is qualified by
+    the fewest trailing folders that tell it apart from the paths it clashes
+    with (``reader-a/fixations``) — only folders that *differ*, so the shared
+    part of an absolute path (``/Users/<name>/…``) never enters a label. Paths
+    in the same folder then keep their extension (``fix.csv`` / ``fix.tsv``),
+    and paths that are the same get a ``#n`` occurrence number. Backslashes
+    count as folder separators, so a zip made on Windows labels as one made
+    elsewhere.
+
+    A browser upload carries no folders, so two same-named uploads read
+    ``fixations#1`` / ``fixations#2`` in the app where the same files read from
+    disk (API, CLI) get their folders. :func:`source_file_name` recovers the
+    file name from any of these forms.
+    """
+    split = []
+    for path in paths:
+        parts = [
+            p for p in str(path).replace("\\", "/").split("/") if p not in ("", ".")
+        ]
+        parts = parts or [str(path)]
+        split.append((tuple(parts[:-1]), parts[-1]))
+    stems = [Path(name).stem for _, name in split]
+
+    def shared_tail(a: tuple, b: tuple) -> int:
+        n = 0
+        while n < min(len(a), len(b)) and a[-1 - n] == b[-1 - n]:
+            n += 1
+        return n
+
+    labels = list(stems)
+    for i, (folders, name) in enumerate(split):
+        clashes = [j for j, stem in enumerate(stems) if j != i and stem == stems[i]]
+        if not clashes:
+            continue
+        others = [split[j][0] for j in clashes if split[j][0] != folders]
+        depth = min(
+            len(folders), max((shared_tail(folders, o) + 1 for o in others), default=0)
+        )
+        same_folder = any(split[j][0] == folders for j in clashes)
+        tail = Path(name).name if same_folder else stems[i]
+        if same_folder and any(split[j] == split[i] for j in clashes):
+            tail = stems[i]
+        labels[i] = "/".join([*folders[len(folders) - depth :], tail])
+    seen: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label] = counts.get(label, 0) + 1
+    for i, label in enumerate(labels):
+        if counts[label] > 1:
+            seen[label] = seen.get(label, 0) + 1
+            labels[i] = f"{label}#{seen[label]}"
+    return labels
+
+
+def source_file_name(label: str) -> str:
+    """The file stem inside a :func:`source_labels` label — without the folders
+    that qualify it, its ``#n`` occurrence number or a kept extension — for
+    code that parses identity out of a file's name (MultiplEYE uploads)."""
+    name = re.sub(r"#\d+$", "", str(label).rsplit("/", 1)[-1])
+    stem = Path(name).stem
+    return stem if Path(name).suffix.lower().lstrip(".") in UPLOAD_FILE_TYPES else name
+
+
 def _tag_and_concat(
     frames: list[pd.DataFrame],
     labels: list[str],
@@ -3142,7 +3216,8 @@ def _read_zipped_table(
     Each member is dispatched on its own extension, so a zip may wrap any
     supported format. A multi-member archive is concatenated just like a
     multi-file upload — every member's rows tagged with its stem in
-    ``source_file``. pandas infers compression only from string paths, not from
+    ``source_file`` (qualified by its folders when two members share a stem,
+    :func:`source_labels`). pandas infers compression only from string paths, not from
     uploaded file-like objects, so we open the archive ourselves. Raises
     ``ValueError`` if the archive holds no data file (macOS ``__MACOSX``/dotfile
     cruft is ignored), or if it would decompress past the DATA-16 size limits
@@ -3214,8 +3289,8 @@ def _read_zipped_table(
                             _read_by_extension(buf, name, member_plan, sep=sep)
                         )
             remaining -= stream.consumed
-            labels.append(Path(member).stem)
-    return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
+            labels.append(member)
+    return _tag_and_concat(frames, source_labels(labels), SOURCE_FILE_COLUMN)
 
 
 # BUG-5: guard the memory-constrained hosted demo against a too-large upload.
@@ -3297,7 +3372,8 @@ def read_tables(
     list mixing those (a ``.zip`` member counts as a file too). ``plan_for`` is
     called with each file's column names and returns the :class:`ReadPlan` to
     read it under (PERF-6); omit it to parse every column. Each part gets a
-    ``source_file`` column holding the file's stem (unless the data already has
+    ``source_file`` column holding the file's stem — qualified by its folders
+    when two files share one (:func:`source_labels`) — (unless the data already has
     that column, or ``source_column=None``) — *including a single file*, so
     datasets that key identity in the filename can recover it (the upload wizard
     maps ``source_file`` as the trial / participant id). Columns are aligned by
@@ -3311,8 +3387,10 @@ def read_tables(
         # file hasn't got, which `usecols` raises on.
         plan = plan_for(read_table_columns(item)) if plan_for is not None else None
         frames.append(read_table(item, plan=plan))
-        labels.append(Path(getattr(item, "name", str(item))).stem)
-    return _tag_and_concat(frames, labels, source_column, always_tag=True)
+        labels.append(getattr(item, "name", str(item)))
+    return _tag_and_concat(
+        frames, source_labels(labels), source_column, always_tag=True
+    )
 
 
 def _load_bundled(name: str) -> pd.DataFrame:
@@ -4920,6 +4998,41 @@ def coerce_flag(col: pd.Series) -> pd.Series:
 #: What a supplied reading-measure flag writes for "not recorded" — EyeLink's
 #: `.` for a word with no first pass, an empty cell, a spelled-out NA.
 _MISSING_FLAG_STRINGS = {"", ".", "na", "nan", "n/a", "-", "none", "null", "<na>"}
+
+
+_TRUE_FLAG_SPELLINGS = {"true", "t", "yes", "y", "1", "1.0"}
+_FALSE_FLAG_SPELLINGS = {"false", "f", "no", "n", "0", "0.0"}
+_FLAG_SPELLINGS = {
+    **dict.fromkeys(_TRUE_FLAG_SPELLINGS, True),
+    **dict.fromkeys(_FALSE_FLAG_SPELLINGS, False),
+}
+
+
+def coerce_bool_or_na(col: pd.Series) -> pd.Series:
+    """A user-supplied true/false column as a nullable boolean.
+
+    Real booleans stay as they are, numbers go by ``!= 0``, and the strings
+    ``true/false``, ``t/f``, ``yes/no``, ``y/n``, ``1/0`` (any case, trimmed)
+    are read by their meaning — never by truthiness, under which the string
+    ``"False"`` is true. Missing cells and any other spelling are ``<NA>``, so
+    a caller decides what an unknown means (round 11).
+    """
+    if pd.api.types.is_bool_dtype(col):
+        return col.astype("boolean")
+    if pd.api.types.is_numeric_dtype(col):
+        return (col != 0).astype("boolean").mask(col.isna())
+    out = pd.Series(pd.NA, index=col.index, dtype="boolean")
+    is_str = col.map(type).eq(str).to_numpy()
+    is_bool = col.map(type).eq(bool).to_numpy()
+    if is_bool.any():
+        out[is_bool] = col[is_bool].astype(bool).to_numpy()
+    numeric = pd.to_numeric(col.where(~is_str & ~is_bool), errors="coerce")
+    is_number = numeric.notna().to_numpy()
+    out[is_number] = (numeric[is_number] != 0).to_numpy()
+    if is_str.any():
+        spelled = col[is_str].str.strip().str.lower()
+        out[is_str] = spelled.map(_FLAG_SPELLINGS).astype("boolean").to_numpy()
+    return out
 
 
 def coerce_measure_flag(col: pd.Series) -> pd.Series:

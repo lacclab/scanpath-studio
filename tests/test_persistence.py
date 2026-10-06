@@ -979,11 +979,24 @@ class TestAMalformedCacheNeverStopsTheApp:
     def test_a_malformed_design_library_keeps_its_good_designs(self, tmp_path):
         self._write(
             tmp_path,
-            self._manifest(session={DESIGN_PRESETS: {"ok": {"a": 1}, "bad": "x"}}),
+            self._manifest(
+                session={
+                    DESIGN_PRESETS: {
+                        "ok": {
+                            "global_show_fix": False,
+                            "global_fixation_opacity": "not-a-number",
+                        },
+                        "bad": "x",
+                    }
+                }
+            ),
         )
         session = {}
         assert restore_state(session, tmp_path)
-        assert session[DESIGN_PRESETS] == {"ok": {"a": 1}}
+        # Round 11: a design's bad value is dropped, its good ones kept.
+        assert session[DESIGN_PRESETS]["ok"]["global_show_fix"] is False
+        assert "global_fixation_opacity" not in session[DESIGN_PRESETS]["ok"]
+        assert "bad" not in session[DESIGN_PRESETS]
 
 
 class TestTheRestoreCrashLoopBreaker:

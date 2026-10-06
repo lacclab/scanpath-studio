@@ -128,6 +128,67 @@ def test_read_table_zip_multiple_members_concatenates():
     assert set(df["source_file"]) == {"reader0", "reader1"}
 
 
+def test_read_table_zip_same_stem_in_different_folders_stays_distinct():
+    """Round 11 #1: two readers' ``fixations.csv`` must not become one."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("reader-a/fixations.csv", "trial_id,x,y,duration_ms\nt1,1,2,100\n")
+        zf.writestr("reader-b\\fixations.csv", "trial_id,x,y,duration_ms\nt1,3,4,120\n")
+        zf.writestr("words.csv", "trial_id,x,y,duration_ms\nt2,5,6,90\n")
+    raw = data_module.read_table(_NamedBytesIO(buf.getvalue(), "readers.zip"))
+    assert raw["source_file"].tolist() == [
+        "reader-a/fixations",
+        "reader-b/fixations",
+        "words",
+    ]
+    schema = data_module.propose_fix_schema(raw)
+    schema["participant"] = data_module.SOURCE_FILE_COLUMN
+    normalized = data_module.normalize_fixations(raw, schema)
+    readings = normalized[["participant_id", "trial_id"]].drop_duplicates()
+    assert len(readings) == 3
+
+
+@pytest.mark.parametrize(
+    ("paths", "expected"),
+    [
+        (["a.csv", "b.tsv"], ["a", "b"]),
+        (["x/a/f.csv", "y/a/f.csv", "z/b/f.csv"], ["x/a/f", "y/a/f", "b/f"]),
+        (["a/f.csv", "a/f.tsv"], ["f.csv", "f.tsv"]),
+        (["x/f.csv", "x/f.tsv", "y/f.csv"], ["x/f.csv", "x/f.tsv", "y/f"]),
+        # Only folders that differ: an absolute path's shared prefix stays out.
+        (["/Users/me/data/a.csv", "/Users/me/data/a.parquet"], ["a.csv", "a.parquet"]),
+        (["/Users/me/d/a.csv", "/Users/me/d/a.csv"], ["a#1", "a#2"]),
+        (["/Users/me/r1/x/f.csv", "/Users/me/r2/x/f.csv"], ["r1/x/f", "r2/x/f"]),
+        (["f.csv", "f.csv"], ["f#1", "f#2"]),
+        (["./a/f.csv", "a\\g.csv"], ["f", "g"]),
+    ],
+)
+def test_source_labels(paths, expected):
+    assert data_module.source_labels(paths) == expected
+    assert len(set(data_module.source_labels(paths))) == len(paths)
+
+
+@pytest.mark.parametrize(
+    ("label", "name"),
+    [
+        ("r/001_x_fixation#2", "001_x_fixation"),
+        ("001_x_fixation.csv", "001_x_fixation"),
+        ("a/b/stim_aoi", "stim_aoi"),
+        ("v1.2_thing", "v1.2_thing"),
+    ],
+)
+def test_source_file_name(label, name):
+    assert data_module.source_file_name(label) == name
+
+
+def test_read_tables_same_name_in_different_folders(tmp_path):
+    for reader in ("r1", "r2"):
+        (tmp_path / reader).mkdir()
+        _write_fix_csv(tmp_path / reader / "fix.csv", "p", "t")
+    df = data_module.read_tables(str(tmp_path / "*" / "fix.csv"))
+    assert sorted(df["source_file"].unique()) == ["r1/fix", "r2/fix"]
+
+
 def test_read_table_zip_mixed_formats_concatenates():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

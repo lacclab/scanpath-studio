@@ -1308,8 +1308,23 @@ _BOOL_STATE_KEYS = frozenset(
         "single_compare_toggle",
         "cmp0_hollow",
         "cmp1_hollow",
+        "single_fix_range_all_trials",
+        "single_fix_range_user_set",
+        "single_compare_fix_range_user_set",
     }
 )
+#: Free-text settings (the label and title/caption patterns): a string.
+_TEXT_STATE_KEYS = frozenset(
+    {
+        "global_illustration_text",
+        "global_title_pattern",
+        "global_caption_pattern",
+        "cmp0_label_pattern",
+        "cmp1_label_pattern",
+    }
+)
+#: A data field the rail heals against the loaded data: a string, or unset.
+_FIELD_STATE_KEYS = frozenset({"global_word_hover_measure"})
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
 #: have to be numbers.
@@ -1332,9 +1347,12 @@ def _closed_choice(options) -> Callable[[object], object]:
 #: passes (a deselected segmented control stores it, and the rail coerces it).
 _CHOICE_STATE_PARSERS = {
     "global_align_algorithm": _parse_align_algorithm,
-    "global_saccade_classes": lambda v: _parse_saccade_classes(
-        ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
-    ),
+    **{
+        key: lambda v: _parse_saccade_classes(
+            ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
+        )
+        for key in ("global_saccade_classes", "cmp1_saccade_classes")
+    },
     "single_compare_layout": _parse_compare_layout,
     "single_compare_stimulus": _parse_compare_stimulus,
     "single_playback_speed": _parse_playback_speed,
@@ -1343,6 +1361,7 @@ _CHOICE_STATE_PARSERS = {
         for i in (0, 1)
     },
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
+    "global_marker_size_scale": _closed_choice(tuple(MARKER_SIZE_SCALES)),
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
@@ -1360,7 +1379,8 @@ _CHOICE_STATE_PARSERS = {
     "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
     "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
     **{
-        f"global_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        f"{side}_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        for side in ("global", "cmp1")
         for c in _FIXCLASS_CATEGORIES
     },
     **{
@@ -1400,6 +1420,8 @@ def sanitize_session_value(key: str, value):
     if key in _COLOR_STATE_KEYS:
         if not isinstance(value, str):
             raise TypeError(f"not a colour: {value!r}")
+        if value == "" and key.endswith("_box_color") and key.startswith("cmp"):
+            return value  # follows the scanpath's own colour
         return _parse_hex_color(value)
     bounds = _URL_BOUNDED.get(key)
     if bounds is not None:
@@ -1419,6 +1441,21 @@ def sanitize_session_value(key: str, value):
         if not isinstance(value, bool):
             raise TypeError(f"not a switch value: {value!r}")
         return value
+    if key in _TEXT_STATE_KEYS:
+        if not isinstance(value, str):
+            raise TypeError(f"not text: {value!r}")
+        return value
+    if key in _FIELD_STATE_KEYS:
+        if value is not None and not isinstance(value, str):
+            raise TypeError(f"not a field name: {value!r}")
+        return value
+    if key in ("single_fix_range", "single_compare_fix_range") and value is not None:
+        # The fixation window: re-expanded to each trial's own range, so it
+        # only has to be two whole numbers.
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise TypeError(f"not a two-number range: {value!r}")
+        a, b = (int(_bounded_number(v, None, None)) for v in value)
+        return (min(a, b), max(a, b))
     parser = _CHOICE_STATE_PARSERS.get(key)
     if parser is not None and value is not None:
         return parser(value)

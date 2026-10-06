@@ -5816,6 +5816,24 @@ def _annotation_trials(combos: pd.DataFrame | None) -> frozenset[tuple[str, str]
     return _c_annotation_trials(combos, frame_fingerprint(combos))
 
 
+@st.cache_data(show_spinner=False)
+def _c_annotation_trial_labels(
+    _combos: pd.DataFrame, key, composite_cols: tuple[str, ...]
+) -> dict[str, str]:
+    """Each trial as the trial picker writes it, cached on the frame's
+    fingerprint (``key``): a Python loop over every trial, asked on every rerun
+    of the Data page."""
+    return trial_id_layout(_combos, composite_cols=composite_cols)[0]
+
+
+def _annotation_trial_labels(combos: pd.DataFrame | None) -> dict[str, str] | None:
+    """The open dataset's trial labels, for its Annotations tab (#374 F5)."""
+    if combos is None:
+        return None
+    composite = tuple(st.session_state.get("_composite_trial_columns") or ())
+    return _c_annotation_trial_labels(combos, frame_fingerprint(combos), composite)
+
+
 def render_dataset_inspection_head(token: str) -> None:
     """*What's in the `<name>` dataset* and the overview under it.
 
@@ -10543,13 +10561,7 @@ def _run_app() -> None:
                     raw_gaze_filtered,
                     annotation_trials=_annotation_trials(combos_all),
                     # #374 F5: each trial as the trial picker writes it.
-                    annotation_trial_labels=trial_id_layout(
-                        combos_all,
-                        composite_cols=st.session_state.get("_composite_trial_columns")
-                        or (),
-                    )[0]
-                    if combos_all is not None
-                    else None,
+                    annotation_trial_labels=_annotation_trial_labels(combos_all),
                     # What the Scanpath picker can open — an annotation row's
                     # Open explains a trial the filters hide.
                     open_trials=_annotation_trials(combos),

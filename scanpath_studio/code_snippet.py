@@ -236,9 +236,23 @@ def _files_python(source: SnippetSource) -> list[str]:
         "words, fixations = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words))},",
         f"    {_py(_one_or_list(fixations))},",
+        *_schema_python(source),
         *_keep_python(source),
         ")",
     ]
+
+
+def _schema_python(source: SnippetSource) -> list[str]:
+    """The ``word_schema=`` / ``fix_schema=`` arguments a file or upload source
+    was loaded with, one field per line."""
+    lines: list[str] = []
+    for option in ("word_schema", "fix_schema"):
+        schema = source.options.get(option)
+        if schema:
+            lines.append(f"    {option}={{")
+            lines += [f"        {_py(k)}: {_py(v)}," for k, v in schema.items()]
+            lines.append("    },")
+    return lines
 
 
 def _author_python(source: SnippetSource) -> list[str]:
@@ -323,7 +337,11 @@ def _files_cli(source: SnippetSource) -> list[str]:
     words = source.options.get("words") or ["words.csv"]
     fixations = source.options.get("fixations") or ["fixations.csv"]
     argv += ["--words", *[str(p) for p in words]]
+    if schema := source.options.get("word_schema"):
+        argv += ["--word-schema", json.dumps(schema, separators=(",", ":"))]
     argv += ["--fixations", *[str(p) for p in fixations]]
+    if schema := source.options.get("fix_schema"):
+        argv += ["--fix-schema", json.dumps(schema, separators=(",", ":"))]
     return argv + _keep_cli(source)
 
 
@@ -484,12 +502,7 @@ def _upload_python(source: SnippetSource) -> list[str]:
     for name in ("words", "fixations"):
         if source.options.get(name):
             lines.append(f"    {name}={_py(source.options[name])},")
-    for option in ("word_schema", "fix_schema"):
-        schema = source.options.get(option)
-        if schema:
-            lines.append(f"    {option}={{")
-            lines += [f"        {_py(k)}: {_py(v)}," for k, v in schema.items()]
-            lines.append("    },")
+    lines += _schema_python(source)
     lines += _keep_python(source)
     lines.append(")")
     return lines

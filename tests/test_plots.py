@@ -2821,3 +2821,11 @@ class TestNonFiniteValues:
         boxes = [s for s in fig.layout.shapes if (s.name or "").endswith("word_boxes")]
         assert len(boxes) == 2
         assert all(pd.notna(s.x1) for s in boxes)
+
+
+def test_humanized_column_writes_id_in_capitals():
+    from scanpath_studio.plots import _humanize_column
+
+    assert _humanize_column("participant_id") == "Participant ID"
+    assert _humanize_column("unique_text_id") == "Unique Text ID"
+    assert _humanize_column("idle_time_ms") == "Idle Time (ms)"

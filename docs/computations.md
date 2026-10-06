@@ -276,9 +276,9 @@ Trial run, line run, and per-word visit/pass indices.
 
 | | |
 | --- | --- |
-| **Output** | Run, linerun, word_runid, pass_index |
+| **Output** | Run, linerun, word_runid, word_run (the visit's pass number), word_run_fix, nrun, reread (word_run > 1) |
 | **Grouping / ordering** | Ordered by `timestamp_ms` within a trial |
-| **Precedence & caveats** | An imported `pass_index` / `reread` column is kept. |
+| **Precedence & caveats** | Always recomputed: an imported column under any of these names is replaced. An imported `pass_index` (EyeLink's `reread` is renamed to it on load) is a separate column and is kept as given — nothing computes `pass_index`. |
 | **Code** | `scanpath_studio/measures.py:materialize_runs` |
 | **Consumers** | UI, API, Export, Corpus Analysis |
 | **Tests** | `tests/test_measures.py` |
@@ -972,11 +972,11 @@ One row per trial: reading time, counts, rates.
 
 Rescale a measure for cross-reader comparison.
 
-**Formula.** Per-reader z-scoring or min–max, as chosen by the Normalize toggle.
+**Formula.** Per-reader z-score, `(value − reader mean) / reader SD`, when the Normalize toggle is on.
 
 | | |
 | --- | --- |
-| **Missing & edge cases** | Zero variance ⇒ the normalized column is NaN, not 0. |
+| **Missing & edge cases** | A reader with zero variance (or one value) ⇒ 0, the reader's own mean; a missing value stays NaN. |
 | **Code** | `scanpath_studio/aggregation.py:add_normalized_column` |
 | **Consumers** | Corpus Analysis |
 | **Tests** | `tests/test_aggregation.py` |

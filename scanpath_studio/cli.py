@@ -1971,14 +1971,20 @@ def _snippet_source_from_args(args) -> SnippetSource:
             options={"root": args.export or "data/MultiplEYE"},
         )
     if args.words or args.fixations:
-        return cs.SnippetSource(
-            kind=cs.SOURCE_FILES,
-            label="files",
-            options={
-                "words": list(args.words or []),
-                "fixations": list(args.fixations or []),
-            },
-        )
+        options = {
+            "words": list(args.words or []),
+            "fixations": list(args.fixations or []),
+        }
+        # The mapping the files were read with, or the snippet's loader
+        # auto-detects columns this command was told to read otherwise.
+        for option, flag in (
+            ("word_schema", "--word-schema"),
+            ("fix_schema", "--fix-schema"),
+        ):
+            schema = _parse_schema_arg(getattr(args, option, None), flag)
+            if schema:
+                options[option] = schema
+        return cs.SnippetSource(kind=cs.SOURCE_FILES, label="files", options=options)
     if args.raw_gaze and not args.sample:
         # VIZ-45: --raw-gaze as the only input — the samples are the dataset.
         return cs.SnippetSource(

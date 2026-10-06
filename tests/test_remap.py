@@ -949,7 +949,7 @@ def _setup_file_restore_app():
 
 
 class TestEditorSetupExport:
-    """The ✏️ Edit dataset footer's ⬇️ Save setup — the add screen's own export,
+    """The ✏️ Edit dataset footer's ⬇️ Download setup file — the add screen's own export,
     for the screen that edits what it created.
 
     It exists so an already-added dataset's mapping can travel: a share link
@@ -1097,7 +1097,7 @@ class TestEditorSetupExport:
         from scanpath_studio.tabs import render_dataset_editor_footer
 
         source = inspect.getsource(render_dataset_editor_footer)
-        assert "f\"{ICONS['download']} Save setup\"" in source
+        assert "f\"{ICONS['download']} Download setup file\"" in source
         assert "f\"{ICONS['confirm']} Save changes\"" in source
         assert "_editor_setup_config" in source
         assert "column_mapping_notes" in source

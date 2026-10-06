@@ -61,7 +61,7 @@ provider. Sessions are temporary and server resources are limited.
   participant and trial IDs and its dataset's name too.
 - An **annotations file** (:material/database: Data Management → Annotations, or `annotations.json` in an
   Export bundle) contains your notes, which may mention participants.
-- A **setup file** (:material/edit: Edit dataset → Save setup) contains the
+- A **setup file** (:material/edit: Edit dataset → Download setup file) contains the
   dataset's name, its column mapping, and its recording setup.
 - An **exported table** contains the selected research data. A bundle's
   attached metadata tables hold only the participants, trials and texts it exports.

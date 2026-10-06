@@ -1209,12 +1209,12 @@ def test_the_setup_guide_counts_the_parts_it_names():
 
 def test_the_setup_guide_ends_on_saving():
     """The guide's last card points at the footer that saves the dataset —
-    ✅ Add dataset and ⬇️ Save setup — not at Recording setup."""
+    ✅ Add dataset and ⬇️ Download setup file — not at Recording setup."""
     from scanpath_studio import tour, wizard
 
     save = tour._WIZARD_GUIDE_STEPS[-1]
     assert save["selector"] == ".st-key-wizard_footer_row"
-    assert "Add dataset" in save["body"] and "Save setup" in save["body"]
+    assert "Add dataset" in save["body"] and "Download setup file" in save["body"]
     import inspect
 
     # The selector names the footer's own container key.

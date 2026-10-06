@@ -4099,7 +4099,7 @@ def _build_studio_config(
     💾 Session dialog's whole-session backup and also carried the annotations,
     the column mapping and the three metadata tables. Each now has its own
     file where it is edited — 🗂️ Data → Annotations → *Export*, ✏️ Edit dataset
-    → *Save setup*, and the tables you attached — so this one describes a
+    → *Download setup file*, and the tables you attached — so this one describes a
     figure and nothing else."""
     # ENG-11: PLOT_CONFIG_SCHEMA is the single source of truth for the version;
     # bump it (+ register a migration) in url_state when this layout changes.
@@ -15784,7 +15784,7 @@ def commit_builtin_setup() -> None:
 #: The editor's own widget namespace → the add screen's. The two screens run the
 #: same ``controls.column_mapping_ui`` over the same field specs, so a key is
 #: ``<prefix>_<field>`` on both sides and the whole difference is the prefix —
-#: which is what lets ⬇️ Save setup write the *add* screen's file from the *edit*
+#: which is what lets ⬇️ Download setup file write the *add* screen's file from the *edit*
 #: screen's state. The namespaces are deliberately separate (see
 #: ``_render_remap_fields``): an open wizard and an open editor must not
 #: overwrite each other's answers.
@@ -15918,7 +15918,7 @@ def _editor_setup_config(name: str) -> dict:
     """The open editor's mapping + recording setup, in the add screen's setup
     format (``wizard._wizard_setup_config``).
 
-    So ⬇️ Save setup means the same thing on both screens, and a file saved from
+    So ⬇️ Download setup file means the same thing on both screens, and a file saved from
     either is restored by the same *Restore a saved setup* uploader — over the
     **original files**, which is why the mapping is written in their column
     names rather than the stored frame's (`_setup_file_mapping`). What a
@@ -15954,7 +15954,7 @@ def _editor_setup_config(name: str) -> dict:
 
 
 def render_dataset_editor_footer(host) -> None:
-    """⬇️ Save setup · ✅ Save changes, at the foot of the ✏️ Edit dataset screen.
+    """⬇️ Download setup file · ✅ Save changes, at the foot of the ✏️ Edit dataset screen.
 
     The add screen's footer, for the screen that edits what it created (UX-106,
     and this round the *pair* rather than the commit alone): one line, matched
@@ -15995,7 +15995,7 @@ def render_dataset_editor_footer(host) -> None:
     )
     config = _editor_setup_config(name)
     save_col.download_button(
-        f"{ICONS['download']} Save setup",
+        f"{ICONS['download']} Download setup file",
         data=json.dumps(config, indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",

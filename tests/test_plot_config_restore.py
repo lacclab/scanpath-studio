@@ -181,7 +181,7 @@ class TestPlotConfigRestore:
         assert ss["_skipped"] == []
 
     def test_a_settings_file_leaves_the_column_mapping_alone(self):
-        """UX-179: the mapping is ✏️ Edit dataset → Save setup's, not this file's.
+        """UX-179: the mapping is ✏️ Edit dataset → Download setup file's, not this file's.
 
         An old session backup still carries one; restoring it as a settings
         file must not re-map the open dataset under the user.

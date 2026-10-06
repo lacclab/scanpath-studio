@@ -8,7 +8,7 @@ three places that outlive the running process:
   people's bookmarks, papers, issue trackers and embedded review apps;
 * the **settings and setup files** (🔗 Share → File, written by
   ``tabs._build_studio_config`` and read by ``url_state._restore_plot_config``;
-  ✏️ Edit dataset → Save setup, written by ``wizard._wizard_setup_config``) —
+  ✏️ Edit dataset → Download setup file, written by ``wizard._wizard_setup_config``) —
   files sit on disk for months;
 * the **pre-widget seeding** both of the above rely on: values are written into
   ``st.session_state`` *before* the widget exists, so the key is the only thing
@@ -241,7 +241,7 @@ TRIAL_ANNOTATIONS = "trial_annotations"
 # (pinned equal to it by the contract test).
 DESIGN_PRESETS = "_design_presets"
 # The column mapping is seeded key-by-key from a setup file's `column_mapping`
-# section (✏️ Edit dataset → Save setup) and stored the same way in the recovery
+# section (✏️ Edit dataset → Download setup file) and stored the same way in the recovery
 # cache; the prefix is the contract, the suffixes are data-dependent.
 COLUMN_MAPPING_PREFIX = "col_map_"
 
@@ -896,7 +896,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# 🔗 Share → File (the settings file) and the Save setup file
+# 🔗 Share → File (the settings file) and the Download setup file file
 # ---------------------------------------------------------------------------
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating

@@ -1394,7 +1394,7 @@ def get_app_css() -> str:
     }
     /* UX-113 — `_FOOTER_ROW_W`'s compact desktop ratio (1.4 : 1.4 : 8 rest,
        matching the ✕ Cancel width elsewhere) gives each button column too few
-       pixels to keep "Save setup" / "Add dataset" on one line, at any width
+       pixels to keep "Download setup file" / "Add dataset" on one line, at any width
        (not only a mobile one — the ratio itself is the problem). Streamlit
        sets each `stColumn`'s own `flex: 1 1 calc(<share>% - Npx)` via a real
        stylesheet class (not inline), so a bare `min-width` floor doesn't just
@@ -1418,9 +1418,9 @@ def get_app_css() -> str:
     }
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(1),
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(2) {
-        flex: 0 0 10.5rem !important;
-        width: 10.5rem !important;
-        min-width: 10.5rem !important;
+        flex: 0 0 12.5rem !important;
+        width: 12.5rem !important;
+        min-width: 12.5rem !important;
     }
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(3) {
         flex: 0 0 0 !important;

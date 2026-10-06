@@ -1806,7 +1806,7 @@ def _wizard_restore_config(host) -> None:
         type=["json"],
         key="wizard_config_restore",
         help="Re-apply a column mapping + field choices you saved earlier "
-        "(⬇️ Save setup at the foot of this page).",
+        "(⬇️ Download setup file at the foot of this page).",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
@@ -2046,7 +2046,7 @@ def _render_setup_download(host) -> None:
         # footer now uses — "Download setup (JSON)" wrapped to two, making the
         # pair 55 px and 40 px tall side by side. What it saves and how to load
         # it back is on the tooltip, where the sentence was already.
-        f"{ICONS['download']} Save setup",
+        f"{ICONS['download']} Download setup file",
         data=json.dumps(_wizard_setup_config(), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
@@ -2067,7 +2067,7 @@ _FOOTER_ROW_W = (1.4, 1.4, 8.0)
 
 
 def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> None:
-    """⬇️ Save setup · ✅ Add dataset, one line, matched widths (UX-93).
+    """⬇️ Download setup file · ✅ Add dataset, one line, matched widths (UX-93).
 
     One place for all three endings — blocked on required fields, blocked on a
     mapping the pipeline rejected, and finished — which is what keeps them the

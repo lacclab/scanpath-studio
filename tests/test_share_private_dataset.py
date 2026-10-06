@@ -38,8 +38,8 @@ def test_the_link_names_the_added_dataset():
     assert query["dataset"] == ["Dataset 1"]
     assert "source" not in query
     (caveat,) = at.session_state["_caveats"]
-    # The sender is pointed at where Save setup lives for an existing dataset.
-    assert "Edit dataset → Save setup" in caveat
+    # The sender is pointed at where Download setup file lives for an existing dataset.
+    assert "Edit dataset → Download setup file" in caveat
     assert "Add dataset → Import files" in caveat
 
 
@@ -65,7 +65,7 @@ def test_the_missing_message_names_the_dataset_and_the_way_to_get_it():
 
     message = missing_dataset_message("Dataset 1", "s01", "44")
     assert "trial 44 of participant s01 in **Dataset 1**" in message
-    assert "Edit dataset → Save setup" in message
+    assert "Edit dataset → Download setup file" in message
     assert "Add dataset → Import files" in message
     assert "**Dataset 1**, which" in missing_dataset_message("Dataset 1")
 

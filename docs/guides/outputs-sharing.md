@@ -47,7 +47,7 @@ The **Share** subtab passes a view on in three ways:
 - **Link** — a URL with the dataset choice, trial and every figure setting.
   It never contains your uploaded data: the link names a dataset you added,
   and the recipient adds the same files (send them with its setup file, from
-  **Edit dataset → Save setup**). A recipient without that dataset is told
+  **Edit dataset → Download setup file**). A recipient without that dataset is told
   which one the link needs, and the view is not applied to another. (A
   scanpath created by hand is the exception; its link carries it.)
 - **Code** — Python or a CLI command that reproduces the figure.
@@ -65,7 +65,7 @@ The **Share** subtab passes a view on in three ways:
 | --- | --- |
 | figure settings | **:material/share: Share → File** |
 | favorites, tags and notes | **:material/database: Data Management → Annotations → Export** |
-| column mapping and recording setup | **:material/edit: Edit dataset → Save setup** |
+| column mapping and recording setup | **:material/edit: Edit dataset → Download setup file** |
 | saved figure designs | **:material/palette: My designs → Export** |
 | an authored scanpath (text, layout and fixations) | **:material/draw: Author a scanpath → Download authoring file** |
 

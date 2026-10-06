@@ -1310,7 +1310,7 @@ def missing_dataset_message(
         what = f"**{shown}**"
     return (
         f"This link shows {what}, which isn't here. Ask the sender for the data "
-        f"files and its setup file ({ICONS['edit']} Edit dataset → Save setup), "
+        f"files and its setup file ({ICONS['edit']} Edit dataset → Download setup file), "
         f"then add it with {ICONS['add']} Add dataset → Import files. Nothing "
         "from the link was applied."
     )
@@ -3135,7 +3135,7 @@ def _build_share_query(
         # upload. What it *can* do is name the route that saves them the
         # re-mapping, which is a real second half of "load the same data": the
         # column mapping and recording setup are exportable as JSON from the
-        # add-dataset screen's ⬇️ Save setup, and re-applied from that screen's
+        # add-dataset screen's ⬇️ Download setup file, and re-applied from that screen's
         # *Restore a saved setup*. The caveat used to stop at "load the same
         # data" and leave the mapping to be redone by hand.
         #
@@ -3146,7 +3146,7 @@ def _build_share_query(
         caveats.append(
             "This dataset's files can't travel in a link — the recipient needs "
             "them too. Send them with its setup file "
-            f"({ICONS['edit']} **Edit dataset → Save setup**): they add the "
+            f"({ICONS['edit']} **Edit dataset → Download setup file**): they add the "
             f"dataset with {ICONS['add']} **Add dataset → Import files** and "
             "restore the setup there. The link names the dataset and carries "
             "the view settings."

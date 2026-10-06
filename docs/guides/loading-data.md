@@ -74,7 +74,7 @@ added dataset, changing an ID or coordinate column shows a few values as they
 are now and as they will be after saving, and **:material/search: Count trials and check
 joins** says whether trials would merge or the word boxes or a metadata table
 would stop matching. Its
-**:material/download: Save setup** writes the mapping in your files' own column names, so
+**:material/download: Download setup file** writes the mapping in your files' own column names, so
 whoever has the same files can restore it on the add screen; anything a
 restore cannot redo by itself is listed beside the button. For the demo and
 the public corpora, a recording setup you save is your own for that dataset

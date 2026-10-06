@@ -3809,7 +3809,7 @@ def _render_builtin_editor_footer(host, *, mapping: bool = True) -> None:
 
     `tabs.render_dataset_editor_footer`'s row, for a dataset with no stored
     entry: the same divider, the same blockers, the button in the same column.
-    There is no ⬇️ Save setup beside it — the corpus' own loader is the setup.
+    There is no ⬇️ Download setup file beside it — the corpus' own loader is the setup.
     ``mapping=False``: a source with no mapping panels, whose Save holds the
     name, description and metadata tables.
     """
@@ -8859,7 +8859,7 @@ def _render_backup_reminder(host, active_view: str) -> None:
         "your annotations and designs. Keep the files you uploaded, and export your "
         f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
         "dataset's mapping from "
-        f"{ICONS['edit']} **Edit dataset → Save setup**. "
+        f"{ICONS['edit']} **Edit dataset → Download setup file**. "
         f"[What to back up ↗]({BACKUP_GUIDE_URL})"
     )
     row = box.container(horizontal=True, gap="small")

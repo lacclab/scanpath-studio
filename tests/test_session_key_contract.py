@@ -620,7 +620,7 @@ def test_saved_config_restore_writes_frozen_state_keys():
     written = set(at.session_state["_written"])
     mapping_keys = {k for k in written if k.startswith(sk.COLUMN_MAPPING_PREFIX)}
     # UX-179: a settings file no longer re-maps the dataset — the mapping is
-    # ✏️ Edit dataset → Save setup's file — even when an old one carries it.
+    # ✏️ Edit dataset → Download setup file's file — even when an old one carries it.
     assert mapping_keys == set(), sorted(mapping_keys)
 
     expected = (

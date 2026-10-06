@@ -540,7 +540,7 @@ def _upload_link_app():
 
 
 def test_a_link_that_cannot_name_its_source_carries_no_recording_setup():
-    """An uploaded dataset's setup travels in its ⬇️ Save setup JSON, which the
+    """An uploaded dataset's setup travels in its ⬇️ Download setup file JSON, which the
     link's caveat points at; on the link it would land on another source."""
     at = AppTest.from_function(_upload_link_app)
     at.run(timeout=30)

@@ -173,6 +173,8 @@ class FigureSettings:
     show_connectors: bool = False
     connector_y: Sequence[float] | None = None
     illustration_reasons: Sequence[str] | None = None
+    #: The Illustration label's text; empty writes "Illustration · <reasons>".
+    illustration_text: str = ""
     playback_speed: float = 1.0
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
@@ -3297,12 +3299,17 @@ def _render_scanpath_figure(
         font=font_settings,
         shapes=shapes,
     )
-    add_illustration_label(fig, illustration_reasons)
+    add_illustration_label(fig, illustration_reasons, text=settings.illustration_text)
     return fig
 
 
-def add_illustration_label(fig: go.Figure, reasons: Sequence[str] | None) -> go.Figure:
-    """Stamp a figure and its metadata when it is schematic or transformed."""
+def add_illustration_label(
+    fig: go.Figure, reasons: Sequence[str] | None, *, text: str = ""
+) -> go.Figure:
+    """Stamp a figure and its metadata when it is schematic or transformed.
+
+    ``text`` replaces the drawn wording; empty draws "Illustration · <reasons>".
+    The reasons are recorded in the metadata either way."""
     reasons = [str(reason) for reason in (reasons or []) if reason]
     if not reasons:
         return fig
@@ -3313,7 +3320,7 @@ def add_illustration_label(fig: go.Figure, reasons: Sequence[str] | None) -> go.
         yref="paper",
         xanchor="right",
         yanchor="bottom",
-        text="Illustration · " + "; ".join(reasons),
+        text=str(text).strip() or "Illustration · " + "; ".join(reasons),
         showarrow=False,
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",

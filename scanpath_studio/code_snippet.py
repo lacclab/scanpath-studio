@@ -1217,6 +1217,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     ),
     "colorbar_tickangle": _int_valued("--colorbar-tickangle"),
     "colorbar_tickfont_size": _int_valued("--colorbar-tickfont-size"),
+    "illustration_text": _valued("--illustration-text"),
     "word_box_color": _valued("--word-box-color"),
     "word_box_line_opacity": _valued("--word-box-line-opacity"),
     "word_box_fill_color": _valued("--word-box-fill-color"),

@@ -159,6 +159,7 @@ _ANIMATION_FIGURE_PARAMS = (
 
 _CANONICAL_OPTION_NAMES = {
     "show_words",
+    "illustration_text",
     "word_box_color",
     "word_box_line_opacity",
     "word_box_fill_color",
@@ -2556,7 +2557,11 @@ def animate_scanpath(
         fixations_b=fixations_b,
         words_b=words_b,
     )
-    add_illustration_label(fig, animation_overrides.get("illustration_reasons"))
+    add_illustration_label(
+        fig,
+        animation_overrides.get("illustration_reasons"),
+        text=render_settings.illustration_text,
+    )
     annotate_figure(fig, title=title, caption=caption)
     return fig
 

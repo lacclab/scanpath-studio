@@ -386,6 +386,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # toggles but no scale opens on the relative one — see `_apply_url_preset`.
     "marker_size_scale": "global_marker_size_scale",
     "illustration_label": "global_illustration_label",
+    "illustration_text": "global_illustration_text",
     # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
     # algorithm). Since VIZ-23 it applies on all three render paths, so a link
     # that dropped it reopened a visibly different figure.
@@ -599,6 +600,7 @@ _URL_PRESETS = {
     # BUG-75 — figure text from a link is text, never markup.
     "title_pattern": ("global_title_pattern", _strip_markup),
     "caption_pattern": ("global_caption_pattern", _strip_markup),
+    "illustration_text": ("global_illustration_text", _strip_markup),
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
     "colorbar_orientation": (
@@ -1866,6 +1868,12 @@ def _restore_plot_config(
         )
     elif "illustration" not in config and has_valid_plot_section:
         put("global_illustration_label", "Auto")
+    # BUG-75: figure text from a config is text, never markup. Absent in a
+    # config saved before it existed, which leaves the automatic wording.
+    if isinstance(illustration.get("text"), str):
+        put("global_illustration_text", _strip_markup(illustration["text"]))
+    elif has_valid_plot_section:
+        put("global_illustration_text", "")
 
     preprocessing = section("preprocessing")
     if "enabled" in preprocessing:

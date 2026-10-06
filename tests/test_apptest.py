@@ -4586,8 +4586,9 @@ class TestFigureAndCanvasSubGroups:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Widgets from every sub-group: 🖥️ Screen, 🔤 Text, 📊 Axes, 🏷️ Labels.
         keys = {w.key for w in at.number_input} | {w.key for w in at.selectbox}
+        # The monitor's size is the Data page's (not drawn in the rail).
+        assert "global_canvas_width" not in keys
         assert {
-            "global_canvas_width",
             "global_coordinate_grid_spacing",
             "global_bg_choice",
             "global_illustration_label",
@@ -4630,9 +4631,10 @@ class TestFigureAndCanvasSubGroups:
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing switch leads the screen block (UX-164: a `Frame | ☑
-        # Whole monitor` row).
-        assert 'key="global_fit_to_monitor"' in control_source
+        # The framing switch leads the screen block: a `Frame | ☑ Crop to data`
+        # row, a shadow of `global_fit_to_monitor` (its inverse).
+        assert 'check_label="Crop to data"' in control_source
+        assert '"global_fit_to_monitor"' in control_source
         assert "with screen_group, _popover_rows(" in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source

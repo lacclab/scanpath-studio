@@ -611,7 +611,7 @@ def test_an_animation_cli_snippet_replays_the_same_figure(
         "fixation_symbol": "diamond",
         "fixation_color": "#aa0000",
         "color_by": "duration_ms",
-        "fixation_colorscale": "Blues",
+        "fixation_colorscale": "Viridis",
         "marker_size_range": (4, 12),
     }
     state = cs.FigureState(

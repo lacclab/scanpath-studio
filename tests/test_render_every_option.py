@@ -65,7 +65,7 @@ NON_DEFAULT = {
     "color_by": "duration_ms",
     "color_by_line": True,
     "fixation_color": "#aa0000",
-    "fixation_colorscale": "Blues",
+    "fixation_colorscale": "Viridis",
     "fixation_color_range": (100.0, 400.0),
     "fixation_symbol": "square",
     "fixation_opacity": 0.5,
@@ -117,6 +117,7 @@ NON_DEFAULT = {
     "word_box_fill_color": "#888888",
     "word_box_fill_opacity": 0.3,
     "word_box_line_opacity": 0.4,
+    "illustration_text": "Schematic",
     # The replay's own.
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,

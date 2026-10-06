@@ -828,6 +828,11 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Auto-label transformed/schematic figures, force the label, or "
         "explicitly hide it (default: auto).",
     )
+    viz.add_argument(
+        "--illustration-text",
+        metavar="TEXT",
+        help='The Illustration label\'s text (default: "Illustration · <reasons>").',
+    )
     # PRE-3: vertical drift correction. The algorithm list below is spelled out
     # for `--help`; `alignment.ALGORITHMS` stays the source of truth (the flag
     # validates against it via _drift_algorithm, and a test pins the two lists
@@ -1517,6 +1522,7 @@ _DIRECT_OPTION_FLAGS = (
     "y_field",
     "colorbar_tickangle",
     "colorbar_tickfont_size",
+    "illustration_text",
     "word_box_color",
     "word_box_line_opacity",
     "word_box_fill_color",

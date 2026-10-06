@@ -721,6 +721,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_render_mode": "Straight",
     "global_fixation_snap_to_word": False,
     "global_illustration_label": "Auto",
+    "global_illustration_text": "",
     # VIZ-10: autoplay the animated replay on load (default on). The toggle lives
     # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the replay
     # player starts it at the configured speed (plots.animation_player_post_script).
@@ -4963,6 +4964,7 @@ def _collect_viz_settings(
         saccade_render_mode=ss.get("global_saccade_render_mode") or "Straight",
         fixation_snap_to_word=bool(ss.get("global_fixation_snap_to_word")),
         illustration_label=ss.get("global_illustration_label") or "Auto",
+        illustration_text=str(ss.get("global_illustration_text") or ""),
         # VIZ-10: autoplay the animated replay on load (default on).
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
         # VIZ-11 follow-up: the animation frame grid (smoothness vs. frame count).
@@ -7147,16 +7149,33 @@ def render_plot_controls(
                 st.session_state["global_caption_pattern"] = DEFAULT_CAPTION_PATTERN
 
     with labels, _popover_rows("fig_labels"):
-        _labeled(
-            st,
-            "selectbox",
+        label_help = (
+            "Auto: label the figure when a setting changes its geometry or data. "
+            "Show: always label it. Hide: never."
+        )
+        label_mode = _sub_row(
+            "Show",
+            section="Illustration",
+            section_help="A note in the figure's corner saying it is not drawn "
+            "exactly as recorded.",
+            caption_help=label_help,
+        ).selectbox(
             "Illustration label",
-            display="Illustration",
             options=["Auto", "Show", "Hide"],
             key="global_illustration_label",
             persist_state="session",
-            help="Auto labels figures when geometry or data is transformed. Show "
-            "forces the label; Hide is an explicit publication override.",
+            help=label_help,
+            label_visibility="collapsed",
+        )
+        text_help = "The label's text. Empty: “Illustration ·” and the reasons."
+        _sub_row("Text", caption_help=text_help).text_input(
+            "Illustration text",
+            key="global_illustration_text",
+            persist_state="session",
+            placeholder="Illustration · <reasons>",
+            disabled=label_mode == "Hide",
+            help=text_help,
+            label_visibility="collapsed",
         )
         show_title_caption, _ = _check_row(
             "Title & caption",

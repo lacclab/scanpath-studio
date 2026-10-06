@@ -1649,6 +1649,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         raw_gaze_color=viz_settings.get("raw_gaze_color", "#888888"),
         raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
         raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
+        illustration_text=str(viz_settings.get("illustration_text", "")),
         word_box_color=viz_settings.get("word_box_color", WORD_BOX_COLOR),
         word_box_line_opacity=viz_settings.get(
             "word_box_line_opacity", WORD_BOX_LINE_OPACITY
@@ -3842,6 +3843,7 @@ def _build_studio_config(
         },
         "illustration": {
             "label_mode": viz_settings.get("illustration_label", "Auto"),
+            "text": str(viz_settings.get("illustration_text", "")),
             "reasons": list(viz_settings.get("illustration_reasons") or []),
         },
         "preprocessing": {
@@ -5050,7 +5052,9 @@ def _build_and_render_animation(
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
-        add_illustration_label(fig, reasons)
+        add_illustration_label(
+            fig, reasons, text=viz_settings.get("illustration_text", "")
+        )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(
             animation_settings, trial_fixations, anim_inputs["fixations_b"]
@@ -5074,6 +5078,7 @@ def _build_and_render_animation(
         anim_key,
         float(playback_speed),
         tuple(reasons or ()),
+        str(viz_settings.get("illustration_text", "")),
         tuple(sorted((str(k), repr(v)) for k, v in (preprocessing or {}).items())),
         title,
         caption,
@@ -8111,7 +8116,11 @@ def _render_comparison_figure(
         settings=comparison_settings,
         raw_gaze=raw_gaze,
     )
-    add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
+    add_illustration_label(
+        fig_compare,
+        viz_settings.get("illustration_reasons"),
+        text=viz_settings.get("illustration_text", ""),
+    )
     _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)
     _apply_title_caption(
         fig_compare,

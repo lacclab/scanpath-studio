@@ -80,6 +80,7 @@ GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
 GLOBAL_ALIGN_ALGORITHM = "global_align_algorithm"
 GLOBAL_ALIGN_CONNECTORS = "global_align_connectors"
 GLOBAL_ILLUSTRATION_LABEL = "global_illustration_label"
+GLOBAL_ILLUSTRATION_TEXT = "global_illustration_text"
 GLOBAL_PREPROC_ENABLED = "global_preproc_enabled"
 GLOBAL_PREPROC_BLINK_ADJACENT = "global_preproc_blink_adjacent"
 GLOBAL_PREPROC_SHORT_POLICY = "global_preproc_short_policy"
@@ -469,6 +470,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "word_hover_fields": GLOBAL_WORD_HOVER_FIELDS,
         "fixation_hover_fields": GLOBAL_FIXATION_HOVER_FIELDS,
         "illustration_label": GLOBAL_ILLUSTRATION_LABEL,
+        "illustration_text": GLOBAL_ILLUSTRATION_TEXT,
         "preproc_short_policy": GLOBAL_PREPROC_SHORT_POLICY,
         "title_pattern": GLOBAL_TITLE_PATTERN,
         "caption_pattern": GLOBAL_CAPTION_PATTERN,
@@ -872,6 +874,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_ALIGN_ALGORITHM,
         GLOBAL_ALIGN_CONNECTORS,
         GLOBAL_ILLUSTRATION_LABEL,
+        GLOBAL_ILLUSTRATION_TEXT,
         GLOBAL_PREPROC_ENABLED,
         GLOBAL_PREPROC_BLINK_ADJACENT,
         GLOBAL_PREPROC_SHORT_POLICY,

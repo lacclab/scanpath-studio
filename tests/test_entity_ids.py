@@ -62,3 +62,19 @@ def test_nothing_to_show() -> None:
     empty = pd.DataFrame()
     for kind in ("participant", "trial", "text"):
         assert _ids_from_data(kind, empty, empty, cache_key=kind).empty
+
+
+def test_trials_carry_their_constant_columns() -> None:
+    words, fixations = _frames()
+    fixations = fixations.assign(
+        difficulty=["Adv", "Adv", "Ele", "Ele", "Adv"],  # one per trial: kept
+        x=[1.0, 2.0, 3.0, 4.0, 5.0],  # varies inside a trial: left out
+        eye=["R"] * 5,  # the same in every trial: left out
+        unique_text_id=["a", "a", "a", "a", "b"],  # repeats Text ID: left out
+        image_path=["/home/me/a.png"] * 4 + ["/home/me/b.png"],  # S4
+    )
+    out = _ids_from_data("trial", words, fixations, cache_key="c")
+    assert out["difficulty"].tolist() == ["Adv", "Ele", "Adv"]
+    assert out["image_path"].tolist() == ["a.png", "a.png", "b.png"]
+    for gone in ("x", "eye", "unique_text_id"):
+        assert gone not in out.columns

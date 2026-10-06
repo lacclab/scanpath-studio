@@ -211,6 +211,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
     vouch_for_frames,
+    zip_member_split,
 )
 from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
@@ -4055,12 +4056,13 @@ def _read_uploaded_table_cached(
         return stamp_source(read_table(_uploaded))
     # PERF-6: parse only the columns the mapping, the registry and the user's
     # own picks need. `kind` and `chosen` are part of the cache key, so naming
-    # a new column simply re-reads the file under the new plan.
-    header = read_table_columns(_uploaded)
+    # a new column simply re-reads the file under the new plan. `kind` also
+    # picks a mixed zip's members (#374 F3).
+    header = read_table_columns(_uploaded, kind=kind)
     plan = upload_read_plan(
         header, kind, chosen=chosen, text_column=text_column, identity=identity
     )
-    return stamp_source(read_table(_uploaded, plan=plan))
+    return stamp_source(read_table(_uploaded, plan=plan, kind=kind))
 
 
 @st.cache_data(show_spinner="Reading uploaded data…", show_time=True)
@@ -4080,7 +4082,7 @@ def _read_uploaded_tables_cached(
                 header, kind, chosen=chosen, text_column=text_column, identity=identity
             )
 
-    return stamp_source(read_tables(list(_uploaded_list), plan_for=plan_for))
+    return stamp_source(read_tables(list(_uploaded_list), plan_for=plan_for, kind=kind))
 
 
 #: Session keys naming a source column the user has picked: every mapping
@@ -4137,7 +4139,7 @@ def upload_read_plan(
     )
 
 
-def _upload_header(uploaded, *, multi: bool) -> list:
+def _upload_header(uploaded, *, multi: bool, kind: str | None = None) -> list:
     """Every column name across an upload, in first-seen order (PERF-6).
 
     The *union*, not the first file's: one upload is commonly one file per
@@ -4150,13 +4152,13 @@ def _upload_header(uploaded, *, multi: bool) -> list:
     sources = list(uploaded) if multi else [uploaded]
     header: list = []
     for source in sources:
-        columns = _upload_columns_cached(source, _uploaded_file_key(source))
+        columns = _upload_columns_cached(source, _uploaded_file_key(source), kind)
         header.extend(c for c in columns if c not in header)
     return header
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def _upload_columns_cached(_uploaded, file_key) -> list:
+def _upload_columns_cached(_uploaded, file_key, kind: str | None = None) -> list:
     """One uploaded file's column names, read once per file (PERF-6's header pass).
 
     Keyed like the planned read. A delimited file's header is cheap, but a
@@ -4165,7 +4167,32 @@ def _upload_columns_cached(_uploaded, file_key) -> list:
     re-parsed the file on every rerun of the wizard: 1.4 s a click on a full
     ``.xls`` sheet, and a second decompressed copy of a large zip held at once.
     """
-    return read_table_columns(_uploaded)
+    return read_table_columns(_uploaded, kind=kind)
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def _zip_split_cached(_uploaded, file_key, kind: str | None) -> str:
+    """The note an upload row shows when its zip mixes fixation and
+    interest-area reports (#374 F3): which members it used, which it left out.
+    Empty for anything else."""
+    try:
+        return zip_member_split(_uploaded, kind).message()
+    except Exception:  # the read itself reports an unreadable archive
+        return ""
+
+
+def upload_zip_notes(uploaded, kind: str | None) -> list[str]:
+    """One note per zip in an upload that left members out for ``kind``."""
+    if kind is None or not uploaded:
+        return []
+    files = uploaded if isinstance(uploaded, (list, tuple)) else [uploaded]
+    notes = []
+    for f in files:
+        if str(getattr(f, "name", "")).lower().endswith(".zip"):
+            note = _zip_split_cached(f, _uploaded_file_key(f), kind)
+            if note:
+                notes.append(note)
+    return notes
 
 
 def _uploaded_header(state_prefix: str) -> list:
@@ -4274,7 +4301,7 @@ def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFr
     text_column = None
     identity: tuple = ()
     if kind is not None:
-        header = _upload_header(uploaded, multi=multi)
+        header = _upload_header(uploaded, multi=multi, kind=kind)
         chosen = tuple(sorted(_columns_chosen_in_state(st.session_state, header)))
         # BUG-53: the word-text column the user mapped by hand (the mapping
         # widget's own key) is the one to read verbatim, not the proposed one.

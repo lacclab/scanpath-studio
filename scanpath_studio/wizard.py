@@ -3342,6 +3342,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             counts = stats.container(key=f"wiz_upload_counts_{prefix}")
             counts.caption(f"{len(frame):,} {noun}")
             counts.caption(f"{n_columns} columns")
+            # #374 F3: a zip holding both EyeLink reports reads only the ones
+            # this row takes — say which, and where the rest go.
+            for note in app.upload_zip_notes(
+                st.session_state.get(f"{prefix}_upload"), kind
+            ):
+                host.caption(f"{ICONS['info']} {note}")
         return frame
 
     # UX-122/UX-127/UX-129: none of the six tables upload at the top of this

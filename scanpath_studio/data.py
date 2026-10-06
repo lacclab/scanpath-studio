@@ -2825,20 +2825,21 @@ def _schema_identity_columns(schema: dict) -> list[str]:
     return columns
 
 
-def read_table_columns(file_like_or_path) -> list[str]:
+def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[str]:
     """A table's column names, without parsing its rows.
 
     The header pass that :func:`plan_table_read` plans from. Delimited text
     reads zero rows and columnar formats read their schema; anything else
     (Excel, a zip of several members) falls back to reading the table, because
     there is no cheaper way to learn its columns and those formats are not the
-    ones that hurt.
+    ones that hurt. ``kind`` (``"words"`` / ``"fixations"``) picks a mixed
+    zip's members the way :func:`zip_member_split` does (#374, F3).
     """
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     _rewind(file_like_or_path)
     try:
         if name.endswith(".zip"):
-            return _zipped_table_columns(file_like_or_path)
+            return _zipped_table_columns(file_like_or_path, kind=kind)
         if name.endswith(".parquet"):
             import pyarrow.parquet as pq
 
@@ -2893,7 +2894,7 @@ def _member_layout(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[list, st
     return _header(io.BytesIO(line + b"\n"), sep), sep
 
 
-def _zipped_table_columns(file_like_or_path) -> list[str]:
+def _zipped_table_columns(file_like_or_path, *, kind: str | None = None) -> list[str]:
     """Column names of a ``.zip``'s members, without decompressing the rows.
 
     A OneStop report is a single ~4 GB CSV inside its zip, so the fallback of
@@ -2914,6 +2915,7 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
         # cheaper way to learn an archive's columns must not also be a way
         # around its decompression limits.
         _check_zip_limits(infos)
+        infos = _zip_split(zf, infos, kind).used_infos
         for info in infos:
             name = info.filename.lower()
             if not name.endswith((".tsv", ".tab", ".csv", ".txt")):
@@ -2921,7 +2923,7 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
                 # read: defer to `_read_zipped_table`, which reads every member
                 # under a running byte budget (declared sizes are forgeable, so
                 # the check above is not sufficient on its own).
-                return list(_read_zipped_table(file_like_or_path).columns)
+                return list(_read_zipped_table(file_like_or_path, kind=kind).columns)
             names, _sep = _member_layout(zf, info)
             columns.extend(c for c in names if c not in columns)
     return columns
@@ -3208,8 +3210,144 @@ class _BudgetedZipMember(io.RawIOBase):
         return read
 
 
+#: What each table kind's members are called in the mixed-zip message (#374 F3).
+_ZIP_KIND_NOUNS = {
+    "fixations": ("fixation report", "fixation reports"),
+    "words": ("interest-area report", "interest-area reports"),
+}
+#: The wizard row each kind belongs in, as the message names it.
+_ZIP_KIND_ROWS = {"fixations": "Fixations", "words": "Words"}
+
+
+def table_kind_of_columns(columns: Iterable[str]) -> str | None:
+    """Whether a header looks like a fixation table or a word (interest-area)
+    table — ``"fixations"``, ``"words"`` or ``None`` when it is neither or both.
+
+    Reuses the mapping's own detection: a fixation table has a duration column
+    and no word box, a word table has a word box and no fixation duration. An
+    EyeLink Fixation Report and Interest Area Report land on opposite sides.
+    """
+    frame = pd.DataFrame(columns=list(dict.fromkeys(map(str, columns))))
+    words = propose_word_schema(frame)
+    has_box = all(words.get(k) for k in ("x", "y", "width", "height")) or all(
+        words.get(k) for k in _BOX_EDGES
+    )
+    has_duration = bool(propose_fix_schema(frame).get("duration"))
+    if has_duration and not has_box:
+        return "fixations"
+    if has_box and not has_duration:
+        return "words"
+    return None
+
+
+@dataclass(frozen=True)
+class ZipMemberSplit:
+    """Which members of a zip one table reads (#374 F3).
+
+    A ZIP of per-participant folders commonly holds both EyeLink reports. Its
+    members are grouped by column set, each set classified by
+    :func:`table_kind_of_columns`; when the archive holds both kinds, the table
+    being read keeps the members of its own kind and the rest are *left out* —
+    never concatenated into one frame, which put a "fixation" at every word.
+    """
+
+    used: tuple[str, ...]
+    left_out: tuple[str, ...] = ()
+    kind: str | None = None
+    left_out_kind: str | None = None
+    used_infos: tuple = ()
+
+    @property
+    def mixed(self) -> bool:
+        return bool(self.left_out)
+
+    def message(self) -> str:
+        """The one-line note the upload row shows ("" when nothing was left out)."""
+        if not self.left_out or self.kind not in _ZIP_KIND_NOUNS:
+            return ""
+        n_used, n_out = len(self.used), len(self.left_out)
+        noun = _ZIP_KIND_NOUNS[self.kind][n_used != 1]
+        if self.left_out_kind in _ZIP_KIND_NOUNS:
+            other = _ZIP_KIND_NOUNS[self.left_out_kind][n_out != 1]
+            row = _ZIP_KIND_ROWS[self.left_out_kind]
+            tail = f" — add the ZIP to the {row} row too."
+        else:
+            other, tail = ("other file" if n_out == 1 else "other files"), "."
+        verb = "was" if n_out == 1 else "were"
+        return (
+            f"Using the {n_used} {noun} in this ZIP; {n_out} {other} {verb} "
+            f"left out{tail}"
+        )
+
+
+def _zip_member_columns(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> list[str]:
+    """One member's column names — the header line for delimited text, else
+    the member read (under the per-file budget) and its schema taken."""
+    name = info.filename.lower()
+    if name.endswith((".tsv", ".tab", ".csv", ".txt")):
+        return _member_layout(zf, info)[0]
+    with zf.open(info) as inner:
+        stream = _BudgetedZipMember(
+            inner, ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES, info.filename
+        )
+        buf = io.BytesIO(stream.read())
+    buf.name = info.filename
+    return read_table_columns(buf)
+
+
+def _zip_split(
+    zf: zipfile.ZipFile, infos: list[zipfile.ZipInfo], kind: str | None
+) -> ZipMemberSplit:
+    """Split ``infos`` into the members ``kind`` reads and those it leaves out."""
+    every = ZipMemberSplit(
+        used=tuple(i.filename for i in infos), kind=kind, used_infos=tuple(infos)
+    )
+    if kind not in _ZIP_KIND_NOUNS or len(infos) < 2:
+        return every
+    by_columns: dict[tuple, str | None] = {}
+    kinds = []
+    for info in infos:
+        columns = tuple(_zip_member_columns(zf, info))
+        if columns not in by_columns:
+            by_columns[columns] = table_kind_of_columns(columns)
+        kinds.append(by_columns[columns])
+    present = {k for k in kinds if k}
+    if len(present) < 2 or kind not in present:
+        return every
+    used = [i for i, k in zip(infos, kinds) if k == kind]
+    out_kinds = {k for k in kinds if k != kind}
+    return ZipMemberSplit(
+        used=tuple(i.filename for i in used),
+        left_out=tuple(i.filename for i, k in zip(infos, kinds) if k != kind),
+        kind=kind,
+        left_out_kind=out_kinds.pop() if len(out_kinds) == 1 else None,
+        used_infos=tuple(used),
+    )
+
+
+def zip_member_split(file_like_or_path, kind: str | None) -> ZipMemberSplit:
+    """Which members of a ``.zip`` the ``kind`` table reads, and which it
+    leaves out (#374 F3) — what the upload row reports. A non-zip, or a zip
+    holding one kind of table, uses everything."""
+    name = getattr(file_like_or_path, "name", str(file_like_or_path))
+    if not name.lower().endswith(".zip"):
+        return ZipMemberSplit(used=(name,), kind=kind)
+    _rewind(file_like_or_path)
+    try:
+        with zipfile.ZipFile(file_like_or_path) as zf:
+            infos = [
+                i
+                for i in zf.infolist()
+                if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
+            ]
+            _check_zip_limits(infos)
+            return _zip_split(zf, infos, kind)
+    finally:
+        _rewind(file_like_or_path)
+
+
 def _read_zipped_table(
-    file_like_or_path, *, plan: ReadPlan | None = None
+    file_like_or_path, *, plan: ReadPlan | None = None, kind: str | None = None
 ) -> pd.DataFrame:
     """Read table(s) from a ``.zip`` archive (e.g. ``data.csv.zip``).
 
@@ -3217,7 +3355,9 @@ def _read_zipped_table(
     supported format. A multi-member archive is concatenated just like a
     multi-file upload — every member's rows tagged with its stem in
     ``source_file`` (qualified by its folders when two members share a stem,
-    :func:`source_labels`). pandas infers compression only from string paths, not from
+    :func:`source_labels`). With ``kind``, an archive that mixes fixation and
+    interest-area reports keeps only the members that fit it
+    (:func:`zip_member_split`, #374 F3). pandas infers compression only from string paths, not from
     uploaded file-like objects, so we open the archive ourselves. Raises
     ``ValueError`` if the archive holds no data file (macOS ``__MACOSX``/dotfile
     cruft is ignored), or if it would decompress past the DATA-16 size limits
@@ -3232,6 +3372,7 @@ def _read_zipped_table(
         if not infos:
             raise ValueError("the zip archive contains no readable table files")
         _check_zip_limits(infos)
+        infos = _zip_split(zf, infos, kind).used_infos
         remaining = ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES
         frames, labels = [], []
         for info in infos:
@@ -3322,17 +3463,21 @@ def upload_exceeds_limit(
     return uploaded_files_total_bytes(uploaded) > threshold_bytes
 
 
-def read_table(file_like_or_path, *, plan: ReadPlan | None = None) -> pd.DataFrame:
+def read_table(
+    file_like_or_path, *, plan: ReadPlan | None = None, kind: str | None = None
+) -> pd.DataFrame:
     """Read a tabular file by extension: csv, tsv, parquet, feather, or a
     ``.zip`` wrapping one or more of those (e.g. ``data.csv.zip``). A
     multi-member zip is concatenated like a multi-file upload.
 
     ``plan`` (PERF-6) is a :class:`ReadPlan` from :func:`plan_table_read`,
-    narrowing the read to the columns normalization keeps."""
+    narrowing the read to the columns normalization keeps. ``kind``
+    (``"words"`` / ``"fixations"``) is the table being read: a zip that mixes
+    the two keeps only the members that fit it (:func:`zip_member_split`)."""
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     try:
         if name.endswith(".zip"):
-            return _read_zipped_table(file_like_or_path, plan=plan)
+            return _read_zipped_table(file_like_or_path, plan=plan, kind=kind)
         return _read_by_extension(file_like_or_path, name, plan)
     except pd.errors.EmptyDataError as exc:
         raise _empty_file_error(name) from exc
@@ -3365,6 +3510,7 @@ def read_tables(
     source_column: str | None = SOURCE_FILE_COLUMN,
     *,
     plan_for=None,
+    kind: str | None = None,
 ) -> pd.DataFrame:
     """Read one or many tabular files and concatenate them into one frame.
 
@@ -3377,7 +3523,8 @@ def read_tables(
     that column, or ``source_column=None``) — *including a single file*, so
     datasets that key identity in the filename can recover it (the upload wizard
     maps ``source_file`` as the trial / participant id). Columns are aligned by
-    name across files; fields absent from a file become NaN for its rows."""
+    name across files; fields absent from a file become NaN for its rows.
+    ``kind`` picks a mixed zip's members (:func:`zip_member_split`)."""
     items = expand_table_inputs(inputs)
     frames, labels = [], []
     for item in items:
@@ -3385,8 +3532,12 @@ def read_tables(
         # participant is the common upload shape, and an export can gain or
         # lose a column between them — a shared plan would name a column some
         # file hasn't got, which `usecols` raises on.
-        plan = plan_for(read_table_columns(item)) if plan_for is not None else None
-        frames.append(read_table(item, plan=plan))
+        plan = (
+            plan_for(read_table_columns(item, kind=kind))
+            if plan_for is not None
+            else None
+        )
+        frames.append(read_table(item, plan=plan, kind=kind))
         labels.append(getattr(item, "name", str(item)))
     return _tag_and_concat(
         frames, source_labels(labels), source_column, always_tag=True
@@ -6113,6 +6264,7 @@ def diagnose_trial_identity(
         "repeated_fixation_id_trials": 0,
         "backwards_clock_trials": 0,
         "multi_valued_columns": {},
+        "mixed_source_shapes": False,
         "sampled_from": None,
     }
     key_frame = fixations if fixations is not None and not fixations.empty else words
@@ -6200,8 +6352,27 @@ def diagnose_trial_identity(
     report["multi_valued_columns"] = dict(
         sorted(multi.items(), key=lambda kv: (-kv[1], kv[0]))
     )
+    # #374 F3: when `source_file` is what varies, the files may be two kinds of
+    # table joined into one (a fixation report and an interest-area report) —
+    # adding `source_file` to the Trial ID would only hide that.
+    report["mixed_source_shapes"] = SOURCE_FILE_COLUMN in multi and any(
+        _mixed_source_shapes(frame) for frame in (words, fixations)
+    )
     report["affected_trials"] = len(flagged)
     return report
+
+
+def _mixed_source_shapes(frame: pd.DataFrame | None) -> bool:
+    """Whether the files behind ``frame`` filled different columns (#374 F3).
+
+    Each ``source_file``'s rows are reduced to the set of columns they hold any
+    value in; two files of one export share that set, while a fixation report
+    and an interest-area report joined into one table do not.
+    """
+    if frame is None or frame.empty or SOURCE_FILE_COLUMN not in frame.columns:
+        return False
+    filled = frame.notna().groupby(frame[SOURCE_FILE_COLUMN], sort=False).any()
+    return len(filled.drop_duplicates()) > 1
 
 
 def _as_tuple(key) -> tuple:
@@ -6231,6 +6402,13 @@ def trial_identity_warning(report: dict[str, object]) -> str | None:
         f"under the current Trial ID.**"
     )
     multi = report.get("multi_valued_columns") or {}
+    if report.get("mixed_source_shapes"):
+        return (
+            f"{lead} Their rows come from files with different columns — one "
+            "table probably holds both fixation and interest-area reports. "
+            "Upload each report in its own row: Fixations, or Words (interest "
+            "areas)."
+        )
     if multi:
         col, count = next(iter(multi.items()))
         return (

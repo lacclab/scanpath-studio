@@ -239,7 +239,9 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
 )
 
 
-def _as_dataframe(table: TablesLike, label: str, *, plan_for=None) -> pd.DataFrame:
+def _as_dataframe(
+    table: TablesLike, label: str, *, plan_for=None, kind: str | None = None
+) -> pd.DataFrame:
     if isinstance(table, pd.DataFrame):
         # DATA-66: a frame this API returned under the dataset's own names goes
         # back to the internal names it was normalized under, so loading it
@@ -250,7 +252,8 @@ def _as_dataframe(table: TablesLike, label: str, *, plan_for=None) -> pd.DataFra
     for item in items:
         if not isinstance(item, pd.DataFrame) and not Path(item).is_file():
             raise FileNotFoundError(f"{label} table not found: {item}")
-    return _data.read_tables(items, plan_for=plan_for)
+    # #374 F3: a zip holding both EyeLink reports gives each table its own.
+    return _data.read_tables(items, plan_for=plan_for, kind=kind)
 
 
 def _metadata_id_plan(id_column, infer, *extra):
@@ -565,7 +568,11 @@ def propose_schema(table: TablesLike, kind: str = "words") -> dict:
         raise ValueError(
             f"Unknown kind {kind!r}; choose one of {', '.join(_SCHEMA_SPECS)}."
         )
-    frame = _as_dataframe(table, _SCHEMA_SPECS[kind]["noun"])
+    frame = _as_dataframe(
+        table,
+        _SCHEMA_SPECS[kind]["noun"],
+        kind=kind if kind in ("words", "fixations") else None,
+    )
     return _SCHEMA_SPECS[kind]["propose"](frame)
 
 
@@ -787,6 +794,7 @@ def load_scanpath_data(
             words,
             "words/IA",
             plan_for=lambda header: _data.verbatim_text_plan(header, word_schema),
+            kind="words",
         )
         explicit = word_schema is not None
         word_schema = word_schema or _data.propose_word_schema(words_df)
@@ -813,6 +821,7 @@ def load_scanpath_data(
             fixations,
             "fixations",
             plan_for=lambda header: _data.identity_text_plan(header, fix_schema),
+            kind="fixations",
         )
         explicit = fix_schema is not None
         fix_schema = fix_schema or _data.propose_fix_schema(fixations_df)

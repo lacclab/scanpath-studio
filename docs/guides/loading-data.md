@@ -23,7 +23,9 @@ Either table alone also works. Participant and text IDs, timestamps, raw gaze,
 conditions and reading measures are optional and unlock more features.
 
 Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of
-these. See [Data format](../data-format.md) for every field.
+these. A `.zip` holding both EyeLink reports (one folder per participant, say)
+can go in both rows: each row reads only its own reports and says which it
+left out. See [Data format](../data-format.md) for every field.
 
 ## Import files
 

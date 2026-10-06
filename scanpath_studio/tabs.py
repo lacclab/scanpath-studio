@@ -14215,6 +14215,8 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
                     plan_for=lambda header, table_key=table_key: _added_table_plan(
                         name, table_key, header
                     ),
+                    # #374 F3: a zip of both EyeLink reports, read for one.
+                    kind=table_key if table_key in ("words", "fixations") else None,
                 )
                 st.session_state[raw_key] = fresh
                 st.session_state[signature_key] = (

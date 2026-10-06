@@ -1176,6 +1176,29 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="PX",
         help="Heatmap colour bar: tick-label size (default: 12).",
     )
+    # v0.33.0's shared colour-bar flags, kept so a script written for it still
+    # runs (round 9) but not listed: `--colorbars` asked for what is now the
+    # default, and each `--colorbar-*` sets both bars unless the bar's own flag
+    # is given too (`_apply_shared_colorbar_flags`).
+    viz.add_argument(
+        "--colorbars",
+        dest="shared_colorbars",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    viz.add_argument(
+        "--colorbar-orientation",
+        dest="shared_colorbar_orientation",
+        choices=["vertical", "horizontal"],
+        help=argparse.SUPPRESS,
+    )
+    for setting in ("tickangle", "tickfont_size"):
+        viz.add_argument(
+            f"--colorbar-{setting.replace('_', '-')}",
+            dest=f"shared_colorbar_{setting}",
+            type=int,
+            help=argparse.SUPPRESS,
+        )
     viz.add_argument(
         "--raw-gaze",
         metavar="PATH",
@@ -2251,11 +2274,26 @@ def _load_multipleye_render(
     return words, fixations, pid, tid
 
 
+def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
+    """Hand v0.33.0's shared ``--colorbar-*`` values to each bar that was not
+    given its own; a bar's own flag wins, wherever it sits on the line.
+    ``--colorbars`` needs nothing: both bars are shown unless a ``--no-*``
+    leaves one out, which it still does beside ``--colorbars``."""
+    for setting in ("orientation", "tickangle", "tickfont_size"):
+        shared = getattr(args, f"shared_colorbar_{setting}")
+        if shared is None:
+            continue
+        for bar in ("fixation", "heatmap"):
+            if getattr(args, f"{bar}_colorbar_{setting}") is None:
+                setattr(args, f"{bar}_colorbar_{setting}", shared)
+
+
 def render(argv: list[str]) -> None:
     # Bound, not inlined: DATA-27's --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
     parser = _render_parser()
     args = parser.parse_args(argv)
+    _apply_shared_colorbar_flags(args)
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [

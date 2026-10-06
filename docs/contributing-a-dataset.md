@@ -1,8 +1,8 @@
 # Contributing a dataset
 
 How to get a public corpus shipped with Scanpath Studio, so every user finds it
-in the data-source picker. Three exist today — OneStop, PoTeC and MultiplEYE —
-and this page is the contract for adding a fourth.
+in the dataset picker. Two ship today, OneStop and PoTeC (MultiplEYE is held
+back from this release); this page is the contract for adding another.
 
 !!! tip "You probably don't need this page"
     To load a corpus **you already have**, no code is needed at all — see
@@ -11,7 +11,7 @@ and this page is the contract for adding a fourth.
 
 ## Do you need an adapter?
 
-If your corpus is two tables with recognisable column names, **no**. The generic
+If your corpus is two tables with recognizable column names, **no**. The generic
 loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint,
 Tobii, SMI, Pupil Labs and snake_case columns.
 
@@ -107,7 +107,7 @@ omit them to let auto-detection run.
     `["reader_id", "text_id"]`, where detection would pick the text alone.
 
 **3. Register any extra column you add.** Normalization builds a *fresh* frame and
-silently drops anything it doesn't recognise. A corpus-specific extra — reader
+silently drops anything it doesn't recognize. A corpus-specific extra — reader
 metadata, a stimulus image path, a genre facet — needs a row in
 `data.WORD_OPTIONAL_FIELDS` / `FIX_OPTIONAL_FIELDS`:
 
@@ -226,18 +226,18 @@ decisions your adapter makes ([OneStop](onestop.md) and
 
 ## Licensing
 
-The corpus must be publicly available under a licence that permits what the
+The corpus must be publicly available under a license that permits what the
 adapter does: reading it, and — for a downloader — fetching it from its own host
 on the user's behalf.
 
 - **No corpus data is vendored into this repository.** The one exception is the
-  bundled demo, a subset of OneStop under OneStop's own licence, cited in the
+  bundled demo, a subset of OneStop under OneStop's own license, cited in the
   README and written into every export bundle so the attribution travels with the
   data.
 - **Downloads point at the corpus' own host**, reusing the file IDs those projects
   publish.
 - **Ported code is separate.** If your adapter ports logic from the corpus'
-  tooling, add a `NOTICE` entry and check the licence is compatible with MIT — a
+  tooling, add a `NOTICE` entry and check the license is compatible with MIT — a
   GPL dependency isn't acceptable, which is why the drift-correction algorithms in
   `alignment.py` are a native port rather than a dependency.
 
@@ -270,7 +270,7 @@ PoTeC is the smallest complete adapter. In `datasets.py`, read it in this order:
 `download_potec` (fetch) → `potec_present` (check) → `_potec_words` (recovers
 `text_id` from the filename and `line` by mapping word positions through the
 character AOIs) → `_potec_fixations` (concatenates the per-trial files and
-synthesizes x/y from character-box centres — the step that gives PoTeC landing
+synthesizes x/y from character-box centers — the step that gives PoTeC landing
 positions at all) → `potec_raw_frames` → `load_potec`. Then `_load_potec_source`
 in `app.py`, and the test tree in `tests/test_dataset_support.py`.
 
@@ -279,7 +279,7 @@ in `app.py`, and the test tree in `tests/test_dataset_support.py`.
 One pull request with all of it: the adapter, any optional-field rows in
 `data.py`, the loader and registry entry, the default directory, the CLI
 flag, the API re-export, the tests, and a docs page plus its nav line. In the PR
-description state the corpus' **licence**, a **citation**, its **public URL**, and
+description state the corpus' **license**, a **citation**, its **public URL**, and
 its **on-disk size**.
 
 Before you open it:

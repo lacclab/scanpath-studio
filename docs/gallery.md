@@ -34,7 +34,7 @@ fig = sps.plot_scanpath(words, fixations, pid, tid)
 print(embed(fig))  # markdown-exec: hide
 ```
 
-## Where the reader dwelt
+## Where the participant dwelt
 
 The heatmap on its own, here as a smooth duration-weighted density rather than
 one tint per word; the app's **:material/local_fire_department: Heatmap** controls offer both.
@@ -55,8 +55,8 @@ print(embed(fig))  # markdown-exec: hide
 
 ## Fixations by text line
 
-Each fixation coloured by the line of text it was assigned to: a quick check
-for vertical drift, which shows up as one line's colour creeping onto the next.
+Each fixation colored by the line of text it was assigned to: a quick check
+for vertical drift, which shows up as one line's color creeping onto the next.
 
 ```python exec="true" html="true" source="below" session="gallery"
 fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
@@ -65,7 +65,7 @@ print(embed(fig))  # markdown-exec: hide
 
 ## Saccades by reading class
 
-Each saccade coloured by its role in reading: forward, skip, refixation, return
+Each saccade colored by its role in reading: forward, skip, refixation, return
 sweep, or regression.
 
 ```python exec="true" html="true" source="below" session="gallery"
@@ -99,10 +99,10 @@ fig = sps.plot_scanpath(
 print(embed(fig))  # markdown-exec: hide
 ```
 
-## Two readers, one text
+## Two participants, one text
 
-The first fifty fixations of two readings of the same paragraph, on one canvas
-in two colours. The readings can also sit side by side, or come from two
+The first fifty fixations of two trials of the same paragraph, on one canvas
+in two colors. The trials can also sit side by side, or come from two
 different datasets.
 
 ```python exec="true" html="true" source="below" session="gallery"
@@ -119,7 +119,7 @@ print(embed(fig))  # markdown-exec: hide
 
 ## Raw gaze under the fixations
 
-Gaze samples, coloured by time, under the fixations, which are drawn hollow so
+Gaze samples, colored by time, under the fixations, which are drawn hollow so
 the samples show through. The demo ships no recorded samples, so this trial's
 are synthesized from its fixations: the figure shows the layer, not real data.
 
@@ -150,7 +150,7 @@ print(embed(fig))  # markdown-exec: hide
 ## A text, word by word
 
 Beyond single trials: the total fixation duration on every word of one text,
-averaged over the demo's readers, with ± one standard deviation as a band. The
+averaged over the demo's participants, with ± one standard deviation as a band. The
 app's :material/bar_chart: **Corpus Analysis** view draws this and more.
 
 ```python exec="true" html="true" source="below" session="gallery"

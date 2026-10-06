@@ -1972,6 +1972,8 @@ DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
 
 # (question, markdown answer). Two-to-four lines each — anything longer belongs
 # on the docs page.
+_WHERE_DATA_GOES = "Where does my data go?"
+
 _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
@@ -1988,17 +1990,9 @@ _FAQ_ITEMS = [
         "the trial id, so map your item column as **Text ID** if trial order was "
         "randomised.",
     ),
-    (
-        "Where does my data go?",
-        "Nowhere off your machine — no accounts, no database, no analytics, no "
-        "upload. A local or desktop run also keeps a **recovery copy** here "
-        "(datasets, mappings, settings, annotations), so a refresh "
-        f"resumes where you left off; **{ICONS['view_data']} Data Management → Saved on this computer** says "
-        "what is stored and where. Two caveats: "
-        "`streamlit run` listens on your whole network (use "
-        "`--server.address=127.0.0.1`), and the online demo runs on "
-        "Streamlit's server, with no recovery.",
-    ),
+    # #374 F22: the answer depends on where the app runs — `faq_items` fills
+    # it in from `_where_data_goes`, so a hosted copy never says "nowhere".
+    (_WHERE_DATA_GOES, ""),
     (
         "My uploaded data vanished after a refresh.",
         "Local and desktop runs normally recover uploaded datasets, settings and "
@@ -2046,9 +2040,53 @@ _DRIFT_FAQ_ITEMS = [
 ]
 
 
+def _where_data_goes() -> str:
+    """ "Where does my data go?" for where this app is running (#374 F22).
+
+    Local means the server listens on loopback only — its own configuration,
+    which ENG-56 made the test for the recovery copy too — as ``scanpath-studio``
+    and the desktop app do. Anything else (the online demo, a bare
+    ``streamlit run``) processes an upload on a server other machines reach.
+    """
+    from scanpath_studio.persistence import (
+        persistence_enabled,
+        server_bound_to_loopback,
+    )
+
+    if not server_bound_to_loopback():
+        kept = (
+            "a recovery copy is kept there"  # opted in: SCANPATH_STUDIO_PERSIST=1
+            if persistence_enabled()
+            else "not kept"
+        )
+        return (
+            "To the server this app runs on, not your computer: a file you "
+            f"upload is processed there and {kept}. No accounts, no database, "
+            "no analytics — but don't upload identifiable data to a server you "
+            "don't control. Run it locally (`pip install scanpath-studio`, then "
+            "`scanpath-studio`) to keep it on your computer; a bare `streamlit "
+            "run` also needs `--server.address=127.0.0.1`."
+        )
+    answer = (
+        "Nowhere: it stays on your computer — no accounts, no database, no "
+        "analytics, no upload."
+    )
+    if persistence_enabled():
+        answer += (
+            " This run also keeps a **recovery copy** (datasets, mappings, "
+            "settings, annotations), so a refresh resumes where you left off; "
+            f"**{ICONS['view_data']} Data Management → Saved on this computer** "
+            "says what is stored and where."
+        )
+    return answer
+
+
 def faq_items() -> list:
     """The FAQ entries this build can honestly answer (PRE-21)."""
-    items = list(_FAQ_ITEMS)
+    items = [
+        (question, _where_data_goes() if question == _WHERE_DATA_GOES else answer)
+        for question, answer in _FAQ_ITEMS
+    ]
     if drift_correction_enabled():
         items.extend(_DRIFT_FAQ_ITEMS)
     return items

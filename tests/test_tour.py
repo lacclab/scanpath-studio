@@ -671,6 +671,26 @@ class TestFaq:
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
 
+    def test_where_data_goes_says_only_what_applies_here(self, monkeypatch):
+        """#374 F22: the hosted demo's FAQ must not claim uploads stay local."""
+        from scanpath_studio import persistence, tour
+
+        def answer() -> str:
+            (text,) = [a for q, a in tour.faq_items() if q == tour._WHERE_DATA_GOES]
+            return text
+
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
+        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: False)
+        hosted = answer()
+        assert hosted.startswith("To the server this app runs on")
+        assert "Nowhere" not in hosted and "not kept" in hosted
+
+        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: True)
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
+        local = answer()
+        assert local.startswith("Nowhere")
+        assert "recovery copy" in local and "server" not in local
+
     def test_no_entry_is_for_someone_editing_the_code(self):
         """BUG-85: docs/faq.md dropped "I edited the code and nothing changed?"
         for the beta — it is contributor material, and CONTRIBUTING.md keeps

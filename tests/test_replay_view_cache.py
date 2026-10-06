@@ -12,6 +12,8 @@ inputs rather than from the figure's JSON.
 
 from __future__ import annotations
 
+import json
+
 import re
 
 import pandas as pd
@@ -131,8 +133,15 @@ class TestARerunShowsTheCachedView:
         _render()
         _render(**change)
         assert page["embeds"][1] != page["embeds"][0]
-        assert shows in page["embeds"][1]
-        assert shows not in page["embeds"][0]
+        assert _shown(shows, page["embeds"][1])
+        assert not _shown(shows, page["embeds"][0])
+
+
+def _shown(text: str, embed: str) -> bool:
+    """``text`` in the page, as written either way: plotly's JSON engine keeps
+    "×" as is with ``orjson`` installed and escapes it (``\u00d7``) without —
+    CI installs no ``orjson``. The browser reads both the same."""
+    return text in embed or json.dumps(text)[1:-1] in embed
 
 
 class TestTheExportReadsTheView:

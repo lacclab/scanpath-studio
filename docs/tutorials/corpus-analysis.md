@@ -28,7 +28,7 @@ matches the question:
 | Question | View |
 | --- | --- |
 | How was one text read? | **Per text** |
-| How does one reader behave across trials? | **Per reader** |
+| How does one participant behave across trials? | **Per participant** |
 | How do conditions or populations differ? | **Groups** |
 
 ## 3. Choose one measure

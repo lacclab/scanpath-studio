@@ -3776,14 +3776,14 @@ class TestSetupWizard:
 @pytest.mark.timeout(120)
 class TestCorpusAnalysisTab:
     """The 'Corpus Analysis' tab hosts the question-oriented analysis sections
-    (Per text / Per reader / Groups). Generations moved to the Scanpath view's
+    (Per text / Per participant / Groups). Generations moved to the Scanpath view's
     Comparisons subtab (ENG-8)."""
 
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
         [
             ("Per text", "ptext_view"),
-            ("Per reader", "prdr_view"),
+            ("Per participant", "prdr_view"),
             ("Groups", "pgrp_view"),
         ],
     )
@@ -3806,6 +3806,27 @@ class TestCorpusAnalysisTab:
         # demo has no `screen_id`, so it must not appear — and its absence is
         # what pins that every single-screen dataset is untouched by the fix.
         assert "ptext_screen" not in keys
+
+    @pytest.mark.parametrize(
+        ("subtab", "view_key"),
+        [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
+    )
+    def test_the_section_caption_names_only_offered_views(self, subtab, view_key):
+        """#374 F15: the caption lists the views in the View list, no others."""
+        from scanpath_studio import tabs
+
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = subtab
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        offered = next(s for s in at.selectbox if s.key == view_key).options
+        captions = " ".join(c.value for c in at.caption)
+        for view, phrase in tabs._VIEW_PHRASES.items():
+            if view in offered:
+                assert phrase in captions, view
+            elif view in tabs._COMPUTED_READER_VIEWS:
+                assert phrase not in captions, view
 
     def test_data_without_ia_columns_says_it_has_no_measures(self):
         """AN-32 (reversing BUG-78's derivation): the page computes no reading
@@ -3876,7 +3897,7 @@ class TestCorpusAnalysisTab:
         at.session_state["groups_compare"] = view_key == "cmp_view"
         at.session_state["corpus_subtab"] = {
             "ptext_view": "Per text",
-            "prdr_view": "Per reader",
+            "prdr_view": "Per participant",
         }.get(view_key, "Groups")
         at.session_state[view_key] = view
         at.run(timeout=60)
@@ -3915,7 +3936,7 @@ class TestCorpusAnalysisTab:
             }
             at.session_state["data_source_choice"] = "No clock"
             at.session_state["main_nav"] = "Corpus Analysis"
-            at.session_state["corpus_subtab"] = "Per reader"
+            at.session_state["corpus_subtab"] = "Per participant"
             at.session_state["prdr_view"] = view
             for key, value in state.items():
                 at.session_state[key] = value

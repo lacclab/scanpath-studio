@@ -374,9 +374,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Pick the question, not the chart",
                 "Each subtab answers one shape of question: **Per text** (one text, "
-                "many readers), **Per reader** (one reader, all their trials) and "
-                "**Groups** (a cohort, or two compared). Our question — "
-                "*did this reader speed up over the experiment?* — is **Per reader**.",
+                "many readers), **Per participant** (one participant, all their "
+                "trials) and **Groups** (a cohort, or two compared). Our question — "
+                "*did this participant speed up over the experiment?* — is "
+                "**Per participant**.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,
             ),
@@ -387,7 +388,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "experiment on one axis, rather than a single trial's dynamics.",
                 ".st-key-tutorial_per_reader_view",
                 view=_VIEW_CORPUS,
-                corpus_subtab="Per reader",
+                corpus_subtab="Per participant",
             ),
             TutorialStep(
                 "Read average fixation duration across the experiment",
@@ -404,7 +405,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "reader unusual, or is the whole cohort like this? Read the sample size "
                 "with the effect, never the plotted mean on its own.",
                 ".st-key-tutorial_per_reader_view",
-                corpus_subtab="Per reader",
+                corpus_subtab="Per participant",
                 view=_VIEW_CORPUS,
                 optional=True,
             ),

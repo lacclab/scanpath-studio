@@ -25,10 +25,10 @@ between consecutive fixations.
 | View | Answers |
 | --- | --- |
 | **Per text** | How was this text read, word by word, across readers? |
-| **Per reader** | How does this reader behave across trials? |
+| **Per participant** | How does this participant behave across trials? |
 | **Groups** | How do conditions or populations differ? |
 
-The address bar names the open view (`?corpus_subtab=Per+reader`), so a
+The address bar names the open view (`?corpus_subtab=Per+participant`), so a
 bookmark or a copied link reopens it.
 
 Choose a measure, how to aggregate it, and the spread to show. A line under the

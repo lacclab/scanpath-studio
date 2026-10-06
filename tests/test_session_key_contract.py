@@ -781,4 +781,31 @@ def test_url_bound_widget_keys_frozen():
     from scanpath_studio import tabs
 
     assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
-    assert tabs.CORPUS_SUBTABS == ("Per text", "Per sentence", "Per reader", "Groups")
+    assert tabs.CORPUS_SUBTABS == (
+        "Per text",
+        "Per sentence",
+        "Per participant",
+        "Groups",
+    )
+    # #374 renamed "Per reader"; its old links still open the subtab.
+    assert tabs.CORPUS_SUBTAB_ALIASES == {"Per reader": "Per participant"}
+
+
+def _old_corpus_subtab_app():
+    """The Corpus Analysis tab bar as `tabs` draws it, behind the alias shim."""
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    tabs._accept_old_corpus_subtab()
+    st.tabs(list(tabs.CORPUS_SUBTABS), key="corpus_subtab", bind="query-params")
+
+
+def test_an_old_per_reader_link_opens_per_participant():
+    """#374: a bookmarked `?corpus_subtab=Per+reader` opens Per participant
+    (Streamlit itself would drop the unknown label and open Per text)."""
+    at = AppTest.from_function(_old_corpus_subtab_app)
+    at.query_params["corpus_subtab"] = "Per reader"
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert at.session_state["corpus_subtab"] == "Per participant"

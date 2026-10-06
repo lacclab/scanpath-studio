@@ -354,7 +354,7 @@ PARAM_CORPUS = "corpus"
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
 # labels (`tabs.CORPUS_SUBTABS`) can be renamed without breaking a bookmarked
-# view. Streamlit reads and writes these itself; `_apply_url_preset` and
+# view — unless the old label stays readable (`tabs.CORPUS_SUBTAB_ALIASES`). Streamlit reads and writes these itself; `_apply_url_preset` and
 # `_build_share_query` never see them.
 CORPUS_SUBTAB = "corpus_subtab"
 URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})

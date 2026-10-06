@@ -370,7 +370,10 @@ if TYPE_CHECKING:
 
 #: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
 #: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
-CORPUS_SUBTABS = ("Per text", "Per sentence", "Per reader", "Groups")
+CORPUS_SUBTABS = ("Per text", "Per sentence", "Per participant", "Groups")
+#: Subtab labels a bookmarked `?corpus_subtab=` may still carry, and the subtab
+#: each now opens (#374: "Per reader" became "Per participant").
+CORPUS_SUBTAB_ALIASES = {"Per reader": "Per participant"}
 
 
 def corpus_subtabs() -> tuple[str, ...]:
@@ -381,6 +384,21 @@ def corpus_subtabs() -> tuple[str, ...]:
         for name in CORPUS_SUBTABS
         if name != "Per sentence" or sentence_analysis_enabled()
     )
+
+
+def _accept_old_corpus_subtab() -> None:
+    """Open the renamed subtab for a label it used to have (#374).
+
+    The tab bar is bound to `?corpus_subtab=` and Streamlit drops a value that
+    is no longer a label, so an old link would land on Per text. The new label
+    is set through session state, which Streamlit then writes back to the URL."""
+    held = st.session_state.get(CORPUS_SUBTAB)
+    if held in CORPUS_SUBTAB_ALIASES:
+        st.session_state[CORPUS_SUBTAB] = CORPUS_SUBTAB_ALIASES[held]
+    elif held is None:
+        wanted = st.query_params.get(CORPUS_SUBTAB)
+        if wanted in CORPUS_SUBTAB_ALIASES:
+            st.session_state[CORPUS_SUBTAB] = CORPUS_SUBTAB_ALIASES[wanted]
 
 
 def _safe_filename(text: str) -> str:
@@ -8367,7 +8385,7 @@ def _render_comparison_figure(
 
 
 # -----------------------------------------------------------------------------
-# Corpus Analysis Tab  (Per text · Per reader · Groups subtabs)
+# Corpus Analysis Tab  (Per text · Per participant · Groups subtabs)
 # -----------------------------------------------------------------------------
 
 # --- Cached analysis wrappers ------------------------------------------------
@@ -8552,6 +8570,30 @@ _COMPUTED_READER_VIEWS = frozenset(
         "Reader summary table",
     }
 )
+
+#: What each Per participant / Groups view shows, as its section caption names
+#: it (#374 F15: the caption lists only the views this build offers).
+_VIEW_PHRASES = {
+    "Distribution vs cohort": "their distribution",
+    "Reading summary": "a reading-speed summary",
+    "Fixation duration over time": "fixation duration over the trial",
+    "Saccade vs fixation duration": "saccade vs fixation duration",
+    "Progressive vs regressive": "progressive vs regressive saccades",
+    "Landing-position curve": "the landing-position curve",
+    "Per-trial trend": "their per-trial trend",
+    "Distributions": "distribution summaries",
+    "Word profile": "the cohort word profile",
+    "Reader summary table": "a per-participant summary table",
+    "Group trend": "the group's trend",
+}
+
+
+def _views_phrase(views) -> str:
+    """The offered ``views`` as one prose list: "a, b and c"."""
+    parts = [_VIEW_PHRASES.get(view, view) for view in views]
+    if len(parts) < 2:
+        return "".join(parts)
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
 
 
 def _measure_note(host, measure: Measure, observation: str) -> None:
@@ -9522,8 +9564,8 @@ def render_corpus_analysis_tab(
     """Corpus Analysis tab — question-oriented analysis sections.
 
     Replaces the single *Aggregated Views* subtab with one subtab per question —
-    **Per text** (one text, many readers), **Per reader** (one reader, many
-    trials), and **Groups** (profile one cohort, or flip a toggle to compare two).
+    **Per text** (one text, many readers), **Per participant** (one participant,
+    many trials), and **Groups** (profile one cohort, or flip a toggle to compare two).
     Every section obeys the active trial filters and reads the shared measure
     picker / aggregation / spread / normalization controls. (**Generations** moved
     to the Scanpath view's **Comparisons** subtab — ENG-8.)
@@ -9598,6 +9640,7 @@ def _render_corpus_analysis_body(
     #
     with st.container(key="tutorial_corpus_subtabs"):
         names = corpus_subtabs()
+        _accept_old_corpus_subtab()
         panes = st.tabs(
             list(names),
             # PERF-9: the same PERF-3 fix the Scanpath subtabs got — `st.tabs`
@@ -9606,7 +9649,7 @@ def _render_corpus_analysis_body(
             # recomputed on every click anywhere in this view: 26 s per click at
             # 16× the demo. Keyed + `on_change="rerun"`, only the open tab runs.
             #
-            # Streamlit 1.65: bound to the URL, so `?corpus_subtab=Per+reader`
+            # Streamlit 1.65: bound to the URL, so `?corpus_subtab=Groups`
             # opens that section and the address bar names the one on screen.
             key=CORPUS_SUBTAB,
             on_change="rerun",
@@ -9615,7 +9658,7 @@ def _render_corpus_analysis_body(
         opened = dict(zip(names, panes, strict=True))
     text_tab, reader_tab, groups_tab = (
         opened["Per text"],
-        opened["Per reader"],
+        opened["Per participant"],
         opened["Groups"],
     )
     sentence_tab = opened.get("Per sentence")
@@ -9625,7 +9668,7 @@ def _render_corpus_analysis_body(
                 words_filtered, fixations_filtered, viz_settings=viz_settings, **common
             )
     if reader_tab.open:
-        with reader_tab, _recipe_section("Per reader"):
+        with reader_tab, _recipe_section("Per participant"):
             render_per_reader_tab(
                 words_filtered,
                 fixations_filtered,
@@ -10221,12 +10264,24 @@ def render_per_reader_tab(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
 ) -> None:
-    """*What does this reader look like?* — one reader, many trials (AN-7…13)."""
+    """*What does this participant look like?* — one participant, many trials
+    (AN-7…13)."""
+    views = [
+        "Distribution vs cohort",
+        "Reading summary",
+        "Fixation duration over time",
+        "Saccade vs fixation duration",
+        "Progressive vs regressive",
+        "Landing-position curve",
+        "Per-trial trend",
+    ]
+    if not computed_measures_enabled():
+        # Their numbers are worked out by the app from the fixations, not read
+        # from the dataset, and are held back until checked by hand.
+        views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
     st.caption(
-        "One **reader**, all their trials, against the cohort behind. Distributions, "
-        "a reading-speed summary, within-trial dynamics, the oculomotor scatter, "
-        "progressive/regressive saccades, the landing-position curve, and this "
-        "reader's per-trial trend."
+        "One **participant**, all their trials, against everyone else: "
+        f"{_views_phrase(views)}."
     )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
@@ -10247,19 +10302,6 @@ def render_per_reader_tab(
     )
     # BUG-103: a fresh copy out of the cache each rerun, named by its inputs.
     assign_derived(fix_e, "enrich_fix", (fixations_filtered, words_filtered))
-    views = [
-        "Distribution vs cohort",
-        "Reading summary",
-        "Fixation duration over time",
-        "Saccade vs fixation duration",
-        "Progressive vs regressive",
-        "Landing-position curve",
-        "Per-trial trend",
-    ]
-    if not computed_measures_enabled():
-        # Their numbers are worked out by the app from the fixations, not read
-        # from the dataset, and are held back until checked by hand.
-        views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
     if st.session_state.get("prdr_view") not in (None, *views):
         del st.session_state["prdr_view"]
     view = top[1].selectbox("View", views, key="prdr_view")
@@ -10580,10 +10622,12 @@ def render_per_group_tab(
     """*What does this group look like?* — a cohort by the active filter.
 
     The one-group case of the Groups tab (wrapped by ``render_groups_tab``)."""
+    views = ["Distributions", "Word profile", "Reader summary table", "Group trend"]
+    if not computed_measures_enabled():
+        views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
     st.caption(
         "Define a **group** (split a field or build a filter set), then pool its "
-        "readers: distribution summaries, the cohort word profile, a per-reader "
-        "summary table, and the group's trend."
+        f"participants: {_views_phrase(views)}."
     )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
@@ -10618,9 +10662,6 @@ def render_per_group_tab(
     if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
         st.info("This group is empty — widen the definition.")
         return
-    views = ["Distributions", "Word profile", "Reader summary table", "Group trend"]
-    if not computed_measures_enabled():
-        views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
     if st.session_state.get("pgrp_view") not in (None, *views):
         del st.session_state["pgrp_view"]
     view = st.selectbox("View", views, key="pgrp_view")

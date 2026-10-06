@@ -943,7 +943,7 @@ class TestSpotlightSelectorsResolve:
         row = '[data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]'
         assert f"{row} {{" in css
         assert "min-height: 2.7rem;" in css
-        assert "flex: 0 0 2.8rem;" in css
+        assert "flex: 0 0 2.6rem;" in css
         assert "width: 100% !important;" in css
         assert '\n    [class*="st-key-split_mode_"] {' not in css
         assert ".st-key-reset_viz_settings_btn button" in css

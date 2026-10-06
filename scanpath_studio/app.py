@@ -1248,8 +1248,9 @@ CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
 #: Set by :func:`_clear_and_start_over` on the emptied session, so the first run
 #: of the fresh start says what happened.
 STARTED_OVER_KEY = "_started_over"
-#: What survives starting over: dismissing the welcome tour is not "your work".
-_KEPT_ON_START_OVER = ("_tour_dismissed",)
+#: What survives starting over: having seen or dismissed the welcome tour is not
+#: "your work", and the tour reopening over a fresh start would be noise.
+_KEPT_ON_START_OVER = ("_tour_dismissed", "tour_seen")
 
 
 def _clear_and_start_over() -> None:

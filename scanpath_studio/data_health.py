@@ -177,8 +177,8 @@ CHECKS: tuple[_Check, ...] = (
         ("x", "y", "width", "height"),
         _box_masks,
         "They stay in every table and export. A box with no area holds no "
-        "fixation, so fixations reach such a word only through the nearest-word "
-        "fallback, and the box draws as a line or not at all; a box with an "
+        "fixation, so fixations reach such a word only through the data's own "
+        "word ids, and the box draws as a line or not at all; a box with an "
         "infinite size or position is left out of the figure.",
     ),
     _Check(

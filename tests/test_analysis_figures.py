@@ -111,6 +111,41 @@ class TestTrendFigures:
         assert fig.layout.xaxis.title.text == "Trial Index"
         assert fig.layout.yaxis.title.text == "Fixation duration (ms)"
 
+    def test_the_trend_breaks_at_a_filtered_out_trial(self):
+        """#374 F35: no segment, and no band, crosses a missing trial."""
+        df = pd.DataFrame(
+            {
+                "trial_index": [1, 2, 5, 6],
+                "value": [10.0, 12.0, 11.0, 9.0],
+                "sem": [1.0, 1.0, 1.0, 1.0],
+            }
+        )
+        fig = plots.make_trend_figure(
+            df,
+            x_col="trial_index",
+            x_label="Trial order (TRIAL_INDEX)",
+            y_label="ms",
+            title="t",
+            break_gaps=True,
+            **_FW,
+        )
+        band, line = fig.data
+        assert list(line.x) == [1, 2, None, 5, 6]
+        assert list(band.x) == [1, 2, 2, 1, None, 5, 6, 6, 5]
+        assert fig.layout.xaxis.title.text == "Trial order (TRIAL_INDEX)"
+        # Non-integer positions (time, fractions) are never broken.
+        assert plots.break_at_gaps([0.5, 3.5], [1, 2]) == ([0.5, 3.5], [1, 2])
+
+    def test_the_trial_order_axis_names_its_column(self, demo):
+        """#374 F35: the demo carries two index columns that disagree."""
+        from scanpath_studio.data import trial_order_label
+
+        assert trial_order_label(demo.fixations) == "Trial order (trial_index)"
+        no_index = demo.fixations.drop(
+            columns=[c for c in ("trial_index", "TRIAL_INDEX") if c in demo.fixations]
+        )
+        assert trial_order_label(no_index) == "Trial order (by fixation time)"
+
     def test_per_participant_lines_overlay_the_trend(self, demo):
         """The Groups subtab's "Per-reader behind" overlay (AN-17)."""
         fx = demo.fixations.assign(trial_index=derive_trial_index(demo.fixations))

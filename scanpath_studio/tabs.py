@@ -235,6 +235,7 @@ from scanpath_studio.data import (
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
+    trial_order_label,
     user_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
@@ -291,6 +292,7 @@ from scanpath_studio.plots import (
     animation_clip_frame_ms,
     animation_playback_ms,
     animation_timeline_summary,
+    break_at_gaps,
     build_scanpath_replay,
     make_comparison_figure,
     make_density_scatter_figure,
@@ -10569,14 +10571,17 @@ def render_per_reader_tab(
         sub = frame[frame["participant_id"].astype(str) == str(pid)].copy()
         if not has_explicit_trial_index(sub):
             st.caption(f"{ICONS['info']} Trial order derived from fixation timestamps.")
+        x_label = trial_order_label(sub)
         sub["trial_index"] = derive_trial_index(sub)
         df = metric_by_trial_index(sub, measure.column, agg=agg)
         _chart(
             make_trend_figure(
                 df,
                 x_col="trial_index",
+                x_label=x_label,
                 y_label=measure.axis_label,
-                title=f"{measure.label} by trial index — {pid}",
+                title=f"{measure.label} by trial order — {pid}",
+                break_gaps=True,
                 **fw,
             )
         )
@@ -10878,22 +10883,26 @@ def render_per_group_tab(
         )
         frame = fix_g if measure.frame == "fixations" else words_g
         sub = frame.copy()
+        x_label = trial_order_label(sub)
         sub["trial_index"] = derive_trial_index(sub)
         df = metric_by_trial_index(sub, measure.column, agg=agg)
         fig = make_trend_figure(
             df,
             x_col="trial_index",
+            x_label=x_label,
             y_label=measure.axis_label,
-            title=f"{measure.label} by trial index — {label}",
+            title=f"{measure.label} by trial order — {label}",
+            break_gaps=True,
             **fw,
         )
         if show_readers:
             per = per_participant_trend(sub, measure.column, agg=agg)
             for rdr, grp in per.groupby("participant_id"):
                 grp = grp.sort_values("trial_index")
+                gx, gy = break_at_gaps(grp["trial_index"], grp["value"])
                 fig.add_scatter(
-                    x=grp["trial_index"],
-                    y=grp["value"],
+                    x=gx,
+                    y=gy,
                     mode="lines",
                     line=dict(color="rgba(150,150,150,0.35)", width=1),
                     name=str(rdr),

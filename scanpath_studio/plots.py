@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import copy
 import html
+import itertools
 import math
 import re
 import struct
@@ -7270,6 +7271,37 @@ def make_metric_convergence_figure(
     return fig
 
 
+def gap_runs(xs) -> list[slice]:
+    """Split ``xs`` (sorted) into runs with no gap: a new run starts where two
+    whole-number ``xs`` are more than 1 apart — a trial the filters left out
+    (#374 F35). Non-integer ``xs`` are one run."""
+    xs = list(xs)
+    try:
+        whole = all(float(x).is_integer() for x in xs)
+    except (TypeError, ValueError):
+        whole = False
+    if not whole:
+        return [slice(0, len(xs))]
+    cuts = [i for i in range(1, len(xs)) if float(xs[i]) - float(xs[i - 1]) > 1]
+    bounds = [0, *cuts, len(xs)]
+    return [slice(a, b) for a, b in itertools.pairwise(bounds)]
+
+
+def break_at_gaps(xs, ys) -> tuple[list, list]:
+    """``xs``/``ys`` with a ``None`` at every gap (see :func:`gap_runs`), so a
+    Plotly line stops there instead of joining across it."""
+    xs, ys = list(xs), list(ys)
+    out_x: list = []
+    out_y: list = []
+    for i, run in enumerate(gap_runs(xs)):
+        if i:
+            out_x.append(None)
+            out_y.append(None)
+        out_x += xs[run]
+        out_y += ys[run]
+    return out_x, out_y
+
+
 def make_trend_figure(
     df: pd.DataFrame,
     *,
@@ -7281,6 +7313,7 @@ def make_trend_figure(
     font_family: str,
     height: int = 340,
     x_label: str | None = None,
+    break_gaps: bool = False,
 ) -> go.Figure:
     """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
 
@@ -7288,7 +7321,8 @@ def make_trend_figure(
     ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
     subtabs for the trial-index trend. ``x_label`` titles the x axis — the
     caller's name for what ``x_col`` holds (AN-9's frame calls it ``x``, which
-    is no title); without one, ``x_col`` humanized.
+    is no title); without one, ``x_col`` humanized. ``break_gaps`` stops the
+    line and band at a missing whole-number ``x`` (a filtered-out trial).
     """
     if x_label is None:
         x_label = x_col.replace("_", " ").title()
@@ -7305,11 +7339,22 @@ def make_trend_figure(
     xs = df[x_col].to_numpy()
     ys = df["value"].to_numpy()
     sem = df["sem"].to_numpy() if "sem" in df.columns else np.zeros(len(xs))
+    runs = gap_runs(xs) if break_gaps else [slice(0, len(xs))]
+    # One closed band per unbroken run, `None`-separated.
+    band_x: list = []
+    band_y: list = []
+    for i, run in enumerate(runs):
+        if i:
+            band_x.append(None)
+            band_y.append(None)
+        band_x += [*xs[run], *xs[run][::-1]]
+        band_y += [*(ys[run] + sem[run]), *(ys[run] - sem[run])[::-1]]
+    line_x, line_y = break_at_gaps(xs, ys) if break_gaps else (xs, ys)
     # ±SEM band (drawn first so the line sits on top).
     fig.add_trace(
         go.Scatter(
-            x=np.concatenate([xs, xs[::-1]]),
-            y=np.concatenate([ys + sem, (ys - sem)[::-1]]),
+            x=band_x,
+            y=band_y,
             fill="toself",
             fillcolor="rgba(31,119,180,0.15)",
             line=dict(width=0),
@@ -7320,8 +7365,8 @@ def make_trend_figure(
     )
     fig.add_trace(
         go.Scatter(
-            x=xs,
-            y=ys,
+            x=line_x,
+            y=line_y,
             mode="lines+markers",
             line=dict(color=COMPARISON_PALETTE[0], width=2),
             marker=dict(size=5, color=COMPARISON_PALETTE[0]),

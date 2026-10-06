@@ -4714,6 +4714,18 @@ def has_explicit_trial_index(frame: pd.DataFrame) -> bool:
     return any(c in frame.columns for c in ("trial_index", "TRIAL_INDEX"))
 
 
+def trial_order_label(frame: pd.DataFrame) -> str:
+    """The axis title for :func:`derive_trial_index`'s values: the column it
+    reads, or how it ordered the trials without one (#374 F35 — the demo
+    carries both ``trial_index`` and ``TRIAL_INDEX``, which differ)."""
+    for col in ("trial_index", "TRIAL_INDEX"):
+        if col in frame.columns:
+            return f"Trial order ({col})"
+    if "timestamp_ms" in frame.columns:
+        return "Trial order (by fixation time)"
+    return "Trial order (as listed)"
+
+
 def derive_trial_index(frame: pd.DataFrame) -> pd.Series:
     """Per-participant 1-based trial order, aligned to ``frame``'s rows.
 

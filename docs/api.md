@@ -3,7 +3,7 @@
 The public API follows one pipeline:
 
 ```text
-load data → list trials → plot or measure → save
+load data → list trials → plot → save
 ```
 
 ```python
@@ -25,7 +25,7 @@ names, which are the same for every dataset. On the bundled demo, the first
 steps print this (run when the docs are built):
 
 ```python exec="true" source="above" result="text" session="api"
-import scanpath_studio as sps  # markdown-exec: hide
+import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head(3))
@@ -136,4 +136,4 @@ print(figure_options_table())
 For a batch loop, see [Automation](automation.md#batch-pattern). GIF and MP4
 export uses
 `scanpath_studio.animation_export.export_animation` and requires Kaleido plus
-Chrome/Chromium.
+Chrome, Chromium or Edge.

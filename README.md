@@ -11,11 +11,11 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22933884.svg)](https://doi.org/10.5281/zenodo.22933884)
 
 **Scanpath Studio shows you how people read.** Load eye-tracking-while-reading
-data and watch each reading unfold over the text, exactly where it sat on the
-screen — then compare readers, analyse a corpus, and export figures ready for a
-paper.
+data and watch each trial unfold over the text, exactly where it sat on the
+screen — then compare participants, analyze a corpus, and export figures ready
+for a paper.
 
-![Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-reader comparison and Corpus Analysis](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
+![Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-participant comparison and Corpus Analysis](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
 ## Get started
 
@@ -43,18 +43,18 @@ corpus downloads.
 - **See the reading:** fixations, saccades, heatmaps and raw gaze over the text
   at its true on-screen position, with fixations colored by any column.
 - **Replay it** in real time or faster, and export it as HTML, GIF or MP4.
-- **Compare readers:** overlay two trials or place them side by side — even
+- **Compare participants:** overlay two trials or place them side by side — even
   from two different datasets.
-- **Analyse a corpus** per text, reader or group, with every measure
-  documented in the
+- **Analyze a corpus** per text, participant or group, from the reading
+  measures your data brings, each defined in the
   [computation register](https://lacclab.github.io/scanpath-studio/computations/).
 - **Triage, export and share:** tag and filter trials, export one figure or a
   zip for every trial, and share a link that reopens the exact view.
 
 | | |
 |:---:|:---:|
-| ![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif) | ![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png) |
-| A reading, replayed fixation by fixation | Two readers of one paragraph, overlaid ([animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)) |
+| ![A scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif) | ![Two participants reading the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png) |
+| A trial, replayed fixation by fixation | Two participants on one paragraph, overlaid ([animated](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/demo_dual_scanpath.gif)) |
 
 The app has three views: 🗺️ **Scanpath** for one trial at a time, 📊 **Corpus
 Analysis** for the whole dataset, and 🗂️ **Data Management** for loading and configuring
@@ -92,8 +92,8 @@ sps.save_figure(fig, "scanpath.html")
 
 For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or
 use `sps.load_scanpath_data("ia.csv", "fix.csv")`. HTML output needs nothing
-else; PNG, SVG, PDF, GIF and MP4 go through Kaleido, which needs Chrome once:
-`plotly_get_chrome -y`. The
+else; PNG, SVG and PDF (and GIF/MP4 replays) go through Kaleido, which needs
+Chrome, Chromium or Edge, or run `plotly_get_chrome -y` once. The
 [CLI reference](https://lacclab.github.io/scanpath-studio/cli/) and the
 [Python API reference](https://lacclab.github.io/scanpath-studio/api/) list
 every flag and parameter.

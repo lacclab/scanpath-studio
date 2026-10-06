@@ -1,56 +1,2615 @@
 {
  "date": "2026-10-06",
- "pypistats": "unavailable (pypistats.org blocked by egress proxy)",
- "pypi_json": {
-  "version": "0.34.0",
-  "urls": [
-   {
-    "comment_text": null,
-    "core-metadata": {
-     "sha256": "d7569e79d2e96a109685fa74de6bb0077971dd9c52a667969a92579614f967cc"
-    },
-    "digests": {
-     "blake2b_256": "924b86dab168cee7d8acf038a2c6d75aec5b4101932ce77a9262c1b4e1efda44",
-     "md5": "c413f0544f6cd21b6e28dee847c9284a",
-     "sha256": "c635c0954859dccb6f61e8c0985178dc1b57bcbf91e94bd42d5917e4b839a3e4"
-    },
-    "downloads": -1,
-    "filename": "scanpath_studio-0.34.0-py3-none-any.whl",
-    "has_sig": false,
-    "md5_digest": "c413f0544f6cd21b6e28dee847c9284a",
-    "packagetype": "bdist_wheel",
-    "python_version": "py3",
-    "requires_python": ">=3.11",
-    "size": 3092824,
-    "upload_time": "2026-10-06T08:43:49",
-    "upload_time_iso_8601": "2026-10-06T08:43:49.091106Z",
-    "url": "https://files.pythonhosted.org/packages/92/4b/86dab168cee7d8acf038a2c6d75aec5b4101932ce77a9262c1b4e1efda44/scanpath_studio-0.34.0-py3-none-any.whl",
-    "yanked": false,
-    "yanked_reason": null
+ "pypistats": {
+  "recent": {
+   "data": {
+    "last_day": 47,
+    "last_month": 737,
+    "last_week": 372
    },
-   {
-    "comment_text": null,
-    "core-metadata": false,
-    "digests": {
-     "blake2b_256": "538935d6aecbbbf84d1a4026eaa9f45b5a1325d798022f52dc08c087c02e4c8b",
-     "md5": "299339ea508c9b7cb2040239ff23ac8a",
-     "sha256": "80ed32a644cac906bb7688b786f433e75bea8317c3771da488b0dedcd1117ad6"
+   "package": "scanpath-studio",
+   "type": "recent_downloads"
+  },
+  "overall": {
+   "data": [
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-06",
+     "downloads": 301
     },
-    "downloads": -1,
-    "filename": "scanpath_studio-0.34.0.tar.gz",
-    "has_sig": false,
-    "md5_digest": "299339ea508c9b7cb2040239ff23ac8a",
-    "packagetype": "sdist",
-    "python_version": "source",
-    "requires_python": ">=3.11",
-    "size": 3042691,
-    "upload_time": "2026-10-06T08:43:51",
-    "upload_time_iso_8601": "2026-10-06T08:43:51.362378Z",
-    "url": "https://files.pythonhosted.org/packages/53/89/35d6aecbbbf84d1a4026eaa9f45b5a1325d798022f52dc08c087c02e4c8b/scanpath_studio-0.34.0.tar.gz",
-    "yanked": false,
-    "yanked_reason": null
-   }
-  ]
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-07",
+     "downloads": 15
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-08",
+     "downloads": 18
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-09",
+     "downloads": 205
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-10",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-11",
+     "downloads": 256
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-12",
+     "downloads": 110
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-13",
+     "downloads": 157
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-14",
+     "downloads": 134
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-15",
+     "downloads": 18
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-16",
+     "downloads": 21
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-17",
+     "downloads": 135
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-18",
+     "downloads": 257
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-19",
+     "downloads": 93
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-20",
+     "downloads": 7
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-21",
+     "downloads": 9
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-22",
+     "downloads": 9
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-23",
+     "downloads": 9
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-24",
+     "downloads": 91
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-25",
+     "downloads": 3
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-26",
+     "downloads": 20
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-27",
+     "downloads": 42
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-28",
+     "downloads": 7
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-29",
+     "downloads": 4
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-06-30",
+     "downloads": 36
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-01",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-03",
+     "downloads": 124
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-04",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-06",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-07",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-09",
+     "downloads": 18
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-10",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-11",
+     "downloads": 10
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-12",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-13",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-16",
+     "downloads": 100
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-17",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-18",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-19",
+     "downloads": 14
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-20",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-21",
+     "downloads": 4
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-22",
+     "downloads": 41
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-23",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-24",
+     "downloads": 3
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-25",
+     "downloads": 15
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-26",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-27",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-28",
+     "downloads": 4
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-07-30",
+     "downloads": 14
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-02",
+     "downloads": 78
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-03",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-04",
+     "downloads": 151
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-05",
+     "downloads": 88
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-06",
+     "downloads": 27
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-07",
+     "downloads": 21
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-08",
+     "downloads": 108
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-09",
+     "downloads": 13
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-10",
+     "downloads": 6
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-11",
+     "downloads": 4
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-12",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-13",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-14",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-15",
+     "downloads": 10
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-17",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-18",
+     "downloads": 9
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-19",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-21",
+     "downloads": 82
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-22",
+     "downloads": 12
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-23",
+     "downloads": 7
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-24",
+     "downloads": 74
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-28",
+     "downloads": 200
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-29",
+     "downloads": 22
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-30",
+     "downloads": 15
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-08-31",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-01",
+     "downloads": 13
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-02",
+     "downloads": 3
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-03",
+     "downloads": 5
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-04",
+     "downloads": 45
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-05",
+     "downloads": 7
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-06",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-07",
+     "downloads": 7
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-08",
+     "downloads": 5
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-09",
+     "downloads": 14
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-10",
+     "downloads": 4
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-11",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-12",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-13",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-14",
+     "downloads": 12
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-15",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-16",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-18",
+     "downloads": 3
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-21",
+     "downloads": 5
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-22",
+     "downloads": 2
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-23",
+     "downloads": 1
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-24",
+     "downloads": 84
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-25",
+     "downloads": 5
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-26",
+     "downloads": 107
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-27",
+     "downloads": 100
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-28",
+     "downloads": 7
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-29",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-09-30",
+     "downloads": 97
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-10-01",
+     "downloads": 97
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-10-02",
+     "downloads": 8
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-10-03",
+     "downloads": 22
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-10-04",
+     "downloads": 93
+    },
+    {
+     "category": "without_mirrors",
+     "date": "2026-10-05",
+     "downloads": 47
+    }
+   ],
+   "package": "scanpath-studio",
+   "type": "overall_downloads"
+  },
+  "system": {
+   "data": [
+    {
+     "category": "Darwin",
+     "date": "2026-06-08",
+     "downloads": 12
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-09",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-10",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-11",
+     "downloads": 6
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-12",
+     "downloads": 10
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-13",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-14",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-17",
+     "downloads": 2
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-18",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-06-26",
+     "downloads": 8
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-07-03",
+     "downloads": 6
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-07-16",
+     "downloads": 2
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-07-17",
+     "downloads": 2
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-07-27",
+     "downloads": 2
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-02",
+     "downloads": 2
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-04",
+     "downloads": 10
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-06",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-09",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-22",
+     "downloads": 2
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-28",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-08-31",
+     "downloads": 6
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-09-23",
+     "downloads": 1
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-09-24",
+     "downloads": 5
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-09-26",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-09-27",
+     "downloads": 6
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-09-30",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-10-01",
+     "downloads": 4
+    },
+    {
+     "category": "Darwin",
+     "date": "2026-10-04",
+     "downloads": 4
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-06",
+     "downloads": 55
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-07",
+     "downloads": 2
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-09",
+     "downloads": 34
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-11",
+     "downloads": 35
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-12",
+     "downloads": 19
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-13",
+     "downloads": 15
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-14",
+     "downloads": 17
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-17",
+     "downloads": 19
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-18",
+     "downloads": 30
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-21",
+     "downloads": 2
+    },
+    {
+     "category": "Linux",
+     "date": "2026-06-24",
+     "downloads": 15
+    },
+    {
+     "category": "Linux",
+     "date": "2026-07-03",
+     "downloads": 10
+    },
+    {
+     "category": "Linux",
+     "date": "2026-07-07",
+     "downloads": 1
+    },
+    {
+     "category": "Linux",
+     "date": "2026-07-16",
+     "downloads": 15
+    },
+    {
+     "category": "Linux",
+     "date": "2026-07-28",
+     "downloads": 2
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-02",
+     "downloads": 21
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-04",
+     "downloads": 28
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-05",
+     "downloads": 9
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-08",
+     "downloads": 19
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-21",
+     "downloads": 20
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-23",
+     "downloads": 2
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-28",
+     "downloads": 18
+    },
+    {
+     "category": "Linux",
+     "date": "2026-08-29",
+     "downloads": 1
+    },
+    {
+     "category": "Linux",
+     "date": "2026-09-24",
+     "downloads": 6
+    },
+    {
+     "category": "Linux",
+     "date": "2026-09-26",
+     "downloads": 7
+    },
+    {
+     "category": "Linux",
+     "date": "2026-09-27",
+     "downloads": 9
+    },
+    {
+     "category": "Linux",
+     "date": "2026-09-30",
+     "downloads": 10
+    },
+    {
+     "category": "Linux",
+     "date": "2026-10-01",
+     "downloads": 8
+    },
+    {
+     "category": "Linux",
+     "date": "2026-10-04",
+     "downloads": 9
+    },
+    {
+     "category": "Linux",
+     "date": "2026-10-05",
+     "downloads": 1
+    },
+    {
+     "category": "Windows",
+     "date": "2026-07-28",
+     "downloads": 2
+    },
+    {
+     "category": "Windows",
+     "date": "2026-08-04",
+     "downloads": 2
+    },
+    {
+     "category": "Windows",
+     "date": "2026-08-11",
+     "downloads": 2
+    },
+    {
+     "category": "Windows",
+     "date": "2026-08-17",
+     "downloads": 2
+    },
+    {
+     "category": "Windows",
+     "date": "2026-09-15",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-06-06",
+     "downloads": 246
+    },
+    {
+     "category": "null",
+     "date": "2026-06-07",
+     "downloads": 13
+    },
+    {
+     "category": "null",
+     "date": "2026-06-08",
+     "downloads": 6
+    },
+    {
+     "category": "null",
+     "date": "2026-06-09",
+     "downloads": 167
+    },
+    {
+     "category": "null",
+     "date": "2026-06-10",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-06-11",
+     "downloads": 215
+    },
+    {
+     "category": "null",
+     "date": "2026-06-12",
+     "downloads": 81
+    },
+    {
+     "category": "null",
+     "date": "2026-06-13",
+     "downloads": 138
+    },
+    {
+     "category": "null",
+     "date": "2026-06-14",
+     "downloads": 113
+    },
+    {
+     "category": "null",
+     "date": "2026-06-15",
+     "downloads": 18
+    },
+    {
+     "category": "null",
+     "date": "2026-06-16",
+     "downloads": 21
+    },
+    {
+     "category": "null",
+     "date": "2026-06-17",
+     "downloads": 114
+    },
+    {
+     "category": "null",
+     "date": "2026-06-18",
+     "downloads": 223
+    },
+    {
+     "category": "null",
+     "date": "2026-06-19",
+     "downloads": 93
+    },
+    {
+     "category": "null",
+     "date": "2026-06-20",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-06-21",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-06-22",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-06-23",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-06-24",
+     "downloads": 76
+    },
+    {
+     "category": "null",
+     "date": "2026-06-25",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-06-26",
+     "downloads": 12
+    },
+    {
+     "category": "null",
+     "date": "2026-06-27",
+     "downloads": 42
+    },
+    {
+     "category": "null",
+     "date": "2026-06-28",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-06-29",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-06-30",
+     "downloads": 36
+    },
+    {
+     "category": "null",
+     "date": "2026-07-01",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-07-03",
+     "downloads": 108
+    },
+    {
+     "category": "null",
+     "date": "2026-07-04",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-07-06",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-09",
+     "downloads": 18
+    },
+    {
+     "category": "null",
+     "date": "2026-07-10",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-11",
+     "downloads": 10
+    },
+    {
+     "category": "null",
+     "date": "2026-07-12",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-13",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-16",
+     "downloads": 83
+    },
+    {
+     "category": "null",
+     "date": "2026-07-17",
+     "downloads": 6
+    },
+    {
+     "category": "null",
+     "date": "2026-07-18",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-07-19",
+     "downloads": 14
+    },
+    {
+     "category": "null",
+     "date": "2026-07-20",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-21",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-07-22",
+     "downloads": 41
+    },
+    {
+     "category": "null",
+     "date": "2026-07-23",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-07-24",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-07-25",
+     "downloads": 15
+    },
+    {
+     "category": "null",
+     "date": "2026-07-26",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-30",
+     "downloads": 14
+    },
+    {
+     "category": "null",
+     "date": "2026-08-02",
+     "downloads": 55
+    },
+    {
+     "category": "null",
+     "date": "2026-08-03",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-04",
+     "downloads": 111
+    },
+    {
+     "category": "null",
+     "date": "2026-08-05",
+     "downloads": 79
+    },
+    {
+     "category": "null",
+     "date": "2026-08-06",
+     "downloads": 23
+    },
+    {
+     "category": "null",
+     "date": "2026-08-07",
+     "downloads": 21
+    },
+    {
+     "category": "null",
+     "date": "2026-08-08",
+     "downloads": 89
+    },
+    {
+     "category": "null",
+     "date": "2026-08-09",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-08-10",
+     "downloads": 6
+    },
+    {
+     "category": "null",
+     "date": "2026-08-11",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-12",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-08-13",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-14",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-15",
+     "downloads": 10
+    },
+    {
+     "category": "null",
+     "date": "2026-08-18",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-08-19",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-21",
+     "downloads": 62
+    },
+    {
+     "category": "null",
+     "date": "2026-08-22",
+     "downloads": 10
+    },
+    {
+     "category": "null",
+     "date": "2026-08-23",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-08-24",
+     "downloads": 74
+    },
+    {
+     "category": "null",
+     "date": "2026-08-28",
+     "downloads": 178
+    },
+    {
+     "category": "null",
+     "date": "2026-08-29",
+     "downloads": 21
+    },
+    {
+     "category": "null",
+     "date": "2026-08-30",
+     "downloads": 15
+    },
+    {
+     "category": "null",
+     "date": "2026-08-31",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-01",
+     "downloads": 13
+    },
+    {
+     "category": "null",
+     "date": "2026-09-02",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-09-03",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-04",
+     "downloads": 45
+    },
+    {
+     "category": "null",
+     "date": "2026-09-05",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-09-06",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-07",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-09-08",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-09",
+     "downloads": 14
+    },
+    {
+     "category": "null",
+     "date": "2026-09-10",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-09-11",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-12",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-09-13",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-14",
+     "downloads": 12
+    },
+    {
+     "category": "null",
+     "date": "2026-09-16",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-09-18",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-09-21",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-22",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-24",
+     "downloads": 73
+    },
+    {
+     "category": "null",
+     "date": "2026-09-25",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-26",
+     "downloads": 96
+    },
+    {
+     "category": "null",
+     "date": "2026-09-27",
+     "downloads": 85
+    },
+    {
+     "category": "null",
+     "date": "2026-09-28",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-09-29",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-09-30",
+     "downloads": 83
+    },
+    {
+     "category": "null",
+     "date": "2026-10-01",
+     "downloads": 85
+    },
+    {
+     "category": "null",
+     "date": "2026-10-02",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-10-03",
+     "downloads": 22
+    },
+    {
+     "category": "null",
+     "date": "2026-10-04",
+     "downloads": 80
+    },
+    {
+     "category": "null",
+     "date": "2026-10-05",
+     "downloads": 46
+    }
+   ],
+   "package": "scanpath-studio",
+   "type": "system_downloads"
+  },
+  "python_minor": {
+   "data": [
+    {
+     "category": "3.11",
+     "date": "2026-06-06",
+     "downloads": 3
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-08",
+     "downloads": 12
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-09",
+     "downloads": 6
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-10",
+     "downloads": 4
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-11",
+     "downloads": 8
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-12",
+     "downloads": 11
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-13",
+     "downloads": 5
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-14",
+     "downloads": 5
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-17",
+     "downloads": 3
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-18",
+     "downloads": 6
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-24",
+     "downloads": 3
+    },
+    {
+     "category": "3.11",
+     "date": "2026-06-26",
+     "downloads": 8
+    },
+    {
+     "category": "3.11",
+     "date": "2026-07-03",
+     "downloads": 6
+    },
+    {
+     "category": "3.11",
+     "date": "2026-07-07",
+     "downloads": 1
+    },
+    {
+     "category": "3.11",
+     "date": "2026-07-16",
+     "downloads": 3
+    },
+    {
+     "category": "3.11",
+     "date": "2026-07-17",
+     "downloads": 2
+    },
+    {
+     "category": "3.11",
+     "date": "2026-07-28",
+     "downloads": 2
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-02",
+     "downloads": 5
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-04",
+     "downloads": 18
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-05",
+     "downloads": 1
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-06",
+     "downloads": 4
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-08",
+     "downloads": 1
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-09",
+     "downloads": 4
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-11",
+     "downloads": 2
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-21",
+     "downloads": 6
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-22",
+     "downloads": 2
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-28",
+     "downloads": 8
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-29",
+     "downloads": 1
+    },
+    {
+     "category": "3.11",
+     "date": "2026-08-31",
+     "downloads": 6
+    },
+    {
+     "category": "3.11",
+     "date": "2026-09-24",
+     "downloads": 7
+    },
+    {
+     "category": "3.11",
+     "date": "2026-09-26",
+     "downloads": 7
+    },
+    {
+     "category": "3.11",
+     "date": "2026-09-27",
+     "downloads": 9
+    },
+    {
+     "category": "3.11",
+     "date": "2026-09-30",
+     "downloads": 7
+    },
+    {
+     "category": "3.11",
+     "date": "2026-10-01",
+     "downloads": 7
+    },
+    {
+     "category": "3.11",
+     "date": "2026-10-04",
+     "downloads": 6
+    },
+    {
+     "category": "3.11",
+     "date": "2026-10-05",
+     "downloads": 1
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-06",
+     "downloads": 52
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-07",
+     "downloads": 2
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-09",
+     "downloads": 32
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-11",
+     "downloads": 32
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-12",
+     "downloads": 18
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-13",
+     "downloads": 14
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-14",
+     "downloads": 16
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-17",
+     "downloads": 18
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-18",
+     "downloads": 28
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-21",
+     "downloads": 2
+    },
+    {
+     "category": "3.12",
+     "date": "2026-06-24",
+     "downloads": 12
+    },
+    {
+     "category": "3.12",
+     "date": "2026-07-03",
+     "downloads": 10
+    },
+    {
+     "category": "3.12",
+     "date": "2026-07-16",
+     "downloads": 14
+    },
+    {
+     "category": "3.12",
+     "date": "2026-07-28",
+     "downloads": 2
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-02",
+     "downloads": 16
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-04",
+     "downloads": 18
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-05",
+     "downloads": 6
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-08",
+     "downloads": 14
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-17",
+     "downloads": 2
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-21",
+     "downloads": 12
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-23",
+     "downloads": 2
+    },
+    {
+     "category": "3.12",
+     "date": "2026-08-28",
+     "downloads": 12
+    },
+    {
+     "category": "3.12",
+     "date": "2026-09-15",
+     "downloads": 1
+    },
+    {
+     "category": "3.12",
+     "date": "2026-09-23",
+     "downloads": 1
+    },
+    {
+     "category": "3.12",
+     "date": "2026-09-24",
+     "downloads": 3
+    },
+    {
+     "category": "3.12",
+     "date": "2026-09-26",
+     "downloads": 3
+    },
+    {
+     "category": "3.12",
+     "date": "2026-09-27",
+     "downloads": 5
+    },
+    {
+     "category": "3.12",
+     "date": "2026-09-30",
+     "downloads": 6
+    },
+    {
+     "category": "3.12",
+     "date": "2026-10-01",
+     "downloads": 3
+    },
+    {
+     "category": "3.12",
+     "date": "2026-10-04",
+     "downloads": 6
+    },
+    {
+     "category": "3.13",
+     "date": "2026-06-11",
+     "downloads": 1
+    },
+    {
+     "category": "3.14",
+     "date": "2026-07-27",
+     "downloads": 2
+    },
+    {
+     "category": "3.14",
+     "date": "2026-08-02",
+     "downloads": 2
+    },
+    {
+     "category": "3.14",
+     "date": "2026-08-04",
+     "downloads": 4
+    },
+    {
+     "category": "3.14",
+     "date": "2026-08-05",
+     "downloads": 2
+    },
+    {
+     "category": "3.14",
+     "date": "2026-08-08",
+     "downloads": 2
+    },
+    {
+     "category": "3.14",
+     "date": "2026-08-21",
+     "downloads": 2
+    },
+    {
+     "category": "3.14",
+     "date": "2026-08-28",
+     "downloads": 2
+    },
+    {
+     "category": "3.14",
+     "date": "2026-09-24",
+     "downloads": 1
+    },
+    {
+     "category": "3.14",
+     "date": "2026-09-26",
+     "downloads": 1
+    },
+    {
+     "category": "3.14",
+     "date": "2026-09-27",
+     "downloads": 1
+    },
+    {
+     "category": "3.14",
+     "date": "2026-09-30",
+     "downloads": 1
+    },
+    {
+     "category": "3.14",
+     "date": "2026-10-01",
+     "downloads": 1
+    },
+    {
+     "category": "3.14",
+     "date": "2026-10-04",
+     "downloads": 1
+    },
+    {
+     "category": "3.9",
+     "date": "2026-08-08",
+     "downloads": 2
+    },
+    {
+     "category": "3.9",
+     "date": "2026-10-01",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-06-06",
+     "downloads": 246
+    },
+    {
+     "category": "null",
+     "date": "2026-06-07",
+     "downloads": 13
+    },
+    {
+     "category": "null",
+     "date": "2026-06-08",
+     "downloads": 6
+    },
+    {
+     "category": "null",
+     "date": "2026-06-09",
+     "downloads": 167
+    },
+    {
+     "category": "null",
+     "date": "2026-06-10",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-06-11",
+     "downloads": 215
+    },
+    {
+     "category": "null",
+     "date": "2026-06-12",
+     "downloads": 81
+    },
+    {
+     "category": "null",
+     "date": "2026-06-13",
+     "downloads": 138
+    },
+    {
+     "category": "null",
+     "date": "2026-06-14",
+     "downloads": 113
+    },
+    {
+     "category": "null",
+     "date": "2026-06-15",
+     "downloads": 18
+    },
+    {
+     "category": "null",
+     "date": "2026-06-16",
+     "downloads": 21
+    },
+    {
+     "category": "null",
+     "date": "2026-06-17",
+     "downloads": 114
+    },
+    {
+     "category": "null",
+     "date": "2026-06-18",
+     "downloads": 223
+    },
+    {
+     "category": "null",
+     "date": "2026-06-19",
+     "downloads": 93
+    },
+    {
+     "category": "null",
+     "date": "2026-06-20",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-06-21",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-06-22",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-06-23",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-06-24",
+     "downloads": 76
+    },
+    {
+     "category": "null",
+     "date": "2026-06-25",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-06-26",
+     "downloads": 12
+    },
+    {
+     "category": "null",
+     "date": "2026-06-27",
+     "downloads": 42
+    },
+    {
+     "category": "null",
+     "date": "2026-06-28",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-06-29",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-06-30",
+     "downloads": 36
+    },
+    {
+     "category": "null",
+     "date": "2026-07-01",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-07-03",
+     "downloads": 108
+    },
+    {
+     "category": "null",
+     "date": "2026-07-04",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-07-06",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-09",
+     "downloads": 18
+    },
+    {
+     "category": "null",
+     "date": "2026-07-10",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-11",
+     "downloads": 10
+    },
+    {
+     "category": "null",
+     "date": "2026-07-12",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-13",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-16",
+     "downloads": 83
+    },
+    {
+     "category": "null",
+     "date": "2026-07-17",
+     "downloads": 6
+    },
+    {
+     "category": "null",
+     "date": "2026-07-18",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-07-19",
+     "downloads": 14
+    },
+    {
+     "category": "null",
+     "date": "2026-07-20",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-21",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-07-22",
+     "downloads": 41
+    },
+    {
+     "category": "null",
+     "date": "2026-07-23",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-07-24",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-07-25",
+     "downloads": 15
+    },
+    {
+     "category": "null",
+     "date": "2026-07-26",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-07-30",
+     "downloads": 14
+    },
+    {
+     "category": "null",
+     "date": "2026-08-02",
+     "downloads": 55
+    },
+    {
+     "category": "null",
+     "date": "2026-08-03",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-04",
+     "downloads": 111
+    },
+    {
+     "category": "null",
+     "date": "2026-08-05",
+     "downloads": 79
+    },
+    {
+     "category": "null",
+     "date": "2026-08-06",
+     "downloads": 23
+    },
+    {
+     "category": "null",
+     "date": "2026-08-07",
+     "downloads": 21
+    },
+    {
+     "category": "null",
+     "date": "2026-08-08",
+     "downloads": 89
+    },
+    {
+     "category": "null",
+     "date": "2026-08-09",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-08-10",
+     "downloads": 6
+    },
+    {
+     "category": "null",
+     "date": "2026-08-11",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-12",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-08-13",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-14",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-15",
+     "downloads": 10
+    },
+    {
+     "category": "null",
+     "date": "2026-08-18",
+     "downloads": 9
+    },
+    {
+     "category": "null",
+     "date": "2026-08-19",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-08-21",
+     "downloads": 62
+    },
+    {
+     "category": "null",
+     "date": "2026-08-22",
+     "downloads": 10
+    },
+    {
+     "category": "null",
+     "date": "2026-08-23",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-08-24",
+     "downloads": 74
+    },
+    {
+     "category": "null",
+     "date": "2026-08-28",
+     "downloads": 178
+    },
+    {
+     "category": "null",
+     "date": "2026-08-29",
+     "downloads": 21
+    },
+    {
+     "category": "null",
+     "date": "2026-08-30",
+     "downloads": 15
+    },
+    {
+     "category": "null",
+     "date": "2026-08-31",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-01",
+     "downloads": 13
+    },
+    {
+     "category": "null",
+     "date": "2026-09-02",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-09-03",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-04",
+     "downloads": 45
+    },
+    {
+     "category": "null",
+     "date": "2026-09-05",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-09-06",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-07",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-09-08",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-09",
+     "downloads": 14
+    },
+    {
+     "category": "null",
+     "date": "2026-09-10",
+     "downloads": 4
+    },
+    {
+     "category": "null",
+     "date": "2026-09-11",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-12",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-09-13",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-14",
+     "downloads": 12
+    },
+    {
+     "category": "null",
+     "date": "2026-09-16",
+     "downloads": 1
+    },
+    {
+     "category": "null",
+     "date": "2026-09-18",
+     "downloads": 3
+    },
+    {
+     "category": "null",
+     "date": "2026-09-21",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-22",
+     "downloads": 2
+    },
+    {
+     "category": "null",
+     "date": "2026-09-24",
+     "downloads": 73
+    },
+    {
+     "category": "null",
+     "date": "2026-09-25",
+     "downloads": 5
+    },
+    {
+     "category": "null",
+     "date": "2026-09-26",
+     "downloads": 96
+    },
+    {
+     "category": "null",
+     "date": "2026-09-27",
+     "downloads": 85
+    },
+    {
+     "category": "null",
+     "date": "2026-09-28",
+     "downloads": 7
+    },
+    {
+     "category": "null",
+     "date": "2026-09-29",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-09-30",
+     "downloads": 83
+    },
+    {
+     "category": "null",
+     "date": "2026-10-01",
+     "downloads": 85
+    },
+    {
+     "category": "null",
+     "date": "2026-10-02",
+     "downloads": 8
+    },
+    {
+     "category": "null",
+     "date": "2026-10-03",
+     "downloads": 22
+    },
+    {
+     "category": "null",
+     "date": "2026-10-04",
+     "downloads": 80
+    },
+    {
+     "category": "null",
+     "date": "2026-10-05",
+     "downloads": 46
+    }
+   ],
+   "package": "scanpath-studio",
+   "type": "python_minor_downloads"
+  }
+ },
+ "pypi_json": {
+  "info": {
+   "version": "0.34.0"
+  },
+  "releases": {
+   "0.14.0": [
+    {
+     "filename": "scanpath_studio-0.14.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-06T09:39:22.388145Z"
+    },
+    {
+     "filename": "scanpath_studio-0.14.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-06T09:39:24.218793Z"
+    }
+   ],
+   "0.15.0": [
+    {
+     "filename": "scanpath_studio-0.15.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-06T13:07:35.452863Z"
+    },
+    {
+     "filename": "scanpath_studio-0.15.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-06T13:07:37.258948Z"
+    }
+   ],
+   "0.15.1": [
+    {
+     "filename": "scanpath_studio-0.15.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-06T15:09:57.145629Z"
+    },
+    {
+     "filename": "scanpath_studio-0.15.1.tar.gz",
+     "upload_time_iso_8601": "2026-06-06T15:09:58.683436Z"
+    }
+   ],
+   "0.16.0": [
+    {
+     "filename": "scanpath_studio-0.16.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-09T15:15:03.512279Z"
+    },
+    {
+     "filename": "scanpath_studio-0.16.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-09T15:15:05.186818Z"
+    }
+   ],
+   "0.16.1": [
+    {
+     "filename": "scanpath_studio-0.16.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-09T16:28:02.303924Z"
+    },
+    {
+     "filename": "scanpath_studio-0.16.1.tar.gz",
+     "upload_time_iso_8601": "2026-06-09T16:28:04.094168Z"
+    }
+   ],
+   "0.16.2": [
+    {
+     "filename": "scanpath_studio-0.16.2-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-11T01:08:28.428091Z"
+    },
+    {
+     "filename": "scanpath_studio-0.16.2.tar.gz",
+     "upload_time_iso_8601": "2026-06-11T01:08:30.181767Z"
+    }
+   ],
+   "0.16.3": [
+    {
+     "filename": "scanpath_studio-0.16.3-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-11T07:30:40.148650Z"
+    },
+    {
+     "filename": "scanpath_studio-0.16.3.tar.gz",
+     "upload_time_iso_8601": "2026-06-11T07:30:41.882959Z"
+    }
+   ],
+   "0.17.0": [
+    {
+     "filename": "scanpath_studio-0.17.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-11T12:08:08.067776Z"
+    },
+    {
+     "filename": "scanpath_studio-0.17.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-11T12:08:09.870284Z"
+    }
+   ],
+   "0.18.0": [
+    {
+     "filename": "scanpath_studio-0.18.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-12T10:15:32.475685Z"
+    },
+    {
+     "filename": "scanpath_studio-0.18.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-12T10:15:34.390674Z"
+    }
+   ],
+   "0.19.0": [
+    {
+     "filename": "scanpath_studio-0.19.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-13T08:12:43.190652Z"
+    },
+    {
+     "filename": "scanpath_studio-0.19.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-13T08:12:45.078183Z"
+    }
+   ],
+   "0.19.1": [
+    {
+     "filename": "scanpath_studio-0.19.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-14T10:37:04.453178Z"
+    },
+    {
+     "filename": "scanpath_studio-0.19.1.tar.gz",
+     "upload_time_iso_8601": "2026-06-14T10:37:05.955895Z"
+    }
+   ],
+   "0.20.0": [
+    {
+     "filename": "scanpath_studio-0.20.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-17T15:49:23.661700Z"
+    },
+    {
+     "filename": "scanpath_studio-0.20.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-17T15:49:25.492451Z"
+    }
+   ],
+   "0.21.0": [
+    {
+     "filename": "scanpath_studio-0.21.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-18T07:37:42.002105Z"
+    },
+    {
+     "filename": "scanpath_studio-0.21.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-18T07:37:44.094659Z"
+    }
+   ],
+   "0.22.0": [
+    {
+     "filename": "scanpath_studio-0.22.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-18T22:48:43.347076Z"
+    },
+    {
+     "filename": "scanpath_studio-0.22.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-18T22:48:45.020182Z"
+    }
+   ],
+   "0.23.0": [
+    {
+     "filename": "scanpath_studio-0.23.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-06-24T09:01:31.148558Z"
+    },
+    {
+     "filename": "scanpath_studio-0.23.0.tar.gz",
+     "upload_time_iso_8601": "2026-06-24T09:01:33.111680Z"
+    }
+   ],
+   "0.24.0": [
+    {
+     "filename": "scanpath_studio-0.24.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-07-03T14:12:32.744050Z"
+    },
+    {
+     "filename": "scanpath_studio-0.24.0.tar.gz",
+     "upload_time_iso_8601": "2026-07-03T14:12:34.508709Z"
+    }
+   ],
+   "0.25.0": [
+    {
+     "filename": "scanpath_studio-0.25.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-07-16T05:39:44.220013Z"
+    },
+    {
+     "filename": "scanpath_studio-0.25.0.tar.gz",
+     "upload_time_iso_8601": "2026-07-16T05:39:45.894643Z"
+    }
+   ],
+   "0.26.0": [
+    {
+     "filename": "scanpath_studio-0.26.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-02T12:34:13.830561Z"
+    },
+    {
+     "filename": "scanpath_studio-0.26.0.tar.gz",
+     "upload_time_iso_8601": "2026-08-02T12:34:15.644707Z"
+    }
+   ],
+   "0.27.0": [
+    {
+     "filename": "scanpath_studio-0.27.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-04T09:53:04.794317Z"
+    },
+    {
+     "filename": "scanpath_studio-0.27.0.tar.gz",
+     "upload_time_iso_8601": "2026-08-04T09:53:06.306702Z"
+    }
+   ],
+   "0.27.1": [
+    {
+     "filename": "scanpath_studio-0.27.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-04T10:59:50.230229Z"
+    },
+    {
+     "filename": "scanpath_studio-0.27.1.tar.gz",
+     "upload_time_iso_8601": "2026-08-04T10:59:52.585887Z"
+    }
+   ],
+   "0.27.2": [
+    {
+     "filename": "scanpath_studio-0.27.2-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-05T08:20:50.040091Z"
+    },
+    {
+     "filename": "scanpath_studio-0.27.2.tar.gz",
+     "upload_time_iso_8601": "2026-08-05T08:20:51.817018Z"
+    }
+   ],
+   "0.28.0": [
+    {
+     "filename": "scanpath_studio-0.28.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-08T10:20:34.103534Z"
+    },
+    {
+     "filename": "scanpath_studio-0.28.0.tar.gz",
+     "upload_time_iso_8601": "2026-08-08T10:20:35.738471Z"
+    }
+   ],
+   "0.29.0": [
+    {
+     "filename": "scanpath_studio-0.29.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-21T17:57:21.222281Z"
+    },
+    {
+     "filename": "scanpath_studio-0.29.0.tar.gz",
+     "upload_time_iso_8601": "2026-08-21T17:57:23.103865Z"
+    }
+   ],
+   "0.30.0": [
+    {
+     "filename": "scanpath_studio-0.30.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-28T07:47:19.041325Z"
+    },
+    {
+     "filename": "scanpath_studio-0.30.0.tar.gz",
+     "upload_time_iso_8601": "2026-08-28T07:47:21.405187Z"
+    }
+   ],
+   "0.30.1": [
+    {
+     "filename": "scanpath_studio-0.30.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-08-28T09:09:09.654736Z"
+    },
+    {
+     "filename": "scanpath_studio-0.30.1.tar.gz",
+     "upload_time_iso_8601": "2026-08-28T09:09:11.914209Z"
+    }
+   ],
+   "0.31.0": [
+    {
+     "filename": "scanpath_studio-0.31.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-09-24T05:21:59.366370Z"
+    },
+    {
+     "filename": "scanpath_studio-0.31.0.tar.gz",
+     "upload_time_iso_8601": "2026-09-24T05:22:01.108772Z"
+    }
+   ],
+   "0.31.1": [
+    {
+     "filename": "scanpath_studio-0.31.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-09-26T12:27:44.391246Z"
+    },
+    {
+     "filename": "scanpath_studio-0.31.1.tar.gz",
+     "upload_time_iso_8601": "2026-09-26T12:27:46.551985Z"
+    }
+   ],
+   "0.31.2": [
+    {
+     "filename": "scanpath_studio-0.31.2-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-09-27T06:44:56.345128Z"
+    },
+    {
+     "filename": "scanpath_studio-0.31.2.tar.gz",
+     "upload_time_iso_8601": "2026-09-27T06:44:58.405079Z"
+    }
+   ],
+   "0.32.0": [
+    {
+     "filename": "scanpath_studio-0.32.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-09-30T17:14:24.109016Z"
+    },
+    {
+     "filename": "scanpath_studio-0.32.0.tar.gz",
+     "upload_time_iso_8601": "2026-09-30T17:14:26.195835Z"
+    }
+   ],
+   "0.32.1": [
+    {
+     "filename": "scanpath_studio-0.32.1-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-10-01T00:36:56.723012Z"
+    },
+    {
+     "filename": "scanpath_studio-0.32.1.tar.gz",
+     "upload_time_iso_8601": "2026-10-01T00:36:59.000433Z"
+    }
+   ],
+   "0.33.0": [
+    {
+     "filename": "scanpath_studio-0.33.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-10-04T20:06:50.344430Z"
+    },
+    {
+     "filename": "scanpath_studio-0.33.0.tar.gz",
+     "upload_time_iso_8601": "2026-10-04T20:06:51.999928Z"
+    }
+   ],
+   "0.34.0": [
+    {
+     "filename": "scanpath_studio-0.34.0-py3-none-any.whl",
+     "upload_time_iso_8601": "2026-10-06T08:43:49.091106Z"
+    },
+    {
+     "filename": "scanpath_studio-0.34.0.tar.gz",
+     "upload_time_iso_8601": "2026-10-06T08:43:51.362378Z"
+    }
+   ]
+  }
  },
  "repo": {
   "stargazers_count": 8,
@@ -60,7 +2619,7 @@
  },
  "releases": [
   {
-   "tag": "v0.34.0",
+   "tag_name": "v0.34.0",
    "published_at": "2026-10-06T08:43:54Z",
    "assets": [
     {
@@ -78,7 +2637,7 @@
    ]
   },
   {
-   "tag": "v0.33.0",
+   "tag_name": "v0.33.0",
    "published_at": "2026-10-04T20:06:54Z",
    "assets": [
     {
@@ -96,7 +2655,7 @@
    ]
   },
   {
-   "tag": "v0.32.1",
+   "tag_name": "v0.32.1",
    "published_at": "2026-10-01T00:37:03Z",
    "assets": [
     {
@@ -114,7 +2673,7 @@
    ]
   },
   {
-   "tag": "v0.32.0",
+   "tag_name": "v0.32.0",
    "published_at": "2026-09-30T17:14:31Z",
    "assets": [
     {
@@ -132,7 +2691,7 @@
    ]
   },
   {
-   "tag": "v0.31.2",
+   "tag_name": "v0.31.2",
    "published_at": "2026-09-27T06:45:01Z",
    "assets": [
     {
@@ -150,7 +2709,7 @@
    ]
   },
   {
-   "tag": "v0.31.1",
+   "tag_name": "v0.31.1",
    "published_at": "2026-09-26T12:27:49Z",
    "assets": [
     {
@@ -168,7 +2727,7 @@
    ]
   },
   {
-   "tag": "v0.31.0",
+   "tag_name": "v0.31.0",
    "published_at": "2026-09-24T08:03:53Z",
    "assets": [
     {
@@ -186,7 +2745,7 @@
    ]
   },
   {
-   "tag": "v0.30.1",
+   "tag_name": "v0.30.1",
    "published_at": "2026-08-28T09:09:14Z",
    "assets": [
     {
@@ -204,7 +2763,7 @@
    ]
   },
   {
-   "tag": "v0.30.0",
+   "tag_name": "v0.30.0",
    "published_at": "2026-08-28T07:47:25Z",
    "assets": [
     {
@@ -222,7 +2781,7 @@
    ]
   },
   {
-   "tag": "v0.29.0",
+   "tag_name": "v0.29.0",
    "published_at": "2026-08-21T17:59:30Z",
    "assets": [
     {
@@ -240,7 +2799,7 @@
    ]
   },
   {
-   "tag": "v0.28.0",
+   "tag_name": "v0.28.0",
    "published_at": "2026-08-08T10:20:39Z",
    "assets": [
     {
@@ -258,7 +2817,7 @@
    ]
   },
   {
-   "tag": "v0.27.2",
+   "tag_name": "v0.27.2",
    "published_at": "2026-08-05T08:20:54Z",
    "assets": [
     {
@@ -276,7 +2835,7 @@
    ]
   },
   {
-   "tag": "v0.27.1",
+   "tag_name": "v0.27.1",
    "published_at": "2026-08-04T10:59:55Z",
    "assets": [
     {
@@ -294,7 +2853,7 @@
    ]
   },
   {
-   "tag": "v0.27.0",
+   "tag_name": "v0.27.0",
    "published_at": "2026-08-04T09:53:08Z",
    "assets": [
     {
@@ -312,7 +2871,7 @@
    ]
   },
   {
-   "tag": "v0.26.0",
+   "tag_name": "v0.26.0",
    "published_at": "2026-08-02T12:34:18Z",
    "assets": [
     {
@@ -330,7 +2889,7 @@
    ]
   },
   {
-   "tag": "v0.25.0",
+   "tag_name": "v0.25.0",
    "published_at": "2026-07-16T05:39:48Z",
    "assets": [
     {
@@ -348,102 +2907,102 @@
    ]
   },
   {
-   "tag": "v0.24.0",
+   "tag_name": "v0.24.0",
    "published_at": "2026-07-03T14:12:36Z",
    "assets": []
   },
   {
-   "tag": "v0.23.0",
+   "tag_name": "v0.23.0",
    "published_at": "2026-06-24T09:01:35Z",
    "assets": []
   },
   {
-   "tag": "v0.22.0",
+   "tag_name": "v0.22.0",
    "published_at": "2026-06-18T22:48:48Z",
    "assets": []
   },
   {
-   "tag": "v0.21.0",
+   "tag_name": "v0.21.0",
    "published_at": "2026-06-18T07:37:24Z",
    "assets": []
   },
   {
-   "tag": "v0.20.0",
+   "tag_name": "v0.20.0",
    "published_at": "2026-06-17T15:49:13Z",
    "assets": []
   },
   {
-   "tag": "v0.19.1",
+   "tag_name": "v0.19.1",
    "published_at": "2026-06-14T10:37:08Z",
    "assets": []
   },
   {
-   "tag": "v0.19.0",
+   "tag_name": "v0.19.0",
    "published_at": "2026-06-13T08:12:47Z",
    "assets": []
   },
   {
-   "tag": "v0.18.0",
+   "tag_name": "v0.18.0",
    "published_at": "2026-06-12T23:08:36Z",
    "assets": []
   },
   {
-   "tag": "v0.17.0",
+   "tag_name": "v0.17.0",
    "published_at": "2026-06-12T23:08:34Z",
    "assets": []
   },
   {
-   "tag": "v0.16.3",
+   "tag_name": "v0.16.3",
    "published_at": "2026-06-12T23:08:33Z",
    "assets": []
   },
   {
-   "tag": "v0.16.2",
+   "tag_name": "v0.16.2",
    "published_at": "2026-06-12T23:08:32Z",
    "assets": []
   },
   {
-   "tag": "v0.16.1",
+   "tag_name": "v0.16.1",
    "published_at": "2026-06-12T23:08:31Z",
    "assets": []
   },
   {
-   "tag": "v0.16.0",
+   "tag_name": "v0.16.0",
    "published_at": "2026-06-09T15:16:34Z",
    "assets": []
   },
   {
-   "tag": "v0.15.1",
+   "tag_name": "v0.15.1",
    "published_at": "2026-06-12T23:08:56Z",
    "assets": []
   },
   {
-   "tag": "v0.15.0",
+   "tag_name": "v0.15.0",
    "published_at": "2026-06-06T13:08:22Z",
    "assets": []
   },
   {
-   "tag": "v0.14.0",
+   "tag_name": "v0.14.0",
    "published_at": "2026-06-06T09:38:52Z",
    "assets": []
   },
   {
-   "tag": "v0.13.0",
+   "tag_name": "v0.13.0",
    "published_at": "2026-06-06T08:28:37Z",
    "assets": []
   },
   {
-   "tag": "v0.12.0",
+   "tag_name": "v0.12.0",
    "published_at": "2026-06-12T23:08:30Z",
    "assets": []
   },
   {
-   "tag": "v0.11.0",
+   "tag_name": "v0.11.0",
    "published_at": "2026-06-12T23:08:29Z",
    "assets": []
   },
   {
-   "tag": "v0.9.1",
+   "tag_name": "v0.9.1",
    "published_at": "2026-05-31T11:18:21Z",
    "assets": []
   }

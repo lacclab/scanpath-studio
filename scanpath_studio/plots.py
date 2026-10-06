@@ -6227,6 +6227,38 @@ def _comparison_heatmap_colorbar_trace(
     )
 
 
+def _comparison_heatmap_colorbar_traces(
+    trial_specs: Sequence[dict],
+    *,
+    z_min: float,
+    z_max: float,
+    title: str,
+    heatmap_norm: str,
+    colorbar_style: dict,
+    overlay: bool,
+) -> list[go.Scatter]:
+    """The comparison heatmap's colour bar(s): one while A and B share a colour
+    scale, else one per scanpath on the same range (`_arrange_colorbars` sets
+    them side by side). The overlay's titles say which half is whose."""
+    scales = [spec["heatmap_colorscale"] for spec in trial_specs]
+    sides = ("left A", "right B") if overlay else ("A", "B")
+    if len(set(scales)) == 1:
+        named = [(scales[0], " · left A / right B" if overlay else "")]
+    else:
+        named = [(scale, f" · {side}") for scale, side in zip(scales, sides)]
+    return [
+        _comparison_heatmap_colorbar_trace(
+            colorscale=scale,
+            z_min=z_min,
+            z_max=z_max,
+            title=title + suffix,
+            heatmap_norm=heatmap_norm,
+            colorbar_style=colorbar_style,
+        )
+        for scale, suffix in named
+    ]
+
+
 def _make_split_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -6280,7 +6312,6 @@ def _make_split_comparison_figure(
     show_heatmap_colorbar = settings.show_heatmap_colorbar
     show_heatmap = settings.show_heatmap
     heatmap_metric = settings.heatmap_metric
-    heatmap_colorscale = settings.heatmap_colorscale
     heatmap_range = settings.heatmap_range
     heatmap_norm = settings.heatmap_norm
     colorbar_orientation = settings.fixation_colorbar_orientation
@@ -6406,6 +6437,11 @@ def _make_split_comparison_figure(
                 # Its raw-gaze samples: the scanpath's own colour unless its
                 # style names one (`raw_gaze_color`).
                 raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
+                # Its heatmap's colour scale: the figure's unless the style
+                # names one (`heatmap_colorscale`). The range stays shared.
+                heatmap_colorscale=(
+                    style.get("heatmap_colorscale") or settings.heatmap_colorscale
+                ),
             )
         )
 
@@ -6580,7 +6616,7 @@ def _make_split_comparison_figure(
                 _comparison_heatmap_shapes(
                     trial_words,
                     heatmap_maps[idx],
-                    heatmap_colorscale=heatmap_colorscale,
+                    heatmap_colorscale=spec["heatmap_colorscale"],
                     heatmap_norm=heatmap_norm,
                     z_min=heatmap_min,
                     z_max=heatmap_max,
@@ -6707,16 +6743,16 @@ def _make_split_comparison_figure(
         fig.update_layout(**{xaxis_key: xaxis, yaxis_key: yaxis})
 
     if show_heatmap and show_heatmap_colorbar and any(heatmap_maps):
-        fig.add_trace(
-            _comparison_heatmap_colorbar_trace(
-                colorscale=heatmap_colorscale,
-                z_min=heatmap_min,
-                z_max=heatmap_max,
-                title=heatmap_title,
-                heatmap_norm=heatmap_norm,
-                colorbar_style=heat_cb_style,
-            )
-        )
+        for trace in _comparison_heatmap_colorbar_traces(
+            trial_specs,
+            z_min=heatmap_min,
+            z_max=heatmap_max,
+            title=heatmap_title,
+            heatmap_norm=heatmap_norm,
+            colorbar_style=heat_cb_style,
+            overlay=False,
+        ):
+            fig.add_trace(trace)
     _add_category_legend(fig, category_legend, category_label or "")
 
     fig.update_layout(
@@ -6797,7 +6833,6 @@ def _render_comparison_figure(
     show_heatmap_colorbar = settings.show_heatmap_colorbar
     show_heatmap = settings.show_heatmap
     heatmap_metric = settings.heatmap_metric
-    heatmap_colorscale = settings.heatmap_colorscale
     heatmap_range = settings.heatmap_range
     heatmap_norm = settings.heatmap_norm
     colorbar_orientation = settings.fixation_colorbar_orientation
@@ -6915,6 +6950,11 @@ def _render_comparison_figure(
                 # Its raw-gaze samples: the scanpath's own colour unless its
                 # style names one (`raw_gaze_color`).
                 raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
+                # Its heatmap's colour scale: the figure's unless the style
+                # names one (`heatmap_colorscale`). The range stays shared.
+                heatmap_colorscale=(
+                    style.get("heatmap_colorscale") or settings.heatmap_colorscale
+                ),
             )
         )
 
@@ -6944,7 +6984,7 @@ def _render_comparison_figure(
                 _comparison_heatmap_shapes(
                     reference_words,
                     heatmap_maps[index],
-                    heatmap_colorscale=heatmap_colorscale,
+                    heatmap_colorscale=trial_specs[index]["heatmap_colorscale"],
                     heatmap_norm=heatmap_norm,
                     z_min=heatmap_min,
                     z_max=heatmap_max,
@@ -6953,16 +6993,16 @@ def _render_comparison_figure(
             )
         fig.update_layout(shapes=existing)
         if show_heatmap_colorbar and any(heatmap_maps):
-            fig.add_trace(
-                _comparison_heatmap_colorbar_trace(
-                    colorscale=heatmap_colorscale,
-                    z_min=heatmap_min,
-                    z_max=heatmap_max,
-                    title=f"{heatmap_title} · left A / right B",
-                    heatmap_norm=heatmap_norm,
-                    colorbar_style=heat_cb_style,
-                )
-            )
+            for trace in _comparison_heatmap_colorbar_traces(
+                trial_specs,
+                z_min=heatmap_min,
+                z_max=heatmap_max,
+                title=heatmap_title,
+                heatmap_norm=heatmap_norm,
+                colorbar_style=heat_cb_style,
+                overlay=True,
+            ):
+                fig.add_trace(trace)
 
     x_range, y_range, *_ = _compute_axis_ranges(
         canvas_width,

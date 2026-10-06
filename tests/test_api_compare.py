@@ -725,3 +725,41 @@ class TestRawGazeColor:
             style_b={"fix_color": "#0000aa", "raw_gaze_color": "#00aa00"},
         )
         assert colors == {"#aa0000", "#00aa00"}
+
+
+class TestHeatmapColorscale:
+    """Each reading's word-box heatmap takes the figure's colour scale unless its
+    style names a `heatmap_colorscale` — then each gets its own colour bar, on
+    the one shared range."""
+
+    @staticmethod
+    def _bars(layout: str, **styles) -> list:
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            canvas_size=(1920, 1080),
+            show_heatmap=True,
+            heatmap_colorscale="Reds",
+            **styles,
+        )
+        return [
+            t.marker
+            for t in fig.data
+            if t.name == "comparison heatmap colorbar" and t.marker.showscale
+        ]
+
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_one_bar_while_the_scales_agree(self, layout):
+        bars = self._bars(layout)
+        assert len(bars) == 1
+
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_a_bar_each_on_one_range_when_they_differ(self, layout):
+        bars = self._bars(layout, style_b={"heatmap_colorscale": "Blues"})
+        assert len(bars) == 2
+        assert bars[0].colorscale != bars[1].colorscale
+        assert (bars[0].cmin, bars[0].cmax) == (bars[1].cmin, bars[1].cmax)

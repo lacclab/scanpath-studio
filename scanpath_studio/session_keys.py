@@ -252,6 +252,8 @@ CMP_BOX_COLOR = "cmp{idx}_box_color"
 CMP_BOX_FILL_COLOR = "cmp{idx}_box_fill_color"
 # The raw-gaze sample colour override ("" = the scanpath's own fixation colour).
 CMP_RAW_GAZE_COLOR = "cmp{idx}_raw_gaze_color"
+# The heatmap colour-scale override ("" = the figure's `global_heatmap_colorscale`).
+CMP_HEATMAP_COLORSCALE = "cmp{idx}_heatmap_colorscale"
 
 # --- CMP-24: scanpath B's own filters in Compare ----------------------------
 # A's filters are the rail's ordinary ones (`global_fixclass_*`,
@@ -531,6 +533,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
             "box_color",
             "box_fill_color",
             "raw_gaze_color",
+            "heatmap_colorscale",
         ),
         # CMP-24.
         "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
@@ -713,6 +716,7 @@ COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
             "box_color",
             "box_fill_color",
             "raw_gaze_color",
+            "heatmap_colorscale",
         ),
         **COMPARE_B_FILTER_PARAMS,
     }
@@ -870,6 +874,7 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_BOX_COLOR,
         CMP_BOX_FILL_COLOR,
         CMP_RAW_GAZE_COLOR,
+        CMP_HEATMAP_COLORSCALE,
     }
 )
 

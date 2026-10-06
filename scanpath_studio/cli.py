@@ -1456,7 +1456,10 @@ def _render_parser() -> argparse.ArgumentParser:
             "box_fill_color / raw_gaze_color (#RRGGBB; box_color outlines the "
             "word boxes, default fix_color, box_fill_color fills them, default "
             "--word-box-fill-color, raw_gaze_color colours the raw-gaze samples, "
-            "default fix_color; all three ignored by --animate), saccade_style "
+            "default fix_color; all three ignored by --animate), "
+            "heatmap_colorscale (a Plotly colour scale for this scanpath's "
+            "heatmap, default --heatmap-colorscale; on the shared range), "
+            "saccade_style "
             f"({'|'.join(SACCADE_DASH_OPTIONS.values())}), saccade_width (px), "
             "marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — "
             f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5. Applies to "
@@ -1606,6 +1609,7 @@ _STYLE_KEYS = (
     "box_color",
     "box_fill_color",
     "raw_gaze_color",
+    "heatmap_colorscale",
     "saccade_style",
     "saccade_width",
     "marker_size_range",
@@ -1642,6 +1646,11 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                     if not re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
                         raise ValueError
                     style[name] = raw
+                elif name == "heatmap_colorscale":
+                    try:
+                        style[name] = _colorscale_name(raw)
+                    except argparse.ArgumentTypeError:
+                        raise ValueError from None
                 elif name == "saccade_style":
                     if raw not in dashes:
                         raise ValueError
@@ -1659,6 +1668,7 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                 raise SystemExit(
                     f"{flag}: can't read {option!r}. Expected KEY=VALUE with KEY "
                     f"one of {', '.join(_STYLE_KEYS)} — colours as #RRGGBB, "
+                    "heatmap_colorscale a Plotly colour scale, "
                     f"saccade_style one of {', '.join(dashes)}, marker_size_range "
                     "as MIN:MAX, hollow as true/false."
                 )

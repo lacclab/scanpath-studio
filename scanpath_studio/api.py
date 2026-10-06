@@ -2998,7 +2998,9 @@ def compare_scanpaths(
     ``raw_gaze_color``, that reading's raw-gaze samples, its ``fix_color`` when
     left out. These three are this figure's only: the co-animation draws one set
     of boxes, in ``word_box_color`` / ``word_box_fill_color``, and no raw gaze,
-    and ignores them.
+    and ignores them. ``heatmap_colorscale`` gives that reading's word-box
+    heatmap its own colour scale (``heatmap_colorscale`` when left out) on the
+    range both share; when A's and B's differ, each gets its own colour bar.
 
     **Filters, per scanpath.** ``fixation_flags`` and
     ``saccade_classes`` filter both scanpaths, as they filter

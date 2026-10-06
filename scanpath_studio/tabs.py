@@ -4247,6 +4247,9 @@ def render_settings_file(
             "box_fill_color": st.session_state.get(f"cmp{idx}_box_fill_color") or "",
             # The raw-gaze colour override ("" = the scanpath's colour).
             "raw_gaze_color": st.session_state.get(f"cmp{idx}_raw_gaze_color") or "",
+            # The heatmap colour-scale override ("" = the figure's).
+            "heatmap_colorscale": st.session_state.get(f"cmp{idx}_heatmap_colorscale")
+            or "",
         }
         for idx in range(2)
     ]
@@ -4968,15 +4971,17 @@ def _replay_style(style: dict | None) -> dict | None:
     """A per-scanpath comparison style as the co-animation takes it: its look
     only, without the filters (`COMPARE_FILTER_STYLE_KEYS`) `_plan_replay`
     hands the replay another way, and without `box_color` / `box_fill_color` /
-    `raw_gaze_color` — the replay draws one set of boxes in the figure's colours
-    and no raw gaze, so they would only split the cache key."""
+    `raw_gaze_color` / `heatmap_colorscale` — the replay draws one set of boxes
+    in the figure's colours and no raw gaze or heatmap, so they would only split
+    the cache key."""
     if not style:
         return None
     return {
         k: v
         for k, v in style.items()
         if k not in COMPARE_FILTER_STYLE_KEYS
-        and k not in ("box_color", "box_fill_color", "raw_gaze_color")
+        and k
+        not in ("box_color", "box_fill_color", "raw_gaze_color", "heatmap_colorscale")
     }
 
 

@@ -1,0 +1,1 @@
+An infinite position, duration, onset or word-box size no longer stretches a figure's axes or crashes it or its replay; the figure leaves such a row out (or times it by duration), and a per-screen screen size that is not finite and positive falls back to the dataset's own.

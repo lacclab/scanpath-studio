@@ -1,5 +1,7 @@
 """Tests for plots.py module."""
 
+from itertools import pairwise
+
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
@@ -2716,3 +2718,106 @@ class TestBackgroundImageLayer:
             )
             == 0
         )
+
+
+class TestNonFiniteValues:
+    """Round 9: a value Data checks reports as infinite is drawn as missing —
+    off the axes, with no saccade through it — and never crashes a builder."""
+
+    @staticmethod
+    def _frames():
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p"] * 3,
+                "trial_id": ["t"] * 3,
+                "text_id": ["x"] * 3,
+                "word_id": [1, 2, 3],
+                "text": ["a", "b", "c"],
+                "line_idx": [0] * 3,
+                "x": [10.0, 60.0, 110.0],
+                "y": [10.0] * 3,
+                "width": [40.0] * 3,
+                "height": [20.0] * 3,
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p"] * 3,
+                "trial_id": ["t"] * 3,
+                "text_id": ["x"] * 3,
+                "fixation_id": [1, 2, 3],
+                "order_in_trial": [1, 2, 3],
+                "x": [20.0, 70.0, 120.0],
+                "y": [20.0] * 3,
+                "duration_ms": [100.0] * 3,
+                "timestamp_ms": [0.0, 150.0, 300.0],
+                "word_id": [1, 2, 3],
+            }
+        )
+        return words, fixations
+
+    _SETTINGS = dict(canvas_width=200, canvas_height=100, base_font_size=16)
+
+    @pytest.mark.parametrize("column", ["x", "y"])
+    def test_an_infinite_position_is_left_out_of_the_figure(self, column):
+        words, fixations = self._frames()
+        clean = make_scanpath_figure(words, fixations, **self._SETTINGS)
+        fixations.loc[1, column] = float("inf")
+        fig = make_scanpath_figure(words, fixations, **self._SETTINGS)
+        assert fig.layout.xaxis.range == clean.layout.xaxis.range
+        assert fig.layout.yaxis.range == clean.layout.yaxis.range
+        # Both saccades start or end at the omitted fixation, so none is drawn
+        # — and none joins its neighbours in its place.
+        (saccades,) = [t for t in fig.data if t.name == "saccades"]
+        points = list(zip(saccades.x, saccades.y))
+        drawn = [
+            (a, b)
+            for a, b in pairwise(points)
+            if None not in (*a, *b) and pd.notna([*a, *b]).all()
+        ]
+        assert drawn == []
+        assert fixations.loc[1, column] == float("inf")  # the caller's copy
+
+    def test_every_path_draws_around_infinite_values(self):
+        words, fixations = self._frames()
+        words.loc[1, "width"] = float("inf")
+        fixations.loc[1, "y"] = float("inf")
+        fixations.loc[2, "duration_ms"] = float("inf")
+        fixations.loc[0, "timestamp_ms"] = -float("inf")
+        raw = fixations[["participant_id", "trial_id", "x", "y"]].assign(
+            timestamp_ms=[0, 1, 2]
+        )
+        for style in ("Word boxes", "Interpolated", "Density"):
+            make_scanpath_figure(
+                words,
+                fixations,
+                raw_gaze=raw,
+                show_raw_gaze=True,
+                show_heatmap=True,
+                heatmap_style=style,
+                **self._SETTINGS,
+            )
+        anim = make_scanpath_animation(
+            words, fixations, fixations_b=fixations, **self._SETTINGS
+        )
+        assert anim.frames
+        both_words = pd.concat([words, words.assign(participant_id="q")])
+        both = pd.concat([fixations, fixations.assign(participant_id="q")])
+        for layout in ("Overlay", "Side by side", "Stacked"):
+            make_comparison_figure(
+                both_words,
+                both,
+                ("p", "t"),
+                ("q", "t"),
+                layout=layout,
+                show_heatmap=True,
+                **self._SETTINGS,
+            )
+
+    def test_a_word_box_at_infinity_is_not_drawn(self):
+        words, fixations = self._frames()
+        words.loc[1, "width"] = float("inf")
+        fig = make_scanpath_figure(words, fixations, show_words=True, **self._SETTINGS)
+        boxes = [s for s in fig.layout.shapes if (s.name or "").endswith("word_boxes")]
+        assert len(boxes) == 2
+        assert all(pd.notna(s.x1) for s in boxes)

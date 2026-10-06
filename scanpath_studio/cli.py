@@ -3625,10 +3625,12 @@ def _check_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scanpath-studio check",
         description="Run the Data page's Data checks on your tables without "
-        "launching the app: fixations lasting 0 ms or less, fixations and "
-        "raw-gaze samples with no finite position, and word boxes with no "
-        "area. Reports what it finds and changes nothing; the exit status is 0 "
-        "whatever it finds (an unreadable table is an error).",
+        "launching the app: fixations lasting 0 ms or less or with an infinite "
+        "duration or onset, fixations and raw-gaze samples with no finite "
+        "position, word boxes with no area or no finite position, and per-screen "
+        "screen sizes that are not finite and positive. Reports what it finds "
+        "and changes nothing; the exit status is 0 whatever it finds (an "
+        "unreadable table is an error).",
     )
     parser.add_argument(
         "--sample",

@@ -79,9 +79,10 @@ goes back to it. Nothing applies until you click **Save changes**;
 annotations, and at the foot, what is saved on this computer.
 
 Above the open dataset's tables, **Data checks** looks for values that loaded
-as numbers but cannot be right: fixations lasting 0 ms or less, fixations or
-raw-gaze samples whose position is missing or infinite, and word boxes with no
-width or height. Each finding gives the rows and trials affected, the columns
+as numbers but cannot be right: fixations lasting 0 ms or less or with an
+infinite duration or onset, fixations or raw-gaze samples whose position is
+missing or infinite, word boxes with no width or height or at infinity, and
+per-screen screen sizes that are infinite or 0 or less. Each finding gives the rows and trials affected, the columns
 they came from, a few example rows, and what the app does with them. Nothing
 is removed: the rows stay in every table and export. `check_data_health` runs
 the same checks from Python, and `scanpath-studio check` from the terminal.

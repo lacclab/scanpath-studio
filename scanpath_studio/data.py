@@ -4971,6 +4971,48 @@ def coerce_flag(col: pd.Series) -> pd.Series:
 _MISSING_FLAG_STRINGS = {"", ".", "na", "nan", "n/a", "-", "none", "null", "<na>"}
 
 
+_TRUE_FLAG_SPELLINGS = {"true", "t", "yes", "y", "1", "1.0"}
+_FALSE_FLAG_SPELLINGS = {"false", "f", "no", "n", "0", "0.0"}
+
+
+def coerce_bool_or_na(col: pd.Series) -> pd.Series:
+    """A user-supplied true/false column as a nullable boolean.
+
+    Real booleans stay as they are, numbers go by ``!= 0``, and the strings
+    ``true/false``, ``t/f``, ``yes/no``, ``y/n``, ``1/0`` (any case, trimmed)
+    are read by their meaning — never by truthiness, under which the string
+    ``"False"`` is true. Missing cells and any other spelling are ``<NA>``, so
+    a caller decides what an unknown means (round 11).
+    """
+    if pd.api.types.is_bool_dtype(col):
+        return col.astype("boolean")
+    out = pd.Series(pd.NA, index=col.index, dtype="boolean")
+    numeric = pd.to_numeric(col, errors="coerce")
+    is_number = numeric.notna() & ~col.map(lambda v: isinstance(v, str))
+    out[is_number.to_numpy()] = (numeric[is_number] != 0).to_numpy()
+    rest = ~is_number & col.notna()
+    if rest.any():
+        spelled = col[rest].map(
+            lambda v: v if isinstance(v, bool) else str(v).strip().lower()
+        )
+        out[rest.to_numpy()] = (
+            spelled.map(
+                lambda v: (
+                    v
+                    if isinstance(v, bool)
+                    else True
+                    if v in _TRUE_FLAG_SPELLINGS
+                    else False
+                    if v in _FALSE_FLAG_SPELLINGS
+                    else pd.NA
+                )
+            )
+            .astype("boolean")
+            .to_numpy()
+        )
+    return out
+
+
 def coerce_measure_flag(col: pd.Series) -> pd.Series:
     """A supplied reading-measure flag (skip, regression in/out) as a nullable
     boolean: true, false, or missing.

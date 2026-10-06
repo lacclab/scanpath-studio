@@ -362,9 +362,12 @@ class TestFieldPickerSurvivesAViewSwitch:
     """
 
     def test_a_corpus_analysis_round_trip_keeps_the_selection(self):
+        from scanpath_studio import tabs
         from tests.conftest import APP_SCRIPT
 
         at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        # The panel renders only while its tab is open (round 11).
+        at.session_state["single_subtab"] = tabs.SUBTAB_STIMULUS
         at.run()
         assert not at.exception, at.exception
         before_spans = list(at.session_state["stimulus_span_fields"])
@@ -407,3 +410,203 @@ class TestFieldPickerKeepsChoicesAcrossTrials:
         at.run()
         assert not at.exception, at.exception
         assert at.session_state["stimulus_qa_fields"] == []
+
+
+# ---------------------------------------------------------------------------
+# Round 11 — the panel's data is input, not markup or a trusted shape.
+# ---------------------------------------------------------------------------
+
+
+class TestComprehensionQuestionShape:
+    """#3: valid JSON of the wrong shape is skipped, never raised on."""
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            '{"question": "Where?"}',
+            '"just a string"',
+            "42",
+            "true",
+            '[null, 3, "x"]',
+            '[{"question": ["a"]}]',
+            '[{"condition": {"a": 1}}]',
+            '[{"target": 5, "distractors": "not a list"}]',
+            '[{"distractors": [{"a": 1}]}]',
+            "{not json",
+        ],
+    )
+    def test_malformed_input_is_skipped(self, raw):
+        from scanpath_studio.tabs import _parse_comprehension_questions
+
+        questions, skipped = _parse_comprehension_questions(raw)
+        assert questions == []
+        assert skipped >= 1
+
+    def test_valid_questions_keep_order_target_and_distractors(self):
+        import json
+
+        from scanpath_studio.tabs import _parse_comprehension_questions
+
+        raw = json.dumps(
+            [
+                {
+                    "question_no": 2,
+                    "question": "Where?",
+                    "target": "Here",
+                    "distractors": ["There", None, 3],
+                    "condition": "nan",
+                },
+                "junk",
+                {"question": "Who?", "target": None},
+            ]
+        )
+        questions, skipped = _parse_comprehension_questions(raw)
+        assert skipped == 1
+        assert [q.question for q in questions] == ["Where?", "Who?"]
+        assert questions[0].number == "2" and questions[1].number == "3"
+        assert questions[0].target == "Here"
+        assert questions[0].distractors == ("There", "3")
+        assert questions[0].condition == ""
+
+    @pytest.mark.parametrize("raw", ["[]", "{}", "null", '""'])
+    def test_empty_is_quiet(self, raw):
+        from scanpath_studio.tabs import _parse_comprehension_questions
+
+        assert _parse_comprehension_questions(raw) == ([], 0)
+
+    def test_render_does_not_raise_on_an_object(self, monkeypatch):
+        from scanpath_studio import tabs
+
+        warned: list[str] = []
+        monkeypatch.setattr(tabs.st, "markdown", lambda *a, **k: None)
+        monkeypatch.setattr(
+            tabs.st, "warning", lambda body, **k: warned.append(str(body))
+        )
+        tabs._render_comprehension_questions(
+            pd.DataFrame({"comprehension_questions": ['{"question":"Where?"}']})
+        )
+        assert len(warned) == 1
+
+
+class TestStringBooleans:
+    """#4: "False" means false wherever a flag is read."""
+
+    def test_span_mask_reads_false_as_false(self):
+        from scanpath_studio.tabs import _flag_mask
+
+        assert _flag_mask(pd.Series(["True", "False", "false", None])).tolist() == [
+            True,
+            False,
+            False,
+            False,
+        ]
+
+    def test_first_bool(self):
+        from scanpath_studio.tabs import _first_bool
+
+        for value, expected in [
+            ("False", False),
+            ("True", True),
+            (0, False),
+            (1, True),
+            (False, False),
+            ("maybe", None),
+        ]:
+            assert _first_bool(pd.DataFrame({"c": [value]}), "c") is expected
+
+    def test_span_text_skips_false_rows(self):
+        from scanpath_studio.tabs import _span_text
+
+        words = pd.DataFrame(
+            {"word_id": [0, 1], "text": ["yes", "no"], "is_in_aspan": ["True", "False"]}
+        )
+        assert _span_text(words, "is_in_aspan") == "yes"
+
+    def test_bool_filter_sees_both_classes(self):
+        from scanpath_studio.controls import _column_present_bools
+
+        df = pd.DataFrame({"c": pd.array([True, False, None], dtype="boolean")})
+        assert _column_present_bools(df, "c", cache_key=("t", 1)) == {True, False}
+        df = pd.DataFrame({"c": ["True", "False"]})
+        assert _column_present_bools(df, "c", cache_key=("t", 2)) == {True, False}
+
+
+class TestImageOrigin:
+    """#5: a zero origin is an origin."""
+
+    @pytest.mark.parametrize(
+        ("words_xy", "fix_xy", "expected"),
+        [
+            ((0, 0), (120, 80), (0.0, 0.0)),
+            ((-5, 0), (120, 80), (-5.0, 0.0)),
+            ((None, 7), (120, 80), (120.0, 7.0)),
+            ((None, None), (None, None), (0.0, 0.0)),
+        ],
+    )
+    def test_origin(self, tmp_path, monkeypatch, words_xy, fix_xy, expected):
+        from PIL import Image
+
+        from scanpath_studio import tabs
+
+        path = tmp_path / "page.png"
+        Image.new("RGB", (2, 3), "white").save(path)
+        monkeypatch.setattr(tabs, "_servable_image_path", lambda p, source=None: p)
+        words = pd.DataFrame(
+            {
+                "image_path": [str(path)],
+                "image_x": [words_xy[0]],
+                "image_y": [words_xy[1]],
+            }
+        )
+        fixations = pd.DataFrame({"image_x": [fix_xy[0]], "image_y": [fix_xy[1]]})
+        result = tabs._reading_stimulus_image(words, fixations)
+        assert result is not None
+        assert result[2] == expected
+
+
+class TestValuesRenderLiterally:
+    """#7: dataset values never reach the Markdown renderer as syntax."""
+
+    def test_question_values_are_escaped(self, monkeypatch):
+        import json
+
+        from scanpath_studio import tabs
+
+        seen: list[tuple[str, bool]] = []
+        monkeypatch.setattr(
+            tabs.st,
+            "markdown",
+            lambda body, unsafe_allow_html=False, **k: seen.append(
+                (str(body), unsafe_allow_html)
+            ),
+        )
+        tabs._render_comprehension_questions(
+            pd.DataFrame(
+                {
+                    "comprehension_questions": [
+                        json.dumps(
+                            [
+                                {
+                                    "question": "![r](https://example.invalid/p)\n\n# h",
+                                    "target": "**answer** <b>x</b>",
+                                    "distractors": ["[c](https://example.invalid/)"],
+                                }
+                            ]
+                        )
+                    ]
+                }
+            )
+        )
+        body = "\n".join(b for b, _ in seen)
+        # Every line is an app-owned HTML block, so the Markdown parser never
+        # reads the values; tags arrive escaped, and no blank line breaks out.
+        assert all(html and b.startswith("<div") for b, html in seen)
+        assert "&lt;b&gt;x&lt;/b&gt;" in body
+        assert "<b>x</b>" not in body
+        assert "\n\n" not in body
+        assert "![r](https://example.invalid/p)" in body  # literal characters
+
+    def test_literal_escapes_markup_and_newlines(self):
+        from scanpath_studio.tabs import _literal
+
+        assert _literal("<img src=x>\r\n\nnext") == "&lt;img src=x&gt;<br><br>next"

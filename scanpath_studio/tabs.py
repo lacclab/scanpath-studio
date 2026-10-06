@@ -206,6 +206,7 @@ from scanpath_studio.data import (
     aggregate_char_boxes,
     assign_derived,
     brought_reading_measures,
+    coerce_bool_or_na,
     compute_word_metrics,
     derive_trial_index,
     drop_internal_columns,
@@ -2945,6 +2946,13 @@ def _is_boolish(series: pd.Series) -> bool:
     }
 
 
+def _flag_mask(series: pd.Series) -> pd.Series:
+    """A span / flag column as a plain mask: true only where the value means
+    true — the string ``"False"`` is false, and an unknown spelling is not true
+    (round 11; ``astype(bool)`` read every non-empty string as true)."""
+    return coerce_bool_or_na(series).fillna(False).astype(bool)
+
+
 def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
     """Per-word boolean columns that mark a highlightable span (generic).
 
@@ -2956,7 +2964,7 @@ def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
         for c in user_columns(trial_words)
         if any(h in c.lower() for h in _SPAN_NAME_HINTS)
         and _is_boolish(trial_words[c])
-        and bool(trial_words[c].fillna(False).astype(bool).any())
+        and bool(_flag_mask(trial_words[c]).any())
     ]
     known = [c for c in ("is_in_aspan", "is_in_dspan") if c in detected]
     rest = [c for c in detected if c not in known]
@@ -3071,7 +3079,7 @@ def _stimulus_field_candidates(
             continue
         series = trial_words[col]
         varies = series.dropna().nunique() > 1
-        if _is_boolish(series) and bool(series.fillna(False).astype(bool).any()):
+        if _is_boolish(series) and bool(_flag_mask(series).any()):
             (spans if varies else qa).append(col)
         elif not varies:
             qa.append(col)
@@ -3166,37 +3174,141 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
             )
 
 
+_ANSWER_YES_COLOR = "#198754"
+_ANSWER_NO_COLOR = "#dc3545"
+
+
+def _literal(value: object) -> str:
+    """A dataset value as literal text inside the panel's app-owned HTML.
+
+    Round 11: question, answer and context values used to be interpolated into
+    Markdown, so ``![x](https://host/pixel)`` fetched a remote image and
+    ``**answer**`` came out bold. Escaped into an HTML block they are inert —
+    Markdown, Streamlit's ``:colour[…]`` / emoji / LaTeX syntax and tags all
+    show as the characters they are. Line breaks become ``<br>``: a blank line
+    would end the HTML block and hand the rest back to the Markdown parser.
+    """
+    text = html.escape(str(value)).replace("\r\n", "\n").replace("\r", "\n")
+    return text.replace("\n", "<br>")
+
+
+def _context_html(body: str) -> None:
+    """One app-owned line of the Stimulus & Context panel (values `_literal`)."""
+    st.markdown(f'<div class="sps-context-line">{body}</div>', unsafe_allow_html=True)
+
+
+def _answer_mark(value: bool, yes: str, no: str) -> str:
+    color, text = (_ANSWER_YES_COLOR, yes) if value else (_ANSWER_NO_COLOR, no)
+    return f'<span style="color:{color};">{text}</span>'
+
+
+@dataclass(frozen=True)
+class _Question:
+    """One structured comprehension question, every field already text."""
+
+    number: str
+    condition: str
+    question: str
+    target: str
+    distractors: tuple[str, ...]
+
+
+def _question_text(value: object) -> str | None:
+    """A question field as text: ``""`` when absent, ``None`` when it is not a
+    scalar (a list or an object where text belongs)."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and not np.isfinite(value):
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return str(value).strip()
+    return None
+
+
+def _parse_comprehension_questions(raw: str) -> tuple[list[_Question], int]:
+    """``comprehension_questions`` JSON → ``(questions, records skipped)``.
+
+    The column is data, so its shape is checked rather than assumed (round 11:
+    a JSON *object* iterated as its keys and crashed every rerun of the
+    trial). The root must be a list; each record an object whose fields are
+    scalars and whose ``distractors`` is a list of scalars. A record that is
+    not is skipped and counted; a value that is not JSON at all counts as one.
+    """
+    try:
+        items = json.loads(raw)
+    except (ValueError, TypeError):
+        return [], 1
+    if items in (None, "", [], {}):
+        return [], 0
+    if not isinstance(items, list):
+        return [], 1
+    questions: list[_Question] = []
+    skipped = 0
+    for i, item in enumerate(items, 1):
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+        fields = {
+            key: _question_text(item.get(key))
+            for key in ("question_no", "condition", "question", "target")
+        }
+        distractors = item.get("distractors")
+        if distractors is None:
+            distractors = []
+        texts = (
+            [_question_text(d) for d in distractors]
+            if isinstance(distractors, list)
+            else [None]
+        )
+        if any(v is None for v in (*fields.values(), *texts)):
+            skipped += 1
+            continue
+        condition = fields["condition"]
+        questions.append(
+            _Question(
+                number=fields["question_no"] or str(i),
+                condition="" if condition.lower() == "nan" else condition,
+                question=fields["question"],
+                target=fields["target"],
+                distractors=tuple(t for t in texts if t),
+            )
+        )
+    return questions, skipped
+
+
 def _render_comprehension_questions(trial_words: pd.DataFrame) -> None:
     """Render structured comprehension questions for the trial's stimulus.
 
     Parses the ``comprehension_questions`` JSON column (MultiplEYE) into a list of
     questions, each with the target (✓ reference answer) and distractors. The
     corpus records no per-reader answer, so the target is shown as the key only —
-    not as a 'selected'/'correct' result. No-op when the column is absent or the
-    JSON is empty/malformed."""
+    not as a 'selected'/'correct' result. No-op when the column is absent or
+    empty; records it cannot read are skipped with one warning
+    (:func:`_parse_comprehension_questions`)."""
     raw = _first_str(trial_words, "comprehension_questions")
     if not raw:
         return
-    try:
-        items = json.loads(raw)
-    except (ValueError, TypeError):
+    questions, skipped = _parse_comprehension_questions(raw)
+    if skipped:
+        st.warning(
+            f"{plural(skipped, 'comprehension question record')} in this trial's "
+            f"{_md_escape(_field_label('comprehension_questions'))} could not be read "
+            "and " + ("is" if skipped == 1 else "are") + " not shown.",
+            icon=ICONS["warning"],
+        )
+    if not questions:
         return
-    if not items:
-        return
-    st.markdown("**Comprehension questions**")
-    for i, q in enumerate(items, 1):
-        head = f"**Q{q.get('question_no') or i}**"
-        cond = (q.get("condition") or "").strip()
-        if cond and cond.lower() != "nan":
-            head += f" · _{cond}_"
-        st.markdown(f"{head}: {q.get('question', '')}")
+    _context_html("<b>Comprehension questions</b>")
+    for q in questions:
+        head = f"<b>Q{_literal(q.number)}</b>"
+        if q.condition:
+            head += f" · <i>{_literal(q.condition)}</i>"
         options = []
-        target = (q.get("target") or "").strip()
-        if target:
-            options.append(f"- ✓ {target}")
-        options += [f"- {d}" for d in q.get("distractors", []) if d]
-        if options:
-            st.markdown("\n".join(options))
+        if q.target:
+            options.append(f"<li>✓ {_literal(q.target)}</li>")
+        options += [f"<li>{_literal(d)}</li>" for d in q.distractors]
+        listed = f'<ul style="margin:0.2rem 0 0.6rem;">{"".join(options)}</ul>'
+        _context_html(f"{head}: {_literal(q.question)}" + (listed if options else ""))
 
 
 def _is_boolish_span(col: str) -> bool:
@@ -3234,17 +3346,14 @@ def _render_paragraph_with_spans(
     if span_bg is None:
         cols = _detect_span_columns(ordered)
         span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(cols)}
+    # Even with no span the text goes through the escaped HTML path: `st.write`
+    # would read a word as Markdown (round 11).
     active = [c for c in span_bg if c in ordered.columns]
-    if not active:
-        st.write(" ".join(ordered["text"].fillna("").astype(str).tolist()))
-        return
-    import html as _html
-
     texts = ordered["text"].fillna("").astype(str).tolist()
-    masks = {c: ordered[c].fillna(False).astype(bool).tolist() for c in active}
+    masks = {c: _flag_mask(ordered[c]).tolist() for c in active}
     parts: list[str] = []
     for i, raw_word in enumerate(texts):
-        word = _html.escape(raw_word)
+        word = html.escape(raw_word)
         bg = ""
         for col in active:  # first matching span wins (known spans listed first)
             if masks[col][i]:
@@ -3269,7 +3378,7 @@ def _span_text(trial_words: pd.DataFrame, mask_col: str) -> str:
     if mask_col not in trial_words.columns or "text" not in trial_words.columns:
         return ""
     ordered = _ordered_words(trial_words)
-    mask = ordered[mask_col].fillna(False).astype(bool)
+    mask = _flag_mask(ordered[mask_col])
     return " ".join(ordered.loc[mask, "text"].fillna("").astype(str).tolist())
 
 
@@ -3301,9 +3410,18 @@ def _reading_stimulus_image(
     size = _png_pixel_size(path) if path and os.path.exists(path) else None
     if size is None:
         return None
-    origin = (
-        _first_num(words, "image_x") or _first_num(fixations, "image_x") or 0.0,
-        _first_num(words, "image_y") or _first_num(fixations, "image_y") or 0.0,
+    # Round 11: coalesce on presence, not truthiness — 0 is a real origin, and
+    # `or` replaced the words' (0, 0) with the fixations' own value.
+    origin = tuple(
+        next(
+            (
+                v
+                for v in (_first_num(words, c), _first_num(fixations, c))
+                if v is not None
+            ),
+            0.0,
+        )
+        for c in ("image_x", "image_y")
     )
     return path, size, origin
 
@@ -3346,11 +3464,14 @@ def _first_num(df: pd.DataFrame, col: str) -> float | None:
 
 
 def _first_bool(df: pd.DataFrame, col: str) -> bool | None:
-    """First non-null value of ``col`` as a bool, or None when absent/empty."""
+    """First non-null value of ``col`` as a bool, or None when absent, empty or
+    not a true/false spelling (:func:`data.coerce_bool_or_na` — ``"False"`` is
+    false)."""
     if col in df.columns:
         vals = df[col].dropna()
         if not vals.empty:
-            return bool(vals.iloc[0])
+            flag = coerce_bool_or_na(vals.iloc[:1]).iloc[0]
+            return None if pd.isna(flag) else bool(flag)
     return None
 
 
@@ -3370,7 +3491,7 @@ def _span_fixated_note(
         or mask_col not in trial_words.columns
     ):
         return ""
-    span_words = trial_words[trial_words[mask_col].fillna(False).astype(bool)]
+    span_words = trial_words[_flag_mask(trial_words[mask_col])]
     if span_words.empty:
         return ""
     from scanpath_studio.measures import fixation_in_text_mask
@@ -3436,11 +3557,13 @@ def _render_paragraph_panel(
 
         # Trial context fields, generically. Keep OneStop's combined
         # "selected X · ✓ correct" answer line when both columns are present.
+        # Round 11: every value goes in as literal text (`_literal`); only the
+        # labels, marks and layout around it are the app's own markup.
         question_cols = [c for c in qa_cols if "question" in c.lower()]
         for col in question_cols:
             val = _first_str(trial_words, col)
             if val:
-                st.markdown(f"**{_field_label(col)}:** {val}")
+                _context_html(f"<b>{_literal(_field_label(col))}:</b> {_literal(val)}")
 
         rendered = set(question_cols)
         if "selected_answer" in qa_cols and "is_correct" in qa_cols:
@@ -3449,24 +3572,24 @@ def _render_paragraph_panel(
             if answer_val or correct is not None:
                 bits = []
                 if answer_val:
-                    bits.append(f"selected **{answer_val}**")
+                    bits.append(f"selected <b>{_literal(answer_val)}</b>")
                 if correct is not None:
-                    bits.append(":green[✓ correct]" if correct else ":red[✗ incorrect]")
-                st.markdown("**Answer:** " + " · ".join(bits))
+                    bits.append(_answer_mark(correct, "✓ correct", "✗ incorrect"))
+                _context_html("<b>Answer:</b> " + " · ".join(bits))
             rendered.update({"selected_answer", "is_correct"})
 
         # Any remaining detected answer/correct columns, rendered generically.
         for col in qa_cols:
             if col in rendered:
                 continue
+            label = f"<b>{_literal(_field_label(col))}:</b> "
             bval = _first_bool(trial_words, col) if "correct" in col.lower() else None
             if bval is not None:
-                mark = ":green[✓ yes]" if bval else ":red[✗ no]"
-                st.markdown(f"**{_field_label(col)}:** " + mark)
+                _context_html(label + _answer_mark(bval, "✓ yes", "✗ no"))
             else:
                 val = _first_str(trial_words, col)
                 if val:
-                    st.markdown(f"**{_field_label(col)}:** {val}")
+                    _context_html(label + _literal(val))
 
         # Each highlighted span's text + (optional) fixation note.
         for col in span_cols:
@@ -7477,7 +7600,12 @@ def render_single_trial_tab(
             bare=True,
         )
     with tab_stim:
-        _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
+        # Round 11: gated like the other keyed tabs — a hidden panel does no work,
+        # and a trial whose context it cannot render costs only this tab.
+        if tab_stim.open:
+            _render_paragraph_panel(
+                trial_words, trial_fixations=trial_fixations, bare=True
+            )
     with tab_compare:
         # PERF-3: only the selected tab's body runs (see the st.tabs call).
         # Nothing to render when closed — a hidden panel is not on screen.

@@ -73,6 +73,7 @@ from .data import (
     INTERNAL_COLUMNS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    coerce_bool_or_na,
     frame_fingerprint,
     mapping_value_preview,
     user_columns,
@@ -7528,9 +7529,10 @@ def _trials_missing_column(_df: pd.DataFrame, column: str, cache_key) -> int:
 def _column_present_bools(_df: pd.DataFrame, column: str, cache_key) -> frozenset:
     if column not in _df.columns:
         return frozenset()
-    return frozenset(
-        bool(v) for v in pd.Series(_df[column]).dropna().astype(bool).unique()
-    )
+    # Round 11: by meaning, not truthiness — `astype(bool)` read "False" as
+    # True and left one class, hiding the filter.
+    flags = coerce_bool_or_na(pd.Series(_df[column])).dropna()
+    return frozenset(bool(v) for v in flags.unique())
 
 
 def _bool_metadata_filter(

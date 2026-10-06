@@ -183,14 +183,12 @@ COLORSCALES = [
     "Spectral",
 ]
 
-# VIZ-32: colourblind-safe (Viridis) is the default a fresh session opens with.
+# Both colour scales open in Blues: one hue, light to dark, colourblind-safe.
 # A keyed selectbox first-rendered inside a popover would otherwise display its
 # first option rather than a non-index-0 seeded value on first open — handled by
 # `controls._popover_selectbox` (explicit `index=`) / `_pin` + `persist_state`, so a
 # non-index-0 default here still keeps the picker and the figure in sync.
-DEFAULT_FIXATION_COLORSCALE = "Viridis"
-#: The heatmap opens in Blues: one hue, light to dark, so it reads as "more
-#: dwell" over the text without competing with Viridis-coloured fixations.
+DEFAULT_FIXATION_COLORSCALE = "Blues"
 DEFAULT_HEATMAP_COLORSCALE = "Blues"
 #: Heatmap styles that scale their smoothed density to each figure's own peak
 #: (`plots._add_interpolated_heatmap`), so a ``heatmap_range`` does nothing to
@@ -423,12 +421,12 @@ PLOTLY_CONFIG: dict = {"showSendToCloud": False}
 #     (VIZ-19) are the redundant channels when colour alone can't carry it.
 PALETTES: dict[str, dict] = {
     # Okabe & Ito's eight-colour set — the de-facto standard for qualitative
-    # colourblind-safe encoding — plus Viridis, which is both perceptually
-    # uniform and safe across the common deficiencies. VIZ-32: this is the
+    # colourblind-safe encoding — plus single-hue Blues scales, which vary in
+    # lightness only and so survive every common deficiency. VIZ-32: this is the
     # default a fresh session opens with, not just an opt-in choice.
     "Default (colourblind-safe)": {
-        "description": "Okabe–Ito hues, a Viridis fixation scale and a Blues "
-        "heatmap; safe for deuteran-, protan- and tritanopia.",
+        "description": "Okabe–Ito hues + Blues scales; safe for deuteran-, "
+        "protan- and tritanopia.",
         "fixation_color": DEFAULT_FIXATION_COLOR,
         "fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
         "heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,

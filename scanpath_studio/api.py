@@ -67,6 +67,7 @@ from .constants import (  # noqa: E402
     palette_settings,
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
+from . import export as _export  # noqa: E402
 from .export import annotate_figure  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
@@ -3321,17 +3322,41 @@ def save_figure(
     fig: go.Figure,
     path: str | Path,
     *,
-    scale: int = 2,
+    scale: float = 2,
     width: int | None = None,
     height: int | None = None,
+    width_mm: float | None = None,
+    width_in: float | None = None,
+    dpi: int | None = None,
 ) -> Path:
     """Save a figure by extension: ``.html`` (interactive, browser-free) or
     ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs a Chrome/Chromium;
     run ``plotly_get_chrome -y`` once if missing). ``width`` / ``height`` set the
     raster output size in px (overriding the figure's intrinsic layout size);
-    both ignored for ``.html``. Returns the written path."""
+    both ignored for ``.html``. Returns the written path.
+
+    ``width_mm`` or ``width_in`` with ``dpi`` (default 300) sizes a PNG for
+    print, as the app's Export → *Current figure* does: 180 mm at 600 dpi is
+    a 4,252 px wide PNG, its height following the figure's aspect, with the
+    dpi written into the file. They replace ``scale``."""
     path = Path(path)
     suffix = path.suffix.lower()
+    if width_mm is not None or width_in is not None:
+        if width_mm is not None and width_in is not None:
+            raise ValueError("Pass width_mm or width_in, not both.")
+        if suffix != ".png":
+            raise ValueError(
+                "width_mm / width_in / dpi size a PNG; save as .png, or set "
+                "width / height / scale for other formats."
+            )
+        dpi = int(dpi or _export.DEFAULT_PRINT_DPI)
+        unit, value = ("mm", width_mm) if width_mm is not None else ("in", width_in)
+        base = int(width or fig.layout.width or 700)
+        scale = _export.print_scale(base, float(value), unit, dpi)
+    elif dpi is not None:
+        raise ValueError(
+            "dpi is the resolution of a print width: pass width_mm or width_in too."
+        )
     if suffix == ".html":
         # BUG-93: an animation replays on the wall-clock player, which also
         # autoplays it at the configured speed when asked (VIZ-10). Plotly's own
@@ -3358,6 +3383,8 @@ def save_figure(
     if suffix in (".png", ".svg", ".pdf"):
         try:
             fig.write_image(str(path), scale=scale, width=width, height=height)
+            if dpi is not None:
+                _export.set_png_dpi(path, dpi)
         except OSError:
             raise  # filesystem problem — the original error says it best
         except Exception as exc:  # Kaleido raises various types

@@ -185,6 +185,13 @@ GLOBAL_DISPLAY_DPI = "global_display_dpi"
 GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
 GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
 
+# --- Export → Current figure's print size (#374, F28) -------------------------
+# Not `global_*`: the size a file is written at is not part of a design. On the
+# link and in the settings file, but only while a width is set.
+EXPORT_FIGURE_WIDTH = "export_figure_width"
+EXPORT_FIGURE_WIDTH_UNIT = "export_figure_width_unit"
+EXPORT_FIGURE_DPI = "export_figure_dpi"
+
 # --- Trial-picker keys a link / config seeds (utils.select_trial owns them) --
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
 # widget keys, seeded before the picker renders.
@@ -469,6 +476,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
 # string / choice / colour
 SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        "export_width_unit": EXPORT_FIGURE_WIDTH_UNIT,
         "color_by": GLOBAL_COLOR_BY,
         "heatmap_style": GLOBAL_HEATMAP_STYLE,
         "heatmap_norm": GLOBAL_HEATMAP_NORM,
@@ -555,6 +563,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
 # int
 SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        "export_dpi": EXPORT_FIGURE_DPI,
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
@@ -578,6 +587,7 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 # float
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        "export_width": EXPORT_FIGURE_WIDTH,
         "line_spacing": GLOBAL_LINE_SPACING,
         "heatmap_sigma_px": GLOBAL_HEATMAP_SIGMA_PX,
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
@@ -710,6 +720,15 @@ COMPARE_B_FILTER_PARAMS: Mapping[str, str] = MappingProxyType(
         "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
     }
 )
+#: #374 F28 — Export → Current figure's print size. On the link only while a
+#: width is set: without one the PNG is drawn at the screen size, the default.
+EXPORT_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "export_width": EXPORT_FIGURE_WIDTH,
+        "export_width_unit": EXPORT_FIGURE_WIDTH_UNIT,
+        "export_dpi": EXPORT_FIGURE_DPI,
+    }
+)
 COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         **_compare_style_params(
@@ -755,6 +774,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
+        *EXPORT_PARAMS,
     }
 )
 
@@ -826,6 +846,9 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_VIEWING_DISTANCE_MM,
         GLOBAL_DISPLAY_DPI,
         GLOBAL_STIMULUS_FONT_PT,
+        # #374 F28.
+        EXPORT_FIGURE_WIDTH,
+        EXPORT_FIGURE_DPI,
         *(
             template.format(idx=idx)
             for template in (CMP_SACCADE_WIDTH, CMP_MARKER_SIZE_RANGE, CMP_OPACITY)
@@ -1050,6 +1073,10 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         COMPARE_SOURCE_STATE_KEY,
         PENDING_COMPARE_STATE_KEY,
         SINGLE_COMPARE_SCREEN_ID,
+        # #374 F28 — the config's `export` section.
+        EXPORT_FIGURE_WIDTH,
+        EXPORT_FIGURE_WIDTH_UNIT,
+        EXPORT_FIGURE_DPI,
     }
 )
 

@@ -1895,10 +1895,11 @@ def cli_snippet(
     # The raster geometry `save_figure` would be given. `render` has the same
     # three flags, so a translated invocation has to carry them or write a
     # differently-sized file than the Python form beside it.
-    for name in ("width", "height", "scale"):
+    # #374 F28: the print width + dpi `save_figure` takes, as `render`'s flags.
+    for name in ("width", "height", "scale", "width_mm", "width_in", "dpi"):
         value = (save_kwargs or {}).get(name)
         if value is not None:
-            argv += [f"--{name}", _num(value)]
+            argv += [f"--{name.replace('_', '-')}", _num(value)]
 
     argv += ["-o", output]
     unsupported.extend(source.cli_unsupported)

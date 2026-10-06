@@ -4,8 +4,8 @@
 
 Open the **Export** subtab in the Scanpath view.
 
-- **Current figure** downloads what is on screen: PNG, SVG, PDF or HTML, or the
-  replay as HTML, GIF or MP4.
+- **Current figure** downloads what is on screen: PNG (at a print width and
+  DPI, if you give one), SVG, PDF or HTML, or the replay as HTML, GIF or MP4.
 - **Export bundle** writes figures and tables for this trial, the filtered
   trials, or the whole dataset, plus a `plot_config.json` recording the main
   settings they were drawn with (the full set is **Share → File**).

@@ -91,6 +91,64 @@ from .preprocessing import (
 from .progress import report as report_progress
 from .utils import extract_trial
 
+
+def _local_stamp() -> str:
+    """Now in this computer's local time, with its UTC offset said (#374, F28):
+    ``2026-10-06 21:21:01 (UTC+03:00)``."""
+    now = datetime.now().astimezone()
+    offset = now.strftime("%z")
+    return f"{now:%Y-%m-%d %H:%M:%S} (UTC{offset[:3]}:{offset[3:]})"
+
+
+# --- #374 F28 · a raster figure's print size ---------------------------------
+#: The units a print width is given in → millimetres per unit.
+PRINT_UNITS = {"mm": 1.0, "in": 25.4}
+#: The resolution a print width is drawn at when none is named.
+DEFAULT_PRINT_DPI = 300
+#: What the app's Export → Current figure PNG is drawn at without a print width
+#: (`tabs._PNG_EXPORT_SCALE`): three pixels per figure pixel.
+SCREEN_PNG_SCALE = 3
+
+
+def print_width_px(width: float, unit: str = "mm", dpi: int = DEFAULT_PRINT_DPI) -> int:
+    """The pixel width of a raster figure ``width`` ``unit`` wide at ``dpi``:
+    180 mm at 600 dpi is 4,252 px."""
+    if unit not in PRINT_UNITS:
+        raise ValueError(f"Unknown width unit {unit!r}; use 'mm' or 'in'.")
+    if not width or width <= 0 or not dpi or dpi <= 0:
+        raise ValueError("A print width and its dpi must both be positive.")
+    return max(1, round(float(width) * PRINT_UNITS[unit] / 25.4 * float(dpi)))
+
+
+def print_scale(
+    figure_width: int, width: float, unit: str = "mm", dpi: int = DEFAULT_PRINT_DPI
+) -> float:
+    """The ``scale`` that draws a ``figure_width``-px figure ``width`` ``unit``
+    wide at ``dpi`` (the height follows the figure's own aspect)."""
+    return print_width_px(width, unit, dpi) / float(figure_width)
+
+
+def png_save_kwargs(
+    width: float | None, unit: str = "mm", dpi: int | None = None
+) -> dict:
+    """The `api.save_figure` keywords that write the PNG Export → *Current
+    figure* writes: the print width at its dpi, else the screen size at
+    `SCREEN_PNG_SCALE` — so Share → Code writes the same pixel size."""
+    if not width:
+        return {"scale": SCREEN_PNG_SCALE}
+    return {f"width_{unit}": float(width), "dpi": int(dpi or DEFAULT_PRINT_DPI)}
+
+
+def set_png_dpi(path, dpi: int) -> None:
+    """Stamp ``dpi`` into a PNG's header (``pHYs``), so a layout program
+    places it at its print size. The pixels are untouched."""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        image.load()
+        image.save(path, format="PNG", dpi=(dpi, dpi))
+
+
 # --- EXP-1 · customizable export paths ---------------------------------------
 # A zip of 200 trials landed with names the tool chose, which is rarely how a
 # user organizes figures for a paper. The path of every artifact is now a
@@ -1404,7 +1462,7 @@ def render_export_options(
     st = st_module
     # No expander — the options are always displayed.
     with st.container():
-        st.markdown("### Trials to Include")
+        st.markdown("### Trials to include")
         # The whole-dataset choice lives inside the scope radio.
         (
             scope,
@@ -1423,7 +1481,7 @@ def render_export_options(
 
         # Figures are the headline artifact, so they lead with a single
         # multi-select of formats (pills) rather than a column of checkboxes.
-        st.markdown("### Figure Formats")
+        st.markdown("### Figure formats")
         fig_formats = (
             panel_field(
                 st,
@@ -2319,7 +2377,7 @@ def bulk_export(
 
     readme_lines = [
         "# Bulk export",
-        f"Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
+        f"Generated: {_local_stamp()}",
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",

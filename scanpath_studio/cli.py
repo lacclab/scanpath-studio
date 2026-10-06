@@ -1383,6 +1383,26 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="X",
         help="Raster pixel-density multiplier (PNG/SVG/PDF; default: 2.0).",
     )
+    # #374 F28 — the app's Export → Current figure Width + DPI.
+    print_width = viz.add_mutually_exclusive_group()
+    print_width.add_argument(
+        "--width-mm",
+        type=float,
+        metavar="MM",
+        help="Print width of a PNG in mm, drawn at --dpi (replaces --scale).",
+    )
+    print_width.add_argument(
+        "--width-in",
+        type=float,
+        metavar="IN",
+        help="Print width of a PNG in inches, drawn at --dpi.",
+    )
+    viz.add_argument(
+        "--dpi",
+        type=int,
+        metavar="N",
+        help="Resolution of --width-mm / --width-in (default: 300).",
+    )
     viz.add_argument(
         "--font-size",
         type=int,
@@ -2201,13 +2221,11 @@ def _print_reproduction_code(
     # line and only a deliberate `--width` / `--scale` shows up.
     save_kwargs = {
         name: value
-        for name, value in (
-            ("scale", args.scale),
-            ("width", args.width),
-            ("height", args.height),
-        )
+        for name, value in _save_kwargs(args).items()
         if value is not None and not (name == "scale" and value == 2.0)
     }
+    if "width_mm" in save_kwargs or "width_in" in save_kwargs:
+        save_kwargs.pop("scale", None)  # the print width replaces it
     caveats = []
     if args.all_screens:
         caveats.append(
@@ -2397,12 +2415,31 @@ def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
                 setattr(args, f"{bar}_colorbar_{setting}", shared)
 
 
+def _save_kwargs(args) -> dict:
+    """`api.save_figure`'s size keywords from the render flags; the print
+    width only when one was given (#374, F28)."""
+    kwargs = {"scale": args.scale, "width": args.width, "height": args.height}
+    if args.width_mm is not None:
+        kwargs["width_mm"] = args.width_mm
+    if args.width_in is not None:
+        kwargs["width_in"] = args.width_in
+    if args.dpi is not None:
+        kwargs["dpi"] = args.dpi
+    return kwargs
+
+
 def render(argv: list[str]) -> None:
     # Bound, not inlined: DATA-27's --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
     parser = _render_parser()
     args = parser.parse_args(argv)
     _apply_shared_colorbar_flags(args)
+    # #374 F28: a print width sizes a PNG; say so before the data loads.
+    printed = args.width_mm is not None or args.width_in is not None
+    if args.dpi is not None and not printed:
+        parser.error("--dpi is the resolution of --width-mm / --width-in; add one.")
+    if printed and args.output and not str(args.output).lower().endswith(".png"):
+        parser.error("--width-mm / --width-in size a PNG; write to a .png file.")
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [
@@ -3407,13 +3444,7 @@ def render(argv: list[str]) -> None:
                     f"{target.stem}__screen-{position:03d}-{safe_screen}{target.suffix}"
                 )
                 written.append(
-                    api.save_figure(
-                        screen_figure,
-                        screen_path,
-                        scale=args.scale,
-                        width=args.width,
-                        height=args.height,
-                    )
+                    api.save_figure(screen_figure, screen_path, **_save_kwargs(args))
                 )
             print(
                 f"Wrote {len(written)} screen figure(s): "
@@ -3421,9 +3452,7 @@ def render(argv: list[str]) -> None:
                 file=sys.stderr,
             )
             return
-        out = api.save_figure(
-            fig, args.output, scale=args.scale, width=args.width, height=args.height
-        )
+        out = api.save_figure(fig, args.output, **_save_kwargs(args))
         # VIZ-5: also drop a per-layer breakdown next to the output.
         layer_paths = None
         if args.separable_layers:

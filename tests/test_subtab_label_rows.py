@@ -183,8 +183,8 @@ class TestConvertedFields:
             "the section heading is the only visible scope label"
         )
         headings = " ".join(m.value for m in at.markdown)
-        assert "### Trials to Include" in headings
-        assert "### Figure Formats" in headings
+        assert "### Trials to include" in headings
+        assert "### Figure formats" in headings
         assert "### File naming" in headings
         assert [p for p in at.get("popover") if p.proto.popover.label == "Fields"]
         assert not [e for e in at.expander if e.label == "Available fields"]

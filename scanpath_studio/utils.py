@@ -1215,8 +1215,11 @@ def _select_trial_none_mode(
     st.session_state[last_dataset_key] = dataset
     # A trial carried over from the dataset left behind is not a choice; one a
     # link or a restored settings file put there with the switch is.
-    carried = previous != dataset and current_label == remembered.get(
-        f"{key_prefix}|{previous}"
+    chosen = st.session_state.pop(f"_{key_prefix}_trial_chosen", None)
+    carried = (
+        previous != dataset
+        and current_label != chosen
+        and current_label == remembered.get(f"{key_prefix}|{previous}")
     )
     back_to = remembered.get(f"{key_prefix}|{dataset}")
     if (

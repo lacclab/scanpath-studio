@@ -1912,6 +1912,9 @@ def _restore_selection(
         "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
     )
     st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
+    # Read once by `utils.select_trial`: a trial chosen here is never mistaken
+    # for one carried over from another dataset that happens to share its id.
+    st.session_state[f"_{key_prefix}_trial_chosen"] = str(row[trial_field])
     if selection.get("screen_id") not in (None, ""):
         st.session_state[f"{key_prefix}_screen_id"] = str(selection["screen_id"])
     return True

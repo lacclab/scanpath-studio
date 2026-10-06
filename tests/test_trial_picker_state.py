@@ -56,10 +56,49 @@ def test_switching_datasets_away_and_back_restores_the_trial():
     trial = _picker(at).value
     picker = at.selectbox(key="data_source_picker")
     assert picker.value == DEMO_CHOICE
-    other = next(i for i, o in enumerate(picker.options) if "Synthetic" in o)
+    other = next(i for i, o in enumerate(picker.options) if "Hand-drawn" in o)
     picker.select_index(other).run()
     assert not at.exception
     assert at.selectbox(key="data_source_picker").value != DEMO_CHOICE
     at.selectbox(key="data_source_picker").select_index(0).run()
     assert not at.exception
     assert _picker(at).value == trial
+
+
+def _two_dataset_picker_app():
+    """The picker alone, over two datasets that reuse the same trial ids."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.annotations import OWNER_KEY
+    from scanpath_studio.utils import select_trial
+
+    st.session_state[OWNER_KEY] = st.session_state.get("_test_dataset", "A")
+    combos = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p1"],
+            "trial_id": ["t1", "t2", "t3"],
+            "text_id": ["x1", "x2", "x3"],
+        }
+    )
+    select_trial(combos, key_prefix="single")
+
+
+def test_a_link_naming_the_remembered_trial_is_not_overridden():
+    """A link that switches dataset and names a trial whose id equals the one
+    remembered for the dataset left behind still opens that trial."""
+    testing = pytest.importorskip("streamlit.testing.v1")
+    at = testing.AppTest.from_function(_two_dataset_picker_app)
+    at.run()
+    at.session_state["single_trial_id"] = "t3"
+    at.run()  # dataset A remembers t3
+    at.session_state["_test_dataset"] = "B"
+    at.session_state["single_trial_id"] = "t2"
+    at.run()  # dataset B remembers t2
+    # A link back to A that names t2 — the id B was left on.
+    at.session_state["_test_dataset"] = "A"
+    at.session_state["single_trial_id"] = "t2"
+    at.session_state["_single_trial_chosen"] = "t2"
+    at.run()
+    assert not at.exception
+    assert at.session_state["single_trial_id"] == "t2"

@@ -1198,7 +1198,7 @@ Cross-check results before publishing.
 with the version above, your operating system, and how you run the app.
 
 {ICONS["question"]} Questions go to [Discussions → Q&A]({CITATION["questions_url"]}) ↗,
-and feature ideas to [an issue]({CITATION["url"]}/issues) ↗.
+and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 """
     )
 

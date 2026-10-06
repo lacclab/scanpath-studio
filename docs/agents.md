@@ -77,7 +77,7 @@ are carried through when present.
 | `duration_ms` | Fixation duration. **Required.** |
 | `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the summaries' `reading_time_ms` / `wpm` then sum fixation durations, with `reading_time_source` saying it is an estimate. |
 | `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
-| `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
+| `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; the assignment (box containment, then nearest word center within 50 px) happens inside the plots that need it. |
 | `order_in_trial` | 1-based fixation index, added during normalization. |
 | `fixation_id` | Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …). |
 | `saccade_type`, `saccade_amplitude`, `eye`, `pass_index` | Passed through when the source has them. |
@@ -277,20 +277,6 @@ unknown name raises rather than silently falling back.
     `plot_scanpath` draws word boxes, the heatmap and fixation indices by
     default, while the app opens on the core scanpath only. Every other default
     (marker opacity, index-label size, monitor framing, colours) is the app's.
-
-## Reading measures
-
-```python
-metrics = sps.compute_word_metrics(words, fixations)
-```
-
-One row per `(participant_id, trial_id, word_id)` with `first_fixation_ms`
-(FFD), `first_pass_gaze_duration_ms` (FPRT), `regression_path_duration_ms`
-(RPD / go-past), `total_fixation_duration_ms` (TFD), `n_fixations`, `skip_flag`,
-`regression_in_flag`, `regression_out_flag`. Pre-aggregated columns already in
-the words table (EyeLink IA exports) win; the rest are computed from the
-fixations and word boxes. Every definition is in
-[Computations & methodology](computations.md).
 
 ## The same thing from the shell
 

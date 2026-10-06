@@ -41,11 +41,8 @@ total). The error names the setting that raises it, for example
 
 ### Does the app compute reading measures?
 
-Not in the app. Corpus Analysis and Export show the measures your
-interest-area report provides, as they are. The Python function
-[`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] does compute
-them from fixations and word boxes; [Computations](computations.md) defines
-each one.
+No. Corpus Analysis and Export show the measures your interest-area report
+provides, as they are; [Computations](computations.md) defines each one.
 
 ### Does :material/cleaning_services: Filter change my data?
 

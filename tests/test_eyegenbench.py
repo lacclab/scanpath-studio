@@ -175,17 +175,17 @@ def test_missing_bundle_says_what_to_run(tmp_path):
         eyegenbench.eyegenbench_raw_frames(tmp_path, dataset="PoTeC")
 
 
-def test_load_eyegenbench_is_exported_from_the_package_root():
+def test_load_eyegenbench_resolves_from_the_package_root_but_is_not_advertised():
+    """The benchmark corpora are held back, so their loaders stay importable
+    but out of `__all__` (and so out of `dir()`)."""
     import scanpath_studio
 
-    assert "load_eyegenbench" in scanpath_studio.__all__
     assert callable(scanpath_studio.load_eyegenbench)
-
-
-def test_load_eyegenbench_is_listed_in_dir():
-    import scanpath_studio
-
-    assert "load_eyegenbench" in dir(scanpath_studio)
+    assert callable(scanpath_studio.eyegenbench_datasets)
+    assert callable(scanpath_studio.load_multipleye)
+    for name in ("load_eyegenbench", "eyegenbench_datasets", "load_multipleye"):
+        assert name not in scanpath_studio.__all__
+        assert name not in dir(scanpath_studio)
 
 
 def test_cli_accepts_the_eyegenbench_input(bundle, tmp_path):

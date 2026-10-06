@@ -63,6 +63,7 @@ from .constants import (  # noqa: E402
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
+    computed_measures_enabled,
     drift_correction_enabled,
     palette_settings,
 )
@@ -358,7 +359,7 @@ class SchemaError(ValueError):
     """A table whose columns don't resolve onto the canonical fields.
 
     Still a ``ValueError`` with the same message, so ``except ValueError``
-    callers are unaffected. The parts are kept apart for the CLI (EXP-13), whose
+    callers are unaffected. The parts are kept apart for the CLI, whose
     users cannot pass ``word_schema=``: it keeps :attr:`detail` and replaces
     :attr:`hint` — the API-vocabulary "pass ``word_schema={…}``" line — with its
     own ``--word-schema`` one, built from :attr:`mapping` (the mapping skeleton,
@@ -623,7 +624,7 @@ def _named_in(
     carries its map (`column_names.attach`); it is renamed back here, and the
     map is returned for the call's options, figure text and output frames. A
     canonical frame passes as it is, with no map. ``optional`` takes ``None``
-    as the empty table (VIZ-45)."""
+    as the empty table."""
     found = _cn.frame_names(frame)
     frame = _cn.to_canonical_frame(frame)
     frame = (
@@ -633,7 +634,7 @@ def _named_in(
 
 
 def _named_out(frame, table: str, names: ColumnNames | None):
-    """An output frame in the names its inputs carried (DATA-66): a table that
+    """An output frame in the names its inputs carried: a table that
     is the dataset's own under its whole map, else (``names`` already
     restricted by the caller) only its ids. Canonical inputs, canonical out."""
     if names is None or frame is None or not isinstance(frame, pd.DataFrame):
@@ -720,7 +721,7 @@ def load_scanpath_data(
 ) -> ScanpathData:
     """Load and normalize a words/IA table and/or a fixations table.
 
-    The columns keep the names your files give them (DATA-66):
+    The columns keep the names your files give them:
     ``CURRENT_FIX_DURATION``, not ``duration_ms``. A column Scanpath Studio
     built, converted, computed or changed keeps its internal name, and
     ``data.column_names`` (a [`ScanpathData`][scanpath_studio.api.ScanpathData])
@@ -737,8 +738,7 @@ def load_scanpath_data(
     Tobii, SMI, Pupil Labs, and snake_case names); pass ``word_schema`` /
     ``fix_schema`` mappings (field → column name; see
     [`propose_schema`][scanpath_studio.api.propose_schema])
-    to override detection. For per-word reading measures, pass the result to
-    [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics].
+    to override detection.
 
     ``trial_parts_manifest`` accepts a nested parent-trial/parts definition for
     datasets whose source tables identify screens through arbitrary selector
@@ -1162,7 +1162,7 @@ def check_data_health(
 
 def _health_findings(words, fixations, raw_gaze) -> list:
     """`data_health.check_data_health` on frames in either naming, its findings
-    naming the columns as the frames did (DATA-66). The CLI's ``check`` prints
+    naming the columns as the frames did. The CLI's ``check`` prints
     these; :func:`check_data_health` tabulates them."""
     from dataclasses import replace
 
@@ -1198,20 +1198,40 @@ def _health_findings(words, fixations, raw_gaze) -> list:
     return [_in_own_names(f) for f in findings]
 
 
+def _require_computed_measures(name: str) -> None:
+    """Refuse a held-back computation, naming the switch that enables it.
+
+    These values are computed by Scanpath Studio rather than read from the
+    dataset, and each needs checking by hand before it is released. A script
+    gets an error rather than an unchecked number.
+    """
+    if not computed_measures_enabled():
+        raise ValueError(
+            f"{name} is not available in this release: its values are computed "
+            "by Scanpath Studio and have not been validated yet. Set "
+            f"{EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
+        )
+
+
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Per-word reading measures (FFD/FPRT/RPD/TFD, skips, regressions, …).
 
-    Pre-aggregated columns in ``words`` (EyeLink IA exports) are preserved; anything
-    missing is computed from fixations + word bounding boxes. Takes the normalized
-    frames from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data],
-    and answers in the names they carry."""
+    Experimental: raises unless ``SCANPATH_EXPERIMENTAL=1``. Pre-aggregated
+    columns in ``words`` (EyeLink IA exports) are preserved; anything missing is
+    computed from fixations + word bounding boxes. Takes the normalized frames
+    from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], and
+    answers in the names they carry."""
+    _require_computed_measures("compute_word_metrics")
     words, word_names = _named_in(words, "words")
     fixations, _fix_names = _named_in(fixations, "fixations")
     return _named_out(_data.compute_word_metrics(words, fixations), "words", word_names)
 
 
 def trial_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """Exportable one-row-per-trial reading summary."""
+    """Exportable one-row-per-trial reading summary.
+
+    Experimental: raises unless ``SCANPATH_EXPERIMENTAL=1``."""
+    _require_computed_measures("trial_summary")
     from .aggregation import trial_summary_table
 
     words, word_names = _named_in(words, "words", optional=True)
@@ -1225,7 +1245,10 @@ def trial_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
 
 
 def reader_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """Exportable one-row-per-reader reading summary."""
+    """Exportable one-row-per-reader reading summary.
+
+    Experimental: raises unless ``SCANPATH_EXPERIMENTAL=1``."""
+    _require_computed_measures("reader_summary")
     from .aggregation import reader_summary_table
 
     words, word_names = _named_in(words, "words", optional=True)
@@ -1248,7 +1271,10 @@ def preprocess_data(
     merge_distance_chars: float = 1.0,
     discard_blink_adjacent: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Apply the optional preprocessing stage and return words/fixations/QA."""
+    """Apply the optional preprocessing stage and return words/fixations/QA.
+
+    Experimental: raises unless ``SCANPATH_EXPERIMENTAL=1``."""
+    _require_computed_measures("preprocess_data")
     if not enabled:
         return words, fixations, pd.DataFrame()
 
@@ -1292,15 +1318,16 @@ def analysis_tables(
 ) -> dict[str, pd.DataFrame]:
     """The tables ``scanpath-studio analyze`` writes, as a dict of frames.
 
+    Experimental: raises unless ``SCANPATH_EXPERIMENTAL=1``.
+
     ``fixations``, ``saccades``, ``word_measures``, ``sentence_measures``,
     ``trial_summary``, ``reader_summary``, ``characters`` and ``cleaning_qa``.
 
     ``word_measures`` is the words table with the reading measures it
-    *brought* (AN-32 / EXP-23): none are computed here, and a words table that
-    carries none leaves ``word_measures`` out. Call
-    [`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] first
-    to add the app's own.
+    *brought*: none are computed here, and a words table that carries none
+    leaves ``word_measures`` out.
     """
+    _require_computed_measures("analysis_tables")
     from .aggregation import reader_summary_table, trial_summary_table
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import (
@@ -1360,13 +1387,13 @@ def alignment_sensitivity(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Word-measure sensitivity and correction QA across line algorithms.
 
-    PRE-21: a derived surface of vertical drift correction, so it is gated with
+    A derived surface of vertical drift correction, so it is gated with
     it and raises rather than returning something that looks like a result.
     """
     if not drift_correction_enabled():
         raise ValueError(
-            "alignment_sensitivity is not available in this build (PRE-21: "
-            "vertical drift correction is not fully integrated yet). Set "
+            "alignment_sensitivity is not available in this release (vertical "
+            "drift correction is not fully integrated yet). Set "
             f"{EXPERIMENTAL_ENV_VAR}=1 to enable it."
         )
     from .preprocessing import measure_sensitivity
@@ -1487,7 +1514,7 @@ def plot_corpus_figure(
 def _optional_frame(frame, label: str) -> pd.DataFrame:
     """``frame`` checked as normalized, or the empty canonical frame for ``None``.
 
-    VIZ-45: a dataset recorded as raw gaze alone has no words or fixations
+    A dataset recorded as raw gaze alone has no words or fixations
     table, so the plotting entry points take ``None`` for either — the same
     empty canonical frame `load_scanpath_data` returns for a table it was not
     given."""
@@ -1514,7 +1541,7 @@ def list_trials(
     [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) adds the trials that
     only its samples cover — every trial, for a dataset recorded as raw gaze
     alone (pass ``None`` for ``words`` and ``fixations`` then). The id columns
-    take the names the frames carry (DATA-66)."""
+    take the names the frames carry."""
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     gaze_names = None
@@ -1616,7 +1643,7 @@ def _resolve_trial(
     is unknown, a few valid values and the closest spellings. An underspecified
     selection matching several trials raises too, unless ``default_first`` picks
     the first match (the CLI's behavior, mirroring the app's default selection).
-    ``raw_gaze`` makes the trials only its samples cover selectable (VIZ-45).
+    ``raw_gaze`` makes the trials only its samples cover selectable.
     """
     combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
     if combos.empty:
@@ -1771,7 +1798,7 @@ def _select_part(
 def _apply_fix_index_range(
     trial_fixations: pd.DataFrame, fix_index_range, pid: str, tid: str
 ) -> pd.DataFrame:
-    """Window the trial to fixations ``start..end`` of ``order_in_trial`` (VIZ-7).
+    """Window the trial to fixations ``start..end`` of ``order_in_trial``.
 
     The headless form of the app's fixation-index slider: both bounds inclusive,
     1-based, and applied only to the frame that feeds the figure. Raises rather
@@ -1820,7 +1847,7 @@ def _figure_kwargs(overrides: dict) -> dict:
 
 
 def _expand_palette(overrides: dict) -> dict:
-    """Expand a ``palette=`` override into the colour kwargs it stands for (VIZ-18).
+    """Expand a ``palette=`` override into the colour kwargs it stands for.
 
     ``palette`` names a set of colour defaults tuned for a medium — screen,
     colourblind viewers, a black & white print, a projector. It's a *preset*, so
@@ -1985,7 +2012,7 @@ def _column_labels(
 def _check_column_options(
     overrides: dict, *, words: pd.DataFrame, fixations: pd.DataFrame
 ) -> None:
-    """Raise when an option the caller *named* points at no column (EXP-17).
+    """Raise when an option the caller *named* points at no column.
 
     Only explicit values are checked: ``highlight_column`` defaults to OneStop's
     ``is_in_aspan``, which most corpora do not have and which the builder then
@@ -2069,7 +2096,7 @@ def _apply_drift_correction(
     connectors: bool,
     explicit: dict,
 ) -> pd.DataFrame:
-    """Snap fixations to their assigned text line (PRE-3), in place of the raw y.
+    """Snap fixations to their assigned text line, in place of the raw y.
 
     Mirrors what the app does on the static plot (``tabs.render_single_trial_tab``):
     run ``alignment.correct``, colour the corrected fixations by line, and
@@ -2083,7 +2110,7 @@ def _apply_drift_correction(
     # be a wrong result with no signal. Name the env var so it is one step to fix.
     if not drift_correction_enabled():
         raise ValueError(
-            "drift_correction is not available in this build (PRE-21: vertical "
+            "drift_correction is not available in this release (vertical "
             f"drift correction is not fully integrated yet). Set "
             f"{EXPERIMENTAL_ENV_VAR}=1 to enable it, or pass drift_correction=None."
         )
@@ -2337,7 +2364,7 @@ def animate_scanpath(
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
     ``"show"``, or ``"hide"`` like [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
 
-    CMP-24: in a co-animation ``fix_index_range`` windows A only (the app's
+    In a co-animation ``fix_index_range`` windows A only (the app's
     rule — A's slider never cuts B), ``fix_index_range_b`` windows B, and
     ``fixation_flags_b`` gives B flags of its own (``None``: A's
     ``fixation_flags``, or the ``fixation_flags`` of ``style_b`` when it
@@ -2584,7 +2611,7 @@ def _second_reading(
     *,
     screen_b: str | None = None,
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-    """Scanpath B's frames for a co-animation, cut to one reading (BUG-85).
+    """Scanpath B's frames for a co-animation, cut to one reading.
 
     The animation builder draws every row it is handed, so frames passed the
     way `compare_scanpaths` takes them — B's whole corpus — drew every fixation
@@ -2657,7 +2684,7 @@ def _second_reading(
 
 
 def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
-    """How to state a screen that a refusal only read off the data (CMP-21).
+    """How to state a screen that a refusal only read off the data.
 
     `setups_comparable` says the readings were *recorded* on different screens,
     but a screen nobody stated is the extent of that trial's data, which rarely
@@ -2729,7 +2756,7 @@ def _refuse_co_animation_across_screens(
     *,
     a_inferred: bool,
 ) -> None:
-    """Refuse a co-animation of two datasets shown on different screens (CMP-21).
+    """Refuse a co-animation of two datasets shown on different screens.
 
     A co-animation draws both readings on one clock in A's coordinates, which
     makes it an overlay, so it is held to `compare_scanpaths`'s overlay gate: the
@@ -2970,7 +2997,7 @@ def compare_scanpaths(
     ``box_color`` is this figure's only: the co-animation draws one set of boxes,
     in ``word_box_color``, and ignores it.
 
-    **Filters, per scanpath (CMP-24).** ``fixation_flags`` and
+    **Filters, per scanpath.** ``fixation_flags`` and
     ``saccade_classes`` filter both scanpaths, as they filter
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s one; the same two keys
     in ``style_a`` / ``style_b`` give that scanpath its own, overriding them —
@@ -2980,7 +3007,7 @@ def compare_scanpaths(
     ``fix_index_range`` windows both scanpaths; ``fix_index_range_b`` gives B a
     window of its own (the app's B slider).
 
-    **Raw gaze (VIZ-48).** ``raw_gaze`` is a frame from
+    **Raw gaze.** ``raw_gaze`` is a frame from
     [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]; each reading's samples
     are drawn under its scanpath, in that scanpath's colour (``raw_gaze_marker_size``
     / ``raw_gaze_opacity`` style them). It serves both readings of a
@@ -3155,7 +3182,7 @@ def compare_scanpaths(
         # PRE-21: same contract as plot_scanpath — raise, don't silently skip.
         if not drift_correction_enabled():
             raise ValueError(
-                "drift_correction is not available in this build (PRE-21). Set "
+                "drift_correction is not available in this release. Set "
                 f"{EXPERIMENTAL_ENV_VAR}=1 to enable it, or pass "
                 "drift_correction=None."
             )
@@ -3223,7 +3250,7 @@ def _compare_raw_gaze(
     raw_gaze: pd.DataFrame | None, pid: str, tid: str, trial_fix: pd.DataFrame
 ) -> pd.DataFrame:
     """One comparison reading's samples — its trial's, and its screen's when the
-    reading is one screen of a multipart trial (VIZ-48)."""
+    reading is one screen of a multipart trial."""
     if raw_gaze is None or raw_gaze.empty:
         return pd.DataFrame()
     samples = _data.filter_raw_gaze(raw_gaze, [pid], [tid])

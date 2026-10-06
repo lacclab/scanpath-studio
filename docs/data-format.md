@@ -240,7 +240,5 @@ EyeLink interest-area report maps them automatically from its `IA_*` names
 
 The **Corpus Analysis** page shows only the measures you mapped — it computes
 none of its own, and without any it says so. Exports and the word hover carry
-the measures you mapped, too. Only the Python function
-[`compute_word_metrics`][scanpath_studio.api.compute_word_metrics] computes them
-from the fixations, with an imported value taking precedence. Definitions are
-in [Computations & methodology](computations.md).
+the measures you mapped, too. Definitions are in
+[Computations & methodology](computations.md).

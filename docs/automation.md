@@ -30,9 +30,6 @@ fig = sps.plot_scanpath(
     canvas_size=(2560, 1440),  # the monitor the stimulus was shown on
 )
 sps.save_figure(fig, "scanpath.html")
-
-metrics = sps.compute_word_metrics(words, fixations)
-metrics.to_csv("word_measures.csv", index=False)
 ```
 
 The [Python API](api.md) lists the public functions and parameters.

@@ -42,7 +42,7 @@ runs on Streamlit Community Cloud.
 - **Replay it** in real time or faster, and export it as HTML, GIF or MP4.
 - **Compare readers:** overlay two trials or place them side by side — even
   from two different datasets.
-- **Analyse a corpus** per text, sentence, reader or group, with every measure
+- **Analyse a corpus** per text, reader or group, with every measure
   documented in the
   [computation register](https://lacclab.github.io/scanpath-studio/computations/).
 - **Triage, export and share:** tag and filter trials, export one figure or a
@@ -85,7 +85,6 @@ words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head())
 fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
 sps.save_figure(fig, "scanpath.html")
-measures = sps.compute_word_metrics(words, fixations)  # FFD, FPRT, RPD, TFD, …
 ```
 
 For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or

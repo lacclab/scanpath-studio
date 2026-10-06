@@ -73,7 +73,7 @@ class TestTheHeadlessSurfacesRefuseRatherThanIgnore:
     ``drift_correction=`` would be a wrong result with no signal."""
 
     def test_plot_scanpath_raises(self, normalized_words_df, normalized_fixations_df):
-        with pytest.raises(ValueError, match="not available in this build"):
+        with pytest.raises(ValueError, match="not available in this release"):
             api.plot_scanpath(
                 normalized_words_df,
                 normalized_fixations_df,
@@ -108,7 +108,7 @@ class TestTheHeadlessSurfacesRefuseRatherThanIgnore:
     def test_alignment_sensitivity_raises(
         self, normalized_words_df, normalized_fixations_df
     ):
-        with pytest.raises(ValueError, match="not available in this build"):
+        with pytest.raises(ValueError, match="not available in this release"):
             api.alignment_sensitivity(normalized_words_df, normalized_fixations_df)
 
 
@@ -271,43 +271,6 @@ class TestPreprocessingGate:
         assert settings["short_policy"] == "Off"
         # …and the stored answers survive for the release that shows it again.
         assert st.session_state["global_preproc_enabled"] is True
-
-    def test_the_python_api_still_preprocesses(self, monkeypatch):
-        """PRE-21's gate raises; this one must not — the API shipped in 0.28.0."""
-        import pandas as pd
-
-        from scanpath_studio import api, constants
-
-        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
-        words = pd.DataFrame(
-            {
-                "participant_id": ["p1"] * 2,
-                "trial_id": ["t1"] * 2,
-                "word_id": [0, 1],
-                "text": ["the", "cat"],
-                "x": [100.0, 200.0],
-                "y": [50.0, 50.0],
-                "width": [90.0, 90.0],
-                "height": [40.0, 40.0],
-            }
-        )
-        fixations = pd.DataFrame(
-            {
-                "participant_id": ["p1"] * 3,
-                "trial_id": ["t1"] * 3,
-                "x": [110.0, 118.0, 210.0],
-                "y": [70.0, 70.0, 70.0],
-                "duration_ms": [200.0, 30.0, 180.0],
-                "timestamp_ms": [0.0, 210.0, 260.0],
-                "order_in_trial": [1, 2, 3],
-            }
-        )
-        _words, processed, qa = api.preprocess_data(
-            words, fixations, enabled=True, short_policy="Discard"
-        )
-        assert not processed.empty
-        assert "excluded" in processed.columns
-        assert not qa.empty
 
     def test_the_tutorial_drops_its_preprocessing_step(self, monkeypatch):
         from scanpath_studio import constants
@@ -689,3 +652,94 @@ class TestPerSentenceGate:
         assert not at.exception, at.exception
         assert [t.label for t in at.tabs][-3:] == ["Per text", "Per reader", "Groups"]
         assert calls == []
+
+
+class TestComputedMeasuresGate:
+    """The numbers the app works out itself are held back until checked by
+    hand: the API refuses them, the CLI does not offer `analyze`, and Corpus
+    Analysis drops the views built on them."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "compute_word_metrics",
+            "trial_summary",
+            "reader_summary",
+            "preprocess_data",
+            "analysis_tables",
+        ],
+    )
+    def test_the_api_refuses_naming_the_env_var(
+        self, name, normalized_words_df, normalized_fixations_df
+    ):
+        with pytest.raises(ValueError, match=constants.EXPERIMENTAL_ENV_VAR):
+            getattr(api, name)(normalized_words_df, normalized_fixations_df)
+
+    def test_the_flag_brings_the_api_back(
+        self, monkeypatch, normalized_words_df, normalized_fixations_df
+    ):
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        measured = api.compute_word_metrics(
+            normalized_words_df, normalized_fixations_df
+        )
+        assert "total_fixation_duration_ms" in measured.columns
+
+    def test_the_cli_refuses_analyze(self):
+        from scanpath_studio import cli
+
+        with pytest.raises(SystemExit, match=constants.EXPERIMENTAL_ENV_VAR):
+            cli.main(["analyze", "--help"])
+
+    def test_the_cli_help_does_not_list_analyze(self, capsys, monkeypatch):
+        from scanpath_studio import cli
+
+        cli.main(["--help"])
+        assert "analyze" not in capsys.readouterr().out
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        cli.main(["--help"])
+        assert "analyze" in capsys.readouterr().out
+
+    def test_the_export_bundle_offers_no_measure_family(self):
+        import inspect
+
+        from scanpath_studio import export
+
+        source = inspect.getsource(export.render_export_options)
+        assert '*(["Full measure family"] if computed_measures_enabled() else [])' in (
+            source
+        )
+
+    @pytest.mark.parametrize(
+        ("subtab", "view_key"), [("Per reader", "prdr_view"), ("Groups", "pgrp_view")]
+    )
+    def test_corpus_analysis_drops_the_computed_views(self, subtab, view_key):
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = subtab
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        views = set(at.selectbox(key=view_key).options)
+        assert views, "no views offered"
+        assert not views & tabs._COMPUTED_READER_VIEWS
+
+    def test_a_session_on_a_hidden_view_falls_back(self):
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per reader"
+        at.session_state["prdr_view"] = "Reading summary"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert at.selectbox(key="prdr_view").value == "Distribution vs cohort"
+
+    def test_fixation_duration_over_time_opens_on_a_fixation_measure(self):
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per reader"
+        at.session_state["prdr_view"] = "Fixation duration over time"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        picker = at.selectbox(key="prdr9_measure")
+        assert all(
+            "fixation" in o.lower() or "saccade" in o.lower() for o in picker.options
+        )
+        assert not any("per-fixation measure" in i.value for i in at.info)

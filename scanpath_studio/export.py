@@ -60,6 +60,7 @@ from .constants import (
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
+    computed_measures_enabled,
     drift_correction_enabled,
 )
 from .data import brought_reading_measures, shareable_frame
@@ -1471,11 +1472,13 @@ def render_export_options(
                 st,
                 "pills",
                 "Tabular data",
+                # The measure family is computed by the app, and held back
+                # with the other computed measures.
                 options=[
                     "Fixations",
                     "Raw gaze",
                     "Word measures",
-                    "Full measure family",
+                    *(["Full measure family"] if computed_measures_enabled() else []),
                 ],
                 selection_mode="multi",
                 default=[],

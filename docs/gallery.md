@@ -159,8 +159,8 @@ averaged over the demo's readers, with ± one standard deviation as a band. The
 app's :material/bar_chart: **Corpus Analysis** view draws this and more.
 
 ```python exec="true" html="true" source="below" session="gallery"
-measures = sps.compute_word_metrics(words, fixations)  # the demo's own names
-one_text = measures[measures["unique_paragraph_id"] == "2_1_1_Ele"]
+# The demo's word table carries EyeLink's own measures (IA_DWELL_TIME, …).
+one_text = words[words["unique_paragraph_id"] == "2_1_1_Ele"]
 profile = (
     one_text.groupby("IA_ID")
     .agg(

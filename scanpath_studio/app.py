@@ -7645,7 +7645,7 @@ def render_canvas_controls(
                 "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
             )
         ),
-        help="A CJK/Hebrew/Arabic-capable CSS fallback stack (PRE-6).",
+        help="A CJK/Hebrew/Arabic-capable CSS fallback stack.",
     )
     font_family = field(
         text,

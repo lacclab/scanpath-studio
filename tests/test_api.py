@@ -1052,9 +1052,7 @@ def test_every_documented_api_function_is_importable_from_the_root():
     assert missing == []
 
 
-@pytest.mark.parametrize(
-    "name", ["eyegenbench_datasets", "load_text_metadata", "propose_schema"]
-)
+@pytest.mark.parametrize("name", ["load_text_metadata", "propose_schema"])
 def test_the_headless_helpers_are_root_exports(name):
     import scanpath_studio as sps
 

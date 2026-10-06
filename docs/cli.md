@@ -28,7 +28,7 @@ them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1`
 (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
 
 Additional launch flags are forwarded to Streamlit. A word that is not one of
-the commands (`run`, `render`, `analyze`, `corpus`, `cache`) is an error that
+the commands (`run`, `render`, `corpus`, `check`, `cache`) is an error that
 names the closest one, rather than an argument handed to Streamlit.
 
 ## Render
@@ -67,7 +67,7 @@ snake_case spellings). When one isn't, `render` stops and prints which field it
 could not find, the names it looked for, the columns your table has, and a
 mapping to start from. Pass that mapping back as JSON — inline, or as a path to
 a `.json` file — with `--word-schema` (the `--words` table) and/or
-`--fix-schema` (the `--fixations` table). `analyze` takes the same two flags.
+`--fix-schema` (the `--fixations` table). `check` takes the same two flags.
 
 ```bash
 scanpath-studio render --words ia.csv --fixations fix.csv \
@@ -230,31 +230,6 @@ scanpath-studio render --raw-gaze gaze_samples.csv --list-trials
 scanpath-studio render --raw-gaze gaze_samples.csv -t t3 -o samples.png
 ```
 
-## Analyze
-
-The `analyze` command writes the full tabular family without opening the app:
-
-```bash
-scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir analysis
-```
-
-This writes fixation, saccade, word, sentence, trial, reader, character and
-cleaning-QA tables as CSV, plus `run_config.json`. It takes the same `--words` / `--fixations`
-(several paths each), `--trial-parts-manifest`, `--word-schema` and
-`--fix-schema` as `render`, plus the optional preprocessing stage
-([`api.preprocess_data`](api.md#scanpath_studio.api.preprocess_data)), which is
-off unless a flag below turns it on and never deletes a row — excluded fixations
-keep `excluded` / `excluded_reason`:
-
-```python exec="true"
-from docs_support import cli_reference
-
-print(cli_reference("analyze"))
-```
-
-The preprocessing settings and `--pixels-per-degree` are recorded in
-`run_config.json`.
-
 ## Corpus figures
 
 `scanpath-studio corpus` goes the other way: it reads a tidy CSV you already
@@ -349,4 +324,4 @@ print(cli_help())
     print(cli_reference("cache"))
     ```
 
-`analyze`, `corpus` and `check` are listed in full in their own sections above.
+`corpus` and `check` are listed in full in their own sections above.

@@ -272,7 +272,7 @@ CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
 lint+format checks on every pull request, and one `pytest --cov` leg that fails
 below `[tool.coverage.report] fail_under` in `pyproject.toml` (ENG-37). The
 browsable HTML report and the README's coverage badge are published with the
-docs site on push to main — see `.github/workflows/docs.yml` → *Coverage report*
+docs site for each release tag — see `.github/workflows/docs.yml` → *Coverage report*
 — so there is no third-party coverage service and no secret to manage. The two
 one-shot data-prep scripts (`onestop_shard.py`, `update_sample_data.py`) are
 omitted from the measurement: they walk corpora that cannot exist in CI.

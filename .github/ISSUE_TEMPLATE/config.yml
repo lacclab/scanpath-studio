@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Ask a question
+    url: https://github.com/lacclab/scanpath-studio/discussions/categories/q-a
+    about: How do I…? Is this expected? Questions go to Discussions → Q&A, where the answer helps the next person too.
   - name: Documentation
     url: https://lacclab.github.io/scanpath-studio/
     about: User guide, dataset notes, and the Python API reference.

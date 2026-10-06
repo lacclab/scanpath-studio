@@ -19,8 +19,10 @@ paper.
 
 ## Get started
 
-- **In the browser:** the live demo at
-  <https://scanpath-studio.streamlit.app>.
+- **As a desktop app**, the easiest way to work with your own data:
+  [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
+  [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) ·
+  [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
 - **With pip** (Python 3.11–3.14):
 
   ```bash
@@ -28,12 +30,13 @@ paper.
   scanpath-studio      # opens the app in your browser
   ```
 
-- **As a desktop app:** [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
-  [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) ·
-  [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
+- **In the browser**, to try it on the bundled demo data: the live demo at
+  <https://scanpath-studio.streamlit.app>.
 
-The pip and desktop installs keep your data on your own machine; the hosted demo
-runs on Streamlit Community Cloud.
+The desktop and pip installs keep your data on your own machine, handle large
+datasets, and download the public corpora (PoTeC, OneStop) in one click. The
+hosted demo runs on Streamlit Community Cloud, with limited memory and no
+corpus downloads.
 
 ## What you can do
 

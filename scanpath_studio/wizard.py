@@ -25,6 +25,7 @@ from . import app, wizard_shell
 from .column_names import ColumnNames, for_tables
 from .constants import (
     _VIEW_DATA,
+    CITATION,
     DATASET_DESCRIPTIONS_KEY,
     DEMO_CHOICE,
     FONT_FAMILY,
@@ -3255,9 +3256,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
-                f"{ICONS['tip']} **Working with a large dataset?** Run Scanpath "
-                "Studio locally — it's faster, and handles much larger datasets "
-                "than this hosted copy:\n\n"
+                f"{ICONS['tip']} **Working with your own data?** Use the "
+                f"[desktop app]({CITATION['desktop_url']}) ↗ (Windows, macOS, "
+                "Linux): it keeps your data on your computer, is faster, and "
+                "handles much larger datasets than this hosted copy. Or install "
+                "it with pip:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 

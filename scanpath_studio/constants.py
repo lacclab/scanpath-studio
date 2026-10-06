@@ -642,6 +642,10 @@ CITATION = {
     "doi": "10.5281/zenodo.22933884",
     "url": "https://github.com/lacclab/scanpath-studio",
     "docs_url": "https://lacclab.github.io/scanpath-studio/",
+    # Where a user asks, reports, and gets the desktop app.
+    "questions_url": "https://github.com/lacclab/scanpath-studio/discussions/categories/q-a",
+    "bug_report_url": "https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md",
+    "desktop_url": "https://github.com/lacclab/scanpath-studio/releases/latest",
     "lab_url": "https://lacclab.github.io/",
     "corpus_note": (
         "Bundled demo data is a subset of OneStop Eye Movements: "
@@ -1051,6 +1055,9 @@ ICONS: dict[str, str] = {
     "faq": ":material/quiz:",
     "about": ":material/info:",
     "course": ":material/school:",
+    "question": ":material/forum:",
+    "bug": ":material/bug_report:",
+    "desktop": ":material/computer:",
     # Plot rail: design presets, layer sections and figure groups.
     "preset_scanpath": ":material/timeline:",
     "preset_custom": ":material/build:",

@@ -28,9 +28,9 @@ SENT = {
     "global_show_stimulus_image": True,
     "global_fit_to_monitor": False,
     "global_show_compare_legend": True,
-    "global_colorbar_orientation": "Horizontal",
-    "global_colorbar_tickangle": 45,
-    "global_colorbar_tickfont_size": 16,
+    "global_fixation_colorbar_orientation": "Horizontal",
+    "global_fixation_colorbar_tickangle": 45,
+    "global_fixation_colorbar_tickfont_size": 16,
     "global_span_border_color": "#00AAAA",
     "global_fixclass_short_mode": "Discard",
     "global_fixclass_short_threshold_ms": 120,
@@ -94,8 +94,8 @@ def _link_app():
         key: st.session_state.get(key)
         for key in (
             "single_playback_speed",
-            "global_colorbar_orientation",
-            "global_colorbar_tickangle",
+            "global_fixation_colorbar_orientation",
+            "global_fixation_colorbar_tickangle",
             "global_fixclass_short_mode",
             "global_fixclass_short_symbol",
             "global_fixclass_short_threshold_ms",
@@ -132,10 +132,10 @@ def test_numbers_are_clamped_to_their_widgets():
     at.run(timeout=30)
     assert not at.exception, at.exception
     seeded = at.session_state["_seeded"]
-    assert seeded["global_colorbar_tickangle"] == 90
+    assert seeded["global_fixation_colorbar_tickangle"] == 90
     assert seeded["global_fixclass_short_threshold_ms"] == 1
     assert seeded["single_playback_speed"] == 2.0
-    assert seeded["global_colorbar_orientation"] == "Horizontal"
+    assert seeded["global_fixation_colorbar_orientation"] == "Horizontal"
 
 
 def test_the_whole_app_reopens_the_senders_figure():

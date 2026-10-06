@@ -147,7 +147,8 @@ def _static(**overrides):
         marker_size_range=(8, 24),
         order_font_size=10,
         order_font_color="#111111",
-        show_colorbars=False,
+        show_fixation_colorbar=False,
+        show_heatmap_colorbar=False,
         fixation_color_range=None,
         heatmap_range=None,
     )
@@ -205,9 +206,12 @@ class TestAnimationParity:
             highlight_column=None,
             highlight_text_color=HIGHLIGHTED_TEXT_COLOR,
             word_hover_measure=None,
-            colorbar_orientation="Vertical",
-            colorbar_tickangle=0,
-            colorbar_tickfont_size=12,
+            fixation_colorbar_orientation="Vertical",
+            heatmap_colorbar_orientation="Vertical",
+            fixation_colorbar_tickangle=0,
+            heatmap_colorbar_tickangle=0,
+            fixation_colorbar_tickfont_size=12,
+            heatmap_colorbar_tickfont_size=12,
         )
         assert same.to_json() == base.to_json()
 
@@ -242,7 +246,11 @@ class TestAnimationParity:
         assert fig.layout.margin.t == _CONTROLS_MARGIN_PX
 
     def test_colorbar_keeps_its_placement_and_reserve(self):
-        fig = _anim(color_by="duration_ms", show_colorbars=True)
+        fig = _anim(
+            color_by="duration_ms",
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
+        )
         cb = _trail(fig).marker.colorbar
         assert cb.title.text == "Duration (ms)"
         assert cb.lenmode == "fraction"
@@ -256,9 +264,13 @@ class TestAnimationParity:
     def test_colorbar_is_now_the_static_figures_styled_one(self):
         """Deliberate VIZ-23 change: both builders share `_colorbar_dict`."""
         anim_cb = _trail(
-            _anim(color_by="duration_ms", show_colorbars=True)
+            _anim(
+                color_by="duration_ms",
+                show_fixation_colorbar=True,
+                show_heatmap_colorbar=True,
+            )
         ).marker.colorbar
-        static = _static(show_colorbars=True)
+        static = _static(show_fixation_colorbar=True, show_heatmap_colorbar=True)
         static_cb = next(
             t for t in static.data if t.name == "Fixations"
         ).marker.colorbar
@@ -372,10 +384,14 @@ class TestAnimationColorbarStyle:
     def test_orientation_tickangle_and_tickfont_apply(self):
         fig = _anim(
             color_by="duration_ms",
-            show_colorbars=True,
-            colorbar_orientation="Horizontal",
-            colorbar_tickangle=45,
-            colorbar_tickfont_size=9,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
+            fixation_colorbar_orientation="Horizontal",
+            heatmap_colorbar_orientation="Horizontal",
+            fixation_colorbar_tickangle=45,
+            heatmap_colorbar_tickangle=45,
+            fixation_colorbar_tickfont_size=9,
+            heatmap_colorbar_tickfont_size=9,
         )
         cb = _trail(fig).marker.colorbar
         assert cb.orientation == "h"
@@ -404,9 +420,12 @@ class TestComparisonParity:
             background_image_size=None,
             background_image_origin=None,
             background_image_opacity=1.0,
-            colorbar_orientation="Vertical",
-            colorbar_tickangle=0,
-            colorbar_tickfont_size=12,
+            fixation_colorbar_orientation="Vertical",
+            heatmap_colorbar_orientation="Vertical",
+            fixation_colorbar_tickangle=0,
+            heatmap_colorbar_tickangle=0,
+            fixation_colorbar_tickfont_size=12,
+            heatmap_colorbar_tickfont_size=12,
         )
         assert same.to_json() == base.to_json()
 
@@ -531,7 +550,13 @@ class TestComparisonColorbarStyle:
         return bars[0]
 
     def test_default_is_the_shared_styled_bar(self):
-        cb = self._colorbar(_compare(color_by="duration_ms", show_colorbars=True))
+        cb = self._colorbar(
+            _compare(
+                color_by="duration_ms",
+                show_fixation_colorbar=True,
+                show_heatmap_colorbar=True,
+            )
+        )
         assert cb.title.text == "Duration (ms)"
         assert cb.thickness == 14
         assert cb.tickfont.size == 12
@@ -540,10 +565,14 @@ class TestComparisonColorbarStyle:
     def test_orientation_tickangle_and_tickfont_apply(self):
         fig = _compare(
             color_by="duration_ms",
-            show_colorbars=True,
-            colorbar_orientation="Horizontal",
-            colorbar_tickangle=30,
-            colorbar_tickfont_size=9,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
+            fixation_colorbar_orientation="Horizontal",
+            heatmap_colorbar_orientation="Horizontal",
+            fixation_colorbar_tickangle=30,
+            heatmap_colorbar_tickangle=30,
+            fixation_colorbar_tickfont_size=9,
+            heatmap_colorbar_tickfont_size=9,
         )
         cb = self._colorbar(fig)
         assert cb.orientation == "h"
@@ -556,8 +585,10 @@ class TestComparisonColorbarStyle:
         fig = _compare(
             layout="side_by_side",
             color_by="duration_ms",
-            show_colorbars=True,
-            colorbar_orientation="Horizontal",
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
+            fixation_colorbar_orientation="Horizontal",
+            heatmap_colorbar_orientation="Horizontal",
         )
         assert fig.layout.margin.b == _COLORBAR_BOTTOM_PX
         assert self._colorbar(fig).orientation == "h"

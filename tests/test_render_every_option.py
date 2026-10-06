@@ -102,10 +102,14 @@ NON_DEFAULT = {
     "coordinate_grid_spacing": 250.0,
     "line_spacing": 2.5,
     "scale_text_to_boxes": False,
-    "show_colorbars": False,
-    "colorbar_orientation": "Horizontal",
-    "colorbar_tickangle": 30,
-    "colorbar_tickfont_size": 14,
+    "show_fixation_colorbar": False,
+    "fixation_colorbar_orientation": "Horizontal",
+    "fixation_colorbar_tickangle": 30,
+    "fixation_colorbar_tickfont_size": 14,
+    "show_heatmap_colorbar": False,
+    "heatmap_colorbar_orientation": "Horizontal",
+    "heatmap_colorbar_tickangle": -30,
+    "heatmap_colorbar_tickfont_size": 10,
     "background_image": "page.png",
     "background_image_size": (1200, 800),
     "background_image_origin": (10.0, 20.0),
@@ -274,14 +278,30 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
         (["--no-full-monitor"], "fit_to_monitor", False),
-        (["--no-colorbars"], "show_colorbars", False),
+        (["--no-fixation-colorbar"], "show_fixation_colorbar", False),
         (
-            ["--colorbar-orientation", "horizontal"],
-            "colorbar_orientation",
+            ["--fixation-colorbar-orientation", "horizontal"],
+            "fixation_colorbar_orientation",
             "Horizontal",
         ),
-        (["--colorbar-tickangle", "-30"], "colorbar_tickangle", -30),
-        (["--colorbar-tickfont-size", "14"], "colorbar_tickfont_size", 14),
+        (["--fixation-colorbar-tickangle", "-30"], "fixation_colorbar_tickangle", -30),
+        (
+            ["--fixation-colorbar-tickfont-size", "14"],
+            "fixation_colorbar_tickfont_size",
+            14,
+        ),
+        (["--no-heatmap-colorbar"], "show_heatmap_colorbar", False),
+        (
+            ["--heatmap-colorbar-orientation", "horizontal"],
+            "heatmap_colorbar_orientation",
+            "Horizontal",
+        ),
+        (["--heatmap-colorbar-tickangle", "-30"], "heatmap_colorbar_tickangle", -30),
+        (
+            ["--heatmap-colorbar-tickfont-size", "14"],
+            "heatmap_colorbar_tickfont_size",
+            14,
+        ),
         (["--raw-gaze-color", "#666666"], "raw_gaze_color", "#666666"),
         (["--raw-gaze-marker-size", "3"], "raw_gaze_marker_size", 3.0),
         (["--raw-gaze-opacity", "0.4"], "raw_gaze_opacity", 0.4),
@@ -528,12 +548,19 @@ STATIC_FLAGS = [
     "--word-hover-measure",
     "first_fixation_ms",
     "--no-full-monitor",
-    "--no-colorbars",
-    "--colorbar-orientation",
+    "--no-fixation-colorbar",
+    "--fixation-colorbar-orientation",
     "horizontal",
-    "--colorbar-tickangle",
+    "--fixation-colorbar-tickangle",
     "30",
-    "--colorbar-tickfont-size",
+    "--fixation-colorbar-tickfont-size",
+    "14",
+    "--no-heatmap-colorbar",
+    "--heatmap-colorbar-orientation",
+    "horizontal",
+    "--heatmap-colorbar-tickangle",
+    "30",
+    "--heatmap-colorbar-tickfont-size",
     "14",
     "--saccade-color-by-direction",
     "--saccade-type-color",
@@ -543,7 +570,12 @@ STATIC_FLAGS = [
 
 def test_every_new_static_option_round_trips(monkeypatch, capsys):
     first, second, printed = _round_trip(monkeypatch, capsys, STATIC_FLAGS)
-    for flag in ("--sample-raw-gaze", "--no-full-monitor", "--no-colorbars"):
+    for flag in (
+        "--sample-raw-gaze",
+        "--no-full-monitor",
+        "--no-fixation-colorbar",
+        "--no-heatmap-colorbar",
+    ):
         assert flag in printed
     assert "Raw gaze" in {trace.name for trace in first.data}
     assert first.to_json() == second.to_json()
@@ -665,13 +697,15 @@ def test_an_integer_flag_is_printed_as_an_integer():
     command = api.figure_code(
         flavor="cli",
         order_font_size=12.0,
-        colorbar_tickangle=30.0,
-        colorbar_tickfont_size=14.0,
+        fixation_colorbar_tickangle=30.0,
+        heatmap_colorbar_tickangle=30.0,
+        fixation_colorbar_tickfont_size=14.0,
+        heatmap_colorbar_tickfont_size=14.0,
     )
     argv = shlex.split(command.replace(" \\\n", " "))
     args = cli._render_parser().parse_args(argv[2:])
-    assert (args.order_font_size, args.colorbar_tickangle) == (12, 30)
-    assert args.colorbar_tickfont_size == 14
+    assert (args.order_font_size, args.fixation_colorbar_tickangle) == (12, 30)
+    assert args.heatmap_colorbar_tickfont_size == 14
     replay = api.figure_code(kind="animation", flavor="cli", anim_max_frames=200.0)
     argv = shlex.split(replay.replace(" \\\n", " "))
     assert cli._render_parser().parse_args(argv[2:]).anim_max_frames == 200

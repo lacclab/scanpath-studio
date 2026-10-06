@@ -62,7 +62,10 @@ GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
 GLOBAL_RAW_GAZE_COLOR = "global_raw_gaze_color"
 GLOBAL_RAW_GAZE_MARKER_SIZE = "global_raw_gaze_marker_size"
 GLOBAL_RAW_GAZE_OPACITY = "global_raw_gaze_opacity"
-GLOBAL_SHOW_COLORBARS = "global_show_colorbars"
+# Each colour scale's bar — the fixations' and the heatmap's — has its own
+# switch and style.
+GLOBAL_SHOW_FIXATION_COLORBAR = "global_show_fixation_colorbar"
+GLOBAL_SHOW_HEATMAP_COLORBAR = "global_show_heatmap_colorbar"
 GLOBAL_HOLLOW_FIXATIONS = "global_hollow_fixations"
 GLOBAL_SCALE_TEXT_TO_BOXES = "global_scale_text_to_boxes"
 GLOBAL_COLOR_BY = "global_color_by"
@@ -144,9 +147,12 @@ GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
 # (one mode/threshold/symbol/colour group per category; `oob` and `blink` have no
 # threshold — geometry and blink tests, not durations) — plus Compare's A/B
 # legend and the replay speed, which travelled in neither.
-GLOBAL_COLORBAR_ORIENTATION = "global_colorbar_orientation"
-GLOBAL_COLORBAR_TICKANGLE = "global_colorbar_tickangle"
-GLOBAL_COLORBAR_TICKFONT_SIZE = "global_colorbar_tickfont_size"
+GLOBAL_FIXATION_COLORBAR_ORIENTATION = "global_fixation_colorbar_orientation"
+GLOBAL_FIXATION_COLORBAR_TICKANGLE = "global_fixation_colorbar_tickangle"
+GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE = "global_fixation_colorbar_tickfont_size"
+GLOBAL_HEATMAP_COLORBAR_ORIENTATION = "global_heatmap_colorbar_orientation"
+GLOBAL_HEATMAP_COLORBAR_TICKANGLE = "global_heatmap_colorbar_tickangle"
+GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE = "global_heatmap_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
 GLOBAL_FIXCLASS_SHORT_MODE = "global_fixclass_short_mode"
 GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS = "global_fixclass_short_threshold_ms"
@@ -314,6 +320,14 @@ PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
 # The one switch title and caption shared before each got its own; still read
 # (it turns both on or off), never written.
 PARAM_SHOW_TITLE_CAPTION = "show_title_caption"
+# The colour-bar settings the fixations and the heatmap shared before each had
+# its own; still read (each sets both bars), never written.
+PARAM_LEGACY_COLORBAR = (
+    "show_colorbars",
+    "colorbar_orientation",
+    "colorbar_tickangle",
+    "colorbar_tickfont_size",
+)
 
 # DATA-27 (Task 12): every public corpus on the deep link.
 #
@@ -416,7 +430,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
         "show_raw_gaze": GLOBAL_SHOW_RAW_GAZE,
-        "show_colorbars": GLOBAL_SHOW_COLORBARS,
+        "show_fixation_colorbar": GLOBAL_SHOW_FIXATION_COLORBAR,
+        "show_heatmap_colorbar": GLOBAL_SHOW_HEATMAP_COLORBAR,
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
         "show_title": GLOBAL_SHOW_TITLE,
@@ -485,7 +500,8 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         COMPARE_LAYOUT_PARAM: SINGLE_COMPARE_LAYOUT,
         COMPARE_STIMULUS_PARAM: SINGLE_COMPARE_STIMULUS,
         # EXP-18.
-        "colorbar_orientation": GLOBAL_COLORBAR_ORIENTATION,
+        "fixation_colorbar_orientation": GLOBAL_FIXATION_COLORBAR_ORIENTATION,
+        "heatmap_colorbar_orientation": GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
         "span_border_color": GLOBAL_SPAN_BORDER_COLOR,
         "fixclass_short_mode": GLOBAL_FIXCLASS_SHORT_MODE,
         "fixclass_short_symbol": GLOBAL_FIXCLASS_SHORT_SYMBOL,
@@ -519,8 +535,10 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
         # EXP-18.
-        "colorbar_tickangle": GLOBAL_COLORBAR_TICKANGLE,
-        "colorbar_tickfont_size": GLOBAL_COLORBAR_TICKFONT_SIZE,
+        "fixation_colorbar_tickangle": GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+        "fixation_colorbar_tickfont_size": GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+        "heatmap_colorbar_tickangle": GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        "heatmap_colorbar_tickfont_size": GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         "fixclass_short_threshold_ms": GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         "fixclass_long_threshold_ms": GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
         # EXP-19.
@@ -724,6 +742,7 @@ URL_LEGACY_PARAMS = frozenset(
         PARAM_ONESTOP_REGIME,
         PARAM_ONESTOP_PARTS,
         PARAM_SHOW_TITLE_CAPTION,
+        *PARAM_LEGACY_COLORBAR,
     }
 )
 
@@ -764,8 +783,10 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_RAW_GAZE_OPACITY,
         GLOBAL_WORD_BOX_LINE_OPACITY,
         GLOBAL_WORD_BOX_FILL_OPACITY,
-        GLOBAL_COLORBAR_TICKANGLE,
-        GLOBAL_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+        GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
         CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
@@ -863,7 +884,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_DURATION_MASS_SIGMA_CHARS,
         GLOBAL_HEATMAP_NORM,
         GLOBAL_HEATMAP_METRIC,
-        GLOBAL_SHOW_COLORBARS,
+        GLOBAL_SHOW_FIXATION_COLORBAR,
+        GLOBAL_SHOW_HEATMAP_COLORBAR,
         GLOBAL_FIXATION_COLORSCALE,
         GLOBAL_HEATMAP_COLORSCALE,
         GLOBAL_FIXATION_COLOR_RANGE,
@@ -898,9 +920,12 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         GLOBAL_STIMULUS_IMAGE_SCALE,
-        GLOBAL_COLORBAR_ORIENTATION,
-        GLOBAL_COLORBAR_TICKANGLE,
-        GLOBAL_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_FIXATION_COLORBAR_ORIENTATION,
+        GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+        GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
+        GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         # sizing
         GLOBAL_MARKER_SIZE_RANGE,
         GLOBAL_MARKER_SIZE_SCALE,

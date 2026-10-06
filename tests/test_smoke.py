@@ -144,7 +144,8 @@ class TestPipelineFigures:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#111111",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -183,7 +184,8 @@ class TestPipelineFigures:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#111111",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )

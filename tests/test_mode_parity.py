@@ -124,10 +124,14 @@ def _viz(**overrides) -> dict:
         "fixation_colorscale": "Viridis",
         "fixation_color_range": None,
         "fixation_flags": None,
-        "show_colorbars": False,
-        "colorbar_orientation": "Vertical",
-        "colorbar_tickangle": 0,
-        "colorbar_tickfont_size": 12,
+        "show_fixation_colorbar": False,
+        "show_heatmap_colorbar": False,
+        "fixation_colorbar_orientation": "Vertical",
+        "fixation_colorbar_tickangle": 0,
+        "fixation_colorbar_tickfont_size": 12,
+        "heatmap_colorbar_orientation": "Vertical",
+        "heatmap_colorbar_tickangle": 0,
+        "heatmap_colorbar_tickfont_size": 12,
         "fixation_symbol": DEFAULT_FIXATION_SYMBOL,
         "text_color": WORD_LABEL_COLOR,
         "critical_span_style": "Mark text",
@@ -285,9 +289,9 @@ class TestAnimationWiring:
         assert kwargs["text_color"] == WORD_LABEL_COLOR
         assert kwargs["highlight_column"] is None
         assert kwargs["word_hover_measure"] is None
-        assert kwargs["colorbar_orientation"] == "Vertical"
-        assert kwargs["colorbar_tickangle"] == 0
-        assert kwargs["colorbar_tickfont_size"] == 12
+        assert kwargs["fixation_colorbar_orientation"] == "Vertical"
+        assert kwargs["fixation_colorbar_tickangle"] == 0
+        assert kwargs["fixation_colorbar_tickfont_size"] == 12
 
     def test_every_new_setting_is_forwarded(self, monkeypatch):
         flags = {"long": {"mode": "Highlight", "threshold_ms": 120, "symbol": "x"}}
@@ -297,9 +301,12 @@ class TestAnimationWiring:
             text_color="#123456",
             highlight_text_color="#abcdef",
             word_hover_measure="total_fixation_duration_ms",
-            colorbar_orientation="Horizontal",
-            colorbar_tickangle=45,
-            colorbar_tickfont_size=9,
+            fixation_colorbar_orientation="Horizontal",
+            heatmap_colorbar_orientation="Horizontal",
+            fixation_colorbar_tickangle=45,
+            heatmap_colorbar_tickangle=45,
+            fixation_colorbar_tickfont_size=9,
+            heatmap_colorbar_tickfont_size=9,
         )
         _, kwargs = _animate(viz, monkeypatch)
 
@@ -309,9 +316,9 @@ class TestAnimationWiring:
         assert kwargs["highlight_column"] == "is_in_aspan"
         assert kwargs["highlight_text_color"] == "#abcdef"
         assert kwargs["word_hover_measure"] == "total_fixation_duration_ms"
-        assert kwargs["colorbar_orientation"] == "Horizontal"
-        assert kwargs["colorbar_tickangle"] == 45
-        assert kwargs["colorbar_tickfont_size"] == 9
+        assert kwargs["fixation_colorbar_orientation"] == "Horizontal"
+        assert kwargs["fixation_colorbar_tickangle"] == 45
+        assert kwargs["fixation_colorbar_tickfont_size"] == 9
 
     def test_mark_border_does_not_leak_into_the_replay(self, monkeypatch):
         _, kwargs = _animate(_viz(critical_span_style="Mark border"), monkeypatch)
@@ -414,9 +421,9 @@ class TestComparisonWiring:
         )
         assert kwargs["fixation_symbol"] == DEFAULT_FIXATION_SYMBOL
         assert kwargs["highlight_column"] is None
-        assert kwargs["colorbar_orientation"] == "Vertical"
-        assert kwargs["colorbar_tickangle"] == 0
-        assert kwargs["colorbar_tickfont_size"] == 12
+        assert kwargs["fixation_colorbar_orientation"] == "Vertical"
+        assert kwargs["fixation_colorbar_tickangle"] == 0
+        assert kwargs["fixation_colorbar_tickfont_size"] == 12
         assert kwargs["background_image"] is None
         assert kwargs["background_image_size"] is None
         assert kwargs["background_image_origin"] is None
@@ -426,9 +433,12 @@ class TestComparisonWiring:
         viz = _viz(
             fixation_symbol="diamond",
             highlight_text_color="#abcdef",
-            colorbar_orientation="Horizontal",
-            colorbar_tickangle=30,
-            colorbar_tickfont_size=8,
+            fixation_colorbar_orientation="Horizontal",
+            heatmap_colorbar_orientation="Horizontal",
+            fixation_colorbar_tickangle=30,
+            heatmap_colorbar_tickangle=30,
+            fixation_colorbar_tickfont_size=8,
+            heatmap_colorbar_tickfont_size=8,
         )
         fig, kwargs = _compare(
             viz,
@@ -441,9 +451,9 @@ class TestComparisonWiring:
         assert kwargs["fixation_symbol"] == "diamond"
         assert kwargs["highlight_column"] == "is_in_aspan"
         assert kwargs["highlight_text_color"] == "#abcdef"
-        assert kwargs["colorbar_orientation"] == "Horizontal"
-        assert kwargs["colorbar_tickangle"] == 30
-        assert kwargs["colorbar_tickfont_size"] == 8
+        assert kwargs["fixation_colorbar_orientation"] == "Horizontal"
+        assert kwargs["fixation_colorbar_tickangle"] == 30
+        assert kwargs["fixation_colorbar_tickfont_size"] == 8
         assert kwargs["background_image"] == STIMULUS_URI
         assert kwargs["background_image_size"] == (800.0, 600.0)
         assert kwargs["background_image_origin"] == (0.0, 0.0)

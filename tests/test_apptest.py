@@ -4579,7 +4579,7 @@ class TestFigureAndCanvasSubGroups:
         at.session_state["global_title_pattern"] = "{participant_id}"
         at.session_state["global_show_coordinate_grid"] = True
         at.session_state["global_coordinate_grid_auto"] = False
-        at.session_state["global_show_colorbars"] = True
+        at.session_state["global_show_fixation_colorbar"] = True
         at.session_state["global_bg_choice"] = "Custom…"
         at.run(timeout=30)
 
@@ -4595,7 +4595,7 @@ class TestFigureAndCanvasSubGroups:
             "global_x_field",
         } <= keys
         assert at.session_state["global_title_pattern"] == "{participant_id}"
-        assert at.session_state["global_colorbar_orientation"] in (
+        assert at.session_state["global_fixation_colorbar_orientation"] in (
             "Vertical",
             "Horizontal",
         )

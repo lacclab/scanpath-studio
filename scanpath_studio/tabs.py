@@ -275,6 +275,7 @@ from scanpath_studio.multipart import (
     screen_canvas_size,
 )
 from scanpath_studio.plots import (
+    COLORBAR_DEFAULTS,
     COMPARE_FILTER_STYLE_KEYS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
@@ -1676,7 +1677,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         duration_size_legend=viz_settings.get("duration_size_legend", True),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
-        show_colorbars=viz_settings["show_colorbars"],
+        **{
+            key: viz_settings.get(key, default)
+            for key, default in COLORBAR_DEFAULTS.items()
+        },
         fixation_color_range=viz_settings["fixation_color_range"],
         heatmap_range=viz_settings["heatmap_range"],
         fixation_colorscale=viz_settings["fixation_colorscale"],
@@ -1706,9 +1710,6 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         color_by_line=viz_settings.get("color_by_line", False),
         fixation_flags=viz_settings.get("fixation_flags"),
         span_border_color=viz_settings.get("span_border_color", "#000000"),
-        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
-        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
-        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
         background_color=viz_settings.get("background_color"),
         word_hover_measure=viz_settings.get(
             "word_hover_measure", "total_fixation_duration_ms"
@@ -3877,7 +3878,11 @@ def _build_studio_config(
                 viz_settings.get("duration_mass_sigma_chars", 1.0)
             ),
             "heatmap_norm": figure_settings.get("heatmap_norm", "Linear"),
-            "show_colorbars": figure_settings["show_colorbars"],
+            **{
+                key: bool(figure_settings.get(key, default))
+                for key, default in COLORBAR_DEFAULTS.items()
+                if key.startswith("show_")
+            },
             "fixation_range": (
                 list(figure_settings["fixation_color_range"])
                 if figure_settings["fixation_color_range"]
@@ -3939,13 +3944,11 @@ def _build_studio_config(
             "stimulus_image_scale": float(
                 viz_settings.get("stimulus_image_scale", 1.0)
             ),
-            "colorbar_orientation": figure_settings.get(
-                "colorbar_orientation", "Vertical"
-            ),
-            "colorbar_tickangle": int(figure_settings.get("colorbar_tickangle", 0)),
-            "colorbar_tickfont_size": int(
-                figure_settings.get("colorbar_tickfont_size", 12)
-            ),
+            **{
+                key: figure_settings.get(key, default)
+                for key, default in COLORBAR_DEFAULTS.items()
+                if not key.startswith("show_")
+            },
         },
         "sizing": {
             "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
@@ -9932,7 +9935,10 @@ def render_per_text_tab(
             ),
             order_font_size=viz_settings.get("order_font_size", 10),
             order_font_color=viz_settings.get("order_font_color", "#111111"),
-            show_colorbars=viz_settings.get("show_colorbars", True),
+            **{
+                key: viz_settings.get(key, default)
+                for key, default in COLORBAR_DEFAULTS.items()
+            },
             fixation_color_range=None,
             heatmap_range=None,
             heatmap_colorscale=viz_settings.get(
@@ -9940,9 +9946,6 @@ def render_per_text_tab(
             ),
             text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
             background_color=viz_settings.get("background_color"),
-            colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
-            colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
-            colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
             fit_to_monitor=viz_settings.get("fit_to_monitor", True),

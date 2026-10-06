@@ -40,7 +40,7 @@ COLOURED = {
     "global_show_heatmap": True,
     "global_heatmap_metric": "duration_ms",
     "global_color_by": "duration_ms",
-    "global_show_colorbars": True,
+    "global_show_fixation_colorbar": True,
 }
 
 
@@ -178,7 +178,8 @@ class TestTheDefaultIsTheApis:
                 show_heatmap=True,
                 heatmap_metric="duration_ms",
                 color_by="duration_ms",
-                show_colorbars=True,
+                show_fixation_colorbar=True,
+                show_heatmap_colorbar=True,
             )
             app_scales = _colour_scales(app_fig)
             assert app_scales["markers"] and app_scales["heatmap_fills"]
@@ -214,7 +215,8 @@ class TestTheDefaultIsTheApis:
             show_heatmap=True,
             heatmap_metric="duration_ms",
             color_by="duration_ms",
-            show_colorbars=True,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
         )
         assert _colour_scales(app_fig)["markers"] == _colour_scales(api_fig)["markers"]
 

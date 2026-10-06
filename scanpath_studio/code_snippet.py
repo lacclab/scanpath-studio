@@ -1211,12 +1211,28 @@ _CLI_EMITTERS: dict[str, Any] = {
     # true only while the figure *was* fitted; one that wasn't reproduced
     # framed on the monitor anyway.
     "fit_to_monitor": _flag_when("--no-full-monitor", False),
-    "show_colorbars": _flag_when("--no-colorbars", False),
-    "colorbar_orientation": _mapped(
-        "--colorbar-orientation", {"Vertical": "vertical", "Horizontal": "horizontal"}
-    ),
-    "colorbar_tickangle": _int_valued("--colorbar-tickangle"),
-    "colorbar_tickfont_size": _int_valued("--colorbar-tickfont-size"),
+    **{
+        key: emitter
+        for bar in ("fixation", "heatmap")
+        for key, emitter in (
+            (f"show_{bar}_colorbar", _flag_when(f"--no-{bar}-colorbar", False)),
+            (
+                f"{bar}_colorbar_orientation",
+                _mapped(
+                    f"--{bar}-colorbar-orientation",
+                    {"Vertical": "vertical", "Horizontal": "horizontal"},
+                ),
+            ),
+            (
+                f"{bar}_colorbar_tickangle",
+                _int_valued(f"--{bar}-colorbar-tickangle"),
+            ),
+            (
+                f"{bar}_colorbar_tickfont_size",
+                _int_valued(f"--{bar}-colorbar-tickfont-size"),
+            ),
+        )
+    },
     "illustration_text": _valued("--illustration-text"),
     "word_box_color": _valued("--word-box-color"),
     "word_box_line_opacity": _valued("--word-box-line-opacity"),

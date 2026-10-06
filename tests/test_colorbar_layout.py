@@ -52,8 +52,10 @@ def _options(orientation: str, heatmap: bool = True) -> dict:
         heatmap_style="Word boxes",
         color_by="timestamp_ms",
         fixation_colorscale="Plasma",
-        show_colorbars=True,
-        colorbar_orientation=orientation,
+        show_fixation_colorbar=True,
+        show_heatmap_colorbar=True,
+        fixation_colorbar_orientation=orientation,
+        heatmap_colorbar_orientation=orientation,
         canvas_width=800,
         canvas_height=600,
         base_font_size=16,
@@ -153,3 +155,54 @@ def test_the_word_heatmap_bar_names_dwell_not_fixation_duration():
         words, fixations, **{**options, "heatmap_norm": "Log"}
     )
     assert "Dwell time per word (ms) (log)" in [b.title.text for b in _bars(log)]
+
+
+class TestEachBarIsItsOwn:
+    """The fixations' bar and the heatmap's have their own switch and style."""
+
+    def test_one_switch_leaves_the_other_bar(self):
+        words, fixations = _frames()
+        fig = plots.make_scanpath_figure(
+            words,
+            fixations,
+            **{**_options("Vertical"), "show_fixation_colorbar": False},
+        )
+        (bar,) = _bars(fig)
+        assert "Timestamp" not in str(bar.title.text)
+
+    def test_a_vertical_and_a_horizontal_bar_each_get_their_margin(self):
+        words, fixations = _frames()
+        alone = plots.make_scanpath_figure(
+            words, fixations, **_options("Vertical", heatmap=False)
+        )
+        fig = plots.make_scanpath_figure(
+            words,
+            fixations,
+            **{**_options("Vertical"), "heatmap_colorbar_orientation": "Horizontal"},
+        )
+        bars = _bars(fig)
+        assert sorted(bar.orientation == "h" for bar in bars) == [False, True]
+        # Each bar alone in its orientation keeps its own spot.
+        vertical = next(bar for bar in bars if bar.orientation != "h")
+        horizontal = next(bar for bar in bars if bar.orientation == "h")
+        assert vertical.x == pytest.approx(1.02)
+        assert horizontal.y == pytest.approx(-0.04)
+        assert fig.layout.margin.r == _COLORBAR_RESERVE_PX
+        assert fig.layout.margin.b > alone.layout.margin.b
+        assert _plot_size(fig) == _plot_size(alone)
+
+    def test_each_bar_takes_its_own_tick_style(self):
+        words, fixations = _frames()
+        fig = plots.make_scanpath_figure(
+            words,
+            fixations,
+            **{
+                **_options("Vertical"),
+                "fixation_colorbar_tickangle": 45,
+                "heatmap_colorbar_tickfont_size": 9,
+            },
+        )
+        angles = sorted(int(bar.tickangle or 0) for bar in _bars(fig))
+        sizes = sorted(int(bar.tickfont.size) for bar in _bars(fig))
+        assert angles == [0, 45]
+        assert sizes == [9, 12]

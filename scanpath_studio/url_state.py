@@ -354,7 +354,10 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "anim_autoplay": "global_anim_autoplay",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
-    "show_colorbars": "global_show_colorbars",
+    # Each colour scale's bar has its own switch; the one they shared before,
+    # `show_colorbars`, is read below as both (with the old style params).
+    "show_fixation_colorbar": "global_show_fixation_colorbar",
+    "show_heatmap_colorbar": "global_show_heatmap_colorbar",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
     "hollow_fixations": "global_hollow_fixations",
@@ -445,7 +448,8 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # fixation flags. *Discard* changes which fixations are drawn at all, so a
     # link without it showed the recipient a different scanpath — and without
     # the Illustration label the sender's figure carried.
-    "colorbar_orientation": "global_colorbar_orientation",
+    "fixation_colorbar_orientation": "global_fixation_colorbar_orientation",
+    "heatmap_colorbar_orientation": "global_heatmap_colorbar_orientation",
     "span_border_color": "global_span_border_color",
     **{
         f"fixclass_{cat}_{part}": f"global_fixclass_{cat}_{part}"
@@ -495,8 +499,10 @@ _SHARE_INT_PARAMS = {
     "anim_grid_step_ms": "global_anim_grid_step_ms",
     "anim_max_frames": "global_anim_max_frames",
     # EXP-18: colour-bar tick styling and the two fixation-flag thresholds.
-    "colorbar_tickangle": "global_colorbar_tickangle",
-    "colorbar_tickfont_size": "global_colorbar_tickfont_size",
+    "fixation_colorbar_tickangle": "global_fixation_colorbar_tickangle",
+    "fixation_colorbar_tickfont_size": "global_fixation_colorbar_tickfont_size",
+    "heatmap_colorbar_tickangle": "global_heatmap_colorbar_tickangle",
+    "heatmap_colorbar_tickfont_size": "global_heatmap_colorbar_tickfont_size",
     "fixclass_short_threshold_ms": "global_fixclass_short_threshold_ms",
     "fixclass_long_threshold_ms": "global_fixclass_long_threshold_ms",
     # EXP-19: the pixel canvas and the base font — the recording setup's half
@@ -606,10 +612,13 @@ _URL_PRESETS = {
     "illustration_text": ("global_illustration_text", _strip_markup),
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
-    "colorbar_orientation": (
-        "global_colorbar_orientation",
-        _parse_colorbar_orientation,
-    ),
+    **{
+        f"{bar}_colorbar_orientation": (
+            f"global_{bar}_colorbar_orientation",
+            _parse_colorbar_orientation,
+        )
+        for bar in ("fixation", "heatmap")
+    },
     **{
         f"fixclass_{cat}_{part}": (f"global_fixclass_{cat}_{part}", parse)
         for cat in ("short", "long", "oob", "blink")
@@ -679,8 +688,14 @@ _URL_BOUNDED = {
     # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
     # a `number_input` with only a minimum, capped at a minute here so a link
     # cannot carry a number no fixation reaches.
-    "global_colorbar_tickangle": (-90, 90),
-    "global_colorbar_tickfont_size": (6, 20),
+    **{
+        key: bounds
+        for bar in ("fixation", "heatmap")
+        for key, bounds in (
+            (f"global_{bar}_colorbar_tickangle", (-90, 90)),
+            (f"global_{bar}_colorbar_tickfont_size", (6, 20)),
+        )
+    },
     "global_fixclass_short_threshold_ms": (1, 60_000),
     "global_fixclass_long_threshold_ms": (1, 60_000),
     "cmp1_fixclass_short_threshold_ms": (1, 60_000),
@@ -1039,6 +1054,28 @@ def _apply_url_preset() -> str | None:
                 SETUP_PROVENANCE_STATE_KEY, {g: str(p) for g, p in arrived.items()}
             )
 
+    # The colour-bar settings the two bars shared before each had its own:
+    # each sets both.
+    for legacy, (suffix, coerce) in {
+        "show_colorbars": ("show_{bar}_colorbar", _coerce_bool),
+        "colorbar_orientation": (
+            "{bar}_colorbar_orientation",
+            _parse_colorbar_orientation,
+        ),
+        "colorbar_tickangle": ("{bar}_colorbar_tickangle", int),
+        "colorbar_tickfont_size": ("{bar}_colorbar_tickfont_size", int),
+    }.items():
+        if legacy not in qp:
+            continue
+        try:
+            value = coerce(qp[legacy])
+        except (ValueError, TypeError):
+            st.warning(f"Ignored bad URL param ?{legacy}={qp[legacy]!r}")
+            continue
+        for bar in ("fixation", "heatmap"):
+            state_key = "global_" + suffix.format(bar=bar)
+            st.session_state.setdefault(state_key, _clamp_url_value(state_key, value))
+
     # The switch title and caption shared before each had its own: both.
     if PARAM_SHOW_TITLE_CAPTION in qp:
         try:
@@ -1275,7 +1312,8 @@ _CHOICE_STATE_PARSERS = {
     "global_saccade_render_mode": _closed_choice(("Straight", "Arc")),
     "global_saccade_color_mode": _closed_choice(tuple(SACCADE_COLOR_MODES)),
     "global_fixation_symbol": _closed_choice(tuple(FIXATION_SYMBOLS)),
-    "global_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
+    "global_fixation_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
+    "global_heatmap_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
     "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
     "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
     **{
@@ -1987,8 +2025,14 @@ def _restore_plot_config(
             coloring["heatmap_metric"],
             "heatmap metric",
         )
-    if "show_colorbars" in coloring:
-        put("global_show_colorbars", bool(coloring["show_colorbars"]))
+    for bar in ("fixation", "heatmap"):
+        # A config saved while the two bars shared one switch sets both.
+        own = f"show_{bar}_colorbar"
+        if own in coloring or "show_colorbars" in coloring:
+            put(
+                f"global_{own}",
+                bool(coloring.get(own, coloring.get("show_colorbars"))),
+            )
     for cfg_key, state_key in (
         ("fixation_colorscale", "global_fixation_colorscale"),
         ("heatmap_colorscale", "global_heatmap_colorscale"),
@@ -2120,30 +2164,26 @@ def _restore_plot_config(
             3.0,
             "stimulus image scale",
         )
-    co = coloring.get("colorbar_orientation")
-    if co is not None:
-        put_valid(
-            co in ("Vertical", "Horizontal"),
-            "global_colorbar_orientation",
-            co,
-            "color bar orientation",
-        )
-    if "colorbar_tickangle" in coloring:
-        put_int(
-            coloring["colorbar_tickangle"],
-            "global_colorbar_tickangle",
-            -90,
-            90,
-            "color bar tick angle",
-        )
-    if "colorbar_tickfont_size" in coloring:
-        put_int(
-            coloring["colorbar_tickfont_size"],
-            "global_colorbar_tickfont_size",
-            6,
-            20,
-            "color bar tick size",
-        )
+    for bar in ("fixation", "heatmap"):
+        # Each bar's own key, else the one both shared in an older config.
+        def _bar_value(name: str, bar: str = bar):
+            return coloring.get(f"{bar}_{name}", coloring.get(name))
+
+        co = _bar_value("colorbar_orientation")
+        if co is not None:
+            put_valid(
+                co in ("Vertical", "Horizontal"),
+                f"global_{bar}_colorbar_orientation",
+                co,
+                f"{bar} color bar orientation",
+            )
+        for name, lo, hi, label in (
+            ("colorbar_tickangle", -90, 90, "tick angle"),
+            ("colorbar_tickfont_size", 6, 20, "tick size"),
+        ):
+            value = _bar_value(name)
+            if value is not None:
+                put_int(value, f"global_{bar}_{name}", lo, hi, f"{bar} {label}")
     # Store them even when their layer is off — the rail draws them as given
     # (`controls._explicit_pair`). VIZ-46: a stored range means
     # *explicit*, so a config saved while the range was auto (`null`) restores

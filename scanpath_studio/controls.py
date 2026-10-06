@@ -788,7 +788,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # "Log" maps to log1p(value), compressing heavy-tailed dwell times so a few
     # very-hot words don't wash out the rest.
     "global_heatmap_norm": "Linear",
-    "global_show_colorbars": True,
+    "global_show_fixation_colorbar": True,
+    "global_show_heatmap_colorbar": True,
     # Frame the view to the whole presentation monitor (scanpath sits at its true
     # on-screen position) rather than cropping to the data extent. Default on.
     "global_fit_to_monitor": True,
@@ -843,9 +844,15 @@ _VIZ_WIDGET_DEFAULTS = {
     # the measure line; any canonical measure column name shows it.
     "global_word_hover_measure": "total_fixation_duration_ms",
     # Colour-bar styling (Axes & color bars expander).
-    "global_colorbar_orientation": "Vertical",
-    "global_colorbar_tickangle": 0,
-    "global_colorbar_tickfont_size": 12,
+    **{
+        f"global_{bar}_colorbar_{name}": default
+        for bar in ("fixation", "heatmap")
+        for name, default in (
+            ("orientation", "Vertical"),
+            ("tickangle", 0),
+            ("tickfont_size", 12),
+        )
+    },
     # EXP-5: title/caption on the figure (Figure & canvas group). Off by default;
     # the two patterns are only meaningful while the toggle is on — see
     # `_collect_viz_settings`, which reports them empty otherwise.
@@ -4310,6 +4317,61 @@ def _render_compare_saccade_styles() -> None:
         )
 
 
+def _render_colorbar_rows(bar: str, *, disabled: bool, reason: str | None) -> None:
+    """One colour scale's bar: ``Color bar | ☑ Show | orientation``, then the
+    tick labels' angle and size — for ``bar`` ``"fixation"`` or ``"heatmap"``.
+
+    Each bar has its own keys, so the fixations' and the heatmap's can be styled
+    apart. ``disabled`` greys all four (the scale itself is idle) without
+    touching a stored value."""
+    shown, rest = _check_row(
+        "Color bar",
+        key=f"global_show_{bar}_colorbar",
+        persist_state="session",
+        disabled=disabled,
+        help=_gated_help(
+            "The scale's legend: right of the plot (Vertical) or below it "
+            "(Horizontal).",
+            reason,
+        ),
+    )
+    idle = disabled or not shown
+    rest.radio(
+        "Color bar orientation",
+        options=["Vertical", "Horizontal"],
+        horizontal=True,
+        key=f"global_{bar}_colorbar_orientation",
+        persist_state="session",
+        disabled=_layer_gate(idle, None)[0],
+        label_visibility="collapsed",
+    )
+    angle_help = _gated_help("Tick-label angle, in degrees.", reason)
+    _numeric_slider(
+        st,
+        "Tick label angle",
+        key=f"global_{bar}_colorbar_tickangle",
+        persist_state="session",
+        min_value=-90,
+        max_value=90,
+        step=15,
+        disabled=idle,
+        help=angle_help,
+        field_host=_sub_row("Angle", caption_help=_layer_gate(False, angle_help)[1]),
+    )
+    size_help = _gated_help("Tick-label size, in px.", reason)
+    _numeric_slider(
+        st,
+        "Tick label size",
+        key=f"global_{bar}_colorbar_tickfont_size",
+        persist_state="session",
+        min_value=6,
+        max_value=20,
+        disabled=idle,
+        help=size_help,
+        field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
+    )
+
+
 #: ``colour | opacity slider + box`` inside one ⬚ Word boxes row: the swatch
 #: takes only what it needs and the opacity fills the rest of the line.
 _COLOR_OPACITY_W = (1.0, 4.5)
@@ -4926,7 +4988,10 @@ def _collect_viz_settings(
         duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
-        show_colorbars=bool(ss.get("global_show_colorbars")),
+        **{
+            f"show_{bar}_colorbar": bool(ss.get(f"global_show_{bar}_colorbar"))
+            for bar in ("fixation", "heatmap")
+        },
         fit_to_monitor=bool(ss.get("global_fit_to_monitor")),
         show_coordinate_grid=bool(ss.get("global_show_coordinate_grid")),
         coordinate_grid_auto=bool(ss.get("global_coordinate_grid_auto", True)),
@@ -4998,9 +5063,24 @@ def _collect_viz_settings(
         fixation_flags=_collect_fixation_flags(),
         show_compare_legend=bool(ss.get("global_show_compare_legend")),
         span_border_color=ss.get("global_span_border_color", "#000000"),
-        colorbar_orientation=ss.get("global_colorbar_orientation") or "Vertical",
-        colorbar_tickangle=int(ss.get("global_colorbar_tickangle") or 0),
-        colorbar_tickfont_size=int(ss.get("global_colorbar_tickfont_size") or 12),
+        **{
+            key: value
+            for bar in ("fixation", "heatmap")
+            for key, value in (
+                (
+                    f"{bar}_colorbar_orientation",
+                    ss.get(f"global_{bar}_colorbar_orientation") or "Vertical",
+                ),
+                (
+                    f"{bar}_colorbar_tickangle",
+                    int(ss.get(f"global_{bar}_colorbar_tickangle") or 0),
+                ),
+                (
+                    f"{bar}_colorbar_tickfont_size",
+                    int(ss.get(f"global_{bar}_colorbar_tickfont_size") or 12),
+                ),
+            )
+        },
         background_color=background_color,
         compare_style_a=None,
         compare_style_b=None,
@@ -5888,6 +5968,13 @@ def render_plot_controls(
                 help="Values of the colour-by column mapped to the two ends of "
                 "the colorscale.",
             )
+        # The fixations' own colour bar — idle unless the colour-by column is
+        # numeric, since a discrete palette has no scale to show.
+        _render_colorbar_rows(
+            "fixation",
+            disabled=metric_disabled or raw_cmin is None,
+            reason=metric_reason,
+        )
         # VIZ-15: shape survives greyscale printing where hue doesn't, and
         # VIZ-23 made it a true global — the one marker property Compare does
         # NOT override per scanpath.
@@ -6793,6 +6880,8 @@ def render_plot_controls(
                 field_host=_sub_row("Range", caption_help=range_text),
             )
 
+        _render_colorbar_rows("heatmap", disabled=heat_disabled, reason=heat_reason)
+
     # Raw gaze is drawn by the static and comparison builders. The toggle is on
     # the section's row (UX-86); this owns the style popover — previously
     # nothing, since raw gaze had no styling of its own before it got a section.
@@ -7036,63 +7125,6 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
         _sub_caption(px_col, "px")
-
-        # VIZ-23: all three builders route their colour bar through
-        # `_colorbar_dict`, so the styling applies wherever a colour bar is
-        # drawn — the co-animation (Animate + Compare) included, since it
-        # colours by the metric like the comparison figure. Same gate as
-        # "Color by".
-        cb_disabled, cb_reason = _mode_gate(animating, comparing)
-        show_colorbars, cb_rest = _check_row(
-            "Color bar",
-            key="global_show_colorbars",
-            persist_state="session",
-            help=_gated_help(
-                "Draw the colour bar of a mapped colour (fixation colour, "
-                "heatmap): on the right (Vertical) or below the plot "
-                "(Horizontal), with its tick labels' angle and size below.",
-                cb_reason,
-            ),
-        )
-        cb_idle = cb_disabled or not show_colorbars
-        cb_rest.radio(
-            "Color bar orientation",
-            options=["Vertical", "Horizontal"],
-            horizontal=True,
-            key="global_colorbar_orientation",
-            persist_state="session",
-            disabled=_layer_gate(cb_idle, None)[0],
-            label_visibility="collapsed",
-        )
-        angle_help = _gated_help(
-            "Rotate the color-bar tick labels (degrees).", cb_reason
-        )
-        _numeric_slider(
-            st,
-            "Tick label angle",
-            key="global_colorbar_tickangle",
-            persist_state="session",
-            min_value=-90,
-            max_value=90,
-            step=15,
-            disabled=cb_idle,
-            help=angle_help,
-            field_host=_sub_row(
-                "Angle", caption_help=_layer_gate(False, angle_help)[1]
-            ),
-        )
-        size_help = _gated_help("Color-bar tick-label font size (px).", cb_reason)
-        _numeric_slider(
-            st,
-            "Tick label size",
-            key="global_colorbar_tickfont_size",
-            persist_state="session",
-            min_value=6,
-            max_value=20,
-            disabled=cb_idle,
-            help=size_help,
-            field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
-        )
 
         # The animation and the comparison figures always plot spatial x/y —
         # only `make_scanpath_figure` takes `x_field`/`y_field`.

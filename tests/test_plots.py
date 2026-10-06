@@ -53,7 +53,8 @@ def _scanpath_kwargs(**overrides):
         marker_size_range=(8, 24),
         order_font_size=10,
         order_font_color="#000000",
-        show_colorbars=False,
+        show_fixation_colorbar=False,
+        show_heatmap_colorbar=False,
         fixation_color_range=None,
         heatmap_range=None,
     )
@@ -83,7 +84,7 @@ class TestDecorationDoesNotShrinkPlot:
         on = make_scanpath_figure(
             normalized_words_df,
             normalized_fixations_df,
-            **_scanpath_kwargs(show_colorbars=True),
+            **_scanpath_kwargs(show_fixation_colorbar=True, show_heatmap_colorbar=True),
         )
         assert _plot_region(on) == _plot_region(off)
         # The figure itself grew to hold the colorbar (it didn't shrink the plot).
@@ -362,7 +363,8 @@ class TestHeatmapNormalization:
                 heatmap_style="Word boxes",  # no words → density path
                 heatmap_norm="Log",
                 heatmap_metric="counts",
-                show_colorbars=True,
+                show_fixation_colorbar=True,
+                show_heatmap_colorbar=True,
             ),
         )
         heat = [t for t in fig.data if t.name == "Fixation heatmap"]
@@ -788,7 +790,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -832,7 +835,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -865,7 +869,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=True,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -896,7 +901,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -927,7 +933,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -963,7 +970,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -1001,7 +1009,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
             raw_gaze=raw_gaze,
@@ -1032,7 +1041,8 @@ class TestMakeScanpathFigure:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -2171,7 +2181,8 @@ class TestMakeComparisonFigure:
             layout=layout,
             show_heatmap=True,
             heatmap_metric="duration_ms",
-            show_colorbars=True,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
         )
 
         heat_shapes = [
@@ -2216,7 +2227,8 @@ class TestPlotEnhancements:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )
@@ -2423,7 +2435,8 @@ class TestTrueToScaleText:
             marker_size_range=(8, 24),
             order_font_size=10,
             order_font_color="#000000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )

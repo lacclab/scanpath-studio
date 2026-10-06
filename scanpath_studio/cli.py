@@ -1130,27 +1130,50 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Frame the axes on the data instead of the whole --canvas monitor.",
     )
     viz.add_argument(
-        "--no-colorbars",
-        dest="show_colorbars",
+        "--no-fixation-colorbar",
+        dest="show_fixation_colorbar",
         action="store_false",
-        help="Leave out the colour bars for --color-by and the heatmap.",
+        help="Leave out --color-by's colour bar.",
     )
     viz.add_argument(
-        "--colorbar-orientation",
+        "--fixation-colorbar-orientation",
         choices=["vertical", "horizontal"],
-        help="With the colour bars on: beside the plot (vertical, default) or below it.",
+        help="Fixation colour bar: beside the plot (vertical, default) or below it.",
     )
     viz.add_argument(
-        "--colorbar-tickangle",
+        "--fixation-colorbar-tickangle",
         type=int,
         metavar="DEG",
-        help="With the colour bars on: tick-label angle, -90–90 (default: 0).",
+        help="Fixation colour bar: tick-label angle, -90–90 (default: 0).",
     )
     viz.add_argument(
-        "--colorbar-tickfont-size",
+        "--fixation-colorbar-tickfont-size",
         type=int,
         metavar="PX",
-        help="With the colour bars on: tick-label size (default: 12).",
+        help="Fixation colour bar: tick-label size (default: 12).",
+    )
+    viz.add_argument(
+        "--no-heatmap-colorbar",
+        dest="show_heatmap_colorbar",
+        action="store_false",
+        help="Leave out the heatmap's colour bar.",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-orientation",
+        choices=["vertical", "horizontal"],
+        help="Heatmap colour bar: beside the plot (vertical, default) or below it.",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-tickangle",
+        type=int,
+        metavar="DEG",
+        help="Heatmap colour bar: tick-label angle, -90–90 (default: 0).",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-tickfont-size",
+        type=int,
+        metavar="PX",
+        help="Heatmap colour bar: tick-label size (default: 12).",
     )
     viz.add_argument(
         "--raw-gaze",
@@ -1520,8 +1543,10 @@ _DIRECT_OPTION_FLAGS = (
     "word_hover_measure",
     "x_field",
     "y_field",
-    "colorbar_tickangle",
-    "colorbar_tickfont_size",
+    "fixation_colorbar_tickangle",
+    "fixation_colorbar_tickfont_size",
+    "heatmap_colorbar_tickangle",
+    "heatmap_colorbar_tickfont_size",
     "illustration_text",
     "word_box_color",
     "word_box_line_opacity",
@@ -1545,7 +1570,8 @@ _NONE_WHEN_EMPTY = frozenset(
 _SWITCH_OPTION_FLAGS = {
     "hollow_fixations": True,
     "color_by_line": True,
-    "show_colorbars": False,
+    "show_fixation_colorbar": False,
+    "show_heatmap_colorbar": False,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
     "duration_size_legend": False,
@@ -2913,8 +2939,10 @@ def render(argv: list[str]) -> None:
         overrides["fixation_color_range"] = tuple(args.fixation_color_range)
     if args.heatmap_range:
         overrides["heatmap_range"] = tuple(args.heatmap_range)
-    if args.colorbar_orientation:
-        overrides["colorbar_orientation"] = args.colorbar_orientation.capitalize()
+    for bar in ("fixation", "heatmap"):
+        orientation = getattr(args, f"{bar}_colorbar_orientation")
+        if orientation:
+            overrides[f"{bar}_colorbar_orientation"] = orientation.capitalize()
     if args.compare_with is not None:
         if args.show_legend:
             overrides["show_legend"] = True

@@ -300,7 +300,7 @@ raising. Every flag is in the [CLI reference](cli.md).
 | `fix_index_range=(a, b) selects no fixations` | The window is outside the trial. | The message gives the trial's fixation count and index range. |
 | `words must be the normalized pandas DataFrame` | A path/string was passed where a frame belongs. | Run it through `load_scanpath_data` first. |
 | `words frame is not normalized:` | A raw table (or a renamed frame) reached a plotting function. | Same — the frames the loader returns are the only accepted input. |
-| `Ambiguous selection: N trials match` | `participant` / `trial` left out with several combos loaded. | Pass both; `list_trials` shows what exists. |
+| `Ambiguous selection: N trials match` | `participant` / `trial` left out with several trials loaded. | Pass both; `list_trials` shows what exists. |
 | `No trial matches participant=…` | Unknown id. | The message lists available ids and the closest spellings. |
 | `plot_scanpath() got an unexpected keyword argument` | Misspelled or unsupported option. | The message suggests the nearest names; `api.figure_options()` is the full list. |
 | `color_by='…' (--color-by on the CLI) names no column` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have. | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'` and `'line'`. |

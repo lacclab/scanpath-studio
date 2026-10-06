@@ -79,6 +79,7 @@ from .multipart import (  # noqa: E402
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     COMPARISON_FIGURE_OPTIONS,
+    FIGURE_OPTION_CHOICES,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _resolve_trial_display_name,
@@ -89,6 +90,8 @@ from .plots import (  # noqa: E402
     make_scanpath_animation,
     make_scanpath_figure,
     make_word_profile_figure,
+    normalize_option_value,
+    normalize_option_values,
     replay_page,
     split_scanpath_layers,
 )
@@ -1859,7 +1862,12 @@ def _expand_palette(overrides: dict) -> dict:
     The palette itself isn't a figure kwarg, so it's consumed here rather than
     forwarded. Raises on an unknown name — a silent fallback to the default
     palette would quietly produce the wrong figure for a print run.
+
+    Every enumerated option is read here too (`plots.normalize_option_values`):
+    ``heatmap_norm="log"`` is ``"Log"``, and a value that is none of the
+    choices raises rather than drawing the default.
     """
+    overrides = normalize_option_values(overrides)
     name = overrides.get("palette")
     if name is None:
         return overrides
@@ -2035,8 +2043,15 @@ def _check_column_options(
         )
 
 
-def figure_options(kind: str = "static") -> dict:
+def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
     """Every figure keyword a builder accepts → the default it renders with.
+
+    With ``choices=True`` each name maps to ``{"default": …, "choices": …}``,
+    where ``choices`` is the tuple of values an enumerated option takes
+    (``heatmap_norm``: ``("Linear", "Log")``) and ``None`` for a free one. An
+    enumerated option takes any spelling of a choice — case, spaces, ``-`` and
+    ``_`` are ignored, so the CLI's ``"log"`` and ``"mark-border"`` work — and
+    raises ``ValueError`` listing them for anything else.
 
     ``kind="static"`` covers [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
     ``kind="animation"`` [`animate_scanpath`][scanpath_studio.api.animate_scanpath]
@@ -2076,6 +2091,11 @@ def figure_options(kind: str = "static") -> dict:
             options[name] = deepcopy(defaults[name])
         else:  # pragma: no cover - every option is a FigureSettings field
             options[name] = None
+    if choices:
+        return {
+            name: {"default": default, "choices": FIGURE_OPTION_CHOICES.get(name)}
+            for name, default in options.items()
+        }
     return options
 
 
@@ -2193,7 +2213,9 @@ def plot_scanpath(
     ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword raises
     a ``TypeError`` naming the closest valid options, and
     [`figure_options`][scanpath_studio.api.figure_options] lists them all with their
-    defaults. A ``color_by`` / ``highlight_column`` naming a column the trial's table
+    defaults (``choices=True`` adds the values each enumerated option takes; a
+    value is matched ignoring case, spaces, ``-`` and ``_``, and any other value
+    raises a ``ValueError``). A ``color_by`` / ``highlight_column`` naming a column the trial's table
     doesn't have raises a ``ValueError`` naming the closest ones, rather than drawing
     without it.
 
@@ -3228,7 +3250,7 @@ def compare_scanpaths(
         base_font_size=int(base_font_size),
         font_family=font_family,
         layout=resolved_layout,
-        compare_stimulus=str(compare_stimulus),
+        compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
         style_a=style_a,
         style_b=style_b,

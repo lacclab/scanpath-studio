@@ -1976,7 +1976,8 @@ def _labelled_columns(labels: Mapping[str, str] | None) -> Iterator[None]:
 
 
 def _humanize_column(column: str, *, unit: bool = True) -> str:
-    """``total_fixation_duration_ms`` → "Total Fixation Duration (ms)".
+    """``total_fixation_duration_ms`` → "Total Fixation Duration (ms)", and
+    ``participant_id`` → "Participant ID".
 
     ``unit=False`` drops the unit, for a hover row that writes it after the
     value — which used to read "… Duration Ms: 200 ms"."""
@@ -1984,7 +1985,7 @@ def _humanize_column(column: str, *, unit: bool = True) -> str:
     in_ms = text.endswith("_ms")
     if in_ms:
         text = text[: -len("_ms")]
-    title = text.replace("_", " ").strip().title()
+    title = re.sub(r"\bId\b", "ID", text.replace("_", " ").strip().title())
     return f"{title} (ms)" if in_ms and unit else title
 
 

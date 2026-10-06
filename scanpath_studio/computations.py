@@ -382,9 +382,17 @@ REGISTER: tuple[Computation, ...] = (
             "assigned line changes."
         ),
         code="scanpath_studio/measures.py:materialize_runs",
-        output="run, linerun, word_runid, pass_index",
+        output=(
+            "run, linerun, word_runid, word_run (the visit's pass number), "
+            "word_run_fix, nrun, reread (word_run > 1)"
+        ),
         grouping="Ordered by `timestamp_ms` within a trial",
-        precedence="An imported `pass_index` / `reread` column is kept.",
+        precedence=(
+            "Always recomputed: an imported column under any of these names is "
+            "replaced. An imported `pass_index` (EyeLink's `reread` is renamed "
+            "to it on load) is a separate column and is kept as given — "
+            "nothing computes `pass_index`."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _EXPORT, _CORPUS),
@@ -1151,9 +1159,15 @@ REGISTER: tuple[Computation, ...] = (
         name="Normalized measure column",
         category=CATEGORY_AGGREGATION,
         summary="Rescale a measure for cross-reader comparison.",
-        formula="Per-reader z-scoring or min–max, as chosen by the Normalize toggle.",
+        formula=(
+            "Per-reader z-score, `(value − reader mean) / reader SD`, when the "
+            "Normalize toggle is on."
+        ),
         code="scanpath_studio/aggregation.py:add_normalized_column",
-        missing="Zero variance ⇒ the normalized column is NaN, not 0.",
+        missing=(
+            "A reader with zero variance (or one value) ⇒ 0, the reader's own "
+            "mean; a missing value stays NaN."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS,),

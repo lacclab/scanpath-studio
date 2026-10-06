@@ -2058,3 +2058,45 @@ def test_an_edited_mapping_is_restated_in_the_files_names():
     assert (restated["left"], restated["right"]) == ("L", "R")
     assert (restated["top"], restated["bottom"]) == ("T", "B")
     assert restated["width"] is None and restated["x"] is None
+
+
+def test_a_files_source_carries_its_column_mapping_in_both_forms():
+    """`render --words … --word-schema …` read the files under that mapping, so
+    its recipe has to pass the same mapping on — or the loader auto-detects."""
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES,
+        options={
+            "words": ["w.csv"],
+            "fixations": ["f.csv"],
+            "word_schema": {"trial": "TRIAL", "word_id": "IA_ID"},
+            "fix_schema": {"trial": "TRIAL", "duration": "DUR"},
+        },
+    )
+    code = cs.reproduction_code(source, _state())
+    assert "word_schema={" in code.python
+    assert "'word_id': 'IA_ID'," in code.python
+    assert "'duration': 'DUR'," in code.python
+    flat = _one_line(code.cli)
+    assert '--word-schema \'{"trial":"TRIAL","word_id":"IA_ID"}\'' in flat
+    assert '--fix-schema \'{"trial":"TRIAL","duration":"DUR"}\'' in flat
+    ast.parse(code.python)
+
+
+def test_render_args_hand_their_schemas_to_the_snippet_source():
+    import argparse
+
+    args = argparse.Namespace(
+        authoring=None,
+        potec=None,
+        eyegenbench=None,
+        onestop=None,
+        source=None,
+        words=["w.csv"],
+        fixations=["f.csv"],
+        word_schema='{"trial": "TRIAL"}',
+        fix_schema=None,
+    )
+    source = cli._snippet_source_from_args(args)
+    assert source.kind == cs.SOURCE_FILES
+    assert source.options["word_schema"] == {"trial": "TRIAL"}
+    assert "fix_schema" not in source.options

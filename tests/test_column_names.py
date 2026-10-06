@@ -911,4 +911,4 @@ def test_the_word_matrix_names_its_rows_as_the_dataset_does():
         base_font_size=12,
         font_family="sans-serif",
     )
-    assert default.layout.yaxis.title.text == "Participant Id"
+    assert default.layout.yaxis.title.text == "Participant ID"

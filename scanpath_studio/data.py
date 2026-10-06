@@ -4138,7 +4138,7 @@ def repair_stranded_stimulus_words(
         )
     except Exception:  # a repair must never break the load
         _LOGGER.warning(
-            "DATA-39: could not repair a stored AOI table left on the placeholder "
+            "Could not repair a stored AOI table left on the placeholder "
             "reader; press Save changes on the Edit dataset screen to retry.",
             exc_info=True,
         )

@@ -5,10 +5,10 @@ or group-level result.
 
 Corpus Analysis shows the reading measures your interest-area table brings
 (mapped under **Reading measures** when you add or edit a dataset); it computes
-none itself. The bundled demo has them. For fixations alone, compute them with
-[`compute_word_metrics`][scanpath_studio.api.compute_word_metrics], join its
-columns onto your AOI table by participant, trial and word ID, and load that;
-the measures map themselves by name.
+none itself. The bundled demo has them. With fixations alone, compute the
+measures with your own pipeline (EyeLink Data Viewer's interest-area report, for
+example), join them onto your AOI table by participant, trial and word ID, and
+load that; EyeLink's `IA_*` names map themselves.
 
 ## 1. Define the analysis pool
 

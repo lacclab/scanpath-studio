@@ -33,6 +33,7 @@ default threshold.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 #: Bumped when an entry's *meaning* changes (a formula, a unit, a default), not
@@ -321,7 +322,7 @@ REGISTER: tuple[Computation, ...] = (
             "`CURRENT_FIX_INTEREST_AREA_ID`, the reading measures follow "
             "EyeLink's assignment and geometry only fills the fixations it left "
             "blank. #BUG-83: geometry now agrees with that column on all 3,208 "
-            "of the demo's EyeLink-assigned fixations (BUG-11's half-space "
+            "of the demo's EyeLink-assigned fixations (an earlier half-space "
             "shift: 92.6%; closed containment on the shared edges: 99.1%)."
         ),
         tiers="A, C",
@@ -504,8 +505,8 @@ REGISTER: tuple[Computation, ...] = (
         status=STATUS_PARTIAL,
         reference=(
             "Definitions differ across toolkits (go-past vs regression path); "
-            "#PRE-4 names `eyekit` as the intended comparison. Unresolved until "
-            "#VAL-4 runs."
+            "`eyekit` is the intended comparison. Unresolved until that "
+            "cross-validation runs."
         ),
         consumers=(_UI, _API),
         tests=("tests/test_measures.py", "tests/test_synthetic.py"),
@@ -833,8 +834,8 @@ REGISTER: tuple[Computation, ...] = (
             "(terminal punctuation). Each sentence's durations, fixation and "
             "run counts, go-past times and skip flag are then derived from the "
             "fixations on its words; the supplied word measures are not used, "
-            "so a sentence with no fixations reads as skipped (why AN-33 holds "
-            "Corpus Analysis → Per sentence back)."
+            "so a sentence with no fixations reads as skipped (which is why "
+            "Corpus Analysis → Per sentence is held back)."
         ),
         code="scanpath_studio/preprocessing.py:sentence_measures",
         output="Sentences table",
@@ -1111,7 +1112,7 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "Counts and NaN-skipping means over that reader's rows. "
             "`mean_saccade_px` is the mean of `fix.saccade_amplitude` and is "
-            "genuinely pixels since #BUG-25."
+            "in pixels."
         ),
         code="scanpath_studio/aggregation.py:reader_summary_table",
         output="Readers table",
@@ -1184,8 +1185,8 @@ REGISTER: tuple[Computation, ...] = (
             "— it used to be clipped onto exactly 1.0, where 15% of the demo's "
             "landings piled up. A first fixation assigned from outside the box "
             "(the nearest-word fallback) reads below 0 or above 1 rather than "
-            "being clipped onto an edge. #BUG-27 put the origin at the word's "
-            "`x` and the scale on `geom.word_char_advance`."
+            "being clipped onto an edge. The origin is the word's `x` and the "
+            "scale is `geom.word_char_advance`."
         ),
         tiers="C",
         status=STATUS_PARTIAL,
@@ -1212,7 +1213,7 @@ REGISTER: tuple[Computation, ...] = (
         id="sim.nld",
         name="Normalized Levenshtein distance",
         category=CATEGORY_SIMILARITY,
-        summary="Scanpath similarity over AoI sequences (gated by PRE-21).",
+        summary="Scanpath similarity over AoI sequences.",
         formula=(
             "`levenshtein(a, b) / max(len(a), len(b))` ∈ [0, 1]; 0 is identical. "
             "Two empty sequences give 0."
@@ -1312,8 +1313,8 @@ REGISTER: tuple[Computation, ...] = (
             "critical-span frame, drift correction and the model scanpaths. A "
             "position *inside* a word goes through `geom.word_char_advance` "
             "instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centred in the box (#BUG-97). "
-            "#BUG-83 reverted BUG-11, which pulled every tiling boundary back "
-            "half a space to mid-whitespace and so disagreed with EyeLink's own "
+            "An earlier version pulled every tiling boundary back half a space "
+            "to mid-whitespace, and so disagreed with EyeLink's own "
             "interest-area assignment on 7.4% of the demo's fixations."
         ),
         tiers="A, C",
@@ -1385,7 +1386,7 @@ REGISTER: tuple[Computation, ...] = (
         precedence=(
             "Not an interest area: `agg.landing_curve` measures a landing "
             "across it and mirrors an RTL one. The drawn word label and the "
-            "linear-reading snap used to sit on it (BUG-30). #BUG-97 measured "
+            "linear-reading snap used to sit on it (BUG-30). Measured against "
             "OneStop's own Experiment Builder screens: each tiling box is "
             "centred on its word, half a space either side, so the run's "
             "`x` start is half an advance early there; the label and snap "
@@ -1516,6 +1517,79 @@ REGISTER: tuple[Computation, ...] = (
 
 BY_ID = {entry.id: entry for entry in REGISTER}
 
+#: Entries the default build does not compute: they need
+#: ``SCANPATH_EXPERIMENTAL=1`` (`constants.computed_measures_enabled`,
+#: `preprocessing_enabled`, `drift_correction_enabled`, `similarity_enabled`).
+#: The page marks them, so it does not present held-back work as shipped.
+EXPERIMENTAL_IDS = frozenset(
+    {
+        "measure.ffd",
+        "measure.fprt",
+        "measure.rpd",
+        "measure.tfd",
+        "measure.nfix",
+        "measure.skip",
+        "measure.regressions",
+        "measure.landing_position",
+        "measure.landing_distance",
+        "measure.second_pass",
+        "measure.single_fix",
+        "measure.reg_in_count",
+        "pre.merge_short",
+        "pre.exclude_short",
+        "pre.blink_adjacent",
+        "pre.cleaning_report",
+        "pre.sentence_measures",
+        "pre.saccade_table",
+        "pre.character_grid",
+        "pre.sensitivity",
+        "align.algorithms",
+        "agg.reader_summary",
+        "agg.trial_summary",
+        "agg.landing_curve",
+        "sim.nld",
+        "sim.aoi_sequence",
+        "sim.windowed",
+    }
+)
+
+_TRACKER_ID = r"#?[A-Z]{2,5}-\d+"
+_TRACKER_PATTERNS = (
+    # "(BUG-25)", "(#PRE-21)", "(PRE-11/12)", "(BUG-61..66)", "(see VIZ-8)"
+    re.compile(
+        rf"\s*\((?:see |cf\. )?{_TRACKER_ID}"
+        rf"(?:\s*(?:[,/]|\.\.|and|&)\s*(?:{_TRACKER_ID}|\d+))*\)"
+    ),
+    # "only with SCANPATH_EXPERIMENTAL=1 — PRE-22)", "blanked, BUG-63)"
+    re.compile(rf"\s*[—–,-]\s*{_TRACKER_ID}(?=\))"),
+    # a sentence opening "#BUG-27: " or "#BUG-27 — "
+    re.compile(rf"(?:^|(?<=\. )){_TRACKER_ID}(?::| —)\s+"),
+)
+
+
+def _public(text: str) -> str:
+    """The register's text as the published page shows it: tracker ids are
+    for the code and its history, not for a reader of the docs."""
+    for pattern in _TRACKER_PATTERNS:
+        text = pattern.sub("", text)
+    # A sentence whose opening id was dropped starts with a capital again.
+    return re.sub(r"(^|\. )([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+
+
+def _experimental_note(entry: Computation) -> list[str]:
+    if entry.id not in EXPERIMENTAL_IDS:
+        return []
+    if entry.category == CATEGORY_MEASURE:
+        body = (
+            "Scanpath Studio does not compute this in this release; set "
+            "`SCANPATH_EXPERIMENTAL=1` to use the computation. A value your "
+            "dataset brings is shown as given, and this entry defines what it "
+            "means."
+        )
+    else:
+        body = "Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`."
+    return ['!!! warning "Experimental"', "", f"    {body}", ""]
+
 
 def entries_in(category: str) -> tuple[Computation, ...]:
     """Every register entry in one category, in declaration order."""
@@ -1577,12 +1651,14 @@ def to_markdown() -> str:
         "",
         '!!! note "Tier B is largely absent, on purpose"',
         "",
-        "    Comparing against an independent implementation is "
-        "[VAL-4](https://github.com/lacclab/scanpath-studio/issues/130), which is "
-        "on hold. "
+        "    Comparing against an independent implementation "
+        "[is planned](https://github.com/lacclab/scanpath-studio/issues/130). "
         "Scientific measures therefore read *Partially verified* even where "
-        "their hand oracle is exact. The one real exception is the drift-"
-        "correction port, which was written against a published reference.",
+        "their hand oracle is exact.",
+        "",
+        "Entries marked *experimental* are not computed by the default build: "
+        "they need `SCANPATH_EXPERIMENTAL=1`. They are listed so that their "
+        "definitions are on record.",
         "",
         "## Summary",
         "",
@@ -1590,9 +1666,12 @@ def to_markdown() -> str:
         "| --- | --- | --- | --- | --- |",
     ]
     for entry in REGISTER:
+        status = entry.status + (
+            " · experimental" if entry.id in EXPERIMENTAL_IDS else ""
+        )
         lines.append(
             f"| [`{entry.id}`](#{anchor(entry.id)}) | {entry.name} | "
-            f"{entry.category} | {entry.unit or '—'} | {entry.status} |"
+            f"{entry.category} | {entry.unit or '—'} | {status} |"
         )
     lines.append("")
     for category in CATEGORIES:
@@ -1604,20 +1683,21 @@ def to_markdown() -> str:
             lines += [
                 f"### `{entry.id}` — {entry.name} {{ #{anchor(entry.id)} }}",
                 "",
-                entry.summary,
+                *_experimental_note(entry),
+                _public(entry.summary),
                 "",
-                f"**Formula.** {entry.formula}",
+                f"**Formula.** {_public(entry.formula)}",
                 "",
             ]
             rows = [
-                ("Output", entry.output),
+                ("Output", _public(entry.output)),
                 ("Unit", entry.unit),
-                ("Grouping / ordering", entry.grouping),
-                ("Missing & edge cases", entry.missing),
-                ("Precedence & caveats", entry.precedence),
-                ("Reference", entry.reference),
+                ("Grouping / ordering", _public(entry.grouping)),
+                ("Missing & edge cases", _public(entry.missing)),
+                ("Precedence & caveats", _public(entry.precedence)),
+                ("Reference", _public(entry.reference)),
                 ("Code", f"`{entry.code}`"),
-                ("Consumers", ", ".join(entry.consumers)),
+                ("Consumers", ", ".join(_public(c) for c in entry.consumers)),
                 ("Tests", ", ".join(f"`{t}`" for t in entry.tests)),
                 ("Verification", f"tier {entry.tiers} — **{entry.status}**"),
             ]

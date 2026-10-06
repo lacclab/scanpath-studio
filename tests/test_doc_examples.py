@@ -66,7 +66,6 @@ def test_the_readme_python_example_runs_as_written(tmp_path, monkeypatch):
     namespace: dict = {}
     exec(compile(block, "<README>", "exec"), namespace)  # noqa: S102
     assert namespace["fig"].data
-    assert not namespace["measures"].empty
     assert (tmp_path / "scanpath.html").exists()
 
 

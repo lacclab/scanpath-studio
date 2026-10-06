@@ -30,9 +30,8 @@ import scanpath_studio as sps  # markdown-exec: hide
 words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head(3))
 
-measures = sps.compute_word_metrics(words, fixations)
 columns = ["IA_ID", "IA_LABEL", "IA_FIRST_FIXATION_DURATION", "IA_DWELL_TIME"]
-print(measures[columns].head(3))
+print(words[columns].head(3))
 ```
 
 ## Load
@@ -63,23 +62,13 @@ print(measures[columns].head(3))
 
 ::: scanpath_studio.datasets.load_onestop
 
-## Inspect and measure
+## Inspect
 
 ::: scanpath_studio.api.list_trials
 
 ::: scanpath_studio.api.list_parts
 
 ::: scanpath_studio.api.check_data_health
-
-::: scanpath_studio.api.compute_word_metrics
-
-::: scanpath_studio.api.preprocess_data
-
-::: scanpath_studio.api.analysis_tables
-
-::: scanpath_studio.api.trial_summary
-
-::: scanpath_studio.api.reader_summary
 
 ## Plot
 

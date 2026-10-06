@@ -45,7 +45,7 @@ scanpath_studio/
 ├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
 ├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
-├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables. PRE-22 holds the **app panel** back from this release (`constants.preprocessing_enabled`, the `SCANPATH_EXPERIMENTAL=1` gate); the API, `analyze` and this module are shipped and unchanged
+├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables. PRE-22 holds the **app panel** back from this release (`constants.preprocessing_enabled`, the `SCANPATH_EXPERIMENTAL=1` gate); `api.preprocess_data` / `analysis_tables` and `analyze` are held back too, by `constants.computed_measures_enabled` (they raise / refuse without the flag)
 ├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip
 ├─ authoring_component.py bidirectional click/add/drag/select/delete canvas for authored events
 ├─ illustration.py   detects geometry-changing/synthetic views that require an Illustration disclosure
@@ -70,7 +70,7 @@ scanpath_studio/
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
 ├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache)
-├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family, `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache
+├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
 ├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
 ├─ onestop_shard.py  one-shot prep: shard the ~15 GB OneStop lacclab CSVs into per-pid Parquet
@@ -117,6 +117,13 @@ After `normalize_words` / `normalize_fixations`:
 and run/pass columns. Initial landing position/distance, regression-in count,
 second-pass duration, and single-fixation duration are also computed. Pre-computed IA values on
 the words table take precedence over computed ones.
+
+**Held back from the release (`constants.computed_measures_enabled`):** without
+`SCANPATH_EXPERIMENTAL=1`, `api.compute_word_metrics` / `trial_summary` /
+`reader_summary` / `preprocess_data` / `analysis_tables` raise, `analyze` is
+refused, the export bundle offers no measure family, and Corpus Analysis drops
+the views computed from fixations (`tabs._COMPUTED_READER_VIEWS`). The register
+marks these entries `computations.EXPERIMENTAL_IDS`.
 
 **AN-32 — the Corpus Analysis page computes none of them.** It shows only the
 measures the dataset brought, mapped as optional AOI-table fields

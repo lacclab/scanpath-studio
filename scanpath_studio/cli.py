@@ -567,7 +567,7 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
-        help="Participant-level metadata table (DATA-20): one row per reader, an "
+        help="Participant-level metadata table: one row per reader, an "
         "id column plus anything known about them. The join is validated and "
         "reported against the loaded readers, and the fields are added to "
         "--list-trials output.",
@@ -576,7 +576,7 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--trial-metadata",
         metavar="FILE",
-        help="Trial-level metadata table (DATA-29): one row per reading, a "
+        help="Trial-level metadata table: one row per reading, a "
         "trial-id column plus anything known about it. Validated and reported "
         "the same way, and its fields are added to --list-trials output.",
     )
@@ -723,8 +723,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="saccade_color_by_type",
         action="store_true",
         help="Colour each saccade by its reading type (forward / skip / "
-        "refixation / return sweep / regression) instead of one uniform colour "
-        "(VIZ-8).",
+        "refixation / return sweep / regression) instead of one uniform colour.",
     )
     viz.add_argument(
         "--saccade-color-by-direction",
@@ -732,7 +731,7 @@ def _render_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Colour saccades forward vs. regression only — the two-way split "
         "between one uniform colour and the full --saccade-color-by-type "
-        "breakdown (VIZ-19).",
+        "breakdown.",
     )
     viz.add_argument(
         "--saccade-type-color",
@@ -750,14 +749,13 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="saccade_type_legend",
         action="store_false",
         help="With --saccade-color-by-type: hide the saccade-type colour key on "
-        "the figure (the coloured lines still draw). Legend shows by default "
-        "(VIZ-8).",
+        "the figure (the coloured lines still draw). Legend shows by default.",
     )
     viz.add_argument(
         "--fix-index-range",
         dest="fix_index_range",
         metavar="START:END",
-        help="VIZ-7: draw only fixations START through END of the trial "
+        help="Draw only fixations START through END of the trial "
         "(1-based, both inclusive), e.g. --fix-index-range 1:40. Honoured by "
         "--animate too, which then replays only that window, and by "
         "--compare-with, which windows both scanpaths (unless "
@@ -785,7 +783,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="fixation_flags",
         action="append",
         metavar="SPEC",
-        help="PRE-2 fixation classification, repeatable. SPEC is "
+        help="Fixation classification, repeatable. SPEC is "
         "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
         "CATEGORY one of short, long, oob, blink and MODE one of off, "
         "highlight, discard — e.g. --fixation-flag short=discard,threshold_ms=80. "
@@ -796,7 +794,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--saccade-classes",
         dest="saccade_classes",
         metavar="CLASSES",
-        help="VIZ-31: draw only these reading classes, comma-separated, e.g. "
+        help="Draw only these reading classes, comma-separated, e.g. "
         "--saccade-classes regression,return_sweep (classes: forward, skip, "
         "refixation, return_sweep, regression, other). Hidden classes lose "
         "their line and their direction arrow. Default: all.",
@@ -806,14 +804,14 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="saccade_arcs",
         action="store_true",
         help="Draw saccades as upward arcs (the linear-reading diagram) instead "
-        "of straight connectors (VIZ-9).",
+        "of straight connectors.",
     )
     viz.add_argument(
         "--snap-fixations",
         dest="snap_fixations",
         action="store_true",
         help="Snap each fixation above the word it lands on instead of its raw "
-        "gaze point (VIZ-9).",
+        "gaze point.",
     )
     viz.add_argument(
         "--illustration",
@@ -849,7 +847,7 @@ def _render_parser() -> argparse.ArgumentParser:
             metavar="ALGORITHM",
             type=_drift_algorithm,
             default=None,
-            help="Correct vertical drift before plotting (PRE-3): snap each "
+            help="Correct vertical drift before plotting: snap each "
             "fixation to its assigned text line and colour the fixations by "
             "line, exactly like the app's 👁️ Fixations ▾ → Drift correction. "
             f"ALGORITHM is one of: {', '.join(ALGORITHMS)} "
@@ -862,14 +860,14 @@ def _render_parser() -> argparse.ArgumentParser:
             action="store_true",
             help="With --drift-correction: draw a faint line from each "
             "fixation's original y to its corrected one, so the size of the "
-            "shift stays visible (PRE-3).",
+            "shift stays visible.",
         )
     else:
         viz.set_defaults(drift_correction=None, drift_connectors=False)
     viz.add_argument(
         "--palette",
         choices=list(PALETTES),
-        help="Colour palette for the marks (VIZ-18): Default (colourblind-safe) "
+        help="Colour palette for the marks: Default (colourblind-safe) "
         "(Okabe–Ito), Print / greyscale (hue-free, survives a B&W print), or "
         "High contrast. Individual --*-color flags override it.",
     )
@@ -890,7 +888,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--fixation-symbol",
         choices=list(FIXATION_SYMBOLS),
-        help="Fixation marker shape (VIZ-15). Unlike colour, shape survives a "
+        help="Fixation marker shape. Unlike colour, shape survives a "
         f"greyscale print (default: {DEFAULT_FIXATION_SYMBOL}).",
     )
     viz.add_argument(
@@ -921,8 +919,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--heatmap-norm",
         choices=["linear", "log"],
         help="Heatmap colour scaling: linear (default) or log — log compresses "
-        "heavy-tailed dwell times so a few hot words don't wash out the rest "
-        "(VIZ-3).",
+        "heavy-tailed dwell times so a few hot words don't wash out the rest.",
     )
     viz.add_argument(
         "--fixation-colorscale",
@@ -971,7 +968,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--coordinate-grid",
         action="store_true",
-        help="Overlay a monitor-pixel X/Y grid on the scanpath (VIZ-34).",
+        help="Overlay a monitor-pixel X/Y grid on the scanpath.",
     )
     viz.add_argument(
         "--coordinate-grid-spacing",
@@ -987,7 +984,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--stimulus-image",
         metavar="PATH",
         help="Draw an image (PNG/JPG) as the stimulus background under the "
-        "scanpath (VIZ-4). By default it's stretched to the image's own pixel "
+        "scanpath. By default it's stretched to the image's own pixel "
         "size (PNG) or the canvas; set --stimulus-image-size / -origin to place "
         "a crop precisely in fixation coordinates.",
     )
@@ -1293,14 +1290,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "--title",
         default=None,
         metavar="TEXT",
-        help="Title band stamped on the figure (EXP-5); off by default. The "
+        help="Title band stamped on the figure; off by default. The "
         "figure grows to make room rather than shrinking the plot.",
     )
     viz.add_argument(
         "--caption",
         default=None,
         metavar="TEXT",
-        help="Caption band stamped on the figure (EXP-5); off by default.",
+        help="Caption band stamped on the figure; off by default.",
     )
     viz.add_argument(
         "--separable-layers",
@@ -1309,7 +1306,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "fixations / saccades / heatmap / labels / stimulus image) in a "
         "`<output>_layers/` folder, so each can be restyled in Illustrator / "
         "Inkscape. Static image output only (.svg/.pdf/.png); the layers register "
-        "when stacked (VIZ-5).",
+        "when stacked.",
     )
     viz.add_argument(
         "--playback-speed",
@@ -1323,8 +1320,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="autoplay",
         action="store_false",
         help="With --animate: start the replay paused (press ▶ Play to run it). "
-        "By default the saved HTML autoplays on load at the playback speed "
-        "(VIZ-10).",
+        "By default the saved HTML autoplays on load at the playback speed.",
     )
     viz.add_argument(
         "--anim-grid-step-ms",
@@ -1351,7 +1347,7 @@ def _render_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FLAVOUR",
         help="Print the API / CLI code that reproduces this figure to stdout "
-        "(python | cli | both), then render as usual (EXP-7). Only the options "
+        "(python | cli | both), then render as usual. Only the options "
         "that differ from the defaults are written.",
     )
     viz.add_argument(
@@ -1368,7 +1364,7 @@ def _render_parser() -> argparse.ArgumentParser:
     # roughly double this parser for a narrow case, and `api.compare_scanpaths`
     # takes B's frames directly, so a Python caller has no such limit.
     cmp_group = parser.add_argument_group(
-        "comparison (CMP-9): draw a second scanpath beside or over the first"
+        "comparison: draw a second scanpath beside or over the first"
     )
     cmp_group.add_argument(
         "--compare-with",
@@ -1504,8 +1500,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--compare-raw-gaze",
         metavar="PATH",
         nargs="+",
-        help="Raw gaze table(s) for the SECOND dataset, drawn under B's scanpath "
-        "(VIZ-48). Same formats as --raw-gaze; with no second dataset, "
+        help="Raw gaze table(s) for the SECOND dataset, drawn under B's scanpath. "
+        "Same formats as --raw-gaze; with no second dataset, "
         "--raw-gaze already covers both readings.",
     )
     cmp_group.add_argument(
@@ -3442,7 +3438,12 @@ def analyze(argv: list[str]) -> None:
     (destination / "run_config.json").write_text(
         json.dumps(config, indent=2), encoding="utf-8"
     )
-    print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
+    extras = (
+        "columns.json + run_config.json"
+        if any(written.values())
+        else ("run_config.json")
+    )
+    print(f"Wrote {len(tables)} tables + {extras} to {destination}")
     if "word_measures" not in tables:
         # AN-32 / EXP-23: measures are the dataset's own; none are computed.
         print(
@@ -3560,6 +3561,10 @@ def cache(argv: list[str]) -> None:
     launching the app (or after closing it).
     """
     args = _cache_parser().parse_args(argv)
+    # `api` quiets Streamlit's bare-mode "No runtime found" cache warnings at
+    # import, and must be imported before `persistence` pulls in `data`, whose
+    # decorators fire them.
+    from . import api  # noqa: F401
     from .persistence import PERSIST_ENV_VAR, cache_status, clear_local_state
     from .persistence import human_size as _human_size
 
@@ -3780,7 +3785,6 @@ usage:
                                    the Data Management page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
-  scanpath-studio analyze …        export preprocessing + the full measure family
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
@@ -3797,6 +3801,28 @@ SCANPATH_LOCAL_FS=1."""
 _COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache")
 
 
+def _commands() -> tuple[str, ...]:
+    """The commands this build offers: `analyze` is held back with the other
+    computed measures (`constants.computed_measures_enabled`)."""
+    from .constants import computed_measures_enabled
+
+    if computed_measures_enabled():
+        return _COMMANDS
+    return tuple(c for c in _COMMANDS if c != "analyze")
+
+
+def _help_text() -> str:
+    from .constants import computed_measures_enabled
+
+    if not computed_measures_enabled():
+        return _HELP
+    return _HELP.replace(
+        "  scanpath-studio corpus …",
+        "  scanpath-studio analyze …        export preprocessing + the full measure "
+        "family\n  scanpath-studio corpus …",
+    )
+
+
 def _refuse_unknown_command(word: str) -> None:
     """ENG-54: a mistyped subcommand is an error, not a Streamlit argument.
 
@@ -3808,11 +3834,11 @@ def _refuse_unknown_command(word: str) -> None:
     ``.py`` path is left to Streamlit as before."""
     import difflib
 
-    close = difflib.get_close_matches(word, _COMMANDS, n=1, cutoff=0.6)
+    close = difflib.get_close_matches(word, _commands(), n=1, cutoff=0.6)
     hint = f" — did you mean {close[0]!r}?" if close else "."
     raise SystemExit(
         f"scanpath-studio: unknown command {word!r}{hint} Commands: "
-        f"{', '.join(_COMMANDS)}; `scanpath-studio --help` lists them. "
+        f"{', '.join(_commands())}; `scanpath-studio --help` lists them. "
         "Streamlit flags (starting with --) still launch the app."
     )
 
@@ -3826,6 +3852,14 @@ def main(argv: list[str] | None = None) -> None:
     elif argv[0] == "render":
         render(argv[1:])
     elif argv[0] == "analyze":
+        from .constants import EXPERIMENTAL_ENV_VAR, computed_measures_enabled
+
+        if not computed_measures_enabled():
+            raise SystemExit(
+                "scanpath-studio: `analyze` is not available in this release: the "
+                "tables it writes are computed by Scanpath Studio and have not "
+                f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
+            )
         analyze(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
@@ -3834,7 +3868,7 @@ def main(argv: list[str] | None = None) -> None:
     elif argv[0] == "cache":
         cache(argv[1:])
     elif argv[0] in ("-h", "--help"):
-        print(_HELP)
+        print(_help_text())
     elif argv[0] in ("-V", "--version"):
         print(__version__)
     elif not argv[0].startswith("-") and not argv[0].endswith(".py"):

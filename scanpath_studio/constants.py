@@ -109,11 +109,23 @@ def preprocessing_enabled() -> bool:
     unfinished work carries it — one env var for "not in this release", one code
     path, and no branch to rebase.
 
-    Scope is the **app** only. `api.preprocess_data`, `scanpath-studio analyze`
-    and `preprocessing.py` itself are untouched and still shipped: they were
-    released in 0.28.0 and a script that already calls them must keep working.
-    Unlike PRE-21's gate, this one therefore does *not* raise from the API — a
-    hidden button and a broken function call are different promises.
+    `api.preprocess_data` and `scanpath-studio analyze` are held back by
+    `computed_measures_enabled` instead, which raises rather than hides.
+    """
+    return experimental_features_enabled()
+
+
+def computed_measures_enabled() -> bool:
+    """Whether the numbers Scanpath Studio works out itself are exposed, this release.
+
+    Held back until each is checked by hand: the per-word reading measures
+    (`api.compute_word_metrics`), the reader / trial summaries, the analysis
+    tables and `scanpath-studio analyze`, the export bundle's measure family,
+    and the Corpus Analysis views built on them (Reading summary, Progressive vs
+    regressive, Landing-position curve, Reader summary table). What stays is
+    everything that shows the dataset's own values. Unlike PRE-22's app-only
+    gate, the API raises and the CLI refuses: a script that gets no number is
+    better off than one that gets an unchecked one.
     """
     return experimental_features_enabled()
 
@@ -126,7 +138,7 @@ def sentence_analysis_enabled() -> bool:
     dataset with supplied measures and no fixations read as 0 ms and skipped.
     It comes back once it is built on the supplied measures. Off, the subtab
     is not drawn and its table is never computed; `preprocessing.sentence_measures`
-    and `api.analysis_tables` are untouched.
+    is untouched (`api.analysis_tables` is held back by `computed_measures_enabled`).
     """
     return experimental_features_enabled()
 

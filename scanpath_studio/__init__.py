@@ -14,14 +14,11 @@ __all__ = [
     "clear_cache",
     "compare_scanpaths",
     "compute_word_metrics",
-    "eyegenbench_datasets",
     "figure_code",
     "figure_options",
     "list_parts",
     "list_trials",
     "load_authored_scanpath",
-    "load_eyegenbench",
-    "load_multipleye",
     "load_onestop",
     "load_participant_metadata",
     "load_potec",
@@ -47,6 +44,9 @@ __version__ = "0.33.0"
 # Public headless API (see api.py / datasets.py / eyegenbench.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
+# The MultiplEYE and benchmark-corpus loaders stay importable but are left out
+# of `__all__`: those corpora are held back from this release
+# (`constants.multipleye_enabled` / `benchmark_corpora_enabled`).
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
 _EYEGENBENCH_EXPORTS = frozenset({"load_eyegenbench", "eyegenbench_datasets"})
 _API_EXPORTS = (

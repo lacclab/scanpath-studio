@@ -151,6 +151,7 @@ from scanpath_studio.constants import (
     WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
+    computed_measures_enabled,
     derived_analysis_tables_enabled,
     drift_correction_enabled,
     icon_html,
@@ -8341,11 +8342,23 @@ def _pretty_col(col: str) -> str:
 
 
 def _measure_picker(
-    words, fixations, *, key, host=None, per_word_only=False, label="Measure"
+    words,
+    fixations,
+    *,
+    key,
+    host=None,
+    per_word_only=False,
+    fixation_only=False,
+    label="Measure",
 ) -> Measure | None:
-    """The shared measure picker (AN-23) — TFD default, only present columns."""
+    """The shared measure picker (AN-23) — TFD default, only present columns.
+
+    ``fixation_only`` offers just the per-fixation measures, for a view that
+    plots fixations one by one."""
     host = host or st
     ms = available_measures(words, fixations, per_word_only=per_word_only)
+    if fixation_only:
+        ms = [m for m in ms if m.frame == "fixations"]
     if not ms:
         host.info("No aggregatable measures found in this dataset.")
         return None
@@ -8364,6 +8377,19 @@ def _measure_picker(
 
 
 _COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
+
+#: Corpus Analysis views whose numbers the app computes from the fixations
+#: (reading speed, regression rate, landing positions, the summary tables)
+#: rather than reading them from the dataset. Held back with
+#: `constants.computed_measures_enabled`.
+_COMPUTED_READER_VIEWS = frozenset(
+    {
+        "Reading summary",
+        "Progressive vs regressive",
+        "Landing-position curve",
+        "Reader summary table",
+    }
+)
 
 
 def _measure_note(host, measure: Measure, observation: str) -> None:
@@ -10047,19 +10073,22 @@ def render_per_reader_tab(
     )
     # BUG-103: a fresh copy out of the cache each rerun, named by its inputs.
     assign_derived(fix_e, "enrich_fix", (fixations_filtered, words_filtered))
-    view = top[1].selectbox(
-        "View",
-        [
-            "Distribution vs cohort",
-            "Reading summary",
-            "Fixation duration over time",
-            "Saccade vs fixation duration",
-            "Progressive vs regressive",
-            "Landing-position curve",
-            "Per-trial trend",
-        ],
-        key="prdr_view",
-    )
+    views = [
+        "Distribution vs cohort",
+        "Reading summary",
+        "Fixation duration over time",
+        "Saccade vs fixation duration",
+        "Progressive vs regressive",
+        "Landing-position curve",
+        "Per-trial trend",
+    ]
+    if not computed_measures_enabled():
+        # Their numbers are worked out by the app from the fixations, not read
+        # from the dataset, and are held back until checked by hand.
+        views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
+    if st.session_state.get("prdr_view") not in (None, *views):
+        del st.session_state["prdr_view"]
+    view = top[1].selectbox("View", views, key="prdr_view")
     fw = dict(
         canvas_width=canvas_width,
         base_font_size=base_font_size,
@@ -10195,9 +10224,10 @@ def render_per_reader_tab(
                 )
     elif view == "Fixation duration over time":  # AN-9
         c = st.columns([3, 2])
-        measure = _measure_picker(words_filtered, fix_e, key="prdr_measure", host=c[0])
-        if measure is None or measure.frame != "fixations":
-            c[0].info("Pick a per-fixation measure (duration / saccade amplitude).")
+        measure = _measure_picker(
+            words_filtered, fix_e, key="prdr9_measure", host=c[0], fixation_only=True
+        )
+        if measure is None:
             return
         # Numbered fixations are not a time axis: without recorded onsets
         # `timestamp_ms` is 0, 1, 2, … and only the order is offered.
@@ -10414,11 +10444,12 @@ def render_per_group_tab(
     if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
         st.info("This group is empty — widen the definition.")
         return
-    view = st.selectbox(
-        "View",
-        ["Distributions", "Word profile", "Reader summary table", "Group trend"],
-        key="pgrp_view",
-    )
+    views = ["Distributions", "Word profile", "Reader summary table", "Group trend"]
+    if not computed_measures_enabled():
+        views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
+    if st.session_state.get("pgrp_view") not in (None, *views):
+        del st.session_state["pgrp_view"]
+    view = st.selectbox("View", views, key="pgrp_view")
     fw = dict(
         canvas_width=canvas_width,
         base_font_size=base_font_size,

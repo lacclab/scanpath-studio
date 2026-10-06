@@ -143,7 +143,7 @@ class TestKnownInconsistenciesAreRecorded:
         assert "between" in bounds.precedence
         assert "word_char_advance" in bounds.precedence
         assert "word_glyph_span" in bounds.precedence
-        assert "BUG-83" in bounds.precedence
+        assert "7.4%" in bounds.precedence  # the half-space shift it reverted
 
 
 class TestMeasureEntry:

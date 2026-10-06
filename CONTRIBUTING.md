@@ -26,13 +26,13 @@ address, and a bare `streamlit run` listens on every interface).
 Tested on Python 3.11–3.14.
 
 Then find the work. Every open and finished item is a
-[GitHub issue](https://github.com/lacclab/scanpath-studio/issues), arranged on
-the [Scanpath Studio board](https://github.com/orgs/lacclab/projects/5):
+[GitHub issue](https://github.com/lacclab/scanpath-studio/issues):
 
 ```bash
 gh issue list                       # what's open
-gh project item-list 5 --owner lacclab   # the board, with Status and Priority
 ```
+
+Maintainers also arrange them on a project board, by status and priority.
 
 Everything closed before 2026-08-20 was in the in-repo `tracker/` archive,
 removed on 2026-09-30; it is still at the `v0.31.2` tag
@@ -139,9 +139,8 @@ selectively and reading what you staged.
 Common to both:
 
 - **Claim the issue before you start it.** `gh issue edit <n> --add-assignee @me`
-  and drag it to *In progress* on the
-  [board](https://github.com/orgs/lacclab/projects/5) *before* writing code, not
-  when you finish. The assignee is the only signal the other person has that it
+  (maintainers also move it to *In progress* on the board) *before* writing
+  code, not when you finish. The assignee is the only signal the other person has that it
   is taken, and it is visible without pulling anything. New work gets an
   issue when it needs one — when it reaches *Review*, is blocked on the
   maintainer, or is carried across sessions (`CLAUDE.md` → *Tracking work*);

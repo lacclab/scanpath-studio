@@ -116,7 +116,7 @@ _INSPECT = "Data Management"
 # named as such so the register does not advertise a panel a user cannot open.
 _UI_PREPROCESSING = "UI (Preprocessing panel — not in this release, PRE-22)"
 _INSPECT_DERIVED = "Data Management (derived tables — not in this release, UX-126)"
-_API_EXPERIMENTAL = "API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21)"
+_API_EXPERIMENTAL = "API (not in this release, PRE-21)"
 # FFD / FPRT / RPD / single-fixation duration, on both paths: computed
 # (`measures.compute_per_word_measures`) and imported
 # (`data._blank_unfixated_measures`, #374).
@@ -925,8 +925,8 @@ REGISTER: tuple[Computation, ...] = (
             "The ten Carr et al. algorithms — `attach`, `chain`, `cluster`, "
             "`compare`, `merge`, `regress`, `segment`, `split`, `stretch`, "
             "`warp` — plus `slice` and a `consensus` vote over them. Each "
-            "reassigns fixation *y* to a text line. Hidden unless "
-            "`SCANPATH_EXPERIMENTAL=1` (#PRE-21)."
+            "reassigns fixation *y* to a text line. Not in this release "
+            "(#PRE-21)."
         ),
         code="scanpath_studio/alignment.py:correct",
         output="Corrected fixation y (display only; exported tables stay raw)",
@@ -1223,7 +1223,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         code="scanpath_studio/similarity.py:normalized_levenshtein",
         unit="dimensionless (0–1)",
-        missing="Hidden unless `SCANPATH_EXPERIMENTAL=1`.",
+        missing="Not in this release.",
         tiers="A, C",
         status=STATUS_VERIFIED,
         reference="Standard edit-distance scanpath comparison.",
@@ -1581,13 +1581,12 @@ def _experimental_note(entry: Computation) -> list[str]:
         return []
     if entry.category == CATEGORY_MEASURE:
         body = (
-            "Scanpath Studio does not compute this in this release; set "
-            "`SCANPATH_EXPERIMENTAL=1` to use the computation. A value your "
-            "dataset brings is shown as given, defined by the software that "
-            "exported it."
+            "Scanpath Studio does not compute this in this release. A value "
+            "your dataset brings is shown as given, defined by the software "
+            "that exported it."
         )
     else:
-        body = "Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`."
+        body = "Not in this release."
     return ['!!! warning "Experimental"', "", f"    {body}", ""]
 
 
@@ -1656,9 +1655,8 @@ def to_markdown() -> str:
         "Scientific measures therefore read *Partially verified* even where "
         "their hand oracle is exact.",
         "",
-        "Entries marked *experimental* are not computed by the default build: "
-        "they need `SCANPATH_EXPERIMENTAL=1`. They are listed so that their "
-        "definitions are on record.",
+        "Entries marked *experimental* are not in this release. They are "
+        "listed so that their definitions are on record.",
         "",
         "## Summary",
         "",

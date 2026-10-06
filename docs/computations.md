@@ -21,7 +21,7 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 
     Comparing against an independent implementation [is planned](https://github.com/lacclab/scanpath-studio/issues/130). Scientific measures therefore read *Partially verified* even where their hand oracle is exact.
 
-Entries marked *experimental* are not computed by the default build: they need `SCANPATH_EXPERIMENTAL=1`. They are listed so that their definitions are on record.
+Entries marked *experimental* are not in this release. They are listed so that their definitions are on record.
 
 ## Summary
 
@@ -320,7 +320,7 @@ Label each outgoing saccade by its reading role.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Fold a short fixation into a neighbour within a character distance.
 
@@ -342,7 +342,7 @@ Fold a short fixation into a neighbour within a character distance.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Soft-exclude fixations outside a duration window.
 
@@ -361,7 +361,7 @@ Soft-exclude fixations outside a duration window.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Drop fixations immediately before/after a blink.
 
@@ -379,7 +379,7 @@ Drop fixations immediately before/after a blink.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 What the preprocessing pass would remove, and why.
 
@@ -397,7 +397,7 @@ What the preprocessing pass would remove, and why.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Per-sentence reading time and counts.
 
@@ -417,7 +417,7 @@ Per-sentence reading time and counts.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 One row per saccade, with amplitude, angle and class.
 
@@ -437,7 +437,7 @@ One row per saccade, with amplitude, angle and class.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Per-character boxes derived from word boxes.
 
@@ -471,7 +471,7 @@ Whether a word's script runs right to left.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 How much the word measures move under different line assignments.
 
@@ -480,7 +480,7 @@ How much the word measures move under different line assignments.
 | | |
 | --- | --- |
 | **Code** | `scanpath_studio/preprocessing.py:measure_sensitivity` |
-| **Consumers** | API (raises unless SCANPATH_EXPERIMENTAL=1) |
+| **Consumers** | API (not in this release) |
 | **Tests** | `tests/test_preprocessing.py` |
 | **Verification** | tier C — **Partially verified** |
 
@@ -488,11 +488,11 @@ How much the word measures move under different line assignments.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Line-assignment algorithms, ported natively.
 
-**Formula.** The ten Carr et al. algorithms — `attach`, `chain`, `cluster`, `compare`, `merge`, `regress`, `segment`, `split`, `stretch`, `warp` — plus `slice` and a `consensus` vote over them. Each reassigns fixation *y* to a text line. Hidden unless `SCANPATH_EXPERIMENTAL=1`.
+**Formula.** The ten Carr et al. algorithms — `attach`, `chain`, `cluster`, `compare`, `merge`, `regress`, `segment`, `split`, `stretch`, `warp` — plus `slice` and a `consensus` vote over them. Each reassigns fixation *y* to a text line. Not in this release.
 
 | | |
 | --- | --- |
@@ -510,7 +510,7 @@ Line-assignment algorithms, ported natively.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Duration of the first fixation on a word.
 
@@ -533,7 +533,7 @@ Duration of the first fixation on a word.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Sum of the fixations in the word's first visit.
 
@@ -556,7 +556,7 @@ Sum of the fixations in the word's first visit.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 First entry to the word until the gaze passes it to the right.
 
@@ -578,7 +578,7 @@ First entry to the word until the gaze passes it to the right.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 All time spent on a word across the whole trial.
 
@@ -599,7 +599,7 @@ All time spent on a word across the whole trial.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Count of fixations assigned to a word.
 
@@ -618,7 +618,7 @@ Count of fixations assigned to a word.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Whether a word received no first-pass fixation.
 
@@ -638,7 +638,7 @@ Whether a word received no first-pass fixation.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Whether a word was returned to, or left backwards.
 
@@ -658,7 +658,7 @@ Whether a word was returned to, or left backwards.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Where in the word the first fixation landed, in letters.
 
@@ -680,7 +680,7 @@ Where in the word the first fixation landed, in letters.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Landing position relative to the word's center.
 
@@ -700,7 +700,7 @@ Landing position relative to the word's center.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 Time spent on the word during its second visit.
 
@@ -720,7 +720,7 @@ Time spent on the word during its second visit.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 First-pass duration when the first pass was exactly one fixation.
 
@@ -741,7 +741,7 @@ First-pass duration when the first pass was exactly one fixation.
 
 !!! warning "Experimental"
 
-    Scanpath Studio does not compute this in this release; set `SCANPATH_EXPERIMENTAL=1` to use the computation. A value your dataset brings is shown as given, defined by the software that exported it.
+    Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
 
 How many times the gaze came back to this word.
 
@@ -931,7 +931,7 @@ Rate measures per word.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 One row per participant: totals, means and rates.
 
@@ -950,7 +950,7 @@ One row per participant: totals, means and rates.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 One row per trial: reading time, counts, rates.
 
@@ -984,7 +984,7 @@ Rescale a measure for cross-participant comparison.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Distribution of initial landing positions by word length.
 
@@ -1019,7 +1019,7 @@ A measure by trial index or fixation index.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Scanpath similarity over AoI sequences.
 
@@ -1028,7 +1028,7 @@ Scanpath similarity over AoI sequences.
 | | |
 | --- | --- |
 | **Unit** | dimensionless (0–1) |
-| **Missing & edge cases** | Hidden unless `SCANPATH_EXPERIMENTAL=1`. |
+| **Missing & edge cases** | Not in this release. |
 | **Reference** | Standard edit-distance scanpath comparison. |
 | **Code** | `scanpath_studio/similarity.py:normalized_levenshtein` |
 | **Consumers** | UI, API |
@@ -1039,7 +1039,7 @@ Scanpath similarity over AoI sequences.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 The symbol string an NLD comparison runs on.
 
@@ -1057,7 +1057,7 @@ The symbol string an NLD comparison runs on.
 
 !!! warning "Experimental"
 
-    Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`.
+    Not in this release.
 
 Similarity restricted to a window of the scanpath.
 

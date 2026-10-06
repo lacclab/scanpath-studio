@@ -172,7 +172,7 @@ def _check_record(index: int, record: object) -> None:
         not isinstance(tags, list)
         or any(isinstance(t, bool) or not isinstance(t, _ID_TYPES) for t in tags)
     ):
-        raise AnnotationsFileError(f"{where}: tags must be a list of words")
+        raise AnnotationsFileError(f"{where}: tags must be a list of text labels")
     note = record.get("note", "")
     if note is not None and not isinstance(note, str):
         raise AnnotationsFileError(f"{where}: note must be text")
@@ -851,10 +851,14 @@ def render_trial_annotations(
             "radio",
             "Annotation scope",
             options=["Parent trial", "This screen"],
+            # #374: the stored option keeps its name; "parent" is internal.
+            format_func=lambda option: (
+                "Whole trial" if option == "Parent trial" else option
+            ),
             key=scope_key,
             horizontal=True,
-            help="Parent annotations follow the logical trial; screen annotations "
-            "describe only the active coordinate space.",
+            help="Whole trial: every screen of this trial. This screen: only the "
+            "screen on view.",
         )
         if scope == "This screen":
             annotation_screen = str(screen_id)
@@ -897,7 +901,7 @@ def render_trial_annotations(
             f"{ICONS['favorite']} Favorite (star this trial)",
             display=f"{ICONS['favorite']} Favorite",
             key=star_key,
-            help="Mark this trial as a favorite.",
+            help="Star this trial (with scope *This screen*, this screen only).",
             on_change=_save_entry_callback,
             args=save_args,
         )
@@ -1242,8 +1246,7 @@ def render_dataset_annotations(
         st.caption(
             f"{_plural(elsewhere, 'annotation')} here "
             f"{'is' if elsewhere == 1 else 'are'} on trials this dataset hasn't "
-            "loaded (*In dataset* unticked) — from an earlier load of it, or "
-            "saved before annotations were kept per dataset. They stay with this "
+            "loaded (*In dataset* unticked). They stay with this "
             "dataset; to move them to another, **Export** them here and "
             "**Import** them there."
         )
@@ -1256,7 +1259,7 @@ def render_dataset_annotations(
             "",
             type="tertiary",
             width="small",
-            help="Show this reading — and its screen, for a screen annotation — "
+            help="Show this trial — and its screen, for a screen annotation — "
             "in the Scanpath view.",
             on_click=_open_annotation,
             args=(open_key, records, trials, _trial_set(open_trials)),

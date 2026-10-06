@@ -158,7 +158,7 @@ DOCS_TUTORIALS_URL = f"{DOCS_URL}tutorials/"
 # The flag is an environment variable, fixed for the life of the process, so
 # resolving it once at import is equivalent to checking it per render.
 _SIMILARITY_SENTENCE = (
-    " Similarity scores (NLD) rank the closest readings for you."
+    " Similarity scores (NLD) rank the closest trials for you."
     if similarity_enabled()
     else ""
 )
@@ -175,7 +175,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         docs_url=f"{DOCS_URL}guides/loading-data/",
         steps=(
             TutorialStep(
-                "Choose the data source",
+                "Choose the dataset",
                 f"Everything about the dataset lives on the {ICONS['view_data']} **Data Management** page, in the "
                 "order the pipeline uses it. Start at the list of datasets — "
                 "click a row to open it, or **+ Add dataset** for your own tables.",
@@ -184,18 +184,18 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check the column mapping",
-                "**Edit**, beside the dataset's description, opens its setup "
-                "screen — the add screen's parts, for a dataset that exists. "
-                "Part **2 · Data tables & column mapping** decides what "
-                "every measure downstream is computed from. Rows marked ✨ were "
-                "auto-detected; override any that guessed wrong.",
+                "**Edit dataset**, under its overview, opens its setup screen — "
+                "the add screen's parts, for a dataset that exists. Part **2 · "
+                "Data tables & column mapping** decides which columns everything "
+                "reads. Rows marked ✨ were auto-detected; override any that "
+                "guessed wrong.",
                 ".st-key-tutorial_column_mapping",
                 view=_VIEW_DATA,
                 dataset_editor=True,
             ),
             TutorialStep(
                 "Verify what was parsed",
-                f"**{ICONS['search']} What's in the selected dataset** opens on {ICONS['view_corpus']} Stats — the "
+                f"**{ICONS['search']} What's in the … dataset** opens on {ICONS['stats']} Stats — the "
                 "counts and their spread, the quickest check that the mapping "
                 "worked. The six raw tables and its annotations are the tabs "
                 "beside it.",
@@ -230,7 +230,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="filter_annotate",
         title="Filter and mark trials",
-        outcome="Finish with reviewed trials annotated and ready for ID export.",
+        outcome="Finish with reviewed trials starred or tagged, and exported.",
         estimated_time="4 min",
         prerequisite="At least one trial",
         availability="has_trials",
@@ -302,8 +302,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Download and preserve settings",
-                "Open **Export** for PNG/SVG/HTML or bulk output. Include the plot config "
-                "when the figure must be reproducible later.",
+                "Open **Export** for this figure (PNG, SVG, PDF, HTML) or a bundle "
+                "of many. Keep the settings file in a bundle so it can be redrawn.",
                 ".st-key-tutorial_export",
                 subtab=SUBTAB_EXPORT,
             ),
@@ -320,19 +320,19 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     ),
     TutorialDefinition(
         id="compare_readings",
-        title="Compare readings of one text",
+        title="Compare trials of one text",
         outcome=(
-            "Finish with the other readings of one text side by side, at one scale."
+            "Finish with the other trials of one text side by side, at one scale."
         ),
         estimated_time="3 min",
-        prerequisite="Two readings sharing a text (and screen for multipart data)",
+        prerequisite="Two trials sharing a text (and screen for multipart data)",
         availability="has_comparable_readings",
         completion_test="Comparisons panel reached",
         docs_url=f"{DOCS_URL}guides/scanpath-visualization/#replay-and-compare",
         steps=(
             TutorialStep(
-                "Choose the reference reading",
-                "Pick the reading that should anchor the comparison. The comparison "
+                "Choose the reference trial",
+                "Pick the trial that should anchor the comparison. The comparison "
                 "panel reuses this exact parent trial and active screen.",
                 ".st-key-tour_grp_trial_picker",
             ),
@@ -340,7 +340,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Compare like with like",
                 f"Open **{ICONS['comparisons']} Comparisons** and set **Match field** to the text id: "
                 "the grid shows the other trials that share this trial's value in "
-                "that field — here, the other readings of *this* text — at one "
+                "that field — here, the other trials of *this* text — at one "
                 "scale." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
                 subtab=SUBTAB_COMPARISONS,
@@ -351,11 +351,11 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         id="explore_corpus",
         title="Explore a corpus question",
         outcome=(
-            "Finish having answered one worked question — how a reader's average "
+            "Finish having answered one worked question — how a participant's average "
             "fixation duration moved across the experiment."
         ),
         estimated_time="4 min",
-        prerequisite="Variation across trials, readers, or texts",
+        prerequisite="Variation across trials, participants, or texts",
         availability="has_corpus_variation",
         completion_test="Corpus Analysis opened",
         docs_url=f"{DOCS_TUTORIALS_URL}corpus-analysis/",
@@ -374,7 +374,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Pick the question, not the chart",
                 "Each subtab answers one shape of question: **Per text** (one text, "
-                "many readers), **Per participant** (one participant, all their "
+                "many participants), **Per participant** (one participant, all their "
                 "trials) and **Groups** (a cohort, or two compared). Our question — "
                 "*did this participant speed up over the experiment?* — is "
                 "**Per participant**.",
@@ -382,8 +382,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 view=_VIEW_CORPUS,
             ),
             TutorialStep(
-                "Choose the reader and the view",
-                "Pick the reader on the left, then set **View** to **Per-trial trend**. "
+                "Choose the participant and the view",
+                "Pick the participant on the left, then set **View** to **Per-trial trend**. "
                 "That plots one point per trial in presentation order — the whole "
                 "experiment on one axis, rather than a single trial's dynamics.",
                 ".st-key-tutorial_per_reader_view",
@@ -393,7 +393,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Read average fixation duration across the experiment",
                 "Set the measure to **fixation duration**; each point is that trial's "
-                "mean. A downward slope is the reader settling in — but check the "
+                "mean. A downward slope is the participant settling in — but check the "
                 "spread and the trial count before believing it, because one short "
                 "trial moves a mean a long way.",
                 ".st-key-tutorial_corpus_analysis",
@@ -402,7 +402,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Put it against the cohort",
                 "**Distribution vs cohort** answers the companion question — is this "
-                "reader unusual, or is the whole cohort like this? Read the sample size "
+                "participant unusual, or is the whole cohort like this? Read the sample size "
                 "with the effect, never the plotted mean on its own.",
                 ".st-key-tutorial_per_reader_view",
                 corpus_subtab="Per participant",
@@ -440,7 +440,7 @@ _STEPS = [
     (
         f"{ICONS['app']} Welcome to Scanpath Studio",
         "Visualize **eye movements in reading** — scanpaths drawn true-to-scale "
-        "over the text. A demo dataset is loaded; this tour takes under a minute.",
+        "over the text. This tour takes under a minute.",
     ),
     (
         f"{ICONS['datasets']} Data Management",
@@ -454,8 +454,8 @@ _STEPS = [
     (
         f"{ICONS['plot_controls']} Plot controls",
         "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
-        f"text. **{ICONS['figure']} Figure & canvas → {ICONS['screen']} Screen & geometry** sets your monitor so "
-        "it stays true-to-scale.",
+        f"text. The monitor is set in {ICONS['view_data']} **Edit dataset → Recording "
+        "setup**, so it stays true-to-scale.",
     ),
     (
         f"{ICONS['views']} Three views",
@@ -787,24 +787,24 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_view_modes",
         "title": f"{ICONS['animate']} Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
-        "**Compare** adds a second scanpath beside it — from this dataset or, "
+        "**Compare** adds a second scanpath, overlaid or side by side — from this dataset or, "
         "via **Scanpath B from**, from another one. The ▾ beside each toggle "
         "opens its settings.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
         "title": f"{ICONS['plot_controls']} Plot controls",
-        "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
-        "boxes, text. **Design presets** jump between Scanpath, Heatmap, "
-        "Illustration and Custom (your own tweaks) — and "
-        f"{ICONS['save']} keeps the ones you set up under a name.",
+        "body": "Toggle and style every layer — fixations, saccades, stimulus, word "
+        "boxes, heatmap, raw gaze. **Design presets** jump between Scanpath, "
+        "Heatmap, Illustration and Custom; "
+        f"**{ICONS['designs']} My designs** keeps yours under a name.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",
         "title": f"{ICONS['panels']} Per-trial panels",
         "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & Context**, "
-        f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export** (this trial or bulk), and "
-        f"**{ICONS['share']} Share** a deep link.",
+        f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export**, and "
+        f"**{ICONS['share']} Share** (link, code or settings file).",
     },
     {
         # UX-100 merged the old "📚 The menu bar" step into this one. It named
@@ -1536,16 +1536,19 @@ def tutorial_availability(
         return True, ""
     if rule == "has_trials":
         available = int(context.get("n_trials", 0)) >= 1
-        return available, "Load at least one trial first."
+        return available, "Open a dataset with trials, or loosen the filters."
     if rule == "has_visual_data":
         available = bool(context.get("has_words") or context.get("has_fixations"))
-        return available, "Load a words or fixations table first."
+        return (
+            available,
+            "Open a dataset with words or fixations, or loosen the filters.",
+        )
     if rule == "has_comparable_readings":
         available = bool(context.get("has_comparable_readings"))
-        return available, "Need two readings with the same text id."
+        return available, "Need two trials of the same text."
     if rule == "has_corpus_variation":
         available = bool(context.get("has_corpus_variation"))
-        return available, "Need variation across trials, readers, or texts."
+        return available, "Need variation across trials, participants, or texts."
     return False, f"Unknown availability rule: {rule}."
 
 
@@ -1849,7 +1852,7 @@ def render_use_case_tutorial() -> None:
         st.markdown(f"**{step.title}**")
         st.markdown(step.body)
         if not surface_open and st.button(
-            "Show me / Open this panel",
+            "Open this panel",
             key="tutorial_open_surface",
             type="primary",
             width="stretch",
@@ -1861,7 +1864,7 @@ def render_use_case_tutorial() -> None:
             text=f"Step {step_index + 1} of {len(steps)}",
         )
         st.link_button(
-            "Matching written tutorial ↗",
+            "Read this in the docs ↗",
             tutorial.docs_url,
             width="stretch",
         )
@@ -1987,9 +1990,9 @@ _FAQ_ITEMS = [
         "What counts as a “trial”?",
         "One reading event — one participant reading one text once — and it is "
         "whatever your **Trial ID** mapping says it is. EyeLink's `TRIAL_INDEX` "
-        "only identifies a trial *within* a reader, and the text id falls back to "
+        "only identifies a trial *within* a participant, and the text id falls back to "
         "the trial id, so map your item column as **Text ID** if trial order was "
-        "randomised.",
+        "randomized.",
     ),
     # #374 F22: the answer depends on where the app runs — `faq_items` fills
     # it in from `_where_data_goes`, so a hosted copy never says "nowhere".

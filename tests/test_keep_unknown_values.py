@@ -131,7 +131,7 @@ class TestThePanel:
         box = at.checkbox(key="filter_keepunknown_score_range")
         assert box.label == "Keep unknown values" and box.value is True
         captions = [c.value for c in at.caption]
-        assert "1 trial has no value and stays in the pool." in captions
+        assert "1 trial has no value and is kept." in captions
 
         box.uncheck().run()
         assert at.session_state["_trial_filters"]["ranges_drop_unknown"] == ("score",)
@@ -284,9 +284,9 @@ def test_a_constant_metadata_field_can_still_leave_its_unknowns_out(
     at.run()
     assert not at.exception, at.exception
     assert len(at.slider) == 0
-    noun = "trials" if grain == "trial" else "readers"
+    noun = "trials" if grain == "trial" else "participants"
     captions = [c.value for c in at.caption]
-    assert f"2 {noun} have no value and stay in the pool." in captions
+    assert f"2 {noun} have no value and are kept." in captions
     assert any("20" in c and "that has a value" in c for c in captions)
     assert at.session_state["_trial_filters"][slot] is None
 
@@ -341,7 +341,7 @@ def test_the_metadata_ranges_are_not_recounted_on_every_rerun(monkeypatch):
     assert not at.exception, at.exception
     assert calls == []
     captions = [c.value for c in at.caption]
-    assert "2 trials have no value and stay in the pool." in captions
+    assert "2 trials have no value and are kept." in captions
 
 
 def test_the_cached_summary_matches_the_per_field_answers():

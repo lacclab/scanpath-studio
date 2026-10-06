@@ -1,0 +1,1 @@
+Corpus Analysis and word exports leave a skipped word out of FFD, FPRT, RPD and single-fixation duration instead of counting an imported 0 (TFD keeps its 0); a blank imported second-pass duration is 0 where the fixation count is known.

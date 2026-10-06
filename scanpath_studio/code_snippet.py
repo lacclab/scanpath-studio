@@ -1089,6 +1089,8 @@ _STYLE_SPEC_KEYS = (
     "fix_color",
     "saccade_color",
     "box_color",
+    "box_fill_color",
+    "raw_gaze_color",
     "saccade_style",
     "saccade_width",
     "marker_size_range",

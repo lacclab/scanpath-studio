@@ -1175,12 +1175,44 @@ def test_the_setup_guide_counts_the_parts_it_names():
     "2 · Upload data tables" contradicted both)."""
     from scanpath_studio import tour
 
-    intro, *parts = tour._WIZARD_GUIDE_STEPS
+    intro, *parts, save = tour._WIZARD_GUIDE_STEPS
     assert "three parts" in intro["body"]
     assert len(parts) == 3
     for number, part in enumerate(parts, start=1):
         assert part["title"].startswith(f"{number} · ")
+        assert part["step_id"]
+    # The closing card is not a fourth part: no number, no wizard part to open.
+    assert save["step_id"] is None
+    assert not save["title"][0].isdigit()
     import inspect
 
     source = inspect.getsource(tour.render_spotlight_wizard_guide)
     assert 'f"Part {step_idx} of {n_parts}"' in source
+
+
+def test_the_setup_guide_ends_on_saving():
+    """The guide's last card points at the footer that saves the dataset —
+    ✅ Add dataset and ⬇️ Save setup — not at Recording setup."""
+    from scanpath_studio import tour, wizard
+
+    save = tour._WIZARD_GUIDE_STEPS[-1]
+    assert save["selector"] == ".st-key-wizard_footer_row"
+    assert "Add dataset" in save["body"] and "Save setup" in save["body"]
+    import inspect
+
+    # The selector names the footer's own container key.
+    assert 'container(key="wizard_footer_row")' in inspect.getsource(
+        wizard._wizard_footer
+    )
+
+
+def test_the_setup_guide_progress_names_the_save_step():
+    at = AppTest.from_function(_wizard_guide_app)
+    at.run()
+    from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
+
+    at.session_state["wizard_guide_step"] = len(_WIZARD_GUIDE_STEPS) - 1
+    at.run()
+    (bar,) = at.get("progress")
+    assert "Last step" in bar.proto.text
+    assert "Part 4" not in bar.proto.text

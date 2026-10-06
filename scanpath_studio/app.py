@@ -6105,6 +6105,12 @@ def _dataset_table_rows(
                 entry.get("fixations"),
                 entry.get("raw_gaze"),
             )
+        elif token == MANUAL_SAMPLE_CHOICE:
+            # Built from the session's draft, not read from disk, so it is as
+            # cheap to count as to open — and nothing else would ever count it
+            # on a server with no recovery cache. Its frames change with each
+            # edit, so it publishes no figures and is counted here instead.
+            frames = (*_manual_sample_frames(), None)
         else:
             frames = (None, None, None)
         about = dataset_about(token, registry)

@@ -457,6 +457,8 @@ def _restore_config_app():
         "opacity": 0.5,
         "label_pattern": "{participant_id} · {trial_id}",
         "box_color": "#333333",
+        "box_fill_color": "#444444",
+        "raw_gaze_color": "#555555",
     }
     config = {
         "schema": st.session_state["_schema"],

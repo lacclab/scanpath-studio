@@ -30,7 +30,9 @@ def test_the_data_page_names_the_scope_of_its_counts():
     # Unfiltered: Stats and the three trial tables say "whole dataset", and
     # nothing else on the page needs to.
     whole = _captions(at, "24 trials · 2 readers · whole dataset")
-    assert len(whole) == 4, whole  # Stats + Fixations + Words + Raw gaze
+    # Stats + Fixations + Words + Raw gaze, and Participants / Trials / Texts,
+    # which list the data's own ids while no table is attached to them.
+    assert len(whole) == 7, whole
     assert not _captions(at, "before the trial filters")
 
     # Set on the Scanpath view, where the filter panel publishes the result
@@ -44,7 +46,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     assert not at.exception, at.exception
 
     scoped = _captions(at, "12 of 24 trials · 1 of 2 readers · filtered")
-    assert len(scoped) == 4, scoped
+    assert len(scoped) == 7, scoped
     assert all("Participant: l7\\_1090" in c for c in scoped)
     # The table and the capabilities block say they did not follow.
     assert _captions(at, "Whole datasets, before the trial filters")

@@ -50,9 +50,9 @@ Word box
     interest area (IA) in EyeLink's terms. It is taken from the data exactly as
     given, never recomputed
     ([`geom.word_box_bounds`](computations.md#geom-word-box-bounds)). A
-    fixation counts for the word its data names (an imported word/IA id), else
-    the word whose box contains it, else the word with the nearest centre
-    within 50 px
+    fixation counts for the word its data names when the data has a word/IA
+    id (a blank there means no word); without one, for the word whose box
+    contains it, else for no word
     ([`assign.fixation_to_word`](computations.md#assign-fixation-to-word)).
 
 Canvas

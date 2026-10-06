@@ -26,10 +26,16 @@ NOT_A_DESIGN_SETTING = {
     # An uploaded file is not a setting, and Streamlit refuses to assign a value
     # to an uploader's key (see `controls._is_restorable_global`).
     "global_stimulus_image_upload",
-    # The Compare box-outline pickers are shadows: they show the colour drawn
-    # and write the real `cmp{idx}_box_color`, which a design does record.
+    # The Compare box-outline / fill pickers are shadows: they show the colour
+    # drawn and write the real `cmp{idx}_box_color` / `cmp{idx}_box_fill_color`
+    # (and the raw-gaze one `cmp{idx}_raw_gaze_color`),
+    # which a design does record.
     "cmp0_box_color__pick",
     "cmp1_box_color__pick",
+    "cmp0_box_fill_color__pick",
+    "cmp1_box_fill_color__pick",
+    "cmp0_raw_gaze_color__pick",
+    "cmp1_raw_gaze_color__pick",
 }
 
 B_FILTERS = {

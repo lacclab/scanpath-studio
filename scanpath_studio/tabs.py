@@ -257,6 +257,7 @@ from scanpath_studio.export import (
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
+    strip_local_paths,
     summarize_export,
 )
 from scanpath_studio.export_status import (
@@ -4242,6 +4243,10 @@ def render_settings_file(
             "label_pattern": st.session_state.get(f"cmp{idx}_label_pattern") or "",
             # The word-box outline override ("" = the scanpath's colour).
             "box_color": st.session_state.get(f"cmp{idx}_box_color") or "",
+            # The word-box fill override ("" = the figure's fill).
+            "box_fill_color": st.session_state.get(f"cmp{idx}_box_fill_color") or "",
+            # The raw-gaze colour override ("" = the scanpath's colour).
+            "raw_gaze_color": st.session_state.get(f"cmp{idx}_raw_gaze_color") or "",
         }
         for idx in range(2)
     ]
@@ -4962,15 +4967,16 @@ _DUAL_UNREAD_STYLE = {
 def _replay_style(style: dict | None) -> dict | None:
     """A per-scanpath comparison style as the co-animation takes it: its look
     only, without the filters (`COMPARE_FILTER_STYLE_KEYS`) `_plan_replay`
-    hands the replay another way, and without `box_color` — the replay draws
-    one set of boxes in the figure's colour, so it would only split the cache
-    key."""
+    hands the replay another way, and without `box_color` / `box_fill_color` /
+    `raw_gaze_color` — the replay draws one set of boxes in the figure's colours
+    and no raw gaze, so they would only split the cache key."""
     if not style:
         return None
     return {
         k: v
         for k, v in style.items()
-        if k not in COMPARE_FILTER_STYLE_KEYS and k != "box_color"
+        if k not in COMPARE_FILTER_STYLE_KEYS
+        and k not in ("box_color", "box_fill_color", "raw_gaze_color")
     }
 
 
@@ -12039,6 +12045,47 @@ def _count_by(
     return out
 
 
+def _with_constants(
+    out: pd.DataFrame, frames: list[pd.DataFrame], keys: list[str]
+) -> pd.DataFrame:
+    """Add every column that holds one value per ``keys`` row to ``out``.
+
+    Per trial: conditions, answers, list or batch ids arrive repeated on each
+    fixation (or AOI) row of their trial. Per reader: age, group, session or
+    list arrive the same way. One value per row of ``out`` is what makes them
+    facts about it. Fixations are read first, then the AOI rows for any column
+    they do not carry. A column with the same value in every row says nothing
+    about any one of them and is left out, as is one that repeats a column
+    already shown (``unique_paragraph_id`` beside the text id). Local paths
+    are cut to their file name (S4).
+    """
+    shown = {tuple(out[c].astype("string").fillna("").tolist()) for c in out.columns}
+    for frame in frames:
+        if frame.empty or not all(k in frame.columns for k in keys):
+            continue
+        frame = shareable_frame(frame)
+        candidates = [c for c in frame.columns if c not in out.columns]
+        if not candidates:
+            continue
+        grouped = frame.groupby(keys, dropna=True, sort=False)
+        varies = grouped[candidates].nunique(dropna=True).max() > 1
+        constant = [c for c in candidates if not varies.get(c, True)]
+        if not constant:
+            continue
+        values = strip_local_paths(grouped[constant].first().reset_index())
+        values = out[keys].merge(values, on=keys, how="left")
+        for column in constant:
+            col = values[column]
+            if col.nunique(dropna=True) <= 1:
+                continue
+            signature = tuple(col.astype("string").fillna("").tolist())
+            if signature in shown:
+                continue
+            shown.add(signature)
+            out[column] = col.to_numpy()
+    return out
+
+
 @st.cache_data(show_spinner=False)
 def _ids_from_data(
     kind: str, _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
@@ -12048,7 +12095,9 @@ def _ids_from_data(
     What the Participants/Trials/Texts tabs show when no separate table is
     attached: the ids are in the fixation and AOI rows either way, so an empty
     tab read as "this dataset has none". Counts only — distinct ids and row
-    counts, nothing computed from the eye movements.
+    counts, nothing computed from the eye movements — and, on the trial rows,
+    the data's own columns that hold one value per trial or per reader
+    (:func:`_with_constants`).
     """
     frames = [_fixations, _words]
     pid, tid, xid = "participant_id", "trial_id", "text_id"
@@ -12061,6 +12110,7 @@ def _ids_from_data(
         texts = _entity_counts(frames, [pid, xid])
         out = _count_by(out, texts, [pid], "# Texts", lambda g: g.size())
         out = _count_by(out, _fixations, [pid], "# Fixations", lambda g: g.size())
+        out = _with_constants(out, frames, [pid])
         return out.sort_values(pid, ignore_index=True).rename(
             columns={pid: "Participant ID"}
         )
@@ -12080,6 +12130,7 @@ def _ids_from_data(
         out = _count_by(out, _fixations, [pid, tid], "# Fixations", lambda g: g.size())
         if "word_id" in _words.columns:
             out = _count_by(out, _words, [pid, tid], "# AOIs", lambda g: g.size())
+        out = _with_constants(out, frames, [pid, tid])
         return out.sort_values([pid, tid], ignore_index=True).rename(
             columns={pid: "Participant ID", tid: "Trial ID", xid: "Text ID"}
         )
@@ -12135,10 +12186,24 @@ def _render_raw_metadata_tab(
             return
         render_data_scope(scope, key=f"data_scope_{kind}_ids")
         st.caption(
-            f"{len(derived):,} {label.lower()}, as named in the fixation and AOI "
-            f"data. " + _ATTACH_HINT.format(grain=kind, unit=unit)
+            f"{len(derived):,} {kind if len(derived) == 1 else label.lower()}, "
+            "as named in the fixation and AOI data"
+            + (
+                f", with every column that holds one value per {unit}"
+                if kind != "text"
+                else ""
+            )
+            + ". "
+            + _ATTACH_HINT.format(grain=kind, unit=unit)
         )
-        st.dataframe(derived, hide_index=True, width="stretch")
+        # DATA-66: a canonical column carried along is headed by the user's name.
+        names = active_column_names(st.session_state, "fixations")
+        st.dataframe(
+            derived,
+            hide_index=True,
+            width="stretch",
+            column_config=column_label_config(derived.columns, names),
+        )
         return
     st.caption(
         f"From **{attached.source_name}**, joined on {id_note}. Kept as its "

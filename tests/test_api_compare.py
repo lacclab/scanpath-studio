@@ -603,7 +603,8 @@ def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layou
 
 class TestBoxOutline:
     """Each reading's word boxes are outlined in its fixation colour unless its
-    style names a `box_color` — the Compare rail's *Line A* / *Line B*."""
+    style names a `box_color` — the *Line* row of the Compare rail's per-scanpath
+    word-box groups."""
 
     @staticmethod
     def _outlines(**styles) -> set:
@@ -638,3 +639,89 @@ class TestBoxOutline:
             style_b={"fix_color": "#0000aa"},
         )
         assert outlines == {"#123456", "#0000aa"}
+
+
+class TestBoxFill:
+    """Each reading's word boxes are filled with the figure's fill colour unless
+    its style names a `box_fill_color` — the Compare rail's per-scanpath *Fill*."""
+
+    @staticmethod
+    def _fills(**kwargs) -> set:
+        from scanpath_studio.plots import _shape_layer
+
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            show_words=True,
+            word_box_fill_opacity=0.3,
+            **kwargs,
+        )
+        return {
+            shape.fillcolor
+            for shape in fig.layout.shapes
+            if _shape_layer(shape) == "word_boxes"
+        }
+
+    def test_the_default_is_the_figures_fill(self):
+        assert len(self._fills(word_box_fill_color="#00aa00")) == 1
+
+    def test_a_box_fill_color_overrides_it_per_scanpath(self):
+        same = self._fills(word_box_fill_color="#00aa00")
+        split = self._fills(
+            word_box_fill_color="#00aa00", style_b={"box_fill_color": "#aa00aa"}
+        )
+        assert len(split) == 2 and same < split
+
+
+class TestRawGazeColor:
+    """Each reading's raw-gaze samples take its fixation colour unless its style
+    names a `raw_gaze_color` — the Compare rail's per-scanpath raw-gaze *Color*."""
+
+    @staticmethod
+    def _colors(**styles) -> set:
+        words, fixations = _pair()
+        raw = pd.concat(
+            [
+                pd.DataFrame(
+                    {
+                        "participant_id": p,
+                        "trial_id": t,
+                        "x": [100.0, 110.0],
+                        "y": [100.0, 105.0],
+                        "timestamp_ms": [0.0, 2.0],
+                    }
+                )
+                for p, t in (("p1", "t1"), ("p2", "t2"))
+            ],
+            ignore_index=True,
+        )
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            raw_gaze=raw,
+            show_raw_gaze=True,
+            **styles,
+        )
+        return {t.marker.color for t in fig.data if "raw gaze" in (t.name or "")}
+
+    def test_the_default_is_each_scanpaths_colour(self):
+        colors = self._colors(
+            style_a={"fix_color": "#aa0000"}, style_b={"fix_color": "#0000aa"}
+        )
+        assert colors == {"#aa0000", "#0000aa"}
+
+    def test_a_raw_gaze_color_overrides_it_per_scanpath(self):
+        colors = self._colors(
+            style_a={"fix_color": "#aa0000"},
+            style_b={"fix_color": "#0000aa", "raw_gaze_color": "#00aa00"},
+        )
+        assert colors == {"#aa0000", "#00aa00"}

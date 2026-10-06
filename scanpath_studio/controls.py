@@ -91,6 +91,7 @@ from .fields import (
     labeled,
     plain,
     row_label,
+    tooltip,
 )
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
@@ -3262,9 +3263,7 @@ def column_mapping_ui(
                 box_grid["cells"] = list(cells[1:])
                 box_grid["used"] = 0
             if spec.get("help"):
-                tip = html.escape(
-                    f"{_plain(spec['label'])} — {_plain(spec['help'])}", quote=True
-                )
+                tip = tooltip(spec["label"], spec["help"])
                 head.markdown(
                     f'<div class="sps-box-title"><span class="sps-fhelp" '
                     f'data-tip="{tip}" aria-label="{tip}">{title}</span></div>',
@@ -3444,11 +3443,11 @@ def _render_field_flag(
     if hover:
         spans.append(
             f'<span class="sps-map-flag sps-fhelp" '
-            f'data-tip="{html.escape(hover, quote=True)}">'
+            f'data-tip="{tooltip(hover)}">'
             f"{icon_html('auto_detected')}</span>"
         )
     if preview:
-        tip = html.escape(preview, quote=True)
+        tip = tooltip(preview)
         spans.append(
             f'<span class="sps-map-flag sps-map-preview sps-fhelp" tabindex="0" '
             f'data-tip="{tip}" aria-label="{tip}">{icon_html("preview")}</span>'
@@ -4146,7 +4145,7 @@ def _sub_caption(host, text: str, help: str | None = None) -> None:
             unsafe_allow_html=True,
         )
         return
-    tip = html.escape(f"{text} — {_plain(help)}", quote=True)
+    tip = tooltip(text, help)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help sps-fsub">{html.escape(text)}'

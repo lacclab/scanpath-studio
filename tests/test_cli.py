@@ -397,8 +397,8 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
     assert out_file.is_file()
     err = capsys.readouterr().err
     assert "ignoring" in err
-    assert "show_heatmap" in err and "saccade_render_mode" in err
-    assert "color_by" not in err
+    assert "--heatmap" in err and "--saccade-arcs" in err
+    assert "color" not in err.split("ignoring them:")[1]
 
 
 def test_render_animate_forwards_every_option_the_replay_takes(tmp_path, monkeypatch):
@@ -1946,12 +1946,12 @@ def test_streamlit_flags_and_script_paths_still_launch_the_app(monkeypatch):
 
 
 def test_the_sample_help_names_the_readers_it_ships(capsys):
-    """DATA-43: the demo is two readers, every one with fixations."""
+    """DATA-43: the demo is two participants, every one with fixations."""
     with pytest.raises(SystemExit):
         cli.main(["render", "--help"])
     out = " ".join(capsys.readouterr().out.split())
     assert "3-participant" not in out and "3 readers" not in out
-    assert "2 readers, 12 paragraphs each" in out
+    assert "2 participants, 12 trials each" in out
 
 
 # ---------------------------------------------------------------------------
@@ -2084,9 +2084,9 @@ def test_check_reports_what_the_data_page_reports(tmp_path, capsys):
     words, fixations = _health_tables(tmp_path)
     cli.main(["check", "--words", words, "--fixations", fixations])
     out = capsys.readouterr().out
-    assert "Data checks: 1 finding(s)" in out
+    assert "Data checks: 1 finding (" in out
     assert "Fixations lasting 0 ms or less" in out
-    assert "2 of 3 rows in 1 trial(s)" in out
+    assert "2 of 3 rows in 1 trial" in out
     assert "1 zero" in out and "1 negative" in out
     assert "in the app:" in out
 

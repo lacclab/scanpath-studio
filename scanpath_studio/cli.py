@@ -3706,7 +3706,7 @@ def _cache_parser() -> argparse.ArgumentParser:
         description="Show what a local run has stored on this computer "
         "(uploaded datasets, mappings, view settings, saved designs, "
         "annotations), where it lives, and delete it. The hosted app stores "
-        "nothing.",
+        "nothing. Set SCANPATH_STUDIO_STATE_DIR to keep it somewhere else.",
     )
     parser.add_argument(
         "--path", action="store_true", help="print the cache folder and exit"
@@ -3716,6 +3716,13 @@ def _cache_parser() -> argparse.ArgumentParser:
         "--clear", action="store_true", help="delete the stored session"
     )
     return parser
+
+
+def _count(n: int, noun: str) -> str:
+    """``"1 setting"``, ``"205 settings"``, ``"no settings"`` (#374, F38)."""
+    if not n:
+        return f"no {noun}s"
+    return f"{n:,} {noun}" + ("" if n == 1 else "s")
 
 
 def cache(argv: list[str]) -> None:
@@ -3769,17 +3776,23 @@ def cache(argv: list[str]) -> None:
         )
         print(f"Size:    {_human_size(status['bytes'])}")
         return
-    names = ", ".join(entry["name"] for entry in status["datasets"]) or "none"
-    print(f"Stored:  {len(status['datasets'])} dataset(s): {names}")
+    datasets = [entry["name"] for entry in status["datasets"]]
+    print(
+        f"Stored:  {_count(len(datasets), 'dataset')}: {', '.join(datasets)}"
+        if datasets
+        else "Stored:  no datasets"
+    )
     # rows is None for a cache written before the manifest carried row counts
     # (the app backfills it on its next save) — don't print a false 0.
-    rows = f"{status['rows']:,} rows" if status["rows"] is not None else "rows unknown"
+    rows = (
+        _count(status["rows"], "row") if status["rows"] is not None else "rows unknown"
+    )
     print(
-        f"         {rows} · {status['annotations']} annotated "
-        f"trial(s) · {status['designs']} saved design(s) · "
+        f"         {rows} · {_count(status['annotations'], 'annotated trial')} · "
+        f"{_count(status['designs'], 'saved design')} · "
         # DATA-38 — the attached metadata tables, the panel's own count.
-        f"{status.get('metadata', 0)} metadata table(s) · "
-        f"{status['settings']} setting(s)"
+        f"{_count(status.get('metadata', 0), 'metadata table')} · "
+        f"{_count(status['settings'], 'setting')}"
     )
     # A stored dataset the app cannot restore (a file gone, an entry damaged):
     # the app holds it back, restores the rest, and keeps it in the cache.

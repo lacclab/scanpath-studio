@@ -860,8 +860,9 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
 
     cli.main(["cache"])
     out = capsys.readouterr().out
-    assert "1 dataset(s): Corpus" in out
+    assert "1 dataset: Corpus" in out
     assert "2 rows" in out
+    assert "(s)" not in out  # #374 F38: real plurals
 
     cli.main(["cache", "--clear"])
     assert "Cleared" in capsys.readouterr().out
@@ -869,6 +870,18 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
 
     cli.main(["cache", "--clear"])
     assert "Nothing stored" in capsys.readouterr().out
+
+
+def test_cache_help_names_the_folder_variable(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["cache", "--help"])
+    assert "SCANPATH_STUDIO_STATE_DIR" in capsys.readouterr().out
+
+
+def test_counts_are_plural_words():
+    assert cli._count(0, "dataset") == "no datasets"
+    assert cli._count(1, "annotated trial") == "1 annotated trial"
+    assert cli._count(205, "setting") == "205 settings"
 
 
 def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):

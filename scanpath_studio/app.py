@@ -527,6 +527,78 @@ _IFRAME_CLICK_CLOSES_POPOVER_SCRIPT = """
 """
 
 
+#: #374 F19: what a screen reader announces. Streamlit sets a widget's
+#: ``aria-label`` to its label string as written, so a switch labelled
+#: ``:material/movie: Animate`` was announced with the shortcode, and the
+#: ligature of every icon it draws (``restart_alt``, ``filter_alt``) was read
+#: as part of the button or tab around it. This strips shortcodes and ``**``
+#: from every ``aria-label`` and hides icon glyphs from assistive technology —
+#: unless the glyph is all that names its control. Labels are fixed at the
+#: source where they can be (`fields.accessible_name`); this covers the visible
+#: labels that keep an icon (toggles and checkboxes take no ``icon=``) and the
+#: glyphs Streamlit draws itself. Installed in the parent's realm once per page
+#: load, like the scripts above.
+_A11Y_NAMES_SCRIPT = """
+<script>
+(function () {
+    function install() {
+        var SHORTCODE = /:material\\/[a-z0-9_]+:/g;
+        var GLYPH = '[data-testid="stIconMaterial"], span[role="img"][translate="no"]';
+        var NAMED = 'button, a, [role="tab"], [role="button"], label, [role="option"]';
+        var pending = false;
+        function clean(value) {
+            return value.replace(SHORTCODE, " ").replace(/\\*\\*/g, "")
+                .replace(/\\s+/g, " ").trim();
+        }
+        function textWithout(el) {
+            var copy = el.cloneNode(true);
+            copy.querySelectorAll(GLYPH).forEach(function (g) { g.remove(); });
+            return (copy.textContent || "").trim();
+        }
+        function update() {
+            pending = false;
+            document.querySelectorAll('[aria-label*=":material/"], [aria-label*="**"]')
+                .forEach(function (el) {
+                    var value = el.getAttribute("aria-label");
+                    var fixed = clean(value);
+                    if (fixed !== value) { el.setAttribute("aria-label", fixed); }
+                });
+            document.querySelectorAll(GLYPH).forEach(function (g) {
+                if (g.getAttribute("aria-hidden") === "true") { return; }
+                var owner = g.closest(NAMED);
+                if (owner && !owner.getAttribute("aria-label")
+                        && !textWithout(owner)) { return; }
+                g.setAttribute("aria-hidden", "true");
+            });
+        }
+        function schedule() {
+            if (pending) { return; }
+            pending = true;
+            requestAnimationFrame(update);
+        }
+        new MutationObserver(schedule).observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["aria-label"],
+        });
+        update();
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsA11yNamesInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsA11yNamesInstalled = true;
+    } catch (e) {
+        /* Not same-origin: the labels fixed at the source still read right. */
+    }
+})();
+</script>
+"""
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -549,6 +621,7 @@ def configure_page() -> None:
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
+    embed_html_iframe(_A11Y_NAMES_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the
@@ -4978,7 +5051,7 @@ def render_data_source_picker(host=None) -> None:
     if current in entries:
         st.session_state["data_source_picker"] = current
     box.selectbox(
-        "**Select Dataset**",
+        "Select Dataset",
         [*entries, _MORE_DATASETS_PLACEHOLDER],
         format_func=_entry_label,
         key="data_source_picker",

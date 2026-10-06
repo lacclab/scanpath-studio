@@ -1188,7 +1188,7 @@ def _select_trial_none_mode(
         return _option_label(value) if label is None else label
 
     n_trials = len(trial_options)
-    picker_label = "**Select Trial**"
+    picker_label = "Select Trial"
     trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
     slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
 
@@ -1288,7 +1288,7 @@ def _select_trial_none_mode(
                 )
             if sort_choice != TRIAL_SORT_DATA_ORDER or sort_desc:
                 picker_label = (
-                    f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+                    f"Select Trial  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
                 )
             if seeded:
                 current_label = trial_options[0]

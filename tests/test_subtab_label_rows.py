@@ -122,7 +122,7 @@ class TestConvertedFields:
 
         at = AppTest.from_function(app).run(timeout=30)
         star = at.checkbox(key="annotrial_star_" + _SLUG)
-        assert star.label == f"{ICONS['favorite']} Favorite (star this trial)"
+        assert star.label == "Favorite (star this trial)"
         assert star.proto.label_visibility.value == COLLAPSED
 
         (drawn,) = [label for label in _labels(at) if "Favorite" in label]
@@ -221,8 +221,10 @@ def test_share_widget_has_one_refresh_and_copy_action(monkeypatch):
 
     rendered = {}
 
-    def capture(html: str, *, height: int, alt: str | None = None) -> None:
-        rendered.update(html=html, height=height, alt=alt)
+    def capture(
+        html: str, *, height: int, alt: str | None = None, focusable: bool = False
+    ) -> None:
+        rendered.update(html=html, height=height, alt=alt, focusable=focusable)
 
     monkeypatch.setattr(url_state, "embed_html_iframe", capture)
     url_state._render_share_link_widget("source=demo")
@@ -231,3 +233,4 @@ def test_share_widget_has_one_refresh_and_copy_action(monkeypatch):
     assert "Refresh &amp; Copy" in rendered["html"]
     assert "Copy link" not in rendered["html"]
     assert rendered["height"] == 76
+    assert rendered["focusable"], "the Copy button must be reachable by Tab"

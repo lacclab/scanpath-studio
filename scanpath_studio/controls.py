@@ -5650,7 +5650,9 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
     # ellipsis it would have drawn comes from `styles.py` instead (the
     # `split_mode_` label rule), which draws it without a tooltip.
     if toggle:
-        value = row.toggle(label, wrap=True, **toggle)
+        # #374 F19: no `**` in the label, which is the switch's accessible
+        # name verbatim; `styles.py` draws the row names bold instead.
+        value = row.toggle(label.replace("**", ""), wrap=True, **toggle)
     else:
         # A name-only section: `styles.py` stretches the ▾ trigger's click
         # target over the whole row, so the name opens the popover (UX-153).

@@ -3425,6 +3425,8 @@ def _render_share_link_widget(query: str) -> None:
         # 110 px frame reserved a visibly empty block before the note below.
         height=76,
         alt="Shareable link with a copy button",
+        # #374 F19: its Copy button must be reachable from the keyboard.
+        focusable=True,
     )
 
 

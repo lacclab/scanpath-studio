@@ -64,7 +64,7 @@ def test_a_switch_row_names_its_switch():
     assert not at.exception
 
     toggle = at.toggle(key="global_show_fix")
-    assert toggle.label == "**Fixations**"
+    assert toggle.label == "Fixations"
     assert toggle.proto.label_visibility.value == VISIBLE
     assert toggle.proto.wrap is True
     # The name is not written a second time beside the switch.

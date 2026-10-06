@@ -893,13 +893,13 @@ class TestAddDatasetMenu:
         assert at.session_state["data_source_choice"] == MANUAL_SAMPLE_CHOICE
         assert not any(t.key == "author_text" for t in at.text_area)
         assert not any(b.key == "cancel_authoring" for b in at.button)
-        assert any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        assert any(s.label.startswith("Select Trial") for s in at.selectbox)
         at.session_state["_author_editing"] = MANUAL_SAMPLE_CHOICE
         at.run(timeout=60)
         _clean(at)
         assert at.text_area(key="author_text").value == "The cat sat\non the mat."
         assert not any("Plot controls" in h.value for h in at.subheader)
-        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        assert not any(s.label.startswith("Select Trial") for s in at.selectbox)
         at.text_area(key="author_text").set_value("An edited example.").run(timeout=60)
         _rerun(at, view=VIEW_DATA)
         at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
@@ -931,7 +931,7 @@ class TestAddDatasetMenu:
         _clean(at)
         assert at.session_state["data_source_choice"] == AUTHOR_CHOICE
         assert not any("Plot controls" in h.value for h in at.subheader)
-        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        assert not any(s.label.startswith("Select Trial") for s in at.selectbox)
         authored = at.session_state["_authored_events_frame"].copy()
         at.text_area(key="author_text").set_value("A small manual trial.").run(
             timeout=60
@@ -961,7 +961,7 @@ class TestAddDatasetMenu:
         from scanpath_studio import app
 
         at = _boot()
-        trial = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        trial = next(s for s in at.selectbox if s.label.startswith("Select Trial"))
         trial.select_index(2).run(timeout=60)
         before_trial = at.selectbox(key=trial.key).value
         before_source = at.session_state["data_source_choice"]

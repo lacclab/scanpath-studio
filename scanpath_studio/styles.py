@@ -917,6 +917,17 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /* #374 F19 — the picker and rail-switch names are bold here, not as `**`
+       in the label string: Streamlit reads a label verbatim as the widget's
+       accessible name, so the markdown was announced. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
+    .st-key-data_source_picker [data-testid="stWidgetLabel"] p,
+    .st-key-single_trial_id [data-testid="stWidgetLabel"] p,
+    .st-key-single_compare_trial [data-testid="stWidgetLabel"] p,
+    .st-key-cmp_dataset [data-testid="stWidgetLabel"] p {
+        font-weight: 600;
+    }
     /* UX-153 — every toggle in these rows takes `wrap=True`, which switches
        off Streamlit's truncate mode (and the native `title=` tooltip it
        stamps), and with it the `min-width: 0` chain that let the label

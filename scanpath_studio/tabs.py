@@ -524,9 +524,11 @@ def _part_catalog_for_display(
         raise
 
 
-def _embed_html_iframe(html: str, *, height: int, alt: str | None = None) -> None:
+def _embed_html_iframe(
+    html: str, *, height: int, alt: str | None = None, focusable: bool = False
+) -> None:
     """Backward-compatible local alias for the shared iframe helper."""
-    embed_html_iframe(html, height=height, alt=alt)
+    embed_html_iframe(html, height=height, alt=alt, focusable=focusable)
 
 
 def _figure_alt(fig, fallback: str) -> str:
@@ -536,6 +538,14 @@ def _figure_alt(fig, fallback: str) -> str:
     is what ``fallback`` names."""
     title = getattr(getattr(fig.layout, "title", None), "text", None)
     return _plain_title(title) or fallback
+
+
+def _scanpath_alt(participant, text, n_fixations: int) -> str:
+    """A screen reader's summary of one trial's scanpath (#374 F19)."""
+    noun = "fixation" if n_fixations == 1 else "fixations"
+    return (
+        f"Scanpath of participant {participant} on text {text}: {n_fixations:,} {noun}"
+    )
 
 
 def _plain_title(title: str | None) -> str:
@@ -841,11 +851,11 @@ _ZOOM_TOOLBAR = """
        display:flex;gap:2px;align-items:center;padding:2px 4px;
        font:11px/1.6 system-ui,sans-serif;color:#444;
        background:rgba(255,255,255,0.88);border:1px solid #ddd;border-radius:4px;">
-    <button id="zoomout-__KEY__" title="Zoom out" style="__BTN__">&minus;</button>
+    <button id="zoomout-__KEY__" title="Zoom out" aria-label="Zoom out" style="__BTN__">&minus;</button>
     <span id="zoomlabel-__KEY__" style="min-width:34px;text-align:center;">100%</span>
-    <button id="zoomin-__KEY__" title="Zoom in" style="__BTN__">+</button>
-    <button id="zoomreset-__KEY__" title="Reset zoom" style="__BTN__">&#8635;</button>
-    <button id="fsbtn-__KEY__" title="Fullscreen" style="__BTN__">&#9974;</button>
+    <button id="zoomin-__KEY__" title="Zoom in" aria-label="Zoom in" style="__BTN__">+</button>
+    <button id="zoomreset-__KEY__" title="Reset zoom" aria-label="Reset zoom" style="__BTN__">&#8635;</button>
+    <button id="fsbtn-__KEY__" title="Fullscreen" aria-label="Fullscreen" style="__BTN__">&#9974;</button>
   </div>
 """
 
@@ -908,7 +918,12 @@ def _true_scale_plot_id(key: str) -> str:
 
 
 def _render_true_scale_chart(
-    fig, *, key: str, max_height: int | None = None, download_name: str | None = None
+    fig,
+    *,
+    key: str,
+    max_height: int | None = None,
+    download_name: str | None = None,
+    alt: str | None = None,
 ) -> None:
     """Display a spatial figure true-to-scale, fitted to the column width.
 
@@ -941,6 +956,10 @@ def _render_true_scale_chart(
     `_PNG_EXPORT_SCALE` instead of Plotly's 1×, and as ``download_name``.png
     when given — the Scanpath view's figures pass the Export subtab's file name,
     so the camera saves the same PNG. The others keep Plotly's ``newplot.png``.
+
+    ``alt`` names the figure for assistive technology (#374 F19), in place of
+    its title; a zoomable figure is also a Tab stop, so the keyboard reaches it
+    and its zoom buttons.
     """
     zoomable = max_height is None
     _render_true_scale_plot(
@@ -952,7 +971,7 @@ def _render_true_scale_chart(
         height=int(fig.layout.height or 600),
         max_height=max_height,
         zoomable=zoomable,
-        alt=_figure_alt(fig, "Scanpath figure"),
+        alt=alt or _figure_alt(fig, "Scanpath figure"),
     )
 
 
@@ -1040,8 +1059,9 @@ def _render_true_scale_plot(
         zoomable=zoomable,
     )
     # Iframe height = full true height (or the cap); the script trims the
-    # visible block to the scaled height.
-    _embed_html_iframe(html, height=iframe_height, alt=alt)
+    # visible block to the scaled height. A zoomable figure is a Tab stop; the
+    # small multiples (`max_height`) stay out of the tab order.
+    _embed_html_iframe(html, height=iframe_height, alt=alt, focusable=zoomable)
     # UX-167: the next figure under this key holds its area at this size.
     loading.record_plot_size(key, width, iframe_height)
 
@@ -2339,7 +2359,7 @@ def _render_compare_dataset_cell(
     from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
 
     host.selectbox(
-        "**Compare with**",
+        "Compare with",
         options=names,
         key=COMPARE_SOURCE_KEY,
         # ENG-36: this widget renders only in Compare mode on the Scanpath view,
@@ -2849,7 +2869,7 @@ def _render_compare_selector(
 
     # UX-189: the label is shown, like A's *Select Trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
-        "**Compare to**",
+        "Compare to",
         options=labels,
         key=sel_key,
         format_func=lambda v: label_display.get(v, v),
@@ -6215,7 +6235,7 @@ def render_single_trial_tab(
                 # the label — icon ligature included, so it read "movie
                 # Animate". `styles.py` draws the one-line ellipsis instead.
                 animate_requested = st.toggle(
-                    f"{ICONS['animate']} **Animate**",
+                    f"{ICONS['animate']} Animate",
                     key="single_animate",
                     persist_state="session",
                     wrap=True,
@@ -6427,7 +6447,7 @@ def render_single_trial_tab(
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
                 # UX-153: `wrap=True` for the same reason as Animate above.
                 compare_requested = st.toggle(
-                    f"{ICONS['compare']} **Compare**",
+                    f"{ICONS['compare']} Compare",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
@@ -7587,6 +7607,11 @@ def render_single_trial_tab(
                     displayed_fig,
                     key="single",
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
+                    alt=_scanpath_alt(
+                        selected_participant,
+                        _trial_text_id(trial_words, plot_fixations) or selected_trial,
+                        len(plot_fixations),
+                    ),
                 )
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial

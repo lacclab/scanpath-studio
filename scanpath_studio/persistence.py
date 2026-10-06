@@ -1232,6 +1232,14 @@ def restored_summary(session) -> dict:
     return dict(summary) if isinstance(summary, dict) else {}
 
 
+def session_was_restored(session) -> bool:
+    """Whether this session applied a saved manifest at all (#374 F32).
+
+    Wider than :func:`restored_from_cache`: settings alone count, since they
+    still say the app was used here before. The welcome tour reads it."""
+    return isinstance(session.get(_RESTORED_PAYLOAD_KEY), dict)
+
+
 def restored_from_cache(session) -> bool:
     """Whether this session got back something the user would recognise.
 

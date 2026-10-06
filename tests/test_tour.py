@@ -168,6 +168,44 @@ def _welcome_tour_replay_app():
     render_spotlight_tour()
 
 
+def _welcome_after_restore_app():
+    import streamlit as st
+
+    from scanpath_studio import persistence
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    st.session_state[persistence._RESTORED_PAYLOAD_KEY] = {"datasets": 0}
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+def _welcome_names_dataset_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    st.session_state["data_source_choice"] = "Dataset 1"
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+class TestWelcomeNamesWhatIsOpen:
+    """#374 F32: no "A demo dataset is loaded" over a returning user's data."""
+
+    def test_a_restored_session_does_not_open_the_tour(self):
+        at = AppTest.from_function(_welcome_after_restore_app).run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_seen"] is True
+        assert not any(b.key == "tour_sp_next" for b in at.button)
+
+    def test_the_welcome_names_the_open_dataset(self):
+        at = AppTest.from_function(_welcome_names_dataset_app).run()
+        assert not at.exception, at.exception
+        text = " ".join(m.value for m in at.markdown)
+        assert "**Dataset 1** is open; **Next**" in text
+        assert "demo dataset is loaded" not in text
+
+
 class TestTourOptOut:
     """UX-12: "Don't show this again", persisted in the ``sps_tour_optout`` cookie."""
 

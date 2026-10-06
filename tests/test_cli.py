@@ -1273,7 +1273,7 @@ def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
             str(out),
         ]
     )
-    assert "line: Line 1" in out.read_text(encoding="utf-8")
+    assert "Line 1" in out.read_text(encoding="utf-8")
 
 
 def test_render_compare_with_rejects_all_screens(tmp_path):

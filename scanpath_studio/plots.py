@@ -66,6 +66,7 @@ from .constants import (
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
+from .illustration import MANUAL_LABEL_REASON
 from .multipart import SCREEN_ID
 
 COLORBAR_LEN_FRACTION = 0.33
@@ -335,15 +336,18 @@ PALETTE_SLUGS = {
 _PALETTE_ALIASES = {
     "colourblindsafe": "Default (colourblind-safe)",
     "colorblindsafe": "Default (colourblind-safe)",
+    # #374: the names the app shows (US spelling, `PALETTE_LABELS`).
+    "defaultcolorblindsafe": "Default (colourblind-safe)",
     "greyscale": "Print / greyscale",
     "grayscale": "Print / greyscale",
+    "printgrayscale": "Print / greyscale",
 }
 
 
 def normalize_palette(value: object) -> str:
     """The palette ``value`` names — its app name, short name (``print``) or
     any spelling of either — else ``ValueError`` listing them."""
-    from .constants import PALETTES
+    from .constants import PALETTES, palette_label
 
     key = _choice_key(value)
     for name in PALETTES:
@@ -356,7 +360,7 @@ def normalize_palette(value: object) -> str:
         return _PALETTE_ALIASES[key]
     raise ValueError(
         f"Unknown palette {value!r}; choose one of {', '.join(PALETTE_SLUGS)} "
-        f"({', '.join(PALETTES)})."
+        f"({', '.join(palette_label(name) for name in PALETTES)})."
     )
 
 
@@ -1212,7 +1216,9 @@ def _add_category_legend(
                     color=color,
                     line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                 ),
-                name=f"{_column_name(color_label)}: {category}",
+                name=category
+                if color_label == "line"
+                else f"{_column_name(color_label)}: {category}",
                 showlegend=True,
                 hoverinfo="skip",
             )
@@ -1364,7 +1370,7 @@ def _glyph_colorbar_trace(marker: dict, values) -> go.Scatter | None:
             colorbar=marker.get("colorbar"),
             size=0,
         ),
-        name="colour scale",
+        name="color scale",
         showlegend=False,
         hoverinfo="skip",
     )
@@ -1854,7 +1860,7 @@ def color_with_alpha(color: str, alpha: float) -> str:
         r, g, b = match.groups()
         return f"rgba({r},{g},{b},{alpha})"
     raise ValueError(
-        f"{color!r} is not a colour a fill can take: use #rrggbb, #rgb or rgb(r, g, b)."
+        f"{color!r} is not a color a fill can take: use #rrggbb, #rgb or rgb(r, g, b)."
     )
 
 
@@ -2067,7 +2073,7 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
 
 
 _HOVER_MEASURE_LABELS: dict[str, str] = {
-    "total_fixation_duration_ms": "Total fixation",
+    "total_fixation_duration_ms": "TFD",
     "first_fixation_ms": "FFD",
     "first_pass_gaze_duration_ms": "FPRT",
     "regression_path_duration_ms": "RPD",
@@ -2094,16 +2100,23 @@ def _labelled_columns(labels: Mapping[str, str] | None) -> Iterator[None]:
 
 
 def _humanize_column(column: str, *, unit: bool = True) -> str:
-    """``total_fixation_duration_ms`` → "Total Fixation Duration (ms)", and
+    """``total_fixation_duration_ms`` → "Total fixation duration (ms)", and
     ``participant_id`` → "Participant ID".
 
     ``unit=False`` drops the unit, for a hover row that writes it after the
     value — which used to read "… Duration Ms: 200 ms"."""
+    from .column_names import _CANONICAL_LABELS, canonical_label
+
     text = str(column)
+    if text in _CANONICAL_LABELS:
+        # #374: the app's own columns read as the rail names them.
+        label = canonical_label(text)
+        return label if unit else label.removesuffix(" (ms)")
     in_ms = text.endswith("_ms")
     if in_ms:
         text = text[: -len("_ms")]
-    title = re.sub(r"\bId\b", "ID", text.replace("_", " ").strip().title())
+    words = text.replace("_", " ").strip()
+    title = re.sub(r"\bid\b", "ID", words[:1].upper() + words[1:], flags=re.IGNORECASE)
     return f"{title} (ms)" if in_ms and unit else title
 
 
@@ -2273,6 +2286,26 @@ def _fixation_hover_head(
     return pd.Series(lines, index=frame.index, dtype=object)
 
 
+def _hover_cell(value):
+    """One hover value as shown: a missing one is "—" (Plotly printed
+    ``null``), a fraction is cut to four significant digits (#374)."""
+    if value is None:
+        return "—"
+    try:
+        if pd.isna(value):
+            return "—"
+    except (TypeError, ValueError):
+        return value
+    if isinstance(value, (float, np.floating)):
+        return f"{value:.0f}" if float(value).is_integer() else f"{value:.4g}"
+    return value
+
+
+def _hover_cells(series: pd.Series) -> pd.Series:
+    """:func:`_hover_cell` over a hover column."""
+    return series.astype(object).map(_hover_cell)
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
@@ -2309,7 +2342,7 @@ def _hover_payload(
             if field == "line_idx" and line_display is not None
             else frame[field]
         )
-        values.append(_plotly_literal_values(series))
+        values.append(_hover_cells(_plotly_literal_values(series)))
         suffix = " ms" if field.endswith("_ms") else ""
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
@@ -2762,14 +2795,14 @@ def _add_raw_gaze_layer(
         color_vals = raw_gaze["timestamp_ms"]
         colorscale = "Viridis"
         customdata = raw_gaze["timestamp_ms"]
-        when = "<br>t: %{customdata} ms"
+        when = "<br>Timestamp: %{customdata} ms"
     elif SAMPLE_INDEX in raw_gaze.columns:
         # No clock (the import mapped none): coloured by the samples' order,
         # and said so — a ramp with no title would read as time.
         color_vals = raw_gaze[SAMPLE_INDEX]
         colorscale = "Viridis"
         customdata = raw_gaze[SAMPLE_INDEX]
-        when = "<br>sample %{customdata}"
+        when = "<br>Sample #: %{customdata}"
         legend_title = "Sample order"
     else:
         color_vals = raw_gaze_color
@@ -3462,7 +3495,9 @@ def _render_scanpath_figure(
                         color=color,
                         line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                     ),
-                    name=f"{_column_name(color_label)}: {category}",
+                    name=category
+                    if color_label == "line"
+                    else f"{_column_name(color_label)}: {category}",
                     showlegend=True,
                     hoverinfo="skip",
                 )
@@ -3621,7 +3656,13 @@ def add_illustration_label(
         xanchor="right",
         yanchor="bottom",
         text=_plotly_literal(str(text).strip())
-        or "Illustration · " + "; ".join(reasons),
+        # #374: a label the user switched on with nothing detected says
+        # "Illustration" alone; "· manual label" told a reader nothing.
+        or (
+            "Illustration"
+            if reasons == [MANUAL_LABEL_REASON]
+            else "Illustration · " + "; ".join(reasons)
+        ),
         showarrow=False,
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",
@@ -3881,7 +3922,7 @@ def _add_density_heatmap(
         if heatmap_range
         else (None, None)
     )
-    base_title = "Fixation density" if weights is None else "Duration (ms)"
+    base_title = "Fixation density" if weights is None else "Dwell time per cell (ms)"
     fig.add_trace(
         go.Heatmap(
             x=(x_edges[:-1] + x_edges[1:]) / 2.0,
@@ -4885,7 +4926,7 @@ def _animation_time_slider(frame_times, total_ms):
                             transition=dict(duration=0),
                         ),
                     ],
-                    label=f"{frame_times[k] / 1000:.1f} / {total_s:.1f}s",
+                    label=f"{frame_times[k] / 1000:.1f} / {total_s:.1f} s",
                     method="animate",
                 )
                 for k in range(len(frame_times))
@@ -5943,9 +5984,9 @@ def _add_comparison_raw_gaze_trace(
     if samples is None or samples.empty:
         return
     if "timestamp_ms" in samples.columns:
-        customdata, when = samples["timestamp_ms"], "<br>t: %{customdata} ms"
+        customdata, when = samples["timestamp_ms"], "<br>Timestamp: %{customdata} ms"
     elif SAMPLE_INDEX in samples.columns:  # no clock: the sample's number
-        customdata, when = samples[SAMPLE_INDEX], "<br>sample %{customdata}"
+        customdata, when = samples[SAMPLE_INDEX], "<br>Sample #: %{customdata}"
     else:
         customdata, when = None, ""
     trace = go.Scatter(
@@ -6499,7 +6540,7 @@ def _comparison_heatmap_colorbar_traces(
     scales = [spec["heatmap_colorscale"] for spec in trial_specs]
     sides = ("left A", "right B") if overlay else ("A", "B")
     if len(set(scales)) == 1:
-        named = [(scales[0], " · left A / right B" if overlay else "")]
+        named = [(scales[0], " · A left half, B right" if overlay else "")]
     else:
         named = [(scale, f" · {side}") for scale, side in zip(scales, sides)]
     return [
@@ -7576,7 +7617,7 @@ def make_trend_figure(
     line and band at a missing whole-number ``x`` (a filtered-out trial).
     """
     if x_label is None:
-        x_label = x_col.replace("_", " ").title()
+        x_label = x_col.replace("_", " ").capitalize()
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     if df is None or df.empty:
@@ -7685,6 +7726,7 @@ def make_small_multiples_figure(
     base_font_size: int,
     font_family: str,
     cohort: pd.DataFrame | None = None,
+    aggregate: str = "mean",
     max_panels: int = 12,
     panel_height: int = 110,
 ) -> go.Figure:
@@ -7699,7 +7741,7 @@ def make_small_multiples_figure(
 
     if per_reader is None or per_reader.empty:
         return _no_data_figure(
-            f"{measure_label} per reader",
+            f"{measure_label} per participant",
             font_family=font_family,
             base_font_size=base_font_size,
         )
@@ -7733,7 +7775,7 @@ def make_small_multiples_figure(
                     y=cohort_xy[1],
                     mode="lines",
                     line=dict(color="rgba(120,120,120,0.45)", width=1.2, dash="dot"),
-                    name="Cohort mean",
+                    name=f"Cohort {aggregate}",
                     showlegend=(i == 1),
                     hoverinfo="skip",
                 ),
@@ -7753,15 +7795,15 @@ def make_small_multiples_figure(
                 hovertemplate=(
                     "word %{x}"
                     + ("  %{customdata}" if "word_text" in sub else "")
-                    + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
+                    + f"<br>{measure_label}: %{{y:.3~g}}<extra></extra>"
                 ),
             ),
             row=i,
             col=1,
         )
-    title = f"{measure_label} per reader (word profile)"
+    title = f"{measure_label} per participant (word profile)"
     if n_total > n:
-        title += f" — showing {n} of {n_total} readers"
+        title += f" — showing {n} of {n_total} participants"
     margin_top = 50 + title_gap_px
     margin_bottom = 40
     fig.update_layout(
@@ -7851,6 +7893,7 @@ def make_word_profile_figure(
     spread_label: str = "SD",
     colors: Sequence[str] | None = None,
     height: int = 380,
+    aggregate: str = "mean",
 ) -> go.Figure:
     """Cohort word profile(s): mean line + shaded spread band (AN-3 / AN-15).
 
@@ -7909,7 +7952,7 @@ def make_word_profile_figure(
                 hovertemplate=(
                     "word %{x}"
                     + ("  %{customdata}" if "word_text" in prof else "")
-                    + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
+                    + f"<br>{measure_label}: %{{y:.3~g}}<extra></extra>"
                 ),
             )
         )
@@ -7920,7 +7963,7 @@ def make_word_profile_figure(
         margin=dict(l=60, r=10, t=45, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title=f"{measure_label} by word — cohort mean ± {spread_label}",
+        title=f"{measure_label} by word — cohort {aggregate}, {spread_label} band",
         xaxis=dict(title="Word (reading order)"),
         yaxis=dict(title=measure_label),
         showlegend=not single,
@@ -8012,7 +8055,7 @@ def make_feature_scatter_figure(
                 )
             )
             r = float(np.corrcoef(x, y)[0, 1])
-            r_txt = f"  (r = {r:.2f}, n = {x.size})"
+            r_txt = f" (r = {r:.2f}, n = {x.size})"
         fig.update_layout(
             xaxis=dict(title=feature_label),
             yaxis=dict(title=measure_label),
@@ -8042,7 +8085,7 @@ def make_word_rate_figure(
     """Skip / regression-in rate per word — lollipop bars (AN-6)."""
     if df is None or df.empty:
         return _no_data_figure(
-            "Skip / regression rate per word",
+            "Skip / regression-in rate per word",
             font_family=font_family,
             base_font_size=base_font_size,
             height=height,
@@ -8287,7 +8330,7 @@ def make_paired_bars_figure(
 
     if df is None or df.empty:
         return _no_data_figure(
-            "Group means",
+            f"Group {aggregate}s",
             font_family=font_family,
             base_font_size=base_font_size,
             height=height,
@@ -8430,7 +8473,7 @@ def make_difference_profile_figure(
             hovertemplate=(
                 "word %{x}"
                 + ("  %{customdata}" if "word_text" in df else "")
-                + f"<br>Δ {measure_label}: %{{y:.1f}}<extra></extra>"
+                + f"<br>Δ {measure_label}: %{{y:.3~g}}<extra></extra>"
             ),
         )
     )
@@ -8701,7 +8744,7 @@ def _require_one_screen_per_reading(
                     f"Scanpath {label} (participant={participant!r}, "
                     f"trial={trial!r}) spans {len(screens)} screens ({shown}). "
                     "Each screen is its own coordinate space, so a comparison "
-                    "draws one screen per scanpath: cut each reading to one "
+                    "draws one screen per scanpath: cut each trial to one "
                     "screen first (multipart.extract_part, or "
                     "compare_scanpaths' screen= / screen_b=)."
                 )

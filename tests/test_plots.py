@@ -2298,7 +2298,7 @@ class TestPlotEnhancements:
         fig = self._figure(
             synthetic_words_df, synthetic_fixations_df, color_by_line=True
         )
-        line_traces = [t for t in fig.data if str(t.name).startswith("line:")]
+        line_traces = [t for t in fig.data if str(t.name).startswith("Line ")]
         assert len(line_traces) == 2
 
     def test_hollow_fixations(self, synthetic_words_df, synthetic_fixations_df):
@@ -2831,6 +2831,6 @@ class TestNonFiniteValues:
 def test_humanized_column_writes_id_in_capitals():
     from scanpath_studio.plots import _humanize_column
 
-    assert _humanize_column("participant_id") == "Participant ID"
-    assert _humanize_column("unique_text_id") == "Unique Text ID"
-    assert _humanize_column("idle_time_ms") == "Idle Time (ms)"
+    assert _humanize_column("participant_id") == "Participant"
+    assert _humanize_column("unique_text_id") == "Unique text ID"
+    assert _humanize_column("idle_time_ms") == "Idle time (ms)"

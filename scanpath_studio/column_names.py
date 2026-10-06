@@ -107,8 +107,8 @@ _CANONICAL_LABELS: dict[str, str] = {
     "x": "X",
     "y": "Y",
     "saccade_amplitude": "Saccade amplitude (px)",
-    "angle_incoming": "Incoming angle",
-    "angle_outgoing": "Outgoing angle",
+    "angle_incoming": "Incoming angle (°)",
+    "angle_outgoing": "Outgoing angle (°)",
     "progression": "Progression",
     "is_regression": "Regression",
     "right_to_left": "Right to left",
@@ -310,6 +310,9 @@ class ColumnNames:
             if kind == CONVERTED and entry.note:
                 return entry.note
             return entry.display
+        if kind == GENERATED and str(column) == "timestamp_ms":
+            # #374: no onset in the data — the stand-in is the order, not ms.
+            return "Fixation order" + COMPUTED_SUFFIX
         if kind in (COMPUTED, GENERATED):
             return canonical_label(column) + COMPUTED_SUFFIX
         return str(column)
@@ -698,7 +701,7 @@ def from_schema(
     out: dict[str, SourceName] = {}
 
     out["participant_id"] = _id_entry(schema.get("participant")) or SourceName(
-        (), GENERATED, "one reader for the whole table"
+        (), GENERATED, "one participant for the whole table"
     )
     if trial := _id_entry(schema.get("trial")):
         out["trial_id"] = out["unique_trial_id"] = trial
@@ -744,7 +747,7 @@ def from_schema(
     elif table == "fixations":
         for coord in ("x", "y"):
             out[coord] = _mapped_or(
-                schema, coord, COMPUTED, "the fixated word's box centre"
+                schema, coord, COMPUTED, "the fixated word's box center"
             )
         if schema.get("duration"):
             out["duration_ms"] = _timed(str(schema["duration"]))
@@ -869,7 +872,11 @@ def dictionary_lines(
 ) -> list[str]:
     """The README's data dictionary: for each table's :func:`written_columns`,
     the header written and where it came from, in markdown."""
-    titles = {"fixations": "Fixations", "words": "Words (AOIs)", "raw_gaze": "Raw gaze"}
+    titles = {
+        "fixations": "Fixations",
+        "words": "Words (interest areas)",
+        "raw_gaze": "Raw gaze",
+    }
     lines: list[str] = []
     for table, rows in tables.items():
         if not rows:

@@ -172,7 +172,7 @@ def get_app_css() -> str:
         padding-bottom: 0.1rem;
         border-bottom-color: rgba(128, 128, 128, 0.45);
     }
-    /* The open dataset: a tint *and* the Current badge — never colour alone. */
+    /* The open dataset: a tint *and* the Current badge — never color alone. */
     .st-key-dataset_table_grid [class*="st-key-dsrow_current_"] {
         background: var(--sps-accent-soft);
     }
@@ -446,7 +446,7 @@ def get_app_css() -> str:
         box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
     }
     /* One track, as wide as the card's container — which the size box's own
-       rule caps at the figure's width (loading.size_box_html) — so "centre"
+       rule caps at the figure's width (loading.size_box_html) — so "center"
        means over the figure, and every width resolves from the column down: a
        track sized by its content would grow past a narrow column, or collapse
        to the card. */
@@ -573,7 +573,7 @@ def get_app_css() -> str:
     /* === Visual polish ==========================================================
        Tasteful, theme-robust chrome styling (header, tabs, chips, cards, buttons).
        Colors are either the brand blue (which reads on both the light and dark
-       themes) or translucent neutrals (grey/blue at low alpha) that tint whatever
+       themes) or translucent neutrals (gray/blue at low alpha) that tint whatever
        background sits behind them, so a single rule set works in both themes
        without depending on a theme class Streamlit doesn't expose. The scientific
        scanpath plot itself is untouched — only the surrounding UI is styled. */
@@ -592,7 +592,7 @@ def get_app_css() -> str:
            the OS preference, not the theme picked in ⋮ → Settings. But
            Streamlit does set `color-scheme` on `.stApp` to match the active
            theme, and `light-dark()` resolves against it — so this follows a
-           theme switch instantly, without a rerun. The two colours are
+           theme switch instantly, without a rerun. The two colors are
            `constants.APP_THEME` / `APP_THEME_DARK`'s backgroundColor, pinned
            by tests/test_theme.py. */
         --sps-page-bg: light-dark(#ffffff, #0e1117);
@@ -606,7 +606,7 @@ def get_app_css() -> str:
 
     /* UX-7 empty-state panels — "no trials match" and "this corpus isn't here
        yet". Both used to be a warning banner + a caption + a body paragraph +
-       a button: four blocks, three background colours, one message. They are now
+       a button: four blocks, three background colors, one message. They are now
        a single amber-tinted card, so the diagnosis visibly belongs to the
        headline above it. Amber (not red) on purpose: nothing is broken, the user
        just has to choose something. */
@@ -874,7 +874,7 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* UX-153 — a rail row with no switch (🧹 Filter, 📐 Figure & canvas) is
+    /* UX-153 — a rail row with no switch (🧹 Flag fixations, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
        is stretched over the whole row by an `::after` overlay, which keeps the
        row's look, and the popover still anchors on the ▾ itself. The row is
@@ -957,13 +957,13 @@ def get_app_css() -> str:
        carries `margin-bottom: 1rem` that Streamlit cancels with a matching
        negative margin on `stMarkdownContainer` — which fixes the layout but not
        `scrollHeight`, and the margin still counts there. So exactly the three
-       name-only sections (📄 Stimulus · 🧹 Filter · 📐 Figure & canvas, the ones
+       name-only sections (📄 Stimulus · 🧹 Flag fixations · 📐 Figure & canvas, the ones
        drawn with a name instead of a switch) scrolled 8px and lost 11px of
        width to the scrollbar's gutter, while the five with a toggle did not.
        Zeroing both margins is the fix rather than `overflow: visible`, because
        it removes the overhang instead of hiding it — the row keeps the
        horizontal clipping Streamlit put there. Nothing moves: the label is
-       centred by the flex row either way. */
+       centerd by the flex row either way. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"],
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
@@ -1043,7 +1043,7 @@ def get_app_css() -> str:
        seam instead of only the glyph's own box. `:has(button:hover:enabled)`
        rather than `:hover` keeps a disabled ▾ inert — it is disabled exactly
        when its mode is off, and a hover response would promise a menu that,
-       while it does open, is entirely greyed. */
+       while it does open, is entirely grayed. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         > div:has([data-testid="stPopover"] button:hover:enabled) {
         background: var(--sps-accent-soft);
@@ -1054,7 +1054,7 @@ def get_app_css() -> str:
        comparison picker's ◀ ▶ ⇅ in tabs.py, and the main trial picker's ◀ ▶ ⇅
        in utils.py), each with its own `st.columns` and its own width unit, so
        they used to render at different heights and two different shapes —
-       square icon buttons beside pill-shaped labelled ones.
+       square icon buttons beside pill-shaped labeled ones.
        Rather than hand-tuning each call site, every trigger in the block goes in
        a container keyed `railbtn_*` and takes its geometry from here.
 
@@ -1107,10 +1107,10 @@ def get_app_css() -> str:
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
     /* The chip strip's ✏️ (edit chips) control is additionally nudged down onto
        the first chip row's baseline:
-       the strip wraps, so the columns are TOP-aligned (a centred control would
+       the strip wraps, so the columns are TOP-aligned (a centerd control would
        drift to the middle of a tall strip), and this offset is the strip's own
        top margin. (UX-11 also fixed the ✏️ sitting visibly high, when it was
-       centred against a one-line strip. Its sideways `margin-left: -0.6rem` is
+       centerd against a one-line strip. Its sideways `margin-left: -0.6rem` is
        gone as of UX-27 — it was the reason the pencil landed 9.6px short of the
        other two rows' right edges.) */
     .st-key-railbtn_chip_trail { margin-top: 0.1rem; }
@@ -1755,7 +1755,7 @@ def get_app_css() -> str:
     }
 
     /* AN-32 — the Corpus Analysis page with no reading measures to show: its
-       sections, drawn as a greyed tab strip so what it offers stays visible. */
+       sections, drawn as a grayed tab strip so what it offers stays visible. */
     .sps-corpus-off {
         display: flex;
         gap: 1.5rem;
@@ -1782,7 +1782,7 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-72 — the two halves of the rail's 🧹 Filter section. A rule and a
+    /* UX-72 — the two halves of the rail's 🧹 Flag fixations section. A rule and a
        small label: enough to group, cheap in height. (UX-74 briefly used this
        for every section's contents and was reverted — the sections read better
        with their `⚙️ …` popovers.) */
@@ -2025,7 +2025,7 @@ def get_app_css() -> str:
         justify-content: center;
     }
     /* An icon-only button still carries the label's right margin, which is what
-       pushes these two off-centre. */
+       pushes these two off-center. */
     .st-key-scanpath_rail [class*="st-key-design_row_"] button [data-testid="stIconMaterial"] {
         margin: 0 !important;
         font-size: 1.1rem;
@@ -2128,10 +2128,10 @@ def get_app_css() -> str:
     /* Multiselect placeholder text ("All texts", "Choose options", …) is
        BaseWeb's theme-text at 0.6 alpha → 4.07:1, same sub-AA problem as the
        caption. Fix it the same theme-agnostic way: take the full-strength theme
-       text colour (`inherit`) and mute it with opacity to 0.72 (~5.5:1) — works
-       in whichever theme is active, unlike a hardcoded colour. The selector
+       text color (`inherit`) and mute it with opacity to 0.72 (~5.5:1) — works
+       in whichever theme is active, unlike a hardcoded color. The selector
        hits only the placeholder (the div following the search input); once
-       chips replace it there's no match, so selected tags keep their colour. */
+       chips replace it there's no match, so selected tags keep their color. */
     [data-testid="stMultiSelect"] [data-baseweb="select"] div:has(> input) + div {
         color: inherit !important;
         opacity: 0.72 !important;

@@ -73,7 +73,9 @@ class TestTrialSortKeys:
         assert "Total fixation time, s (computed)" in keys
         assert keys["Fixation count (computed)"]["t2"] == 3
         assert keys["Total fixation time, s (computed)"]["t2"] == pytest.approx(0.6)
-        assert keys["Mean fixation, ms (computed)"]["t3"] == pytest.approx(250.0)
+        assert keys["Mean fixation duration, ms (computed)"]["t3"] == pytest.approx(
+            250.0
+        )
 
     def test_computed_stats_are_dropped_without_their_frame(self, combos):
         keys = trial_sort_keys(combos, "trial_id")
@@ -349,14 +351,14 @@ class TestSortValueIsVisibleInThePicker:
     """UX-10 follow-up: sorting with the key hidden just looks shuffled."""
 
     def _picker(self, at):
-        return next(s for s in at.selectbox if s.label.startswith("Select Trial"))
+        return next(s for s in at.selectbox if s.label.startswith("Select trial"))
 
     def test_unsorted_shows_plain_ids_and_a_plain_label(self):
         at = AppTest.from_function(_sortable_picker_app)
         at.run(timeout=20)
         assert not at.exception, at.exception
         picker = self._picker(at)
-        assert picker.label == "Select Trial"
+        assert picker.label == "Select trial"
         assert [picker.format_func(o) for o in picker.options] == ["t_a", "t_b", "t_c"]
 
     def test_sorting_puts_the_value_on_every_option_and_names_the_key(self):
@@ -367,7 +369,7 @@ class TestSortValueIsVisibleInThePicker:
         assert not at.exception, at.exception
         picker = self._picker(at)
         # The label says what the order *is* — ascending by fixation count.
-        assert picker.label == "Select Trial  ·  by Fixation count (computed) ↑"
+        assert picker.label == "Select trial  ·  by Fixation count (computed) ↑"
         assert [picker.format_func(o) for o in picker.options] == [
             "t_c  ·  2",
             "t_a  ·  5",
@@ -428,7 +430,7 @@ class TestDataOrderIsTheDefault:
     Trial ID is a choice in ⇅, not the default."""
 
     def _picker(self, at):
-        return next(s for s in at.selectbox if s.label.startswith("Select Trial"))
+        return next(s for s in at.selectbox if s.label.startswith("Select trial"))
 
     def test_the_picker_starts_in_data_order_on_the_first_trial(self):
         at = AppTest.from_function(_numeric_ids_picker_app)
@@ -436,7 +438,7 @@ class TestDataOrderIsTheDefault:
         assert not at.exception, at.exception
         assert at.selectbox(key="single_trial_sort").value == "Data order"
         picker = self._picker(at)
-        assert picker.label == "Select Trial"
+        assert picker.label == "Select trial"
         assert list(picker.options) == [str(n) for n in range(1, 13)]
         assert picker.value == "1"
 

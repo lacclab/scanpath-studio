@@ -1069,7 +1069,7 @@ class TestSpotlightSelectorsResolve:
         control_source = inspect.getsource(controls.render_plot_controls)
 
         assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
-        assert "f\"{ICONS['plot_filter']} **Filter**{" in control_source
+        assert "f\"{ICONS['plot_filter']} **Flag fixations**{" in control_source
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):

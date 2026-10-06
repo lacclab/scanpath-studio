@@ -54,7 +54,7 @@ The app opens on a small bundled sample of the
 
 ## 3. Load your own data
 
-Click **+** beside **Select Dataset** and choose **Import files**. Upload a
+Click **+** beside **Select dataset** and choose **Import files**. Upload a
 fixation table and a Words (interest areas) table, check the column mapping the
 app proposes, describe the **Recording setup**, then click **:material/check: Add dataset**.
 

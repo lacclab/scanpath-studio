@@ -4,7 +4,7 @@
 
 Open the dataset picker above the plot, or the :material/database: **Data Management** page.
 
-- **Bundled Demo** — a small OneStop sample, for learning the app.
+- **Bundled demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
 - **Public corpus** — OneStop or PoTeC, downloaded when you ask, on your own
   computer only (see [OneStop](../onestop.md)).

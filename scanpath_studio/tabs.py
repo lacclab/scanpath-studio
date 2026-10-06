@@ -10101,9 +10101,17 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
     st.session_state[_PTEXT_SEEDED_FROM] = trial
     for col in ("unique_trial_id", "trial_id"):
         if col in words.columns:
-            match = words.loc[words[col].astype(str) == str(trial), text_col]
-            if not match.empty:
-                return match.iloc[0]
+            ids = words[col]
+            # Compare as the column stores it; a string copy of a corpus-sized
+            # column is only made when the types differ.
+            same = ids == trial
+            if not same.any():
+                same = ids.astype(str) == str(trial)
+            texts = words.loc[same, text_col].dropna().unique()
+            if len(texts):
+                # An id several participants share can name different texts:
+                # then the Scanpath trial is ambiguous here, so don't guess.
+                return texts[0] if len(texts) == 1 else None
     return None
 
 

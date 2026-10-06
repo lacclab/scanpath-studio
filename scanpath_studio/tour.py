@@ -2127,7 +2127,8 @@ def _render_wizard_guide_optout() -> None:
     embed_html_iframe(_wizard_guide_optout_script(opted_out), height=0)
 
 
-# (title, markdown body) per step — one per part of the wizard, in order.
+# (title, markdown body) per step — an overview, one per part of the wizard in
+# order, then the closing Save card.
 # DATA-22 §4: the guide is now *anchored*. Each step names the wizard step it
 # talks about (so Next drives the accordion instead of narrating beside it) and a
 # CSS selector to highlight + scroll to. Keyed expanders give every step a
@@ -2139,7 +2140,7 @@ _WIZARD_GUIDE_STEPS = [
         "body": (
             "Turn your eye-tracking tables into an interactive dataset in three "
             "parts: name it, upload and map each table (and pick which extras "
-            "to keep), and describe the recording setup. "
+            "to keep), and describe the recording setup — then save it. "
             "Follow along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
@@ -2176,6 +2177,19 @@ _WIZARD_GUIDE_STEPS = [
         ),
         "selector": ".st-key-wiz_part_setup",
         "step_id": "setup",
+    },
+    # The way out of the three parts, not a fourth part — no `step_id`, so the
+    # progress line reads "Last step" rather than "Part 4 of 3".
+    {
+        "title": f"{ICONS['confirm']} Save it",
+        "body": (
+            f"**{ICONS['confirm']} Add dataset** saves it and opens it, ready to "
+            f"explore. **{ICONS['download']} Save setup** downloads this mapping "
+            "and recording setup as a file — load it with *Restore a saved "
+            "setup* the next time you add data shaped like this."
+        ),
+        "selector": ".st-key-wizard_footer_row",
+        "step_id": None,
     },
 ]
 
@@ -2265,15 +2279,17 @@ def render_spotlight_wizard_guide() -> None:
         st.markdown(f"## {title}")
         st.markdown(body)
         # Counted in the screen's own parts ("2 · Upload data tables" is part 2
-        # of 3), not in cards: the overview card is not a part, and "Step 3 of
-        # 4" under a "2 ·" heading contradicted the "three parts" it opens with.
-        n_parts = n - 1
-        st.progress(
-            (step_idx + 1) / n,
-            text=f"Part {step_idx} of {n_parts}"
-            if step_idx
-            else f"Overview · {n_parts} parts",
-        )
+        # of 3), not in cards: neither the overview card nor the closing Save
+        # card is a part, and "Step 3 of 4" under a "2 ·" heading contradicted
+        # the "three parts" it opens with.
+        n_parts = sum(1 for s in _WIZARD_GUIDE_STEPS if s["step_id"])
+        if step["step_id"]:
+            progress_text = f"Part {step_idx} of {n_parts}"
+        elif step_idx:
+            progress_text = "Last step · save"
+        else:
+            progress_text = f"Overview · {n_parts} parts"
+        st.progress((step_idx + 1) / n, text=progress_text)
         # UX-110: same placement rule as the welcome tour's own opt-out — only
         # where a user decides they're done with the guide (the first step,
         # bailing out now, or the last, got it, don't greet me again), so the
@@ -2360,8 +2376,12 @@ def maybe_show_wizard_guide() -> None:
 def render_wizard_guide_button(host) -> None:
     """A button inside the wizard that (re)opens the setup guide from step 1."""
     host.button(
-        f"{ICONS['help']} Show setup guide",
+        "Show setup guide",
         key="wizard_guide_replay",
+        icon=ICONS["help"],
+        # A menu row in the wizard's *Setup help* popover, matching the
+        # documentation link beneath it.
+        type="tertiary",
         help="Walk through the dataset setup, step by step.",
         on_click=_arm_wizard_guide,
     )

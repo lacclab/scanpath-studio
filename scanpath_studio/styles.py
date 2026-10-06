@@ -394,6 +394,13 @@ def get_app_css() -> str:
     div[data-testid="stPopoverBody"] {
         min-width: min(28rem, 90vw);
     }
+    /* The wizard's *Setup help* is a two-row menu, not a panel of controls:
+       as wide as its rows, like the nav's own ❓ Help menu, rather than 28rem
+       of empty popover to the right of two short labels. The body is
+       portalled out of the wizard, so it is found by the row it holds. */
+    div[data-testid="stPopoverBody"]:has(.st-key-wizard_guide_replay) {
+        min-width: 0;
+    }
     div[data-testid="stPopoverBody"] p { line-height: 1.45; }
 
     /* === Streamlit's spinners (UX-165) ======================================

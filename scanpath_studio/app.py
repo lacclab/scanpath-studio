@@ -6080,6 +6080,11 @@ def _dataset_table_rows(
                     registry.get(token),
                     stood_in_for=token == active and placeholder,
                 ),
+                # In memory: the open dataset, a stored upload, or one this
+                # session already read (its loader's cache holds it).
+                loaded=(token == active and not placeholder)
+                or token in stored_uploads
+                or token in st.session_state.get(LOADED_THIS_SESSION_KEY, ()),
                 order=len(rows),
             )
         )
@@ -6087,7 +6092,7 @@ def _dataset_table_rows(
 
 
 def _dataset_status(spec: Mapping | None, *, stood_in_for: bool = False) -> str:
-    """One row's **Status** — ``""`` (Ready) or what is missing (BUG-113).
+    """One row's **Status** — ``""`` (here) or what is missing (BUG-113).
 
     Asked the same way of every row, open or not: a corpus with files on disk
     has a ``files_present`` check in its registry entry — path stats only, never
@@ -6442,7 +6447,7 @@ def render_dataset_table(
     **Kind · Dataset · Status · Participants · Texts · Trials · Fixations ·
     Remove** (UX-178 moved Status beside the name it qualifies). A click anywhere on a row opens that dataset (UX-78); the open one
     carries a **Current** badge and a tint, and never moves. **Status** is
-    whether the dataset can be opened now — *Ready*, *Needs download* or
+    whether the dataset can be opened now — *Loaded*, *Available*, *Needs download* or
     *Needs setup* — asked the same way of every row (BUG-113; see
     `_dataset_status`). Everything else about a dataset —
     Screens, Words and Gaze points, its description, renaming it, editing its
@@ -8262,6 +8267,10 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
 #: (`_remember_open_dataset`). Not the wizard's `_prev_source`, which only
 #: records where leaving the add-dataset wizard returns to.
 LAST_LOADED_SOURCE_KEY = "_sps_last_loaded_source"
+#: Every dataset this session has had on screen — the table's *Loaded* status.
+#: Session-only on purpose: the remembered counts outlive a restart, the
+#: loaders' caches do not.
+LOADED_THIS_SESSION_KEY = "_sps_loaded_this_session"
 #: UX-166: the dataset task this session's pipeline is running, set when the
 #: card opens and cleared when it ends; found still set by the next run, it
 #: means that run was abandoned mid-load.
@@ -8502,9 +8511,9 @@ def _remember_open_dataset(data_choice: str) -> None:
     """
     if data_choice == UPLOAD_CHOICE:
         return
-    st.session_state[LAST_LOADED_SOURCE_KEY] = str(
-        st.session_state.get("data_source_choice") or data_choice
-    )
+    token = str(st.session_state.get("data_source_choice") or data_choice)
+    st.session_state[LAST_LOADED_SOURCE_KEY] = token
+    st.session_state.setdefault(LOADED_THIS_SESSION_KEY, set()).add(token)
 
 
 def _finish_dataset_card(card: loading.Card | None, data_choice: str) -> None:

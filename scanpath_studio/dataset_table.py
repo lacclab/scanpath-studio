@@ -13,7 +13,8 @@ dataset and draws it; everything that decides a cell's text lives here:
   integer value, and a missing value sorts last in either direction, so
   formatting a cell can never turn a numeric sort into a lexical one.
 - **A status of its own.** The **Status** column says whether the dataset can
-  be opened right now — *Ready*, *Needs download* or *Needs setup*
+  be opened right now, and how fast — *Loaded*, *Available*, *Needs download*
+  or *Needs setup*
   (:attr:`DatasetRow.status_label`) — and every row says it the same way,
   whichever dataset is open (BUG-113). Where a row's numbers came from
   (DATA-36's *loaded* vs *published*) is a different question, which the
@@ -77,14 +78,19 @@ _NOT_APPLICABLE_WHEN_LOADED: Mapping[str, str] = {
 #: for the open dataset only — so a corpus whose files had gone read *Loaded*
 #: until you opened it, and *Needs setup* the moment you did. Every row now says
 #: whether its dataset can be opened.
-READY = "Ready"
+#: Its data being here splits in two: already read this session (opens at
+#: once) or still to be read (opening reads its files, which takes a while on
+#: a large corpus).
+LOADED = "Loaded"
+AVAILABLE = "Available"
 NEEDS_DOWNLOAD = "Needs download"
 NEEDS_SETUP = "Needs setup"
 
 #: What each value of the **Status** column means, for its hover text.
 STATUS_EXPLANATIONS: Mapping[str, str] = {
-    READY: "Its data is here — bundled with the app, stored in this session, or "
-    "its files are in its folder.",
+    LOADED: "Read this session: opens at once.",
+    AVAILABLE: "Its files are here; opening it reads them, which can take a "
+    "while for a large dataset.",
     NEEDS_DOWNLOAD: "Its files are not in its folder yet: open it to download them.",
     NEEDS_SETUP: "Its files were not found and there is no download: open it "
     "and point it at the folder that holds them.",
@@ -113,8 +119,9 @@ class DatasetRow:
     ``counts`` holds only that source's numbers (a row never mixes the two).
     ``measured`` says whether the session ever counted this dataset at all,
     which is what tells *Not loaded* from *Unknown* on a row with no numbers.
-    ``status`` is whether the dataset can be opened now — :data:`READY` when
-    blank, else :data:`NEEDS_DOWNLOAD` / :data:`NEEDS_SETUP` — deliberately a
+    ``status`` is whether the dataset can be opened now — blank when it can
+    (then ``loaded`` says :data:`LOADED` or :data:`AVAILABLE`), else
+    :data:`NEEDS_DOWNLOAD` / :data:`NEEDS_SETUP` — deliberately a
     field of its own: it says what the app can do with the dataset right now,
     which is a different question from where its numbers came from (BUG-113).
     ``order`` is the row's place in the unsorted list, so the list returns to
@@ -131,6 +138,7 @@ class DatasetRow:
     active: bool = False
     measured: bool = False
     status: str = ""
+    loaded: bool = False
     order: int = 0
 
     def value(self, count_field: str) -> int | None:
@@ -163,12 +171,15 @@ class DatasetRow:
 
     @property
     def status_label(self) -> str:
-        """The **Status** cell — :data:`READY` unless a state says otherwise.
+        """The **Status** cell — :data:`LOADED` / :data:`AVAILABLE` unless a
+        missing-files state says otherwise.
 
         Never derived from :attr:`source` (BUG-113): whether the numbers were
-        counted or published says nothing about whether the files are here.
+        counted or published says nothing about whether the files are here —
+        and counts are remembered across sessions, so neither do they say
+        whether this session has read the dataset (``loaded``).
         """
-        return self.status or READY
+        return self.status or (LOADED if self.loaded else AVAILABLE)
 
 
 def _text_key(row: DatasetRow, column: str) -> str | int | None:

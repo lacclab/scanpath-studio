@@ -45,7 +45,7 @@ built from keyed containers and buttons, not an `st.dataframe` — a grid can't
 write *Not loaded* in a numeric column without sorting it as text. What a row
 says is the pure `dataset_table.DatasetRow` (a count, or its reason: Not loaded
 / Not reported / Not applicable / Unknown — never `None` or a stand-in 0; and
-`status_label`: Ready / Needs download / Needs setup), and
+`status_label`: Loaded / Available / Needs download / Needs setup), and
 `dataset_table.sort_rows` sorts on the integers with gaps last. **The whole row
 opens its dataset** (UX-174 r2): its first child is a `dataset_open_<slug>`
 button that `styles.py` stretches over the row (`position: absolute`), and every
@@ -65,12 +65,15 @@ registry entry's `files_present` (path stats only — `potec_present`,
 `onestop_present`, the MultiplEYE inventory, `eyegenbench_present`, against the
 folder `app._dataset_folder` resolves exactly as `_dataset_dir_input` would,
 without drawing it) and says *Needs download* (`downloadable=True`) or *Needs
-setup*; an entry with no check (bundled, stored uploads) is *Ready*. It never
+setup*; an entry with no check (bundled, stored uploads) is here, and then reads
+*Loaded* when this session has had it on screen or holds it in memory
+(`app.LOADED_THIS_SESSION_KEY`, the open row, a stored upload) and *Available*
+otherwise — opening it reads its files. It never
 reads where the counts came from — that used to be the column (*Loaded* / *Not
 loaded*), so a corpus read *Loaded* until you opened it and found its files
 gone; the count headers' help says it now (`COUNTS_EXPLANATION`). A new
 downloadable corpus needs a `files_present` in its entry, or its row says
-*Ready* while it is not. Rename and edit are not on the rows: **Edit dataset**
+*Available* while it is not. Rename and edit are not on the rows: **Edit dataset**
 sits at the end of the *What's in…* heading (`app.render_dataset_inspection_head`),
 and the editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
 and **Description**. An upload's name is applied by ✅ Save changes

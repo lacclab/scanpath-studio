@@ -959,10 +959,10 @@ class TestDatasetTable:
         assert not [k for k in keys if "rename" in str(k)]
         assert "dataset_edit_btn" in keys
         # BUG-113: Status says whether a dataset can be opened — a stored
-        # upload always can — and nothing else.
+        # upload is in memory, so it opens at once.
         status = frame.set_index("_token")["Status"]
-        assert status[self.NAME] == "Ready"
-        assert set(status) <= {"Ready", "Needs download", "Needs setup"}
+        assert status[self.NAME] == "Loaded"
+        assert set(status) <= {"Loaded", "Available", "Needs download", "Needs setup"}
         assert frame.set_index("_token")["Counts"][self.NAME] == "Loaded"
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
@@ -1250,13 +1250,13 @@ class TestDatasetTable:
         opened = self._status_with(monkeypatch, opened=self.POTEC, present=False)
         assert closed == opened == "Needs download"
 
-    def test_a_corpus_whose_files_are_here_is_ready_before_it_is_opened(
+    def test_a_corpus_whose_files_are_here_is_available_before_it_is_opened(
         self, monkeypatch
     ):
         from scanpath_studio.constants import DEMO_CHOICE
 
         assert self._status_with(monkeypatch, opened=DEMO_CHOICE, present=True) == (
-            "Ready"
+            "Available"
         )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):

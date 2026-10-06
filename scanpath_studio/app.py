@@ -10362,4 +10362,6 @@ def _run_app() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from scanpath_studio.crash_report import run_app
+
+    run_app()

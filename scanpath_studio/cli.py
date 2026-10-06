@@ -375,7 +375,9 @@ def launch_app(extra_args: list[str]) -> None:
         if any(str(arg).startswith("--client.toolbarMode") for arg in extra_args)
         else ["--client.toolbarMode=viewer"]
     )
-    app_resource = resources.files(__package__).joinpath("app.py")
+    # The entry shim, not app.py itself: it runs the app inside crash_report's
+    # guard, which an import-time error in app.py would otherwise escape.
+    app_resource = resources.files(__package__).joinpath("streamlit_entry.py")
     with resources.as_file(app_resource) as app_path:
         sys.argv = [
             "streamlit",

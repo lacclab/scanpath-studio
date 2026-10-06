@@ -955,6 +955,19 @@ class TestAnnotationsInTheBundle:
             assert file_dataset(text) == "Pilot"
             assert "annotations.json" in zf.read("README.md").decode("utf-8")
 
+    def test_no_annotation_in_scope_means_no_file_and_no_readme_line(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """Round 10, finding 6: the README promised a file the scope left out."""
+        others = minimal_combos[minimal_combos["trial_id"] != "t1"]
+        with self._export(
+            others, minimal_words, minimal_fixations, base_settings, include=True
+        ) as zf:
+            assert "annotations.json" not in zf.namelist()
+            assert "annotations.json" not in zf.read("README.md").decode("utf-8")
+            index = zf.read("index.csv").decode("utf-8")
+            assert "annotations" not in index
+
     def test_off_by_default_and_when_off(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):

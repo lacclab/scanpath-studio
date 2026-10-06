@@ -586,7 +586,9 @@ def path_structure_error(pattern: str) -> str | None:
     if not probe.strip():
         return "The file path pattern is empty."
     if "\\" in probe:
-        return "Use `/` between folders: a backslash is a separator to some unzip tools."
+        return (
+            "Use `/` between folders: a backslash is a separator to some unzip tools."
+        )
     if probe.startswith("/") or _DRIVE_PREFIX.match(probe):
         return "The file path must be relative to the ZIP: start it with a folder or file name."
     for part in probe.split("/"):
@@ -2211,6 +2213,14 @@ def bulk_export(
     if pattern_problem:
         raise ValueError(pattern_problem)
     combos = _apply_scope(combos, options)
+    # UX-179's annotations, cut to the exported trials once: the README says
+    # the file is there exactly when the writer below writes it (round 10).
+    annotations_kept: list[dict] = []
+    if options.include_annotations and annotation_records:
+        from .annotations import records_in, records_to_store
+
+        trials = zip(combos["participant_id"], combos["trial_id"], strict=True)
+        annotations_kept = records_in(records_to_store(annotation_records), trials)
     maps = {
         table: names
         for table, names in (column_names or {}).items()
@@ -2336,7 +2346,7 @@ def bulk_export(
                 "- `annotations.json` holds the favorites, tags and notes on "
                 "these trials; import it on the app's Data Management page → Annotations."
             ]
-            if options.include_annotations and annotation_records
+            if annotations_kept
             else []
         ),
         "",
@@ -2896,18 +2906,15 @@ def bulk_export(
             _inventory(path, "text_metadata", "written")
     # UX-179: the exported trials' annotations, in the Data → Annotations file
     # format, so the bundle's notes can be imported back into the app.
-    if options.include_annotations and annotation_records:
-        from .annotations import records_in, records_to_store, serialize
+    if annotations_kept:
+        from .annotations import records_to_store, serialize
 
-        trials = zip(combos["participant_id"], combos["trial_id"], strict=True)
-        kept = records_in(records_to_store(annotation_records), trials)
-        if kept:
-            data = serialize(records_to_store(kept), dataset=annotation_dataset).encode(
-                "utf-8"
-            )
-            zf.writestr("annotations.json", data)
-            _inventory("annotations.json", "annotations", "written")
-            progress.bytes_written += len(data)
+        data = serialize(
+            records_to_store(annotations_kept), dataset=annotation_dataset
+        ).encode("utf-8")
+        zf.writestr("annotations.json", data)
+        _inventory("annotations.json", "annotations", "written")
+        progress.bytes_written += len(data)
     emit_status(
         status_callback,
         ExportStage.FINALIZING,

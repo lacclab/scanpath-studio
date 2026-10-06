@@ -2198,6 +2198,44 @@ def _hover_payload(
     return customdata, "<br>".join(rows) + "<extra></extra>"
 
 
+#: The highlight key's annotation (#374 F6), so it is drawn once a figure.
+_HIGHLIGHT_KEY_NAME = "highlight_key"
+
+
+def _add_highlight_key(
+    fig: go.Figure, column: str, color: str, *, border: bool = False
+) -> None:
+    """Name the highlighted words on the figure itself (#374 F6): a swatch in
+    the highlight's colour and "Highlighted: is_in_aspan (answer span)", in
+    the plot's bottom-left corner. Drawn once however many panels mark words."""
+    if any(a.name == _HIGHLIGHT_KEY_NAME for a in fig.layout.annotations or ()):
+        return
+    from .column_names import HIGHLIGHT_NOTES
+
+    note = HIGHLIGHT_NOTES.get(str(column))
+    swatch = "▢" if border else "■"
+    text = (
+        f'<span style="color:{color}">{swatch}</span> Highlighted: '
+        f"{_plotly_literal(_column_name(column))}" + (f" ({note})" if note else "")
+    )
+    fig.add_annotation(
+        x=0,
+        y=0,
+        xref="paper",
+        yref="paper",
+        xanchor="left",
+        yanchor="bottom",
+        xshift=6,
+        yshift=6,
+        text=text,
+        showarrow=False,
+        align="left",
+        font=dict(size=12, color="#444444"),
+        bgcolor="rgba(255,255,255,0.75)",
+        name=_HIGHLIGHT_KEY_NAME,
+    )
+
+
 def _add_word_label_trace(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -2254,6 +2292,8 @@ def _add_word_label_trace(
         label_color = [
             highlight_text_color if is_crit else text_color for is_crit in critical_mask
         ]
+        if critical_mask.any():
+            _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
     # BUG-97 — the label is centred in its word's box, as the data defines it.
@@ -2939,6 +2979,7 @@ def _render_scanpath_figure(
             shapes = shapes + build_critical_span_overlay(
                 words, highlight_column, color=span_border_color
             )
+            _add_highlight_key(fig, highlight_column, span_border_color, border=True)
         if shapes:
             fig.update_layout(shapes=shapes)
         if show_word_labels:

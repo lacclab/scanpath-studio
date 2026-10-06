@@ -5162,16 +5162,15 @@ def _seed_viz_state(
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
     # A column the app seeded is re-derived for each dataset; only the user's own
-    # pick survives a switch. Otherwise OneStop (no `is_in_aspan`) seeds IA_SKIP,
-    # which the demo also has, and the demo keeps it after switching back.
+    # pick survives a switch. #374 F6: only the bundled demo is seeded (its
+    # answer span); any other dataset opens with nothing highlighted, rather
+    # than with whichever yes/no column came first (IA_SKIP on EyeLink data).
     ss = st.session_state
-    seeded = None
-    if highlight_options:
-        seeded = (
-            "is_in_aspan"
-            if "is_in_aspan" in highlight_options
-            else highlight_options[0]
-        )
+    seeded = (
+        "is_in_aspan"
+        if "is_in_aspan" in highlight_options and current_dataset_name() == DEMO_CHOICE
+        else None
+    )
     current = ss.get("global_highlight_column")
     if current not in (None, seeded) and current == ss.get(_HIGHLIGHT_SEEDED_KEY):
         ss.pop("global_highlight_column", None)
@@ -6862,6 +6861,14 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
+                placeholder="Choose a column",
+                # #374 F6: nothing is seeded outside the demo, and an unseeded
+                # selectbox would otherwise pick its first option itself.
+                **(
+                    {}
+                    if "global_highlight_column" in st.session_state
+                    else {"index": None}
+                ),
             )
         style_help = (
             "**Mark text**: colour the span's words (needs **Text** on). "

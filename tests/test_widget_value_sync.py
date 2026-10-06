@@ -352,14 +352,15 @@ def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
 def test_seeded_highlight_column_follows_the_dataset(monkeypatch):
     """A highlight column the app seeded is re-derived for each dataset.
 
-    OneStop's word table has no ``is_in_aspan``, so the seed there is the first
-    boolean column (``IA_SKIP``). The demo also has ``IA_SKIP``, so before this
-    fix the seed survived switching back and the demo highlighted skips. A
-    column the user picked stays put."""
+    #374 F6: only the bundled demo is seeded (its answer span). Another dataset
+    opens with nothing highlighted — not its first yes/no column (``IA_SKIP``),
+    and not ``is_in_aspan`` either when it happens to have one. A column the
+    user picked stays put."""
     import pandas as pd
     import streamlit
 
     from scanpath_studio import controls
+    from scanpath_studio.constants import DEMO_CHOICE
 
     fixations = pd.DataFrame({"x": [1.0], "y": [2.0], "duration_ms": [200.0]})
     demo = pd.DataFrame(
@@ -369,14 +370,37 @@ def test_seeded_highlight_column_follows_the_dataset(monkeypatch):
 
     monkeypatch.setattr(streamlit, "session_state", {})
     ss = streamlit.session_state
+    ss["data_source_choice"] = DEMO_CHOICE
     controls._seed_viz_state(fixations, 16, demo)
     assert ss["global_highlight_column"] == "is_in_aspan"
+    ss["data_source_choice"] = "Dataset 1"
     controls._seed_viz_state(fixations, 16, onestop)
-    assert ss["global_highlight_column"] == "IA_SKIP"
+    assert ss.get("global_highlight_column") is None
+    controls._seed_viz_state(fixations, 16, demo)  # its own is_in_aspan
+    assert ss.get("global_highlight_column") is None
+    ss["data_source_choice"] = DEMO_CHOICE
     controls._seed_viz_state(fixations, 16, demo)
     assert ss["global_highlight_column"] == "is_in_aspan"
 
     ss["global_highlight_column"] = "IA_REGRESSION_IN"
+    ss["data_source_choice"] = "Dataset 1"
     controls._seed_viz_state(fixations, 16, onestop)
+    ss["data_source_choice"] = DEMO_CHOICE
     controls._seed_viz_state(fixations, 16, demo)
     assert ss["global_highlight_column"] == "IA_REGRESSION_IN"
+
+
+def test_a_highlight_draws_a_key_naming_it():
+    """#374 F6: whenever words are highlighted, the figure says by what."""
+    import scanpath_studio as sps
+
+    words, fixations = sps.load_sample_data(names="canonical")
+    trial = (fixations["participant_id"].iloc[0], fixations["trial_id"].iloc[0])
+    keys = [
+        a.text
+        for a in sps.plot_scanpath(words, fixations, *trial).layout.annotations
+        if a.name == "highlight_key"
+    ]
+    assert len(keys) == 1 and "Highlighted: is_in_aspan (answer span)" in keys[0]
+    plain = sps.plot_scanpath(words, fixations, *trial, highlight_column=None)
+    assert not [a for a in plain.layout.annotations if a.name == "highlight_key"]

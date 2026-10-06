@@ -246,7 +246,7 @@ def test_data_inspection_reports_the_verdict():
         if str(m.value).startswith('<div class="sps-wiz-part"')
     ]
     assert any("Trial identity" in part for part in parts), parts
-    assert any("single reading" in s.value for s in at.success)
+    assert any("none looks like more than one reading" in s.value for s in at.success)
     assert any(e.label == "What was checked" for e in at.expander)
 
 

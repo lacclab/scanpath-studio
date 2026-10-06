@@ -350,7 +350,7 @@ class TestOverlayGate:
         quoted a layout it never drew. The fallback is the caller's to say."""
         comparable, reason = self._run().session_state["_gate_no_screen"]
         assert comparable is False
-        assert "does not report a screen" in reason
+        assert "doesn't record its screen" in reason
         assert "side by side" not in reason
 
 
@@ -635,7 +635,7 @@ class TestArrivedProvenanceIsShown:
         assert not at.exception, at.exception
         captions = " ".join(c.value for c in at.caption)
         assert "shared from a setup recorded differently" in captions
-        assert "assumed" in captions
+        assert "Assumed" in captions
         # Only the groups that actually differ are named.
         assert "Screen" in captions or "screen" in captions
 

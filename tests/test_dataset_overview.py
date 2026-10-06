@@ -132,7 +132,7 @@ class TestTheSpreadMetrics:
         from scanpath_studio.tabs import _spread_help
 
         help_text = _spread_help(self._spread())
-        assert "± 69.57 std" in help_text
+        assert "± 69.57 SD" in help_text
         assert "range 35–311" in help_text
         assert "Computed after the current filters." in help_text
 

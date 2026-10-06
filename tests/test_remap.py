@@ -1566,7 +1566,7 @@ class TestPendingChangePreview:
         assert census["Trials with word boxes"] == ("2 of 2", "0 of 1")
         assert census["Trials in the trial table"] == ("2 of 2", "0 of 1")
         # The readers are untouched.
-        assert census["Readers in the participant table"] == ("1 of 1", "1 of 1")
+        assert census["Participants in the participant table"] == ("1 of 1", "1 of 1")
 
     def test_the_editor_shows_it_and_counts_on_request(self):
         from streamlit.testing.v1 import AppTest

@@ -604,7 +604,7 @@ class TestDataInspectionTab:
         assert "Dataset statistics" not in subheaders
 
         metric_labels = [m.label for m in at.metric]
-        for headline in ("Participants", "Texts", "Trials", "Fixations", "Words"):
+        for headline in ("Participants", "Texts", "Trials", "Fixations", "Word rows"):
             assert headline in metric_labels, f"missing headline metric {headline}"
         # The second statistics row is gone.
         for dropped in ("Mean fixation dur (ms)", "Reading speed (wpm)"):
@@ -3827,7 +3827,8 @@ class TestCorpusAnalysisTab:
         offered = next(s for s in at.selectbox if s.key == view_key).options
         captions = " ".join(c.value for c in at.caption)
         for view, phrase in tabs._VIEW_PHRASES.items():
-            if view in offered:
+            # Options are what the picker shows (`tabs._view_label`).
+            if tabs._view_label(view) in offered:
                 assert phrase in captions, view
             elif view in tabs._COMPUTED_READER_VIEWS:
                 assert phrase not in captions, view
@@ -4015,9 +4016,9 @@ class TestCorpusAnalysisTab:
         captions = [c.value for c in at.caption]
         note = next(c for c in captions if "computations/#measure-tfd" in c)
         assert "All time spent on a word" in note and "Unit: ms." in note
-        assert "Each word's value is the mean across its readers." in note
+        assert "Each word's value is the mean across its participants." in note
         assert any(
-            c.startswith("SEM: how precisely the mean is known") for c in captions
+            c.startswith("SEM: how precisely the center is known") for c in captions
         )
 
     def test_group_filter_set_mode_renders(self):

@@ -3474,6 +3474,10 @@ def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
 # other boolean column).
 _PREFERRED_HIGHLIGHT_FIELDS = ["is_in_aspan", "is_in_dspan"]
 
+#: The highlight column the app seeded itself, as opposed to one the user
+#: picked: a seeded pick is re-derived when the dataset changes.
+_HIGHLIGHT_SEEDED_KEY = "_global_highlight_column_seeded"
+
 
 def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     """Boolean word columns offered in the 'Highlight words by' selector.
@@ -4940,13 +4944,24 @@ def _seed_viz_state(
     # no boolean columns can't carry a dangling pick.
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
+    # A column the app seeded is re-derived for each dataset; only the user's own
+    # pick survives a switch. Otherwise OneStop (no `is_in_aspan`) seeds IA_SKIP,
+    # which the demo also has, and the demo keeps it after switching back.
+    ss = st.session_state
+    seeded = None
     if highlight_options:
-        _pin(
-            "global_highlight_column",
+        seeded = (
             "is_in_aspan"
             if "is_in_aspan" in highlight_options
-            else highlight_options[0],
+            else highlight_options[0]
         )
+    current = ss.get("global_highlight_column")
+    if current not in (None, seeded) and current == ss.get(_HIGHLIGHT_SEEDED_KEY):
+        ss.pop("global_highlight_column", None)
+    if seeded is not None:
+        if "global_highlight_column" not in ss:
+            ss[_HIGHLIGHT_SEEDED_KEY] = seeded
+        _pin("global_highlight_column", seeded)
 
     # VIZ-26: arbitrary multi-field word/fixation hover. The legacy one-measure
     # key remains as a fallback for old links/configs, but new surfaces write the

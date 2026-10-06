@@ -3359,8 +3359,8 @@ detected, so the fixation, saccade and heatmap layers stay empty.</p>
 through <code>end</code> (1-based, both inclusive) of the trial — the headless form of
 the app's fixation-index window.</p>
 <p><code>title</code> / <code>caption</code> stamp a title/caption band onto the figure
-without shrinking the plot area, exactly like the rail's <em>Title &amp; caption on
-the figure</em> control — literal text here, not the rail's <code>{trial_id}</code>-style
+without shrinking the plot area, exactly like the rail's <em>Title</em> / <em>Caption</em>
+rows — literal text here, not the rail's <code>{trial_id}</code>-style
 pattern, since the caller already knows which trial this is.</p>
 <p>Remaining keywords override the app's defaults and are forwarded to
 <code>plots.make_scanpath_figure</code> (e.g. <code>show_heatmap=False</code>,
@@ -3827,24 +3827,6 @@ settings against what it would get::</p>
 <td>all three</td>
 </tr>
 <tr>
-<td><code>colorbar_orientation</code></td>
-<td><code>'Vertical'</code></td>
-<td><code>--colorbar-orientation</code></td>
-<td>all three</td>
-</tr>
-<tr>
-<td><code>colorbar_tickangle</code></td>
-<td><code>0</code></td>
-<td><code>--colorbar-tickangle</code></td>
-<td>all three</td>
-</tr>
-<tr>
-<td><code>colorbar_tickfont_size</code></td>
-<td><code>12</code></td>
-<td><code>--colorbar-tickfont-size</code></td>
-<td>all three</td>
-</tr>
-<tr>
 <td><code>compare_stimulus</code></td>
 <td><code>'both'</code></td>
 <td><code>--compare-stimulus</code></td>
@@ -3866,12 +3848,6 @@ settings against what it would get::</p>
 <td><code>critical_span_style</code></td>
 <td><code>'Mark text'</code></td>
 <td><code>--critical-span-style</code></td>
-<td>plot, compare</td>
-</tr>
-<tr>
-<td><code>duration_mass_sigma_chars</code></td>
-<td><code>1.0</code></td>
-<td><code>--duration-mass-sigma</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
@@ -3899,8 +3875,26 @@ settings against what it would get::</p>
 <td>all three</td>
 </tr>
 <tr>
+<td><code>fixation_colorbar_orientation</code></td>
+<td><code>'Vertical'</code></td>
+<td><code>--fixation-colorbar-orientation</code></td>
+<td>all three</td>
+</tr>
+<tr>
+<td><code>fixation_colorbar_tickangle</code></td>
+<td><code>0</code></td>
+<td><code>--fixation-colorbar-tickangle</code></td>
+<td>all three</td>
+</tr>
+<tr>
+<td><code>fixation_colorbar_tickfont_size</code></td>
+<td><code>12</code></td>
+<td><code>--fixation-colorbar-tickfont-size</code></td>
+<td>all three</td>
+</tr>
+<tr>
 <td><code>fixation_colorscale</code></td>
-<td><code>'Viridis'</code></td>
+<td><code>'Blues'</code></td>
 <td><code>--fixation-colorscale</code></td>
 <td>all three</td>
 </tr>
@@ -3947,8 +3941,26 @@ settings against what it would get::</p>
 <td>animate</td>
 </tr>
 <tr>
+<td><code>heatmap_colorbar_orientation</code></td>
+<td><code>'Vertical'</code></td>
+<td><code>--heatmap-colorbar-orientation</code></td>
+<td>all three</td>
+</tr>
+<tr>
+<td><code>heatmap_colorbar_tickangle</code></td>
+<td><code>0</code></td>
+<td><code>--heatmap-colorbar-tickangle</code></td>
+<td>all three</td>
+</tr>
+<tr>
+<td><code>heatmap_colorbar_tickfont_size</code></td>
+<td><code>12</code></td>
+<td><code>--heatmap-colorbar-tickfont-size</code></td>
+<td>all three</td>
+</tr>
+<tr>
 <td><code>heatmap_colorscale</code></td>
-<td><code>'Viridis'</code></td>
+<td><code>'Blues'</code></td>
 <td><code>--heatmap-colorscale</code></td>
 <td>plot, compare</td>
 </tr>
@@ -3968,6 +3980,12 @@ settings against what it would get::</p>
 <td><code>heatmap_range</code></td>
 <td><code>None</code></td>
 <td><code>--heatmap-range</code></td>
+<td>plot, compare</td>
+</tr>
+<tr>
+<td><code>heatmap_sigma_px</code></td>
+<td><code>None</code></td>
+<td><code>--heatmap-sigma</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
@@ -3999,6 +4017,12 @@ settings against what it would get::</p>
 <td><code>None</code></td>
 <td>—</td>
 <td>plot, compare</td>
+</tr>
+<tr>
+<td><code>illustration_text</code></td>
+<td><code>''</code></td>
+<td><code>--illustration-text</code></td>
+<td>all three</td>
 </tr>
 <tr>
 <td><code>label_a</code></td>
@@ -4121,12 +4145,6 @@ settings against what it would get::</p>
 <td>all three</td>
 </tr>
 <tr>
-<td><code>show_colorbars</code></td>
-<td><code>False</code></td>
-<td><code>--colorbars</code></td>
-<td>all three</td>
-</tr>
-<tr>
 <td><code>show_connectors</code></td>
 <td><code>False</code></td>
 <td>—</td>
@@ -4136,6 +4154,12 @@ settings against what it would get::</p>
 <td><code>show_coordinate_grid</code></td>
 <td><code>False</code></td>
 <td><code>--coordinate-grid</code></td>
+<td>all three</td>
+</tr>
+<tr>
+<td><code>show_fixation_colorbar</code></td>
+<td><code>True</code></td>
+<td><code>--no-fixation-colorbar</code></td>
 <td>all three</td>
 </tr>
 <tr>
@@ -4149,6 +4173,12 @@ settings against what it would get::</p>
 <td><code>True</code></td>
 <td><code>--no-heatmap</code></td>
 <td>plot, compare</td>
+</tr>
+<tr>
+<td><code>show_heatmap_colorbar</code></td>
+<td><code>True</code></td>
+<td><code>--no-heatmap-colorbar</code></td>
+<td>all three</td>
 </tr>
 <tr>
 <td><code>show_legend</code></td>
@@ -4232,6 +4262,12 @@ settings against what it would get::</p>
 <td><code>word_box_fill_opacity</code></td>
 <td><code>0.05</code></td>
 <td><code>--word-box-fill-opacity</code></td>
+<td>all three</td>
+</tr>
+<tr>
+<td><code>word_box_line_opacity</code></td>
+<td><code>1.0</code></td>
+<td><code>--word-box-line-opacity</code></td>
 <td>all three</td>
 </tr>
 <tr>

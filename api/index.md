@@ -338,7 +338,7 @@ Build the canonical scanpath figure for one trial.
 
 `fix_index_range=(start, end)` draws only fixations `start` through `end` (1-based, both inclusive) of the trial — the headless form of the app's fixation-index window.
 
-`title` / `caption` stamp a title/caption band onto the figure without shrinking the plot area, exactly like the rail's *Title & caption on the figure* control — literal text here, not the rail's `{trial_id}`-style pattern, since the caller already knows which trial this is.
+`title` / `caption` stamp a title/caption band onto the figure without shrinking the plot area, exactly like the rail's *Title* / *Caption* rows — literal text here, not the rail's `{trial_id}`-style pattern, since the caller already knows which trial this is.
 
 Remaining keywords override the app's defaults and are forwarded to `plots.make_scanpath_figure` (e.g. `show_heatmap=False`, `color_by="pass_index"`, `x_field="order_in_trial"`); an unknown keyword raises a `TypeError` naming the closest valid options, and figure_options lists them all with their defaults. A `color_by` / `highlight_column` naming a column the trial's table doesn't have raises a `ValueError` naming the closest ones, rather than drawing without it.
 
@@ -500,95 +500,101 @@ Every figure keyword a builder accepts → the default it renders with.
 
 Every keyword the figure builders take, with the default it renders with, the `render` flag that sets it on the command line, and which builders accept it: `plot` is `plot_scanpath`, `animate` is `animate_scanpath`, `compare` is `compare_scanpaths`.
 
-| Option                      | Default                                        | `render` flag                                             | Accepted by      |
-| --------------------------- | ---------------------------------------------- | --------------------------------------------------------- | ---------------- |
-| `anim_grid_step_ms`         | `None`                                         | `--anim-grid-step-ms`                                     | animate          |
-| `anim_max_frames`           | `None`                                         | `--anim-max-frames`                                       | animate          |
-| `background_color`          | `'#ffffff'`                                    | `--background-color`                                      | all three        |
-| `background_image`          | `None`                                         | `--stimulus-image`                                        | all three        |
-| `background_image_b`        | `None`                                         | `--stimulus-image-b`                                      | compare          |
-| `background_image_opacity`  | `1.0`                                          | `--stimulus-image-opacity`                                | all three        |
-| `background_image_origin`   | `None`                                         | `--stimulus-image-origin`                                 | all three        |
-| `background_image_origin_b` | `None`                                         | `--stimulus-image-origin-b`                               | compare          |
-| `background_image_size`     | `None`                                         | `--stimulus-image-size`                                   | all three        |
-| `background_image_size_b`   | `None`                                         | `--stimulus-image-size-b`                                 | compare          |
-| `color_by`                  | `'(uniform)'`                                  | `--color-by`                                              | all three        |
-| `color_by_line`             | `False`                                        | `--color-by-line`                                         | all three        |
-| `colorbar_orientation`      | `'Vertical'`                                   | `--colorbar-orientation`                                  | all three        |
-| `colorbar_tickangle`        | `0`                                            | `--colorbar-tickangle`                                    | all three        |
-| `colorbar_tickfont_size`    | `12`                                           | `--colorbar-tickfont-size`                                | all three        |
-| `compare_stimulus`          | `'both'`                                       | `--compare-stimulus`                                      | animate          |
-| `connector_y`               | `None`                                         | —                                                         | plot, compare    |
-| `coordinate_grid_spacing`   | `None`                                         | `--coordinate-grid-spacing`                               | all three        |
-| `critical_span_style`       | `'Mark text'`                                  | `--critical-span-style`                                   | plot, compare    |
-| `duration_mass_sigma_chars` | `1.0`                                          | `--duration-mass-sigma`                                   | plot, compare    |
-| `duration_size_legend`      | `True`                                         | `--no-duration-size-legend`                               | all three        |
-| `fit_to_monitor`            | `True`                                         | `--no-full-monitor`                                       | all three        |
-| `fixation_color`            | `'#0072B2'`                                    | `--fixation-color`                                        | all three        |
-| `fixation_color_range`      | `None`                                         | `--fixation-color-range`                                  | all three        |
-| `fixation_colorscale`       | `'Viridis'`                                    | `--fixation-colorscale`                                   | all three        |
-| `fixation_flags`            | `None`                                         | `--fixation-flag`                                         | all three        |
-| `fixation_flags_b`          | `None`                                         | `--compare-fixation-flag`                                 | animate          |
-| `fixation_hover_fields`     | `['order_in_trial', 'duration_ms', 'word_id']` | `--fixation-hover-fields`                                 | all three        |
-| `fixation_opacity`          | `0.7`                                          | `--fixation-opacity`                                      | all three        |
-| `fixation_snap_to_word`     | `False`                                        | `--snap-fixations`                                        | plot, compare    |
-| `fixation_symbol`           | `'circle'`                                     | `--fixation-symbol`                                       | all three        |
-| `fixations_b`               | `None`                                         | —                                                         | animate          |
-| `heatmap_colorscale`        | `'Viridis'`                                    | `--heatmap-colorscale`                                    | plot, compare    |
-| `heatmap_metric`            | `'duration_ms'`                                | `--heatmap-metric`                                        | plot, compare    |
-| `heatmap_norm`              | `'Linear'`                                     | `--heatmap-norm`                                          | plot, compare    |
-| `heatmap_range`             | `None`                                         | `--heatmap-range`                                         | plot, compare    |
-| `heatmap_style`             | `'Word boxes'`                                 | `--heatmap-style`                                         | plot, compare    |
-| `highlight_column`          | `'is_in_aspan'`                                | `--highlight-column`                                      | all three        |
-| `highlight_text_color`      | `'#D55E00'`                                    | `--highlight-text-color`                                  | all three        |
-| `hollow_fixations`          | `False`                                        | `--hollow-fixations`                                      | all three        |
-| `illustration_reasons`      | `None`                                         | —                                                         | plot, compare    |
-| `label_a`                   | `'Scanpath A'`                                 | `--label-a`                                               | animate          |
-| `label_b`                   | `'Scanpath B'`                                 | `--label-b`                                               | animate          |
-| `line_spacing`              | `3.0`                                          | `--line-spacing`                                          | all three        |
-| `marker_duration_range`     | `(50, 600)`                                    | `--marker-duration-range`                                 | all three        |
-| `marker_size_range`         | `(8, 24)`                                      | `--marker-size-range`                                     | all three        |
-| `marker_size_scale`         | `'sqrt'`                                       | `--marker-size-scale`                                     | all three        |
-| `order_font_color`          | `'#111111'`                                    | `--order-font-color`                                      | all three        |
-| `order_font_size`           | `10`                                           | `--order-font-size`                                       | all three        |
-| `raw_gaze_color`            | `'#888888'`                                    | `--raw-gaze-color`                                        | all three        |
-| `raw_gaze_marker_size`      | `4.0`                                          | `--raw-gaze-marker-size`                                  | all three        |
-| `raw_gaze_opacity`          | `0.6`                                          | `--raw-gaze-opacity`                                      | all three        |
-| `saccade_class_colors`      | `None`                                         | `--saccade-type-color`                                    | plot, compare    |
-| `saccade_classes`           | `list` (see `figure_options()`)                | `--saccade-classes`                                       | plot, compare    |
-| `saccade_color`             | `'#CC79A7'`                                    | `--saccade-color`                                         | all three        |
-| `saccade_color_mode`        | `'Uniform'`                                    | `--saccade-color-by-type`, `--saccade-color-by-direction` | plot, compare    |
-| `saccade_render_mode`       | `'Straight'`                                   | `--saccade-arcs`                                          | plot, compare    |
-| `saccade_style`             | `'solid'`                                      | `--saccade-style`                                         | all three        |
-| `saccade_type_legend`       | `True`                                         | `--no-saccade-type-legend`                                | plot, compare    |
-| `saccade_width`             | `2.0`                                          | `--saccade-width`                                         | all three        |
-| `scale_text_to_boxes`       | `True`                                         | `--no-scale-text-to-boxes`                                | all three        |
-| `show_colorbars`            | `False`                                        | `--colorbars`                                             | all three        |
-| `show_connectors`           | `False`                                        | —                                                         | plot, compare    |
-| `show_coordinate_grid`      | `False`                                        | `--coordinate-grid`                                       | all three        |
-| `show_fixations`            | `True`                                         | `--no-fixations`                                          | plot, compare    |
-| `show_heatmap`              | `True`                                         | `--no-heatmap`                                            | plot, compare    |
-| `show_legend`               | `False`                                        | `--compare-legend`                                        | animate, compare |
-| `show_order`                | `True`                                         | `--no-order`                                              | all three        |
-| `show_raw_gaze`             | `False`                                        | —                                                         | plot, compare    |
-| `show_saccade_arrows`       | `False`                                        | `--saccade-arrows`                                        | all three        |
-| `show_saccades`             | `True`                                         | `--no-saccades`                                           | all three        |
-| `show_word_labels`          | `True`                                         | `--no-labels`                                             | all three        |
-| `show_words`                | `True`                                         | `--no-words`                                              | all three        |
-| `span_border_color`         | `'#000000'`                                    | `--span-border-color`                                     | plot, compare    |
-| `style_a`                   | `None`                                         | `--style-a`                                               | animate, compare |
-| `style_b`                   | `None`                                         | `--style-b`                                               | animate, compare |
-| `text_color`                | `'#000000'`                                    | `--text-color`                                            | all three        |
-| `word_box_color`            | `'#6c757d'`                                    | `--word-box-color`                                        | all three        |
-| `word_box_fill_color`       | `'#646464'`                                    | `--word-box-fill-color`                                   | all three        |
-| `word_box_fill_opacity`     | `0.05`                                         | `--word-box-fill-opacity`                                 | all three        |
-| `word_heatmap_col`          | `None`                                         | `--word-heatmap-col`                                      | plot, compare    |
-| `word_heatmap_title`        | `None`                                         | `--word-heatmap-title`                                    | plot, compare    |
-| `word_hover_fields`         | `list` (see `figure_options()`)                | `--word-hover-fields`                                     | all three        |
-| `word_hover_measure`        | `'total_fixation_duration_ms'`                 | `--word-hover-measure`                                    | all three        |
-| `words_b`                   | `None`                                         | —                                                         | animate          |
-| `x_field`                   | `'x'`                                          | `--x-field`                                               | plot, compare    |
-| `y_field`                   | `'y'`                                          | `--y-field`                                               | plot, compare    |
+| Option                            | Default                                        | `render` flag                                             | Accepted by      |
+| --------------------------------- | ---------------------------------------------- | --------------------------------------------------------- | ---------------- |
+| `anim_grid_step_ms`               | `None`                                         | `--anim-grid-step-ms`                                     | animate          |
+| `anim_max_frames`                 | `None`                                         | `--anim-max-frames`                                       | animate          |
+| `background_color`                | `'#ffffff'`                                    | `--background-color`                                      | all three        |
+| `background_image`                | `None`                                         | `--stimulus-image`                                        | all three        |
+| `background_image_b`              | `None`                                         | `--stimulus-image-b`                                      | compare          |
+| `background_image_opacity`        | `1.0`                                          | `--stimulus-image-opacity`                                | all three        |
+| `background_image_origin`         | `None`                                         | `--stimulus-image-origin`                                 | all three        |
+| `background_image_origin_b`       | `None`                                         | `--stimulus-image-origin-b`                               | compare          |
+| `background_image_size`           | `None`                                         | `--stimulus-image-size`                                   | all three        |
+| `background_image_size_b`         | `None`                                         | `--stimulus-image-size-b`                                 | compare          |
+| `color_by`                        | `'(uniform)'`                                  | `--color-by`                                              | all three        |
+| `color_by_line`                   | `False`                                        | `--color-by-line`                                         | all three        |
+| `compare_stimulus`                | `'both'`                                       | `--compare-stimulus`                                      | animate          |
+| `connector_y`                     | `None`                                         | —                                                         | plot, compare    |
+| `coordinate_grid_spacing`         | `None`                                         | `--coordinate-grid-spacing`                               | all three        |
+| `critical_span_style`             | `'Mark text'`                                  | `--critical-span-style`                                   | plot, compare    |
+| `duration_size_legend`            | `True`                                         | `--no-duration-size-legend`                               | all three        |
+| `fit_to_monitor`                  | `True`                                         | `--no-full-monitor`                                       | all three        |
+| `fixation_color`                  | `'#0072B2'`                                    | `--fixation-color`                                        | all three        |
+| `fixation_color_range`            | `None`                                         | `--fixation-color-range`                                  | all three        |
+| `fixation_colorbar_orientation`   | `'Vertical'`                                   | `--fixation-colorbar-orientation`                         | all three        |
+| `fixation_colorbar_tickangle`     | `0`                                            | `--fixation-colorbar-tickangle`                           | all three        |
+| `fixation_colorbar_tickfont_size` | `12`                                           | `--fixation-colorbar-tickfont-size`                       | all three        |
+| `fixation_colorscale`             | `'Blues'`                                      | `--fixation-colorscale`                                   | all three        |
+| `fixation_flags`                  | `None`                                         | `--fixation-flag`                                         | all three        |
+| `fixation_flags_b`                | `None`                                         | `--compare-fixation-flag`                                 | animate          |
+| `fixation_hover_fields`           | `['order_in_trial', 'duration_ms', 'word_id']` | `--fixation-hover-fields`                                 | all three        |
+| `fixation_opacity`                | `0.7`                                          | `--fixation-opacity`                                      | all three        |
+| `fixation_snap_to_word`           | `False`                                        | `--snap-fixations`                                        | plot, compare    |
+| `fixation_symbol`                 | `'circle'`                                     | `--fixation-symbol`                                       | all three        |
+| `fixations_b`                     | `None`                                         | —                                                         | animate          |
+| `heatmap_colorbar_orientation`    | `'Vertical'`                                   | `--heatmap-colorbar-orientation`                          | all three        |
+| `heatmap_colorbar_tickangle`      | `0`                                            | `--heatmap-colorbar-tickangle`                            | all three        |
+| `heatmap_colorbar_tickfont_size`  | `12`                                           | `--heatmap-colorbar-tickfont-size`                        | all three        |
+| `heatmap_colorscale`              | `'Blues'`                                      | `--heatmap-colorscale`                                    | plot, compare    |
+| `heatmap_metric`                  | `'duration_ms'`                                | `--heatmap-metric`                                        | plot, compare    |
+| `heatmap_norm`                    | `'Linear'`                                     | `--heatmap-norm`                                          | plot, compare    |
+| `heatmap_range`                   | `None`                                         | `--heatmap-range`                                         | plot, compare    |
+| `heatmap_sigma_px`                | `None`                                         | `--heatmap-sigma`                                         | plot, compare    |
+| `heatmap_style`                   | `'Word boxes'`                                 | `--heatmap-style`                                         | plot, compare    |
+| `highlight_column`                | `'is_in_aspan'`                                | `--highlight-column`                                      | all three        |
+| `highlight_text_color`            | `'#D55E00'`                                    | `--highlight-text-color`                                  | all three        |
+| `hollow_fixations`                | `False`                                        | `--hollow-fixations`                                      | all three        |
+| `illustration_reasons`            | `None`                                         | —                                                         | plot, compare    |
+| `illustration_text`               | `''`                                           | `--illustration-text`                                     | all three        |
+| `label_a`                         | `'Scanpath A'`                                 | `--label-a`                                               | animate          |
+| `label_b`                         | `'Scanpath B'`                                 | `--label-b`                                               | animate          |
+| `line_spacing`                    | `3.0`                                          | `--line-spacing`                                          | all three        |
+| `marker_duration_range`           | `(50, 600)`                                    | `--marker-duration-range`                                 | all three        |
+| `marker_size_range`               | `(8, 24)`                                      | `--marker-size-range`                                     | all three        |
+| `marker_size_scale`               | `'sqrt'`                                       | `--marker-size-scale`                                     | all three        |
+| `order_font_color`                | `'#111111'`                                    | `--order-font-color`                                      | all three        |
+| `order_font_size`                 | `10`                                           | `--order-font-size`                                       | all three        |
+| `raw_gaze_color`                  | `'#888888'`                                    | `--raw-gaze-color`                                        | all three        |
+| `raw_gaze_marker_size`            | `4.0`                                          | `--raw-gaze-marker-size`                                  | all three        |
+| `raw_gaze_opacity`                | `0.6`                                          | `--raw-gaze-opacity`                                      | all three        |
+| `saccade_class_colors`            | `None`                                         | `--saccade-type-color`                                    | plot, compare    |
+| `saccade_classes`                 | `list` (see `figure_options()`)                | `--saccade-classes`                                       | plot, compare    |
+| `saccade_color`                   | `'#CC79A7'`                                    | `--saccade-color`                                         | all three        |
+| `saccade_color_mode`              | `'Uniform'`                                    | `--saccade-color-by-type`, `--saccade-color-by-direction` | plot, compare    |
+| `saccade_render_mode`             | `'Straight'`                                   | `--saccade-arcs`                                          | plot, compare    |
+| `saccade_style`                   | `'solid'`                                      | `--saccade-style`                                         | all three        |
+| `saccade_type_legend`             | `True`                                         | `--no-saccade-type-legend`                                | plot, compare    |
+| `saccade_width`                   | `2.0`                                          | `--saccade-width`                                         | all three        |
+| `scale_text_to_boxes`             | `True`                                         | `--no-scale-text-to-boxes`                                | all three        |
+| `show_connectors`                 | `False`                                        | —                                                         | plot, compare    |
+| `show_coordinate_grid`            | `False`                                        | `--coordinate-grid`                                       | all three        |
+| `show_fixation_colorbar`          | `True`                                         | `--no-fixation-colorbar`                                  | all three        |
+| `show_fixations`                  | `True`                                         | `--no-fixations`                                          | plot, compare    |
+| `show_heatmap`                    | `True`                                         | `--no-heatmap`                                            | plot, compare    |
+| `show_heatmap_colorbar`           | `True`                                         | `--no-heatmap-colorbar`                                   | all three        |
+| `show_legend`                     | `False`                                        | `--compare-legend`                                        | animate, compare |
+| `show_order`                      | `True`                                         | `--no-order`                                              | all three        |
+| `show_raw_gaze`                   | `False`                                        | —                                                         | plot, compare    |
+| `show_saccade_arrows`             | `False`                                        | `--saccade-arrows`                                        | all three        |
+| `show_saccades`                   | `True`                                         | `--no-saccades`                                           | all three        |
+| `show_word_labels`                | `True`                                         | `--no-labels`                                             | all three        |
+| `show_words`                      | `True`                                         | `--no-words`                                              | all three        |
+| `span_border_color`               | `'#000000'`                                    | `--span-border-color`                                     | plot, compare    |
+| `style_a`                         | `None`                                         | `--style-a`                                               | animate, compare |
+| `style_b`                         | `None`                                         | `--style-b`                                               | animate, compare |
+| `text_color`                      | `'#000000'`                                    | `--text-color`                                            | all three        |
+| `word_box_color`                  | `'#6c757d'`                                    | `--word-box-color`                                        | all three        |
+| `word_box_fill_color`             | `'#646464'`                                    | `--word-box-fill-color`                                   | all three        |
+| `word_box_fill_opacity`           | `0.05`                                         | `--word-box-fill-opacity`                                 | all three        |
+| `word_box_line_opacity`           | `1.0`                                          | `--word-box-line-opacity`                                 | all three        |
+| `word_heatmap_col`                | `None`                                         | `--word-heatmap-col`                                      | plot, compare    |
+| `word_heatmap_title`              | `None`                                         | `--word-heatmap-title`                                    | plot, compare    |
+| `word_hover_fields`               | `list` (see `figure_options()`)                | `--word-hover-fields`                                     | all three        |
+| `word_hover_measure`              | `'total_fixation_duration_ms'`                 | `--word-hover-measure`                                    | all three        |
+| `words_b`                         | `None`                                         | —                                                         | animate          |
+| `x_field`                         | `'x'`                                          | `--x-field`                                               | plot, compare    |
+| `y_field`                         | `'y'`                                          | `--y-field`                                               | plot, compare    |
 
 ## Save
 

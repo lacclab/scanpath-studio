@@ -174,9 +174,9 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
 
 `saccade_color_mode` is `"Uniform"`, `"Forward / regression"` (the two-way fold) or `"By type"` (forward / skip / refixation / return sweep / regression, each a legended sub-trace, classified at render time); `saccade_class_colors={"regression": "#000", …}` overrides individual class colours. `saccade_classes` is the same split used as a **filter** rather than as hue — `saccade_classes=["regression"]` draws a regressions-only figure (the hidden classes lose their direction arrows too), and it composes with any colour mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws the linear-reading schematic.
 
-`heatmap_style` is `"Word boxes"`, `"Interpolated"` or `"Duration mass"`; `heatmap_metric="counts"` weights by fixation count instead of dwell time; `heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
+`heatmap_style` is `"Word boxes"` or `"Interpolated"`; `heatmap_metric="counts"` weights by fixation count instead of dwell time; `heatmap_norm="Log"` compresses heavy-tailed dwell times. Interpolated blurs the fixations with a Gaussian of σ `heatmap_sigma_px` px — `None` (the default) is 2% of the data's larger span, at least 8 px.
 
-`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the metric's own units — for the word-box heatmap, dwell time per word in ms. Left at `None` each trial is scaled to its own values, and a comparison shares one scale across A and B. Pass a range to put every trial on the same scale. The `"Interpolated"` and `"Duration mass"` styles scale their density to their own peak and ignore `heatmap_range`.
+`fixation_color_range` and `heatmap_range` are `(min, max)` pairs in the metric's own units — for the word-box heatmap, dwell time (ms) or fixations per word. Left at `None` each trial is scaled to its own values (the word-box heatmap from 0), and a comparison shares one scale across A and B. Pass a range to put every trial on the same scale. The `"Interpolated"` style scales its density to its own peak and ignores `heatmap_range`.
 
 `highlight_column` is a boolean words column (OneStop's critical span by default); the default is skipped when absent, a column you name must exist.
 

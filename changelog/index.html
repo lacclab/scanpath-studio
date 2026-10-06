@@ -1905,6 +1905,24 @@ behind each line, and the releases before 0.28.0, are in
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>.
 <em>Unreleased</em> is what is on <code>main</code> and not yet on PyPI.</p>
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<p><strong>Added</strong></p>
+<ul>
+<li>The Illustration label's text can be edited (rail, link, settings file, <code>render --illustration-text</code>, <code>illustration_text=</code>), and title and caption have their own switches. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Word boxes: the outline has its own opacity (rail, share link, <code>--word-box-line-opacity</code>, <code>word_box_line_opacity=</code>), and each opacity now sits beside its colour. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+</ul>
+<p><strong>Changed</strong></p>
+<ul>
+<li>Data Management's Status column says <em>Loaded</em> (opens at once) or <em>Available</em> (opening reads its files) instead of <em>Ready</em>. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Figure &amp; canvas: <em>Whole monitor</em> is now an unticked <em>Crop to data</em> box, the monitor size and the px/degree line left the rail (set on the Data page), and the axes row warns that fields other than x / y draw fixation markers only. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Both colour scales (fixations and heatmap) open in Blues, and colour bars are shown by default. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Heatmap: <em>Duration mass</em> is removed (links and settings files naming it open <em>Interpolated</em>); Interpolated gets a <strong>Blur</strong> row — Auto (showing the σ it uses) or a fixed σ in px (<code>heatmap_sigma_px</code>, <code>render --heatmap-sigma</code>); the colour range starts at 0 and is offered for Fixation count too. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>The fixations and the heatmap each have their own colour bar settings (show, orientation, tick angle and size), under their layer in the rail; <code>render</code> takes <code>--no-fixation-colorbar</code> / <code>--fixation-colorbar-*</code> and the heatmap equivalents, and links or settings files using the old shared settings apply them to both. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+<li>Shorter help texts throughout the plot controls. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+</ul>
+<p><strong>Removed</strong></p>
+<ul>
+<li>The px-per-degree figure is no longer shown in the Recording setup forms, and the export's saccade table no longer converts amplitudes to degrees. (<a href="https://github.com/lacclab/scanpath-studio/issues/349">#349</a>)</li>
+</ul>
 <h2 id="0330-2026-10-04">0.33.0 — 2026-10-04<a class="headerlink" href="#0330-2026-10-04" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>
 <ul>

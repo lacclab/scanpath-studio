@@ -1,13 +1,13 @@
-# Corpus workspace
+# Corpus Analysis
 
-**:material/bar_chart: Corpus Analysis** summarises many readings at once. It uses the same
+**:material/bar_chart: Corpus Analysis** summarizes many trials at once. It uses the same
 dataset and trial filters as the Scanpath view. The line beside the dataset
 picker counts what those filters keep (for example *12 of 24 trials · 1 of 2
-readers*) and names each active filter. **Edit filters** opens the Scanpath
+participants*) and names each active filter. **Edit filters** opens the Scanpath
 view's filter panel, and **Clear** resets every filter.
 
 <figure class="sps-screenshot" markdown>
-![Corpus Analysis, Per text: each reader's total fixation duration on every word of one text, against the cohort mean](../assets/screenshots/corpus-analysis.webp)
+![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../assets/screenshots/corpus-analysis.webp)
 </figure>
 
 ## Reading measures come from your data
@@ -24,7 +24,7 @@ between consecutive fixations.
 
 | View | Answers |
 | --- | --- |
-| **Per text** | How was this text read, word by word, across readers? |
+| **Per text** | How was this text read, word by word, across participants? |
 | **Per participant** | How does this participant behave across trials? |
 | **Groups** | How do conditions or populations differ? |
 
@@ -33,13 +33,13 @@ bookmark or a copied link reopens it.
 
 Choose a measure, how to aggregate it, and the spread to show. A line under the
 measure says what it is, its unit, and what each plotted value is (one word,
-one reader's mean, …), with a link to its definition; a line under the spread
-says whether it shows how values vary (SD, IQR) or how precisely the centre is
-known (SEM, bootstrap CI). Set a **minimum number of readers** per word so
+one participant's mean, …), with a link to its definition; a line under the spread
+says whether it shows how values vary (SD, IQR) or how precisely the center is
+known (SEM, bootstrap CI). Set a minimum number of participants per word so
 sparse words don't look like stable estimates.
 
 **Groups** defines a cohort by splitting on a field, or with its own filters.
-Turn on **Compare** for a second cohort, with the two group means and their
+Turn on **Compare a second group**, with the two group means and their
 difference — descriptive, with no significance test.
 Fields from attached participant, trial or text tables appear here too.
 

@@ -12,9 +12,9 @@ For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 
     Sources, upload, column mapping, and the recording setup.
 
-- :material-chart-box:{ .lg .middle } **[Corpus workspace](corpus-workspace.md)**
+- :material-chart-box:{ .lg .middle } **[Corpus Analysis](corpus-workspace.md)**
 
-    Raw-data inspection, reading measures, and the four analysis views.
+    Per text, Per participant and Groups, from the measures your data brings.
 
 - :material-share-variant:{ .lg .middle } **[Outputs and sharing](outputs-sharing.md)**
 

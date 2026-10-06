@@ -6,8 +6,8 @@ Open the dataset picker above the plot, or the :material/database: **Data Manage
 
 - **Bundled Demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
-- **Public corpus** — OneStop or PoTeC; the app downloads it when asked
-  (only when it runs on your own computer — [OneStop](../onestop.md)).
+- **Public corpus** — OneStop or PoTeC, downloaded when you ask, on your own
+  computer only (see [OneStop](../onestop.md)).
 - **+ → Import files** — your own tables.
 - **+ → Create manually** — type a text and place fixations on it by hand:
   click to add, drag to move, or edit the table.
@@ -31,8 +31,8 @@ left out. See [Data format](../data-format.md) for every field.
 
 The import screen has three parts:
 
-1. **Name** — and an optional one-line description.
-2. **Tables** — upload Fixations, Words (interest areas) and, optionally,
+1. **Name & description** — the description is optional.
+2. **Upload data tables** — upload Fixations, Words (interest areas) and, optionally,
    raw gaze. The app
    guesses which column is which; check its guesses. The trial count under each
    ID picker is a quick sanity check, and hovering the :material/visibility:
@@ -43,8 +43,8 @@ The import screen has three parts:
    **Text ID**: `TRIAL_INDEX` only orders a participant's trials. Reading
    measures from an EyeLink
    interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and
-   are what Corpus Analysis shows. Optional tables, one row per reader, trial or
-   text, add fields to filter and group by.
+   are what Corpus Analysis shows. Optional tables, one row per participant, trial
+   or text, add fields to filter and group by.
 3. **Recording setup** — the screen the data was recorded on (below).
 
 Then click **:material/check: Add dataset**. Anything the app cannot use is listed above the
@@ -68,11 +68,11 @@ values from assumed ones.
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 **Edit dataset** opens under the list, below the open dataset's counts and
 tables, and changes its name, description, column mapping, recording setup
-and metadata tables, or adds a table it is missing (Fixations, Words or raw
+and metadata tables, or adds a table it is missing (Fixations, Words (interest areas) or raw
 gaze); its mapped fields show the same value preview. On an
 added dataset, changing an ID or coordinate column shows a few values as they
 are now and as they will be after saving, and **:material/search: Count trials and check
-joins** says whether readings would merge or the word boxes or a metadata table
+joins** says whether trials would merge or the word boxes or a metadata table
 would stop matching. Its
 **:material/download: Save setup** writes the mapping in your files' own column names, so
 whoever has the same files can restore it on the add screen; anything a
@@ -92,11 +92,11 @@ they came from, a few example rows, and what the app does with them. Nothing
 is removed: the rows stay in every table and export. `check_data_health` runs
 the same checks from Python, and `scanpath-studio check` from the terminal.
 
-Columns are named as they are in your files: in the tables, the plot
-controls, the trial chips, filters and sort, Corpus Analysis, the figure's
-hover and colour bar, and the setup screens, a column you uploaded as
-`CURRENT_FIX_DURATION` keeps that name. A column marked *(computed)* is one
-Scanpath Studio made, such as a reading measure your data did not bring.
+Columns keep the names they have in your files, so a column uploaded as
+`CURRENT_FIX_DURATION` is called that in the tables. On chips, filters and
+plot controls, a mapped field is named by its role (*Participant*, *Duration
+(ms)*), with your column's name in its tooltip. A column marked *(computed)* is
+one Scanpath Studio derived, such as a saccade's amplitude.
 
 <figure class="sps-screenshot" markdown>
 ![The Data Management page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)

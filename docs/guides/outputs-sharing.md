@@ -52,7 +52,7 @@ The **Share** subtab passes a view on in three ways:
   scanpath created by hand is the exception; its link carries it.)
 - **Code** — Python or a CLI command that reproduces the figure.
 - **File** — the figure's settings as a file, to restore later: its mode
-  (static, animated or a comparison) and, for a comparison, which reading it
+  (static, animated or a comparison) and, for a comparison, which trial it
   was compared with and on which screen.
 
 <figure class="sps-screenshot" markdown>
@@ -64,7 +64,7 @@ The **Share** subtab passes a view on in three ways:
 | What | Where |
 | --- | --- |
 | figure settings | **:material/share: Share → File** |
-| favorites, tags and notes | **:material/database: Data → Annotations → Export** |
+| favorites, tags and notes | **:material/database: Data Management → Annotations → Export** |
 | column mapping and recording setup | **:material/edit: Edit dataset → Save setup** |
 | saved figure designs | **:material/palette: My designs → Export** |
 | an authored scanpath (text, layout and fixations) | **:material/draw: Author a scanpath → Download authoring file** |
@@ -74,7 +74,7 @@ one. The authoring file is the exception: it is the whole authored scanpath, and
 **Restore authoring file** on the same screen loads it back, as do
 `load_authored_scanpath` and `scanpath-studio render --authoring`. Notes may contain participant information, so check them before sharing.
 
-On a local or desktop install, the app also keeps a recovery copy of your
-datasets and work, restored after a refresh or restart.
+On a local or desktop install, the app also keeps your datasets and work
+**Saved on this computer**, restored after a refresh or restart.
 
 For scripted output, see [Automation](../automation.md).

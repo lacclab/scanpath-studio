@@ -502,7 +502,12 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     },
     # EXP-19: Compare's per-scanpath colours, line style and legend label.
     **_cmp_style_params(
-        "fix_color", "saccade_color", "saccade_style", "label_pattern", "box_color"
+        "fix_color",
+        "saccade_color",
+        "saccade_style",
+        "label_pattern",
+        "box_color",
+        "box_fill_color",
     ),
     # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
     # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
@@ -534,7 +539,7 @@ _SHARE_COLOR_PARAMS = (
     "fixclass_long_color",
     "fixclass_oob_color",
     "fixclass_blink_color",
-    *_cmp_style_params("fix_color", "saccade_color", "box_color"),
+    *_cmp_style_params("fix_color", "saccade_color", "box_color", "box_fill_color"),
 )
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -1420,8 +1425,12 @@ def sanitize_session_value(key: str, value):
     if key in _COLOR_STATE_KEYS:
         if not isinstance(value, str):
             raise TypeError(f"not a colour: {value!r}")
-        if value == "" and key.endswith("_box_color") and key.startswith("cmp"):
-            return value  # follows the scanpath's own colour
+        if (
+            value == ""
+            and key.endswith(("_box_color", "_box_fill_color"))
+            and key.startswith("cmp")
+        ):
+            return value  # follows the scanpath's colour / the figure's fill
         return _parse_hex_color(value)
     bounds = _URL_BOUNDED.get(key)
     if bounds is not None:
@@ -2679,6 +2688,12 @@ def _restore_plot_config(
                 bc == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bc)
             ):
                 put(f"cmp{idx}_box_color", bc)
+            # Likewise "" for the fill: follow the figure's.
+            bf = entry.get("box_fill_color")
+            if isinstance(bf, str) and (
+                bf == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bf)
+            ):
+                put(f"cmp{idx}_box_fill_color", bf)
             if "saccade_style" in entry:
                 put_valid(
                     entry["saccade_style"] in SACCADE_DASH_OPTIONS,

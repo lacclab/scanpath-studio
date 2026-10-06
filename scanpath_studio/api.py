@@ -2992,10 +2992,11 @@ def compare_scanpaths(
 
     **Per-scanpath style.** ``style_a`` / ``style_b`` restyle one scanpath:
     ``fix_color``, ``marker_size_range``, ``opacity``, ``hollow``,
-    ``saccade_color``, ``saccade_style``, ``saccade_width`` and ``box_color`` —
-    the outline of that reading's word boxes, its ``fix_color`` when left out.
-    ``box_color`` is this figure's only: the co-animation draws one set of boxes,
-    in ``word_box_color``, and ignores it.
+    ``saccade_color``, ``saccade_style``, ``saccade_width``, ``box_color`` —
+    the outline of that reading's word boxes, its ``fix_color`` when left out —
+    and ``box_fill_color``, their fill, ``word_box_fill_color`` when left out.
+    The two box colours are this figure's only: the co-animation draws one set
+    of boxes, in ``word_box_color`` / ``word_box_fill_color``, and ignores them.
 
     **Filters, per scanpath.** ``fixation_flags`` and
     ``saccade_classes`` filter both scanpaths, as they filter

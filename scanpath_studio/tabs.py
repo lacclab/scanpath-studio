@@ -4242,6 +4242,8 @@ def render_settings_file(
             "label_pattern": st.session_state.get(f"cmp{idx}_label_pattern") or "",
             # The word-box outline override ("" = the scanpath's colour).
             "box_color": st.session_state.get(f"cmp{idx}_box_color") or "",
+            # The word-box fill override ("" = the figure's fill).
+            "box_fill_color": st.session_state.get(f"cmp{idx}_box_fill_color") or "",
         }
         for idx in range(2)
     ]
@@ -4962,15 +4964,16 @@ _DUAL_UNREAD_STYLE = {
 def _replay_style(style: dict | None) -> dict | None:
     """A per-scanpath comparison style as the co-animation takes it: its look
     only, without the filters (`COMPARE_FILTER_STYLE_KEYS`) `_plan_replay`
-    hands the replay another way, and without `box_color` — the replay draws
-    one set of boxes in the figure's colour, so it would only split the cache
-    key."""
+    hands the replay another way, and without `box_color` / `box_fill_color` —
+    the replay draws one set of boxes in the figure's colours, so they would
+    only split the cache key."""
     if not style:
         return None
     return {
         k: v
         for k, v in style.items()
-        if k not in COMPARE_FILTER_STYLE_KEYS and k != "box_color"
+        if k not in COMPARE_FILTER_STYLE_KEYS
+        and k not in ("box_color", "box_fill_color")
     }
 
 

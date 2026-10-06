@@ -1,0 +1,1 @@
+In Compare, the Word boxes popover now has a Scanpath A and a Scanpath B group, each with its own line and fill colour (the new box_fill_color style key, on the Share link, CLI --style-a/--style-b and the API too).

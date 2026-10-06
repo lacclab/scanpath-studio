@@ -2341,7 +2341,7 @@ def _render_compare_dataset_cell(
     from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
 
     host.selectbox(
-        "**Compare with**",
+        "**Scanpath B from**",
         options=names,
         key=COMPARE_SOURCE_KEY,
         # ENG-36: this widget renders only in Compare mode on the Scanpath view,
@@ -2508,7 +2508,7 @@ def _render_compare_selector(
     B frames from which the selected trial must be extracted.
 
     **UX-64** made that one line rather than three: B's row is now A's row —
-    ``[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
+    ``[Scanpath B from] [Scanpath B] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
     ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
     picker row stacked above the chips. The dataset is therefore resolved from
     session state *before* the row is drawn (``_resolve_compare_source``), since
@@ -2592,7 +2592,7 @@ def _render_compare_selector(
     # candidate, and its own navigator (rendered once it's chosen) is what
     # narrows it to one coordinate space.
     # UX-64 — ONE row for scanpath B, the mirror of A's above it:
-    # `[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]` on the same
+    # `[Scanpath B from] [Scanpath B] [scrub slider] [◀ ▶ ⇅ filter]` on the same
     # `SELECTOR_ROW_GRID`, replacing the dataset row + *Filter B by* row + picker
     # row this used to stack above the chips. The dataset keeps a track of its
     # own and does not shrink — the label is what tells two compared corpora
@@ -2854,7 +2854,7 @@ def _render_compare_selector(
 
     # UX-189: the label is shown, like A's *Select Trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
-        "**Compare to**",
+        "**Scanpath B**",
         options=labels,
         key=sel_key,
         format_func=lambda v: label_display.get(v, v),
@@ -4229,7 +4229,7 @@ def _build_studio_config(
             "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
             "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
             # BUG-72: the A/B legend, the one compare setting that is a switch.
-            "legend": bool(viz_settings.get("show_compare_legend", False)),
+            "legend": bool(viz_settings.get("show_compare_legend", True)),
         },
     }
 
@@ -5102,7 +5102,7 @@ def _plan_replay(
         # The replay has no border-overlay layer, so only the text-marking mode
         # carries a highlight column.
         highlight_column=_marked_text_column(viz_settings),
-        show_legend=viz_settings.get("show_compare_legend", False),
+        show_legend=viz_settings.get("show_compare_legend", True),
         label_a=(
             _resolve_compare_label(
                 0, selected_participant, selected_trial, trial_words, trial_fixations
@@ -8264,7 +8264,7 @@ def _render_comparison_figure(
         compare_stimulus=compare_stimulus,
         style_a=viz_settings.get("compare_style_a"),
         style_b=viz_settings.get("compare_style_b"),
-        show_legend=viz_settings.get("show_compare_legend", False),
+        show_legend=viz_settings.get("show_compare_legend", True),
         # Comparison retains its count-vs-duration spelling; the static builder
         # translates "counts" to None internally.
         heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),

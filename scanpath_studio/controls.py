@@ -843,7 +843,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "single_fix_range_all_trials": False,
     # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
     # default — the per-scanpath colours already tell the readings apart.
-    "global_show_compare_legend": False,
+    "global_show_compare_legend": True,  # #374 F26: names A and B
     # VIZ-13: reading measure shown in the word hover tooltip. "Off" (None) hides
     # the measure line; any canonical measure column name shows it.
     "global_word_hover_measure": "total_fixation_duration_ms",

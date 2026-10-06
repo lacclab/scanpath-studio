@@ -1439,9 +1439,11 @@ def _render_parser() -> argparse.ArgumentParser:
     cmp_group.add_argument(
         "--compare-legend",
         dest="show_legend",
-        action="store_true",
-        help="Draw a legend naming the two scanpaths (the app's A/B legend). "
-        "Applies to the --animate co-animation too.",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Draw the legend naming the two scanpaths (the app's A/B legend; "
+        "on by default, as in the app). Applies to the --animate co-animation "
+        "too.",
     )
     # EXP-20. Named after `compare_scanpaths`'s `style_a` / `style_b`, like the
     # `--label-a` / `--label-b` pair above.
@@ -2389,7 +2391,7 @@ def render(argv: list[str]) -> None:
     compare_only = [
         flag
         for flag, given in (
-            ("--compare-legend", args.show_legend),
+            ("--compare-legend", args.show_legend is not None),
             ("--style-a", args.style_a),
             ("--style-b", args.style_b),
             ("--stimulus-image-b", args.stimulus_image_b),
@@ -3004,8 +3006,8 @@ def render(argv: list[str]) -> None:
         if orientation:
             overrides[f"{bar}_colorbar_orientation"] = orientation.capitalize()
     if args.compare_with is not None:
-        if args.show_legend:
-            overrides["show_legend"] = True
+        if args.show_legend is not None:
+            overrides["show_legend"] = args.show_legend
         for side in ("a", "b"):
             style = _parse_style_spec(getattr(args, f"style_{side}"), f"--style-{side}")
             if style:

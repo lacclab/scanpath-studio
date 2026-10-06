@@ -1325,7 +1325,7 @@ def test_render_accepts_a_second_datasets_command_line(kind, capsys):
     state = _state(
         kind=kind,
         canvas=(2560, 1440),
-        figure={"show_legend": True} if kind == "animation" else {},
+        figure={"show_legend": False} if kind == "animation" else {},
         compare=cs.CompareTarget(
             participant="p2",
             trial="t2",
@@ -1350,7 +1350,7 @@ def test_render_accepts_a_second_datasets_command_line(kind, capsys):
     assert args.compare_stimulus == "b"
     assert (args.label_a, args.label_b) == ("Reader A", "Reader B")
     if kind == "animation":
-        assert args.animate and args.show_legend
+        assert args.animate and args.show_legend is False
 
 
 @pytest.fixture()

@@ -6597,17 +6597,13 @@ def _make_split_comparison_figure(
         avoid=[spec["color"] for spec in trial_specs],
     )
     category_label = "line" if (color_by_line or color_by == "line") else color_by
-    legend_on = show_legend or bool(category_legend)
 
-    # The panel names are the split layouts' A/B legend, so they follow its
-    # toggle (BUG-90): with it off the top margin is 0, which clipped the upper
-    # title off the canvas while the lower one, sitting in the gap between the
-    # panels, still showed.
-    subplot_titles = (
-        [trial_specs[0]["display_name"], trial_specs[1]["display_name"]]
-        if show_legend
-        else None
-    )
+    # #374 F26: each panel always says which scanpath it is, "A · …" / "B · …",
+    # legend or not — so the top band is reserved for the titles too (BUG-90:
+    # without it the upper title was clipped off the canvas).
+    subplot_titles = [
+        f"{side} · {spec['display_name']}" for side, spec in zip("AB", trial_specs)
+    ]
 
     # Each panel's own axis ranges, from its trial's words + fixations (CMP-8).
     panel_ranges = []
@@ -6667,7 +6663,7 @@ def _make_split_comparison_figure(
     grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     # The t band was the (now-removed) title; keep a slim band only for the
     # optional legend.
-    top_px = (_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0
+    top_px = _compare_legend_font(base_font_size)["size"] + 14
     figure_width = total_width + grid_left + right_px
     figure_height = total_height + bottom_px + grid_bottom
     plot_area = (

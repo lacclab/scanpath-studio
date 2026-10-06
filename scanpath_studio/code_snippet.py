@@ -1259,7 +1259,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "word_heatmap_col": _valued("--word-heatmap-col"),
     "word_heatmap_title": _valued("--word-heatmap-title"),
     # The comparison's (and the co-animation's) own options.
-    "show_legend": _flag_when("--compare-legend", True),
+    "show_legend": _flag_when("--no-compare-legend", False),
     "compare_stimulus": _lowercase("--compare-stimulus"),
     "style_a": _style_spec("--style-a"),
     "style_b": _style_spec("--style-b"),

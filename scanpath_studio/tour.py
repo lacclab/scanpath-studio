@@ -785,7 +785,7 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['animate']} Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
         "**Compare** adds a second scanpath beside it — from this dataset or, "
-        "via **Compare with**, from another one. The ▾ beside each toggle "
+        "via **Scanpath B from**, from another one. The ▾ beside each toggle "
         "opens its settings.",
     },
     {

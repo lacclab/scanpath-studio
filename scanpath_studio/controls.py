@@ -892,7 +892,7 @@ _FIXCLASS_CATEGORIES = (
     ("long", "Long", "Fixations longer than the ms threshold.", True),
     (
         "oob",
-        "Outside text",
+        "Out of bounds",
         "Fixations in no word box (gaps between lines count).",
         False,
     ),

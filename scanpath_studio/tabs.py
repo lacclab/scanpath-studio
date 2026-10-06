@@ -8616,7 +8616,7 @@ def _measure_note(host, measure: Measure, observation: str) -> None:
 
 
 #: Appended to a measure note when the values are z-scored (AN-25).
-_Z_NOTE = " Z-scored within each reader, so in SD units rather than the unit above."
+_Z_NOTE = " Z-scored per participant, so in SD units rather than the unit above."
 
 
 def _observation(measure: Measure, normalize: bool = False) -> str:
@@ -8648,14 +8648,14 @@ def _spread_note(host, spread: str) -> None:
 
 
 def _normalize_toggle(host, *, key, disabled=False):
-    """Z-score-within-reader toggle (AN-25)."""
+    """Z-score-per-participant toggle (AN-25)."""
     return bool(
         host.toggle(
-            "Z-score within reader",
+            "Z-score per participant",
             value=False,
             key=key,
             disabled=disabled,
-            help="Compare slow vs fast readers on shape, not absolute level.",
+            help="Compare slow vs fast participants on shape, not absolute level.",
         )
     )
 

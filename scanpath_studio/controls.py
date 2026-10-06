@@ -1389,6 +1389,9 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_order": False,
         "global_show_words": False,
         "global_show_raw_gaze": False,
+        # #374 F16: the word colours are the whole figure; a highlighted span
+        # would read as part of the map.
+        "global_critical_span_style": "None",
     },
     "illustration": {
         "global_show_fix": True,
@@ -5986,7 +5989,8 @@ def render_plot_controls(
         key="viz_view_heatmap",
         type="primary" if _active == "heatmap" else "secondary",
         width="stretch",
-        help="Fixation-density heatmap over the text, nothing else.",
+        help="Each word box colored by the total time spent on it (ms), with "
+        "nothing else drawn.",
         on_click=_apply_view_preset,
         args=("heatmap",),
     )

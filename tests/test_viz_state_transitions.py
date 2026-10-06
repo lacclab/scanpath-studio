@@ -304,3 +304,17 @@ class TestTrialFiltersKeepTheDesign:
         at.session_state["global_show_saccades"] = False
         self._run(at)
         assert at.session_state["_quick_view_selection"] == "custom"
+
+
+def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
+    """#374 F16: the Heatmap design is the word colours and nothing else, so a
+    highlighted span is switched off with the other layers."""
+    store = _viz_store()
+    store["global_critical_span_style"] = "Mark text"
+    monkeypatch.setattr(controls.st, "session_state", store)
+
+    controls._apply_view_preset("heatmap")
+    assert store["global_critical_span_style"] == "None"
+    assert controls._active_quick_view() == "heatmap"
+    controls._apply_view_preset("scanpath")
+    assert store["global_critical_span_style"] == "Mark text"

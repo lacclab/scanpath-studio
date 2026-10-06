@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_easter_egg_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-06 15:55 +0000
+            created at 2026-10-06 16:12 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -547,23 +547,26 @@
     <p class="run"><span class="n"><a id="t465" href="#t465">465</a></span><span class="t">        <span class="nam">_debug_dialog</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t466" href="#t466">466</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t467" href="#t467">467</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t468" href="#t468">468</a></span><span class="t"><span class="op">@</span><span class="nam">st</span><span class="op">.</span><span class="nam">dialog</span><span class="op">(</span><span class="fst">f&quot;</span><span class="op">{</span><span class="nam">ICONS</span><span class="op">[</span><span class="str">&#x27;debug&#x27;</span><span class="op">]</span><span class="op">}</span><span class="fst"> Debug</span><span class="fst">&quot;</span><span class="op">,</span> <span class="nam">width</span><span class="op">=</span><span class="str">&quot;large&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t468" href="#t468">468</a></span><span class="t"><span class="op">@</span><span class="nam">st</span><span class="op">.</span><span class="nam">dialog</span><span class="op">(</span><span class="fst">f&quot;</span><span class="op">{</span><span class="nam">ICONS</span><span class="op">[</span><span class="str">&#x27;debug&#x27;</span><span class="op">]</span><span class="op">}</span><span class="fst"> Debug</span><span class="fst">&quot;</span><span class="op">,</span> <span class="nam">width</span><span class="op">=</span><span class="str">&quot;large&quot;</span><span class="op">,</span> <span class="nam">position</span><span class="op">=</span><span class="str">&quot;right&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t469" href="#t469">469</a></span><span class="t"><span class="key">def</span> <span class="nam">_debug_dialog</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t470" href="#t470">470</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The Debug modal: the gate, then &#8212; once it is on &#8212; the log panel.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t470" href="#t470">470</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The Debug drawer: the gate, then &#8212; once it is on &#8212; the log panel.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t471" href="#t471">471</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t472" href="#t472">472</a></span><span class="t"><span class="str">    The toggle is the whole of the feature&#x27;s switch (UX-37), so it sits here</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t473" href="#t473">473</a></span><span class="t"><span class="str">    even while it is off; the panel under it appears in the same fragment run</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t474" href="#t474">474</a></span><span class="t"><span class="str">    that turns it on, because the toggle&#x27;s ``on_change`` mirrors the gate before</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t475" href="#t475">475</a></span><span class="t"><span class="str">    this body re-runs.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t476" href="#t476">476</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t477" href="#t477">477</a></span><span class="t">    <span class="nam">render_debug_toggle</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t478" href="#t478">478</a></span><span class="t">    <span class="key">if</span> <span class="nam">debug_enabled</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t479" href="#t479">479</a></span><span class="t">        <span class="nam">render_debug_panel</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t480" href="#t480">480</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t481" href="#t481">481</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t482" href="#t482">482</a></span><span class="t"><span class="key">def</span> <span class="nam">_escape</span><span class="op">(</span><span class="nam">text</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t483" href="#t483">483</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Minimal HTML escaping for log messages rendered via st.markdown.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t484" href="#t484">484</a></span><span class="t">    <span class="key">return</span> <span class="nam">text</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="str">&quot;&amp;&quot;</span><span class="op">,</span> <span class="str">&quot;&amp;amp;&quot;</span><span class="op">)</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="str">&quot;&lt;&quot;</span><span class="op">,</span> <span class="str">&quot;&amp;lt;&quot;</span><span class="op">)</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="str">&quot;&gt;&quot;</span><span class="op">,</span> <span class="str">&quot;&amp;gt;&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t472" href="#t472">472</a></span><span class="t"><span class="str">    A right-side drawer (Streamlit 1.65) rather than a centred modal, so the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t473" href="#t473">473</a></span><span class="t"><span class="str">    view the log describes stays in sight beside it; the user can widen it.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t474" href="#t474">474</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t475" href="#t475">475</a></span><span class="t"><span class="str">    The toggle is the whole of the feature&#x27;s switch (UX-37), so it sits here</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t476" href="#t476">476</a></span><span class="t"><span class="str">    even while it is off; the panel under it appears in the same fragment run</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t477" href="#t477">477</a></span><span class="t"><span class="str">    that turns it on, because the toggle&#x27;s ``on_change`` mirrors the gate before</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t478" href="#t478">478</a></span><span class="t"><span class="str">    this body re-runs.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t479" href="#t479">479</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t480" href="#t480">480</a></span><span class="t">    <span class="nam">render_debug_toggle</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t481" href="#t481">481</a></span><span class="t">    <span class="key">if</span> <span class="nam">debug_enabled</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t482" href="#t482">482</a></span><span class="t">        <span class="nam">render_debug_panel</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t483" href="#t483">483</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t484" href="#t484">484</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t485" href="#t485">485</a></span><span class="t"><span class="key">def</span> <span class="nam">_escape</span><span class="op">(</span><span class="nam">text</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t486" href="#t486">486</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Minimal HTML escaping for log messages rendered via st.markdown.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t487" href="#t487">487</a></span><span class="t">    <span class="key">return</span> <span class="nam">text</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="str">&quot;&amp;&quot;</span><span class="op">,</span> <span class="str">&quot;&amp;amp;&quot;</span><span class="op">)</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="str">&quot;&lt;&quot;</span><span class="op">,</span> <span class="str">&quot;&amp;lt;&quot;</span><span class="op">)</span><span class="op">.</span><span class="nam">replace</span><span class="op">(</span><span class="str">&quot;&gt;&quot;</span><span class="op">,</span> <span class="str">&quot;&amp;gt;&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -573,7 +576,7 @@
             <a class="nav" href="z_370c57a259db20f3_easter_egg_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-06 15:55 +0000
+            created at 2026-10-06 16:12 +0000
         </p>
     </div>
 </footer>

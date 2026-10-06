@@ -1930,6 +1930,8 @@ behind each line, and the releases before 0.28.0, are in
 <p><strong>Added</strong></p>
 <ul>
 <li>The dataset setup guide now ends on a step about saving: Add dataset, and Save setup to reuse the mapping next time. (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
+<li>The Corpus Analysis address names the open section (<code>?corpus_subtab=Per+reader</code>), so a bookmark or a copied link reopens it. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>Screen readers announce the scanpath figure, the animated replay, the Corpus Analysis charts and the Share link box by name. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
@@ -1940,6 +1942,10 @@ behind each line, and the releases before 0.28.0, are in
 <li>The add-dataset wizard's Setup help popover is now a compact two-row menu (Show setup guide · More documentation). (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
 <li>The Data page's Participants, Trials and Texts tabs list the ids in your data, with counts, when no separate table is attached — and the Participants and Trials tabs add every column that holds one value per reader or trial. (<a href="https://github.com/lacclab/scanpath-studio/issues/367">#367</a>)</li>
 <li>In Compare, the Raw gaze popover now has a Scanpath A and a Scanpath B group, each with its own sample colour (the new raw_gaze_color style key, also on the Share link, CLI --style-a/--style-b and the API). (<a href="https://github.com/lacclab/scanpath-studio/issues/368">#368</a>)</li>
+<li>❓ Help → Debug opens as a resizable drawer on the right, beside the view it describes. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>Typing a dataset's description or a built-in dataset's new name, or flipping the editor's character-box toggle, no longer reruns the page; the value is applied when you save. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>Name fields (a new dataset, an edited one, a saved or renamed design) no longer accept an empty name; clearing one keeps the last name. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>Requires Streamlit 1.65. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>

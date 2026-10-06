@@ -12015,12 +12015,131 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
     _render_raw_table(raw_gaze_filtered, table="raw_gaze")
 
 
-def _render_raw_metadata_tab(label: str, attached, id_note: str) -> None:
+def _entity_counts(frames: list[pd.DataFrame], keys: list[str]) -> pd.DataFrame:
+    """The distinct ``keys`` across ``frames`` — every frame that carries them."""
+    parts = [
+        f[keys].dropna().drop_duplicates()
+        for f in frames
+        if not f.empty and all(k in f.columns for k in keys)
+    ]
+    if not parts:
+        return pd.DataFrame(columns=keys)
+    return pd.concat(parts, ignore_index=True).drop_duplicates(ignore_index=True)
+
+
+def _count_by(
+    out: pd.DataFrame, frame: pd.DataFrame, keys: list[str], label: str, how
+) -> pd.DataFrame:
+    """Left-join one count column onto ``out``; 0 where ``frame`` has none."""
+    if frame.empty or not all(k in frame.columns for k in keys):
+        return out
+    counts = how(frame.groupby(keys, dropna=True)).rename(label).reset_index()
+    out = out.merge(counts, on=keys, how="left")
+    out[label] = out[label].fillna(0).astype(int)
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def _ids_from_data(
+    kind: str, _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+) -> pd.DataFrame:
+    """The participants / trials / texts the loaded data names, with counts.
+
+    What the Participants/Trials/Texts tabs show when no separate table is
+    attached: the ids are in the fixation and AOI rows either way, so an empty
+    tab read as "this dataset has none". Counts only — distinct ids and row
+    counts, nothing computed from the eye movements.
+    """
+    frames = [_fixations, _words]
+    pid, tid, xid = "participant_id", "trial_id", "text_id"
+    if kind == "participant":
+        out = _entity_counts(frames, [pid])
+        if out.empty:
+            return out
+        trials = _entity_counts(frames, [pid, tid])
+        out = _count_by(out, trials, [pid], "# Trials", lambda g: g.size())
+        texts = _entity_counts(frames, [pid, xid])
+        out = _count_by(out, texts, [pid], "# Texts", lambda g: g.size())
+        out = _count_by(out, _fixations, [pid], "# Fixations", lambda g: g.size())
+        return out.sort_values(pid, ignore_index=True).rename(
+            columns={pid: "Participant ID"}
+        )
+    if kind == "trial":
+        out = _entity_counts(frames, [pid, tid])
+        if out.empty:
+            return out
+        texts = _entity_counts(frames, [pid, tid, xid])
+        if not texts.empty:
+            texts = (
+                texts.astype({xid: "string"})
+                .groupby([pid, tid])[xid]
+                .agg(lambda s: ", ".join(sorted(s.unique())))
+                .reset_index()
+            )
+            out = out.merge(texts, on=[pid, tid], how="left")
+        out = _count_by(out, _fixations, [pid, tid], "# Fixations", lambda g: g.size())
+        if "word_id" in _words.columns:
+            out = _count_by(out, _words, [pid, tid], "# AOIs", lambda g: g.size())
+        return out.sort_values([pid, tid], ignore_index=True).rename(
+            columns={pid: "Participant ID", tid: "Trial ID", xid: "Text ID"}
+        )
+    # Texts: the passage table the derived Stimuli tab builds, plus readers.
+    out = _build_stimuli_table_cached(_words, frame_fingerprint(_words))
+    if out.empty:
+        out = _entity_counts(frames, [xid]).rename(columns={xid: "Text ID"})
+    if out.empty:
+        return out
+    readers = _entity_counts(frames, [xid, pid]).rename(columns={xid: "Text ID"})
+    out = _count_by(out, readers, ["Text ID"], "# Readers", lambda g: g.size())
+    if "# Readers" in out.columns:
+        first = ["Text ID", "# Readers"]
+        out = out[first + [c for c in out.columns if c not in first]]
+    return out
+
+
+#: How the attach screen is named in the fallback caption.
+_ATTACH_HINT = (
+    "Attach a {grain} table (one row per {unit}) on ✏️ **Edit dataset → "
+    "Metadata** to add columns of your own."
+)
+
+
+def _render_raw_metadata_tab(
+    label: str,
+    attached,
+    id_note: str,
+    *,
+    kind: str,
+    unit: str,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    scope: str | None = None,
+) -> None:
     """One of the Participants/Trials/Texts sub-tabs — always present (UX-126),
     even when nothing is attached, so the Raw Data section is always the same
-    six tables rather than some appearing only once uploaded."""
+    six tables rather than some appearing only once uploaded.
+
+    Without an attached table it lists the ids the fixation and AOI rows
+    carry, with counts (:func:`_ids_from_data`) — the dataset has readers,
+    trials and texts whether or not a separate table describes them.
+    """
     if attached is None or attached.frame.empty:
-        st.caption(f"No {label.lower()} table attached.")
+        derived = _ids_from_data(
+            kind,
+            words,
+            fixations,
+            cache_key=(kind, frame_fingerprint(words), frame_fingerprint(fixations)),
+        )
+        if derived.empty:
+            st.caption(f"No {label.lower()} found in the data.")
+            return
+        render_data_scope(scope, key=f"data_scope_{kind}_ids")
+        st.caption(
+            f"{len(derived):,} {kind if len(derived) == 1 else label.lower()}, "
+            "as named in the fixation and AOI "
+            f"data. " + _ATTACH_HINT.format(grain=kind, unit=unit)
+        )
+        st.dataframe(derived, hide_index=True, width="stretch")
         return
     st.caption(
         f"From **{attached.source_name}**, joined on {id_note}. Kept as its "
@@ -12230,14 +12349,34 @@ def _fill_raw_data_tabs(
     with tabs[2]:
         render_data_scope(scope, key="data_scope_raw_gaze")
         render_raw_gaze_tab(raw_gaze_filtered)
+    data = {"words": words_filtered, "fixations": fixations_filtered, "scope": scope}
     with tabs[3]:
         _render_raw_metadata_tab(
-            "Participants", active_participant_metadata(), "the reader id"
+            "Participants",
+            active_participant_metadata(),
+            "the reader id",
+            kind="participant",
+            unit="reader",
+            **data,
         )
     with tabs[4]:
-        _render_raw_metadata_tab("Trials", md.active_trials(), "the trial id")
+        _render_raw_metadata_tab(
+            "Trials",
+            md.active_trials(),
+            "the trial id",
+            kind="trial",
+            unit="trial",
+            **data,
+        )
     with tabs[5]:
-        _render_raw_metadata_tab("Texts", md.active_texts(), "the text id")
+        _render_raw_metadata_tab(
+            "Texts",
+            md.active_texts(),
+            "the text id",
+            kind="text",
+            unit="text",
+            **data,
+        )
 
 
 # -----------------------------------------------------------------------------

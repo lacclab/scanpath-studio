@@ -66,6 +66,7 @@ from .constants import (
     drift_correction_enabled,
     icon_html,
     icons_to_html,
+    palette_label,
     palette_settings,
     spoken,
     upload_limit_mb,
@@ -5712,6 +5713,7 @@ def corpus_style_controls(
             key="global_palette",
             persist_state="session",
             on_change=_on_palette_change,
+            format_func=palette_label,
             help="Same palette as the Scanpath view; designs and Share links keep it.",
         )
         columns = st.columns(2)
@@ -6100,6 +6102,7 @@ def render_plot_controls(
         key="global_palette",
         persist_state="session",
         on_change=_on_palette_change,
+        format_func=palette_label,
     )
 
     # Keep the palette controls visually separate from the bordered layer cards.
@@ -6361,8 +6364,8 @@ def render_plot_controls(
         # colour is inert in Compare, where each scanpath wears its own colour
         # (see "Per-scanpath (comparison)" below).
         by_help = _gated_help(
-            f"The column that colors the markers. **{UNIFORM_COLOR_FIELD}**: one "
-            "color, in the box beside it. A numeric column: the color scale "
+            "The column that colors the markers. **One color**: the "
+            "color in the box beside it. A numeric column: the color scale "
             "beside it. **Line** or a categorical column: a discrete palette. In "
             "Compare, both scanpaths share the mapping.",
             metric_reason,
@@ -6393,7 +6396,7 @@ def render_plot_controls(
         color_labels = rail_names.option_labels(
             color_fields,
             {
-                UNIFORM_COLOR_FIELD: UNIFORM_COLOR_FIELD,
+                UNIFORM_COLOR_FIELD: "One color",
                 "line": "Line" + cn.COMPUTED_SUFFIX,
             },
             roles=True,

@@ -148,4 +148,7 @@ class TestTheWizard:
         assert not at.exception, at.exception
         text = " ".join(c.value for c in at.caption)
         assert "Available with this dataset" in text
-        assert "**Reading measures:** Total fixation duration — TFD, First fixation duration — FFD" in text
+        assert (
+            "**Reading measures:** Total fixation duration — TFD, First fixation duration — FFD"
+            in text
+        )

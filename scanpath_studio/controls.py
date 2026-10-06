@@ -4389,51 +4389,60 @@ _COMPARE_SCANPATH_HELP = {
 }
 
 
+def _compare_saccade_color_picker(host, idx: int) -> None:
+    """One scanpath's saccade colour, ``cmp{idx}_saccade_color``."""
+    disabled, _ = _layer_gate(False, None)
+    host.color_picker(
+        f"{_COMPARE_SCANPATHS[idx][1]} — saccade color",
+        key=f"cmp{idx}_saccade_color",
+        persist_state="session",
+        disabled=disabled,
+        label_visibility="collapsed",
+    )
+
+
+def _compare_saccade_line_rows(idx: int) -> None:
+    """One scanpath's saccade *Style* and *Width* rows (``cmp{idx}_saccade_*``)."""
+    name = _COMPARE_SCANPATHS[idx][1]
+    disabled, _ = _layer_gate(False, None)
+    _sub_row("Style").selectbox(
+        f"{name} — line style",
+        options=list(SACCADE_DASH_OPTIONS.keys()),
+        key=f"cmp{idx}_saccade_style",
+        persist_state="session",
+        disabled=disabled,
+        label_visibility="collapsed",
+    )
+    _numeric_slider(
+        st,
+        f"{name} — line width",
+        key=f"cmp{idx}_saccade_width",
+        persist_state="session",
+        min_value=SACCADE_WIDTH_BOUNDS[0],
+        max_value=SACCADE_WIDTH_BOUNDS[1],
+        step=0.5,
+        slider_format="%.1f px",
+        number_format="%.1f",
+        field_host=_sub_row("Width"),
+    )
+
+
 def _render_compare_saccade_styles() -> None:
-    """Per-scanpath *saccade* styling for the two-trial comparison — rendered
-    inside the Saccade-style popover (when comparing). Laid out like
-    :func:`_render_compare_fix_styles`: the colour and the line style share the
-    *Line* row, the width its own."""
-    st.caption("Per scanpath (Compare)")
-    style_labels = list(SACCADE_DASH_OPTIONS.keys())
-    swatch_disabled, _ = _layer_gate(False, None)
-    for idx, name in _COMPARE_SCANPATHS:
-        line = _sub_row(
-            "Line",
+    """Scanpath B's saccade styling for the two-trial comparison, rendered in
+    the Saccades popover under scanpath A's group — the popover's *Line* group,
+    retitled in Compare, whose colour, style and width rows write A's
+    ``cmp0_*`` keys. Laid out like :func:`_render_compare_fix_styles`."""
+    idx, name = _COMPARE_SCANPATHS[1]
+    _compare_saccade_color_picker(
+        _sub_row(
+            "Color",
             section=name,
             section_help=_COMPARE_SCANPATH_HELP[idx],
             section_share=_COMPARE_SECTION_SHARE,
-        )
-        color_col, style_col = line.columns(
-            [0.3, 0.7], gap=_LABEL_GAP, vertical_alignment="center"
-        )
-        color_col.color_picker(
-            f"{name} — saccade color",
-            key=f"cmp{idx}_saccade_color",
-            persist_state="session",
-            disabled=swatch_disabled,
-            label_visibility="collapsed",
-        )
-        style_col.selectbox(
-            f"{name} — line style",
-            options=style_labels,
-            key=f"cmp{idx}_saccade_style",
-            persist_state="session",
-            disabled=swatch_disabled,
-            label_visibility="collapsed",
-        )
-        _numeric_slider(
-            st,
-            f"{name} — line width",
-            key=f"cmp{idx}_saccade_width",
-            persist_state="session",
-            min_value=SACCADE_WIDTH_BOUNDS[0],
-            max_value=SACCADE_WIDTH_BOUNDS[1],
-            step=0.5,
-            slider_format="%.1f px",
-            number_format="%.1f",
-            field_host=_sub_row("Width"),
-        )
+        ),
+        idx,
+    )
+    _compare_saccade_line_rows(idx)
 
 
 def _render_heatmap_blur_row(
@@ -6406,11 +6415,20 @@ def render_plot_controls(
                 class_reason,
             ),
         )
+        # In Compare this group *is* scanpath A's, as the Fixations popover's
+        # *Marker* group is: its colour, style and width rows write A's
+        # `cmp0_*` keys, and scanpath B's group follows the shared Shape row.
         field = _sub_row(
             "Color",
-            section="Line",
-            section_help="How saccades are drawn.",
+            section=_COMPARE_SCANPATHS[0][1] if comparing else "Line",
+            section_help=(
+                _COMPARE_SCANPATH_HELP[0] + " Colour, style and width are its "
+                "own; shape and direction arrows are shared."
+                if comparing
+                else "How saccades are drawn."
+            ),
             caption_help=mode_help,
+            section_share=_COMPARE_SECTION_SHARE if comparing else 0.45,
         )
         mode_col, swatch_col = field.columns(
             [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
@@ -6426,7 +6444,9 @@ def render_plot_controls(
         )
         # In Animate / Compare the class breakdown never draws, so the slot
         # keeps the uniform swatch rather than showing five dead class ones.
-        if color_mode == "Uniform" or class_disabled:
+        if comparing:
+            _compare_saccade_color_picker(swatch_col, 0)
+        elif color_mode == "Uniform" or class_disabled:
             swatch_disabled, swatch_help = _layer_gate(
                 _dis,
                 _gated_help(
@@ -6482,39 +6502,42 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=swatch_disabled,
             )
-        # A selectbox, not UX-80's segmented control: four segments do not fit
-        # beside a caption, and a wrapped control reads as two settings.
-        if st.session_state.get("global_saccade_style") not in SACCADE_DASH_OPTIONS:
-            st.session_state["global_saccade_style"] = "Solid"
-        style_disabled, style_help = _layer_gate(
-            _dis, _gated_help("Line style for the saccade traces.", _reason)
-        )
-        _sub_row("Style", caption_help=style_help).selectbox(
-            "Saccade line style",
-            options=list(SACCADE_DASH_OPTIONS.keys()),
-            key="global_saccade_style",
-            persist_state="session",
-            disabled=style_disabled,
-            help=style_help,
-            label_visibility="collapsed",
-        )
-        _, width_help = _layer_gate(
-            _dis, _gated_help("Thickness of the saccade lines. Default 2.", _reason)
-        )
-        _numeric_slider(
-            st,
-            "Saccade line width",
-            key="global_saccade_width",
-            persist_state="session",
-            min_value=SACCADE_WIDTH_BOUNDS[0],
-            max_value=SACCADE_WIDTH_BOUNDS[1],
-            step=0.5,
-            slider_format="%.1f px",
-            number_format="%.1f",
-            disabled=_dis,
-            help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
-            field_host=_sub_row("Width", caption_help=width_help),
-        )
+        if comparing:
+            _compare_saccade_line_rows(0)
+        else:
+            # A selectbox, not UX-80's segmented control: four segments do not fit
+            # beside a caption, and a wrapped control reads as two settings.
+            if st.session_state.get("global_saccade_style") not in SACCADE_DASH_OPTIONS:
+                st.session_state["global_saccade_style"] = "Solid"
+            style_disabled, style_help = _layer_gate(
+                _dis, _gated_help("Line style for the saccade traces.", _reason)
+            )
+            _sub_row("Style", caption_help=style_help).selectbox(
+                "Saccade line style",
+                options=list(SACCADE_DASH_OPTIONS.keys()),
+                key="global_saccade_style",
+                persist_state="session",
+                disabled=style_disabled,
+                help=style_help,
+                label_visibility="collapsed",
+            )
+            _, width_help = _layer_gate(
+                _dis, _gated_help("Thickness of the saccade lines. Default 2.", _reason)
+            )
+            _numeric_slider(
+                st,
+                "Saccade line width",
+                key="global_saccade_width",
+                persist_state="session",
+                min_value=SACCADE_WIDTH_BOUNDS[0],
+                max_value=SACCADE_WIDTH_BOUNDS[1],
+                step=0.5,
+                slider_format="%.1f px",
+                number_format="%.1f",
+                disabled=_dis,
+                help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
+                field_host=_sub_row("Width", caption_help=width_help),
+            )
         # VIZ-9: "linear reading" schematic — arched saccades. Its paired
         # control, "Snap above words", remains under Fixations because it moves
         # fixations. Arcs are a `make_scanpath_figure` feature.
@@ -6536,6 +6559,9 @@ def render_plot_controls(
             help=shape_help,
             label_visibility="collapsed",
         )
+        if comparing:
+            # Scanpath B's group, under A's (whose last row is the shared Shape).
+            _render_compare_saccade_styles()
         # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own (each
         # arrowhead un-masks with the saccade it belongs to), so direction
         # arrows reach all three builders.
@@ -6545,9 +6571,6 @@ def render_plot_controls(
             persist_state="session",
             help="An arrowhead on each saccade, pointing in the gaze direction.",
         )
-        # Per-scanpath saccade styling for the two-trial comparison.
-        if comparing:
-            _render_compare_saccade_styles()
 
     # VIZ-31: the Saccades section's *filter* sub-section, the counterpart to the
     # fixation one above — which reading classes are drawn at all, as opposed to

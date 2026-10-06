@@ -201,6 +201,7 @@ from scanpath_studio.data import (
     IDENTITY_SCHEMA_FIELDS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    UNFIXATED_BLANK_MEASURES,
     ReadPlan,
     StimulusJoinWarning,
     aggregate_char_boxes,
@@ -8566,6 +8567,9 @@ def _measure_note(host, measure: Measure, observation: str) -> None:
         about = re.sub(r"\s*\([A-Z]+-\d+\)(?=\.?$)", "", entry.summary)
         url = f"{_COMPUTATIONS_URL}#{computation_anchor(entry.id)}"
         unit = entry.unit or measure.unit or "count"
+    if measure.column in UNFIXATED_BLANK_MEASURES:
+        # #374 F1: a skipped word has no value here, not a 0 ms one.
+        about += " Skipped words are left out."
     host.caption(f"{about} Unit: {unit}. {observation} [Definition ↗]({url})")
 
 

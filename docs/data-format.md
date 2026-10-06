@@ -239,6 +239,11 @@ EyeLink interest-area report maps them automatically from its `IA_*` names
 (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, `IA_FIRST_RUN_DWELL_TIME`,
 `IA_REGRESSION_PATH_DURATION`, …); every one is optional.
 
+A word nobody fixated has no FFD, FPRT, RPD or single-fixation duration. An
+EyeLink report writes `0` there; Scanpath Studio leaves those cells empty
+(fixation count 0, or with no count mapped, a TFD of 0), so a skipped word is
+left out of their means. Its TFD stays 0.
+
 The **Corpus Analysis** page shows only the measures you mapped — it computes
 none of its own, and without any it says so. Exports and the word hover carry
 the measures you mapped, too. Definitions are in

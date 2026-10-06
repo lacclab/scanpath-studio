@@ -121,6 +121,14 @@ _INSPECT_DERIVED = (
     "Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126)"
 )
 _API_EXPERIMENTAL = "API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21)"
+# FFD / FPRT / RPD / single-fixation duration, on both paths: computed
+# (`measures.compute_per_word_measures`) and imported
+# (`data._blank_unfixated_measures`, #374).
+_UNFIXATED_MISSING = (
+    "Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. "
+    "An imported 0 is blanked too, wherever the word's fixation count is 0 — "
+    "or, with no count mapped, its total fixation duration is 0 (BUG-63)."
+)
 
 
 REGISTER: tuple[Computation, ...] = (
@@ -450,10 +458,7 @@ REGISTER: tuple[Computation, ...] = (
         output="first_fixation_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing=(
-            "Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no "
-            "fixations is blanked too (BUG-63)."
-        ),
+        missing=_UNFIXATED_MISSING,
         precedence="A precomputed `IA_FIRST_FIXATION_DURATION` wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -477,7 +482,7 @@ REGISTER: tuple[Computation, ...] = (
         output="first_pass_gaze_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
+        missing=_UNFIXATED_MISSING,
         precedence="A precomputed IA gaze duration wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -502,7 +507,7 @@ REGISTER: tuple[Computation, ...] = (
         output="regression_path_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
+        missing=_UNFIXATED_MISSING,
         tiers="A",
         status=STATUS_PARTIAL,
         reference=(
@@ -663,7 +668,7 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="single_fixation_duration_ms",
         unit="ms",
-        missing="A first run of more than one fixation, or never fixated ⇒ NaN.",
+        missing=("A first run of more than one fixation ⇒ NaN. " + _UNFIXATED_MISSING),
         tiers="A",
         status=STATUS_PARTIAL,
         reference="Rayner (1998).",

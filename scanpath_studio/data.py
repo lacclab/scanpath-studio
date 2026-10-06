@@ -1617,6 +1617,43 @@ def _apply_reading_measures(
             del df[canonical]
 
 
+#: The duration measures a word nobody fixated does not have (BUG-63). Total
+#: fixation duration is not one of them: the word was read past and got 0 ms.
+UNFIXATED_BLANK_MEASURES: tuple[str, ...] = (
+    "first_fixation_ms",
+    "first_pass_gaze_duration_ms",
+    "regression_path_duration_ms",
+    "single_fixation_duration_ms",
+)
+
+
+def _blank_unfixated_measures(df: pd.DataFrame) -> None:
+    """Blank the imported FFD / FPRT / RPD / single-fixation duration of a word
+    nobody fixated (BUG-63's rule, on the imported path — #374 F1).
+
+    An EyeLink IA report writes ``0`` there, and every mean then counted a
+    skipped word as a 0 ms fixation. "Never fixated" is a fixation count of 0;
+    where no count is mapped (or the cell is blank), a total fixation duration
+    of 0 says the same. Total fixation duration itself keeps its 0."""
+    present = [column for column in UNFIXATED_BLANK_MEASURES if column in df.columns]
+    if not present:
+        return
+    unfixated = pd.Series(False, index=df.index)
+    count = (
+        pd.to_numeric(df["n_fixations"], errors="coerce")
+        if "n_fixations" in df.columns
+        else pd.Series(np.nan, index=df.index)
+    )
+    unfixated |= count.eq(0)
+    if "total_fixation_duration_ms" in df.columns:
+        total = pd.to_numeric(df["total_fixation_duration_ms"], errors="coerce")
+        unfixated |= count.isna() & total.eq(0)
+    if not unfixated.any():
+        return
+    for column in present:
+        df[column] = pd.to_numeric(df[column], errors="coerce").mask(unfixated)
+
+
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
     schema = _propose_word_schema_by_field(words)
@@ -5332,6 +5369,7 @@ def normalize_words(
     # AN-32: after the passthrough and the extras, so the mapping has the last
     # word on every measure it names.
     _apply_reading_measures(df, words, schema)
+    _blank_unfixated_measures(df)
 
     df = _preserve_composite_columns(df, words, schema["trial"])
     return df

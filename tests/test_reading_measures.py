@@ -221,3 +221,48 @@ class TestFromTheReview:
         assert "repeated_reading_trial" in {
             d["source"] for d in cats["detected_optional"]
         }
+
+
+class TestSkippedWordsAreLeftOut:
+    """#374 F1 — BUG-63's rule on the imported path: an IA report's 0 ms FFD /
+    FPRT / RPD / single-fixation duration on a word nobody fixated is blank,
+    not a 0 ms fixation; its total fixation duration stays 0."""
+
+    def _report(self, **extra) -> pd.DataFrame:
+        frame = _ia()
+        frame["IA_FIRST_FIXATION_DURATION"] = [200, 0]
+        frame["IA_FIRST_RUN_DWELL_TIME"] = [250, 0]
+        frame["IA_REGRESSION_PATH_DURATION"] = [300, 0]
+        frame["IA_SINGLE_FIXATION_DURATION"] = [0, 0]
+        for column, values in extra.items():
+            frame[column] = values
+        return frame
+
+    def test_a_zero_fixation_count_blanks_the_durations(self):
+        raw = self._report(IA_FIXATION_COUNT=[2, 0])
+        out = normalize_words(raw, propose_word_schema(raw))
+        for column in data.UNFIXATED_BLANK_MEASURES:
+            assert pd.isna(out[column].iloc[1]), column
+        assert out["first_fixation_ms"].iloc[0] == 200
+        # Two fixations, so no single-fixation duration: the imported 0 stays.
+        assert out["single_fixation_duration_ms"].iloc[0] == 0
+        assert out["total_fixation_duration_ms"].tolist() == [250, 0]
+
+    def test_without_a_count_a_zero_total_says_never_fixated(self):
+        raw = self._report()
+        out = normalize_words(raw, propose_word_schema(raw))
+        assert "n_fixations" not in out.columns
+        assert out["first_fixation_ms"].iloc[0] == 200
+        assert pd.isna(out["first_fixation_ms"].iloc[1])
+        assert pd.isna(out["regression_path_duration_ms"].iloc[1])
+        assert out["total_fixation_duration_ms"].tolist() == [250, 0]
+
+    def test_the_demo_mean_ffd_covers_fixated_words_only(self):
+        from scanpath_studio import api
+
+        words = api.load_sample_data(names="canonical").words
+        ffd = words["first_fixation_ms"]
+        assert not ffd.eq(0).any()
+        assert ffd.mean() == pytest.approx(207.6, abs=0.5)
+        # TFD keeps the skipped words at 0 ms.
+        assert words["total_fixation_duration_ms"].eq(0).sum() == 834

@@ -521,7 +521,7 @@ Duration of the first fixation on a word.
 | **Output** | First_fixation_ms |
 | **Unit** | ms |
 | **Grouping / ordering** | (participant, trial, word) |
-| **Missing & edge cases** | Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no fixations is blanked too. |
+| **Missing & edge cases** | Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0. |
 | **Precedence & caveats** | A precomputed `IA_FIRST_FIXATION_DURATION` wins. |
 | **Reference** | Rayner (1998), standard reading-measure definitions. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -544,7 +544,7 @@ Sum of first-pass fixations on a word.
 | **Output** | First_pass_gaze_duration_ms |
 | **Unit** | ms |
 | **Grouping / ordering** | (participant, trial, word) |
-| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked). |
+| **Missing & edge cases** | Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0. |
 | **Precedence & caveats** | A precomputed IA gaze duration wins. |
 | **Reference** | Rayner (1998). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
@@ -567,7 +567,7 @@ First entry to the word until the gaze passes it to the right.
 | **Output** | Regression_path_duration_ms |
 | **Unit** | ms |
 | **Grouping / ordering** | (participant, trial, word) |
-| **Missing & edge cases** | Never fixated ⇒ NaN (an imported 0 is blanked). |
+| **Missing & edge cases** | Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0. |
 | **Reference** | Definitions differ across toolkits (go-past vs regression path); `eyekit` is the intended comparison. Unresolved until that cross-validation runs. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API |
@@ -730,7 +730,7 @@ First-pass duration when the first pass was exactly one fixation.
 | --- | --- |
 | **Output** | Single_fixation_duration_ms |
 | **Unit** | ms |
-| **Missing & edge cases** | A first run of more than one fixation, or never fixated ⇒ NaN. |
+| **Missing & edge cases** | A first run of more than one fixation ⇒ NaN. Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0. |
 | **Reference** | Rayner (1998). |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API |

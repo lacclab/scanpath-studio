@@ -548,3 +548,36 @@ class TestDeepLinkAndCli:
 
     def test_default_palette_is_registered(self):
         assert DEFAULT_PALETTE in PALETTES
+
+
+class TestADesignPresetSurvivesAClosedPopover:
+    """#374 F9 for the design presets: Illustration writes popover widgets
+    (Saccades ▾ Shape, Fixations ▾ Snap, opacity); a stale echo of the old
+    value must not undo them, and the dataset-seeded keys are not held."""
+
+    @pytest.fixture
+    def state(self, monkeypatch):
+        from scanpath_studio import controls
+
+        store: dict = {}
+        monkeypatch.setattr(controls.st, "session_state", store)
+        monkeypatch.setattr(controls.st, "query_params", {})
+        return store
+
+    def test_a_stale_echo_does_not_undo_the_preset(self, state):
+        from scanpath_studio.controls import (
+            _PENDING_WRITES_KEY,
+            _apply_view_preset,
+            reassert_pending_writes,
+        )
+
+        state["global_saccade_render_mode"] = "Straight"
+        state["global_canvas_width"] = 1234
+        _apply_view_preset("illustration")
+        assert state["global_saccade_render_mode"] == "Arc"
+        assert "global_canvas_width" not in state.get(_PENDING_WRITES_KEY, {})
+        reassert_pending_writes()  # the callback run
+        for _ in range(3):  # the opened popover keeps echoing "Straight"
+            state["global_saccade_render_mode"] = "Straight"
+            reassert_pending_writes()
+            assert state["global_saccade_render_mode"] == "Arc"

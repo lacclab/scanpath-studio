@@ -1483,6 +1483,50 @@ def _apply_view_preset(name: str) -> None:
         raise ValueError(f"Unknown design preset: {name}")
 
     ss = st.session_state
+    before = {
+        key: deepcopy(ss[key])
+        for key in list(ss)
+        if _is_design_key(key) or _is_restorable_global(key)
+    }
+    try:
+        _apply_view_preset_state(ss, name, saved)
+    finally:
+        _hold_view_writes(ss, before)
+
+
+def _hold_view_writes(ss, before: dict) -> None:
+    """#374 F9 for the design presets: hold every value a preset changed.
+
+    A popover widget the user has opened keeps echoing the value it last
+    showed, so a preset's write to it (Saccades ▾ → Arc, Fixations ▾ → Snap,
+    the defaults a preset resets to) would hold for one run and snap back. So
+    each changed value goes through `write_through`. The dataset-seeded keys
+    are left alone: the rerun seeds them from the data, and holding the
+    static default would overwrite that.
+    """
+    for key, old in before.items():
+        if key in _SEEDED_VIEW_KEYS or key not in ss:
+            continue
+        if _write_match_key(ss[key]) != _write_match_key(old):
+            write_through(key, ss[key])
+
+
+#: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
+#: preset clears their guards — see `_hold_view_writes`.
+_SEEDED_VIEW_KEYS = frozenset(
+    {
+        "global_canvas_width",
+        "global_canvas_height",
+        "global_base_font_size",
+        "global_font_family",
+        "global_scale_text_to_boxes",
+        "global_show_raw_gaze",
+    }
+)
+
+
+def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
+    """The body of `_apply_view_preset`: write the chosen design's state."""
     ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:

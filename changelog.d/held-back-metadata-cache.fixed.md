@@ -1,1 +1,0 @@
-Metadata tables saved on this computer that can't be read back are kept as they are, said under **Saved on this computer** with **Retry** and **Remove from cache**, instead of being deleted by the next save.

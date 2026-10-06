@@ -1,1 +1,0 @@
-`scanpath-studio cache` no longer prints Streamlit's "No runtime found" warnings, the CLI docs list the `check` command, and the MultiplEYE and benchmark-corpus loaders are no longer advertised in the package's public names.

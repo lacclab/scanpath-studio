@@ -1,1 +1,0 @@
-`render` accepts v0.33.0's `--colorbars` and shared `--colorbar-orientation` / `--colorbar-tickangle` / `--colorbar-tickfont-size` again, the last three setting both colour bars unless a bar's own flag is given.

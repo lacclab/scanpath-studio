@@ -8,6 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.34.0] - 2026-10-06
+
+### Added
+- The Illustration label's text can be edited (rail, link, settings file, `render --illustration-text`, `illustration_text=`), and title and caption have their own switches. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Word boxes: the outline has its own opacity (rail, share link, `--word-box-line-opacity`, `word_box_line_opacity=`), and each opacity now sits beside its colour. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Data checks also report infinite fixation durations and onsets, word boxes at infinity, and per-screen screen sizes that are infinite or 0 or less. ([#351](https://github.com/lacclab/scanpath-studio/issues/351))
+
+### Changed
+- Data Management's Status column says *Loaded* (opens at once) or *Available* (opening reads its files) instead of *Ready*. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Figure & canvas: *Whole monitor* is now an unticked *Crop to data* box, the monitor size and the px/degree line left the rail (set on the Data page), and the axes row warns that fields other than x / y draw fixation markers only. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Both colour scales (fixations and heatmap) open in Blues, and colour bars are shown by default. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Heatmap: *Duration mass* is removed (links and settings files naming it open *Interpolated*); Interpolated gets a **Blur** row — Auto (showing the σ it uses) or a fixed σ in px (`heatmap_sigma_px`, `render --heatmap-sigma`); the colour range starts at 0 and is offered for Fixation count too. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- The fixations and the heatmap each have their own colour bar settings (show, orientation, tick angle and size), under their layer in the rail; `render` takes `--no-fixation-colorbar` / `--fixation-colorbar-*` and the heatmap equivalents, and links or settings files using the old shared settings apply them to both. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Shorter help texts throughout the plot controls. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- The command-line help, API reference, error messages and computation register no longer show internal tracker IDs. ([#354](https://github.com/lacclab/scanpath-studio/issues/354))
+
+### Removed
+- The px-per-degree figure is no longer shown in the Recording setup forms, and the export's saccade table no longer converts amplitudes to degrees. ([#349](https://github.com/lacclab/scanpath-studio/issues/349))
+- Measures the app computes itself are held back until validated: the reading-measure, summary, preprocessing and analysis-table API functions, the `analyze` command, the export bundle's measure family, and the computed Corpus Analysis views (Reading summary, Progressive vs regressive, Landing-position curve, Reader summary table) now need `SCANPATH_EXPERIMENTAL=1`. ([#354](https://github.com/lacclab/scanpath-studio/issues/354))
+
+### Fixed
+- `render` accepts v0.33.0's `--colorbars` and shared `--colorbar-orientation` / `--colorbar-tickangle` / `--colorbar-tickfont-size` again, the last three setting both colour bars unless a bar's own flag is given. ([#351](https://github.com/lacclab/scanpath-studio/issues/351))
+- A figure's title, caption, Illustration label, word-heatmap title and the names of compared scanpaths are drawn as written: angle brackets, `&` and `%{…}` no longer act as Plotly markup, and only a real newline starts a new caption line. ([#351](https://github.com/lacclab/scanpath-studio/issues/351))
+- An infinite position, duration, onset or word-box size no longer stretches a figure's axes or crashes it or its replay; the figure leaves such a row out (or times it by duration), and a per-screen screen size that is not finite and positive falls back to the dataset's own. ([#351](https://github.com/lacclab/scanpath-studio/issues/351))
+- The plot rail shows "Word boxes" in full at a 1280-pixel window. ([#351](https://github.com/lacclab/scanpath-studio/issues/351))
+- `scanpath-studio cache` no longer prints Streamlit's "No runtime found" warnings, the CLI docs list the `check` command, and the MultiplEYE and benchmark-corpus loaders are no longer advertised in the package's public names. ([#354](https://github.com/lacclab/scanpath-studio/issues/354))
+- Corpus Analysis › Per reader › Fixation duration over time opens on a per-fixation measure instead of an empty notice. ([#354](https://github.com/lacclab/scanpath-studio/issues/354))
+- An Export bundle's README mentions `annotations.json` only when the bundle holds it, that is, when an exported trial has an annotation. ([#355](https://github.com/lacclab/scanpath-studio/issues/355))
+- A Share link to a comparison whose second reader or trial id contains a colon now restores that comparison. ([#355](https://github.com/lacclab/scanpath-studio/issues/355))
+- The export's file path pattern must stay inside the ZIP: an empty pattern, a leading `/` or drive, a backslash, and an empty, `.` or `..` folder or file name are refused before anything is rendered, in the app and by `bulk_export`. ([#355](https://github.com/lacclab/scanpath-studio/issues/355))
+- Metadata tables saved on this computer that can't be read back are kept as they are, said under **Saved on this computer** with **Retry** and **Remove from cache**, instead of being deleted by the next save. ([#355](https://github.com/lacclab/scanpath-studio/issues/355))
+- An infinite value in a participant, trial or text metadata table counts as no value, so its filter opens instead of failing, and **Keep unknown values** decides whether those records stay. ([#355](https://github.com/lacclab/scanpath-studio/issues/355))
+- Ids that only differ as "1" and "1.0" in one column stay two readers or trials, and a participant or trial id that is only spaces or tabs is reported and left out like a missing one, in raw gaze too. ([#355](https://github.com/lacclab/scanpath-studio/issues/355))
+- Compare's A/B trial table fits its column — a long trial id wraps instead of pushing the last columns out of view, and a table still too wide shows its scrollbar — and a value both scanpaths share is written in both rows instead of one merged cell that read as B's left blank. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- The dataset table offers Remove only for datasets you added: on the demo and the public corpora it only hid the row for the session, with no way back. The table also sits a little lower under the Data Management title. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- The rail's design-preset highlight goes back to the preset when Compare is switched on and then off again, instead of staying on Custom. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- Export's HTML option is labelled Self-contained HTML, and its help says it makes the file open without an internet connection. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- Corpus Analysis › Per text › Per-reader profiles leaves room for each reader's title, which no longer sits on the panel above. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- With saving switched off at launch, Saved on this computer says so in plain words, and names the setting only in a small line under it. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- The welcome tour's last step rings the whole nav once instead of drawing a bracket round each link, and the ring goes when the tour ends. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+- The add-dataset screen's setup guide counts its three parts (Part 2 of 3) instead of its cards, leaves room beside the form on a wide screen instead of covering the upload rows, and its help pill is a compact Setup help next to Cancel. ([#356](https://github.com/lacclab/scanpath-studio/issues/356))
+
 ## [0.33.0] - 2026-10-04
 
 ### Added

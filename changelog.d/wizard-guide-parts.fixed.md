@@ -1,1 +1,0 @@
-The add-dataset screen's setup guide counts its three parts (Part 2 of 3) instead of its cards, leaves room beside the form on a wide screen instead of covering the upload rows, and its help pill is a compact Setup help next to Cancel.

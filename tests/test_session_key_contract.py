@@ -772,3 +772,12 @@ def test_an_unshareable_compare_source_is_declared_not_dropped():
     assert sk.COMPARE_PARAM not in emitted
     assert sk.COMPARE_SOURCE_PARAM not in emitted
     assert any("My upload" in caveat for caveat in at.session_state["_caveats"])
+
+
+def test_url_bound_widget_keys_frozen():
+    # Streamlit's bind="query-params" makes the key the URL param and the tab
+    # label its value: renaming either breaks a bookmarked Corpus Analysis view.
+    from scanpath_studio import tabs
+
+    assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
+    assert tabs.CORPUS_SUBTABS == ("Per text", "Per sentence", "Per reader", "Groups")

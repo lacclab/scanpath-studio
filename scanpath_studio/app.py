@@ -5469,6 +5469,9 @@ def render_description_field(host, token: str) -> None:
         help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
         f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
         height=80,
+        # Streamlit 1.65: read only by Save changes / Cancel, so typing needs
+        # no rerun.
+        on_change="ignore",
         # A draft outlives a visit to another view while the editor is open.
         persist_state="session",
     )
@@ -5619,7 +5622,10 @@ def render_name_field(host, token: str) -> None:
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
-        on_change=_stage_upload_name if uploaded else None,
+        required=True,
+        # An upload stages its name on change; a built-in's is read only by
+        # Save changes / Cancel, so it needs no rerun (Streamlit 1.65).
+        on_change=_stage_upload_name if uploaded else "ignore",
         help="Shown in the list of datasets and the dataset picker. Saved with "
         f"**{ICONS['confirm']} Save changes**.",
         # A draft outlives a visit to another view while the editor is open.
@@ -8095,6 +8101,9 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         if source == MANUAL_SAMPLE_CHOICE
         else "My scanpath",
         key=name_key,
+        required=True,
+        # Streamlit 1.65: read only by the Save dataset callback.
+        on_change="ignore",
     )
     can_save = events_valid and not words.empty and not fixations.empty and not dropped
     if can_save:

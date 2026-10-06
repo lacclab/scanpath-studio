@@ -202,7 +202,8 @@ def test_compare_labels_are_drawn_as_written(layout):
     assert not any(label in template for label in LABELS for template in templates)
     assert any(LABELS_LITERAL[1] in template for template in templates)
     if layout != "overlay":
-        titles = {a.text for a in fig.layout.annotations}
+        # #374 F26: each panel title leads with its side, "A · …" / "B · …".
+        titles = {a.text.split(" · ", 1)[-1] for a in fig.layout.annotations}
         assert set(LABELS_LITERAL) <= titles
 
 

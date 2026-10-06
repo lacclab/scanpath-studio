@@ -91,6 +91,7 @@ from .fields import (
     labeled,
     plain,
     row_label,
+    tooltip,
 )
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
@@ -1389,6 +1390,9 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_order": False,
         "global_show_words": False,
         "global_show_raw_gaze": False,
+        # #374 F16: the word colours are the whole figure; a highlighted span
+        # would read as part of the map.
+        "global_critical_span_style": "None",
     },
     "illustration": {
         "global_show_fix": True,
@@ -1918,6 +1922,15 @@ _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
+#: #374 F25 — Compare and Animate are ways of *viewing* a design, not part of
+#: it: switching one on leaves the design's highlight where it is. (A design
+#: still records whether Compare was on, so applying it restores that.)
+_VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
+#: The dataset the applied design's baseline was taken on; see
+#: `_sync_quick_view_state`.
+_QUICK_VIEW_DATASET = "_quick_view_dataset"
+
+
 def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 
@@ -1933,7 +1946,7 @@ def _design_drifted(applied: dict, current: dict) -> bool:
     with no default (an explicit colour range, VIZ-46) appearing *has*.
     """
     for key in applied.keys() | current.keys():
-        if _is_drift_mirror(key):
+        if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
             continue
         default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
         if applied.get(key, default) != current.get(key, default):
@@ -1954,9 +1967,9 @@ def _drift_to_custom(selected: str, applied: dict) -> str:
 def _returned_to_design() -> str | None:
     """The design a drift left, once the settings are back on its baseline.
 
-    Switching Compare (a design setting) on reads Custom; switching it off
-    again restores every setting the design had, so the highlight goes back to
-    it rather than staying Custom. Only the design that was left is checked —
+    Changing a setting reads Custom; changing it back restores every setting
+    the design had, so the highlight goes back to it rather than staying
+    Custom. Only the design that was left is checked —
     an explicit pick (`_apply_view_preset`, a save, Reset) forgets it.
     """
     ss = st.session_state
@@ -1979,6 +1992,31 @@ def _returned_to_design() -> str | None:
     return name
 
 
+def _link_departs_from(name: str) -> bool:
+    """Whether the open deep link sets a design value design ``name`` would not.
+
+    #374 F25: on a link's first run the highlight is inferred from the settings
+    the link restored. Matching a design's own few keys is not enough — a link
+    from a view with a hand-changed colour matched Scanpath — so every design
+    value the link carries is held against what the design would set (its own
+    value, else the widget default). Values with no default (the canvas size,
+    seeded per dataset) say nothing either way.
+    """
+    from .url_state import linked_state_keys
+
+    ss = st.session_state
+    preset = _VIEW_PRESETS[name]
+    for key in linked_state_keys():
+        if not _is_design_key(key) or key in _VIEW_MODE_KEYS or key not in ss:
+            continue
+        expected = preset.get(key, _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT))
+        if expected is _ABSENT:
+            continue
+        if _write_match_key(ss.get(key)) != _write_match_key(expected):
+            return True
+    return False
+
+
 def _sync_quick_view_state() -> str:
     """Keep the design-preset highlight in step with manual plot-control edits.
 
@@ -1988,6 +2026,16 @@ def _sync_quick_view_state() -> str:
     """
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    # #374 F25: another dataset re-seeds its own canvas size, highlight column
+    # and hover fields. That is the design meeting new data, not a departure
+    # from it, so a design that was in force stays highlighted: its baseline is
+    # retaken on the new dataset (the seeds have run by now).
+    dataset = (ss.get("data_source_choice"), ss.get("public_dataset_choice"))
+    if ss.get(_QUICK_VIEW_DATASET, dataset) != dataset and isinstance(
+        ss.get(_QUICK_VIEW_APPLIED_STATE), dict
+    ):
+        ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+    ss[_QUICK_VIEW_DATASET] = dataset
     # VIZ-39: a `design:<name>` selection is valid while that design still
     # exists, and from here on is treated exactly like a built-in — including
     # the drift check below, so editing any control drops the highlight.
@@ -2007,6 +2055,7 @@ def _sync_quick_view_state() -> str:
                 if all(
                     ss.get(key) == value for key, value in _VIEW_PRESETS[name].items()
                 )
+                and not _link_departs_from(name)
             ),
             _CUSTOM_VIEW,
         )
@@ -2085,7 +2134,80 @@ def apply_palette(name: str) -> None:
     if name == CUSTOM_PALETTE:
         return
     for key, value in palette_state(name).items():
-        st.session_state[key] = value
+        write_through(key, value)
+
+
+#: #374 F9 — programmatic widget writes the browser may not have taken yet:
+#: ``{key: [value, stale_echo]}``. See `write_through`.
+_PENDING_WRITES_KEY = "_pending_widget_writes"
+_WRITE_FRESH = "\x00fresh"  # written this run: the browser has not answered yet
+_WRITE_UNSEEN = "\x00unseen"  # one run on: the next echo is the browser's
+
+
+def _write_match_key(value):
+    """Normalize a widget value for comparison: pickers hand back lowercase hex,
+    sliders tuples where the stored value is a list."""
+    if isinstance(value, tuple):
+        return [_write_match_key(v) for v in value]
+    if isinstance(value, list):
+        return [_write_match_key(v) for v in value]
+    return _palette_match_key(value)
+
+
+def write_through(key: str, value) -> None:
+    """Write ``value`` to a widget's key so that a closed popover cannot undo it.
+
+    #374 F9. A widget inside an ``st.popover`` is mounted in the browser only
+    while the popover is open. Once it has been open, the browser remembers the
+    value it showed and sends that value back on every rerun; a programmatic
+    write made while the popover is closed reaches no mounted widget, so it
+    holds for one run and the next rerun puts the remembered value back (the
+    palette that "stopped sticking" after Fixations ▾ had been opened).
+
+    So the write is also recorded here, and `reassert_pending_writes` repeats
+    it at the top of each run while the browser keeps echoing the old value.
+    It lets go as soon as the browser sends anything else: the written value
+    (the widget remounted and took it) or a new pick of the user's own.
+    Call it from a callback, like any write to a widget key.
+    """
+    ss = st.session_state
+    ss[key] = value
+    pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
+    pending[key] = [deepcopy(value), _WRITE_FRESH]
+    ss[_PENDING_WRITES_KEY] = pending
+
+
+def reassert_pending_writes() -> None:
+    """Re-apply `write_through` writes the browser has not taken yet.
+
+    Runs at the top of every script run, before any widget is built. The first
+    run after a write learns what the browser echoes for the key; while it
+    keeps echoing that, the write is repeated; any other value ends it.
+    """
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY)
+    if not pending:
+        return
+    kept = {}
+    for key, (value, stale) in pending.items():
+        if stale == _WRITE_FRESH:
+            # The run the callback wrote in: the write itself is what reads
+            # back, so there is nothing to learn yet.
+            kept[key] = [value, _WRITE_UNSEEN]
+            continue
+        current = _write_match_key(ss.get(key))
+        if current == _write_match_key(value):
+            continue  # the browser has it
+        if stale == _WRITE_UNSEEN:
+            stale = current
+        elif current != stale:
+            continue  # the user picked something else
+        ss[key] = deepcopy(value)
+        kept[key] = [value, stale]
+    if kept:
+        ss[_PENDING_WRITES_KEY] = kept
+    else:
+        ss.pop(_PENDING_WRITES_KEY, None)
 
 
 def _palette_match_key(value):
@@ -3141,9 +3263,7 @@ def column_mapping_ui(
                 box_grid["cells"] = list(cells[1:])
                 box_grid["used"] = 0
             if spec.get("help"):
-                tip = html.escape(
-                    f"{_plain(spec['label'])} — {_plain(spec['help'])}", quote=True
-                )
+                tip = tooltip(spec["label"], spec["help"])
                 head.markdown(
                     f'<div class="sps-box-title"><span class="sps-fhelp" '
                     f'data-tip="{tip}" aria-label="{tip}">{title}</span></div>',
@@ -3323,11 +3443,11 @@ def _render_field_flag(
     if hover:
         spans.append(
             f'<span class="sps-map-flag sps-fhelp" '
-            f'data-tip="{html.escape(hover, quote=True)}">'
+            f'data-tip="{tooltip(hover)}">'
             f"{icon_html('auto_detected')}</span>"
         )
     if preview:
-        tip = html.escape(preview, quote=True)
+        tip = tooltip(preview)
         spans.append(
             f'<span class="sps-map-flag sps-map-preview sps-fhelp" tabindex="0" '
             f'data-tip="{tip}" aria-label="{tip}">{icon_html("preview")}</span>'
@@ -4025,7 +4145,7 @@ def _sub_caption(host, text: str, help: str | None = None) -> None:
             unsafe_allow_html=True,
         )
         return
-    tip = html.escape(f"{text} — {_plain(help)}", quote=True)
+    tip = tooltip(text, help)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help sps-fsub">{html.escape(text)}'
@@ -5868,7 +5988,8 @@ def render_plot_controls(
         key="viz_view_heatmap",
         type="primary" if _active == "heatmap" else "secondary",
         width="stretch",
-        help="Fixation-density heatmap over the text, nothing else.",
+        help="Each word box colored by the total time spent on it (ms), with "
+        "nothing else drawn.",
         on_click=_apply_view_preset,
         args=("heatmap",),
     )

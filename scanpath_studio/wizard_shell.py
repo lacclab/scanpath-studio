@@ -45,6 +45,7 @@ from enum import Enum
 import streamlit as st
 
 from .constants import ICONS, icon_html
+from .fields import tooltip
 
 #: Prefix for the accordion's per-step open flags. Deliberately *not* the
 #: ``col_map_`` prefix — ``tabs._collect_column_mapping`` sweeps that whole
@@ -254,10 +255,7 @@ def part(
     mark = f"{icon_html(_badge_concept(status))} " if status else ""
     title = html.escape(step.title)
     if note:
-        title = (
-            f'<span class="sps-fhelp" data-tip="{html.escape(note, quote=True)}">'
-            f"{title}</span>"
-        )
+        title = f'<span class="sps-fhelp" data-tip="{tooltip(note)}">{title}</span>'
     title_html = (
         f'<div class="sps-wiz-part"><span class="sps-wiz-part-n">{step.number}</span>'
         f"{mark}{title}</div>"

@@ -6428,6 +6428,13 @@ def render_single_trial_tab(
                     # Creating the slot here keeps the resulting frame count beside
                     # the smoothness control that determines it.
                     anim_info_slot = st.container()
+            if animate:
+                # #374 F23: why the layer rows below are greyed, said where it
+                # is read without hovering each one.
+                st.caption(
+                    "Replay draws its own fixations; Heatmap and Raw gaze are off "
+                    "while it runs."
+                )
             # Compare is a view mode (toggle here); the second-trial selector renders
             # above the chips in the plot column (compare_slot below), mirroring the
             # main trial picker (CMP-1).

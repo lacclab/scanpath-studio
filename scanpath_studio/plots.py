@@ -22,6 +22,7 @@ import plotly.graph_objects as go
 
 from . import progress
 from .constants import (
+    APP_THEME,
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
     COMPARE_FIXATION_OPACITY,
@@ -4517,6 +4518,10 @@ def set_replay_clock(
     fig.layout.meta = {**meta, **_replay_clock_meta(times, playback_speed, autoplay)}
 
 
+#: The replay's transport controls are app chrome, drawn in the app's font.
+_REPLAY_UI_FONT = APP_THEME["font"]
+
+
 def _animation_play_buttons(frame_duration):
     """Play / Pause / Restart buttons.
 
@@ -4546,6 +4551,9 @@ def _animation_play_buttons(frame_duration):
             xanchor="left",
             yanchor="bottom",
             pad=dict(b=12, l=8),
+            # #374 F23: the app's font, not the figure's (often a monospace
+            # stimulus font), so the buttons read as the app's own.
+            font=dict(family=_REPLAY_UI_FONT),
             buttons=[
                 dict(
                     label="▶ Play",
@@ -4615,7 +4623,9 @@ def _animation_time_slider(frame_times, total_ms):
             # track, so draw them fully transparent.
             font=dict(color="rgba(0,0,0,0)"),
             currentvalue=dict(
-                font=dict(size=14, color="#444"),
+                font=dict(size=14, color="#444", family=_REPLAY_UI_FONT),
+                # #374 F23/F8: the trial's own clock, first fixation onward.
+                prefix="Trial time ",
                 visible=True,
                 xanchor="right",
             ),

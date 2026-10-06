@@ -794,8 +794,8 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['plot_controls']} Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
         "boxes, text. **Design presets** jump between Scanpath, Heatmap, "
-        f"Illustration and your last tuning — and {ICONS['save']} keeps the ones you "
-        "set up yourself under a name.",
+        "Illustration and Custom (your own tweaks) — and "
+        f"{ICONS['save']} keeps the ones you set up under a name.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",

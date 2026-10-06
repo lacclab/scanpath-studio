@@ -1253,6 +1253,23 @@ def link_sets(state_key: str) -> bool:
     )
 
 
+def linked_state_keys() -> frozenset[str]:
+    """The session keys the open deep link carries a value for (#374 F25).
+
+    What the rail's design highlight is recomputed from on a link's first run:
+    a link built from a customized view opens on Custom, not on the design
+    whose own few settings it happens to match."""
+    try:
+        params = st.query_params
+    except Exception:
+        return frozenset()
+    return frozenset(
+        target
+        for url_key, (target, _coerce) in _URL_PRESETS.items()
+        if url_key in params
+    )
+
+
 def scope_link_setup(choice: str | None) -> None:
     """Tie the keys a link seeded (EXP-19) to the data source it resolved to.
 

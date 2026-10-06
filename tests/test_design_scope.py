@@ -159,8 +159,9 @@ class TestComingBackToTheDesign:
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
         return _run(at)
 
-    def test_compare_on_then_off_restores_a_saved_design(self, at):
-        """The built-ins are covered in test_viz_state_transitions: this harness
+    def test_compare_on_then_off_keeps_a_saved_design(self, at):
+        """#374 F25: Compare is a mode, so a saved design stays highlighted.
+        The built-ins are covered in test_viz_state_transitions: this harness
         renders the rail without the app's palette sync, which a built-in needs."""
         _do(at, "save:mine")
         _do(at, "apply:mine")
@@ -168,7 +169,7 @@ class TestComingBackToTheDesign:
         assert at.session_state["_quick_view_selection"] == "design:mine"
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = True
         _run(at)
-        assert at.session_state["_quick_view_selection"] == "custom"
+        assert at.session_state["_quick_view_selection"] == "design:mine"
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
         _run(at)
         assert at.session_state["_quick_view_selection"] == "design:mine"

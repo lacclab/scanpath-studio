@@ -397,6 +397,64 @@ class TestTheSelectorStopsClaimingAPalette:
         assert ("palette" in skipped) is expect_skipped
 
 
+class TestAPaletteSurvivesAClosedPopover:
+    """#374 F9. A colour picker inside a rail popover that has been opened once
+    keeps echoing the colour it last showed, on every rerun, even after a
+    palette wrote a new one while the popover was closed. The palette held for
+    one run and then snapped back, and the box read Custom."""
+
+    @pytest.fixture
+    def state(self, monkeypatch):
+        from scanpath_studio import controls
+
+        store: dict = {}
+        monkeypatch.setattr(controls.st, "session_state", store)
+        return store
+
+    @staticmethod
+    def _run(state, echo=None):
+        """One rerun: the browser's widget values land, then the script starts."""
+        from scanpath_studio.controls import reassert_pending_writes
+
+        state.update(echo or {})
+        reassert_pending_writes()
+
+    def test_a_stale_echo_does_not_undo_the_palette(self, state):
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("Print / greyscale")
+        grey = state["global_fixation_color"]
+        self._run(state)
+        self._run(state)
+        apply_palette("High contrast")  # the callback run
+        self._run(state)
+        for _ in range(4):  # the browser keeps sending greyscale's colour
+            self._run(state, {"global_fixation_color": grey.lower()})
+            assert _active_palette() == "High contrast"
+
+    def test_a_hand_picked_colour_still_wins(self, state):
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("Print / greyscale")
+        grey = state["global_fixation_color"]
+        apply_palette("High contrast")
+        self._run(state)
+        self._run(state, {"global_fixation_color": grey})  # stale echo
+        self._run(state, {"global_fixation_color": "#ff0000"})  # the user's pick
+        assert state["global_fixation_color"] == "#ff0000"
+        assert _active_palette() is None
+        self._run(state, {"global_fixation_color": "#ff0000"})
+        assert state["global_fixation_color"] == "#ff0000"
+
+    def test_the_write_lets_go_once_the_browser_has_it(self, state):
+        from scanpath_studio.controls import _PENDING_WRITES_KEY, apply_palette
+
+        apply_palette("High contrast")
+        self._run(state)
+        self._run(state)  # nothing stale: the value read back is the write
+        assert _PENDING_WRITES_KEY not in state
+
+
 class TestSaccadeDirectionMode:
     """VIZ-19: forward vs. regression, between Uniform and the five-way split."""
 

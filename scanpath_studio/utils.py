@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
+from .annotations import current_dataset as annotations_dataset
 from .annotations import get_entry, store_for_prefix
 from .column_names import COMPUTED_SUFFIX, active_all
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
@@ -1116,6 +1117,11 @@ def step_linked_compare(delta: int) -> None:
     }
 
 
+#: #374 F34 — ``{"<key prefix>|<dataset>": trial id}``: the trial each
+#: dataset's picker was last on.
+_TRIAL_BY_DATASET_KEY = "_trial_by_dataset"
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
@@ -1196,6 +1202,26 @@ def _select_trial_none_mode(
     # Save-&-restore code seeds it (`_restore_selection`). The slider mirrors it
     # and ◀ ▶ step it; all stay in sync via the trial id.
     current_label = st.session_state.get(trial_id_key) if trial_id_key else None
+    # #374 F34: the trial each dataset was last on, so switching away and back
+    # returns to it rather than to the first trial.
+    dataset = annotations_dataset(st.session_state)
+    remembered = st.session_state.setdefault(_TRIAL_BY_DATASET_KEY, {})
+    last_dataset_key = f"{_TRIAL_BY_DATASET_KEY}_{key_prefix}"
+    previous = st.session_state.get(last_dataset_key, dataset)
+    st.session_state[last_dataset_key] = dataset
+    # A trial carried over from the dataset left behind is not a choice; one a
+    # link or a restored settings file put there with the switch is.
+    carried = previous != dataset and current_label == remembered.get(
+        f"{key_prefix}|{previous}"
+    )
+    back_to = remembered.get(f"{key_prefix}|{dataset}")
+    if (
+        trial_id_key
+        and back_to in trial_options
+        and (carried or current_label not in trial_options)
+    ):
+        current_label = back_to
+        st.session_state[trial_id_key] = current_label
     # Seeded rather than chosen: re-seeded to the *sorted* list's first trial
     # once the ⇅ order is known (UX-171 — data order's first, not the id's).
     seeded = current_label not in trial_options
@@ -1315,6 +1341,14 @@ def _select_trial_none_mode(
     # picker's linked ◀ ▶ can step this picker without rebuilding its ordering.
     if trial_id_key:
         st.session_state[trial_options_snapshot_key(key_prefix)] = list(trial_options)
+        # #374 F10: the browser identifies the picked option by its *label*, and
+        # a label carries the trial's ★ 🏷️ 📝 marks. Written only when it moved,
+        # the browser kept the label from that run; a tag added later renamed the
+        # option, the old label matched nothing, and the view fell back to trial
+        # 1. Written every run (as the slider is), the browser always holds the
+        # label it was last shown, which the next run can still read back.
+        st.session_state[trial_id_key] = current_label
+        remembered[f"{key_prefix}|{dataset}"] = current_label
 
     option_labels.update({opt: _option_label(opt) for opt in trial_options})
 

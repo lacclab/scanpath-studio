@@ -64,6 +64,16 @@ def plain(text: str) -> str:
     return _WHITESPACE_RUN.sub(" ", _MD_MARKS.sub("", text)).strip()
 
 
+def tooltip(*parts: str | None) -> str:
+    """A CSS tooltip's text: ``parts`` joined with " — ", plain, no icon codes.
+
+    Escaped for an HTML attribute. Every ``data-tip`` goes through this (#374
+    F36): an icon shortcode left in one printed as text, ":material_warning:".
+    """
+    text = " — ".join(plain(part) for part in parts if part)
+    return html.escape(_ICON_CODE.sub("", text).strip(), quote=True)
+
+
 def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> None:
     """Render one row's title into its own (left) column.
 
@@ -91,8 +101,7 @@ def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> 
             unsafe_allow_html=True,
         )
         return
-    tip = _ICON_CODE.sub("", f"{text} — {plain(help)}")
-    tip = html.escape(tip, quote=True)
+    tip = tooltip(text, help)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help{emph}">{html.escape(text)}</span>'

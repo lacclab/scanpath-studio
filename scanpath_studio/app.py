@@ -88,6 +88,7 @@ from scanpath_studio.constants import (
     DATA_OVERVIEW_KEY,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
+    DATASET_ADDED_KEY,
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
@@ -196,6 +197,7 @@ from scanpath_studio.data import (
     raw_gaze_in_pool,
     read_table,
     read_table_columns,
+    read_table_sample,
     read_tables,
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
@@ -4181,6 +4183,23 @@ def _zip_split_cached(_uploaded, file_key, kind: str | None) -> str:
         return ""
 
 
+@st.cache_data(show_spinner=False, max_entries=32)
+def _upload_sample_cached(_uploaded, file_key, kind: str | None) -> pd.DataFrame:
+    """The first rows of one upload, every column parsed (#374 F13)."""
+    return read_table_sample(_uploaded, kind=kind)
+
+
+def upload_sample(state_prefix: str, kind: str | None) -> pd.DataFrame:
+    """A sample of the first file uploaded under ``state_prefix`` — what the
+    wizard judges a column the planned read left out by. Empty without one."""
+    uploaded = st.session_state.get(f"{state_prefix}_upload")
+    files = uploaded if isinstance(uploaded, (list, tuple)) else [uploaded]
+    first = next((f for f in files if f is not None), None)
+    if first is None or not hasattr(first, "read"):
+        return pd.DataFrame()
+    return _upload_sample_cached(first, _uploaded_file_key(first), kind)
+
+
 def upload_zip_notes(uploaded, kind: str | None) -> list[str]:
     """One note per zip in an upload that left members out for ``kind``."""
     if kind is None or not uploaded:
@@ -5570,8 +5589,9 @@ def render_dataset_inspection_head(token: str) -> None:
     :func:`render_dataset_edit_button`, below the description and checks and
     above the inspection subtabs.
     """
-    label = _dataset_display_name(token).replace("`", "'")
-    st.subheader(f"{ICONS['search']} What's in the `{label}` dataset")
+    # #374 F30: the name alone — "the `Dataset 1` dataset" said it twice.
+    label = _dataset_display_name(token).replace("*", r"\*")
+    st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
 
 
@@ -5672,6 +5692,25 @@ def _open_mapping_editor() -> None:
         st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
+
+
+def dataset_added_message(
+    name: str, words: pd.DataFrame, fixations: pd.DataFrame
+) -> str:
+    """The toast ✅ Add dataset ends with (#374 F30): "**Dataset 1** added —
+    24 trials, 2 participants." The counts are left out when there are none
+    (a raw-gaze-only dataset counts its trials elsewhere)."""
+    readers: set = set()
+    for frame in (words, fixations):
+        if frame is not None and "participant_id" in frame.columns:
+            readers |= set(frame["participant_id"].dropna().astype(str))
+    readers.discard("")  # a stimulus-level word table's placeholder
+    trials = count_trials(words, fixations)
+    shown = name.replace("*", r"\*")
+    head = f"**{shown}** added"
+    if not trials:
+        return f"{head}."
+    return f"{head} — {plural(trials, 'trial')}, {plural(len(readers), 'participant')}."
 
 
 @st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
@@ -6566,8 +6605,13 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     # Only a dataset you added can be removed. For the demo, a public corpus
     # or a local bundle, Remove only hid the row for the rest of the session —
     # nothing was deleted and nothing could bring it back — so they offer none.
-    # The empty cell keeps the columns lined up.
+    # The empty cell keeps the columns lined up — drawn with a space in it, as
+    # the header's is, because an empty container is not drawn at all and the
+    # row's numbers then sat right of an added dataset's (#374 F30).
     if row.token not in set(st.session_state.get("_data_source_uploaded") or []):
+        actions.markdown(
+            '<span aria-hidden="true">&nbsp;</span>', unsafe_allow_html=True
+        )
         return
     actions.button(
         f"Remove {row.name}",
@@ -9783,6 +9827,13 @@ def _run_app() -> None:
     # set `TRIAL_IDENTITY_CHECK_KEY`; the report they are asking about is the one
     # just computed above, on the frames those buttons produced.
     asked_by = st.session_state.pop(TRIAL_IDENTITY_CHECK_KEY, None)
+    added = st.session_state.pop(DATASET_ADDED_KEY, None)
+    if added:
+        # #374 F30: ✅ Add dataset ended with no word — say what arrived.
+        st.toast(
+            dataset_added_message(str(added), words_all, fixations_all),
+            icon=ICONS["success"],
+        )
     if asked_by and identity_warning:
         try:
             _trial_identity_alert_dialog(str(asked_by), identity_warning)

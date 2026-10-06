@@ -13165,6 +13165,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         "Trial ID column *",
         columns,
         key=trial_key,
+        select_all=False,  # an id is a few columns, never all (#374)
         persist_state="session",
         label_visibility="collapsed",
     )
@@ -13375,6 +13376,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         "Text ID column *",
         columns,
         key=text_key,
+        select_all=False,  # an id is a few columns, never all (#374)
         persist_state="session",
         label_visibility="collapsed",
     )

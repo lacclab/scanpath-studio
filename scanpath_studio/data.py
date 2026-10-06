@@ -1291,6 +1291,10 @@ TEXT_ID_CANDIDATES = [
     "presented_stimulus_name",  # Tobii Pro Lab — the stimulus *is* the text
     "media_name",  # Tobii Studio / Gazepoint
     "stimulus",  # SMI BeGaze
+    # #374 F13: an EyeLink export's own item column (`item`, `ITEM_ID`, …) —
+    # last, so a named text/paragraph column still wins.
+    "item",
+    "item_id",
 ]
 TEXT_CANDIDATES = [
     "text",
@@ -3344,6 +3348,72 @@ def zip_member_split(file_like_or_path, kind: str | None) -> ZipMemberSplit:
             return _zip_split(zf, infos, kind)
     finally:
         _rewind(file_like_or_path)
+
+
+#: Rows :func:`read_table_sample` parses, and the bytes it reads of a zip member.
+_SAMPLE_ROWS = 2000
+_SAMPLE_BYTES = 4 * 1024 * 1024
+
+
+def read_table_sample(
+    file_like_or_path, *, kind: str | None = None, nrows: int = _SAMPLE_ROWS
+) -> pd.DataFrame:
+    """The first rows of a delimited table, every column parsed (#374 F13).
+
+    What the wizard judges an unmapped column's values by, when its planned
+    read (PERF-6) left that column out. Delimited text only — a plain file or
+    a zip's first member of ``kind`` (:func:`zip_member_split`); anything else,
+    or a file that will not parse, gives an empty frame, which the caller reads
+    as "no evidence".
+    """
+    name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
+    delimited = (".tsv", ".tab", ".csv", ".txt")
+    _rewind(file_like_or_path)
+    try:
+        if name.endswith(delimited):
+            sep = _sniff_delimiter(file_like_or_path, name)
+            return _read_delimited(file_like_or_path, sep, None, nrows=nrows)
+        if not name.endswith(".zip"):
+            return pd.DataFrame()
+        with zipfile.ZipFile(file_like_or_path) as zf:
+            infos = [
+                i
+                for i in zf.infolist()
+                if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
+            ]
+            _check_zip_limits(infos)
+            used = _zip_split(zf, infos, kind).used_infos
+            info = next(
+                (i for i in used if i.filename.lower().endswith(delimited)), None
+            )
+            if info is None:
+                return pd.DataFrame()
+            sep = _member_layout(zf, info)[1]
+            with zf.open(info) as inner:
+                head = inner.read(_SAMPLE_BYTES)
+        # Cut at the last whole line: the read stops mid-row.
+        if len(head) == _SAMPLE_BYTES and b"\n" in head:
+            head = head[: head.rindex(b"\n") + 1]
+        return _read_delimited(io.BytesIO(head), sep, None, nrows=nrows)
+    except Exception:  # no evidence, not an error: the real read reports it
+        return pd.DataFrame()
+    finally:
+        _rewind(file_like_or_path)
+
+
+def looks_like_condition(values: pd.Series) -> bool:
+    """Whether a column reads as a condition or an item id — a few repeated
+    values, such as ``Adv`` / ``Ele`` or ``2_1`` … ``2_12`` (#374 F13).
+
+    Between 2 and 50 distinct values, each used at least twice on average; a
+    fractional number is a measurement, never a condition."""
+    filled = values.dropna()
+    if filled.empty:
+        return False
+    if pd.api.types.is_float_dtype(filled) and not (filled % 1 == 0).all():
+        return False
+    distinct = filled.nunique()
+    return 2 <= distinct <= 50 and distinct * 2 <= len(filled)
 
 
 def _read_zipped_table(

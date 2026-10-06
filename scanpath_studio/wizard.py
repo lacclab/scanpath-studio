@@ -26,6 +26,7 @@ from .column_names import ColumnNames, for_tables
 from .constants import (
     _VIEW_DATA,
     CITATION,
+    DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DEMO_CHOICE,
     FONT_FAMILY,
@@ -71,6 +72,7 @@ from .data import (
     extract_columns_from_source_file,
     frame_cache,
     frame_fingerprint,
+    looks_like_condition,
     normalization_issues,
     normalize_raw_gaze,
     pick_column,
@@ -371,6 +373,8 @@ def _finalize_wizard_dataset() -> None:
     # the mapping that produced it is still fresh — instead of a page-wide
     # banner it will learn to ignore. See `app._trial_identity_alert_dialog`.
     st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
+    # #374 F30: and confirm it, with its counts, once its frames are loaded.
+    st.session_state[DATASET_ADDED_KEY] = ds_name
     # UX-199: on a deployment that saves nothing, the first upload says so.
     app.arm_backup_reminder()
 
@@ -882,6 +886,8 @@ def _render_identity_field(
             key=key,
             help=help_text,
             label_visibility="collapsed",
+            # #374 F13: an id is one column or a few, never every column.
+            select_all=False,
             on_change=_mark_field_touched,
             args=(key,),
         )
@@ -1675,6 +1681,10 @@ def _row_body(host):
     return body
 
 
+#: The table each upload row's prefix reads.
+_PREFIX_KIND = {"col_map_words": "words", "col_map_fix": "fixations"}
+
+
 def _wizard_table_keep_picker(
     host, raw, schema, registry, prefix: str, *, noun: str
 ) -> tuple[set, list]:
@@ -1712,6 +1722,12 @@ def _wizard_table_keep_picker(
     if not detected and not unclaimed:
         return set(), []
     host = _row_body(host)
+    # #374 F13: a column already mapped (TRIAL_INDEX as the Trial ID) is never
+    # pre-kept, and an unmapped one that reads as a condition or an item id is.
+    mapped = set(cats["mapped"])
+    sample = app.upload_sample(prefix, _PREFIX_KIND.get(prefix))
+    if sample.empty:
+        sample = raw
 
     opts: list = []
     labels: dict = {}
@@ -1732,13 +1748,15 @@ def _wizard_table_keep_picker(
         # AN-32: not the leftover measures — the ones the app uses are mapped on
         # the *Reading measures* lines above, and pre-keeping the rest (last-run
         # dwell, trial dwell/count, …) only widened every table by default.
-        if d["category"] in ("meta", "linguistic"):
+        if d["category"] in ("meta", "linguistic") and src not in mapped:
             default.append(src)
         if d["category"] == "meta":
             meta_dest_by_source[src] = d["dest"]
     for col in unclaimed:
         opts.append(col)
         labels.setdefault(col, col)
+        if col in sample.columns and looks_like_condition(sample[col]):
+            default.append(col)
 
     key = f"wizard_keep_{prefix}"
     if key not in st.session_state:
@@ -2102,7 +2120,7 @@ _SCREEN_ESTIMATE = "Estimate from my data"
 _SCREEN_DEFAULT = "Use a common default (2560×1440)"
 
 _GEOM_KNOW = "I know them"
-_GEOM_DEFAULT = "Use typical lab values (597 mm / 800 mm)"
+_GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)"
 _GEOM_SKIP = "Skip — I don't need visual-angle units"
 
 _TEXT_BOXES = "Scale to the word boxes"
@@ -3134,11 +3152,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         if cancel_col.button(
             "✕ Cancel",
             key="cancel_add_data",
-            # UX-66 r2: the same filled blue as ✅ Add dataset. The two are the
-            # ends of the same decision — commit or leave — and a ghost button
-            # beside a filled one reads as the disabled half of a pair rather
-            # than as the other way out.
-            type="primary",
+            # #374 F30: secondary. UX-66 r2 made it the same filled blue as
+            # ✅ Add dataset, which put the page's loudest button on the way
+            # out, at the top, before anything had been added.
+            type="secondary",
             help="Leave the wizard and go back to the dataset you were on.",
             width="content",
         ):

@@ -74,7 +74,7 @@ class TestThePage:
         at = self._data_page()
         headings = [s.value for s in at.subheader]
         assert not any(h.startswith("ℹ️ About") for h in headings), headings
-        assert any("What's in the" in h for h in headings), headings
+        assert any("What's in" in h for h in headings), headings
 
     def test_the_overview_is_one_sentence_under_the_heading(self):
         at = self._data_page()

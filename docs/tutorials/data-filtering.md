@@ -47,7 +47,7 @@ trial, and its tags are not offered in the pickers; find those on
 
 Check at least one trial from each participant or condition. Then open the
 :material/database: **Data Management** page and confirm that the participant, text, trial,
-fixation, and word counts under **What's in the … dataset → Stats** are
+fixation, and word counts under **What's in … → Stats** are
 plausible. Those follow the filters; the dataset table above them counts the
 whole dataset.
 

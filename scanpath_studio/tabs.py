@@ -1195,6 +1195,36 @@ export default function (component) {
     return null;
   };
 
+  // A print width's dpi goes into the PNG header (a `pHYs` chunk after IHDR),
+  // as `export.set_png_dpi` does headless, so a layout program places the file
+  // at its print size. The pixels are untouched.
+  const crc32 = (bytes) => {
+    let c = ~0;
+    for (const b of bytes) {
+      c ^= b;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1));
+    }
+    return ~c >>> 0;
+  };
+  const withDpi = (png, dpi) => {
+    if (!dpi) return png;
+    const chunk = new Uint8Array(21);
+    const view = new DataView(chunk.buffer);
+    const ppm = Math.round(dpi / 0.0254);
+    view.setUint32(0, 9);
+    chunk.set([0x70, 0x48, 0x59, 0x73], 4);  // "pHYs"
+    view.setUint32(8, ppm);
+    view.setUint32(12, ppm);
+    chunk[16] = 1;  // pixels per metre
+    view.setUint32(17, crc32(chunk.subarray(4, 17)));
+    const at = 33;  // signature (8) + IHDR (25)
+    const out = new Uint8Array(png.length + chunk.length);
+    out.set(png.subarray(0, at));
+    out.set(chunk, at);
+    out.set(png.subarray(at), at + chunk.length);
+    return out;
+  };
+
   // Reassigned, not added: Streamlit reuses the component across reruns.
   button.onclick = async () => {
     const plot = findPlot();
@@ -1213,7 +1243,7 @@ export default function (component) {
       });
       const blob = data.format === 'svg'
         ? new Blob([image], { type: 'image/svg+xml;charset=utf-8' })
-        : new Blob([Uint8Array.from(atob(image), (c) => c.charCodeAt(0))],
+        : new Blob([withDpi(Uint8Array.from(atob(image), (c) => c.charCodeAt(0)), data.dpi)],
                    { type: 'image/png' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1376,6 +1406,10 @@ def _render_save_plot_button(
                 "width": fig_width,
                 "height": fig_height,
                 "scale": _png_scale(fig_width) if fmt == "PNG" else 1,
+                # Only a set print width has a dpi to record.
+                "dpi": _print_size_setting()["dpi"]
+                if fmt == "PNG" and _print_size_setting()["width"]
+                else None,
                 "label": f"⬇ Download {fmt}",
             },
             height="content",

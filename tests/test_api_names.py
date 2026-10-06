@@ -98,7 +98,9 @@ class TestEveryFunctionTakesEitherKind:
             fixation_hover_fields=["duration_ms"],
         )
         text = fig.to_json()
-        assert "CURRENT_FIX_DURATION" in text
+        # #374 F5: a mapped role is named by its role, not its source column.
+        assert "Duration (ms)" in text
+        assert "CURRENT_FIX_DURATION" not in text
 
     def test_a_word_option_reads_the_words_tables_names(self, demo, demo_trial):
         # `word_id` is the AOI table's IA_ID but the fixations' shifted
@@ -108,7 +110,8 @@ class TestEveryFunctionTakesEitherKind:
             words, fixations, *demo_trial, word_hover_fields=["IA_ID"]
         )
         (labels,) = (trace for trace in fig.data if trace.name == "words")
-        assert "IA_ID:" in labels.hovertemplate
+        # #374 F5: the word id is a role, named as one.
+        assert "Word #:" in labels.hovertemplate
         assert "CURRENT_FIX_INTEREST_AREA_ID" not in labels.hovertemplate
 
     def test_canonical_frames_draw_as_before(self, demo_trial):
@@ -126,7 +129,8 @@ class TestEveryFunctionTakesEitherKind:
             show_heatmap_colorbar=True,
             column_names=data.column_names,
         )
-        assert "CURRENT_FIX_DURATION" in fig.to_json()
+        # The file's name picks the column; the figure names its role (#374 F5).
+        assert "Duration (ms)" in fig.to_json()
 
     def test_a_misspelt_heatmap_metric_is_refused(self, demo, demo_trial):
         words, fixations = demo

@@ -772,6 +772,14 @@ class TestFigureText:
             **settings,
         )
 
+    @staticmethod
+    def _assigned(demo):
+        """The synthetic trial with its fixations' words assigned from the boxes."""
+        from scanpath_studio.measures import assign_fixations_to_words
+
+        words, fixations = demo
+        return words, assign_fixations_to_words(fixations, words, overwrite=True)
+
     def test_the_colour_bar_takes_the_datasets_name(self, demo):
         fig = self._figure(
             demo,
@@ -792,24 +800,36 @@ class TestFigureText:
     def test_a_hover_row_takes_the_datasets_name(self, demo):
         fig = self._figure(
             demo,
-            fixation_hover_fields=("duration_ms",),
-            column_labels={"duration_ms": "CURRENT_FIX_DURATION"},
+            fixation_hover_fields=("x",),
+            column_labels={"x": "CURRENT_FIX_X"},
         )
         templates = " ".join(str(t.hovertemplate) for t in fig.data)
-        assert "CURRENT_FIX_DURATION: " in templates
+        assert "CURRENT_FIX_X: " in templates
 
     def test_a_word_hover_reads_the_words_tables_label(self, demo):
         fig = self._figure(
-            demo,
+            self._assigned(demo),
             word_hover_fields=("word_id",),
             fixation_hover_fields=("word_id",),
             column_labels={"word_id": "FIX_IA", "words:word_id": "IA_ID"},
         )
         by_name = {trace.name: str(trace.hovertemplate) for trace in fig.data}
         assert "IA_ID: " in by_name["words"]
-        assert "FIX_IA: " in " ".join(
-            template for name, template in by_name.items() if name != "words"
-        )
+        # #374 F7: a fixation names its word in the lead line, by its text.
+        fixation = next(t for t in fig.data if t.name == "Fixations")
+        assert "FIX_IA" not in str(fixation.hovertemplate)
+        assert any("(word " in str(row[0]) for row in fixation.customdata)
+
+    def test_the_fixation_hover_reads_like_a_sentence(self, demo):
+        """#374 F7: "Fixation 3 · 200 ms · on “word” (word 2)", no column names."""
+        fig = self._figure(self._assigned(demo))
+        fixation = next(t for t in fig.data if t.name == "Fixations")
+        assert str(fixation.hovertemplate).startswith("%{customdata[0]}")
+        lines = [str(row[0]) for row in fixation.customdata]
+        assert lines[0].startswith("Fixation 1 · ")
+        assert any(" ms · on “" in line for line in lines), lines
+        # The synthetic trial's out-of-text fixation.
+        assert any(line.endswith("outside the text") for line in lines), lines
 
     def test_table_labels_keep_each_tables_name(self):
         words = ColumnNames({"IA_X": SourceName(("IA_X",), cn.MAPPED, "")})

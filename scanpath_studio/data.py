@@ -1637,7 +1637,16 @@ def _blank_unfixated_measures(df: pd.DataFrame) -> None:
     An EyeLink IA report writes ``0`` there, and every mean then counted a
     skipped word as a 0 ms fixation. "Never fixated" is a fixation count of 0;
     where no count is mapped (or the cell is blank), a total fixation duration
-    of 0 says the same. Total fixation duration itself keeps its 0."""
+    of 0 says the same. Total fixation duration itself keeps its 0.
+
+    The mirror image, as on the computed path: second pass is "fewer than two
+    runs ⇒ 0", but an imported IA_SECOND_RUN_DWELL_TIME leaves those cells
+    blank, so its mean would cover only re-read words. Where the fixation count
+    is known, a blank second pass becomes 0."""
+    if "second_pass_duration_ms" in df.columns and "n_fixations" in df.columns:
+        known = pd.to_numeric(df["n_fixations"], errors="coerce").notna()
+        second = pd.to_numeric(df["second_pass_duration_ms"], errors="coerce")
+        df["second_pass_duration_ms"] = second.mask(known & second.isna(), 0.0)
     present = [column for column in UNFIXATED_BLANK_MEASURES if column in df.columns]
     if not present:
         return

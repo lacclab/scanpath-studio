@@ -710,7 +710,7 @@ Time spent on the word during its second visit.
 | --- | --- |
 | **Output** | second_pass_duration_ms |
 | **Unit** | ms |
-| **Missing & edge cases** | Fewer than two runs ⇒ 0. An imported blank `IA_SECOND_RUN_DWELL_TIME` stays blank, so its mean covers only re-read words. |
+| **Missing & edge cases** | Fewer than two runs ⇒ 0. An imported blank `IA_SECOND_RUN_DWELL_TIME` becomes 0 too, where the fixation count is known. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API |
 | **Tests** | `tests/test_measures.py` |

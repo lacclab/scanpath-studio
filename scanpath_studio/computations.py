@@ -648,8 +648,8 @@ REGISTER: tuple[Computation, ...] = (
         unit="ms",
         missing=(
             "Fewer than two runs ⇒ 0. An imported blank "
-            "`IA_SECOND_RUN_DWELL_TIME` stays blank, so its mean covers only "
-            "re-read words."
+            "`IA_SECOND_RUN_DWELL_TIME` becomes 0 too, where the fixation count "
+            "is known."
         ),
         tiers="A",
         status=STATUS_PARTIAL,

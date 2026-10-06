@@ -266,3 +266,20 @@ class TestSkippedWordsAreLeftOut:
         assert ffd.mean() == pytest.approx(207.6, abs=0.5)
         # TFD keeps the skipped words at 0 ms.
         assert words["total_fixation_duration_ms"].eq(0).sum() == 834
+
+
+def test_an_imported_blank_second_pass_is_zero_where_the_count_is_known():
+    """#374: second pass is "fewer than two runs ⇒ 0" on the imported path too."""
+    import pandas as pd
+
+    from scanpath_studio.data import _blank_unfixated_measures
+
+    df = pd.DataFrame(
+        {
+            "n_fixations": [0, 1, 3, None],
+            "second_pass_duration_ms": [None, None, 180.0, None],
+        }
+    )
+    _blank_unfixated_measures(df)
+    assert df["second_pass_duration_ms"].tolist()[:3] == [0.0, 0.0, 180.0]
+    assert pd.isna(df["second_pass_duration_ms"].iloc[3])

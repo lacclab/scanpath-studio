@@ -5679,8 +5679,8 @@ def _add_comparison_raw_gaze_trace(
 ) -> None:
     """One reading's raw-gaze samples in a comparison figure (VIZ-48).
 
-    Drawn in that scanpath's own colour rather than the single-trial figure's
-    time scale: two clouds on one Viridis ramp could not be told apart in an
+    Drawn in that scanpath's own colour (its style's ``raw_gaze_color``, else
+    its fixation colour) rather than the single-trial figure's time scale: two clouds on one Viridis ramp could not be told apart in an
     overlay, and the A/B colour is the cue every other comparison layer keeps.
     Size and opacity are the 🔵 Raw gaze settings, as on the single figure. The
     trace joins its scanpath's legend group, so toggling A in the legend hides
@@ -6403,6 +6403,9 @@ def _make_split_comparison_figure(
                 box_fill_color=(
                     style.get("box_fill_color") or settings.word_box_fill_color
                 ),
+                # Its raw-gaze samples: the scanpath's own colour unless its
+                # style names one (`raw_gaze_color`).
+                raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
             )
         )
 
@@ -6618,7 +6621,7 @@ def _make_split_comparison_figure(
             fig,
             spec["raw_gaze"],
             spec["display_name"],
-            spec["color"],
+            spec["raw_gaze_color"],
             settings,
             row=row,
             col=col,
@@ -6909,6 +6912,9 @@ def _render_comparison_figure(
                 box_fill_color=(
                     style.get("box_fill_color") or settings.word_box_fill_color
                 ),
+                # Its raw-gaze samples: the scanpath's own colour unless its
+                # style names one (`raw_gaze_color`).
+                raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
             )
         )
 
@@ -6995,7 +7001,11 @@ def _render_comparison_figure(
     # other reading's fixations.
     for spec in trial_specs:
         _add_comparison_raw_gaze_trace(
-            fig, spec["raw_gaze"], spec["display_name"], spec["color"], settings
+            fig,
+            spec["raw_gaze"],
+            spec["display_name"],
+            spec["raw_gaze_color"],
+            settings,
         )
     for _idx, spec in enumerate(trial_specs):
         _add_comparison_fixation_trace(

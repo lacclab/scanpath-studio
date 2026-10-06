@@ -2994,9 +2994,11 @@ def compare_scanpaths(
     ``fix_color``, ``marker_size_range``, ``opacity``, ``hollow``,
     ``saccade_color``, ``saccade_style``, ``saccade_width``, ``box_color`` —
     the outline of that reading's word boxes, its ``fix_color`` when left out —
-    and ``box_fill_color``, their fill, ``word_box_fill_color`` when left out.
-    The two box colours are this figure's only: the co-animation draws one set
-    of boxes, in ``word_box_color`` / ``word_box_fill_color``, and ignores them.
+    ``box_fill_color``, their fill, ``word_box_fill_color`` when left out — and
+    ``raw_gaze_color``, that reading's raw-gaze samples, its ``fix_color`` when
+    left out. These three are this figure's only: the co-animation draws one set
+    of boxes, in ``word_box_color`` / ``word_box_fill_color``, and no raw gaze,
+    and ignores them.
 
     **Filters, per scanpath.** ``fixation_flags`` and
     ``saccade_classes`` filter both scanpaths, as they filter

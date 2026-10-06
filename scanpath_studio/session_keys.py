@@ -250,6 +250,8 @@ CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 CMP_BOX_COLOR = "cmp{idx}_box_color"
 # The word-box fill override ("" = the figure's `global_word_box_fill_color`).
 CMP_BOX_FILL_COLOR = "cmp{idx}_box_fill_color"
+# The raw-gaze sample colour override ("" = the scanpath's own fixation colour).
+CMP_RAW_GAZE_COLOR = "cmp{idx}_raw_gaze_color"
 
 # --- CMP-24: scanpath B's own filters in Compare ----------------------------
 # A's filters are the rail's ordinary ones (`global_fixclass_*`,
@@ -528,6 +530,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
             "label_pattern",
             "box_color",
             "box_fill_color",
+            "raw_gaze_color",
         ),
         # CMP-24.
         "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
@@ -709,6 +712,7 @@ COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
             "label_pattern",
             "box_color",
             "box_fill_color",
+            "raw_gaze_color",
         ),
         **COMPARE_B_FILTER_PARAMS,
     }
@@ -865,6 +869,7 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_LABEL_PATTERN,
         CMP_BOX_COLOR,
         CMP_BOX_FILL_COLOR,
+        CMP_RAW_GAZE_COLOR,
     }
 )
 

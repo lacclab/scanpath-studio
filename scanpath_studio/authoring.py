@@ -112,9 +112,7 @@ def layout_problems(
         return []
     ids = ", ".join(str(int(value)) for value in overflow["word_id"].head(8))
     suffix = f" (+{len(overflow) - 8} more)" if len(overflow) > 8 else ""
-    return [
-        f"Word {ids}{suffix} is wider than the available canvas and extends past the right margin."
-    ]
+    return [f"Too wide for the canvas: word {ids}{suffix}."]
 
 
 def default_events(words: pd.DataFrame) -> pd.DataFrame:
@@ -244,7 +242,7 @@ def event_problems(words: pd.DataFrame, events: pd.DataFrame | None) -> list[str
         listed = ", ".join(str(number) for number in unusable[:10])
         suffix = f" (+{len(unusable) - 10} more)" if len(unusable) > 10 else ""
         problems.append(
-            f"Row {listed}{suffix} has neither finite X/Y coordinates nor a valid target word."
+            f"Not drawn — no X/Y and no valid target word: row {listed}{suffix}."
         )
     return problems
 
@@ -538,14 +536,21 @@ def authoring_json(
     )
 
 
+#: Schema 1 or 2 is accepted; the user is told only what the file is not.
+_NOT_AUTHORING = "That file isn't an authoring file saved from this editor."
+
+
 def parse_authoring_document(payload: str) -> AuthoringDocument:
     """Restore schema 2 or migrate a VIZ-20 schema-1 authoring document."""
-    value = json.loads(payload)
+    try:
+        value = json.loads(payload)
+    except ValueError:
+        value = None
     if not isinstance(value, dict):
-        raise ValueError("Not a Scanpath Studio authoring file (schema 1 or 2).")
+        raise ValueError(_NOT_AUTHORING)
     schema = value.get("schema")
     if schema not in {1, AUTHORING_SCHEMA} or not isinstance(value.get("text"), str):
-        raise ValueError("Not a Scanpath Studio authoring file (schema 1 or 2).")
+        raise ValueError(_NOT_AUTHORING)
     events = value.get("fixations", [])
     if not isinstance(events, list):
         raise ValueError("The authoring file's fixations must be a list.")

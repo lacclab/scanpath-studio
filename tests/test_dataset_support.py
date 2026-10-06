@@ -205,7 +205,7 @@ def test_read_table_zip_no_data_files_raises():
         zf.writestr("__MACOSX/._x", b"junk")
         zf.writestr(".DS_Store", b"junk")
     upload = _NamedBytesIO(buf.getvalue(), "empty.zip")
-    with pytest.raises(ValueError, match="no readable table files"):
+    with pytest.raises(ValueError, match="holds no table file"):
         data_module.read_table(upload)
 
 
@@ -931,7 +931,7 @@ class TestPinnedDownloads:
             Path(dest).write_bytes(b"not the pinned file")
 
         monkeypatch.setattr(datasets_module, "_fetch_to_file", fake_fetch)
-        with pytest.raises(OSError, match="not the file this release pins"):
+        with pytest.raises(OSError, match="sent a different file"):
             datasets_module.download_onestop(
                 tmp_path, regime="ordinary", parts=["Paragraph"]
             )
@@ -941,7 +941,7 @@ class TestPinnedDownloads:
         monkeypatch.setattr(
             datasets_module, "_fetch_bytes", lambda url, *, detail: b"short"
         )
-        with pytest.raises(OSError, match="not the file this release pins"):
+        with pytest.raises(OSError, match="sent a different file"):
             datasets_module.download_potec(tmp_path)
         assert not (tmp_path / "eyetracking_data" / "scanpaths").exists()
 

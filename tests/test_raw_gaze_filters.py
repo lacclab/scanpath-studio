@@ -166,7 +166,7 @@ class TestZipSizeCap:
         # size is what trips, before any member is opened.
         monkeypatch.setattr("scanpath_studio.data.ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES", 8)
         buf = _zip_bytes({"fix.csv": b"a,b\n1,2\n3,4\n"})
-        with pytest.raises(ValueError, match="above the per-file limit"):
+        with pytest.raises(ValueError, match="per-file limit"):
             read_table(buf)
 
     def test_declared_oversize_total_is_rejected(self, monkeypatch):
@@ -175,7 +175,7 @@ class TestZipSizeCap:
         )
         monkeypatch.setattr("scanpath_studio.data.ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES", 10)
         buf = _zip_bytes({"a.csv": b"a,b\n1,2\n", "b.csv": b"a,b\n3,4\n"})
-        with pytest.raises(ValueError, match="decompression limit"):
+        with pytest.raises(ValueError, match="limit. Split it into smaller uploads"):
             read_table(buf)
 
     def test_compression_ratio_is_rejected(self, monkeypatch):
@@ -215,7 +215,7 @@ class TestZipSizeCap:
             "scanpath_studio.data._check_zip_limits", lambda infos: None
         )
         buf.seek(0)
-        with pytest.raises(ValueError, match="declared size was wrong"):
+        with pytest.raises(ValueError, match="larger than the archive says"):
             read_table(buf)
 
     def test_forged_member_cannot_exceed_per_file_budget(self, monkeypatch):
@@ -266,5 +266,5 @@ class TestZipSizeCap:
             pass
         buf.seek(0)
         buf.name = "empty.zip"
-        with pytest.raises(ValueError, match="no readable table files"):
+        with pytest.raises(ValueError, match="holds no table file"):
             read_table(buf)

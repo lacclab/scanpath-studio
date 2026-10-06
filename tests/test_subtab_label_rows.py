@@ -230,7 +230,6 @@ def test_share_widget_has_one_refresh_and_copy_action(monkeypatch):
     url_state._render_share_link_widget("source=demo")
 
     assert rendered["html"].count("<button") == 1
-    assert "Refresh &amp; Copy" in rendered["html"]
-    assert "Copy link" not in rendered["html"]
+    assert rendered["html"].count("Copy link") == 1
     assert rendered["height"] == 76
     assert rendered["focusable"], "the Copy button must be reachable by Tab"

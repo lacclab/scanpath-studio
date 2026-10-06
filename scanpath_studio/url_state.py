@@ -152,7 +152,7 @@ def _parse_saccade_classes(v) -> list[str]:
 
     Comma-separated class names (``regression,return_sweep``). An unknown name
     raises, so a link written against a build with different classes surfaces the
-    reader's "Ignored bad URL param" warning instead of quietly showing a figure
+    reader's "Ignored the link's invalid …" warning instead of quietly showing a figure
     with the wrong saccades in it. The result is ordered by
     ``SACCADE_CLASS_ORDER`` to match what the multiselect writes.
     """
@@ -174,7 +174,7 @@ def _parse_choice(value, options: tuple[str, ...], what: str) -> str:
     """Match ``value`` case-insensitively against a closed vocabulary.
 
     Raising (rather than falling back to the default) is what turns a mangled
-    link into the reader's "Ignored bad URL param" warning instead of a wedged
+    link into the reader's "Ignored the link's invalid …" warning instead of a wedged
     widget — the same contract `_parse_align_algorithm` follows. Hyphens are
     accepted for the layout so the CLI's `--compare-layout side-by-side` and the
     link agree on one spelling.
@@ -210,11 +210,11 @@ def _parse_hex_color(v) -> str:
     A colour reaches Plotly straight from session state on the render path, so
     ``?order_font_color=zzz`` used to raise inside the figure builder — before
     the picker that would have coerced it ever rendered. Raising here instead
-    turns a mangled link into the reader's "Ignored bad URL param" warning.
+    turns a mangled link into the reader's "Ignored the link's invalid …" warning.
     """
     text = str(v).strip()
     if not _HEX_COLOR.fullmatch(text):
-        raise ValueError(f"not a #rrggbb colour: {text!r}")
+        raise ValueError(f"not a #rrggbb color: {text!r}")
     return text
 
 
@@ -278,7 +278,7 @@ def _parse_playback_speed(v) -> float:
     """A replay speed → the ⚙ Playback slider's own option (EXP-18).
 
     It is an `st.select_slider`, which raises on a value outside its options,
-    so ``?playback_speed=3.3`` is rejected here (the "Ignored bad URL param"
+    so ``?playback_speed=3.3`` is rejected here (the "Ignored the link's invalid …"
     warning) rather than wedging the popover. The options belong to `tabs`,
     which imports this module — hence the import at call time.
     """
@@ -335,7 +335,7 @@ def _parse_heatmap_style(value) -> str:
 
 
 def _parse_colorbar_orientation(v) -> str:
-    return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
+    return _parse_choice(v, ("Vertical", "Horizontal"), "color bar orientation")
 
 
 def _parse_align_algorithm(v) -> str:
@@ -652,7 +652,7 @@ def _parse_colorscale(value: str) -> str:
     """One of the app's colour scales, else ``ValueError`` (the reader's "Ignored
     bad URL param" warning) rather than a name the rail's picker cannot show."""
     if value not in COLORSCALES:
-        raise ValueError(f"not one of the app's colour scales: {value!r}")
+        raise ValueError(f"not one of the app's color scales: {value!r}")
     return value
 
 
@@ -1080,7 +1080,7 @@ def _apply_url_preset() -> str | None:
                 try:
                     st.session_state.setdefault(f"{prefix}_slider", int(qp["trial"]))
                 except (ValueError, TypeError):
-                    st.warning(f"Ignored bad URL param ?trial={qp['trial']!r}")
+                    st.warning(f"Ignored the link's invalid trial={qp['trial']}.")
 
     _apply_url_palette(qp)
 
@@ -1098,7 +1098,7 @@ def _apply_url_preset() -> str | None:
         try:
             value = coerce(raw)
         except (ValueError, TypeError):
-            st.warning(f"Ignored bad URL param ?{url_key}={raw!r}")
+            st.warning(f"Ignored the link's invalid {url_key}={raw}.")
             continue
         # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
         # the slider / number_input on render.
@@ -1160,7 +1160,7 @@ def _apply_url_preset() -> str | None:
         try:
             value = coerce(qp[legacy])
         except (ValueError, TypeError):
-            st.warning(f"Ignored bad URL param ?{legacy}={qp[legacy]!r}")
+            st.warning(f"Ignored the link's invalid {legacy}={qp[legacy]}.")
             continue
         for bar in ("fixation", "heatmap"):
             state_key = "global_" + suffix.format(bar=bar)
@@ -1172,8 +1172,8 @@ def _apply_url_preset() -> str | None:
             both = _coerce_bool(qp[PARAM_SHOW_TITLE_CAPTION])
         except (ValueError, TypeError):
             st.warning(
-                f"Ignored bad URL param ?{PARAM_SHOW_TITLE_CAPTION}="
-                f"{qp[PARAM_SHOW_TITLE_CAPTION]!r}"
+                f"Ignored the link's invalid {PARAM_SHOW_TITLE_CAPTION}="
+                f"{qp[PARAM_SHOW_TITLE_CAPTION]}."
             )
         else:
             st.session_state.setdefault("global_show_title", both)
@@ -1240,7 +1240,7 @@ def _apply_url_preset() -> str | None:
             try:
                 events = event_records_frame(json.loads(str(qp["author_events"])))
             except (ValueError, TypeError, RecursionError):
-                st.warning("Ignored malformed authored-fixation data in the URL.")
+                st.warning("Ignored the link's unreadable hand-made scanpath.")
             else:
                 st.session_state.setdefault("_authored_events_frame", events)
                 # Prevent the authoring widget's text-change initializer from
@@ -1557,7 +1557,7 @@ def sanitize_session_value(key: str, value):
     """
     if key in _COLOR_STATE_KEYS:
         if not isinstance(value, str):
-            raise TypeError(f"not a colour: {value!r}")
+            raise TypeError(f"not a color: {value!r}")
         if (
             value == ""
             and key.endswith(("_box_color", "_box_fill_color", "_raw_gaze_color"))
@@ -1818,16 +1818,15 @@ def _migrate_plot_config(config: dict) -> tuple[dict, str | None]:
     working = copy.deepcopy(config)
     if version > PLOT_CONFIG_SCHEMA:
         return working, (
-            "This plot config was saved by a newer version of Scanpath Studio "
-            f"(format v{version}; this build understands up to v{PLOT_CONFIG_SCHEMA}). "
-            "Settings it doesn't recognise were ignored."
+            "This settings file was saved by a newer version of Scanpath Studio; "
+            "settings this one doesn't recognize were ignored."
         )
     while version < PLOT_CONFIG_SCHEMA:
         migrate = _PLOT_CONFIG_MIGRATIONS.get(version)
         if migrate is None:
             note = (
-                f"Couldn't fully upgrade this plot config (no migration from format "
-                f"v{version} to v{PLOT_CONFIG_SCHEMA}); applied what still fit."
+                "This settings file is from an older version that can't be fully "
+                "read; applied what still fit."
             )
             working["schema"] = version
             return working, note
@@ -1856,7 +1855,7 @@ def _match_selection(
     if tid in (None, ""):
         return None, "it names no trial"
     if combos is None or combos.empty:
-        return None, "the trial pool is empty"
+        return None, "no trials pass the current filters"
     tid = str(tid)
     participant_given = pid not in (None, "")
     readings = list(zip(combos["participant_id"], combos["trial_id"], strict=True))
@@ -1870,7 +1869,7 @@ def _match_selection(
         ]
         if match.empty:
             return None, (
-                f"reader {pid}'s trial {tid} is not in the current trial pool"
+                f"participant {pid}'s trial {tid} isn't in the filtered trials"
             )
         return match.iloc[0], ""
     trial_ids = {str(t) for _, t in readings}
@@ -1878,12 +1877,12 @@ def _match_selection(
         tid = composite_respelling_map([tid], trial_ids).get(tid, tid)
     match = combos[combos["trial_id"].astype(str) == tid]
     if match.empty:
-        return None, f"trial {tid} is not in the current trial pool"
+        return None, f"trial {tid} isn't in the filtered trials"
     readers = match["participant_id"].astype(str).unique()
     if len(readers) > 1:
         return None, (
-            f"trial {tid} belongs to {len(readers)} readers in the current pool "
-            "and no reader was named"
+            f"trial {tid} belongs to {len(readers)} participants and the link "
+            "names none"
         )
     return match.iloc[0], ""
 
@@ -1958,7 +1957,7 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> str | None:
     }
     _row, reason = _match_selection(selection, combos)
     if reason:
-        return f"The link's reading couldn't be opened: {reason}."
+        return f"The link's trial couldn't be opened: {reason}."
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
@@ -2030,7 +2029,7 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
     st.session_state.pop(PENDING_TRIAL_KEY, None)
     _row, reason = _match_selection(selection, combos)
     if reason:
-        return f"Couldn't open that reading: {reason}."
+        return f"Couldn't open that trial: {reason}."
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
@@ -2271,7 +2270,7 @@ def _restore_plot_config(
             coloring["heatmap_norm"] in ("Linear", "Log"),
             "global_heatmap_norm",
             coloring["heatmap_norm"],
-            "heatmap colour scaling",
+            "heatmap color scaling",
         )
     if "color_by" in coloring:
         put_valid(
@@ -2296,7 +2295,12 @@ def _restore_plot_config(
     ):
         val = coloring.get(cfg_key)
         if val is not None:
-            put_valid(val in COLORSCALES, state_key, val, cfg_key.replace("_", " "))
+            put_valid(
+                val in COLORSCALES,
+                state_key,
+                val,
+                cfg_key.replace("_", " ").replace("colorscale", "color scale"),
+            )
     sac = coloring.get("saccade_color")
     if isinstance(sac, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sac):
         put("global_saccade_color", sac)
@@ -2347,7 +2351,7 @@ def _restore_plot_config(
             mode in SACCADE_COLOR_MODES,  # VIZ-19 added "Forward / regression"
             "global_saccade_color_mode",
             mode,
-            "saccade colour mode",
+            "saccade color mode",
         )
     if "saccade_type_legend" in coloring:
         put("global_saccade_type_legend", bool(coloring["saccade_type_legend"]))
@@ -2860,7 +2864,7 @@ def _restore_plot_config(
                     entry["heatmap_colorscale"] in ("", *COLORSCALES),
                     f"cmp{idx}_heatmap_colorscale",
                     entry["heatmap_colorscale"],
-                    f"scanpath {idx + 1} heatmap colour scale",
+                    f"scanpath {idx + 1} heatmap color scale",
                 )
             if "saccade_style" in entry:
                 put_valid(
@@ -2932,9 +2936,9 @@ def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | Non
     from .compare_source import secondary_dataset_options
 
     if not isinstance(compare, dict) or compare.get("trial_id") in (None, ""):
-        return None, "the file names no second reading"
+        return None, "the file names no second trial"
     if compare.get("participant_id") in (None, ""):
-        return None, "the file's second reading names no reader"
+        return None, "the file's second trial names no participant"
     source = compare.get("source")
     if source in (None, "") or source == st.session_state.get("data_source_choice"):
         _row, reason = _match_selection(compare, combos)
@@ -3026,13 +3030,13 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
         config = json.loads(uploaded.getvalue().decode("utf-8"))
         if not isinstance(config, dict):
             raise ValueError("expected a JSON object")
-    except (ValueError, UnicodeDecodeError) as exc:
-        st.toast(f"Couldn't read plot config: {exc}", icon=ICONS["warning"])
+    except (ValueError, UnicodeDecodeError):
+        st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     try:
         applied, skipped = _restore_plot_config(config, combos, fixations)
     except Exception as exc:  # backstop for an unexpectedly shaped config
-        st.toast(f"Couldn't apply plot config: {exc}", icon=ICONS["warning"])
+        st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return
     st.session_state["_plot_config_skipped"] = skipped
     staged = st.session_state.get(PENDING_PREPROC_RESTORE_KEY) or {}
@@ -3052,11 +3056,11 @@ _PLOT_CONFIG_TOAST_KEY = "_plot_config_restored_toast"
 def _toast_restored(applied: int, any_skipped: bool) -> None:
     if applied:
         st.toast(
-            f"Restored {plural(applied, 'setting')} from plot config.",
+            f"Restored {plural(applied, 'setting')} from the settings file.",
             icon=ICONS["success"],
         )
     elif not any_skipped:
-        st.toast("Plot config had no recognized settings.", icon=ICONS["warning"])
+        st.toast("The settings file had no recognized settings.", icon=ICONS["warning"])
 
 
 def _build_share_query(
@@ -3187,7 +3191,7 @@ def _build_share_query(
             # cannot travel, and the link must say so rather than arrive as a
             # single scanpath the recipient has no way to know was a pair.
             caveats.append(
-                "The compared scanpath names a second reader, so it isn't "
+                "The compared scanpath names a second participant, so it isn't "
                 "included at this privacy setting — the link opens the first "
                 "scanpath only."
             )
@@ -3485,7 +3489,7 @@ def _render_share_link_widget(query: str) -> None:
           <div class="sps-share-row">
             <input id="sps-share-url" type="text" readonly
                    aria-label="Shareable link" />
-            <button id="sps-share-action" type="button">Refresh &amp; Copy</button>
+            <button id="sps-share-action" type="button">Copy link</button>
           </div>
           <div id="sps-share-status" class="sps-share-status"></div>
         </div>
@@ -3628,10 +3632,10 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=AUTHOR_CHOICE,
             options={"path": "scanpath.json"},
             note=(
-                "An authored scanpath lives in this session — save it with "
-                "**Download authoring file** on the ✍️ authoring screen first "
-                "(it downloads as `scanpath.json`, the name the snippet reads), "
-                "then run the snippet beside it."
+                "An authored scanpath exists only in the app — save it with "
+                "**Download authoring file** on *Author a scanpath* first (it "
+                "saves as `scanpath.json`, which the snippet reads), then run "
+                "the snippet beside it."
             ),
         )
 
@@ -3884,7 +3888,7 @@ def _render_share_body(
         if not visible:
             return
         if settings_file is None:
-            st.caption("A settings file needs a figure to describe.")
+            st.caption("Open a trial first; the settings file describes its figure.")
         else:
             settings_file()
         return

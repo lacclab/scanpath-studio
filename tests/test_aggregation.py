@@ -901,9 +901,9 @@ class TestReaderViews:
 
     def test_reader_vs_cohort_values(self):
         groups = reader_vs_cohort_values(_tidy_fixations(), "p1", MEASURES["fix_dur"])
-        assert set(groups) == {"This reader", "Cohort"}
+        assert set(groups) == {"This participant", "Cohort"}
         np.testing.assert_array_equal(
-            groups["This reader"], np.array([100.0, 150.0, 130.0])
+            groups["This participant"], np.array([100.0, 150.0, 130.0])
         )
         np.testing.assert_array_equal(groups["Cohort"], np.array([200.0, 180.0]))
 

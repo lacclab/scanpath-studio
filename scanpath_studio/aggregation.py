@@ -127,7 +127,7 @@ MEASURES: dict[str, Measure] = {
         ),
         Measure(
             "fprt",
-            "First-pass gaze — FPRT",
+            "First-pass reading time — FPRT",
             "words",
             "first_pass_gaze_duration_ms",
             "ms",
@@ -171,7 +171,7 @@ MEASURES: dict[str, Measure] = {
         ),
         Measure(
             "landing_distance",
-            "Centred landing distance",
+            "Centered landing distance",
             "words",
             "initial_landing_distance",
             "letters",
@@ -737,7 +737,7 @@ def reader_vs_cohort_values(
     *,
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
-    """``{"This reader": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
+    """``{"This participant": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
         return {}
     work = frame.copy()
@@ -749,7 +749,7 @@ def reader_vs_cohort_values(
     me = work.loc[is_target, "_m"].dropna().to_numpy()
     others = work.loc[~is_target, "_m"].dropna().to_numpy()
     if me.size:
-        out["This reader"] = me
+        out["This participant"] = me
     if others.size:
         out["Cohort"] = others
     return out

@@ -9,7 +9,7 @@ import streamlit as st
 
 _HTML = """
 <div class="authoring-toolbar">
-  <span>Click empty space to add · drag a fixation to move · click to select</span>
+  <span>Click outside the words to add · drag to move · click to select</span>
   <button type="button" class="delete" disabled>Delete selected</button>
 </div>
 <svg class="authoring-canvas" role="img" aria-label="Interactive fixation authoring canvas"></svg>

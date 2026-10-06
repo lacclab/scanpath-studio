@@ -616,7 +616,7 @@ class TestStimulusLevelWordsRemap:
         (problem,) = problems["words"]
         assert problem.startswith(MAPPING_FAILURE_LEAD)
         assert "in the fixations finds them" in problem
-        assert "share neither a trial ID nor a Text ID" in problem
+        assert "share neither a Trial ID nor a Text ID" in problem
         assert saved is entry
         assert self._boxes(saved["words"]) == self._boxes(words)
 
@@ -1310,7 +1310,7 @@ class TestStimulusProvenanceOnRemap:
             )
         assert not problems
         notices = st.session_state.get(tabs.STIMULUS_JOIN_NOTICE_KEY)
-        assert notices and "1 of 2 readings have word boxes" in notices[0]
+        assert notices and "1 of 2 trials have word boxes" in notices[0]
 
 
 class TestLegacyStoredRepeats:

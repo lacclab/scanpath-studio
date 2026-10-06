@@ -177,8 +177,8 @@ def _public_ready_cached(
     kwargs = dict(options)
     short = short or label.split(" — ")[0]
     if not root:
-        return False, f"{short} isn't loadable as a comparison dataset."
-    hint = f"Open {short} as the main dataset once to set its location."
+        return False, f"{short} has no data folder yet — open it once first."
+    hint = f"Open {short} as the main dataset once to download or locate it."
     try:
         if dataset := kwargs.get("dataset"):
             from scanpath_studio.eyegenbench import eyegenbench_present

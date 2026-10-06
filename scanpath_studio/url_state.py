@@ -508,6 +508,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
         "label_pattern",
         "box_color",
         "box_fill_color",
+        "raw_gaze_color",
     ),
     # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
     # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
@@ -539,7 +540,9 @@ _SHARE_COLOR_PARAMS = (
     "fixclass_long_color",
     "fixclass_oob_color",
     "fixclass_blink_color",
-    *_cmp_style_params("fix_color", "saccade_color", "box_color", "box_fill_color"),
+    *_cmp_style_params(
+        "fix_color", "saccade_color", "box_color", "box_fill_color", "raw_gaze_color"
+    ),
 )
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -1427,7 +1430,7 @@ def sanitize_session_value(key: str, value):
             raise TypeError(f"not a colour: {value!r}")
         if (
             value == ""
-            and key.endswith(("_box_color", "_box_fill_color"))
+            and key.endswith(("_box_color", "_box_fill_color", "_raw_gaze_color"))
             and key.startswith("cmp")
         ):
             return value  # follows the scanpath's colour / the figure's fill
@@ -2694,6 +2697,12 @@ def _restore_plot_config(
                 bf == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bf)
             ):
                 put(f"cmp{idx}_box_fill_color", bf)
+            # And for the raw-gaze samples: follow the fixation colour.
+            rg = entry.get("raw_gaze_color")
+            if isinstance(rg, str) and (
+                rg == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", rg)
+            ):
+                put(f"cmp{idx}_raw_gaze_color", rg)
             if "saccade_style" in entry:
                 put_valid(
                     entry["saccade_style"] in SACCADE_DASH_OPTIONS,

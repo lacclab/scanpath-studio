@@ -1453,13 +1453,14 @@ def _render_parser() -> argparse.ArgumentParser:
             metavar="SPEC",
             help=f"Styling for the {which} scanpath, repeatable: KEY=VALUE[,...] "
             "with KEY one of fix_color / saccade_color / box_color / "
-            "box_fill_color (#RRGGBB; box_color outlines the word boxes, default "
-            "fix_color, box_fill_color fills them, default --word-box-fill-color; "
-            "both ignored by --animate), saccade_style "
+            "box_fill_color / raw_gaze_color (#RRGGBB; box_color outlines the "
+            "word boxes, default fix_color, box_fill_color fills them, default "
+            "--word-box-fill-color, raw_gaze_color colours the raw-gaze samples, "
+            "default fix_color; all three ignored by --animate), saccade_style "
             f"({'|'.join(SACCADE_DASH_OPTIONS.values())}), saccade_width (px), "
             "marker_size_range (MIN:MAX), opacity (0.1–1), hollow (true|false) — "
             f"e.g. --style-{side} fix_color=#D55E00,opacity=0.5. Applies to "
-            "the --animate co-animation too, except the two box colours.",
+            "the --animate co-animation too, except those three colours.",
         )
     # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
@@ -1604,6 +1605,7 @@ _STYLE_KEYS = (
     "saccade_color",
     "box_color",
     "box_fill_color",
+    "raw_gaze_color",
     "saccade_style",
     "saccade_width",
     "marker_size_range",
@@ -1635,6 +1637,7 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                     "saccade_color",
                     "box_color",
                     "box_fill_color",
+                    "raw_gaze_color",
                 ):
                     if not re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
                         raise ValueError

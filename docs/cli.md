@@ -146,13 +146,15 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 `--style-a` / `--style-b` (below) style it as they style the comparison.
 
 `--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows
-under :material/blur_on: Fixations, :material/arrow_outward: Saccades and the
-word boxes' *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`:
+under :material/blur_on: Fixations, :material/arrow_outward: Saccades, the
+word boxes and raw gaze — their *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`:
 a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`,
-`saccade_color`, `box_color` and `box_fill_color` (`#RRGGBB`; `box_color`
-outlines that reading's word boxes, its `fix_color` when left out, and
-`box_fill_color` fills them, `--word-box-fill-color` when left out — both static
-comparison only, the `--animate` co-animation draws one set of boxes), `saccade_style` (`solid`, `dash`,
+`saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`;
+`box_color` outlines that reading's word boxes, its `fix_color` when left out,
+`box_fill_color` fills them, `--word-box-fill-color` when left out, and
+`raw_gaze_color` colours its raw-gaze samples, its `fix_color` when left out —
+all three static comparison only, the `--animate` co-animation draws one set of
+boxes and no raw gaze), `saccade_style` (`solid`, `dash`,
 `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`),
 `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that
 scanpath's default.

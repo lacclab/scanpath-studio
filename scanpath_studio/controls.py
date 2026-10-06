@@ -4252,7 +4252,8 @@ def compare_style_defaults() -> dict:
     ``cmp{idx}_label_pattern`` is not seeded — its absence *is* the auto label —
     so it is listed here as the empty string it reads as; ``cmp{idx}_box_color``
     likewise, its absence being "the scanpath's own colour", and
-    ``cmp{idx}_box_fill_color``, its absence being "the figure's fill".
+    ``cmp{idx}_box_fill_color``, its absence being "the figure's fill", and
+    ``cmp{idx}_raw_gaze_color``, its absence being "the scanpath's own colour".
     """
     defaults: dict = {}
     for idx, _ in _COMPARE_SCANPATHS:
@@ -4275,6 +4276,8 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_box_color": "",
                 # The word-box fill; empty follows `global_word_box_fill_color`.
                 f"cmp{idx}_box_fill_color": "",
+                # The raw-gaze samples; empty follows `cmp{idx}_fix_color`.
+                f"cmp{idx}_raw_gaze_color": "",
             }
         )
     # CMP-24 — scanpath B's own filters (A's are the rail's ordinary ones).
@@ -4297,7 +4300,9 @@ def _seed_compare_styles() -> None:
     ``persist_state="session"``, which keeps the value alive through the runs
     where the popover isn't open (ENG-36)."""
     for key, default in compare_style_defaults().items():
-        if not key.endswith(("_label_pattern", "_box_color", "_box_fill_color")):
+        if not key.endswith(
+            ("_label_pattern", "_box_color", "_box_fill_color", "_raw_gaze_color")
+        ):
             _pin(key, default)
 
 
@@ -4604,16 +4609,19 @@ _LINE_OPACITY_HELP = "Outline opacity; 0 hides it."
 _FILL_OPACITY_HELP = "How strongly the fill shows; 0 draws outlines only."
 
 
-def _compare_box_color_picker(
+def _compare_follow_color_picker(
     host,
     idx: int,
     part: str,
     *,
     follow: str,
     help: str,
+    what: str,
+    disabled: bool = False,
 ) -> None:
-    """One scanpath's word-box ``part`` colour (``"box"`` outline or
-    ``"box_fill"``), ``cmp{idx}_{part}_color``.
+    """One scanpath's ``part`` colour, ``cmp{idx}_{part}_color`` — the word-box
+    outline (``"box"``), its fill (``"box_fill"``) or the raw-gaze samples
+    (``"raw_gaze"``); ``what`` names it in the widget's label.
 
     The picker is a shadow of that key: it shows the colour actually drawn —
     ``follow`` until one is picked — and only a pick writes the override, so an
@@ -4629,16 +4637,20 @@ def _compare_box_color_picker(
         picked = st.session_state[pick_key]
         st.session_state[key] = "" if picked.lower() == follow.lower() else picked
 
-    disabled, tip = _layer_gate(False, help)
-    what = "line" if part == "box" else "fill"
+    disabled, tip = _layer_gate(disabled, help)
     host.color_picker(
-        f"{_COMPARE_SCANPATHS[idx][1]} — word box {what} color",
+        f"{_COMPARE_SCANPATHS[idx][1]} — {what} color",
         key=pick_key,
         on_change=_apply,
         disabled=disabled,
         help=tip,
         label_visibility="collapsed",
     )
+
+
+def _compare_fix_color(idx: int) -> str:
+    """The fixation colour one scanpath wears in Compare."""
+    return st.session_state.get(f"cmp{idx}_fix_color") or compare_palette_color(idx)
 
 
 def _render_compare_box_groups(fill_help: str) -> None:
@@ -4669,20 +4681,25 @@ def _render_compare_box_groups(fill_help: str) -> None:
             caption_help=_layer_gate(False, line_help)[1],
             section_share=_COMPARE_SECTION_SHARE,
         ).columns(_COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center")
-        _compare_box_color_picker(
+        _compare_follow_color_picker(
             line_col,
             idx,
             "box",
-            follow=st.session_state.get(f"cmp{idx}_fix_color")
-            or compare_palette_color(idx),
+            follow=_compare_fix_color(idx),
             help=line_help,
+            what="word box line",
         )
         this_fill_help = f"{name}'s word-box fill colour. {fill_help}"
         fill_col, fill_opacity_col = _sub_row(
             "Fill", caption_help=_layer_gate(False, this_fill_help)[1]
         ).columns(_COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center")
-        _compare_box_color_picker(
-            fill_col, idx, "box_fill", follow=figure_fill, help=this_fill_help
+        _compare_follow_color_picker(
+            fill_col,
+            idx,
+            "box_fill",
+            follow=figure_fill,
+            help=this_fill_help,
+            what="word box fill",
         )
         # One outline and one fill opacity for both readings, on A's rows.
         if idx == 0:
@@ -4700,6 +4717,31 @@ def _render_compare_box_groups(fill_help: str) -> None:
                 label="Fill opacity",
                 help=f"{_FILL_OPACITY_HELP} Applies to both scanpaths' fills.",
             )
+
+
+def _compare_raw_gaze_color_row(idx: int, *, disabled: bool) -> None:
+    """One scanpath's group title and raw-gaze *Color* row, for the comparison:
+    its samples' colour, ``cmp{idx}_raw_gaze_color`` — its fixation colour
+    until one is picked. Scanpath A's group goes on with the shared *Size* and
+    *Opacity* rows."""
+    name = _COMPARE_SCANPATHS[idx][1]
+    help_text = f"{name}'s raw-gaze sample colour. Defaults to its fixation colour."
+    _compare_follow_color_picker(
+        _sub_row(
+            "Color",
+            section=name,
+            section_help=_COMPARE_SCANPATH_HELP[idx]
+            + (" Colour is its own; size and opacity are shared." if idx == 0 else ""),
+            caption_help=_layer_gate(disabled, help_text)[1],
+            section_share=_COMPARE_SECTION_SHARE,
+        ),
+        idx,
+        "raw_gaze",
+        follow=_compare_fix_color(idx),
+        help=help_text,
+        what="raw gaze",
+        disabled=disabled,
+    )
 
 
 def _collect_compare_styles() -> tuple[dict, dict]:
@@ -4737,6 +4779,10 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 # Likewise: None fills with the figure's `word_box_fill_color`.
                 box_fill_color=(
                     st.session_state.get(f"cmp{idx}_box_fill_color") or None
+                ),
+                # None colours the samples in `fix_color`.
+                raw_gaze_color=(
+                    st.session_state.get(f"cmp{idx}_raw_gaze_color") or None
                 ),
             )
         )
@@ -7077,40 +7123,34 @@ def render_plot_controls(
         _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
         _popover_rows("rawgaze"),
     ):
-        # VIZ-48: a comparison colours each reading's samples by its scanpath
-        # (the A/B cue), so the flat colour has nothing to colour there.
-        color_mode_disabled, color_reason = (
-            (raw_disabled, raw_reason)
-            if raw_disabled
-            else (
-                comparing,
-                f"{ICONS['warning']} In **Compare**, each reading's samples take "
-                "its scanpath colour."
-                if comparing
-                else "",
+        if comparing:
+            # VIZ-48: a comparison colours each reading's samples by its own
+            # scanpath (the A/B cue), so the *Marker* group becomes scanpath
+            # A's — as in 👁️ Fixations — and B's group follows it.
+            _compare_raw_gaze_color_row(0, disabled=raw_disabled)
+        else:
+            color_disabled, color_help = _layer_gate(
+                raw_disabled,
+                _gated_help(
+                    "Sample colour. Ignored when the samples have timestamps, "
+                    "which are coloured by time.",
+                    raw_reason,
+                ),
             )
-        )
-        color_disabled, color_help = _layer_gate(
-            color_mode_disabled,
-            _gated_help(
-                "Sample colour. Ignored when the samples have timestamps, which "
-                "are coloured by time.",
-                color_reason,
-            ),
-        )
-        _sub_row(
-            "Color",
-            section="Marker",
-            section_help="How each raw-gaze sample is drawn: colour, size and opacity.",
-            caption_help=color_help,
-        ).color_picker(
-            "Color",
-            key="global_raw_gaze_color",
-            persist_state="session",
-            disabled=color_disabled,
-            help=color_help,
-            label_visibility="collapsed",
-        )
+            _sub_row(
+                "Color",
+                section="Marker",
+                section_help="How each raw-gaze sample is drawn: colour, size and "
+                "opacity.",
+                caption_help=color_help,
+            ).color_picker(
+                "Color",
+                key="global_raw_gaze_color",
+                persist_state="session",
+                disabled=color_disabled,
+                help=color_help,
+                label_visibility="collapsed",
+            )
         size_help = "Diameter of each raw-gaze sample dot."
         _numeric_slider(
             st,
@@ -7140,6 +7180,9 @@ def render_plot_controls(
                 "Opacity", caption_help=_layer_gate(False, opacity_help)[1]
             ),
         )
+        if comparing:
+            # Scanpath B's group, under A's (whose size and opacity are shared).
+            _compare_raw_gaze_color_row(1, disabled=raw_disabled)
     # --- Word boxes -------------------------------------------------------
     # The interest areas' outline and fill. One *Box* group, as raw gaze's
     # *Marker* (UX-161). All three render paths draw the boxes; a static

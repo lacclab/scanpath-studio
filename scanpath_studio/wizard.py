@@ -2918,6 +2918,8 @@ def _wizard_name_header(host, active: bool) -> None:
         key="wizard_dataset_name",
         help="Shown in the Data source list so you can switch back to it.",
         placeholder="Name this dataset",
+        # Streamlit 1.65: a cleared name is not committed — the last one stays.
+        required=True,
         # UX-113: the numbered stage heading above ("1 Dataset name") already
         # says this — the widget's own label just repeated it verbatim.
         label_visibility="collapsed",
@@ -2930,6 +2932,8 @@ def _wizard_name_header(host, active: bool) -> None:
         "the language.",
         help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=68,
+        # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
+        on_change="ignore",
     )
 
 

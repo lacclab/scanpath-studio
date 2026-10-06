@@ -13,7 +13,6 @@ inputs rather than from the figure's JSON.
 from __future__ import annotations
 
 import json
-
 import re
 
 import pandas as pd
@@ -65,7 +64,7 @@ def page(monkeypatch):
     tabs._cached_scanpath_animation.clear()
     record = {"embeds": [], "replay_loads": 0}
 
-    def embed(html, *, height):
+    def embed(html, *, height, alt=None):
         record["embeds"].append(html)
 
     real = tabs._cached_scanpath_animation
@@ -92,6 +91,15 @@ def _render(speed: float = 1.0, *, autoplay: bool = True, **viz):
         *frames, viz_settings=viz_settings, plan=plan
     )
     return view
+
+
+def _shows(text: str, html: str) -> bool:
+    """``text`` is in the page, raw or as Plotly's JSON escapes it.
+
+    Plotly writes non-ASCII as ``\\u00d7`` unless ``orjson`` is installed,
+    and nothing in ``[test]`` installs it.
+    """
+    return text in html or json.dumps(text)[1:-1] in html
 
 
 class TestARerunShowsTheCachedView:
@@ -133,15 +141,8 @@ class TestARerunShowsTheCachedView:
         _render()
         _render(**change)
         assert page["embeds"][1] != page["embeds"][0]
-        assert _shown(shows, page["embeds"][1])
-        assert not _shown(shows, page["embeds"][0])
-
-
-def _shown(text: str, embed: str) -> bool:
-    """``text`` in the page, as written either way: plotly's JSON engine keeps
-    "×" as is with ``orjson`` installed and escapes it (``\u00d7``) without —
-    CI installs no ``orjson``. The browser reads both the same."""
-    return text in embed or json.dumps(text)[1:-1] in embed
+        assert _shows(shows, page["embeds"][1])
+        assert not _shows(shows, page["embeds"][0])
 
 
 class TestTheExportReadsTheView:

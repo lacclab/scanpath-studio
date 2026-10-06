@@ -221,8 +221,8 @@ def test_share_widget_has_one_refresh_and_copy_action(monkeypatch):
 
     rendered = {}
 
-    def capture(html: str, *, height: int) -> None:
-        rendered.update(html=html, height=height)
+    def capture(html: str, *, height: int, alt: str | None = None) -> None:
+        rendered.update(html=html, height=height, alt=alt)
 
     monkeypatch.setattr(url_state, "embed_html_iframe", capture)
     url_state._render_share_link_widget("source=demo")

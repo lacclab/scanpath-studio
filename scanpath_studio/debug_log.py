@@ -465,9 +465,12 @@ def maybe_show_debug() -> None:
         _debug_dialog()
 
 
-@st.dialog(f"{ICONS['debug']} Debug", width="large")
+@st.dialog(f"{ICONS['debug']} Debug", width="large", position="right")
 def _debug_dialog() -> None:
-    """The Debug modal: the gate, then — once it is on — the log panel.
+    """The Debug drawer: the gate, then — once it is on — the log panel.
+
+    A right-side drawer (Streamlit 1.65) rather than a centred modal, so the
+    view the log describes stays in sight beside it; the user can widen it.
 
     The toggle is the whole of the feature's switch (UX-37), so it sits here
     even while it is off; the panel under it appears in the same fragment run

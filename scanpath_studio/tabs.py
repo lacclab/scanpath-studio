@@ -311,6 +311,7 @@ from scanpath_studio.plots import (
     set_replay_clock,
 )
 from scanpath_studio.session_keys import (
+    CORPUS_SUBTAB,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
@@ -523,9 +524,27 @@ def _part_catalog_for_display(
         raise
 
 
-def _embed_html_iframe(html: str, *, height: int) -> None:
+def _embed_html_iframe(html: str, *, height: int, alt: str | None = None) -> None:
     """Backward-compatible local alias for the shared iframe helper."""
-    embed_html_iframe(html, height=height)
+    embed_html_iframe(html, height=height, alt=alt)
+
+
+def _figure_alt(fig, fallback: str) -> str:
+    """The alt text of a rendered figure: its title as plain text, else ``fallback``.
+
+    A figure whose title the user switched off still gets a description, which
+    is what ``fallback`` names."""
+    title = getattr(getattr(fig.layout, "title", None), "text", None)
+    return _plain_title(title) or fallback
+
+
+def _plain_title(title: str | None) -> str:
+    """A Plotly title as words for a screen reader: ``<br>`` / ``<sup>``
+    markup and entities removed."""
+    text = html.unescape(
+        re.sub(r"<br\s*/?>", " — ", str(title or ""), flags=re.IGNORECASE)
+    )
+    return " ".join(re.sub(r"<[^>]+>", "", text).split())
 
 
 # VIZ-zoom (MVP): Plotly's own zoom only rescales the *axes*, so the word boxes
@@ -933,6 +952,7 @@ def _render_true_scale_chart(
         height=int(fig.layout.height or 600),
         max_height=max_height,
         zoomable=zoomable,
+        alt=_figure_alt(fig, "Scanpath figure"),
     )
 
 
@@ -1006,6 +1026,7 @@ def _render_true_scale_plot(
     height: int,
     max_height: int | None = None,
     zoomable: bool = True,
+    alt: str | None = None,
 ) -> None:
     """Embed `_true_scale_plot_html`'s markup in the true-scale iframe."""
     # ENG-64: the installed plotly's own plotly.min.js, served by this app's
@@ -1020,7 +1041,7 @@ def _render_true_scale_plot(
     )
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height.
-    _embed_html_iframe(html, height=iframe_height)
+    _embed_html_iframe(html, height=iframe_height, alt=alt)
     # UX-167: the next figure under this key holds its area at this size.
     loading.record_plot_size(key, width, iframe_height)
 
@@ -5238,7 +5259,11 @@ def _build_and_render_animation(
         _finished_figure=finished_figure,
     )
     _render_true_scale_plot(
-        view.plot_html, key=plot_key, width=view.width, height=view.height
+        view.plot_html,
+        key=plot_key,
+        width=view.width,
+        height=view.height,
+        alt=": ".join(filter(None, ("Animated scanpath replay", _plain_title(title)))),
     )
     return view, save_slug, file_stem
 
@@ -9576,8 +9601,12 @@ def _render_corpus_analysis_body(
             # (uncached, masking the whole fixation frame per sentence) was
             # recomputed on every click anywhere in this view: 26 s per click at
             # 16× the demo. Keyed + `on_change="rerun"`, only the open tab runs.
-            key="corpus_subtab",
+            #
+            # Streamlit 1.65: bound to the URL, so `?corpus_subtab=Per+reader`
+            # opens that section and the address bar names the one on screen.
+            key=CORPUS_SUBTAB,
             on_change="rerun",
+            bind="query-params",
         )
         opened = dict(zip(names, panes, strict=True))
     text_tab, reader_tab, groups_tab = (
@@ -9714,7 +9743,12 @@ def _render_per_sentence_tab(
 
 def _chart(fig) -> None:
     """Render a non-spatial Plotly figure stretched to the column width."""
-    st.plotly_chart(fig, width="stretch", config={**PLOTLY_CONFIG})
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        config={**PLOTLY_CONFIG},
+        alt=_figure_alt(fig, "Corpus analysis chart"),
+    )
 
 
 def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
@@ -11911,7 +11945,10 @@ def render_multiple_comparison_tab(
                 font_family=font_family,
             )
             st.plotly_chart(
-                fig_idx, width="stretch", config={**PLOTLY_CONFIG, "responsive": True}
+                fig_idx,
+                width="stretch",
+                config={**PLOTLY_CONFIG, "responsive": True},
+                alt=_figure_alt(fig_idx, "NLD convergence chart"),
             )
         with conv_cols[1]:
             fig_time = make_metric_convergence_figure(
@@ -11924,7 +11961,10 @@ def render_multiple_comparison_tab(
                 font_family=font_family,
             )
             st.plotly_chart(
-                fig_time, width="stretch", config={**PLOTLY_CONFIG, "responsive": True}
+                fig_time,
+                width="stretch",
+                config={**PLOTLY_CONFIG, "responsive": True},
+                alt=_figure_alt(fig_time, "NLD convergence chart"),
             )
 
 
@@ -14255,6 +14295,8 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
         "Aggregate character AOIs into word boxes",
         key=aggregate_key(name),
         disabled=not adding,
+        # Streamlit 1.65: read only by Save changes (`_apply_remap`).
+        on_change="ignore",
         help="For interest-area tables with one row per *character* (e.g. CJK "
         "corpora): collapse the characters of each word (grouped by the Trial "
         "+ Word/IA id above) into one bounding box."

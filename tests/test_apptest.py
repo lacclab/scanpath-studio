@@ -5391,14 +5391,14 @@ class TestAnnotationsBelongToTheirDataset:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         store = dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY])
         assert len(store) == 1 and next(iter(store.values()))["star"] is True
-        assert any(o.startswith("★ ") for o in self._picker_options(at))
+        assert any("★" in o for o in self._picker_options(at))
 
         # The Bundled Demo has the same (participant, trial) ids — and no star.
         at = self._at(DEMO_CHOICE, self._carry(at))
         assert at.session_state[annotations_mod.OWNER_KEY] == DEMO_CHOICE
         assert at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] == {}
         assert self._picker_options(at)
-        assert not any(o.startswith("★ ") for o in self._picker_options(at))
+        assert not any("★" in o for o in self._picker_options(at))
         editor = self._star_boxes(at)
         assert editor and not any(c.value for c in editor)
 
@@ -5406,7 +5406,7 @@ class TestAnnotationsBelongToTheirDataset:
         at = self._at(self.NAME, self._carry(at))
         assert at.session_state[annotations_mod.OWNER_KEY] == self.NAME
         assert dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == store
-        assert any(o.startswith("★ ") for o in self._picker_options(at))
+        assert any("★" in o for o in self._picker_options(at))
 
 
 def test_column_detection_runs_once_per_table_not_on_every_rerun(monkeypatch):

@@ -167,7 +167,7 @@ def test_compare_label_keeps_markers_and_participant_suffix():
     from scanpath_studio.tabs import _compare_label_display
 
     shown = {"p_1_r0": "p · 1 · r0"}
-    assert _compare_label_display("📄 p_1_r0", "p_1_r0", "📄", shown) == "📄 p · 1 · r0"
+    assert _compare_label_display("📄 p_1_r0", "p_1_r0", "📄", shown) == "p · 1 · r0 📄"
     assert (
         _compare_label_display("p_1_r0 [p2]", "p_1_r0", "", shown) == "p · 1 · r0 [p2]"
     )

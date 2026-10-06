@@ -70,9 +70,9 @@ class TestTrialSortKeys:
     ):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
         assert "Fixation count (computed)" in keys
-        assert "Reading time, s (computed)" in keys
+        assert "Total fixation time, s (computed)" in keys
         assert keys["Fixation count (computed)"]["t2"] == 3
-        assert keys["Reading time, s (computed)"]["t2"] == pytest.approx(0.6)
+        assert keys["Total fixation time, s (computed)"]["t2"] == pytest.approx(0.6)
         assert keys["Mean fixation, ms (computed)"]["t3"] == pytest.approx(250.0)
 
     def test_computed_stats_are_dropped_without_their_frame(self, combos):

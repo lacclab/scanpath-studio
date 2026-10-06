@@ -303,7 +303,7 @@ TRIAL_SORT_DATA_ORDER = "Data order"
 # are listed after the dataset's own columns.
 _TRIAL_SORT_STATS = {
     "Fixation count (computed)": ("fixations", "size"),
-    "Reading time, s (computed)": ("fixations", "duration_sum_s"),
+    "Total fixation time, s (computed)": ("fixations", "duration_sum_s"),
     "Mean fixation, ms (computed)": ("fixations", "duration_mean"),
     "Word count (computed)": ("words", "size"),
     "First timestamp (computed)": ("fixations", "timestamp_min"),
@@ -1175,7 +1175,9 @@ def _select_trial_none_mode(
     def _option_label(value: str) -> str:
         marks = annotation_markers(trial_to_pid.get(value), value, store=store)
         base = id_display.get(value) or _trial_display_label(value)
-        label = f"{marks} {base}" if marks else base
+        # #374 F27: the badges follow the trial, so a narrow picker cuts the
+        # badges rather than the trial.
+        label = f"{base} {marks}" if marks else base
         shown = sort_values.get(value)
         return f"{label}  ·  {shown}" if shown else label
 

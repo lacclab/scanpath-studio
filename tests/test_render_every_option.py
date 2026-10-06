@@ -126,7 +126,7 @@ NON_DEFAULT = {
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,
     # The comparison's (and the co-animation's).
-    "show_legend": True,
+    "show_legend": False,  # on by default since #374 F26
     "compare_stimulus": "b",
     "label_a": "A",
     "label_b": "B",

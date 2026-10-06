@@ -34,6 +34,7 @@ from .constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEMO_CHOICE,
     FIXATION_SYMBOLS,
     HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
@@ -843,7 +844,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "single_fix_range_all_trials": False,
     # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
     # default — the per-scanpath colours already tell the readings apart.
-    "global_show_compare_legend": False,
+    "global_show_compare_legend": True,  # #374 F26: names A and B
     # VIZ-13: reading measure shown in the word hover tooltip. "Off" (None) hides
     # the measure line; any canonical measure column name shows it.
     "global_word_hover_measure": "total_fixation_duration_ms",
@@ -5281,16 +5282,15 @@ def _seed_viz_state(
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
     # A column the app seeded is re-derived for each dataset; only the user's own
-    # pick survives a switch. Otherwise OneStop (no `is_in_aspan`) seeds IA_SKIP,
-    # which the demo also has, and the demo keeps it after switching back.
+    # pick survives a switch. #374 F6: only the bundled demo is seeded (its
+    # answer span); any other dataset opens with nothing highlighted, rather
+    # than with whichever yes/no column came first (IA_SKIP on EyeLink data).
     ss = st.session_state
-    seeded = None
-    if highlight_options:
-        seeded = (
-            "is_in_aspan"
-            if "is_in_aspan" in highlight_options
-            else highlight_options[0]
-        )
+    seeded = (
+        "is_in_aspan"
+        if "is_in_aspan" in highlight_options and current_dataset_name() == DEMO_CHOICE
+        else None
+    )
     current = ss.get("global_highlight_column")
     if current not in (None, seeded) and current == ss.get(_HIGHLIGHT_SEEDED_KEY):
         ss.pop("global_highlight_column", None)
@@ -6333,6 +6333,7 @@ def render_plot_controls(
                 UNIFORM_COLOR_FIELD: UNIFORM_COLOR_FIELD,
                 "line": "Line" + cn.COMPUTED_SUFFIX,
             },
+            roles=True,
         )
         color_by = by_col.selectbox(
             "Color fixations by",
@@ -6983,6 +6984,14 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
+                placeholder="Choose a column",
+                # #374 F6: nothing is seeded outside the demo, and an unseeded
+                # selectbox would otherwise pick its first option itself.
+                **(
+                    {}
+                    if "global_highlight_column" in st.session_state
+                    else {"index": None}
+                ),
             )
         style_help = (
             "**Mark text**: colour the span's words (needs **Text** on). "
@@ -7209,7 +7218,7 @@ def render_plot_controls(
             else field.columns([0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center")
         )
         metric_labels = _rail_names().option_labels(
-            ["duration_ms", "counts"], {"counts": "Fixation count"}
+            ["duration_ms", "counts"], {"counts": "Fixation count"}, roles=True
         )
         heatmap_metric = metric_col.selectbox(
             "Metric",
@@ -7570,7 +7579,7 @@ def render_plot_controls(
         )
         _row_label(axes_cols[0], "Axes", axis_help)
         _sub_caption(axes_cols[1], "X")
-        axis_labels = _rail_names().option_labels(numeric_fields)
+        axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
         axes_cols[2].selectbox(
             "X axis field",
             options=numeric_fields,
@@ -7719,7 +7728,7 @@ def render_plot_controls(
     with hover, _popover_rows("fig_hover"):
         word_names = cn.active(st.session_state, "words")
         word_hover = word_names.sort_options(hover_field_options(words, words=True))
-        word_hover_labels = word_names.option_labels(word_hover)
+        word_hover_labels = word_names.option_labels(word_hover, roles=True)
         _labeled(
             st,
             "multiselect",
@@ -7733,7 +7742,7 @@ def render_plot_controls(
         )
         fix_names = _rail_names()
         fix_hover = fix_names.sort_options(hover_field_options(trial_fixations))
-        fix_hover_labels = fix_names.option_labels(fix_hover)
+        fix_hover_labels = fix_names.option_labels(fix_hover, roles=True)
         _labeled(
             st,
             "multiselect",
@@ -7864,6 +7873,7 @@ def _bool_metadata_filter(
     key: str,
     host,
     on_change=None,
+    help: str | None = None,
 ) -> None:
     """Render a friendly multiselect for a boolean metadata column.
 
@@ -7878,7 +7888,15 @@ def _bool_metadata_filter(
     if len(options) < 2:
         return
     _seed_filter_widget(key, options, options)
-    _labeled(host, "multiselect", label, options=options, key=key, on_change=on_change)
+    _labeled(
+        host,
+        "multiselect",
+        label,
+        options=options,
+        key=key,
+        on_change=on_change,
+        help=help or None,
+    )
 
 
 def _bool_filter_narrowing(
@@ -8254,7 +8272,7 @@ def active_filter_items(
         col = bare.removeprefix("filter_")
         if col.endswith("_range") and col.removesuffix("_range") in labels:
             col = col.removesuffix("_range")
-        return labels.get(col) or names.label(col)
+        return labels.get(col) or names.field_label(col)
 
     return describe_filter_keys(keys, values, label_for, prefix)
 
@@ -8306,7 +8324,11 @@ _CHIP_DEFAULT_CONDITIONS = [
 # Virtual chip fields → label. These are computed per trial (not data columns),
 # always trial-level, and folded in from the former Trial Info tab's summary.
 SUMMARY_CHIP_FIELDS = {
-    "@reading_time_s": "Total reading time (s)",
+    # #374 F8: the sum of the fixation durations (or the recorded dwell time),
+    # not the time spent on the trial — that is the next chip. The key keeps
+    # its old name: saved chip lists carry it.
+    "@reading_time_s": "Total fixation time (s)",
+    "@trial_duration_s": "Trial duration (s)",
     "@word_count": "Number of words",
     "@fixation_count": "Number of fixations",
     "@in_text_fixations": "Fixations in word boxes",
@@ -8314,6 +8336,13 @@ SUMMARY_CHIP_FIELDS = {
     # that has samples (`tabs._summary_rows`), so a dataset without raw gaze
     # never shows it.
     "@gaze_sample_count": "Number of gaze samples",
+}
+#: What each summary chip counts, as its tooltip (#374 F8).
+SUMMARY_CHIP_HELP = {
+    "@reading_time_s": "The sum of the trial's fixation durations "
+    "(the recorded trial dwell time when the data has one).",
+    "@trial_duration_s": "From the first fixation's onset to the last fixation's "
+    "end, saccades included.",
 }
 #: …and the ones shown by default. The other two are offered in *Available*
 #: like any other field. All four used to be default chips behind a **Summary
@@ -8328,7 +8357,12 @@ SUMMARY_CHIP_FIELDS = {
 #: the trial has, so a trial with fixations and no samples still shows the same
 #: two chips, and a raw-gaze-only trial — whose reading time and fixation count
 #: were never measured and are left out — shows the one count it has.
-_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count", "@gaze_sample_count")
+_CHIP_DEFAULT_SUMMARY = (
+    "@reading_time_s",
+    "@trial_duration_s",
+    "@fixation_count",
+    "@gaze_sample_count",
+)
 
 
 def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
@@ -8375,6 +8409,11 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     cols: list[str] = []
 
     def add(c: str) -> None:
+        # #374 F5: one chip per role — `unique_trial_id` beside `trial_id` would
+        # be a second "Trial", told apart only by an internal name.
+        role = cn.ROLE_LABELS.get(c)
+        if role is not None and any(cn.ROLE_LABELS.get(x) == role for x in cols):
+            return
         if c and c not in cols:
             cols.append(c)
 
@@ -8431,7 +8470,25 @@ def chip_field_label(col: str, names: cn.ColumnNames | None = None) -> str:
     """
     if col in SUMMARY_CHIP_FIELDS:
         return SUMMARY_CHIP_FIELDS[col]
-    return (names if names is not None else _rail_names()).label(col)
+    return (names if names is not None else _rail_names()).field_label(col)
+
+
+def field_help(col: str, names: cn.ColumnNames | None = None) -> str:
+    """The tooltip beside a field's name (#374 F5): the bundled demo's
+    description of its own column, and a role's source column
+    ("from RECORDING_SESSION_LABEL"). ``""`` when there is neither."""
+    if col in SUMMARY_CHIP_FIELDS:
+        return SUMMARY_CHIP_HELP.get(col, "")
+    names = names if names is not None else _rail_names()
+    note = (
+        cn.DEMO_COLUMN_NOTES.get(col, "")
+        if current_dataset_name() == DEMO_CHOICE
+        else ""
+    )
+    source = names.source_tooltip(col)
+    if source:
+        source = source[:1].upper() + source[1:] + "."
+    return " ".join(part for part in (note, source) if part)
 
 
 def _default_chip_fields(available: list[str]) -> list[str]:
@@ -9505,7 +9562,7 @@ def trial_filter_labels(
         *numeric_fields,
         *(c for c in _filter_fields_for(words, fixations) if c not in numeric_fields),
     ]
-    return unique_field_labels(columns, names.label)
+    return unique_field_labels(columns, names.field_label)
 
 
 def render_trial_filters(
@@ -9554,7 +9611,15 @@ def render_trial_filters(
             max_value=hi,
             key=_range_filter_key(col, prefix),
             on_change=_apply,
-            help="Keep only trials whose value falls in this range.",
+            help=" ".join(
+                filter(
+                    None,
+                    (
+                        field_help(col, names),
+                        "Keep only trials whose value falls in this range.",
+                    ),
+                )
+            ),
         )
         # Say how many trials have no value and what happens to them, or the
         # kept-anyway trials look like the range isn't working.
@@ -9586,6 +9651,7 @@ def render_trial_filters(
                 f"{prefix}filter_{col}",
                 host,
                 on_change=_apply,
+                help=field_help(col, names),
             )
         else:
             values = _column_unique_strs(
@@ -9602,6 +9668,7 @@ def render_trial_filters(
                     options=values,
                     key=f"{prefix}filter_{col}",
                     on_change=_apply,
+                    help=field_help(col, names) or None,
                 )
 
     _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)

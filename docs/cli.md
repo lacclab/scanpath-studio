@@ -134,7 +134,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
 | name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
 | style each scanpath | `--style-a SPEC`, `--style-b SPEC` (below) |
-| the A/B legend | `--compare-legend` |
+| the A/B legend (on by default) | `--no-compare-legend` to leave it off |
 | B's own stimulus page (split layouts) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
 | that dataset's raw gaze | `--compare-raw-gaze PATH…` |
@@ -163,7 +163,7 @@ scanpath's default.
 
 ```bash
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-legend \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 ```

@@ -234,6 +234,8 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     fixation_opacity=0.7,
     background_color=DEFAULT_BACKGROUND_COLOR,
     fit_to_monitor=True,
+    # #374 F26: the A/B legend is on, as in the app.
+    show_legend=True,
     word_hover_fields=["text", "word_id", "line_idx", "total_fixation_duration_ms"],
     fixation_hover_fields=["order_in_trial", "duration_ms", "word_id"],
 )

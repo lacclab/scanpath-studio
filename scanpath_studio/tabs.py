@@ -90,6 +90,7 @@ from scanpath_studio.code_snippet import (
 )
 from scanpath_studio.column_names import EMPTY as EMPTY_NAMES
 from scanpath_studio.column_names import (
+    ROLE_LABELS,
     ColumnNames,
     across_tables,
     active_all,
@@ -184,6 +185,7 @@ from scanpath_studio.controls import (
     compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
+    field_help,
     format_filter_item,
     has_active_trial_filters,
     inline_field_label,
@@ -2381,7 +2383,7 @@ def _render_compare_dataset_cell(
     from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
 
     host.selectbox(
-        "Compare with",
+        "Scanpath B from",
         options=names,
         key=COMPARE_SOURCE_KEY,
         # ENG-36: this widget renders only in Compare mode on the Scanpath view,
@@ -2414,7 +2416,10 @@ def _compare_label_display(
     shown = id_display.get(trial_id)
     if not shown or not label.startswith(prefix + trial_id):
         return label
-    return prefix + shown + label[len(prefix) + len(trial_id) :]
+    # #374 F27: the marks follow the trial, so a narrow picker cuts the marks,
+    # not the id.
+    rest = label[len(prefix) + len(trial_id) :]
+    return f"{shown}{rest} {markers}" if markers else shown + rest
 
 
 def _render_compare_filters(host, source: SecondaryDataset) -> None:
@@ -2545,7 +2550,7 @@ def _render_compare_selector(
     B frames from which the selected trial must be extracted.
 
     **UX-64** made that one line rather than three: B's row is now A's row —
-    ``[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
+    ``[Scanpath B from] [Scanpath B] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
     ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
     picker row stacked above the chips. The dataset is therefore resolved from
     session state *before* the row is drawn (``_resolve_compare_source``), since
@@ -2629,7 +2634,7 @@ def _render_compare_selector(
     # candidate, and its own navigator (rendered once it's chosen) is what
     # narrows it to one coordinate space.
     # UX-64 — ONE row for scanpath B, the mirror of A's above it:
-    # `[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]` on the same
+    # `[Scanpath B from] [Scanpath B] [scrub slider] [◀ ▶ ⇅ filter]` on the same
     # `SELECTOR_ROW_GRID`, replacing the dataset row + *Filter B by* row + picker
     # row this used to stack above the chips. The dataset keeps a track of its
     # own and does not shrink — the label is what tells two compared corpora
@@ -2891,7 +2896,7 @@ def _render_compare_selector(
 
     # UX-189: the label is shown, like A's *Select Trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
-        "Compare to",
+        "Scanpath B",
         options=labels,
         key=sel_key,
         format_func=lambda v: label_display.get(v, v),
@@ -2988,7 +2993,7 @@ _QA_NAME_HINTS = (
 
 def _field_label(col: str) -> str:
     """A stimulus / context field's name: the dataset's own for it (DATA-66)."""
-    return active_all(st.session_state).label(col)
+    return active_all(st.session_state).field_label(col)
 
 
 def _is_boolish(series: pd.Series) -> bool:
@@ -3254,6 +3259,19 @@ def _literal(value: object) -> str:
     """
     text = html.escape(str(value)).replace("\r\n", "\n").replace("\r", "\n")
     return text.replace("\n", "<br>")
+
+
+def _context_block_html(lines: list[str]) -> str:
+    """The Stimulus & Context fields as one block, a line per field (#374 F17)."""
+    body = "".join(f'<div class="sps-context-line">{line}</div>' for line in lines)
+    return f'<div class="sps-context" style="line-height:1.6">{body}</div>'
+
+
+def _field_label_html(col: str) -> str:
+    """``<b>name:</b>`` for a context field, with its description as a tooltip."""
+    tip = field_help(col, active_all(st.session_state))
+    title = f' title="{html.escape(tip)}"' if tip else ""
+    return f"<b{title}>{_literal(_field_label(col))}:</b>"
 
 
 def _context_html(body: str) -> None:
@@ -3623,11 +3641,14 @@ def _render_paragraph_panel(
         # "selected X · ✓ correct" answer line when both columns are present.
         # Round 11: every value goes in as literal text (`_literal`); only the
         # labels, marks and layout around it are the app's own markup.
+        # #374 F17: every line goes into ONE block — one element per line drew
+        # the lines on top of each other.
+        lines: list[str] = []
         question_cols = [c for c in qa_cols if "question" in c.lower()]
         for col in question_cols:
             val = _first_str(trial_words, col)
             if val:
-                _context_html(f"<b>{_literal(_field_label(col))}:</b> {_literal(val)}")
+                lines.append(f"{_field_label_html(col)} {_literal(val)}")
 
         rendered = set(question_cols)
         if "selected_answer" in qa_cols and "is_correct" in qa_cols:
@@ -3639,21 +3660,21 @@ def _render_paragraph_panel(
                     bits.append(f"selected <b>{_literal(answer_val)}</b>")
                 if correct is not None:
                     bits.append(_answer_mark(correct, "✓ correct", "✗ incorrect"))
-                _context_html("<b>Answer:</b> " + " · ".join(bits))
+                lines.append("<b>Answer:</b> " + " · ".join(bits))
             rendered.update({"selected_answer", "is_correct"})
 
         # Any remaining detected answer/correct columns, rendered generically.
         for col in qa_cols:
             if col in rendered:
                 continue
-            label = f"<b>{_literal(_field_label(col))}:</b> "
+            label = f"{_field_label_html(col)} "
             bval = _first_bool(trial_words, col) if "correct" in col.lower() else None
             if bval is not None:
-                _context_html(label + _answer_mark(bval, "✓ yes", "✗ no"))
+                lines.append(label + _answer_mark(bval, "✓ yes", "✗ no"))
             else:
                 val = _first_str(trial_words, col)
                 if val:
-                    _context_html(label + _literal(val))
+                    lines.append(label + _literal(val))
 
         # Each highlighted span's text + (optional) fixation note.
         for col in span_cols:
@@ -3661,10 +3682,9 @@ def _render_paragraph_panel(
             if not span_str:
                 continue
             note = _span_fixated_note(trial_words, trial_fixations, col)
-            st.markdown(
-                _span_summary_html(col, span_str, span_bg[col], note),
-                unsafe_allow_html=True,
-            )
+            lines.append(_span_summary_html(col, span_str, span_bg[col], note))
+        if lines:
+            st.markdown(_context_block_html(lines), unsafe_allow_html=True)
 
 
 def _span_summary_html(col: str, span_str: str, bg: str, note: str) -> str:
@@ -3681,7 +3701,7 @@ def _span_summary_html(col: str, span_str: str, bg: str, note: str) -> str:
     return (
         f'<span style="background-color:{bg};'
         f'color:{_HIGHLIGHT_TEXT_COLOR};padding:0 4px;border-radius:2px;">'
-        f"<b>{html.escape(_field_label(col))}:</b></span> "
+        f"{_field_label_html(col)}</span> "
         f"{html.escape(span_str)}{note}"
     )
 
@@ -3813,6 +3833,35 @@ def _no_fixations_note(
     )
 
 
+def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
+    """The caption under a figure framed on the whole screen (#374 F39), else
+    ``""``: the empty band is the screen, and where to zoom to the text."""
+    if not viz_settings.get("fit_to_monitor", True):
+        return ""
+    try:
+        width, height = int(canvas_width), int(canvas_height)
+    except (TypeError, ValueError):
+        return ""
+    if width <= 0 or height <= 0:
+        return ""
+    return (
+        f"Full {width}×{height} screen — **Figure & canvas → Crop to data** "
+        "zooms to the text."
+    )
+
+
+def _trial_duration_ms(trial_fixations: pd.DataFrame) -> float | None:
+    """First fixation onset to last fixation offset, in ms — the span the
+    replay's *Trial time* runs over (#374 F8). ``None`` without timestamps."""
+    if not {"timestamp_ms", "duration_ms"} <= set(trial_fixations.columns):
+        return None
+    start = pd.to_numeric(trial_fixations["timestamp_ms"], errors="coerce")
+    end = start + pd.to_numeric(trial_fixations["duration_ms"], errors="coerce")
+    if end.notna().sum() == 0:
+        return None
+    return float(end.max() - start.min())
+
+
 def _summary_rows(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -3831,7 +3880,7 @@ def _summary_rows(
 
     VIZ-45: **a row is written only for a number that was measured.** Every
     count used to be written whatever the trial had, so a raw-gaze-only trial
-    read "Total reading time (s) = 0.0 · Number of fixations = 0" — two measured
+    read "Total fixation time (s) = 0.0 · Number of fixations = 0" — two measured
     zeros for two things nobody measured — and a words-only one did the same.
     Reading time needs a recorded dwell time or fixations to sum, the word count
     a words table, the fixation count fixations; a row with nothing behind it is
@@ -3854,8 +3903,16 @@ def _summary_rows(
     if recorded_dwell or has_fixations:
         rows.append(
             {
-                "Field": "Total reading time (s)",
+                "Field": SUMMARY_CHIP_FIELDS["@reading_time_s"],
                 "Value": f"{stats['total_reading_time_s']:.1f}",
+            }
+        )
+    duration_ms = _trial_duration_ms(trial_fixations) if has_fixations else None
+    if duration_ms is not None:
+        rows.append(
+            {
+                "Field": SUMMARY_CHIP_FIELDS["@trial_duration_s"],
+                "Value": f"{duration_ms / 1000:.1f}",
             }
         )
     if has_words:
@@ -4231,7 +4288,7 @@ def _build_studio_config(
             "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
             "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
             # BUG-72: the A/B legend, the one compare setting that is a switch.
-            "legend": bool(viz_settings.get("show_compare_legend", False)),
+            "legend": bool(viz_settings.get("show_compare_legend", True)),
         },
     }
 
@@ -5104,7 +5161,7 @@ def _plan_replay(
         # The replay has no border-overlay layer, so only the text-marking mode
         # carries a highlight column.
         highlight_column=_marked_text_column(viz_settings),
-        show_legend=viz_settings.get("show_compare_legend", False),
+        show_legend=viz_settings.get("show_compare_legend", True),
         label_a=(
             _resolve_compare_label(
                 0, selected_participant, selected_trial, trial_words, trial_fixations
@@ -5696,6 +5753,7 @@ class ChipEntry:
     value: str
     trial_level: bool = True
     color: str = _CHIP_NEUTRAL_BG
+    tip: str = ""  # the header's tooltip (#374 F5): description, source column
 
 
 def _trial_chip_entries(
@@ -5739,7 +5797,14 @@ def _trial_chip_entries(
                 # words to count, no word boxes for "Fixations in word boxes".
                 continue
             entries.append(
-                ChipEntry(col, label, str(value), True, _chip_color(col, str(value)))
+                ChipEntry(
+                    col,
+                    label,
+                    str(value),
+                    True,
+                    _chip_color(col, str(value)),
+                    field_help(col, names),
+                )
             )
             continue
         value, trial_level = _chip_value_and_uniqueness(
@@ -5759,6 +5824,7 @@ def _trial_chip_entries(
                 value_str,
                 bool(trial_level),
                 _chip_color(col, value_str),
+                field_help(col, names),
             )
         )
     return entries
@@ -5832,11 +5898,16 @@ def _chip_table_html(
         for col in columns
     }
     num_class = ' class="sps-ct-num"'
-    head = "".join(
-        f'<th scope="col"{num_class if numeric[col] else ""}>'
-        f"{html.escape(next(side[col].label for side in by_side if col in side))}</th>"
-        for col in columns
-    )
+
+    def header(col: str) -> str:
+        entry = next(side[col] for side in by_side if col in side)
+        tip = f' title="{html.escape(entry.tip)}"' if entry.tip else ""
+        return (
+            f'<th scope="col"{num_class if numeric[col] else ""}{tip}>'
+            f"{html.escape(entry.label)}</th>"
+        )
+
+    head = "".join(header(col) for col in columns)
     rows = []
     for (name, color, _entries), side in zip(sides, by_side):
         cells = []
@@ -7642,6 +7713,9 @@ def render_single_trial_tab(
                         len(plot_fixations),
                     ),
                 )
+            note = _full_screen_note(viz_settings, canvas_width, canvas_height)
+            if note:
+                st.caption(note)
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial
     # Info is gone — the chip strip above the plot now carries the trial's identity,
@@ -8264,7 +8338,7 @@ def _render_comparison_figure(
         compare_stimulus=compare_stimulus,
         style_a=viz_settings.get("compare_style_a"),
         style_b=viz_settings.get("compare_style_b"),
-        show_legend=viz_settings.get("show_compare_legend", False),
+        show_legend=viz_settings.get("show_compare_legend", True),
         # Comparison retains its count-vs-duration spelling; the static builder
         # translates "counts" to None internally.
         heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),
@@ -11753,19 +11827,78 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
     return sorted(cols, key=_rank)
 
 
+#: #374 F18: the two Match choices that come before the dataset's fields.
+_MATCH_SAME_TEXT = "@same_text"
+_MATCH_SAME_PARTICIPANT = "@same_participant"
+_MATCH_LABELS = {
+    _MATCH_SAME_TEXT: "Same text — other participants",
+    _MATCH_SAME_PARTICIPANT: "Same participant — other texts",
+}
+#: Ids and orderings the two choices above cover, or that select one trial:
+#: never offered as a condition field of their own.
+_MATCH_NOT_A_CONDITION = frozenset(
+    {*ROLE_LABELS, "unique_paragraph_id", "TRIAL_INDEX", "trial_index"}
+)
+
+
+def _match_text_column(fixations: pd.DataFrame) -> str | None:
+    """The column a trial's text is read from, for *Same text*."""
+    return next(
+        (
+            column
+            for column in ("unique_text_id", "text_id", "paragraph_id")
+            if column in fixations.columns
+        ),
+        None,
+    )
+
+
+def _match_options(fixations: pd.DataFrame, names: ColumnNames) -> list[str]:
+    """The Comparisons subtab's *Match* choices (#374 F18): *Same text — other
+    participants*, *Same participant — other texts*, then one entry per
+    condition field under the dataset's own name, none twice."""
+    options = []
+    if _match_text_column(fixations) and "participant_id" in fixations.columns:
+        options += [_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT]
+    seen: set[str] = set()
+    text_col = _match_text_column(fixations)
+    for column in _generation_column_options(fixations):
+        if column in _MATCH_NOT_A_CONDITION or column == text_col:
+            continue
+        label = names.field_label(column)
+        if label in seen:
+            continue
+        seen.add(label)
+        options.append(column)
+    return options
+
+
+def _resolve_match(choice: str, fixations: pd.DataFrame) -> tuple[str, str | None]:
+    """``(column to match, column that must differ)`` for a *Match* choice."""
+    text_col = _match_text_column(fixations)
+    if choice == _MATCH_SAME_TEXT and text_col:
+        return text_col, "participant_id"
+    if choice == _MATCH_SAME_PARTICIPANT and text_col:
+        return "participant_id", text_col
+    return choice, None
+
+
 def _collect_generations(
     fixations_pool: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     gen_col: str,
     selected_participant,
     selected_trial,
+    differ_col: str | None = None,
 ) -> tuple:
     """Trials matching the selected trial's ``gen_col`` value.
 
     The comparison column is a selector, not a grouping dimension: choosing
     ``participant_id`` shows that reader's other trials, while choosing
     ``text_id`` shows other readings of the same text. Each returned item is one
-    trial and the selected trial itself is always excluded.
+    trial and the selected trial itself is always excluded. ``differ_col``
+    also drops every trial that shares the selected trial's value there —
+    *Same text — other participants* drops the participant's own rereading.
     """
     if (
         gen_col not in fixations_pool.columns
@@ -11784,6 +11917,10 @@ def _collect_generations(
     if len(selected_values) != 1:
         return {}, 0
     pool = pool[pool[gen_col] == selected_values[0]]
+    if differ_col is not None and differ_col in trial_fixations.columns:
+        own = trial_fixations[differ_col].dropna().unique()
+        if differ_col in pool.columns and len(own):
+            pool = pool[~pool[differ_col].isin(own)]
     if {"participant_id", "trial_id"} <= set(pool.columns):
         pool = pool[
             ~(
@@ -11846,6 +11983,18 @@ def _comparison_panel_settings(base_settings: dict) -> dict:
     return settings
 
 
+def _match_panel_caption(choice: str, fix: pd.DataFrame, text_col) -> str:
+    """A Comparisons panel's name (#374 F5/F18): what tells it apart under the
+    *Match* choice — its participant for *Same text*, its text for *Same
+    participant* — else the trial as the trial picker writes it."""
+    first = fix.iloc[0]
+    if choice == _MATCH_SAME_TEXT:
+        return f"Participant {first['participant_id']}"
+    if choice == _MATCH_SAME_PARTICIPANT and text_col in fix.columns:
+        return f"Text {first[text_col]}"
+    return trial_id_shown(first["trial_id"], fix)
+
+
 def render_multiple_comparison_tab(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -11872,24 +12021,31 @@ def render_multiple_comparison_tab(
         st.info("Choose a trial with words and fixations.")
         return
 
-    gen_cols = _generation_column_options(fixations_filtered)
-    if not gen_cols:
+    names = active_all(st.session_state)
+    match_options = _match_options(fixations_filtered, names)
+    if not match_options:
         st.info("No trial-level field is available for matching.")
         return
+    match_labels = {
+        **names.option_labels(match_options, roles=True),
+        **_MATCH_LABELS,
+    }
+    # A choice saved before #374 (`participant_id`) is no longer offered.
+    if st.session_state.get("multi_gen_col") not in match_options:
+        st.session_state.pop("multi_gen_col", None)
 
     intro_col, field_col, grid_col = st.columns(
         [4.6, 3.2, 2.2], gap="medium", vertical_alignment="center"
     )
-    names = active_all(st.session_state)
     with intro_col:
         st.caption("Show trials matching the selected trial on one field.")
     with field_col:
-        gen_col = labeled(
+        choice = labeled(
             st,
             "selectbox",
             "Match field",
-            options=gen_cols,
-            format_func=names.option_labels(gen_cols).__getitem__,
+            options=match_options,
+            format_func=match_labels.__getitem__,
             key="multi_gen_col",
             help="Show trials with the same value as the selected trial.",
         )
@@ -11897,13 +12053,14 @@ def render_multiple_comparison_tab(
         n_cols = labeled(
             st,
             "slider",
-            "Grid columns",
+            "Columns",
             min_value=1,
             max_value=4,
-            value=3,
+            value=2,
             key="multi_n_cols",
             help="Number of panels per row.",
         )
+    gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
     candidates, n_total = _collect_generations(
         fixations_filtered,
@@ -11911,9 +12068,10 @@ def render_multiple_comparison_tab(
         gen_col,
         selected_participant,
         selected_trial,
+        differ_col,
     )
     if not candidates:
-        st.info(f"No other filtered trial matches **{names.label(gen_col)}**.")
+        st.info(f"No other filtered trial matches **{match_labels[choice]}**.")
         return
     # More scanpaths of this text exist than we score (very high-cardinality
     # column); the ones we do score are ranked by similarity below.
@@ -12023,7 +12181,7 @@ def render_multiple_comparison_tab(
                 with cell:
                     fix = sliced_gens[name]
                     nld = nld_by_gen.get(name)
-                    trial_label = str(fix["trial_id"].iloc[0])
+                    trial_label = _match_panel_caption(choice, fix, text_col)
                     if nld is not None and pd.notna(nld):
                         st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
@@ -16285,6 +16443,7 @@ def render_data_inspection_tab(
     open_trials=None,
     dataset_name: str = "",
     scope: str | None = None,
+    annotation_trial_labels=None,
 ) -> None:
     """Render the *What's in this dataset* section of the 🗂️ Data page.
 
@@ -16342,6 +16501,7 @@ def render_data_inspection_tab(
                 annotation_trials,
                 dataset_name=dataset_name,
                 open_trials=open_trials,
+                trial_labels=annotation_trial_labels,
             )
     _fill_raw_data_tabs(
         raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered, scope=scope

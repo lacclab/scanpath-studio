@@ -84,7 +84,11 @@ def _replay_labels(fig) -> list[list[str]]:
 
 def _replay_hover(fig, name: str = "Scanpath A") -> list[int]:
     trail = next(t for t in fig.data if t.name == name)
-    return [int(row[0]) for row in np.asarray(trail.customdata)]
+    # #374 F7: the hover's lead line reads "Fixation 41 · …".
+    return [
+        int(str(row[0]).split(" · ")[0].removeprefix("Fixation "))
+        for row in np.asarray(trail.customdata)
+    ]
 
 
 def _frame_labels(fig) -> set[tuple[str, ...]]:

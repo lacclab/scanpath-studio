@@ -116,7 +116,8 @@ class TestSummaryRows:
             row["Field"] for row in tabs._summary_rows(trial(words), trial(fixations))
         ]
         assert fields == [
-            "Total reading time (s)",
+            "Total fixation time (s)",
+            "Trial duration (s)",
             "Number of words",
             "Number of fixations",
             "Fixations in word boxes",
@@ -139,7 +140,7 @@ class TestSummaryRows:
         table = " ".join(written)
         assert ">Number of gaze samples</th>" in table
         assert f">{len(raw_gaze):,}</td>" in table
-        assert "Total reading time" not in table
+        assert "Total fixation time" not in table
         assert "Number of fixations" not in table
 
 

@@ -2087,15 +2087,91 @@ def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
     return [str(j + 1) for j in range(n)]
 
 
+#: #374 F7: the fixation hover's lead line is written from these, in this
+#: order, as "Fixation 41 · 336 ms · on “Droppings!” (word 27)".
+_FIXATION_HEAD_FIELDS = ("order_in_trial", "duration_ms", "word_id")
+
+
+def _hover_number(value) -> str:
+    """A hover number without a trailing ``.0`` (``27.0`` → ``27``)."""
+    number = pd.to_numeric(value, errors="coerce")
+    if pd.isna(number):
+        return str(value)
+    return f"{number:.0f}" if float(number).is_integer() else f"{number:g}"
+
+
+def _fixation_hover_head(
+    frame: pd.DataFrame, head: Sequence[str], words: pd.DataFrame | None
+) -> pd.Series:
+    """The fixation hover's lead line, one string per row (#374 F7).
+
+    The word a fixation landed on is named by its text when the trial's word
+    table has it (and its word ids are unique); a fixation on no word reads
+    "outside the text"."""
+    word_text: dict[float, str] = {}
+    if (
+        "word_id" in head
+        and words is not None
+        and not words.empty
+        and {"word_id", "text"} <= set(words.columns)
+    ):
+        ids = pd.to_numeric(words["word_id"], errors="coerce")
+        if ids.notna().all() and ids.is_unique:
+            word_text = dict(zip(ids.astype(float), words["text"].astype(str)))
+    columns = {field: frame[field].tolist() for field in head}
+    # A fixation with no word id is "outside the text" only when it is outside
+    # every word box: the data's own assignment can be blank inside one.
+    outside = [False] * len(frame)
+    if (
+        "word_id" in head
+        and words is not None
+        and not words.empty
+        and {"x", "y"} <= set(frame.columns)
+    ):
+        from .measures import fixation_in_text_mask
+
+        outside = (~fixation_in_text_mask(frame, words)).tolist()
+    lines = []
+    for i in range(len(frame)):
+        parts = []
+        if "order_in_trial" in columns:
+            value = columns["order_in_trial"][i]
+            if pd.notna(value):
+                parts.append(f"Fixation {_hover_number(value)}")
+        if "duration_ms" in columns:
+            value = columns["duration_ms"][i]
+            if pd.notna(value):
+                parts.append(f"{_hover_number(value)} ms")
+        if "word_id" in columns:
+            value = pd.to_numeric(columns["word_id"][i], errors="coerce")
+            if pd.isna(value):
+                if outside[i]:
+                    parts.append("outside the text")
+            else:
+                text = word_text.get(float(value))
+                word = f"word {_hover_number(value)}"
+                parts.append(
+                    f"on “{_plotly_literal(text)}” ({word})" if text else f"on {word}"
+                )
+        lines.append(" · ".join(parts))
+    return pd.Series(lines, index=frame.index, dtype=object)
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
     *,
     line_display: pd.Series | None = None,
     table: str | None = None,
+    fixation: bool = False,
+    words: pd.DataFrame | None = None,
 ) -> tuple[np.ndarray | None, str]:
     """Plotly customdata + template for a user-selected field list (VIZ-26);
-    ``table`` says whose names label the rows (DATA-66)."""
+    ``table`` says whose names label the rows (DATA-66).
+
+    ``fixation=True`` writes the fixation number, duration and word as one
+    plain lead line (#374 F7), the word by its text from ``words``; any other
+    chosen field follows as a ``Label: value`` row."""
     valid = [
         field
         for field in fields
@@ -2105,7 +2181,13 @@ def _hover_payload(
         return None, "<extra></extra>"
     values: list[pd.Series] = []
     rows: list[str] = []
-    for idx, field in enumerate(valid):
+    if fixation:
+        head = [field for field in _FIXATION_HEAD_FIELDS if field in valid]
+        if head:
+            values.append(_fixation_hover_head(frame, head, words))
+            rows.append("%{customdata[0]}")
+            valid = [field for field in valid if field not in head]
+    for idx, field in enumerate(valid, start=len(values)):
         series = (
             line_display
             if field == "line_idx" and line_display is not None
@@ -2116,6 +2198,44 @@ def _hover_payload(
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
     return customdata, "<br>".join(rows) + "<extra></extra>"
+
+
+#: The highlight key's annotation (#374 F6), so it is drawn once a figure.
+_HIGHLIGHT_KEY_NAME = "highlight_key"
+
+
+def _add_highlight_key(
+    fig: go.Figure, column: str, color: str, *, border: bool = False
+) -> None:
+    """Name the highlighted words on the figure itself (#374 F6): a swatch in
+    the highlight's colour and "Highlighted: is_in_aspan (answer span)", in
+    the plot's bottom-left corner. Drawn once however many panels mark words."""
+    if any(a.name == _HIGHLIGHT_KEY_NAME for a in fig.layout.annotations or ()):
+        return
+    from .column_names import HIGHLIGHT_NOTES
+
+    note = HIGHLIGHT_NOTES.get(str(column))
+    swatch = "▢" if border else "■"
+    text = (
+        f'<span style="color:{color}">{swatch}</span> Highlighted: '
+        f"{_plotly_literal(_column_name(column))}" + (f" ({note})" if note else "")
+    )
+    fig.add_annotation(
+        x=0,
+        y=0,
+        xref="paper",
+        yref="paper",
+        xanchor="left",
+        yanchor="bottom",
+        xshift=6,
+        yshift=6,
+        text=text,
+        showarrow=False,
+        align="left",
+        font=dict(size=12, color="#444444"),
+        bgcolor="rgba(255,255,255,0.75)",
+        name=_HIGHLIGHT_KEY_NAME,
+    )
 
 
 def _add_word_label_trace(
@@ -2174,6 +2294,8 @@ def _add_word_label_trace(
         label_color = [
             highlight_text_color if is_crit else text_color for is_crit in critical_mask
         ]
+        if critical_mask.any():
+            _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
     # BUG-97 — the label is centred in its word's box, as the data defines it.
@@ -2859,6 +2981,7 @@ def _render_scanpath_figure(
             shapes = shapes + build_critical_span_overlay(
                 words, highlight_column, color=span_border_color
             )
+            _add_highlight_key(fig, highlight_column, span_border_color, border=True)
         if shapes:
             fig.update_layout(shapes=shapes)
         if show_word_labels:
@@ -3147,7 +3270,9 @@ def _render_scanpath_figure(
             if fixation_hover_fields is None
             else list(fixation_hover_fields)
         )
-        customdata, hovertemplate = _hover_payload(ordered, hover_fields)
+        customdata, hovertemplate = _hover_payload(
+            ordered, hover_fields, fixation=True, words=words
+        )
         glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
         if glyph:
             # VIZ-15: a shape Plotly's marker enum doesn't carry (♥), drawn as
@@ -5096,7 +5221,9 @@ def _render_scanpath_animation(
             if fixation_hover_fields is None
             else list(fixation_hover_fields)
         )
-        s["customdata"], s["hovertemplate"] = _hover_payload(ordered, hover_fields)
+        s["customdata"], s["hovertemplate"] = _hover_payload(
+            ordered, hover_fields, fixation=True, words=s.get("words")
+        )
         # The trial's own fixation numbers, as the static figure and the hover
         # show them — never a 1..n renumbering of what survived the filters.
         s["order_text"] = _fixation_order_labels(ordered)
@@ -5965,7 +6092,9 @@ def _add_comparison_fixation_trace(
         if fixation_hover_fields is None
         else list(fixation_hover_fields)
     )
-    customdata, hovertemplate = _hover_payload(trial_fix, hover_fields)
+    customdata, hovertemplate = _hover_payload(
+        trial_fix, hover_fields, fixation=True, words=trial_words
+    )
     glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
     # The trace's own legend swatch would mislead under category colours (it
     # shows the first fixation's category) and cannot draw a glyph (♥), so in
@@ -5982,7 +6111,7 @@ def _add_comparison_fixation_trace(
             name=display_name,
             legendgroup=display_name,
             showlegend=False,
-            hovertemplate=f"{display_name} {hovertemplate}",
+            hovertemplate=f"{display_name}<br>{hovertemplate}",
             customdata=customdata,
         ):
             _add(trace)
@@ -6017,7 +6146,7 @@ def _add_comparison_fixation_trace(
                 text=trial_fix["order_in_trial"] if show_order else None,
                 textposition="top center",
                 textfont=order_font,
-                hovertemplate=f"{display_name} {hovertemplate}",
+                hovertemplate=f"{display_name}<br>{hovertemplate}",
                 customdata=customdata,
             )
         )
@@ -6479,17 +6608,13 @@ def _make_split_comparison_figure(
         avoid=[spec["color"] for spec in trial_specs],
     )
     category_label = "line" if (color_by_line or color_by == "line") else color_by
-    legend_on = show_legend or bool(category_legend)
 
-    # The panel names are the split layouts' A/B legend, so they follow its
-    # toggle (BUG-90): with it off the top margin is 0, which clipped the upper
-    # title off the canvas while the lower one, sitting in the gap between the
-    # panels, still showed.
-    subplot_titles = (
-        [trial_specs[0]["display_name"], trial_specs[1]["display_name"]]
-        if show_legend
-        else None
-    )
+    # #374 F26: each panel always says which scanpath it is, "A · …" / "B · …",
+    # legend or not — so the top band is reserved for the titles too (BUG-90:
+    # without it the upper title was clipped off the canvas).
+    subplot_titles = [
+        f"{side} · {spec['display_name']}" for side, spec in zip("AB", trial_specs)
+    ]
 
     # Each panel's own axis ranges, from its trial's words + fixations (CMP-8).
     panel_ranges = []
@@ -6549,7 +6674,7 @@ def _make_split_comparison_figure(
     grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     # The t band was the (now-removed) title; keep a slim band only for the
     # optional legend.
-    top_px = (_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0
+    top_px = _compare_legend_font(base_font_size)["size"] + 14
     figure_width = total_width + grid_left + right_px
     figure_height = total_height + bottom_px + grid_bottom
     plot_area = (

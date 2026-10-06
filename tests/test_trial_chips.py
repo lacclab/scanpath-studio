@@ -36,9 +36,32 @@ def test_two_summary_fields_are_chips_by_default():
     assert "@gaze_sample_count" in shown
     assert set(_CHIP_DEFAULT_SUMMARY) == {
         "@reading_time_s",
+        "@trial_duration_s",
         "@fixation_count",
         "@gaze_sample_count",
     }
+
+
+def test_trial_duration_is_onset_to_offset_and_named_apart_from_fixation_time():
+    """#374 F8: two different numbers never share the name "reading time"."""
+    import pandas as pd
+
+    from scanpath_studio import tabs
+    from scanpath_studio.controls import SUMMARY_CHIP_FIELDS
+
+    fixations = pd.DataFrame(
+        {"timestamp_ms": [1000.0, 1300.0, 2000.0], "duration_ms": [200.0, 250.0, 300.0]}
+    )
+    rows = {
+        r["Field"]: r["Value"] for r in tabs._summary_rows(pd.DataFrame(), fixations)
+    }
+    assert rows[SUMMARY_CHIP_FIELDS["@reading_time_s"]] == "0.8"  # 750 ms summed
+    assert rows[SUMMARY_CHIP_FIELDS["@trial_duration_s"]] == "1.3"  # 1000 → 2300
+    assert SUMMARY_CHIP_FIELDS["@reading_time_s"] == "Total fixation time (s)"
+    assert not any("reading time" in v.lower() for v in SUMMARY_CHIP_FIELDS.values())
+    # No timestamps, no duration chip.
+    no_clock = tabs._summary_rows(pd.DataFrame(), fixations[["duration_ms"]])
+    assert "Trial duration (s)" not in {r["Field"] for r in no_clock}
 
 
 def test_every_summary_field_is_still_pickable():
@@ -67,7 +90,7 @@ def test_a_summary_field_renders_as_a_column_not_a_popover(monkeypatch):
         tabs,
         "_summary_rows",
         lambda w, f, g=None, **_kw: [
-            {"Field": "Total reading time (s)", "Value": "12.3"},
+            {"Field": "Total fixation time (s)", "Value": "12.3"},
             {"Field": "Number of fixations", "Value": "154"},
         ],
     )
@@ -81,7 +104,7 @@ def test_a_summary_field_renders_as_a_column_not_a_popover(monkeypatch):
 
     assert result is None
     table = " ".join(written)
-    assert ">Total reading time (s)</th>" in table and ">12.3</td>" in table
+    assert ">Total fixation time (s)</th>" in table and ">12.3</td>" in table
     assert ">Number of fixations</th>" in table and ">154</td>" in table
 
 
@@ -102,3 +125,36 @@ def test_the_picker_says_where_the_colours_are():
     # the buckets themselves are a `sort_items` component AppTest cannot read.
     source = " ".join(inspect.getsource(render_trial_chip_picker).split())
     assert 'set below the list."' in source
+
+
+def test_a_full_screen_figure_says_how_to_zoom_to_the_text():
+    """#374 F39: the empty band under the text is the screen, and says so."""
+    from scanpath_studio import tabs
+
+    note = tabs._full_screen_note({"fit_to_monitor": True}, 2560, 1440)
+    assert note.startswith("Full 2560×1440 screen") and "Crop to data" in note
+    assert tabs._full_screen_note({"fit_to_monitor": False}, 2560, 1440) == ""
+    assert tabs._full_screen_note({}, None, None) == ""
+
+
+def test_the_chip_editor_offers_each_role_once():
+    """#374 F5: no second "Trial (unique_trial_id)" beside "Trial"."""
+    import pandas as pd
+
+    from scanpath_studio import controls
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "trial_id": ["t1"],
+            "unique_trial_id": ["t1"],
+            "text_id": ["a"],
+            "unique_text_id": ["a"],
+            "cond": ["x"],
+        }
+    )
+    level = set(fixations.columns)
+    options = controls._chip_field_options(fixations, fixations, level)
+    assert options.count("trial_id") + options.count("unique_trial_id") == 1
+    assert options.count("text_id") + options.count("unique_text_id") == 1
+    assert "cond" in options

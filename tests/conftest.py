@@ -235,7 +235,8 @@ def picker_trial_id(option: str) -> str:
     the parts with ``_`` and put back the ``r0`` a split id no longer shows. An
     id that did not split is shown as it is.
     """
-    shown = str(option).removeprefix("★ ").strip()
+    # #374 F27: the badges follow the trial.
+    shown = str(option).removesuffix(" ★").strip()
     parts = shown.split(" · ")
     if len(parts) == 1:
         return shown

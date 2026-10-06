@@ -665,6 +665,9 @@ def _app_figure_defaults(words, fixations, monkeypatch):
     are pure, so the app's own defaults can be resolved headlessly with a plain
     dict standing in for ``st.session_state``."""
     monkeypatch.setattr(streamlit, "session_state", {})
+    # The sample is the bundled demo, the one dataset the app seeds a highlight
+    # on (#374 F6).
+    streamlit.session_state["data_source_choice"] = constants.DEMO_CHOICE
     controls._seed_viz_state(fixations, 16, words)
     viz = controls._collect_viz_settings(fixations, words)
     settings = tabs._build_figure_settings(viz, viz["show_raw_gaze"])

@@ -121,7 +121,7 @@ def _clean(at: AppTest, note: str = "") -> None:
 def _trial_ids(at: AppTest) -> list[str]:
     """The trial ids currently offered by the picker (the live trial pool).
 
-    Favorited trials are labelled ``★ <id>``. The options are the ids as shown
+    Favorited trials are labelled ``<id> ★``. The options are the ids as shown
     (UX-187 / UX-202); `picker_trial_id` gives each id back.
     """
     from tests.conftest import picker_trial_id
@@ -331,7 +331,7 @@ class TestTrialFilterFlow:
         assert entry["star"] is True
         assert len(_trial_ids(at)) == DEMO_ADV_TRIALS_IN_PICKER
         picker = next(s for s in at.selectbox if s.key == "single_trial_id")
-        assert any(str(option).startswith("★ ") for option in picker.options)
+        assert any("★" in str(option) for option in picker.options)
 
         # (3) Favorites-only narrows to exactly the starred trial.
         # AppTest cannot replay a selectbox whose format_func reads Streamlit

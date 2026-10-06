@@ -332,7 +332,12 @@ from scanpath_studio.url_state import (
 # ``scanpath_studio.app``, so wizard's ``from . import app`` re-imports app fresh,
 # re-entering this import while wizard is still half-loaded → ImportError.
 # Deferring it lets app finish loading before wizard is ever imported.
-from scanpath_studio.utils import build_combo_options, combo_source, extract_trial
+from scanpath_studio.utils import (
+    build_combo_options,
+    combo_source,
+    extract_trial,
+    trial_id_layout,
+)
 
 # Re-exported under a private alias so tests can import it from `app`; keep the
 # F401 silence (it's not used by app.py itself).
@@ -2452,7 +2457,7 @@ def mark_wip_if_benchmark(choice: str) -> str:
     """``choice`` with the (WIP) marker when it names a harmonised corpus.
 
     The marker has to reach **every** picker that offers these corpora, not just
-    the data-source one: Comparisons' *Compare with* selectbox can load a corpus
+    the data-source one: Compare's *Scanpath B from* selectbox can load a corpus
     as scanpath B, and a user who only ever meets it there would publish a
     comparison against an unfinished feature without being told. Display-only in
     both places, and the same predicate decides both.
@@ -10404,6 +10409,14 @@ def _run_app() -> None:
                     fixations_filtered,
                     raw_gaze_filtered,
                     annotation_trials=_annotation_trials(combos_all),
+                    # #374 F5: each trial as the trial picker writes it.
+                    annotation_trial_labels=trial_id_layout(
+                        combos_all,
+                        composite_cols=st.session_state.get("_composite_trial_columns")
+                        or (),
+                    )[0]
+                    if combos_all is not None
+                    else None,
                     # What the Scanpath picker can open — an annotation row's
                     # Open explains a trial the filters hide.
                     open_trials=_annotation_trials(combos),

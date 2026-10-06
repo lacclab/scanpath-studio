@@ -133,6 +133,59 @@ _CANONICAL_LABELS: dict[str, str] = {
 }
 
 
+#: #374 F5: a mapped **role** — a field the add-dataset wizard asks for — is
+#: named by its role wherever the app names a field (chips, trial filters,
+#: figure text), with the dataset's own column in a tooltip
+#: (:meth:`ColumnNames.source_tooltip`). The dataset's other columns keep their
+#: own names. The mapping screens themselves still offer the source columns
+#: (:meth:`ColumnNames.label`).
+ROLE_LABELS: dict[str, str] = {
+    "participant_id": "Participant",
+    "trial_id": "Trial",
+    "unique_trial_id": "Trial",
+    "text_id": "Text",
+    "unique_text_id": "Text",
+    "screen_id": "Screen",
+    "word_id": "Word #",
+    "text": "Word",
+    "line_idx": "Line",
+    "x": "X",
+    "y": "Y",
+    "width": "Width",
+    "height": "Height",
+    "duration_ms": "Duration (ms)",
+    "timestamp_ms": "Time (ms)",
+    "fixation_id": "Fixation #",
+    "screen_fixation_id": "Fixation # on screen",
+    "canvas_width": "Screen width",
+    "canvas_height": "Screen height",
+}
+
+#: #374 F5: one-sentence descriptions of the bundled OneStop demo's own columns,
+#: shown as a tooltip beside their (unchanged) names. Only what the repo's docs
+#: state (docs/onestop.md, docs/glossary.md); a column not listed gets none.
+DEMO_COLUMN_NOTES: dict[str, str] = {
+    "difficulty_level": "The paragraph's version: Adv (Advanced) or Ele (Elementary).",
+    "question_preview": "True when the question was shown before the paragraph "
+    "(information seeking).",
+    "repeated_reading_trial": "True when the paragraph is read for the second time.",
+    "is_correct": "Whether the comprehension question was answered correctly.",
+    "selected_answer": "The answer the participant chose.",
+    "question": "The comprehension question of the trial.",
+    "article_title": "The title of the article the paragraph comes from.",
+    "TRIAL_INDEX": "The trial's position in the participant's session.",
+    "is_in_aspan": "True for the words that answer the trial's question "
+    "(the answer span).",
+    "is_in_dspan": "True for the words of the distractor span.",
+}
+
+#: A short name for a highlight column in the figure's key (#374 F6).
+HIGHLIGHT_NOTES: dict[str, str] = {
+    "is_in_aspan": "answer span",
+    "is_in_dspan": "distractor span",
+}
+
+
 #: Canonical columns that can carry a copy of a partner's values — see
 #: `ColumnNames.aliases`.
 _ALIAS_PAIRS = (("trial_id", "unique_trial_id"), ("text_id", "unique_text_id"))
@@ -261,11 +314,40 @@ class ColumnNames:
             return canonical_label(column) + COMPUTED_SUFFIX
         return str(column)
 
+    def field_label(self, column) -> str:
+        """What ``column`` is called where the app names a *field* — a chip, a
+        trial filter, a picker on the rail (#374 F5).
+
+        A role the dataset mapped (:data:`ROLE_LABELS`) is named by its role,
+        not by the source column; everything else as :meth:`label`.
+        """
+        column = str(column)
+        if column in ROLE_LABELS and self.kind_of(column) not in (
+            COMPUTED,
+            GENERATED,
+        ):
+            return ROLE_LABELS[column]
+        return self.label(column)
+
+    def source_tooltip(self, column) -> str:
+        """``"from RECORDING_SESSION_LABEL"`` for a role :meth:`field_label`
+        names by its role, else ``""`` (#374 F5)."""
+        column = str(column)
+        entry = self.source(column)
+        if column not in ROLE_LABELS or entry is None or not entry.sources:
+            return ""
+        if entry.kind == CONVERTED and entry.note:
+            return f"from {entry.note}"
+        if entry.kind not in (MAPPED, COMPOSITE):
+            return ""
+        return f"from {entry.display}"
+
     def figure_labels(self, columns: Iterable) -> dict[str, str]:
         """``{column: label}`` for a figure's text (`FigureSettings.column_labels`).
 
-        Every column the dataset brought, under its own name; the columns the
-        app made are left out, so a figure keeps its short labels for them
+        Every column the dataset brought, under its own name, except a mapped
+        role (:data:`ROLE_LABELS`); those and the columns the app made are left
+        out, so a figure keeps its short labels for them
         ("Fixation #", "FFD") rather than writing "(computed)" into a hover.
         Bookkeeping columns (`data.INTERNAL_COLUMNS`) are no figure's text. A
         column converted from one source (a duration read in seconds) is named
@@ -276,9 +358,12 @@ class ColumnNames:
 
         out: dict[str, str] = {}
         for column in columns:
-            if column in INTERNAL_COLUMNS or self.kind_of(column) in (
-                COMPUTED,
-                GENERATED,
+            # #374 F5/F7: a role is the figure's own plain word ("Duration",
+            # "Word #"), not the source column.
+            if (
+                column in INTERNAL_COLUMNS
+                or str(column) in ROLE_LABELS
+                or self.kind_of(column) in (COMPUTED, GENERATED)
             ):
                 continue
             entry = self.source(column)
@@ -298,12 +383,17 @@ class ColumnNames:
         """Both tables' entries, this map's winning where both name a column."""
         return ColumnNames({**dict(other.entries), **dict(self.entries)})
 
-    def option_labels(self, options, extra: Mapping | None = None) -> dict[str, str]:
+    def option_labels(
+        self, options, extra: Mapping | None = None, *, roles: bool = False
+    ) -> dict[str, str]:
         """``{option: label}`` for a picker; ``extra`` labels synthetic options
         (``"(uniform)"``, ``"line"``). A label two options share gets the
-        internal name added, so a picker never shows two identical rows."""
+        internal name added, so a picker never shows two identical rows.
+        ``roles=True`` names a mapped role by its role (:meth:`field_label`) —
+        for the rail's pickers, not the mapping screens."""
         extra = dict(extra or {})
-        labels = {o: extra.get(o) or self.label(o) for o in options}
+        name = self.field_label if roles else self.label
+        labels = {o: extra.get(o) or name(o) for o in options}
         counts: dict[str, int] = {}
         for value in labels.values():
             counts[value] = counts.get(value, 0) + 1

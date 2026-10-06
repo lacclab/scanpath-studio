@@ -554,15 +554,19 @@ def test_the_rail_shows_the_demos_own_column_names(demo_raw):
     at.run()
     assert not at.exception, at.exception
     color = at.selectbox(key="global_color_by")
-    assert duration in color.options, color.options
+    # #374 F5: a mapped role is named by its role, the dataset's own extra
+    # columns by their own names.
+    assert "Duration (ms)" in color.options, color.options
+    assert duration not in color.options
     assert "duration_ms" not in color.options
+    assert "NEXT_SAC_AMPLITUDE" in color.options
     hover = at.multiselect(key="global_fixation_hover_fields")
-    assert duration in hover.options, hover.options
+    assert "Duration (ms)" in hover.options, hover.options
     assert any(o.endswith(cn.COMPUTED_SUFFIX) for o in hover.options)
     # "Line" is the app's, so it sorts after the dataset's own fields.
     assert color.options[-1] == "Line" + cn.COMPUTED_SUFFIX
     metric = at.selectbox(key="global_heatmap_metric")
-    assert metric.options == [duration, "Fixation count"]
+    assert metric.options == ["Duration (ms)", "Fixation count"]
     # The values are still canonical: links and saved configs are unchanged.
     assert at.session_state["global_heatmap_metric"] == "duration_ms"
 
@@ -691,13 +695,22 @@ def test_active_all_reads_every_table_of_the_session():
     assert names.label("duration_ms") == "DUR"
 
 
-def test_a_chip_is_named_as_the_dataset_names_its_column():
+def test_a_chip_names_a_role_by_its_role_and_its_source_in_the_tooltip():
     from scanpath_studio import controls
 
-    names = ColumnNames({"participant_id": SourceName(("RECORDING_SESSION_LABEL",))})
-    assert (
-        controls.chip_field_label("participant_id", names) == "RECORDING_SESSION_LABEL"
+    names = ColumnNames(
+        {
+            "participant_id": SourceName(("RECORDING_SESSION_LABEL",)),
+            "cond": SourceName(("CONDITION",)),
+        }
     )
+    assert controls.chip_field_label("participant_id", names) == "Participant"
+    assert controls.field_help("participant_id", names) == (
+        "From RECORDING_SESSION_LABEL."
+    )
+    # The dataset's own extra column keeps its own name.
+    assert controls.chip_field_label("cond", names) == "CONDITION"
+    assert controls.field_help("cond", names) == ""
     # A summary statistic is the app's and keeps its name.
     stat = next(iter(controls.SUMMARY_CHIP_FIELDS))
     assert controls.chip_field_label(stat, names) == controls.SUMMARY_CHIP_FIELDS[stat]
@@ -735,10 +748,8 @@ def test_figure_labels_name_the_users_columns_and_leave_the_apps():
     labels = names.figure_labels(
         ["duration_ms", "gpt2_surprisal", "is_regression", "fixation_id"]
     )
-    assert labels == {
-        "duration_ms": "CURRENT_FIX_DURATION",
-        "gpt2_surprisal": "gpt2_surprisal",
-    }
+    # #374 F5/F7: a role keeps the figure's own plain word ("Duration").
+    assert labels == {"gpt2_surprisal": "gpt2_surprisal"}
 
 
 class TestFigureText:
@@ -761,6 +772,14 @@ class TestFigureText:
             **settings,
         )
 
+    @staticmethod
+    def _assigned(demo):
+        """The synthetic trial with its fixations' words assigned from the boxes."""
+        from scanpath_studio.measures import assign_fixations_to_words
+
+        words, fixations = demo
+        return words, assign_fixations_to_words(fixations, words, overwrite=True)
+
     def test_the_colour_bar_takes_the_datasets_name(self, demo):
         fig = self._figure(
             demo,
@@ -781,40 +800,65 @@ class TestFigureText:
     def test_a_hover_row_takes_the_datasets_name(self, demo):
         fig = self._figure(
             demo,
-            fixation_hover_fields=("duration_ms",),
-            column_labels={"duration_ms": "CURRENT_FIX_DURATION"},
+            fixation_hover_fields=("x",),
+            column_labels={"x": "CURRENT_FIX_X"},
         )
         templates = " ".join(str(t.hovertemplate) for t in fig.data)
-        assert "CURRENT_FIX_DURATION: " in templates
+        assert "CURRENT_FIX_X: " in templates
 
     def test_a_word_hover_reads_the_words_tables_label(self, demo):
         fig = self._figure(
-            demo,
+            self._assigned(demo),
             word_hover_fields=("word_id",),
             fixation_hover_fields=("word_id",),
             column_labels={"word_id": "FIX_IA", "words:word_id": "IA_ID"},
         )
         by_name = {trace.name: str(trace.hovertemplate) for trace in fig.data}
         assert "IA_ID: " in by_name["words"]
-        assert "FIX_IA: " in " ".join(
-            template for name, template in by_name.items() if name != "words"
-        )
+        # #374 F7: a fixation names its word in the lead line, by its text.
+        fixation = next(t for t in fig.data if t.name == "Fixations")
+        assert "FIX_IA" not in str(fixation.hovertemplate)
+        assert any("(word " in str(row[0]) for row in fixation.customdata)
+
+    def test_the_fixation_hover_reads_like_a_sentence(self, demo):
+        """#374 F7: "Fixation 3 · 200 ms · on “word” (word 2)", no column names."""
+        fig = self._figure(self._assigned(demo))
+        fixation = next(t for t in fig.data if t.name == "Fixations")
+        assert str(fixation.hovertemplate).startswith("%{customdata[0]}")
+        lines = [str(row[0]) for row in fixation.customdata]
+        assert lines[0].startswith("Fixation 1 · ")
+        assert any(" ms · on “" in line for line in lines), lines
+        # The synthetic trial's out-of-text fixation.
+        assert any(line.endswith("outside the text") for line in lines), lines
 
     def test_table_labels_keep_each_tables_name(self):
-        words = ColumnNames({"word_id": SourceName(("IA_ID",), cn.MAPPED, "")})
+        words = ColumnNames({"IA_X": SourceName(("IA_X",), cn.MAPPED, "")})
+        fixations = ColumnNames(
+            {"IA_X": SourceName(("FIX_X",), cn.CONVERTED, "FIX_X − 1")}
+        )
+        labels = cn.table_figure_labels(
+            {"words": words, "fixations": fixations},
+            {"words": ["IA_X"], "fixations": ["IA_X"]},
+        )
+        assert labels["words:IA_X"] == "IA_X"
+        assert labels["IA_X"] == "FIX_X − 1"
+        words_only = cn.table_figure_labels(
+            {"words": words, "fixations": fixations}, {"words": ["IA_X"]}
+        )
+        assert words_only == {"IA_X": "IA_X"}
+
+    def test_a_role_is_never_a_formula_in_a_figure(self):
+        """#374 F7: a shifted word id is labelled by the figure, not as
+        ``CURRENT_FIX_INTEREST_AREA_ID − 1``."""
         fixations = ColumnNames(
             {"word_id": SourceName(("FIX_IA",), cn.CONVERTED, "FIX_IA − 1")}
         )
         labels = cn.table_figure_labels(
-            {"words": words, "fixations": fixations},
-            {"words": ["word_id"], "fixations": ["word_id"]},
+            {"fixations": fixations}, {"fixations": ["word_id"]}
         )
-        assert labels["words:word_id"] == "IA_ID"
-        assert labels["word_id"] == "FIX_IA − 1"
-        words_only = cn.table_figure_labels(
-            {"words": words, "fixations": fixations}, {"words": ["word_id"]}
-        )
-        assert words_only == {"word_id": "IA_ID"}
+        assert labels == {}
+        assert fixations.field_label("word_id") == "Word #"
+        assert fixations.source_tooltip("word_id") == "from FIX_IA − 1"
 
     def test_without_labels_a_figure_is_unchanged(self, demo):
         """The API passes none (phase 4), and its figures keep today's text."""
@@ -868,7 +912,8 @@ def test_a_converted_duration_is_named_by_its_source_in_a_figure():
         }
     )
     labels = names.figure_labels(["duration_ms", "width", "_text_id_mapped"])
-    assert labels == {"duration_ms": "FPOGD", "width": "R − L"}
+    # #374 F5: both are roles, which a figure names in its own words.
+    assert labels == {}
 
 
 def test_a_column_called_like_a_fixed_sort_option_names_its_column():

@@ -1,1 +1,0 @@
-The dataset table offers Remove only for datasets you added: on the demo and the public corpora it only hid the row for the session, with no way back. The table also sits a little lower under the Data Management title.

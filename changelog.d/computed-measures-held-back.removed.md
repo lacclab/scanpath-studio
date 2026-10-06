@@ -1,1 +1,0 @@
-Measures the app computes itself are held back until validated: the reading-measure, summary, preprocessing and analysis-table API functions, the `analyze` command, the export bundle's measure family, and the computed Corpus Analysis views (Reading summary, Progressive vs regressive, Landing-position curve, Reader summary table) now need `SCANPATH_EXPERIMENTAL=1`.

@@ -1,1 +1,0 @@
-Figure & canvas: *Whole monitor* is now an unticked *Crop to data* box, the monitor size and the px/degree line left the rail (set on the Data page), and the axes row warns that fields other than x / y draw fixation markers only.

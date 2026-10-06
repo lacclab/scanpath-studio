@@ -53,6 +53,7 @@ from .controls import (
     multi_field_flag,
     value_preview_tip,
 )
+from .crash_report import guarded
 from .data import (
     FIX_OPTIONAL_FIELDS,
     PARTICIPANT_CANDIDATES,
@@ -506,6 +507,7 @@ def _render_leave_prompt(host) -> None:
 
 
 @st.dialog("Leave setup?")
+@guarded()
 def _leave_prompt_dialog(destination: str) -> None:
     """The modal body — UX-79. Opened by :func:`_render_leave_prompt`.
 

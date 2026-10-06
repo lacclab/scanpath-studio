@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -29,6 +30,33 @@ def _stopping_script() -> None:
         st.stop()
 
 
+def _guarded_fragment_script() -> None:
+    import streamlit as st
+
+    from scanpath_studio.crash_report import guarded
+
+    @st.fragment
+    @guarded()
+    def panel() -> None:
+        raise ValueError("inside a fragment")
+
+    with guarded():
+        panel()
+
+
+def _unguarded_fragment_script() -> None:
+    import streamlit as st
+
+    from scanpath_studio.crash_report import guarded
+
+    @st.fragment
+    def panel() -> None:
+        raise ValueError("inside a fragment")
+
+    with guarded():
+        panel()
+
+
 def test_a_crash_shows_the_report_note_and_the_traceback():
     at = AppTest.from_function(_crashing_script).run()
     assert len(at.error) == 1
@@ -46,6 +74,42 @@ def test_streamlit_control_flow_passes_through():
     at = AppTest.from_function(_stopping_script).run()
     assert not at.error
     assert not at.exception
+
+
+def test_a_guarded_fragment_shows_the_note_once():
+    at = AppTest.from_function(_guarded_fragment_script).run()
+    assert len(at.error) == 1
+    assert len(at.exception) == 1
+
+
+def test_an_error_streamlit_already_drew_is_not_drawn_again():
+    """A fragment's own handler draws the traceback, then raises
+    FragmentHandledException — which the outer guard must let through."""
+    at = AppTest.from_function(_unguarded_fragment_script).run()
+    assert not at.error
+    assert len(at.exception) == 1
+
+
+def _decorator_name(node: ast.expr) -> str:
+    target = node.func if isinstance(node, ast.Call) else node
+    return ast.unparse(target)
+
+
+def test_every_dialog_and_fragment_is_guarded():
+    """Streamlit calls a fragment or dialog directly when it reruns on its own,
+    outside the script run run_app guards."""
+    unguarded = []
+    for path in sorted((ROOT / "scanpath_studio").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            names = [_decorator_name(d) for d in node.decorator_list]
+            if any(n in ("st.dialog", "st.fragment") for n in names) and (
+                "guarded" not in names
+            ):
+                unguarded.append(f"{path.name}:{node.lineno} {node.name}")
+    assert not unguarded, unguarded
 
 
 def test_the_report_link_carries_only_the_error_type():

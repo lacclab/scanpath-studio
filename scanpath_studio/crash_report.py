@@ -7,10 +7,18 @@ problem to solve. :func:`run_app` runs the whole script — the import of
 where to report it, followed by the same traceback (with its *Copy* button) for
 the report.
 
+A fragment or dialog that reruns on its own is called by Streamlit directly,
+outside that run, so every ``@st.dialog`` / ``@st.fragment`` in the package also
+carries ``@guarded()`` (pinned by ``tests/test_crash_report.py``). Widget
+callbacks are **not** covered: Streamlit runs them before the script starts, and
+an error there still shows Streamlit's bare traceback.
+
 Streamlit's control flow (``st.rerun``, ``st.stop``) raises ``BaseException``
-subclasses, so it passes through untouched. Streamlit 1.65's ``on_script_error``
-hook would do this job, but it is only wired up for ``st.App`` (ASGI) servers,
-not for ``streamlit run``, which is how every surface launches the app.
+subclasses, so it passes through untouched, and so does
+``FragmentHandledException`` — a fragment whose error Streamlit has already
+drawn. Streamlit 1.65's ``on_script_error`` hook covers callbacks too, but only
+when the app is served as an ``st.App`` (a different, Starlette-based server),
+which none of our surfaces is.
 
 This module imports only the standard library, Streamlit and ``constants`` —
 itself stdlib-only — so it still loads when the module that failed is one of
@@ -25,6 +33,7 @@ from contextlib import contextmanager
 from urllib.parse import urlencode
 
 import streamlit as st
+from streamlit.errors import FragmentHandledException
 
 from scanpath_studio import __version__
 from scanpath_studio.constants import CITATION, ICONS
@@ -67,9 +76,15 @@ def show_crash(error: Exception) -> None:
 
 @contextmanager
 def guarded() -> Iterator[None]:
-    """Turn an uncaught app error into :func:`show_crash` instead of a bare traceback."""
+    """Turn an uncaught app error into :func:`show_crash` instead of a bare traceback.
+
+    A context manager, and — like any ``contextmanager`` — a decorator too:
+    ``@guarded()`` under ``@st.dialog`` / ``@st.fragment``.
+    """
     try:
         yield
+    except FragmentHandledException:
+        raise
     except Exception as error:
         show_crash(error)
 

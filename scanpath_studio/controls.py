@@ -69,6 +69,7 @@ from .constants import (
     spoken,
     upload_limit_mb,
 )
+from .crash_report import guarded
 from .data import (
     INTERNAL_COLUMNS,
     READING_MEASURE_FIELDS,
@@ -1711,6 +1712,7 @@ def _close_design_delete_dialog() -> None:
 
 
 @st.dialog("Delete this design?", on_dismiss=_close_design_delete_dialog)
+@guarded()
 def _design_delete_dialog(name: str) -> None:
     """Confirm forgetting one saved design — VIZ-39."""
     st.caption(
@@ -1742,6 +1744,7 @@ def _close_design_save_dialog() -> None:
 # flag stayed armed and the dialog reopened on the very next rerun — clicking a
 # preset, toggling a layer, anything.
 @st.dialog("Save current design", on_dismiss=_close_design_save_dialog)
+@guarded()
 def _design_save_dialog() -> None:
     """Name the settings on screen and keep them (VIZ-39).
 
@@ -5707,6 +5710,7 @@ _RESET_VIZ_PENDING_KEY = "_reset_viz_pending"
 
 
 @st.dialog("Reset visualization?")
+@guarded()
 def _reset_viz_confirmation_dialog() -> None:
     """The modal body — BUG-36. Opened by ``render_viz_reset``.
 

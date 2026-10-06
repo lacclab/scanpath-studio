@@ -58,6 +58,7 @@ from dataclasses import dataclass
 
 import streamlit as st
 
+from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import NAV_SELECTOR
 
@@ -680,6 +681,7 @@ def _step_next() -> None:
 
 
 @st.dialog("Quick tour", width="large")
+@guarded()
 def _tour_dialog() -> None:
     """One tour step + Back / Skip / Next navigation.
 
@@ -1232,6 +1234,7 @@ def _scroll_into_view_script(selector: str) -> str:
 
 
 @st.fragment
+@guarded()
 def render_spotlight_tour() -> None:
     """Floating tour card + pulsing highlight for the current spotlight step.
 
@@ -1661,6 +1664,7 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
 
 
 @st.dialog(f"{ICONS['tutorials']} Tutorials", width="large")
+@guarded()
 def _tutorial_library_dialog() -> None:
     """The chooser: outcome, prerequisites, time, and progress per tutorial."""
     from scanpath_studio.menu import close_open_popovers
@@ -1739,6 +1743,7 @@ def _tutorial_library_dialog() -> None:
 
 
 @st.fragment
+@guarded()
 def render_use_case_tutorial() -> None:
     """Render the active named tutorial with safe, explicit navigation."""
     tutorial_id = st.session_state.get("tutorial_active")
@@ -1986,6 +1991,7 @@ def faq_items() -> list:
 
 
 @st.dialog(f"{ICONS['faq']} Frequently asked questions", width="large")
+@guarded()
 def _faq_dialog() -> None:
     """The in-app FAQ: short answers in expanders + links to the full docs.
 
@@ -2237,6 +2243,7 @@ def _exit_wizard_guide() -> None:
 
 
 @st.fragment
+@guarded()
 def render_spotlight_wizard_guide() -> None:
     """Floating bottom-right card walking through the dataset-setup wizard.
 

@@ -3306,9 +3306,11 @@ stimulus.</p>
 <code>fix_color</code>, <code>marker_size_range</code>, <code>opacity</code>, <code>hollow</code>,
 <code>saccade_color</code>, <code>saccade_style</code>, <code>saccade_width</code>, <code>box_color</code> —
 the outline of that reading's word boxes, its <code>fix_color</code> when left out —
-and <code>box_fill_color</code>, their fill, <code>word_box_fill_color</code> when left out.
-The two box colours are this figure's only: the co-animation draws one set
-of boxes, in <code>word_box_color</code> / <code>word_box_fill_color</code>, and ignores them.</p>
+<code>box_fill_color</code>, their fill, <code>word_box_fill_color</code> when left out — and
+<code>raw_gaze_color</code>, that reading's raw-gaze samples, its <code>fix_color</code> when
+left out. These three are this figure's only: the co-animation draws one set
+of boxes, in <code>word_box_color</code> / <code>word_box_fill_color</code>, and no raw gaze,
+and ignores them.</p>
 <p><strong>Filters, per scanpath.</strong> <code>fixation_flags</code> and
 <code>saccade_classes</code> filter both scanpaths, as they filter
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>'s one; the same two keys

@@ -462,7 +462,7 @@ def _render_screen_navigator(
     *pick* and *scrub* tracks — ``SELECTOR_ROW_GRID`` in full, with the leading
     *dataset* track left blank — instead of ``SELECTOR_ROW_TRIO`` (which merges
     those two tracks into one, so this row's dropdown started under **Select
-    Dataset** and its slider ran on past **Select Trial**'s own, wider than it
+    Dataset** and its slider ran on past **Select trial**'s own, wider than it
     and not aligned to it). The trail (◀ ▶) keeps the *actions* track either
     way, so it does not move.
 
@@ -2991,7 +2991,7 @@ def _render_compare_selector(
 
         current_idx = labels.index(current)
 
-    # UX-189: the label is shown, like A's *Select Trial*, so its help "?" is there.
+    # UX-189: the label is shown, like A's *Select trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
         "Scanpath B",
         options=labels,
@@ -3169,7 +3169,7 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     return out
 
 
-#: Columns the Stimulus & Context field picker never offers (UX-32): the
+#: Columns the Stimulus & context field picker never offers (UX-32): the
 #: stimulus text itself, word geometry, and the identity columns the trial chips
 #: above the plot already carry.
 _STIMULUS_FIELD_EXCLUDE = frozenset(
@@ -3359,7 +3359,7 @@ def _literal(value: object) -> str:
 
 
 def _context_block_html(lines: list[str]) -> str:
-    """The Stimulus & Context fields as one block, a line per field (#374 F17)."""
+    """The Stimulus & context fields as one block, a line per field (#374 F17)."""
     body = "".join(f'<div class="sps-context-line">{line}</div>' for line in lines)
     return f'<div class="sps-context" style="line-height:1.6">{body}</div>'
 
@@ -3372,7 +3372,7 @@ def _field_label_html(col: str) -> str:
 
 
 def _context_html(body: str) -> None:
-    """One app-owned line of the Stimulus & Context panel (values `_literal`)."""
+    """One app-owned line of the Stimulus & context panel (values `_literal`)."""
     st.markdown(f'<div class="sps-context-line">{body}</div>', unsafe_allow_html=True)
 
 
@@ -3717,7 +3717,7 @@ def _render_paragraph_panel(
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
 
     container = (
-        st.container() if bare else st.expander("Stimulus & Context", expanded=expanded)
+        st.container() if bare else st.expander("Stimulus & context", expanded=expanded)
     )
     with container:
         text_col, picker_col = st.columns([9, 1.4], vertical_alignment="top")
@@ -6197,7 +6197,7 @@ def render_single_trial_tab(
        **visualization controls** (formerly in the sidebar — see
        ``controls.render_plot_controls``, rendered here with ``host=``).
     3. A plot-width **subtab bar** directly below it: 📝 Annotations ·
-       📄 Stimulus & Context · 🔬 Comparisons · 📤 Export · 🔗 Share. Export folds in the former Bulk
+       📄 Stimulus & context · 🔬 Comparisons · 📤 Export · 🔗 Share. Export folds in the former Bulk
        Export tab (``_render_export_panel``); Share (the former header popover)
        builds the deep link via ``share_renderer`` (passed by ``app.main``). The
        former Trial Info subtab was folded into the chips above the plot, and
@@ -10365,7 +10365,11 @@ def render_per_text_tab(
             cohort = coh[["word_id", "value"]] if not coh.empty else None
         _chart(
             make_small_multiples_figure(
-                per, measure_label=measure.axis_label, cohort=cohort, **fw
+                per,
+                measure_label=measure.axis_label,
+                cohort=cohort,
+                aggregate=agg,
+                **fw,
             )
         )
         _download_tidy(
@@ -10447,6 +10451,7 @@ def render_per_text_tab(
                 {f"Cohort ({measure.label})": prof},
                 measure_label=measure.axis_label,
                 spread_label=spread,
+                aggregate=agg,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
             )
@@ -11101,6 +11106,7 @@ def render_per_group_tab(
                 {label: prof},
                 measure_label=measure.axis_label,
                 spread_label=spread,
+                aggregate=agg,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
             )

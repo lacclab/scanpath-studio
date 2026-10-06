@@ -2085,7 +2085,80 @@ def apply_palette(name: str) -> None:
     if name == CUSTOM_PALETTE:
         return
     for key, value in palette_state(name).items():
-        st.session_state[key] = value
+        write_through(key, value)
+
+
+#: #374 F9 — programmatic widget writes the browser may not have taken yet:
+#: ``{key: [value, stale_echo]}``. See `write_through`.
+_PENDING_WRITES_KEY = "_pending_widget_writes"
+_WRITE_FRESH = "\x00fresh"  # written this run: the browser has not answered yet
+_WRITE_UNSEEN = "\x00unseen"  # one run on: the next echo is the browser's
+
+
+def _write_match_key(value):
+    """Normalize a widget value for comparison: pickers hand back lowercase hex,
+    sliders tuples where the stored value is a list."""
+    if isinstance(value, tuple):
+        return [_write_match_key(v) for v in value]
+    if isinstance(value, list):
+        return [_write_match_key(v) for v in value]
+    return _palette_match_key(value)
+
+
+def write_through(key: str, value) -> None:
+    """Write ``value`` to a widget's key so that a closed popover cannot undo it.
+
+    #374 F9. A widget inside an ``st.popover`` is mounted in the browser only
+    while the popover is open. Once it has been open, the browser remembers the
+    value it showed and sends that value back on every rerun; a programmatic
+    write made while the popover is closed reaches no mounted widget, so it
+    holds for one run and the next rerun puts the remembered value back (the
+    palette that "stopped sticking" after Fixations ▾ had been opened).
+
+    So the write is also recorded here, and `reassert_pending_writes` repeats
+    it at the top of each run while the browser keeps echoing the old value.
+    It lets go as soon as the browser sends anything else: the written value
+    (the widget remounted and took it) or a new pick of the user's own.
+    Call it from a callback, like any write to a widget key.
+    """
+    ss = st.session_state
+    ss[key] = value
+    pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
+    pending[key] = [deepcopy(value), _WRITE_FRESH]
+    ss[_PENDING_WRITES_KEY] = pending
+
+
+def reassert_pending_writes() -> None:
+    """Re-apply `write_through` writes the browser has not taken yet.
+
+    Runs at the top of every script run, before any widget is built. The first
+    run after a write learns what the browser echoes for the key; while it
+    keeps echoing that, the write is repeated; any other value ends it.
+    """
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY)
+    if not pending:
+        return
+    kept = {}
+    for key, (value, stale) in pending.items():
+        if stale == _WRITE_FRESH:
+            # The run the callback wrote in: the write itself is what reads
+            # back, so there is nothing to learn yet.
+            kept[key] = [value, _WRITE_UNSEEN]
+            continue
+        current = _write_match_key(ss.get(key))
+        if current == _write_match_key(value):
+            continue  # the browser has it
+        if stale == _WRITE_UNSEEN:
+            stale = current
+        elif current != stale:
+            continue  # the user picked something else
+        ss[key] = deepcopy(value)
+        kept[key] = [value, stale]
+    if kept:
+        ss[_PENDING_WRITES_KEY] = kept
+    else:
+        ss.pop(_PENDING_WRITES_KEY, None)
 
 
 def _palette_match_key(value):

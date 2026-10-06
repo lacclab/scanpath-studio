@@ -150,6 +150,7 @@ from scanpath_studio.controls import (
     column_mapping_ui,
     has_active_trial_filters,
     read_trial_filters,
+    reassert_pending_writes,
     unique_field_labels,
     viz_settings_from_state,
 )
@@ -8708,6 +8709,8 @@ def _run_app() -> None:
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()
+    # #374 F9: before any widget, so a write a closed popover would undo holds.
+    reassert_pending_writes()
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
     # `?source=...&participant=...&trial=...&...` to land on a specific trial

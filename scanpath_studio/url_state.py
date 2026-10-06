@@ -12,7 +12,7 @@ import copy
 import json
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
 
@@ -103,6 +103,7 @@ from .session_keys import (
     FIX_RANGE_PARAM,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
+    PARAM_DATASET,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
@@ -1251,6 +1252,79 @@ def link_sets(state_key: str) -> bool:
         url_key in params and target == state_key
         for url_key, (target, _coerce) in _URL_PRESETS.items()
     )
+
+
+#: #374 F14 — a link to an added dataset this session doesn't hold, kept so the
+#: notice stays up (the link's params are dropped once it is read) until
+#: another dataset is opened: ``{"message": str, "choice": str | None}``.
+LINK_DATASET_MISSING_KEY = "_link_dataset_missing"
+
+
+def missing_dataset_message(
+    name: str, participant: str | None = None, trial: str | None = None
+) -> str:
+    """What a recipient reads when a link names a dataset they don't have."""
+    shown = str(name).replace("*", r"\*")
+    if trial and participant:
+        what = f"trial {trial} of participant {participant} in **{shown}**"
+    elif trial:
+        what = f"trial {trial} in **{shown}**"
+    else:
+        what = f"**{shown}**"
+    return (
+        f"This link shows {what}, which isn't here. Ask the sender for the data "
+        f"files and its setup file ({ICONS['edit']} Edit dataset → Save setup), "
+        f"then add it with {ICONS['add']} Add dataset → Import files. Nothing "
+        "from the link was applied."
+    )
+
+
+def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
+    """Open the added dataset a link names (`?dataset=`, #374 F14).
+
+    Returns the dataset to open when this session holds one of that name. When
+    it doesn't, the link's view is **not** applied to whatever else is open:
+    every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
+    link's params are cleared so the next run does not seed them again, and a
+    notice saying which dataset is missing — and how to get it — is parked
+    under :data:`LINK_DATASET_MISSING_KEY`. ``current`` is the dataset open now,
+    which the notice is tied to.
+    """
+    try:
+        params = st.query_params
+        name = params.get(PARAM_DATASET)
+    except Exception:
+        return None
+    if not name or params.get("source"):
+        return None
+    if name in (st.session_state.get("_datasets") or {}):
+        return str(name)
+    message = missing_dataset_message(
+        str(name), params.get("participant"), params.get("trial_id")
+    )
+    for key in seeded:
+        st.session_state.pop(key, None)
+    params.clear()
+    st.session_state[LINK_DATASET_MISSING_KEY] = {
+        "message": message,
+        "choice": current,
+    }
+    return None
+
+
+def link_dataset_notice(current: str | None) -> str | None:
+    """The missing-dataset notice while it holds — until another dataset is
+    opened than the one that was open when the link was read."""
+    held = st.session_state.get(LINK_DATASET_MISSING_KEY)
+    if not isinstance(held, dict):
+        return None
+    if held.get("choice") is None:
+        # A fresh session has no dataset open until the picker resolves one.
+        held["choice"] = current
+    elif held.get("choice") != current:
+        st.session_state.pop(LINK_DATASET_MISSING_KEY, None)
+        return None
+    return str(held.get("message") or "") or None
 
 
 def scope_link_setup(choice: str | None) -> None:
@@ -3002,14 +3076,18 @@ def _build_share_query(
         # add-dataset screen's ⬇️ Save setup, and re-applied from that screen's
         # *Restore a saved setup*. The caveat used to stop at "load the same
         # data" and leave the mapping to be redone by hand.
+        #
+        # #374 F14: the link names the dataset, so the recipient's app can open
+        # one of that name and say which is missing when it has none.
+        if data_choice in (st.session_state.get("_datasets") or {}):
+            params[PARAM_DATASET] = str(data_choice)
         caveats.append(
-            "This data source can't be rebuilt from a link — the recipient will "
-            "need to load the same files themselves. Send them the dataset's "
-            f"**⬇ Save setup** JSON (on the {ICONS['add']} Add dataset screen, beside "
-            f"{ICONS['confirm']} Add dataset) along with the files: it carries the column mapping "
-            "and recording setup, and they re-apply it from *Restore a saved "
-            "setup* on that same screen. The view settings below travel in the "
-            "link itself."
+            "This dataset's files can't travel in a link — the recipient needs "
+            "them too. Send them with its setup file "
+            f"({ICONS['edit']} **Edit dataset → Save setup**): they add the "
+            f"dataset with {ICONS['add']} **Add dataset → Import files** and "
+            "restore the setup there. The link names the dataset and carries "
+            "the view settings."
         )
 
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):

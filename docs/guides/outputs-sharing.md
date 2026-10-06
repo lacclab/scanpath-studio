@@ -45,8 +45,11 @@ still downloads.
 The **Share** subtab passes a view on in three ways:
 
 - **Link** — a URL with the dataset choice, trial and every figure setting.
-  It never contains your uploaded data: the recipient must load the same
-  dataset. (A scanpath created by hand is the exception; its link carries it.)
+  It never contains your uploaded data: the link names a dataset you added,
+  and the recipient adds the same files (send them with its setup file, from
+  **Edit dataset → Save setup**). A recipient without that dataset is told
+  which one the link needs, and the view is not applied to another. (A
+  scanpath created by hand is the exception; its link carries it.)
 - **Code** — Python or a CLI command that reproduces the figure.
 - **File** — the figure's settings as a file, to restore later: its mode
   (static, animated or a comparison) and, for a comparison, which reading it

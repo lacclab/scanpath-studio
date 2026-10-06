@@ -351,6 +351,13 @@ PARAM_LEGACY_COLORBAR = (
 # are emitted in preference to this pair, as `onestop_public` was before them.
 PARAM_CORPUS = "corpus"
 
+# #374 F14: a dataset the user added, by its name. Its files can't travel in a
+# link, so the name is what lets the recipient's app open it when it holds a
+# dataset of that name, and say which dataset is missing when it doesn't —
+# rather than apply the view to whatever else is open. Read in `app.main`, like
+# `corpus`; emitted only for an added dataset.
+PARAM_DATASET = "dataset"
+
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
 # labels (`tabs.CORPUS_SUBTABS`) can be renamed without breaking a bookmarked
@@ -673,6 +680,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_REGIME,
         PARAM_ONESTOP_PARTS,
         PARAM_CORPUS,
+        PARAM_DATASET,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
         COMPARE_SCREEN_PARAM,
@@ -751,6 +759,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SOURCE_PARAM,
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
+        PARAM_DATASET,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,

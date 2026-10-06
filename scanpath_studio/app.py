@@ -268,7 +268,11 @@ from scanpath_studio.persistence import (
     save_local_state,
     server_bound_to_loopback,
 )
-from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
+from scanpath_studio.session_keys import (
+    COLUMN_MAPPING_PREFIX,
+    PARAM_CORPUS,
+    PARAM_DATASET,
+)
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
@@ -318,8 +322,10 @@ from scanpath_studio.url_state import (
     _render_share_body,
     apply_pending_preprocessing,
     corpus_choice_for_slug,
+    link_dataset_notice,
     link_sets,
     link_setup_keys_for,
+    resolve_link_dataset,
     scope_link_setup,
 )
 
@@ -1644,6 +1650,8 @@ def _benchmark_files_present(dataset: str) -> bool:
 # value so the loaders can keep falling back to the demo corpus and the app
 # stays usable.
 _UNAVAILABLE_KEY = "_dataset_unavailable"
+#: #374 F14 — the added dataset a `?dataset=` link opened, so it is opened once.
+_LINK_DATASET_OPENED_KEY = "_link_dataset_opened"
 #: UX-174: whether this run is showing the demo *in place of* the selected
 #: corpus. Cleared at the start of every full run and set with the note above
 #: (which is consumed before the dataset table draws), so it describes this run
@@ -8783,7 +8791,12 @@ def _run_app() -> None:
     # for the full URL schema. External tools can deep-link into this app with
     # `?source=...&participant=...&trial=...&...` to land on a specific trial
     # with the reviewer's preferred viz settings.
+    keys_before_link = set(st.session_state.keys())
     url_source = _apply_url_preset()
+    # #374 F14: what the link seeded, to take back if it names a dataset that
+    # isn't here (`resolve_link_dataset`, after the recovery cache restores).
+    link_seeded = set(st.session_state.keys()) - keys_before_link
+    links_dataset = bool(st.query_params.get(PARAM_DATASET))
     # ENG-26: desktop/localhost installs remember uploaded datasets, annotations,
     # mappings and view settings across browser refreshes and process restarts.
     # Public deployments never opt in implicitly (there is no user identity with
@@ -8915,6 +8928,19 @@ def _run_app() -> None:
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
+    elif links_dataset:
+        # #374 F14: `?dataset=` names a dataset the sender added. Opened when
+        # this session holds one of that name — once, on the run that read the
+        # link, so the picker stays the user's afterwards — and otherwise the
+        # link is set aside whole, with a notice naming what is missing.
+        current = st.session_state.get("data_source_choice")
+        if (name := resolve_link_dataset(link_seeded, current)) is not None:
+            linked_choice = name
+            if st.session_state.get(_LINK_DATASET_OPENED_KEY) != name:
+                st.session_state[_LINK_DATASET_OPENED_KEY] = name
+                st.session_state["_pending_source_choice"] = name
+    if notice := link_dataset_notice(st.session_state.get("data_source_choice")):
+        page_notices.warning(notice, icon=ICONS["warning"])
     # EXP-19: the canvas / font a link seeded belong to the source it names.
     # Scope their protection from the source snap to that source — or drop it
     # when the link named none this app can open, so the fallback source still

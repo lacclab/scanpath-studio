@@ -37,7 +37,7 @@ Three rules are worth knowing:
 
 - **The table is never copied onto your fixations.** It stays its own table and is exported separately (`metadata/participants.csv`).
 - **Nothing is guessed.** The join is reported before anything uses it: readers in your data with no row, rows describing readers you did not load, and duplicate rows. Duplicates that *disagree* are dropped and named rather than resolved by taking the first one, so the field reads as missing. Duplicates that do not disagree are combined: each field keeps the one value the rows hold, so one row's age and another's language both survive.
-- **A missing reader is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool. A numeric range keeps the readers with no value too, unless you untick **Keep unknown values** under it; the line under the box says how many readers that concerns. The same choice sits under every numeric trial filter, for the trial and text tables as well.
+- **A missing reader is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool. A numeric range keeps the readers with no value too, unless you untick **Keep unknown values** under it; the line under the box says how many readers that concerns. An infinite value counts as no value. The same choice sits under every numeric trial filter, for the trial and text tables as well.
 
 Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render` and [`load_participant_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 

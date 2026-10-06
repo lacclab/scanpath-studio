@@ -52,7 +52,7 @@ When you run it locally or as the desktop app, nowhere: it stays on your compute
 
 Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
 
-If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove from cache**. If the whole recovery copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
+If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove from cache**. Saved metadata tables that can't be read are kept the same way. If the whole recovery copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
 ### How do I turn the recovery copy off, or delete it?
 

@@ -26,7 +26,7 @@ Open **Export → Current figure** and choose:
 | interactive inspection | HTML              |
 | replay                 | HTML, GIF, or MP4 |
 
-PNG and SVG are saved by your browser from the figure on screen, and HTML needs nothing either (it loads Plotly from the internet when opened, or tick **HTML files → Self-contained HTML** for a larger file that opens offline); PDF, GIF and MP4 need Chrome, Chromium or Edge. For a still figure, the plot's own camera button saves the same PNG.
+PNG and SVG are saved by your browser from the figure on screen, and HTML needs nothing either (it loads Plotly from the internet when opened, or tick **Self-contained HTML** for a larger file that opens offline); PDF, GIF and MP4 need Chrome, Chromium or Edge. For a still figure, the plot's own camera button saves the same PNG.
 
 ## 3. Export a batch when needed
 

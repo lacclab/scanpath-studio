@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_app_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-06 08:22 +0000
+            created at 2026-10-06 08:42 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -3614,29 +3614,31 @@
     <p class="pln"><span class="n"><a id="t3532" href="#t3532">3532</a></span><span class="t"><span class="str">    reports that store without launching the app: ``enabled``, ``directory``,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t3533" href="#t3533">3533</a></span><span class="t"><span class="str">    ``datasets`` (name + per-frame row counts), ``rows``, ``annotations``,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t3534" href="#t3534">3534</a></span><span class="t"><span class="str">    ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3535" href="#t3535">3535</a></span><span class="t"><span class="str">    missing or unreadable manifest, and ``damaged`` (name + reason) for a stored</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3535" href="#t3535">3535</a></span><span class="t"><span class="str">    missing or unreadable manifest, ``damaged`` (name + reason) for a stored</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t3536" href="#t3536">3536</a></span><span class="t"><span class="str">    dataset whose entry or files are broken &#8212; the app restores the others and</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3537" href="#t3537">3537</a></span><span class="t"><span class="str">    keeps that one in the cache rather than dropping it. Delete it with</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3538" href="#t3538">3538</a></span><span class="t"><span class="str">    [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3539" href="#t3539">3539</a></span><span class="t"><span class="str">    app&#x27;s &#128450;&#65039; Data Management &#8594; *Saved on this computer* section and in</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3540" href="#t3540">3540</a></span><span class="t"><span class="str">    ``scanpath-studio cache``.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t3541" href="#t3541">3541</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">persistence</span> <span class="key">import</span> <span class="nam">cache_status</span> <span class="key">as</span> <span class="nam">_cache_status</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3542" href="#t3542">3542</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t3543" href="#t3543">3543</a></span><span class="t">    <span class="key">return</span> <span class="nam">_cache_status</span><span class="op">(</span><span class="nam">url</span><span class="op">=</span><span class="str">&quot;http://localhost&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3537" href="#t3537">3537</a></span><span class="t"><span class="str">    keeps that one in the cache rather than dropping it &#8212; and</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3538" href="#t3538">3538</a></span><span class="t"><span class="str">    ``damaged_metadata``, the reason the stored metadata tables would not</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3539" href="#t3539">3539</a></span><span class="t"><span class="str">    restore (``&quot;&quot;`` when they would). Delete it with</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3540" href="#t3540">3540</a></span><span class="t"><span class="str">    [`clear_cache`][scanpath_studio.api.clear_cache]; the same information is in the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3541" href="#t3541">3541</a></span><span class="t"><span class="str">    app&#x27;s &#128450;&#65039; Data Management &#8594; *Saved on this computer* section and in</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3542" href="#t3542">3542</a></span><span class="t"><span class="str">    ``scanpath-studio cache``.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t3543" href="#t3543">3543</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">persistence</span> <span class="key">import</span> <span class="nam">cache_status</span> <span class="key">as</span> <span class="nam">_cache_status</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t3544" href="#t3544">3544</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3545" href="#t3545">3545</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t3546" href="#t3546">3546</a></span><span class="t"><span class="key">def</span> <span class="nam">clear_cache</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">dict</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3547" href="#t3547">3547</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Delete the on-device recovery cache and return its status afterwards.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3548" href="#t3548">3548</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3549" href="#t3549">3549</a></span><span class="t"><span class="str">    Removes only the files this app wrote (``manifest.json`` and the dataset</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3550" href="#t3550">3550</a></span><span class="t"><span class="str">    Parquet files); anything else in the folder is left alone. A *running* local</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3551" href="#t3551">3551</a></span><span class="t"><span class="str">    app writes its session back out at the end of its next change &#8212; start it</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3552" href="#t3552">3552</a></span><span class="t"><span class="str">    with ``scanpath-studio run --no-persist`` or ``SCANPATH_STUDIO_PERSIST=0`` to</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3553" href="#t3553">3553</a></span><span class="t"><span class="str">    stop that.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t3554" href="#t3554">3554</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">persistence</span> <span class="key">import</span> <span class="nam">clear_local_state</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3555" href="#t3555">3555</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t3556" href="#t3556">3556</a></span><span class="t">    <span class="nam">clear_local_state</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t3557" href="#t3557">3557</a></span><span class="t">    <span class="key">return</span> <span class="nam">cache_status</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t3545" href="#t3545">3545</a></span><span class="t">    <span class="key">return</span> <span class="nam">_cache_status</span><span class="op">(</span><span class="nam">url</span><span class="op">=</span><span class="str">&quot;http://localhost&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3546" href="#t3546">3546</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3547" href="#t3547">3547</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t3548" href="#t3548">3548</a></span><span class="t"><span class="key">def</span> <span class="nam">clear_cache</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">dict</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3549" href="#t3549">3549</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Delete the on-device recovery cache and return its status afterwards.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3550" href="#t3550">3550</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3551" href="#t3551">3551</a></span><span class="t"><span class="str">    Removes only the files this app wrote (``manifest.json`` and the dataset</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3552" href="#t3552">3552</a></span><span class="t"><span class="str">    Parquet files); anything else in the folder is left alone. A *running* local</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3553" href="#t3553">3553</a></span><span class="t"><span class="str">    app writes its session back out at the end of its next change &#8212; start it</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3554" href="#t3554">3554</a></span><span class="t"><span class="str">    with ``scanpath-studio run --no-persist`` or ``SCANPATH_STUDIO_PERSIST=0`` to</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3555" href="#t3555">3555</a></span><span class="t"><span class="str">    stop that.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t3556" href="#t3556">3556</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">persistence</span> <span class="key">import</span> <span class="nam">clear_local_state</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3557" href="#t3557">3557</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t3558" href="#t3558">3558</a></span><span class="t">    <span class="nam">clear_local_state</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t3559" href="#t3559">3559</a></span><span class="t">    <span class="key">return</span> <span class="nam">cache_status</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -3646,7 +3648,7 @@
             <a class="nav" href="z_370c57a259db20f3_app_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-06 08:22 +0000
+            created at 2026-10-06 08:42 +0000
         </p>
     </div>
 </footer>

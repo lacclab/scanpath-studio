@@ -4171,9 +4171,11 @@ where it left off — on localhost/desktop only, never on a hosted deployment. T
 reports that store without launching the app: <code>enabled</code>, <code>directory</code>,
 <code>datasets</code> (name + per-frame row counts), <code>rows</code>, <code>annotations</code>,
 <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> / <code>readable</code> for a
-missing or unreadable manifest, and <code>damaged</code> (name + reason) for a stored
+missing or unreadable manifest, <code>damaged</code> (name + reason) for a stored
 dataset whose entry or files are broken — the app restores the others and
-keeps that one in the cache rather than dropping it. Delete it with
+keeps that one in the cache rather than dropping it — and
+<code>damaged_metadata</code>, the reason the stored metadata tables would not
+restore (<code>""</code> when they would). Delete it with
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.clear_cache&lt;/span&gt;" href="#scanpath_studio.api.clear_cache"><code>clear_cache</code></a>; the same information is in the
 app's 🗂️ Data Management → <em>Saved on this computer</em> section and in
 <code>scanpath-studio cache</code>.</p>

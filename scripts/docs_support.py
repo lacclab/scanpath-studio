@@ -307,6 +307,11 @@ def _default_cell(value) -> str:
     return f"`{text}`"
 
 
+#: Options a snippet never writes as a flag but `render` still sets (#374):
+#: the raw-gaze layer follows the table `--raw-gaze` loads.
+_UNEMITTED_FLAGS = {"show_raw_gaze": ["--raw-gaze", "--no-raw-gaze"]}
+
+
 def figure_options_table() -> str:
     """Every figure keyword → its default, the values it takes, its ``render``
     flag, its builders.
@@ -340,7 +345,9 @@ def figure_options_table() -> str:
     ]
     for name in sorted(set().union(*kinds.values())):
         default = next(k[name] for k in kinds.values() if name in k)
-        flags = _emitter_flags(_CLI_EMITTERS.get(name))
+        flags = _emitter_flags(_CLI_EMITTERS.get(name)) or _UNEMITTED_FLAGS.get(
+            name, []
+        )
         unknown = [flag for flag in flags if flag not in known]
         if unknown:
             raise RuntimeError(f"{name}: {unknown} is not a `render` flag")

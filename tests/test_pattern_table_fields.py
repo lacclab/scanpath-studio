@@ -121,7 +121,7 @@ def test_the_list_heads_each_tables_fields():
     assert "{participant_id}" in plain and "{trials.font_size}" not in plain
     assert "{trials.font_size}" in tables
     # Only the known tables are grouped; any other dotted name stays plain.
-    assert "{words.x}" in text and "**AOI table**" in text
+    assert "{words.x}" in text and "**Words table**" in text
 
 
 def _share_app():

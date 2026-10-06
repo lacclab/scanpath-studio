@@ -412,7 +412,7 @@ class TestAppLaunches:
         assert scope_radios, "bulk-export scope radio missing"
         assert scope_radios[0].options[:3] == [
             "This trial",
-            "All",
+            "All, ignoring filters",
             "All filtered trials",
         ], f"unexpected scope options: {scope_radios[0].options}"
 

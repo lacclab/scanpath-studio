@@ -130,7 +130,7 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
     EXP-14: one table for both surfaces. `render --sample` drew the demo at its
     real 2560×1440 monitor while the Python snippet ``api.figure_code`` wrote
     for the same request estimated 960×480 from the data extents, so the two
-    flavours of one recipe produced different figures. ``None`` means the
+    flavors of one recipe produced different figures. ``None`` means the
     screen is read off the data (or, for a benchmark corpus, its manifest)."""
     if kind in (SOURCE_DEMO, SOURCE_ONESTOP):
         # OneStop's Dell U2715H — cited in eyegenbench_geometry.DISPLAY_SPECS
@@ -164,7 +164,7 @@ _FIXATION_COLUMN_OPTIONS = ("color_by", "x_field", "y_field", "fixation_hover_fi
 
 def _loader_columns() -> frozenset:
     """Every column ``load_scanpath_data`` hands back without being asked — the
-    canonical ones, the recognised optional ones, and the per-fixation fields
+    canonical ones, the recognized optional ones, and the per-fixation fields
     the builders compute — plus the two non-column ``color_by`` values."""
     from .constants import UNIFORM_COLOR_FIELD
     from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
@@ -775,8 +775,8 @@ _FIXATION_SCALE_OPTIONS = frozenset(
 
 def _inert(key: str, settings: dict) -> bool:
     """Whether ``key`` changes nothing on this figure: it styles a layer that
-    is off, a highlight with no highlight column, class colours in *Uniform*,
-    or a colour scale on uniformly coloured fixations."""
+    is off, a highlight with no highlight column, class colors in *Uniform*,
+    or a color scale on uniformly colored fixations."""
     from .constants import UNIFORM_COLOR_FIELD
 
     layer = _STYLED_BY.get(key)
@@ -1010,9 +1010,9 @@ def _saccade_color_mode(value):
 
 
 def _saccade_class_colors(value, baseline: dict | None = None):
-    """One ``--saccade-type-color`` per class colour that differs from
-    ``baseline`` — the stock classes, or the colours a named ``--palette`` has
-    just written (so a stock colour it moved is moved back)."""
+    """One ``--saccade-type-color`` per class color that differs from
+    ``baseline`` — the stock classes, or the colors a named ``--palette`` has
+    just written (so a stock color it moved is moved back)."""
     if not isinstance(value, dict):
         return []
     from .constants import SACCADE_CLASS_COLORS, SACCADE_CLASS_EDITABLE
@@ -1027,7 +1027,7 @@ def _saccade_class_colors(value, baseline: dict | None = None):
 
 
 def _effective_color(key: str, value):
-    """``saccade_class_colors=None`` means the stock class colours, so compare
+    """``saccade_class_colors=None`` means the stock class colors, so compare
     it as those — otherwise the default palette would read as a change."""
     if key == "saccade_class_colors" and value is None:
         from .constants import SACCADE_CLASS_COLORS
@@ -1044,7 +1044,7 @@ def _palette_colors(name: str) -> dict:
 
 
 def _classes_coloured(settings: dict) -> bool:
-    """Whether the reading-class colours are drawn at all. In *Uniform* they are
+    """Whether the reading-class colors are drawn at all. In *Uniform* they are
     not, so they can be neither a reason to name a palette nor a flag to emit."""
     return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
 
@@ -1052,18 +1052,18 @@ def _classes_coloured(settings: dict) -> bool:
 def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
     """The ``--palette`` a CLI snippet can name instead of spelling it out.
 
-    EXP-12. A palette writes eight colours at once. Spelled key by key, three of
+    EXP-12. A palette writes eight colors at once. Spelled key by key, three of
     them (`text_color`, `highlight_text_color`, `background_color`) have no
-    `render` flag and were named unsupported, and the class colours became five
+    `render` flag and were named unsupported, and the class colors became five
     ``--saccade-type-color`` flags — which switch saccades to *By type*, so any
     palette choice produced a command drawing a different figure. A palette
-    matches when every colour it writes that the figure draws equals the
-    figure's (#374 F29: a palette whose colours later flags take back read as
+    matches when every color it writes that the figure draws equals the
+    figure's (#374 F29: a palette whose colors later flags take back read as
     if the screen used it, while its Palette box said *Custom*); one that
     explains none (the default palette on a stock figure) is not named at all.
     Of those, the one that saves the most flags is named.
 
-    Returns ``(name, colours)`` — the colours the named palette supplies — or
+    Returns ``(name, colors)`` — the colors the named palette supplies — or
     ``(None, {})``."""
     from . import api
     from .constants import PALETTES
@@ -1094,8 +1094,8 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
 def _restate_against_palette(
     kwargs: dict, settings: dict, kind: str, palette_colors: dict
 ) -> dict:
-    """The figure keywords to write after ``--palette``: the colours it got right
-    dropped, and every one it got wrong restated — a colour still at its default
+    """The figure keywords to write after ``--palette``: the colors it got right
+    dropped, and every one it got wrong restated — a color still at its default
     included, which `figure_kwargs` would not otherwise write (EXP-20)."""
     from . import api
 
@@ -1743,8 +1743,17 @@ def python_snippet(
         )
         lines += ["", f"sps.save_figure(fig, {_py(output)}{extra})"]
     if source.note:
-        lines = [f"# {source.note}", ""] + lines
+        lines = [*_comment_lines(source.note), ""] + lines
     return "\n".join(lines)
+
+
+def _comment_lines(note: str, width: int = 79) -> list[str]:
+    """``note`` as wrapped ``#`` lines, without the Markdown the app renders it
+    with — in a ``.py`` file ``**`` and backticks would show literally (#374)."""
+    import textwrap
+
+    plain = note.replace("**", "").replace("`", "")
+    return [f"# {line}" for line in textwrap.wrap(plain, width - 2)]
 
 
 def cli_snippet(
@@ -1906,7 +1915,7 @@ def cli_snippet(
     argv += ["-o", output]
     unsupported.extend(source.cli_unsupported)
     if source_cli is None:
-        unsupported.append(f"the {source.label or source.kind} data source")
+        unsupported.append(f"the {source.label or source.kind} dataset")
     return _wrap_command(argv, env_prefix=env_prefix), sorted(
         dict.fromkeys(unsupported)
     )
@@ -1964,7 +1973,7 @@ def _wrap_command(argv: list[str], width: int = 76, *, env_prefix: str = "") -> 
 
 @dataclass(frozen=True)
 class ReproductionCode:
-    """Both flavours of one figure's recipe, plus what neither can promise.
+    """Both flavors of one figure's recipe, plus what neither can promise.
 
     ``cli_unsupported`` names settings the ``render`` parser has no flag for;
     ``caveats`` are the human-readable notes that apply to **both** snippets —
@@ -2010,7 +2019,7 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
     if other is not None:
         note = (
             f"Scanpath B comes from a second dataset (`{other.dataset}`), so "
-            f"`{other.participant}` is that corpus's reader, not this one's."
+            f"`{other.participant}` is a participant of that dataset, not this one."
         )
         if not (other.words or other.fixations):
             note += (
@@ -2023,7 +2032,7 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             # as the app did before drawing this — and a screen nobody states is
             # read off that trial's data, which rarely matches, so B's is named.
             note += (
-                " A co-animation needs both readings on one screen, so state B's "
+                " A co-animation needs both scanpaths on one screen, so state B's "
                 "too, as `setup_b=` (`--compare-canvas` on the CLI): one read off "
                 "B's data rarely matches."
             )
@@ -2031,9 +2040,9 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
     if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
         notes.append(
             "`compare_scanpaths` has no `illustration_label` parameter, so the "
-            "snippet leaves your **"
-            f"{str(state.illustration_label).capitalize()}** choice off — the "
-            "disclosure is re-derived from the figure."
+            "snippet leaves out your Illustration label (**"
+            f"{str(state.illustration_label).capitalize()}**); the comparison "
+            "sets it itself."
         )
     return notes
 

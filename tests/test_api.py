@@ -104,7 +104,7 @@ def test_load_scanpath_data_rejects_image_pattern_escape(tmp_path, sample_words_
 
 def test_load_scanpath_data_bad_schema():
     junk = pd.DataFrame({"a": [1], "b": [2]})
-    with pytest.raises(ValueError, match="schema problems"):
+    with pytest.raises(ValueError, match="column mapping problems"):
         sps.load_scanpath_data(junk, junk, names="canonical")
 
 
@@ -125,7 +125,7 @@ def test_words_schema_error_names_field_candidates_and_columns():
     # The canonical field, its schema key, and the exact candidates tried.
     assert "Trial ID (word_schema key 'trial'): no column matched" in message
     assert "Looked for: unique_trial_id, trial_id" in message
-    assert "Word/IA ID (word_schema key 'word_id')" in message
+    assert "Word ID (word_schema key 'word_id')" in message
     # The either/or box requirement names which keys each convention still needs.
     # `start_x` is a literal `left` candidate (exact pass) *and*, since it is
     # the only column carrying the whole token "x", the DATA-25 second pass
@@ -142,7 +142,7 @@ def test_words_schema_error_names_field_candidates_and_columns():
         "Fields that did resolve: text='word', x='start_x', left='start_x'" in message
     )
     assert (
-        "Columns present in the words/IA table (4): subject, para, word, start_x"
+        "Columns present in the words table (4): subject, para, word, start_x"
         in message
     )
     # A copy-pasteable override that keeps the columns already resolved — the
@@ -161,7 +161,10 @@ def test_fixations_schema_error_names_field_candidates_and_columns():
         sps.load_scanpath_data(fixations=fixations, names="canonical")
     message = str(excinfo.value)
 
-    assert "Fixations schema problems: missing Trial ID; missing Duration" in message
+    assert (
+        "Fixations column mapping problems: missing Trial ID; missing Duration"
+        in message
+    )
     assert "Duration (fix_schema key 'duration'): no column matched" in message
     assert "Looked for: duration_ms, CURRENT_FIX_DURATION" in message
     assert (
@@ -177,7 +180,7 @@ def test_schema_error_truncates_a_wide_table():
     with pytest.raises(ValueError) as excinfo:
         sps.load_scanpath_data(words=wide, names="canonical")
     message = str(excinfo.value)
-    assert "Columns present in the words/IA table (45): col0, " in message
+    assert "Columns present in the words table (45): col0, " in message
     assert "col39, … (+5 more)" in message
     assert "col40" not in message
 
@@ -195,12 +198,10 @@ def test_words_schema_rejects_a_column_the_table_does_not_have():
             words=words_raw, fixations=fix_raw, word_schema=schema, names="canonical"
         )
     message = str(excinfo.value)
-    assert (
-        "Words/IA schema maps 1 column name the words/IA table doesn't have" in message
-    )
+    assert "Words schema maps 1 column name the words table doesn't have" in message
     assert "word_schema['trial'] = 'TRIAL_LABEL': no such column" in message
     assert "closest: 'IA_LABEL'" in message
-    assert "Columns present in the words/IA table (60): participant_id" in message
+    assert "Columns present in the words table (60): participant_id" in message
     assert "api.propose_schema(table, 'words')" in message
 
 
@@ -254,7 +255,7 @@ def test_explicit_schema_error_points_at_the_mapping_not_at_detection():
             names="canonical",
         )
     message = str(excinfo.value)
-    assert "Words/IA schema problems: missing Trial ID" in message
+    assert "Words column mapping problems: missing Trial ID" in message
     assert "Missing from the word_schema you passed:" in message
     assert (
         "Trial ID (word_schema key 'trial'): not set in the word_schema you passed. "
@@ -512,7 +513,7 @@ def test_animate_scanpath_rejects_static_only_options(sample):
     # figure; the heatmap overlay is still static-only.)
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
-    with pytest.raises(ValueError, match="not supported by the animation"):
+    with pytest.raises(ValueError, match="does not support"):
         sps.animate_scanpath(words, fixations, pid, tid, show_heatmap=True)
 
 
@@ -574,7 +575,7 @@ def test_ambiguous_message_says_which_argument_is_missing(sample):
     assert f"Participant {str(pid)!r} has {n_for_pid} trials — pass trial= too." in (
         message
     )
-    assert f"lists all {len(combos)} combos" in message
+    assert f"lists all {len(combos)} trials" in message
 
 
 def test_plot_scanpath_unknown_option_suggests_the_real_one(sample):
@@ -585,7 +586,7 @@ def test_plot_scanpath_unknown_option_suggests_the_real_one(sample):
     message = str(excinfo.value)
     assert "plot_scanpath() got an unexpected keyword argument" in message
     assert "'show_saccade' (did you mean 'show_saccades'" in message
-    assert "api.figure_options()" in message
+    assert "figure_options()" in message
 
 
 def test_figure_options_cover_every_builder_keyword():
@@ -948,7 +949,7 @@ def test_save_figure_html(sample, tmp_path):
 
 def test_save_figure_bad_extension(sample, tmp_path):
     fig = go.Figure()
-    with pytest.raises(ValueError, match="Unsupported extension"):
+    with pytest.raises(ValueError, match="save_figure writes .html"):
         sps.save_figure(fig, tmp_path / "fig.docx")
 
 
@@ -1092,3 +1093,51 @@ def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
         api.save_figure_layers(fig, target, fmt="png")
     assert not target.exists()
     assert not (tmp_path / "nested").exists()
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "print",
+        "Print / greyscale",
+        "Print / grayscale",
+        "PRINT / GRAYSCALE",
+        "grayscale",
+        "greyscale",
+    ],
+)
+def test_a_palette_is_found_in_either_spelling(spelling):
+    """#374: the palette names moved to US spelling; old names keep working."""
+    from scanpath_studio.api import resolve_palette
+    from scanpath_studio.constants import PALETTES
+
+    name = resolve_palette(spelling)
+    assert name in PALETTES and "print" in name.lower()
+    assert resolve_palette("Default (colorblind-safe)") == resolve_palette(
+        "Default (colourblind-safe)"
+    )
+
+
+def test_a_canvas_size_string_is_refused(sample):
+    words, fixations = sample
+    with pytest.raises(ValueError, match=r"\(width, height\) pair"):
+        sps.plot_scanpath(words, fixations, canvas_size="1920x1080")
+
+
+def test_an_unknown_schema_key_is_named_with_its_field():
+    fixations = pd.DataFrame({"p": [1], "t": [1], "X": [1.0], "Y": [2.0], "d": [100]})
+    with pytest.raises(ValueError) as excinfo:
+        api.load_scanpath_data(
+            words=None,
+            fixations=fixations,
+            fix_schema={
+                "participant": "p",
+                "trial": "t",
+                "x_pos": "X",
+                "y": "Y",
+                "duration": "d",
+            },
+        )
+    message = str(excinfo.value)
+    assert "not a field: 'x_pos' — did you mean 'x'?" in message
+    assert "x_pos='X'" not in message

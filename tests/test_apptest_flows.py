@@ -703,7 +703,7 @@ class TestBulkExportFlow:
         at.run(timeout=60)
         _clean(at, "after picking PNG + HTML:")
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "bundle figures are drawn on this server" in warnings
+        assert "on the computer running Scanpath Studio" in warnings
 
         next(b for b in at.button if b.label == "Build export").click()
         at.run(timeout=120)

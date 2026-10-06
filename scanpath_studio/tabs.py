@@ -9100,7 +9100,9 @@ def _join_label(values):
 def _render_filter_set(words, fixations, *, key, default_label):
     """One independent group's filter-set picker → ``(spec, label)``."""
     spec = {}
-    label = st.text_input("Label", value=default_label, key=f"{key}_label")
+    label = st.text_input(
+        "Label", value=default_label, key=f"{key}_label", persist_state="session"
+    )
     text_col = _text_column(fixations) or _text_column(words)
     for col, pretty in (
         ("participant_id", "Participants"),
@@ -9115,7 +9117,13 @@ def _render_filter_set(words, fixations, *, key, default_label):
         opts = _both_frame_values(words, fixations, col)
         if len(opts) < 2 or len(opts) > 400:
             continue
-        sel = st.multiselect(pretty, opts, key=f"{key}_{col}", placeholder="All")
+        sel = st.multiselect(
+            pretty,
+            opts,
+            key=f"{key}_{col}",
+            placeholder="All",
+            persist_state="session",
+        )
         for column, values in _group_spec(col, sel, words, fixations).items():
             _merge_spec(spec, column, values)
     return spec, (label or default_label)
@@ -9151,12 +9159,17 @@ def _n_readers(count: int) -> str:
 
 
 def _render_group_definition(words, fixations, *, key, two_groups, host=None):
-    """Group-definition UI → one ``spec``/``(spec, label)`` or two ``(a, b, la, lb)``."""
+    """Group-definition UI → one ``spec``/``(spec, label)`` or two ``(a, b, la, lb)``.
+
+    Every widget keeps its value while another Corpus subtab is open (#374):
+    only the open subtab runs (PERF-9), and an unrendered widget's value is
+    otherwise dropped."""
     host = host or st
     mode = host.radio(
         "Define group(s) by",
         ["Split a field", "Independent filter sets"],
         key=f"{key}_mode",
+        persist_state="session",
         horizontal=True,
         help="Split one categorical column into groups, or build each group from "
         "its own participant/text/condition filter.",
@@ -9173,16 +9186,30 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
         # this Streamlit falls back to the first option silently and the cohort
         # on screen changes with no notice (`controls._drop_stale`'s job).
         _drop_stale(f"{key}_field", cols)
-        col = host.selectbox("Field", cols, key=f"{key}_field", format_func=_pretty_col)
+        col = host.selectbox(
+            "Field",
+            cols,
+            key=f"{key}_field",
+            format_func=_pretty_col,
+            persist_state="session",
+        )
         vals = _both_frame_values(words, fixations, col)
         if two_groups:
             c = host.columns(2)
             a = c[0].multiselect(
-                f"Group A — {_pretty_col(col)}", vals, default=vals[:1], key=f"{key}_a"
+                f"Group A — {_pretty_col(col)}",
+                vals,
+                default=vals[:1],
+                key=f"{key}_a",
+                persist_state="session",
             )
             rest = [v for v in vals if v not in a]
             b = c[1].multiselect(
-                f"Group B — {_pretty_col(col)}", vals, default=rest[:1], key=f"{key}_b"
+                f"Group B — {_pretty_col(col)}",
+                vals,
+                default=rest[:1],
+                key=f"{key}_b",
+                persist_state="session",
             )
             return (
                 _group_spec(col, a, words, fixations),
@@ -9191,7 +9218,11 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
                 _join_label(b) or "Group B",
             )
         sel = host.multiselect(
-            f"{_pretty_col(col)} =", vals, default=vals[:1], key=f"{key}_g"
+            f"{_pretty_col(col)} =",
+            vals,
+            default=vals[:1],
+            key=f"{key}_g",
+            persist_state="session",
         )
         return _group_spec(col, sel, words, fixations), (_join_label(sel) or "All")
     # Independent filter sets.
@@ -10584,14 +10615,7 @@ def render_groups_tab(
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
     )
-    compare = st.toggle(
-        "Compare a second group",
-        value=False,
-        key="groups_compare",
-        help="Off: profile a single group. On: define a second group and compare "
-        "A vs B — difference profile, paired bars, group means, and more.",
-    )
-    if compare:
+    if _groups_compare_toggle():
         render_group_comparison_tab(
             words_filtered,
             fixations_filtered,
@@ -10605,6 +10629,19 @@ def render_groups_tab(
             viz_settings=viz_settings,
             **common,
         )
+
+
+def _groups_compare_toggle() -> bool:
+    """The Groups subtab's "Compare a second group" switch. It stays on, with
+    its groups, while another subtab is open (#374)."""
+    return st.toggle(
+        "Compare a second group",
+        value=False,
+        key="groups_compare",
+        persist_state="session",
+        help="Off: profile a single group. On: define a second group and compare "
+        "A vs B — difference profile, paired bars, group means, and more.",
+    )
 
 
 def render_per_group_tab(

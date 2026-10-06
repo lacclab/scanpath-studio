@@ -809,3 +809,41 @@ def test_an_old_per_reader_link_opens_per_participant():
     at.run(timeout=30)
     assert not at.exception, at.exception
     assert at.session_state["corpus_subtab"] == "Per participant"
+
+
+def _groups_definition_app():
+    """The Groups subtab's toggle + group definition, drawn only while
+    `_groups_open` — the way PERF-9 draws only the open Corpus subtab."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    if not st.session_state.get("_groups_open", True):
+        st.write("Per text")
+        return
+    frame = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2", "p3", "p4"],
+            "difficulty_level": ["Adv", "Ele", "Adv", "Ele"],
+        }
+    )
+    if tabs._groups_compare_toggle():
+        tabs._render_group_definition(frame, frame, key="cmp", two_groups=True)
+
+
+def test_the_groups_setup_survives_another_subtab():
+    """#374 F34: leaving Groups for another Corpus subtab and back kept neither
+    the Compare toggle nor the group definitions."""
+    at = AppTest.from_function(_groups_definition_app)
+    at.run(timeout=30)
+    at.toggle(key="groups_compare").set_value(True).run(timeout=30)
+    at.multiselect(key="cmp_b").set_value(["Adv", "Ele"]).run(timeout=30)
+    assert not at.exception, at.exception
+    at.session_state["_groups_open"] = False
+    at.run(timeout=30)
+    at.session_state["_groups_open"] = True
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert at.toggle(key="groups_compare").value is True
+    assert at.multiselect(key="cmp_b").value == ["Adv", "Ele"]

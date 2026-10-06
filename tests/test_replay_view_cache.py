@@ -12,6 +12,7 @@ inputs rather than from the figure's JSON.
 
 from __future__ import annotations
 
+import json
 import re
 
 import pandas as pd
@@ -92,6 +93,16 @@ def _render(speed: float = 1.0, *, autoplay: bool = True, **viz):
     return view
 
 
+def _shows(text: str, html: str) -> bool:
+    """Whether ``text`` is on the page, as written or as the figure JSON spells it.
+
+    The figure's JSON may escape non-ASCII (``×`` as ``\\u00d7``), which the
+    browser reads back as the same character.
+    """
+    escaped = json.dumps(text)[1:-1]
+    return text in html or escaped in html
+
+
 class TestARerunShowsTheCachedView:
     def test_a_rerun_neither_rebuilds_nor_reloads_the_replay(self, page):
         _render()
@@ -131,8 +142,8 @@ class TestARerunShowsTheCachedView:
         _render()
         _render(**change)
         assert page["embeds"][1] != page["embeds"][0]
-        assert shows in page["embeds"][1]
-        assert shows not in page["embeds"][0]
+        assert _shows(shows, page["embeds"][1])
+        assert not _shows(shows, page["embeds"][0])
 
 
 class TestTheExportReadsTheView:

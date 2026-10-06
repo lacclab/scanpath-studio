@@ -2725,7 +2725,7 @@ class TestUnmappedRawDataView:
         # The picker's label carries the active sort key (UX-10), so match the
         # stem rather than the whole string.
         picker = next(
-            (s for s in at.selectbox if s.label.startswith("Select Trial")), None
+            (s for s in at.selectbox if s.label.startswith("Select trial")), None
         )
         opts = list(picker.options) if picker is not None else []
         # Two per-page trials, not collapsed into one stimulus-level trial.

@@ -870,9 +870,9 @@ class TestFigureText:
     def test_a_hover_row_never_writes_its_unit_twice(self):
         from scanpath_studio import plots
 
-        assert plots._hover_label("total_fixation_duration_ms") == "Total fixation"
-        assert plots._hover_label("my_measure_ms") == "My Measure"
-        assert plots._column_title("my_measure_ms") == "My Measure (ms)"
+        assert plots._hover_label("total_fixation_duration_ms") == "TFD"
+        assert plots._hover_label("my_measure_ms") == "My measure"
+        assert plots._column_title("my_measure_ms") == "My measure (ms)"
 
 
 def test_the_trial_sort_offers_an_alias_of_the_same_column_once():
@@ -956,4 +956,4 @@ def test_the_word_matrix_names_its_rows_as_the_dataset_does():
         base_font_size=12,
         font_family="sans-serif",
     )
-    assert default.layout.yaxis.title.text == "Participant ID"
+    assert default.layout.yaxis.title.text == "Participant"

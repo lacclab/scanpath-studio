@@ -305,7 +305,7 @@ TRIAL_SORT_DATA_ORDER = "Data order"
 _TRIAL_SORT_STATS = {
     "Fixation count (computed)": ("fixations", "size"),
     "Total fixation time, s (computed)": ("fixations", "duration_sum_s"),
-    "Mean fixation, ms (computed)": ("fixations", "duration_mean"),
+    "Mean fixation duration, ms (computed)": ("fixations", "duration_mean"),
     "Word count (computed)": ("words", "size"),
     "First timestamp (computed)": ("fixations", "timestamp_min"),
 }
@@ -997,7 +997,7 @@ def _render_trial_sort_popover(
             "Sort trials by",
             options=options,
             key=state_key,
-            help="Reorder the trial list by a computed statistic or by a reader, "
+            help="Reorder the trial list by a computed statistic or by a participant, "
             "text or condition property.",
         )
         descending = labeled(
@@ -1148,7 +1148,9 @@ def _select_trial_none_mode(
     available_trials = combos.drop_duplicates(subset=[trial_field])
     trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
     if not trial_options:
-        st.warning("No trials available after filtering.")
+        st.warning(
+            "No trials match the filters. Clear one, or use ✕ Clear all filters."
+        )
         st.stop()
 
     # Trial id → participant, so the annotation markers (UX-6) can be looked up per
@@ -1196,7 +1198,7 @@ def _select_trial_none_mode(
         return _option_label(value) if label is None else label
 
     n_trials = len(trial_options)
-    picker_label = "Select Trial"
+    picker_label = "Select trial"
     trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
     slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
 
@@ -1316,7 +1318,7 @@ def _select_trial_none_mode(
                 )
             if sort_choice != TRIAL_SORT_DATA_ORDER or sort_desc:
                 picker_label = (
-                    f"Select Trial  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+                    f"Select trial  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
                 )
             if seeded:
                 current_label = trial_options[0]
@@ -1486,7 +1488,9 @@ def select_trial(
         builder, which still supports the other modes when called directly).
     """
     if combos.empty:
-        st.warning("No trials available after filtering.")
+        st.warning(
+            "No trials match the filters. Clear one, or use ✕ Clear all filters."
+        )
         st.stop()
 
     trial_field = (

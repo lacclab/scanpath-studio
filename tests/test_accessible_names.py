@@ -18,8 +18,8 @@ def test_accessible_name_drops_icons_and_bold():
     assert accessible_name(":material/star: Favorite (star this trial)") == (
         "Favorite (star this trial)"
     )
-    assert accessible_name("**Select Trial**  ·  by Fixations ↑") == (
-        "Select Trial · by Fixations ↑"
+    assert accessible_name("**Select trial**  ·  by Fixations ↑") == (
+        "Select trial · by Fixations ↑"
     )
     assert accessible_name("Plain") == "Plain"
 
@@ -29,7 +29,7 @@ def test_the_main_pickers_have_plain_labels():
 
     from scanpath_studio import utils
 
-    assert '"**Select Trial**"' not in inspect.getsource(utils)
+    assert '"**Select trial**"' not in inspect.getsource(utils)
     assert '"**Select Dataset**"' not in inspect.getsource(app)
 
 

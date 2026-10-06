@@ -6759,10 +6759,9 @@ def render_plot_controls(
             ),
         )
         heat_style = _sub_row(
-            "Style",
+            None,
             section="Style",
-            section_help="How the heatmap is drawn.",
-            caption_help=style_help,
+            section_help=style_help,
         ).selectbox(
             "Style",
             options=["Word boxes", "Interpolated"],

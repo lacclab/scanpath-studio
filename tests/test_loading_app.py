@@ -490,7 +490,7 @@ def test_the_editors_download_releases_the_page_first(at, monkeypatch, tmp_path)
 
 def test_an_unavailable_corpus_gets_no_counts_on_its_card(at, monkeypatch):
     """The rows read for a corpus that isn't here are the demo's stand-in, so
-    the card moves on to Normalizing without claiming them as the corpus's."""
+    the card moves on to Mapping columns without claiming them as the corpus's."""
     at.run()
     monkeypatch.setattr(loading, "DELAY_S", 0)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
@@ -498,7 +498,7 @@ def test_an_unavailable_corpus_gets_no_counts_on_its_card(at, monkeypatch):
     monkeypatch.setattr(app, "prepare_data", _stop)
     at.run()
     text = _markdown(at)
-    assert "Normalizing" in text and "word rows and" not in text
+    assert "Mapping columns" in text and "word rows and" not in text
 
 
 def test_the_editors_card_sits_on_the_editor_screen(at, monkeypatch):

@@ -1583,7 +1583,10 @@ class TestEachCachedDatasetRestoresOnItsOwn:
         manifest_path.write_text("{ not json", encoding="utf-8")
         session = {}
         assert not restore_local_state(session, self.URL)
-        assert persistence.cache_failure(session) == "its manifest is not valid JSON"
+        assert (
+            persistence.cache_failure(session)
+            == "its index file (manifest.json) is damaged"
+        )
         assert persistence_paused(session)
         session["global_show_heatmap"] = False
         assert not save_local_state(session, self.URL)
@@ -1661,7 +1664,7 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     warnings = " ".join(str(w.value) for w in at.warning)
     assert "couldn't be restored" in warnings
     labels = [b.label for b in at.button]
-    assert "Retry" in labels and "Remove from cache" in labels
+    assert "Retry" in labels and "Remove saved copy" in labels
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["datasets"]) == {"good", "damaged"}
 

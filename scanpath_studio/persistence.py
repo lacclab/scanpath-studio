@@ -588,8 +588,8 @@ def _restore_manifest(
         schema = int(manifest.get("schema", 0))
         if schema != SCHEMA_VERSION:
             raise ValueError(
-                f"it is in cache format {schema}, and this version reads "
-                f"format {SCHEMA_VERSION}"
+                f"it was saved by another version (format {schema}; this one "
+                f"reads {SCHEMA_VERSION})"
             )
         stored_datasets = _as_mapping(manifest.get("datasets", {}))
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
@@ -692,11 +692,13 @@ def _failure_reason(exc: BaseException) -> str:
     if isinstance(exc, PermissionError):
         return "a stored file can't be opened (permission denied)"
     if isinstance(exc, json.JSONDecodeError):
-        return "its manifest is not valid JSON"
+        return "its index file (manifest.json) is damaged"
     message = str(exc).strip()
     if isinstance(exc, ValueError) and message.startswith("it "):
         return message
-    return f"it can't be read ({type(exc).__name__}: {message[:120]})"
+    # The class and message are for a bug report, not for the warning.
+    _LOGGER.warning("Saved data unreadable: %s: %s", type(exc).__name__, message)
+    return "it can't be read (damaged, or written by another version)"
 
 
 def _frame_path(root: Path, relative: Any) -> Path:

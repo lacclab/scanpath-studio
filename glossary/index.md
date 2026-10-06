@@ -20,7 +20,7 @@ Run, pass : Consecutive fixations on one word form a run; a word's first run is 
 
 ## Words and the screen
 
-Word box : The rectangle a word occupied on screen — its area of interest (AOI), or interest area (IA) in EyeLink's terms. It is taken from the data exactly as given, never recomputed ([`geom.word_box_bounds`](https://lacclab.github.io/scanpath-studio/computations/#geom-word-box-bounds)). A fixation counts for the word its data names (an imported word/IA id), else the word whose box contains it, else the word with the nearest centre within 50 px ([`assign.fixation_to_word`](https://lacclab.github.io/scanpath-studio/computations/#assign-fixation-to-word)).
+Word box : The rectangle a word occupied on screen — its area of interest (AOI), or interest area (IA) in EyeLink's terms. It is taken from the data exactly as given, never recomputed ([`geom.word_box_bounds`](https://lacclab.github.io/scanpath-studio/computations/#geom-word-box-bounds)). A fixation counts for the word its data names when the data has a word/IA id (a blank there means no word); without one, for the word whose box contains it, else for no word ([`assign.fixation_to_word`](https://lacclab.github.io/scanpath-studio/computations/#assign-fixation-to-word)).
 
 Canvas : The recorded screen in pixels, such as 2560 × 1440 — the coordinate system every figure is drawn in.
 

@@ -1929,6 +1929,7 @@ behind each line, and the releases before 0.28.0, are in
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <p><strong>Changed</strong></p>
 <ul>
+<li>When the fixation table maps a Word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> ID, fixations now count for exactly that word, and a blank means no word; without one, a fixation counts for the word box it falls in and is no longer snapped to a word up to 50 px away. (<a href="https://github.com/lacclab/scanpath-studio/issues/352">#352</a>)</li>
 <li>In Compare, the Saccades popover now lays out like Fixations: the Line group becomes Scanpath A's colour, style and width, with Scanpath B's group under it, instead of greyed figure-wide rows followed by a duplicate per-scanpath block. (<a href="https://github.com/lacclab/scanpath-studio/issues/361">#361</a>)</li>
 </ul>
 <p><strong>Fixed</strong></p>

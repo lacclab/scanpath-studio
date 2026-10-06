@@ -29,8 +29,10 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import copy
+import functools
 import hashlib
 import html
 import json
@@ -553,6 +555,39 @@ def configure_page() -> None:
 #: package so it ships with a pip install — see `pyproject.toml`'s
 #: `package-data`, and `desktop/scanpath_studio.spec` for the frozen build.
 LOGO_PATH = Path(__file__).parent / "assets" / "scanpath_studio_title_logo.png"
+#: The same wordmark with light text, for the dark theme (#374 F37). Both are
+#: transparent, so neither theme draws a tile behind them.
+LOGO_DARK_PATH = LOGO_PATH.with_name("scanpath_studio_title_logo_dark.png")
+
+
+@functools.cache
+def _logo_theme_css() -> str:
+    """CSS that swaps the header wordmark for its dark variant in dark mode.
+
+    ``st.logo`` takes one image, and the server cannot tell the theme reliably
+    (``st.context.theme`` is wrong on first load and right after a switch). So
+    the swap happens in CSS: ``light-dark()`` follows the theme Streamlit puts
+    on the page, instantly; a browser without image support in ``light-dark()``
+    drops that line and falls back to the OS preference.
+    """
+    if not (LOGO_PATH.is_file() and LOGO_DARK_PATH.is_file()):
+        return ""
+
+    def _uri(path: Path) -> str:
+        return (
+            "url(data:image/png;base64,"
+            + base64.b64encode(path.read_bytes()).decode()
+            + ")"
+        )
+
+    light, dark = _uri(LOGO_PATH), _uri(LOGO_DARK_PATH)
+    sel = 'img[data-testid="stHeaderLogo"]'
+    return (
+        "<style>"
+        f"@media (prefers-color-scheme: dark) {{ {sel} {{ content: {dark}; }} }}"
+        f"{sel} {{ content: light-dark({light}, {dark}); }}"
+        "</style>"
+    )
 
 
 def render_app_logo() -> None:
@@ -573,6 +608,9 @@ def render_app_logo() -> None:
         )
         return
     st.logo(str(LOGO_PATH), size="large", link=CITATION["docs_url"])
+    if css := _logo_theme_css():
+        # A style-only `st.html` goes to Streamlit's event container: no block.
+        st.html(css)
 
 
 def _render_about_panel(host=None) -> None:

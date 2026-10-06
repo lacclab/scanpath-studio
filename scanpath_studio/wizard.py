@@ -843,7 +843,7 @@ def _render_identity_field(
     if has_fix:
         tables.append(("fix", "Fixations", raw_fix, fix_schema))
     if has_words:
-        tables.append(("words", "AOI", raw_words, word_schema))
+        tables.append(("words", WORDS_TABLE_LABEL, raw_words, word_schema))
 
     tinted: dict[str, list[str]] = {}
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
@@ -930,6 +930,33 @@ _DERIVE_TABLE_PREFIX = {
     "Words / IA": "col_map_words",
     "Raw gaze": "col_map_raw_gaze",
 }
+
+#: #374 F12 — the word table's one name on the add and edit screens. Issue
+#: #375 may revisit it; every label and message reads it from here.
+WORDS_TABLE_LABEL = "Words (interest areas)"
+
+#: How the derive picker shows each table (its values stay the keys above,
+#: which saved setups carry).
+_DERIVE_TABLE_DISPLAY = {"Words / IA": WORDS_TABLE_LABEL}
+
+#: #374 F12 — the one-line caption above each upload row: what goes there, in
+#: EyeLink's terms.
+ROW_CAPTIONS = {
+    "fixations": "One row per fixation — e.g. EyeLink's Fixation Report.",
+    "words": "One row per word with its box — e.g. EyeLink's Interest Area Report.",
+}
+
+
+def _row_note(block, text: str):
+    """A caption line across the top of an upload row's mapping side (#374
+    F12), returned so later notes for the row (a mixed ZIP's) land under it.
+
+    Drawn right of the row's name column: that column is an overlay spanning
+    the whole block (`styles.py`), so a full-width line would sit under it."""
+    note = block.columns(_META_ROW_W, gap="small")[1]
+    note.caption(text)
+    return note
+
 
 #: UX-129 — one shared column-width tuple for every derivation line (Table ·
 #: Column · How · pattern · Lowercase · ➕ Another · Apply), so the five
@@ -1078,6 +1105,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             help="Which uploaded table to derive from — its own columns are "
             "offered next, since two tables' `source_file` rarely mean the "
             "same thing.",
+            # #374 F12: the value stays "Words / IA" — saved setups name it.
+            format_func=lambda t: _DERIVE_TABLE_DISPLAY.get(t, t),
         )
         table_frame = frames[selected_table]
         table_columns = (
@@ -1393,7 +1422,7 @@ def _wizard_trial_step(
     if has_fix:
         sets["Fixations"] = _trial_id_values(raw_fix, fix_schema)
     if has_words:
-        sets["Words/IA"] = _trial_id_values(raw_words, word_schema)
+        sets["Words"] = _trial_id_values(raw_words, word_schema)
     # UX-67 r2: the count is a caption under the picker it counts, not a banner.
     # One `st.success` per identifier stacked three coloured boxes onto a screen
     # whose whole point is that the mapping fits on it — and put the number far
@@ -3237,7 +3266,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             gap="small",
         )
         guide.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, "
+            f"**{WORDS_TABLE_LABEL}**, or "
             "**Raw gaze** below to get started.",
             width="content",
         )
@@ -3253,7 +3283,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             icon=ICONS["download"],
             key="wizard_example_download",
             on_click="ignore",
-            help="Two tiny tables, one AOI table and one fixation table, that "
+            help="Two tiny tables, one Words table and one fixation table, that "
             "import with every column mapped automatically. The README inside "
             "explains each column, its unit, and the IDs.",
         )
@@ -3279,7 +3309,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
 
     def upload_box(
-        host, *, label, help_text, prefix, multi, noun, kind=None, short_label=None
+        host,
+        *,
+        label,
+        help_text,
+        prefix,
+        multi,
+        noun,
+        kind=None,
+        short_label=None,
+        notes_host=None,
     ):
         # UX-113: the title reads like every mapping field's — dotted underline,
         # the description on hover (`.sps-fhelp`) — instead of Streamlit's own
@@ -3344,10 +3383,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             counts.caption(f"{n_columns} columns")
             # #374 F3: a zip holding both EyeLink reports reads only the ones
             # this row takes — say which, and where the rest go.
+            # Drawn beside the row (`notes_host`), not in this narrow column.
             for note in app.upload_zip_notes(
                 st.session_state.get(f"{prefix}_upload"), kind
             ):
-                host.caption(f"{ICONS['info']} {note}")
+                (notes_host or host).caption(f"{ICONS['info']} {note}")
         return frame
 
     # UX-122/UX-127/UX-129: none of the six tables upload at the top of this
@@ -3492,6 +3532,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # just row 1's (which the uploader itself was already taller than,
     # defeating `vertical_alignment="center"` on row 1 alone).
     fix_block = s2.container(key="wiz_map_block_col_map_fix")
+    # #374 F12: which export goes in this row, in EyeLink's own terms.
+    fix_note = _row_note(fix_block, ROW_CAPTIONS["fixations"])
     row_fix = fix_block.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
@@ -3503,6 +3545,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         multi=True,
         noun="fixations",
         kind="fixations",
+        notes_host=fix_note,
     )
     has_fix = not raw_fix.empty
     if has_fix:
@@ -3514,19 +3557,21 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
     words_block = s2.container(key="wiz_map_block_col_map_words")
+    words_note = _row_note(words_block, ROW_CAPTIONS["words"])
     row_words = words_block.columns(
         _ID_ROW1_W, gap="small", vertical_alignment="center"
     )
     raw_words = upload_box(
         row_words[0].container(key="wiz_map_upload_col_map_words"),
-        label="Words / IA table(s)",
-        short_label="AOIs",
+        label=f"{WORDS_TABLE_LABEL} table(s)",
+        short_label=WORDS_TABLE_LABEL,
         help_text="One or more files (e.g. one per text); concatenated. "
         + _upload_types_note,
         prefix="col_map_words",
         kind="words",
         multi=True,
         noun="words",
+        notes_host=words_note,
     )
     has_words = not raw_words.empty
     if has_words:
@@ -3632,7 +3677,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # still benefits from the reminder that each is optional on its own
         # but at least one is required.
         derive_host.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, "
+            f"**{WORDS_TABLE_LABEL}**, or "
             "**Raw gaze** below to get started."
         )
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
@@ -3712,10 +3758,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "text_id",
             "Text ID",
             "texts",
-            "The text column — or several to compose an id. An AOI table with "
-            "no Participant ID attaches to a reading by it when their trial ids "
-            "differ. Leave empty to use the trial id; a repeated reading keeps "
-            "the first reading's, without its _r2 suffix.",
+            "The text column — or several to compose an id. Map your item "
+            "column here if trial order was randomized: `TRIAL_INDEX` only "
+            "orders a participant's trials. A Words table with no Participant "
+            "ID attaches to a reading by it when their trial ids differ. Leave "
+            "empty to use the trial id; a repeated reading keeps the first "
+            "reading's, without its _r2 suffix.",
             s2,
             raw_words,
             raw_fix,
@@ -3932,7 +3980,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     problems: list = []
     if words_problems:
-        problems.append("Words/IA: " + "; ".join(words_problems))
+        line = "Words table: " + "; ".join(words_problems) + "."
+        if any(p.startswith("need either") for p in words_problems):
+            # #374 F12: say what to do, not only what is missing.
+            line += (
+                " Without word boxes the text can't be drawn: map the box "
+                "columns, re-export the Interest Area Report with IA_LEFT, "
+                "IA_RIGHT, IA_TOP and IA_BOTTOM, or remove this table to see "
+                "fixations alone."
+            )
+        problems.append(line)
     if fix_problems:
         problems.append("Fixations: " + "; ".join(fix_problems))
     # A raw-gaze-ONLY upload: an incomplete raw-gaze mapping is the only thing
@@ -3961,7 +4018,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             word_schema,
             WORD_OPTIONAL_FIELDS,
             "col_map_words",
-            noun="AOI",
+            noun=WORDS_TABLE_LABEL,
         )
         keep_by_prefix["col_map_words"] = kept
         filter_fields += meta
@@ -4181,7 +4238,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # carries on without them, so say which and what was done, where the
         # other blockers are: directly above ✅ Add dataset.
         tables = (
-            ("Words/IA", raw_words, word_schema, has_words),
+            ("Words table", raw_words, word_schema, has_words),
             ("Fixations", raw_fix, fix_schema, has_fix),
         )
         for table, raw, schema, present in tables:
@@ -4315,7 +4372,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
             help_text=(
-                "Upload a Fixations, Words/IA, or Raw gaze table above to get started."
+                f"Upload a Fixations, {WORDS_TABLE_LABEL} or Raw gaze table above "
+                "to get started."
                 if nothing_uploaded
                 else "Answer the Recording setup section first: "
                 + ", ".join(setup_blockers)

@@ -3551,7 +3551,7 @@ def _render_paragraph_panel(
             # fixations-only trial has none.
             st.caption(
                 f"{ICONS['info']} No stimulus text for this trial — it comes from "
-                "the words / AOI table, and this trial has no rows there."
+                "the Words table, and this trial has no rows there."
             )
         return
     # UX-32: the name-hint detection supplies the defaults; the ⚙️ Fields popover
@@ -9236,18 +9236,18 @@ def _corpus_unavailable_notice(
             f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
             "Analysis shows the per-AOI measures an interest-area (AOI) report "
             "brings — FFD, TFD, first-pass time, regression path and the rest — "
-            f"and this dataset has no AOI table.{samples} {where}; an EyeLink "
+            f"and this dataset has no Words table.{samples} {where}; an EyeLink "
             "interest-area report (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, "
             "…) maps its measures automatically."
         )
     else:
         where = (
-            "Map them under **Reading measures** in this dataset's AOI table, on "
+            "Map them under **Reading measures** in this dataset's Words table, on "
             f"{ICONS['edit']} Edit dataset"
             if editable
             else "This dataset is built in and cannot be remapped — add your own "
             f"report with {ICONS['add']} Add dataset and map them under **Reading measures** in "
-            "its AOI table"
+            "its Words table"
         )
         st.info(
             f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
@@ -12045,7 +12045,7 @@ def render_words_tab(words_filtered: pd.DataFrame) -> None:
     AOI table it's derived *from* is what belongs here.
     """
     if words_filtered.empty:
-        st.caption("No Words / IA table uploaded.")
+        st.caption("No Words (interest areas) table uploaded.")
         return
     _render_raw_table(words_filtered, table="words")
 
@@ -12425,7 +12425,7 @@ def _render_data_provenance() -> None:
 #: the whole bar in one `st.tabs` call.
 RAW_DATA_TAB_LABELS = [
     "Fixations",
-    "AOIs",
+    "Words (interest areas)",
     "Raw gaze",
     "Participants",
     "Trials",
@@ -12603,7 +12603,7 @@ _RAW_GAZE_MAPPING_LABELS = {
     "text": "Word text/label",
 }
 _MAPPING_TABLES = [
-    ("Words/IA", "words", _WORD_MAPPING_LABELS),
+    ("Words (interest areas)", "words", _WORD_MAPPING_LABELS),
     ("Fixations", "fixations", _FIX_MAPPING_LABELS),
     ("Raw gaze", "raw_gaze", _RAW_GAZE_MAPPING_LABELS),
 ]
@@ -12697,7 +12697,7 @@ _RAW_GAZE_REMAP_CANON = {
 }
 # (table_key, label, field_specs, canonical-map) for the editable remap form.
 _REMAP_TABLES = [
-    ("words", "Words/IA", WORD_FIELD_SPECS, _WORD_REMAP_CANON),
+    ("words", "Words (interest areas)", WORD_FIELD_SPECS, _WORD_REMAP_CANON),
     ("fixations", "Fixations", FIX_FIELD_SPECS, _FIX_REMAP_CANON),
     ("raw_gaze", "Raw gaze", RAW_GAZE_FIELD_SPECS, _RAW_GAZE_REMAP_CANON),
 ]
@@ -13714,7 +13714,7 @@ def raw_gaze_identity_problem(raw_gaze: pd.DataFrame, entry: dict) -> str | None
         return (
             "None of its readings match this dataset's: no sample has a "
             "participant and trial the dataset's "
-            f"{_TABLE_LABELS[table_key].lower()} table has. Check that "
+            f"{_TABLE_LABELS[table_key].split()[0]} table has. Check that "
             "**Participant ID** and **Trial ID** name the same readers and "
             "trials, spelled the same way."
         )
@@ -14068,7 +14068,7 @@ def _edit_rows() -> tuple:
             "",
         ),
         (
-            "AOI",
+            "Words (interest areas)",
             _ID_ROW1_W,
             (
                 ("words", "trial"),
@@ -14113,7 +14113,11 @@ def _edit_rows() -> tuple:
 _EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
 
 #: What each table is called down the editor's left-hand name column.
-_TABLE_LABELS = {"fixations": "Fixations", "words": "AOI", "raw_gaze": "Raw gaze"}
+_TABLE_LABELS = {
+    "fixations": "Fixations",
+    "words": "Words (interest areas)",
+    "raw_gaze": "Raw gaze",
+}
 
 
 #: UX-104 — the tables a stored dataset can be *missing* and later gain.
@@ -14126,10 +14130,15 @@ _ADDABLE_TABLES = (
     (
         "fixations",
         "Add a fixations table",
-        "Scanpath / fixation CSVs",
+        "Fixation table files — e.g. EyeLink's Fixation Report",
         propose_fix_schema,
     ),
-    ("words", "Add an AOI (word box) table", "Word AOI CSVs", propose_word_schema),
+    (
+        "words",
+        "Add a Words (interest areas) table",
+        "Word table files — e.g. EyeLink's Interest Area Report",
+        propose_word_schema,
+    ),
     # Round 6, improvement C — the samples, for a dataset added from its
     # fixation / AOI reports before they were exported.
     (
@@ -15213,7 +15222,11 @@ _EDITOR_KEY_NOISE = ("_cell", "_upload", "_header")
 
 
 #: Each table's name in a setup-file note.
-_SETUP_TABLE_NAMES = {"words": "AOI", "fixations": "Fixations", "raw_gaze": "Raw gaze"}
+_SETUP_TABLE_NAMES = {
+    "words": "Words",
+    "fixations": "Fixations",
+    "raw_gaze": "Raw gaze",
+}
 _BOX_EDGE_KEYS = ("left", "right", "top", "bottom")
 _BOX_ORIGIN_KEYS = ("x", "y", "width", "height")
 
@@ -15312,7 +15325,7 @@ def _setup_file_mapping(
             )
     if "aggregate_char_boxes" in (recipe.get("steps") or ()):
         notes.append(
-            "AOI: character boxes were combined into word boxes; turn "
+            "Words: character boxes were combined into word boxes; turn "
             "*Aggregate character AOIs into word boxes* on again after restoring."
         )
     return mapping, notes
@@ -15948,7 +15961,7 @@ def dataset_capabilities(
     elif fix_trials:
         scanpath = (
             f"for {plural(len(fix_trials), 'trial')}, with no text: "
-            "the dataset has no AOI table"
+            "the dataset has no Words table"
         )
     elif gaze_trials:
         scanpath = (
@@ -16044,7 +16057,7 @@ def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
 
 
 #: How a health finding names the rows of each table.
-_HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "AOI", "raw_gaze": "raw-gaze"}
+_HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "word", "raw_gaze": "raw-gaze"}
 
 
 def render_data_health(

@@ -3070,7 +3070,7 @@ def _cached_words_join_nothing(
 
 #: BUG-32 — said once per page, in the notices strip, while it holds.
 WORDS_JOIN_NOTHING_WARNING = (
-    f"{ICONS['warning']} **No fixation has word boxes.** A words / AOI table was loaded, but none "
+    f"{ICONS['warning']} **No fixation has word boxes.** A Words table was loaded, but none "
     "of its participant + trial pairs is in the fixations, so every trial draws "
     "without its text or its word-level measures. The usual cause is a **Trial "
     "ID** or **Participant ID** mapping that names different trials in the two "
@@ -3763,7 +3763,7 @@ def prepare_data(
         if allow_override:
             word_schema = column_mapping_ui(
                 words_df,
-                table_label="Words/IA",
+                table_label="Words (interest areas)",
                 state_key_prefix="col_map_words",
                 field_specs=WORD_FIELD_SPECS,
                 proposed=word_proposed,
@@ -3785,7 +3785,7 @@ def prepare_data(
             word_schema = word_proposed
         word_problems = validate_word_schema(word_schema)
         if word_problems:
-            problems.append("Words/IA: " + "; ".join(word_problems))
+            problems.append("Words table: " + "; ".join(word_problems))
 
     if has_fixations:
         fix_proposed = _apply_declared_schema(
@@ -3907,7 +3907,7 @@ def _render_unmapped_view(
         raw_fixations_df is None or raw_fixations_df.empty
     ):
         st.info("No data loaded yet.")
-    _render_raw_preview("Words / IA", raw_words_df)
+    _render_raw_preview("Words (interest areas)", raw_words_df)
     _render_raw_preview("Fixations", raw_fixations_df)
 
 
@@ -5007,7 +5007,7 @@ def render_data_source_picker(host=None) -> None:
             "Import files",
             icon=ICONS["upload"],
             key="import_dataset_btn",
-            help="Add your fixation and word/AOI tables with the setup wizard.",
+            help="Add your Fixations and Words (interest areas) tables.",
             on_click=_enter_add_data_wizard,
             width="stretch",
         )
@@ -9267,7 +9267,7 @@ def _run_app() -> None:
                 icon=ICONS["upload"],
                 key="add_data_btn",
                 on_click=_enter_add_data_wizard,
-                help="Add your fixation and word/AOI tables with the setup wizard.",
+                help="Add your Fixations and Words (interest areas) tables.",
                 width="stretch",
             )
     # UX-178 — part 1's headline on every run, like the other parts (the editor

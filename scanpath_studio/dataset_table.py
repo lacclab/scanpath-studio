@@ -68,7 +68,7 @@ GAP_EXPLANATIONS: Mapping[str, str] = {
 #: counting. Every other field left blank by a load is :data:`UNKNOWN`.
 _NOT_APPLICABLE_WHEN_LOADED: Mapping[str, str] = {
     "Screens": "Every trial is a single screen.",
-    "Words": "This dataset has no AOI (word) table.",
+    "Words": "This dataset has no Words table.",
     "Fixations": "This dataset has no fixation table.",
     "Gaze points": "This dataset has no raw-gaze samples.",
 }

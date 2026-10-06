@@ -14,8 +14,8 @@ any guess.
 
 | Table | Holds | Key columns (auto-detected) |
 |-------|-------|-----------------------------|
-| **Words / IA** | one row per word / interest area, with its on-screen box | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
-| **Fixations** | one row per fixation | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id |
+| **Words (interest areas)** | one row per word / interest area, with its on-screen box (EyeLink's Interest Area Report) | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
+| **Fixations** | one row per fixation (EyeLink's Fixation Report) | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id |
 | **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y; optionally timestamp |
 | **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
 | **Trial metadata** *(optional)* | one row per trial | trial id, plus anything you know about that trial |

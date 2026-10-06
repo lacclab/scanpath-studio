@@ -593,7 +593,12 @@ class TestDataInspectionTab:
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
         tab_labels = [t.label for t in at.tabs]
-        for tab in (f"{ICONS['stats']} Stats", "Fixations", "AOIs", "Raw gaze"):
+        for tab in (
+            f"{ICONS['stats']} Stats",
+            "Fixations",
+            "Words (interest areas)",
+            "Raw gaze",
+        ):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
         # The counts are the section's opening answer, so they kept no heading.
         assert "Dataset statistics" not in subheaders

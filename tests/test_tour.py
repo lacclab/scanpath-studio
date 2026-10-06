@@ -1148,3 +1148,22 @@ def test_wizard_guide_steps_are_anchored_to_real_wizard_steps():
         # UX-53 r8: the parts are linear labels, not keyed expanders, so the
         # selector comes from their own container key.
         assert step["selector"] == f".st-key-{wizard_shell.part_key(step['step_id'])}"
+
+
+def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
+    """The nav selector matches one container per link: outlining each drew a
+    row of separate brackets. It outlines one ring around all of them, which
+    the ring script places and removes once the step's CSS no longer styles it
+    or the tour card is gone, so it cannot outlive the tour."""
+    from scanpath_studio import tour
+    from scanpath_studio.menu import NAV_SELECTOR
+
+    css = tour._highlight_css(NAV_SELECTOR, "#1f77b4")
+    assert NAV_SELECTOR not in css
+    assert f"#{tour._GROUP_RING_ID}" in css and "outline: 3px solid" in css
+
+    script = tour._group_ring_script(NAV_SELECTOR)
+    assert tour._GROUP_RING_ID in script
+    assert ".st-key-tour_card" in script  # removes itself once the card is gone
+    # The instant hide on Done / ✕ hides the ring with the card.
+    assert tour._GROUP_RING_ID in tour._dismiss_listener_script(NAV_SELECTOR)

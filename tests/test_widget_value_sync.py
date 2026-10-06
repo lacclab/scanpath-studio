@@ -347,3 +347,36 @@ def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
     at.run()
     assert not at.exception, at.exception
     assert len(calls) == 1, f"the replay was built {len(calls)} times"
+
+
+def test_seeded_highlight_column_follows_the_dataset(monkeypatch):
+    """A highlight column the app seeded is re-derived for each dataset.
+
+    OneStop's word table has no ``is_in_aspan``, so the seed there is the first
+    boolean column (``IA_SKIP``). The demo also has ``IA_SKIP``, so before this
+    fix the seed survived switching back and the demo highlighted skips. A
+    column the user picked stays put."""
+    import pandas as pd
+    import streamlit
+
+    from scanpath_studio import controls
+
+    fixations = pd.DataFrame({"x": [1.0], "y": [2.0], "duration_ms": [200.0]})
+    demo = pd.DataFrame(
+        {"is_in_aspan": [True], "IA_SKIP": [False], "IA_REGRESSION_IN": [True]}
+    )
+    onestop = demo.drop(columns="is_in_aspan")
+
+    monkeypatch.setattr(streamlit, "session_state", {})
+    ss = streamlit.session_state
+    controls._seed_viz_state(fixations, 16, demo)
+    assert ss["global_highlight_column"] == "is_in_aspan"
+    controls._seed_viz_state(fixations, 16, onestop)
+    assert ss["global_highlight_column"] == "IA_SKIP"
+    controls._seed_viz_state(fixations, 16, demo)
+    assert ss["global_highlight_column"] == "is_in_aspan"
+
+    ss["global_highlight_column"] = "IA_REGRESSION_IN"
+    controls._seed_viz_state(fixations, 16, onestop)
+    controls._seed_viz_state(fixations, 16, demo)
+    assert ss["global_highlight_column"] == "IA_REGRESSION_IN"

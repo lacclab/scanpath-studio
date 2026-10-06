@@ -3658,6 +3658,11 @@ def cache(argv: list[str]) -> None:
     # the app holds it back, restores the rest, and keeps it in the cache.
     for entry in status.get("damaged") or []:
         print(f"Damaged: {entry['name']} — {entry['reason']} (kept; not restored)")
+    if status.get("damaged_metadata"):
+        print(
+            f"Damaged: metadata tables — {status['damaged_metadata']} "
+            "(kept; not restored)"
+        )
     print(f"Size:    {_human_size(status['bytes'])}")
     print(f"Written: {status['saved_at']}")
     print("Delete with `scanpath-studio cache --clear`.")

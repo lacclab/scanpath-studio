@@ -1,0 +1,1 @@
+The export's file path pattern must stay inside the ZIP: an empty pattern, a leading `/` or drive, a backslash, and an empty, `.` or `..` folder or file name are refused before anything is rendered, in the app and by `bulk_export`.

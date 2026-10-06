@@ -567,6 +567,40 @@ def pattern_error(pattern: str, fields: dict) -> str | None:
     )
 
 
+_DRIVE_PREFIX = re.compile(r"^[A-Za-z]:")
+
+
+def path_structure_error(pattern: str) -> str | None:
+    """What is wrong with ``pattern``'s own text as a path inside the ZIP, or
+    ``None`` (round 10).
+
+    The values put into ``{…}`` are sanitized one by one (:func:`render_pattern`),
+    but the text around them is the pattern's: ``../{artifact}.{ext}`` wrote a
+    member outside the archive's root, and an empty pattern one with no name.
+    Every member must be a relative path of named folders ending in a file
+    name, so this refuses an empty pattern, a leading ``/`` or drive, a
+    backslash (a separator to some unzip tools), and an empty, ``.`` or ``..``
+    folder or file name. Checked before any figure is rendered, in the app and
+    by :func:`bulk_export`.
+    """
+    text = str(pattern or "")
+    probe = _PLACEHOLDER_RE.sub("x", text)
+    if not probe.strip():
+        return "The file path pattern is empty."
+    if "\\" in probe:
+        return (
+            "Use `/` between folders: a backslash is a separator to some unzip tools."
+        )
+    if probe.startswith("/") or _DRIVE_PREFIX.match(probe):
+        return "The file path must be relative to the ZIP: start it with a folder or file name."
+    for part in probe.split("/"):
+        if not part.strip():
+            return "The file path has an empty folder or file name (`//`, or a trailing `/`)."
+        if set(part) <= {"."}:
+            return f"`{part}` can't be a folder or file name in the ZIP."
+    return None
+
+
 def _path_component(text: str) -> str:
     """One path segment, sanitized. ``.`` / ``..`` collapse so nothing escapes."""
     safe = _safe_id(text)
@@ -1318,7 +1352,7 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
         value = panel_field(
             st, "text_input", label, value=default, key=key, help=help_text
         )
-        error = pattern_error(value, fields)
+        error = pattern_error(value, fields) or path_structure_error(value)
         if error:
             st.error(error)
             return default
@@ -2176,8 +2210,22 @@ def bulk_export(
 
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
+
+    Raises ``ValueError`` before any work when ``options.path_pattern`` is not
+    a path that stays inside the ZIP (:func:`path_structure_error`).
     """
+    pattern_problem = path_structure_error(options.path_pattern)
+    if pattern_problem:
+        raise ValueError(pattern_problem)
     combos = _apply_scope(combos, options)
+    # UX-179's annotations, cut to the exported trials once: the README says
+    # the file is there exactly when the writer below writes it (round 10).
+    annotations_kept: list[dict] = []
+    if options.include_annotations and annotation_records:
+        from .annotations import records_in, records_to_store
+
+        trials = zip(combos["participant_id"], combos["trial_id"], strict=True)
+        annotations_kept = records_in(records_to_store(annotation_records), trials)
     maps = {
         table: names
         for table, names in (column_names or {}).items()
@@ -2303,7 +2351,7 @@ def bulk_export(
                 "- `annotations.json` holds the favorites, tags and notes on "
                 "these trials; import it on the app's Data Management page → Annotations."
             ]
-            if options.include_annotations and annotation_records
+            if annotations_kept
             else []
         ),
         "",
@@ -2863,18 +2911,15 @@ def bulk_export(
             _inventory(path, "text_metadata", "written")
     # UX-179: the exported trials' annotations, in the Data → Annotations file
     # format, so the bundle's notes can be imported back into the app.
-    if options.include_annotations and annotation_records:
-        from .annotations import records_in, records_to_store, serialize
+    if annotations_kept:
+        from .annotations import records_to_store, serialize
 
-        trials = zip(combos["participant_id"], combos["trial_id"], strict=True)
-        kept = records_in(records_to_store(annotation_records), trials)
-        if kept:
-            data = serialize(records_to_store(kept), dataset=annotation_dataset).encode(
-                "utf-8"
-            )
-            zf.writestr("annotations.json", data)
-            _inventory("annotations.json", "annotations", "written")
-            progress.bytes_written += len(data)
+        data = serialize(
+            records_to_store(annotations_kept), dataset=annotation_dataset
+        ).encode("utf-8")
+        zf.writestr("annotations.json", data)
+        _inventory("annotations.json", "annotations", "written")
+        progress.bytes_written += len(data)
     emit_status(
         status_callback,
         ExportStage.FINALIZING,

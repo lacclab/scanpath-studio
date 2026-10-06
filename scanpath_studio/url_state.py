@@ -241,6 +241,37 @@ def _strip_markup(v) -> str:
         text = stripped
 
 
+_COMPARE_ESCAPE = re.compile(r"\\([\\:])")
+
+
+def compare_value(participant, trial) -> str:
+    """``?compare=``'s value for scanpath B: ``<participant>:<trial>``.
+
+    A colon or backslash inside the participant is written ``\\:`` / ``\\\\``,
+    so the first unescaped colon is always the separator, whatever the ids
+    hold (round 10); everything after it is the trial, colons and all. An id
+    without either reads exactly as before, so older links still restore."""
+    escaped = str(participant).replace("\\", "\\\\").replace(":", "\\:")
+    return f"{escaped}:{trial}"
+
+
+def parse_compare_value(raw) -> tuple[str, str] | None:
+    """:func:`compare_value` read back: ``(participant, trial)``, or ``None``
+    when either is empty or there is no separator."""
+    text = str(raw or "")
+    index = 0
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
+            continue
+        if text[index] == ":":
+            participant = _COMPARE_ESCAPE.sub(r"\1", text[:index])
+            trial = text[index + 1 :]
+            return (participant, trial) if participant and trial else None
+        index += 1
+    return None
+
+
 def _parse_playback_speed(v) -> float:
     """A replay speed → the ⚙ Playback slider's own option (EXP-18).
 
@@ -1122,24 +1153,23 @@ def _apply_url_preset() -> str | None:
     # the same reason ENG-36's trial jump parks a request). `cmp_source` names
     # B's corpus; an unknown name is dropped rather than honoured, which falls
     # back to "B is in this dataset" instead of wedging the picker.
-    compare_raw = str(qp.get(COMPARE_PARAM) or "")
-    if ":" in compare_raw:
-        participant_b, _, trial_b = compare_raw.partition(":")
-        if participant_b and trial_b:
-            st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, True)
+    compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
+    if compare_ids is not None:
+        participant_b, trial_b = compare_ids
+        st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, True)
+        st.session_state.setdefault(
+            PENDING_COMPARE_STATE_KEY,
+            {"participant_id": participant_b, "trial_id": trial_b},
+        )
+        source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
+        if source_b is not None:
+            st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
+        # B's own screen, for B's navigator — which keeps it only when B's
+        # trial has that screen, as A's does with `screen=`.
+        if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
             st.session_state.setdefault(
-                PENDING_COMPARE_STATE_KEY,
-                {"participant_id": participant_b, "trial_id": trial_b},
+                SINGLE_COMPARE_SCREEN_ID, str(qp[COMPARE_SCREEN_PARAM])
             )
-            source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
-            if source_b is not None:
-                st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
-            # B's own screen, for B's navigator — which keeps it only when B's
-            # trial has that screen, as A's does with `screen=`.
-            if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
-                st.session_state.setdefault(
-                    SINGLE_COMPARE_SCREEN_ID, str(qp[COMPARE_SCREEN_PARAM])
-                )
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
     # the deep link too, seeded before the loader's widgets render. Validate each
@@ -2925,7 +2955,7 @@ def _build_share_query(
     if isinstance(compare, dict) and compare.get("trial_id") not in (None, ""):
         participant_b = compare.get("participant_id")
         if include_participant and participant_b not in (None, ""):
-            params[COMPARE_PARAM] = f"{participant_b}:{compare['trial_id']}"
+            params[COMPARE_PARAM] = compare_value(participant_b, compare["trial_id"])
         else:
             # `compare=` has no trial-only spelling — it is `<pid>:<trial>`, and
             # a trial id alone is ambiguous across readers in B's corpus. Under

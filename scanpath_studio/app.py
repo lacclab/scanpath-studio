@@ -248,7 +248,9 @@ from scanpath_studio.persistence import (
     clear_local_state,
     consume_restore_skipped,
     discard_failed_dataset,
+    discard_failed_metadata,
     failed_datasets,
+    failed_metadata,
     human_size,
     is_loopback_url,
     local_state_restored,
@@ -259,6 +261,7 @@ from scanpath_studio.persistence import (
     restored_summary,
     retry_cache_restore,
     retry_failed_datasets,
+    retry_failed_metadata,
     save_local_state,
     server_bound_to_loopback,
 )
@@ -881,6 +884,16 @@ def _remove_cached_dataset(name: str) -> None:
     discard_failed_dataset(st.session_state, name)
 
 
+def _retry_cached_metadata() -> None:
+    """``on_click``: read the held-back metadata tables again."""
+    retry_failed_metadata(st.session_state)
+
+
+def _remove_cached_metadata() -> None:
+    """``on_click``: delete the held-back metadata tables' stored copy."""
+    discard_failed_metadata(st.session_state)
+
+
 def _retry_unreadable_cache(app_url: str) -> None:
     """``on_click``: try the whole cache again, as a reload would."""
     retry_cache_restore(st.session_state, app_url)
@@ -907,11 +920,16 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
       paused so this session cannot replace it; **Retry** reads it again and
       **Clear the cache** deletes it, after which saving resumes.
 
+    The metadata tables' file is held back the same way as a dataset (round
+    10): kept as it is until **Retry** reads it or **Remove from cache**
+    deletes that copy alone.
+
     Returns whether anything was drawn.
     """
     failure = cache_failure(st.session_state)
     failed = failed_datasets(st.session_state)
-    if not failure and not failed:
+    metadata_failure = failed_metadata(st.session_state)
+    if not failure and not failed and metadata_failure is None:
         return False
     box = host.container(border=True)
     if failure:
@@ -936,6 +954,30 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
             on_click=_clear_unreadable_cache,
             help="Delete the stored session. Saving resumes.",
         )
+        return True
+    if metadata_failure is not None:
+        box.warning(
+            "The metadata tables saved on this computer couldn't be restored — "
+            f"{metadata_failure}. They are kept in the cache as they are until "
+            "you retry or remove them; tables you attach meanwhile are not saved.",
+            icon=ICONS["warning"],
+        )
+        row = box.container(horizontal=True)
+        row.button(
+            "Retry",
+            icon=ICONS["refresh"],
+            key=f"{key}_retry_metadata",
+            on_click=_retry_cached_metadata,
+        )
+        row.button(
+            "Remove from cache",
+            icon=ICONS["delete"],
+            key=f"{key}_remove_metadata",
+            on_click=_remove_cached_metadata,
+            help="Delete the stored metadata tables. Datasets and annotations "
+            "are kept.",
+        )
+    if not failed:
         return True
     box.warning(
         f"{len(failed)} dataset{'s' if len(failed) != 1 else ''} saved on this "

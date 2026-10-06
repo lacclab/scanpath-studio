@@ -852,6 +852,101 @@ class TestRowsWithoutIdentity:
         assert fixations["trial_id"].tolist() == ["t1_1"]
 
 
+class TestOpaqueAndBlankIds:
+    """Round 10, finding 1: ids are opaque within a column, and an id that is
+    only whitespace is missing — never a trial named ``""``."""
+
+    SCHEMA = {
+        "participant": "reader",
+        "trial": "trial",
+        "x": "x",
+        "y": "y",
+        "duration": "duration",
+    }
+
+    @staticmethod
+    def _raw(readers, trials):
+        n = len(readers)
+        return pd.DataFrame(
+            {
+                "reader": readers,
+                "trial": trials,
+                "x": [10.0] * n,
+                "y": [20.0] * n,
+                "duration": [200.0] * n,
+            }
+        )
+
+    def test_one_and_one_point_zero_as_text_stay_two_readers(self):
+        fixations = normalize_fixations(
+            self._raw(["1", "1.0"], ["reading"] * 2), self.SCHEMA
+        )
+        assert sorted(set(fixations["participant_id"])) == ["1", "1.0"]
+
+    def test_two_tables_of_the_same_shape_decide_alike(self):
+        """A text table holding "1.0" beside other whole numbers keeps it,
+        whether or not that table also holds a "1"."""
+        words = data_module.stable_id(pd.Series(["1", "1.0", "2"]))
+        fixations = data_module.stable_id(pd.Series(["1.0", "2"]))
+        assert words.tolist() == ["1", "1.0", "2"]
+        assert fixations.tolist() == ["1.0", "2"]
+
+    def test_repeated_index_labels_do_not_break_a_mixed_column(self):
+        """Two frames concatenated as they were repeat their labels; the mixed
+        object column's float cells are found by position, not by label."""
+        ids = pd.Series([1, 2, 2.0, "t3"], index=[0, 1, 0, 1], dtype=object)
+        assert data_module.stable_id(ids).tolist() == ["1", "2", "2", "t3"]
+
+    def test_a_column_of_decimals_still_loses_its_point_zero(self):
+        ids = data_module.stable_id(pd.Series([101.0, 102.0, np.nan]))
+        assert ids.tolist()[:2] == ["101", "102"]
+        text = data_module.stable_id(pd.Series(["101.0", "102.0"]))
+        assert text.tolist() == ["101", "102"]
+
+    @pytest.mark.parametrize("blank", ["  ", "\t", " \t "])
+    @pytest.mark.parametrize("column", ["reader", "trial"])
+    def test_a_whitespace_id_is_left_out_and_said(self, blank, column):
+        raw = self._raw(["p1", "p1"], ["t1", "t1"])
+        raw.loc[1, column] = blank
+        with pytest.warns(UserWarning, match=column):
+            fixations = normalize_fixations(raw, self.SCHEMA)
+        assert len(fixations) == 1
+        words = raw.rename(columns={"duration": "w"}).assign(
+            word=[1, 2], text=["a", "b"], width=10.0, height=10.0
+        )
+        with pytest.warns(UserWarning, match=column):
+            normalized = normalize_words(
+                words,
+                {
+                    "participant": "reader",
+                    "trial": "trial",
+                    "word_id": "word",
+                    "text": "text",
+                    "x": "x",
+                    "y": "y",
+                    "width": "width",
+                    "height": "height",
+                },
+            )
+        assert "" not in set(normalized["trial_id"]) | set(normalized["participant_id"])
+
+    def test_raw_gaze_without_an_id_is_left_out_and_said(self):
+        raw = pd.DataFrame(
+            {
+                "reader": ["p1", np.nan, "  ", "p1"],
+                "trial": ["t1", "t1", "t1", "\t"],
+                "x": [1.0, 2.0, 3.0, 4.0],
+                "y": [1.0, 2.0, 3.0, 4.0],
+                "time": [0, 1, 2, 3],
+            }
+        )
+        schema = {"participant": "reader", "trial": "trial", "x": "x", "y": "y"}
+        schema["timestamp"] = "time"
+        with pytest.warns(UserWarning, match="Raw gaze: 3 rows"):
+            gaze = data_module.normalize_raw_gaze(raw, schema)
+        assert gaze[["participant_id", "trial_id"]].values.tolist() == [["p1", "t1"]]
+
+
 class TestZeroPaddedIds:
     """BUG-59: `007` in one table and 7 in the other joined on nothing."""
 

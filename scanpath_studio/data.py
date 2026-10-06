@@ -992,13 +992,35 @@ def stable_id(series: pd.Series) -> pd.Series:
     match, even though both name the same trial.
 
     Dropping a trailing ``.0`` off an otherwise-integer string is the one
-    collapse worth making here: it never changes what two *genuinely* different
-    ids look like (``"101"`` and ``"101.5"`` are untouched), and it is the
-    single spelling difference a real corpus never intends and a stray missing
-    cell always creates.
+    collapse worth making here, and only where the ``.0`` is how *numbers* were
+    written (round 10): a column read as decimals, a float cell in a mixed
+    column, or a text column whose every whole number carries ``.0`` (an id
+    column a script wrote out as floats). A text column that spells some whole
+    numbers with ``.0`` and some without — ``"1"`` beside ``"1.0"`` — holds
+    opaque ids, and every spelling in it stays as written. The rule reads the
+    column's shape, not whether a ``"1"`` happens to sit beside a ``"1.0"``, so
+    two tables of the same shape decide alike.
     """
     text = series.astype(str).str.strip()
-    return text.str.replace(_WHOLE_FLOAT_ID, r"\1", regex=True)
+    # A full match and a slice rather than a backreferenced `re.sub`, which
+    # pandas runs per element in Python (5x slower per million rows).
+    pointed = text.str.fullmatch(_WHOLE_FLOAT_ID).fillna(False).astype(bool)
+    if not pointed.any():
+        return text
+    collapsed = text.mask(pointed, text.str.slice(stop=-2))
+    if pd.api.types.is_float_dtype(series):
+        return collapsed
+    whole = text.str.fullmatch(r"-?\d+(?:\.0)?").fillna(False).astype(bool)
+    if bool(pointed[whole].all()):
+        return collapsed  # every whole number written as a float
+    if series.dtype != object:
+        return text
+    # A mixed object column: a real float cell is a number, the rest are text.
+    # By position, never by label — a concatenated frame repeats its labels.
+    mask = pointed.to_numpy()
+    keep = mask.copy()
+    keep[mask] = [not isinstance(value, float) for value in series.to_numpy()[mask]]
+    return collapsed.mask(keep, text)
 
 
 _DIGITS_ONLY = re.compile(r"^\d+$")
@@ -2393,6 +2415,18 @@ def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
     return [c for c in dict.fromkeys(columns) if c in source.columns]
 
 
+def _id_missing(values: pd.Series) -> pd.Series:
+    """Cells that hold no id: missing, or text that is only whitespace — which
+    :func:`stable_id` would turn into an empty id, a trial named ``""``."""
+    missing = values.isna()
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return missing
+    # Tested per distinct value: an id column has few, and a corpus many rows.
+    distinct = pd.Series(values[~missing].unique())
+    blank = distinct[distinct.astype(str).str.strip().eq("")]
+    return missing | values.isin(blank) if len(blank) else missing
+
+
 def _rows_missing_identity(
     source: pd.DataFrame, schema: dict
 ) -> tuple[pd.Series, pd.Series]:
@@ -2402,12 +2436,13 @@ def _rows_missing_identity(
     load outright — one ``,,,,`` line, the blank row Excel leaves at the end of
     a sheet, made the whole dataset impossible to add (BUG-56). ``blank`` is the
     rows that hold nothing at all, which are not data and go quietly;
-    ``unkeyed`` is the rest, which hold data and are reported. Only the missing
-    rows are inspected cell by cell, so a clean table costs one ``isna`` per id
-    column.
+    ``unkeyed`` is the rest, which hold data and are reported. An id that is
+    only whitespace counts as missing (round 10). Only the missing rows are
+    inspected cell by cell, so a clean table costs one ``isna`` and one pass
+    over the distinct values per id column.
     """
     columns = _identity_columns(source, schema)
-    missing = source[columns].isna().any(axis=1) if columns else None
+    missing = source[columns].apply(_id_missing).any(axis=1) if columns else None
     none = pd.Series(False, index=source.index)
     if missing is None or not missing.any():
         return none, none
@@ -2425,14 +2460,26 @@ def _drop_rows_missing_identity(source: pd.DataFrame, schema: dict) -> pd.DataFr
     return source if keep.all() else source.loc[keep]
 
 
-def identity_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
-    """A warning for rows that hold data but no participant or trial id."""
-    _, unkeyed = _rows_missing_identity(raw, schema)
+def identity_issues(
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    unkeyed: pd.Series | None = None,
+) -> list[str]:
+    """A warning for rows that hold data but no participant or trial id.
+
+    ``unkeyed`` is :func:`_rows_missing_identity`'s second mask, when the
+    caller already has it."""
+    if unkeyed is None:
+        _, unkeyed = _rows_missing_identity(raw, schema)
     count = int(unkeyed.sum())
     if not count:
         return []
     columns = [
-        c for c in _identity_columns(raw, schema) if raw.loc[unkeyed, c].isna().any()
+        c
+        for c in _identity_columns(raw, schema)
+        if _id_missing(raw.loc[unkeyed, c]).any()
     ]
     named = ", ".join(f"`{c}`" for c in columns)
     if count == 1:
@@ -3467,6 +3514,13 @@ def normalize_raw_gaze(
     ``saccade_amplitude`` does for fixations), so this only ever carries
     unclaimed columns, via :func:`_carry_extra_columns`.
     """
+    # Samples with no participant or trial id belong to no trial (BUG-56's
+    # rule for the other two tables, round 10).
+    blank, unkeyed = _rows_missing_identity(raw_gaze, schema)
+    for issue in identity_issues(raw_gaze, schema, table="Raw gaze", unkeyed=unkeyed):
+        warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=2)
+    if (blank | unkeyed).any():
+        raw_gaze = raw_gaze.loc[~(blank | unkeyed)]
     df = pd.DataFrame(index=raw_gaze.index)
     if schema.get("participant"):
         # str or list (a composite participant id), joined like normalize_words —

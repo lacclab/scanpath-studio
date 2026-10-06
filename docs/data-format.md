@@ -85,8 +85,9 @@ Three rules are worth knowing:
 - **A missing reader is missing, not excluded.** Attaching a table that forgets
   someone never removes them from the pool. A numeric range keeps the readers
   with no value too, unless you untick **Keep unknown values** under it; the
-  line under the box says how many readers that concerns. The same choice sits
-  under every numeric trial filter, for the trial and text tables as well.
+  line under the box says how many readers that concerns. An infinite value
+  counts as no value. The same choice sits under every numeric trial filter,
+  for the trial and text tables as well.
 
 Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
 and [`load_participant_metadata()`](api.md) in the Python API.

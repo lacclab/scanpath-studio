@@ -1280,6 +1280,64 @@ class TestMetadataTablesInTheRecoveryCache:
         assert md.SESSION_KEY not in restored
         assert restored_summary(restored)["metadata"] == 0
 
+    @pytest.mark.parametrize("damage", ["corrupt", "missing", "unreadable"])
+    def test_a_file_that_will_not_read_is_held_back_not_overwritten(
+        self, tmp_path, damage
+    ):
+        """Round 10, finding 4: the next save deleted the unreadable tables,
+        and nothing said they had failed."""
+        from scanpath_studio import metadata as md
+
+        save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
+        sidecar = tmp_path / persistence.METADATA_FILE
+        good = sidecar.read_text("utf-8")
+        if damage == "corrupt":
+            sidecar.write_text("{not json", "utf-8")
+        elif damage == "missing":
+            sidecar.unlink()
+        else:
+            sidecar.unlink()
+            sidecar.mkdir()  # reading it raises IsADirectoryError
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        assert "study" in restored["_datasets"]
+        assert persistence.failed_metadata(restored)
+        assert persistence.cache_failure(restored) is None
+        restored["global_show_heatmap"] = True
+        assert save_state(restored, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert manifest["metadata"]["file"] == persistence.METADATA_FILE
+        if damage == "corrupt":
+            assert sidecar.read_text("utf-8") == "{not json"
+        # Repaired, a retry brings the tables back and saving them resumes.
+        if sidecar.is_dir():
+            sidecar.rmdir()
+        sidecar.write_text(good, "utf-8")
+        assert persistence.retry_failed_metadata(restored, tmp_path) is None
+        assert persistence.failed_metadata(restored) is None
+        md.activate_dataset(restored, "study")
+        assert md.SESSION_KEY in restored
+
+    def test_removing_the_held_back_file_touches_nothing_else(self, tmp_path):
+        save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
+        sidecar = tmp_path / persistence.METADATA_FILE
+        sidecar.write_text("{not json", "utf-8")
+        restored = {}
+        restore_state(restored, tmp_path)
+        assert save_state(restored, tmp_path)  # held back: pointer kept
+        assert persistence.retry_failed_metadata(restored, tmp_path)  # still bad
+        assert persistence.discard_failed_metadata(restored, tmp_path)
+        assert not sidecar.exists()
+        assert persistence.failed_metadata(restored) is None
+        assert "study" in restored["_datasets"]
+        # The removal reaches the manifest, so the next launch is clean.
+        assert save_state(restored, tmp_path)
+        manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
+        assert "metadata" not in manifest
+        relaunched = {}
+        restore_state(relaunched, tmp_path)
+        assert persistence.failed_metadata(relaunched) is None
+
     def test_clearing_the_cache_removes_the_file(self, tmp_path):
         save_state(self._attached(), tmp_path)
         forget_state(tmp_path)
@@ -1287,7 +1345,15 @@ class TestMetadataTablesInTheRecoveryCache:
 
     def test_cache_status_counts_the_tables(self, tmp_path):
         save_state(self._attached(), tmp_path)
-        assert cache_status(tmp_path, environ={})["metadata"] == 3
+        status = cache_status(tmp_path, environ={})
+        assert status["metadata"] == 3
+        assert status["damaged_metadata"] == ""
+
+    def test_cache_status_names_a_missing_tables_file(self, tmp_path):
+        save_state(self._attached(), tmp_path)
+        (tmp_path / persistence.METADATA_FILE).unlink()
+        status = cache_status(tmp_path, environ={})
+        assert "missing" in status["damaged_metadata"]
 
 
 def test_restoring_datasets_reports_each_one(tmp_path):
@@ -1579,3 +1645,30 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     assert not at.exception, [e.message for e in at.exception]
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["datasets"]) == {"good"}
+
+
+def _metadata_notice_app():
+    import streamlit as st
+
+    from scanpath_studio import app
+
+    st.session_state.setdefault(
+        "_local_persistence_failed_metadata",
+        {"pointer": {"file": "metadata.json"}, "reason": "its file is not valid JSON"},
+    )
+    app.render_cache_recovery_notice(st, "http://127.0.0.1:8501", key="probe")
+
+
+def test_the_page_names_held_back_metadata_tables_with_their_actions():
+    """Round 10, finding 4: the held-back tables are said, with Retry and a
+    Remove from cache scoped to them."""
+    streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+    at = streamlit_testing.AppTest.from_function(_metadata_notice_app)
+    at.run()
+    assert not at.exception, [e.message for e in at.exception]
+    (warning,) = at.warning
+    assert "metadata tables" in warning.value and "not valid JSON" in warning.value
+    assert {b.key for b in at.button} == {
+        "probe_retry_metadata",
+        "probe_remove_metadata",
+    }

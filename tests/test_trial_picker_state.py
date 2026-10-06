@@ -44,3 +44,22 @@ def test_the_browser_is_told_the_current_label_every_run():
     assert picker.proto.set_value
     assert "★" in picker.proto.raw_value
     assert picker.proto.raw_value == picker.format_func(trial)
+
+
+def test_switching_datasets_away_and_back_restores_the_trial():
+    """F34: Dataset → another → back lands on the trial you left, not trial 1."""
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    at = _boot()
+    for _ in range(3):
+        at.button(key="single_next_trial").click().run()
+    trial = _picker(at).value
+    picker = at.selectbox(key="data_source_picker")
+    assert picker.value == DEMO_CHOICE
+    other = next(i for i, o in enumerate(picker.options) if "Synthetic" in o)
+    picker.select_index(other).run()
+    assert not at.exception
+    assert at.selectbox(key="data_source_picker").value != DEMO_CHOICE
+    at.selectbox(key="data_source_picker").select_index(0).run()
+    assert not at.exception
+    assert _picker(at).value == trial

@@ -251,7 +251,8 @@ def test_words_only_heatmap_uses_preaggregated_measures(sample_words_df):
             marker_size_range=(6, 30),
             order_font_size=12,
             order_font_color="#000",
-            show_colorbars=False,
+            show_fixation_colorbar=False,
+            show_heatmap_colorbar=False,
             fixation_color_range=None,
             heatmap_range=None,
         )

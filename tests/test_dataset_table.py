@@ -74,8 +74,15 @@ class TestStatus:
     numbers came from."""
 
     @pytest.mark.parametrize("source", ["loaded", "published", ""])
-    def test_a_row_with_nothing_missing_is_ready_whatever_its_counts(self, source):
-        assert _row("x", 0, source=source).status_label == dt.READY
+    def test_a_row_with_nothing_missing_is_available_whatever_its_counts(self, source):
+        assert _row("x", 0, source=source).status_label == dt.AVAILABLE
+
+    def test_a_row_this_session_read_is_loaded(self):
+        assert _row("x", 0, loaded=True).status_label == dt.LOADED
+
+    def test_missing_files_win_over_loaded(self):
+        row = _row("x", 0, loaded=True, status=dt.NEEDS_SETUP)
+        assert row.status_label == dt.NEEDS_SETUP
 
     def test_a_missing_state_takes_its_place(self):
         row = _row("PoTeC", 0, source="loaded", status=dt.NEEDS_DOWNLOAD)
@@ -88,7 +95,7 @@ class TestStatus:
         assert replace(row, active=True).status_label == row.status_label
 
     def test_every_status_is_explained(self):
-        for label in (dt.READY, dt.NEEDS_DOWNLOAD, dt.NEEDS_SETUP):
+        for label in (dt.LOADED, dt.AVAILABLE, dt.NEEDS_DOWNLOAD, dt.NEEDS_SETUP):
             assert dt.STATUS_EXPLANATIONS[label]
         assert dt.COUNTS_EXPLANATION
 
@@ -197,4 +204,4 @@ def test_the_record_keeps_values_and_cells_apart():
     assert record["_cells"]["Participants"] == "75"
     assert record["_cells"]["Screens"] == dt.NOT_REPORTED
     assert record["Counts"] == "Published"
-    assert record["Status"] == dt.READY
+    assert record["Status"] == dt.AVAILABLE

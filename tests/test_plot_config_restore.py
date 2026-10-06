@@ -160,7 +160,7 @@ class TestPlotConfigRestore:
         assert ss["global_heatmap_style"] == "Interpolated"
         assert ss["global_color_by"] == "pass_index"
         assert ss["global_heatmap_metric"] == "counts"
-        assert ss["global_show_colorbars"] is True
+        assert ss["global_show_fixation_colorbar"] is True
         assert ss["global_fixation_colorscale"] == "Viridis"
         assert ss["global_heatmap_colorscale"] == "Plasma"
         assert ss["global_fixation_color_range"] == (150.0, 250.0)
@@ -213,9 +213,12 @@ class TestPlotConfigRestore:
             saccade_type_legend=False,
             saccade_class_colors={"regression": "#010203"},
             hollow_fixations=True,
-            colorbar_orientation="Horizontal",
-            colorbar_tickangle=45,
-            colorbar_tickfont_size=14,
+            fixation_colorbar_orientation="Horizontal",
+            heatmap_colorbar_orientation="Horizontal",
+            fixation_colorbar_tickangle=45,
+            heatmap_colorbar_tickangle=45,
+            fixation_colorbar_tickfont_size=14,
+            heatmap_colorbar_tickfont_size=14,
         )
         config["text"] = {
             "scale_text_to_boxes": False,
@@ -298,9 +301,9 @@ class TestPlotConfigRestore:
         assert ss["global_bg_choice"] == "Custom…"
         assert ss["global_bg_custom"] == "#222222"
         # BATCH A settings round-trip.
-        assert ss["global_colorbar_orientation"] == "Horizontal"
-        assert ss["global_colorbar_tickangle"] == 45
-        assert ss["global_colorbar_tickfont_size"] == 14
+        assert ss["global_fixation_colorbar_orientation"] == "Horizontal"
+        assert ss["global_fixation_colorbar_tickangle"] == 45
+        assert ss["global_fixation_colorbar_tickfont_size"] == 14
         assert ss["global_fixclass_oob_symbol"] == "star"
         assert ss["global_span_border_color"] == "#0a0b0c"
         # Per-scanpath comparison styling round-trips (raw widget values).
@@ -514,7 +517,8 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         "color_by": "line",
         "heatmap_style": "Word boxes",
         "heatmap_norm": "Log",
-        "show_colorbars": False,
+        "show_fixation_colorbar": False,
+        "show_heatmap_colorbar": True,
         "fixation_color_range": None,
         "heatmap_range": None,
         "fixation_colorscale": "Blues",
@@ -535,9 +539,12 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         "text_color": "#010203",
         "saccade_color": "#6f42c1",
         "span_border_color": "#0a0b0c",
-        "colorbar_orientation": "Horizontal",
-        "colorbar_tickangle": 30,
-        "colorbar_tickfont_size": 14,
+        "fixation_colorbar_orientation": "Horizontal",
+        "fixation_colorbar_tickangle": 30,
+        "fixation_colorbar_tickfont_size": 14,
+        "heatmap_colorbar_orientation": "Vertical",
+        "heatmap_colorbar_tickangle": -45,
+        "heatmap_colorbar_tickfont_size": 9,
     }
     compare_styles = [
         {
@@ -604,9 +611,12 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["highlighting"]["highlight_text_color"] == "#fedcba"
     assert cfg["highlighting"]["background_color"] == "#222222"
     # BATCH A settings + per-scanpath comparison styling must be captured too.
-    assert cfg["coloring"]["colorbar_orientation"] == "Horizontal"
-    assert cfg["coloring"]["colorbar_tickangle"] == 30
-    assert cfg["coloring"]["colorbar_tickfont_size"] == 14
+    assert cfg["coloring"]["fixation_colorbar_orientation"] == "Horizontal"
+    assert cfg["coloring"]["fixation_colorbar_tickangle"] == 30
+    assert cfg["coloring"]["fixation_colorbar_tickfont_size"] == 14
+    assert cfg["coloring"]["show_fixation_colorbar"] is False
+    assert cfg["coloring"]["show_heatmap_colorbar"] is True
+    assert cfg["coloring"]["heatmap_colorbar_tickangle"] == -45
     assert cfg["highlighting"]["fixation_flags"]["oob"] == {
         "mode": "Highlight",
         "symbol": "star",
@@ -787,7 +797,7 @@ class TestConfigMigration:
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 6
+        assert PLOT_CONFIG_SCHEMA == 7
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the
@@ -832,7 +842,8 @@ def _minimal_figure_settings(**extra) -> dict:
         "show_heatmap": False,
         "show_raw_gaze": False,
         "color_by": "duration_ms",
-        "show_colorbars": False,
+        "show_fixation_colorbar": False,
+        "show_heatmap_colorbar": True,
         "fixation_color_range": None,
         "heatmap_range": None,
         "fixation_colorscale": "Blues",
@@ -988,7 +999,7 @@ def test_restoring_annotations_leaves_the_view_settings_alone():
         "global_coordinate_grid_auto": False,
         "global_coordinate_grid_spacing": 250.0,
         "global_illustration_label": "Hide",
-        "global_show_title_caption": True,
+        "global_show_title": True,
         "global_title_pattern": "Mine",
     }
     config = {

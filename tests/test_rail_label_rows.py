@@ -289,4 +289,4 @@ class TestTheRealRail:
         ):
             assert f">{title}</span>" in labels, f"{title} lost its label column"
         # …carrying the control's help as the title's own tooltip.
-        assert 'data-tip="Drift correction — Snap fixations' in labels
+        assert 'data-tip="Drift correction — Move each fixation' in labels

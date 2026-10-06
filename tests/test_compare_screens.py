@@ -47,7 +47,11 @@ def _marker_xs(fig) -> list[list[float]]:
     return [
         [float(x) for x in trace.x]
         for trace in fig.data
-        if trace.mode and "markers" in trace.mode and trace.x is not None
+        if trace.mode
+        and "markers" in trace.mode
+        # The colour bar's carrier trace has markers but no points.
+        and trace.x is not None
+        and any(x is not None for x in trace.x)
     ]
 
 

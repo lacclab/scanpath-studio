@@ -123,6 +123,23 @@ class TestRetimingIsByteIdentical:
         )
         assert reasoned.to_json() == plain.to_json()
 
+    def test_the_illustration_text_does_not_reach_the_frames(self):
+        # Same for the label's text: the app pins it to "" for the frames and
+        # stamps it with the label afterwards, so editing it rebuilds nothing.
+        plain = make_scanpath_animation(_words(), _fixations(), **_CANVAS)
+        texted = make_scanpath_animation(
+            _words(), _fixations(), illustration_text="Schematic", **_CANVAS
+        )
+        assert texted.to_json() == plain.to_json()
+
+    def test_the_app_keys_the_frames_without_the_text(self):
+        import inspect
+
+        from scanpath_studio import tabs
+
+        source = inspect.getsource(tabs._plan_replay)
+        assert 'illustration_text=""' in source
+
     def test_a_replay_with_no_frames_stays_without_controls(self):
         empty = _fixations().iloc[0:0]
         built = make_scanpath_animation(

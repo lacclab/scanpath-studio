@@ -828,6 +828,11 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Auto-label transformed/schematic figures, force the label, or "
         "explicitly hide it (default: auto).",
     )
+    viz.add_argument(
+        "--illustration-text",
+        metavar="TEXT",
+        help='The Illustration label\'s text (default: "Illustration · <reasons>").',
+    )
     # PRE-3: vertical drift correction. The algorithm list below is spelled out
     # for `--help`; `alignment.ALGORITHMS` stays the source of truth (the flag
     # validates against it via _drift_algorithm, and a test pins the two lists
@@ -896,14 +901,15 @@ def _render_parser() -> argparse.ArgumentParser:
     )
     viz.add_argument(
         "--heatmap-style",
-        choices=["word-boxes", "interpolated", "duration-mass"],
+        choices=["word-boxes", "interpolated"],
         help="Heatmap geometry (default: word-boxes).",
     )
     viz.add_argument(
-        "--duration-mass-sigma",
+        "--heatmap-sigma",
         type=float,
-        metavar="CHARS",
-        help="Gaussian sigma in character widths for --heatmap-style duration-mass.",
+        metavar="PX",
+        help="Gaussian σ in px for --heatmap-style interpolated (default: 2%% of "
+        "the data's larger span, at least 8 px).",
     )
     viz.add_argument(
         "--heatmap-colorscale",
@@ -1125,27 +1131,50 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Frame the axes on the data instead of the whole --canvas monitor.",
     )
     viz.add_argument(
-        "--colorbars",
-        dest="show_colorbars",
-        action="store_true",
-        help="Draw the colour bars for --color-by and the heatmap.",
+        "--no-fixation-colorbar",
+        dest="show_fixation_colorbar",
+        action="store_false",
+        help="Leave out --color-by's colour bar.",
     )
     viz.add_argument(
-        "--colorbar-orientation",
+        "--fixation-colorbar-orientation",
         choices=["vertical", "horizontal"],
-        help="With --colorbars: beside the plot (vertical, default) or below it.",
+        help="Fixation colour bar: beside the plot (vertical, default) or below it.",
     )
     viz.add_argument(
-        "--colorbar-tickangle",
+        "--fixation-colorbar-tickangle",
         type=int,
         metavar="DEG",
-        help="With --colorbars: tick-label angle, -90–90 (default: 0).",
+        help="Fixation colour bar: tick-label angle, -90–90 (default: 0).",
     )
     viz.add_argument(
-        "--colorbar-tickfont-size",
+        "--fixation-colorbar-tickfont-size",
         type=int,
         metavar="PX",
-        help="With --colorbars: tick-label size (default: 12).",
+        help="Fixation colour bar: tick-label size (default: 12).",
+    )
+    viz.add_argument(
+        "--no-heatmap-colorbar",
+        dest="show_heatmap_colorbar",
+        action="store_false",
+        help="Leave out the heatmap's colour bar.",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-orientation",
+        choices=["vertical", "horizontal"],
+        help="Heatmap colour bar: beside the plot (vertical, default) or below it.",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-tickangle",
+        type=int,
+        metavar="DEG",
+        help="Heatmap colour bar: tick-label angle, -90–90 (default: 0).",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-tickfont-size",
+        type=int,
+        metavar="PX",
+        help="Heatmap colour bar: tick-label size (default: 12).",
     )
     viz.add_argument(
         "--raw-gaze",
@@ -1187,6 +1216,13 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="COLOR",
         help="Word-box outline colour (default: #6c757d). A comparison outlines "
         "each reading's boxes in its scanpath colour instead.",
+    )
+    viz.add_argument(
+        "--word-box-line-opacity",
+        type=float,
+        metavar="O",
+        help="Word-box outline opacity, 0–1; 0 draws the fill only (default: 1). "
+        "Below 1 the outline colour must be #rrggbb, #rgb or rgb(r, g, b).",
     )
     viz.add_argument(
         "--word-box-fill-color",
@@ -1508,9 +1544,13 @@ _DIRECT_OPTION_FLAGS = (
     "word_hover_measure",
     "x_field",
     "y_field",
-    "colorbar_tickangle",
-    "colorbar_tickfont_size",
+    "fixation_colorbar_tickangle",
+    "fixation_colorbar_tickfont_size",
+    "heatmap_colorbar_tickangle",
+    "heatmap_colorbar_tickfont_size",
+    "illustration_text",
     "word_box_color",
+    "word_box_line_opacity",
     "word_box_fill_color",
     "word_box_fill_opacity",
     "raw_gaze_color",
@@ -1531,7 +1571,8 @@ _NONE_WHEN_EMPTY = frozenset(
 _SWITCH_OPTION_FLAGS = {
     "hollow_fixations": True,
     "color_by_line": True,
-    "show_colorbars": True,
+    "show_fixation_colorbar": False,
+    "show_heatmap_colorbar": False,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
     "duration_size_legend": False,
@@ -2759,10 +2800,9 @@ def render(argv: list[str]) -> None:
         overrides["heatmap_style"] = {
             "word-boxes": "Word boxes",
             "interpolated": "Interpolated",
-            "duration-mass": "Duration mass",
         }[args.heatmap_style]
-    if args.duration_mass_sigma is not None:
-        overrides["duration_mass_sigma_chars"] = args.duration_mass_sigma
+    if args.heatmap_sigma is not None:
+        overrides["heatmap_sigma_px"] = args.heatmap_sigma
     if args.heatmap_colorscale:
         overrides["heatmap_colorscale"] = args.heatmap_colorscale
     if args.heatmap_norm:
@@ -2899,8 +2939,10 @@ def render(argv: list[str]) -> None:
         overrides["fixation_color_range"] = tuple(args.fixation_color_range)
     if args.heatmap_range:
         overrides["heatmap_range"] = tuple(args.heatmap_range)
-    if args.colorbar_orientation:
-        overrides["colorbar_orientation"] = args.colorbar_orientation.capitalize()
+    for bar in ("fixation", "heatmap"):
+        orientation = getattr(args, f"{bar}_colorbar_orientation")
+        if orientation:
+            overrides[f"{bar}_colorbar_orientation"] = orientation.capitalize()
     if args.compare_with is not None:
         if args.show_legend:
             overrides["show_legend"] = True

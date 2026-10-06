@@ -159,7 +159,9 @@ _ANIMATION_FIGURE_PARAMS = (
 
 _CANONICAL_OPTION_NAMES = {
     "show_words",
+    "illustration_text",
     "word_box_color",
+    "word_box_line_opacity",
     "word_box_fill_color",
     "word_box_fill_opacity",
     "show_word_labels",
@@ -180,7 +182,14 @@ _CANONICAL_OPTION_NAMES = {
     "duration_size_legend",
     "order_font_size",
     "order_font_color",
-    "show_colorbars",
+    "show_fixation_colorbar",
+    "fixation_colorbar_orientation",
+    "fixation_colorbar_tickangle",
+    "fixation_colorbar_tickfont_size",
+    "show_heatmap_colorbar",
+    "heatmap_colorbar_orientation",
+    "heatmap_colorbar_tickangle",
+    "heatmap_colorbar_tickfont_size",
     "fixation_color_range",
     "heatmap_range",
     "fixation_colorscale",
@@ -2146,8 +2155,8 @@ def plot_scanpath(
     the app's fixation-index window.
 
     ``title`` / ``caption`` stamp a title/caption band onto the figure
-    without shrinking the plot area, exactly like the rail's *Title & caption on
-    the figure* control — literal text here, not the rail's ``{trial_id}``-style
+    without shrinking the plot area, exactly like the rail's *Title* / *Caption*
+    rows — literal text here, not the rail's ``{trial_id}``-style
     pattern, since the caller already knows which trial this is.
 
     Remaining keywords override the app's defaults and are forwarded to
@@ -2555,7 +2564,11 @@ def animate_scanpath(
         fixations_b=fixations_b,
         words_b=words_b,
     )
-    add_illustration_label(fig, animation_overrides.get("illustration_reasons"))
+    add_illustration_label(
+        fig,
+        animation_overrides.get("illustration_reasons"),
+        text=render_settings.illustration_text,
+    )
     annotate_figure(fig, title=title, caption=caption)
     return fig
 

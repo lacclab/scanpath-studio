@@ -183,18 +183,18 @@ COLORSCALES = [
     "Spectral",
 ]
 
-# VIZ-32: colourblind-safe (Viridis) is the default a fresh session opens with.
+# Both colour scales open in Blues: one hue, light to dark, colourblind-safe.
 # A keyed selectbox first-rendered inside a popover would otherwise display its
 # first option rather than a non-index-0 seeded value on first open — handled by
 # `controls._popover_selectbox` (explicit `index=`) / `_pin` + `persist_state`, so a
 # non-index-0 default here still keeps the picker and the figure in sync.
-DEFAULT_FIXATION_COLORSCALE = "Viridis"
-DEFAULT_HEATMAP_COLORSCALE = "Viridis"
+DEFAULT_FIXATION_COLORSCALE = "Blues"
+DEFAULT_HEATMAP_COLORSCALE = "Blues"
 #: Heatmap styles that scale their smoothed density to each figure's own peak
 #: (`plots._add_interpolated_heatmap`), so a ``heatmap_range`` does nothing to
 #: them: the rail greys the range for these, and the code snippet omits it.
 #: Compare always draws word boxes, where the range applies again.
-SELF_SCALED_HEATMAP_STYLES = frozenset({"Interpolated", "Duration mass"})
+SELF_SCALED_HEATMAP_STYLES = frozenset({"Interpolated"})
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 # How fixation duration maps onto that size range. The three *fixed* scales map
@@ -224,6 +224,8 @@ MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
+#: The outline's opacity; 1 draws it solid, as before the setting existed.
+WORD_BOX_LINE_OPACITY = 1.0
 #: The word boxes' fill, drawn translucent (``WORD_BOX_FILL_OPACITY``) so it
 #: tints the interest area without hiding the text, fixations or image under it.
 WORD_BOX_FILL_COLOR = "#646464"
@@ -272,6 +274,9 @@ SACCADE_DASH_OPTIONS = {
 # Saccade line width (px): default + the (min, max) the width slider allows.
 DEFAULT_SACCADE_WIDTH = 2.0
 SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
+#: The Interpolated heatmap's fixed blur σ (px): the box's limits and default.
+HEATMAP_SIGMA_BOUNDS = (1.0, 500.0)
+DEFAULT_HEATMAP_SIGMA_PX = 20.0
 
 # VIZ-8 · colour saccades by reading type. Each saccade (the segment from one
 # fixation to the next) is classified into one of these reading-schematic
@@ -419,11 +424,11 @@ PLOTLY_CONFIG: dict = {"showSendToCloud": False}
 #     (VIZ-19) are the redundant channels when colour alone can't carry it.
 PALETTES: dict[str, dict] = {
     # Okabe & Ito's eight-colour set — the de-facto standard for qualitative
-    # colourblind-safe encoding — plus Viridis, which is both perceptually
-    # uniform and safe across the common deficiencies. VIZ-32: this is the
+    # colourblind-safe encoding — plus single-hue Blues scales, which vary in
+    # lightness only and so survive every common deficiency. VIZ-32: this is the
     # default a fresh session opens with, not just an opt-in choice.
     "Default (colourblind-safe)": {
-        "description": "Okabe–Ito hues + Viridis scales; safe for deuteran-, "
+        "description": "Okabe–Ito hues + Blues scales; safe for deuteran-, "
         "protan- and tritanopia.",
         "fixation_color": DEFAULT_FIXATION_COLOR,
         "fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,

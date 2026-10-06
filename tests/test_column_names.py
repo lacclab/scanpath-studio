@@ -765,7 +765,8 @@ class TestFigureText:
         fig = self._figure(
             demo,
             color_by="duration_ms",
-            show_colorbars=True,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
             column_labels={"duration_ms": "CURRENT_FIX_DURATION"},
         )
         titles = [

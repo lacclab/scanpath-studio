@@ -297,7 +297,9 @@ def test_deep_link_seeds_frozen_state_keys():
 
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
     # EXP-18: the settings that joined the link are closed vocabularies too.
-    validated["colorbar_orientation"] = "Horizontal"
+    validated["fixation_colorbar_orientation"] = "Horizontal"
+    validated["heatmap_style"] = "Interpolated"
+    validated["heatmap_colorbar_orientation"] = "Horizontal"
     validated["marker_size_scale"] = "linear"
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Discard"
@@ -466,7 +468,8 @@ def _restore_config_app():
             "heatmap_style": "Word boxes",
             "heatmap_norm": "Linear",
             "heatmap_metric": "duration_ms",
-            "show_colorbars": True,
+            "show_fixation_colorbar": True,
+            "show_heatmap_colorbar": True,
             "fixation_colorscale": "Blues",
             "heatmap_colorscale": "Greens",
             "fixation_range": [0, 1],
@@ -492,9 +495,12 @@ def _restore_config_app():
             "stimulus_image_offset_x": 1.0,
             "stimulus_image_offset_y": 2.0,
             "stimulus_image_scale": 1.5,
-            "colorbar_orientation": "Vertical",
-            "colorbar_tickangle": 10,
-            "colorbar_tickfont_size": 12,
+            "fixation_colorbar_orientation": "Vertical",
+            "fixation_colorbar_tickangle": 10,
+            "fixation_colorbar_tickfont_size": 12,
+            "heatmap_colorbar_orientation": "Horizontal",
+            "heatmap_colorbar_tickangle": -10,
+            "heatmap_colorbar_tickfont_size": 14,
         },
         "sizing": {
             "marker_size_range": [4, 10],
@@ -536,7 +542,8 @@ def _restore_config_app():
             "span_border_color": "#000000",
         },
         "labels": {
-            "show_title_caption": True,
+            "show_title": True,
+            "show_caption": True,
             "title_pattern": "{participant_id} · {trial_id}",
             "caption_pattern": "{text_id} · {n_fixations} fixations",
         },
@@ -544,6 +551,7 @@ def _restore_config_app():
         "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
         "word_boxes": {
             "color": "#112233",
+            "line_opacity": 0.6,
             "fill_color": "#445566",
             "fill_opacity": 0.2,
         },

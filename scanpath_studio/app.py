@@ -141,10 +141,8 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
-    _label_w,
     _labeled,
     _pin,
-    _row_label,
     _sub_caption,
     _sub_row,
     clear_trial_filter,
@@ -234,7 +232,6 @@ from scanpath_studio.experimental_setup import (
     Provenance,
     SetupSnapshot,
     font_pt_to_px,
-    pixels_per_degree,
 )
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
@@ -6082,6 +6079,11 @@ def _dataset_table_rows(
                     registry.get(token),
                     stood_in_for=token == active and placeholder,
                 ),
+                # In memory: the open dataset, a stored upload, or one this
+                # session already read (its loader's cache holds it).
+                loaded=(token == active and not placeholder)
+                or token in stored_uploads
+                or token in st.session_state.get(LOADED_THIS_SESSION_KEY, ()),
                 order=len(rows),
             )
         )
@@ -6089,7 +6091,7 @@ def _dataset_table_rows(
 
 
 def _dataset_status(spec: Mapping | None, *, stood_in_for: bool = False) -> str:
-    """One row's **Status** — ``""`` (Ready) or what is missing (BUG-113).
+    """One row's **Status** — ``""`` (here) or what is missing (BUG-113).
 
     Asked the same way of every row, open or not: a corpus with files on disk
     has a ``files_present`` check in its registry entry — path stats only, never
@@ -6444,7 +6446,7 @@ def render_dataset_table(
     **Kind · Dataset · Status · Participants · Texts · Trials · Fixations ·
     Remove** (UX-178 moved Status beside the name it qualifies). A click anywhere on a row opens that dataset (UX-78); the open one
     carries a **Current** badge and a tint, and never moves. **Status** is
-    whether the dataset can be opened now — *Ready*, *Needs download* or
+    whether the dataset can be opened now — *Loaded*, *Available*, *Needs download* or
     *Needs setup* — asked the same way of every row (BUG-113; see
     `_dataset_status`). Everything else about a dataset —
     Screens, Words and Gaze points, its description, renaming it, editing its
@@ -7152,44 +7154,6 @@ _MULTILINGUAL_FONT_STACK = (
 )
 
 
-def _rail_monitor_row(host) -> tuple[int, int]:
-    """The monitor's pixel size as one ``Monitor | W × H px`` row (UX-163)."""
-    label_w = _label_w()
-    rest = 1.0 - label_w
-    label_col, width_col, times_col, height_col, unit_col = host.columns(
-        [label_w, rest * 0.4, rest * 0.08, rest * 0.4, rest * 0.12],
-        gap=_LABEL_GAP,
-        vertical_alignment="center",
-    )
-    _row_label(
-        label_col,
-        "Monitor",
-        "The presentation monitor's width × height in pixels. Keep it true to the "
-        "experiment's screen so coordinates and word boxes stay to scale.",
-    )
-    width = width_col.number_input(
-        "Monitor width (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        key="global_canvas_width",
-        persist_state="session",
-        label_visibility="collapsed",
-    )
-    _sub_caption(times_col, "×")
-    height = height_col.number_input(
-        "Monitor height (px)",
-        min_value=100,
-        max_value=10000,
-        step=10,
-        key="global_canvas_height",
-        persist_state="session",
-        label_visibility="collapsed",
-    )
-    _sub_caption(unit_col, "px")
-    return int(width), int(height)
-
-
 def _rail_text_rows(
     host,
     *,
@@ -7234,11 +7198,9 @@ def _rail_text_rows(
             section=section,
             section_help="How the reading text is drawn.",
             caption_help=tip(
-                "**Scale to boxes** sizes the text from the word-box height "
-                "(text height = box height ÷ line spacing), so it fills the real "
-                "line slot and scales with the figure. The spacing beside it is "
-                "how many line slots one box spans — OneStop uses 3. Untick to "
-                "set a fixed size below."
+                "**Scale to boxes**: size the text from the word-box height (box "
+                "height ÷ line spacing). Spacing: how many text lines one box "
+                "spans (OneStop: 3). Untick to set a fixed size below."
             ),
         )
         fit_col, spacing_cap_col, spacing_col = fit.columns(
@@ -7265,10 +7227,8 @@ def _rail_text_rows(
         size = _sub_row(
             "Size",
             caption_help=tip(
-                "With **Scale to boxes** on, this is the axis, legend and "
-                "fallback text size in px. Off, it is the reading text's size — "
-                "in px, or in points converted with the dataset DPI "
-                "(px = pt × DPI ÷ 72)."
+                "With **Scale to boxes** on: the size of the axis and legend text. "
+                "Off: the reading text's size, in px or pt (px = pt × DPI ÷ 72)."
             ),
         )
         unit_col, size_col = size.columns(
@@ -7313,10 +7273,9 @@ def _rail_text_rows(
         font = _sub_row(
             "Font",
             caption_help=tip(
-                "The font for the word labels — the exact font from your "
-                "experiment (e.g. 'Courier New') or a CSS fallback stack. "
-                "**Multilingual** fills in a CJK / Hebrew / Arabic-capable stack "
-                "(PRE-6)."
+                "The word labels' font: a font name (e.g. 'Courier New') or a CSS "
+                "font stack. **Multilingual** fills in a stack for CJK, Hebrew and "
+                "Arabic."
             ),
         )
         family_col, stack_col = font.columns(
@@ -7344,11 +7303,7 @@ def _rail_text_rows(
         _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
         color = _sub_row(
             "Color",
-            caption_help=tip(
-                "The reading text's colour, then the background of the plotting "
-                "area (and of exported figures) — with its own colour when "
-                "*Custom…* is picked."
-            ),
+            caption_help=tip("The reading text's colour, and the plot background."),
         )
         text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
             [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
@@ -7484,7 +7439,11 @@ def render_canvas_controls(
     screen = display
     text = text_host if (bare and text_host is not None) else display
     if bare:
-        canvas_width, canvas_height = _rail_monitor_row(screen)
+        # The monitor's size is the dataset's Recording setup, set on the 🗂️ Data
+        # page; the rail only frames the figure on it. `seed_canvas_state` has
+        # resolved both keys above, and no widget owns them here, so nothing can
+        # drop them at the end of a run.
+        canvas_width, canvas_height = int(seeded[0]), int(seeded[1])
     else:
         canvas_width = field(
             screen,
@@ -7524,9 +7483,6 @@ def render_canvas_controls(
     # The wizard's standalone form still shows them: that *is* where they are set.
     if bare:
         monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
-        viewing_distance_mm = float(
-            st.session_state.get("global_viewing_distance_mm", 800.0)
-        )
         display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
     else:
         monitor_width_mm = field(
@@ -7541,7 +7497,7 @@ def render_canvas_controls(
             persist_state="session",
             help="Width of the visible display area, not the diagonal size.",
         )
-        viewing_distance_mm = field(
+        field(
             screen,
             "number_input",
             "Viewing distance (mm)",
@@ -7565,21 +7521,8 @@ def render_canvas_controls(
             help="Used for point-to-pixel stimulus font conversion. The physical "
             f"width above implies {derived_dpi:.1f} DPI.",
         )
-    px_per_degree = pixels_per_degree(
-        float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
-    )
-    # Still said, because it is the one number the framing controls imply and
-    # cannot be read off them: where the geometry came from is the Data page's
-    # to explain, but what it *means* for this figure belongs beside the canvas.
-    screen.caption(
-        f"Geometry: **{px_per_degree:.1f} px/degree** · "
-        f"{1.0 / px_per_degree:.4f}° per pixel."
-        + (
-            f"  ·  set in {ICONS['view_data']} Data Management → Recording setup."
-            if bare
-            else ""
-        )
-    )
+    # No derived visual-angle figure (px/degree) is shown anywhere: nothing in
+    # this release draws in degrees.
 
     # Text can be switched off while this function still supplies the screen
     # half to 📐 Figure & canvas. Before BUG-38, the caller passed an undefined
@@ -8303,6 +8246,10 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
 #: (`_remember_open_dataset`). Not the wizard's `_prev_source`, which only
 #: records where leaving the add-dataset wizard returns to.
 LAST_LOADED_SOURCE_KEY = "_sps_last_loaded_source"
+#: Every dataset this session has had on screen — the table's *Loaded* status.
+#: Session-only on purpose: the remembered counts outlive a restart, the
+#: loaders' caches do not.
+LOADED_THIS_SESSION_KEY = "_sps_loaded_this_session"
 #: UX-166: the dataset task this session's pipeline is running, set when the
 #: card opens and cleared when it ends; found still set by the next run, it
 #: means that run was abandoned mid-load.
@@ -8543,9 +8490,9 @@ def _remember_open_dataset(data_choice: str) -> None:
     """
     if data_choice == UPLOAD_CHOICE:
         return
-    st.session_state[LAST_LOADED_SOURCE_KEY] = str(
-        st.session_state.get("data_source_choice") or data_choice
-    )
+    token = str(st.session_state.get("data_source_choice") or data_choice)
+    st.session_state[LAST_LOADED_SOURCE_KEY] = token
+    st.session_state.setdefault(LOADED_THIS_SESSION_KEY, set()).add(token)
 
 
 def _finish_dataset_card(card: loading.Card | None, data_choice: str) -> None:

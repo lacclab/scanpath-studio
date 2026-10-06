@@ -402,7 +402,8 @@ def test_a_numeric_colour_bar_survives_the_heart():
     at = _rail(
         global_fixation_symbol="heart",
         global_color_by="duration_ms",
-        global_show_colorbars=True,
+        global_show_fixation_colorbar=True,
+        global_show_heatmap_colorbar=True,
     )
     fig = _static(at)
     bars = [t for t in fig.data if t.marker is not None and t.marker.showscale]

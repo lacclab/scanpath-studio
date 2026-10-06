@@ -117,6 +117,7 @@ from scanpath_studio.constants import (
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_HEATMAP_SIGMA_PX,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
@@ -147,6 +148,7 @@ from scanpath_studio.constants import (
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
+    WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     derived_analysis_tables_enabled,
@@ -274,6 +276,7 @@ from scanpath_studio.multipart import (
     screen_canvas_size,
 )
 from scanpath_studio.plots import (
+    COLORBAR_DEFAULTS,
     COMPARE_FILTER_STYLE_KEYS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
@@ -1638,7 +1641,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_heatmap=viz_settings["show_heatmap"],
         heatmap_style=viz_settings.get("heatmap_style", "Word boxes"),
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
-        duration_mass_sigma_chars=viz_settings.get("duration_mass_sigma_chars", 1.0),
+        heatmap_sigma_px=viz_settings.get("heatmap_sigma_px"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
@@ -1648,7 +1651,11 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         raw_gaze_color=viz_settings.get("raw_gaze_color", "#888888"),
         raw_gaze_marker_size=viz_settings.get("raw_gaze_marker_size", 4.0),
         raw_gaze_opacity=viz_settings.get("raw_gaze_opacity", 0.6),
+        illustration_text=str(viz_settings.get("illustration_text", "")),
         word_box_color=viz_settings.get("word_box_color", WORD_BOX_COLOR),
+        word_box_line_opacity=viz_settings.get(
+            "word_box_line_opacity", WORD_BOX_LINE_OPACITY
+        ),
         word_box_fill_color=viz_settings.get(
             "word_box_fill_color", WORD_BOX_FILL_COLOR
         ),
@@ -1671,7 +1678,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         duration_size_legend=viz_settings.get("duration_size_legend", True),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
-        show_colorbars=viz_settings["show_colorbars"],
+        **{
+            key: viz_settings.get(key, default)
+            for key, default in COLORBAR_DEFAULTS.items()
+        },
         fixation_color_range=viz_settings["fixation_color_range"],
         heatmap_range=viz_settings["heatmap_range"],
         fixation_colorscale=viz_settings["fixation_colorscale"],
@@ -1701,9 +1711,6 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         color_by_line=viz_settings.get("color_by_line", False),
         fixation_flags=viz_settings.get("fixation_flags"),
         span_border_color=viz_settings.get("span_border_color", "#000000"),
-        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
-        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
-        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
         background_color=viz_settings.get("background_color"),
         word_hover_measure=viz_settings.get(
             "word_hover_measure", "total_fixation_duration_ms"
@@ -3838,6 +3845,7 @@ def _build_studio_config(
         },
         "illustration": {
             "label_mode": viz_settings.get("illustration_label", "Auto"),
+            "text": str(viz_settings.get("illustration_text", "")),
             "reasons": list(viz_settings.get("illustration_reasons") or []),
         },
         "preprocessing": {
@@ -3867,11 +3875,21 @@ def _build_studio_config(
             "color_by": figure_settings["color_by"],
             "heatmap_metric": viz_settings["heatmap_metric"],
             "heatmap_style": figure_settings.get("heatmap_style", "Word boxes"),
-            "duration_mass_sigma_chars": float(
-                viz_settings.get("duration_mass_sigma_chars", 1.0)
+            # The Interpolated blur: Auto, and the fixed σ kept for when it is off.
+            "heatmap_sigma_auto": bool(
+                st.session_state.get("global_heatmap_sigma_auto", True)
+            ),
+            "heatmap_sigma_px": float(
+                st.session_state.get(
+                    "global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX
+                )
             ),
             "heatmap_norm": figure_settings.get("heatmap_norm", "Linear"),
-            "show_colorbars": figure_settings["show_colorbars"],
+            **{
+                key: bool(figure_settings.get(key, default))
+                for key, default in COLORBAR_DEFAULTS.items()
+                if key.startswith("show_")
+            },
             "fixation_range": (
                 list(figure_settings["fixation_color_range"])
                 if figure_settings["fixation_color_range"]
@@ -3933,13 +3951,11 @@ def _build_studio_config(
             "stimulus_image_scale": float(
                 viz_settings.get("stimulus_image_scale", 1.0)
             ),
-            "colorbar_orientation": figure_settings.get(
-                "colorbar_orientation", "Vertical"
-            ),
-            "colorbar_tickangle": int(figure_settings.get("colorbar_tickangle", 0)),
-            "colorbar_tickfont_size": int(
-                figure_settings.get("colorbar_tickfont_size", 12)
-            ),
+            **{
+                key: figure_settings.get(key, default)
+                for key, default in COLORBAR_DEFAULTS.items()
+                if not key.startswith("show_")
+            },
         },
         "sizing": {
             "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
@@ -3975,9 +3991,8 @@ def _build_studio_config(
         },
         # EXP-5: title/caption pattern, moved here from being Export-only.
         "labels": {
-            "show_title_caption": bool(
-                st.session_state.get("global_show_title_caption", False)
-            ),
+            "show_title": bool(st.session_state.get("global_show_title", False)),
+            "show_caption": bool(st.session_state.get("global_show_caption", False)),
             "title_pattern": viz_settings.get("title_pattern", ""),
             "caption_pattern": viz_settings.get("caption_pattern", ""),
         },
@@ -4010,6 +4025,9 @@ def _build_studio_config(
         # The ⬚ Word boxes section's style (its switch is `layers.words`).
         "word_boxes": {
             "color": viz_settings.get("word_box_color", WORD_BOX_COLOR),
+            "line_opacity": float(
+                viz_settings.get("word_box_line_opacity", WORD_BOX_LINE_OPACITY)
+            ),
             "fill_color": viz_settings.get("word_box_fill_color", WORD_BOX_FILL_COLOR),
             "fill_opacity": float(
                 viz_settings.get("word_box_fill_opacity", WORD_BOX_FILL_OPACITY)
@@ -4927,6 +4945,8 @@ def _plan_replay(
         playback_speed=1.0,
         autoplay=True,
         illustration_reasons=None,
+        # Stamped after the frames, by `finished_figure`; the view keys on it.
+        illustration_text="",
         # The duration-size key is layout only — no frame draws it — so it is
         # stamped onto the cached replay in `finished_figure`, and toggling it
         # costs no frame rebuild.
@@ -5043,7 +5063,9 @@ def _build_and_render_animation(
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
-        add_illustration_label(fig, reasons)
+        add_illustration_label(
+            fig, reasons, text=viz_settings.get("illustration_text", "")
+        )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(
             animation_settings, trial_fixations, anim_inputs["fixations_b"]
@@ -5067,6 +5089,7 @@ def _build_and_render_animation(
         anim_key,
         float(playback_speed),
         tuple(reasons or ()),
+        str(viz_settings.get("illustration_text", "")),
         tuple(sorted((str(k), repr(v)) for k, v in (preprocessing or {}).items())),
         title,
         caption,
@@ -5275,16 +5298,8 @@ def _render_export_panel(
     bulk_settings["preprocessing_report"] = (
         report.to_dict("records") if isinstance(report, pd.DataFrame) else []
     )
-    from scanpath_studio.experimental_setup import pixels_per_degree
-
-    try:
-        bulk_settings["pixels_per_degree"] = pixels_per_degree(
-            float(st.session_state.get("global_viewing_distance_mm", 800.0)),
-            float(canvas_width),
-            float(st.session_state.get("global_monitor_width_mm", 597.0)),
-        )
-    except (TypeError, ValueError):
-        pass
+    # No `pixels_per_degree`: the export's saccade table gives amplitudes in px
+    # only — a visual-angle conversion is not part of this release.
     # DATA-20: ship the participant table with the bundle, as its own file.
     #
     # The **fingerprint** goes in the settings dict, not the frame. `sig` below
@@ -6170,8 +6185,7 @@ def render_single_trial_tab(
                         _sub_row(
                             "Quality",
                             section="Frames",
-                            section_help="How the replay is sampled — which is what "
-                            "its smoothness, export size and render time are made of.",
+                            section_help="How often the replay samples the scanpath.",
                             caption_help=_gated_help(
                                 "Fine is smoother; Coarse renders faster. Custom sets "
                                 "the spacing and the limit below.",
@@ -6306,9 +6320,8 @@ def render_single_trial_tab(
                     # what genuinely does not apply goes grey, with the reason
                     # in its tooltip.
                     layout_gate = cmp_gate or (
-                        f"{ICONS['warning']} An animated comparison replays "
-                        "both readings on one clock, in one coordinate space, "
-                        "so it always overlays."
+                        f"{ICONS['warning']} An animated comparison is always "
+                        "an overlay."
                         if animate
                         else ""
                     )
@@ -6331,9 +6344,7 @@ def render_single_trial_tab(
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
-                            "Overlay both scanpaths on one canvas, or give "
-                            "each its own panel — side by side, or one above "
-                            "the other.",
+                            "Overlay both scanpaths, or give each its own panel.",
                             layout_gate,
                         ),
                     )
@@ -6358,10 +6369,8 @@ def render_single_trial_tab(
                     overlaid = animate or stored_layout == "Overlay"
                     if _compare_source_name() is not None and overlaid:
                         st.caption(
-                            "Overlay needs one coordinate space, so across "
-                            "datasets it applies only when both were recorded "
-                            "on the same screen. The caption under the plot "
-                            "says which you got."
+                            "Across datasets, Overlay needs both to be recorded on "
+                            "the same screen size."
                         )
                     # CMP-11: two datasets' AOIs coincide only when the text
                     # is identical, so an overlay can otherwise stack two
@@ -6382,9 +6391,7 @@ def render_single_trial_tab(
                         persist_state="session",
                         disabled=cmp_disabled or not overlaid,
                         help=_gated_help(
-                            "Which reading supplies the word boxes and text "
-                            "of an overlay (each panel of a split layout draws "
-                            "its own). Across datasets the two rarely line up."
+                            "Which reading's word boxes and text an overlay draws."
                             + (
                                 " A replay draws one stimulus layer, so "
                                 "**Both** means A's."
@@ -6823,6 +6830,9 @@ def render_single_trial_tab(
     )
     viz_settings["illustration_reasons"] = label_reasons
     figure_settings["illustration_reasons"] = label_reasons
+    # No label drawn: the text is a no-op, so it must not bust the figure cache.
+    if not label_reasons:
+        figure_settings["illustration_text"] = ""
     render_settings = FigureSettings.from_mapping(
         figure_settings,
         canvas_width=int(canvas_width),
@@ -8104,7 +8114,11 @@ def _render_comparison_figure(
         settings=comparison_settings,
         raw_gaze=raw_gaze,
     )
-    add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
+    add_illustration_label(
+        fig_compare,
+        viz_settings.get("illustration_reasons"),
+        text=viz_settings.get("illustration_text", ""),
+    )
     _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)
     _apply_title_caption(
         fig_compare,
@@ -9917,7 +9931,10 @@ def render_per_text_tab(
             ),
             order_font_size=viz_settings.get("order_font_size", 10),
             order_font_color=viz_settings.get("order_font_color", "#111111"),
-            show_colorbars=viz_settings.get("show_colorbars", True),
+            **{
+                key: viz_settings.get(key, default)
+                for key, default in COLORBAR_DEFAULTS.items()
+            },
             fixation_color_range=None,
             heatmap_range=None,
             heatmap_colorscale=viz_settings.get(
@@ -9925,9 +9942,6 @@ def render_per_text_tab(
             ),
             text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
             background_color=viz_settings.get("background_color"),
-            colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
-            colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
-            colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
             fit_to_monitor=viz_settings.get("fit_to_monitor", True),
@@ -15259,15 +15273,6 @@ def _render_setup_provenance_note(host=None) -> None:
             f'<div class="sps-readonly-map-note">{provenance}</div>'
             "</div>",
             unsafe_allow_html=True,
-        )
-    if snapshot.geometry_provenance is Provenance.SKIPPED:
-        box.caption(
-            "Visual-angle units are hidden for this dataset — the physical size "
-            "was skipped, so there is nothing honest to derive them from."
-        )
-    elif snapshot.px_per_degree is not None:
-        box.caption(
-            f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle."
         )
     _render_arrived_provenance_note(snapshot, host=box)
 

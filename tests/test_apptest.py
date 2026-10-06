@@ -959,10 +959,10 @@ class TestDatasetTable:
         assert not [k for k in keys if "rename" in str(k)]
         assert "dataset_edit_btn" in keys
         # BUG-113: Status says whether a dataset can be opened — a stored
-        # upload always can — and nothing else.
+        # upload is in memory, so it opens at once.
         status = frame.set_index("_token")["Status"]
-        assert status[self.NAME] == "Ready"
-        assert set(status) <= {"Ready", "Needs download", "Needs setup"}
+        assert status[self.NAME] == "Loaded"
+        assert set(status) <= {"Loaded", "Available", "Needs download", "Needs setup"}
         assert frame.set_index("_token")["Counts"][self.NAME] == "Loaded"
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
@@ -1250,13 +1250,13 @@ class TestDatasetTable:
         opened = self._status_with(monkeypatch, opened=self.POTEC, present=False)
         assert closed == opened == "Needs download"
 
-    def test_a_corpus_whose_files_are_here_is_ready_before_it_is_opened(
+    def test_a_corpus_whose_files_are_here_is_available_before_it_is_opened(
         self, monkeypatch
     ):
         from scanpath_studio.constants import DEMO_CHOICE
 
         assert self._status_with(monkeypatch, opened=DEMO_CHOICE, present=True) == (
-            "Ready"
+            "Available"
         )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
@@ -4575,26 +4575,27 @@ class TestFigureAndCanvasSubGroups:
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         # Open the four conditional bodies at once.
-        at.session_state["global_show_title_caption"] = True
+        at.session_state["global_show_title"] = True
         at.session_state["global_title_pattern"] = "{participant_id}"
         at.session_state["global_show_coordinate_grid"] = True
         at.session_state["global_coordinate_grid_auto"] = False
-        at.session_state["global_show_colorbars"] = True
+        at.session_state["global_show_fixation_colorbar"] = True
         at.session_state["global_bg_choice"] = "Custom…"
         at.run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Widgets from every sub-group: 🖥️ Screen, 🔤 Text, 📊 Axes, 🏷️ Labels.
         keys = {w.key for w in at.number_input} | {w.key for w in at.selectbox}
+        # The monitor's size is the Data page's (not drawn in the rail).
+        assert "global_canvas_width" not in keys
         assert {
-            "global_canvas_width",
             "global_coordinate_grid_spacing",
             "global_bg_choice",
             "global_illustration_label",
             "global_x_field",
         } <= keys
         assert at.session_state["global_title_pattern"] == "{participant_id}"
-        assert at.session_state["global_colorbar_orientation"] in (
+        assert at.session_state["global_fixation_colorbar_orientation"] in (
             "Vertical",
             "Horizontal",
         )
@@ -4630,9 +4631,10 @@ class TestFigureAndCanvasSubGroups:
         # The typography half is drawn into the Stimulus section instead.
         assert "text_host" in canvas_source
         assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing switch leads the screen block (UX-164: a `Frame | ☑
-        # Whole monitor` row).
-        assert 'key="global_fit_to_monitor"' in control_source
+        # The framing switch leads the screen block: a `Frame | ☑ Crop to data`
+        # row, a shadow of `global_fit_to_monitor` (its inverse).
+        assert 'check_label="Crop to data"' in control_source
+        assert '"global_fit_to_monitor"' in control_source
         assert "with screen_group, _popover_rows(" in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source

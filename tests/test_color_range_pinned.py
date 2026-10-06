@@ -224,7 +224,8 @@ class TestTheWordHeatmapRangeIsInDwell:
         at.checkbox(key="_heatmap_color_range_auto").uncheck()
         _rerun(at)
         viz = at.session_state["_viz"]
-        assert viz["heatmap_range"] == (300.0, 600.0)
+        # The scale starts at 0, as the figure's auto range does.
+        assert viz["heatmap_range"] == (0.0, 600.0)
         fills = _heat_fills(_static(viz))
         assert fills == auto_fills
         assert len(set(fills)) == 2
@@ -250,10 +251,13 @@ class TestTheWordHeatmapRangeIsInDwell:
         fig = plots.make_scanpath_figure(words, fixations, settings=log)
         assert len(set(_heat_fills(fig))) == 2
 
-    def test_counts_keep_no_range(self):
+    def test_counts_get_a_range_from_zero(self):
         at = _rail(**{**WORD_HEAT, "global_heatmap_metric": "counts"})
-        assert at.session_state["_viz"]["heatmap_range"] is None
-        assert not [s for s in at.slider if s.key == HEAT_VIEW]
+        assert at.session_state["_viz"]["heatmap_range"] is None  # auto
+        slider = at.slider(key=HEAT_VIEW)
+        assert slider.proto.min == 0
+        assert slider.proto.max >= 2
+        assert "Fixations per word" in slider.proto.help
 
 
 class TestHeatmapValueBounds:
@@ -285,11 +289,10 @@ class TestHeatmapValueBounds:
 
 
 class TestASmoothedHeatmapOffersNoRange:
-    """Finding 12: Interpolated and Duration mass scale their density to their
-    own peak, so the range is greyed for them — kept, not cleared — and the
+    """Finding 12: Interpolated scales its density to its own peak, so the range is greyed for them — kept, not cleared — and the
     code snippet does not present it as pinning anything."""
 
-    @pytest.mark.parametrize("style", ["Interpolated", "Duration mass"])
+    @pytest.mark.parametrize("style", ["Interpolated"])
     def test_the_range_is_greyed_and_kept(self, style):
         at = _rail(**{**WORD_HEAT, "global_heatmap_style": style, HEAT_KEY: (0, 600)})
         assert at.slider(key=HEAT_VIEW).proto.disabled
@@ -345,14 +348,14 @@ class TestHeatmapBoundsOnlyWhenShown:
         at = _rail(**{**WORD_HEAT, "global_show_heatmap": False})
         assert calls == []
         slider = at.slider(key=HEAT_VIEW)
-        assert (slider.proto.min, slider.proto.max) == (100, 300)
+        assert (slider.proto.min, slider.proto.max) == (0, 300)
 
     def test_on_bounds_it_by_dwell(self, monkeypatch):
         calls = self._counting(monkeypatch)
         at = _rail(**WORD_HEAT)
         assert len(calls) == 1
         slider = at.slider(key=HEAT_VIEW)
-        assert (slider.proto.min, slider.proto.max) == (300, 600)
+        assert (slider.proto.min, slider.proto.max) == (0, 600)
 
     def test_words_key_the_cache_only_on_the_words_only_fallback(self, monkeypatch):
         from scanpath_studio import controls
@@ -361,7 +364,7 @@ class TestHeatmapBoundsOnlyWhenShown:
         monkeypatch.setattr(
             controls,
             "_heatmap_value_bounds_cached",
-            lambda fix, words, key: seen.append((words, key)),
+            lambda fix, words, counts, key: seen.append((words, key)),
         )
         words, fixations = _frames()
         controls._heatmap_bounds_for_rail(fixations, words)

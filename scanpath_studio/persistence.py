@@ -68,6 +68,7 @@ from .session_keys import (
     SINGLE_PLAYBACK_SPEED,
     compare_state_keys,
     keep_legacy_marker_scale,
+    rename_legacy_keys,
 )
 
 SCHEMA_VERSION = 1
@@ -835,7 +836,8 @@ def _restorable_session(stored: Any) -> dict:
     from .url_state import sanitize_session_value
 
     clean = {}
-    for key, value in _as_mapping(stored).items():
+    # Renamed keys move to their new names before the allow-list sees them.
+    for key, value in rename_legacy_keys(_as_mapping(stored)).items():
         if not isinstance(key, str) or not (
             key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
         ):
@@ -894,7 +896,7 @@ def _restorable_session(stored: Any) -> dict:
             # One saved before the fixed duration scale keeps the relative one.
             if isinstance(value, dict):
                 clean[key] = {
-                    str(name): keep_legacy_marker_scale(design)
+                    str(name): keep_legacy_marker_scale(rename_legacy_keys(design))
                     for name, design in value.items()
                     if isinstance(design, dict)
                 }

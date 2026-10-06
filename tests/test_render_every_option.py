@@ -55,7 +55,7 @@ NON_DEFAULT = {
     "heatmap_style": "Interpolated",
     "heatmap_norm": "Log",
     "heatmap_metric": None,  # "counts" at the figure level
-    "duration_mass_sigma_chars": 2.0,
+    "heatmap_sigma_px": 15.0,
     "heatmap_colorscale": "Greens",
     "heatmap_range": (0.0, 900.0),
     "word_heatmap_col": "gpt2_surprisal",
@@ -65,7 +65,7 @@ NON_DEFAULT = {
     "color_by": "duration_ms",
     "color_by_line": True,
     "fixation_color": "#aa0000",
-    "fixation_colorscale": "Blues",
+    "fixation_colorscale": "Viridis",
     "fixation_color_range": (100.0, 400.0),
     "fixation_symbol": "square",
     "fixation_opacity": 0.5,
@@ -102,10 +102,14 @@ NON_DEFAULT = {
     "coordinate_grid_spacing": 250.0,
     "line_spacing": 2.5,
     "scale_text_to_boxes": False,
-    "show_colorbars": True,
-    "colorbar_orientation": "Horizontal",
-    "colorbar_tickangle": 30,
-    "colorbar_tickfont_size": 14,
+    "show_fixation_colorbar": False,
+    "fixation_colorbar_orientation": "Horizontal",
+    "fixation_colorbar_tickangle": 30,
+    "fixation_colorbar_tickfont_size": 14,
+    "show_heatmap_colorbar": False,
+    "heatmap_colorbar_orientation": "Horizontal",
+    "heatmap_colorbar_tickangle": -30,
+    "heatmap_colorbar_tickfont_size": 10,
     "background_image": "page.png",
     "background_image_size": (1200, 800),
     "background_image_origin": (10.0, 20.0),
@@ -116,6 +120,8 @@ NON_DEFAULT = {
     "word_box_color": "#777777",
     "word_box_fill_color": "#888888",
     "word_box_fill_opacity": 0.3,
+    "word_box_line_opacity": 0.4,
+    "illustration_text": "Schematic",
     # The replay's own.
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,
@@ -272,20 +278,37 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
         (["--no-full-monitor"], "fit_to_monitor", False),
-        (["--colorbars"], "show_colorbars", True),
+        (["--no-fixation-colorbar"], "show_fixation_colorbar", False),
         (
-            ["--colorbar-orientation", "horizontal"],
-            "colorbar_orientation",
+            ["--fixation-colorbar-orientation", "horizontal"],
+            "fixation_colorbar_orientation",
             "Horizontal",
         ),
-        (["--colorbar-tickangle", "-30"], "colorbar_tickangle", -30),
-        (["--colorbar-tickfont-size", "14"], "colorbar_tickfont_size", 14),
+        (["--fixation-colorbar-tickangle", "-30"], "fixation_colorbar_tickangle", -30),
+        (
+            ["--fixation-colorbar-tickfont-size", "14"],
+            "fixation_colorbar_tickfont_size",
+            14,
+        ),
+        (["--no-heatmap-colorbar"], "show_heatmap_colorbar", False),
+        (
+            ["--heatmap-colorbar-orientation", "horizontal"],
+            "heatmap_colorbar_orientation",
+            "Horizontal",
+        ),
+        (["--heatmap-colorbar-tickangle", "-30"], "heatmap_colorbar_tickangle", -30),
+        (
+            ["--heatmap-colorbar-tickfont-size", "14"],
+            "heatmap_colorbar_tickfont_size",
+            14,
+        ),
         (["--raw-gaze-color", "#666666"], "raw_gaze_color", "#666666"),
         (["--raw-gaze-marker-size", "3"], "raw_gaze_marker_size", 3.0),
         (["--raw-gaze-opacity", "0.4"], "raw_gaze_opacity", 0.4),
         (["--word-box-color", "#777777"], "word_box_color", "#777777"),
         (["--word-box-fill-color", "#888888"], "word_box_fill_color", "#888888"),
         (["--word-box-fill-opacity", "0.3"], "word_box_fill_opacity", 0.3),
+        (["--word-box-line-opacity", "0.4"], "word_box_line_opacity", 0.4),
         (
             ["--word-heatmap-col", "gpt2_surprisal"],
             "word_heatmap_col",
@@ -492,6 +515,8 @@ STATIC_FLAGS = [
     "#888888",
     "--word-box-fill-opacity",
     "0.3",
+    "--word-box-line-opacity",
+    "0.4",
     "--fixation-opacity",
     "0.5",
     "--hollow-fixations",
@@ -523,12 +548,19 @@ STATIC_FLAGS = [
     "--word-hover-measure",
     "first_fixation_ms",
     "--no-full-monitor",
-    "--colorbars",
-    "--colorbar-orientation",
+    "--no-fixation-colorbar",
+    "--fixation-colorbar-orientation",
     "horizontal",
-    "--colorbar-tickangle",
+    "--fixation-colorbar-tickangle",
     "30",
-    "--colorbar-tickfont-size",
+    "--fixation-colorbar-tickfont-size",
+    "14",
+    "--no-heatmap-colorbar",
+    "--heatmap-colorbar-orientation",
+    "horizontal",
+    "--heatmap-colorbar-tickangle",
+    "30",
+    "--heatmap-colorbar-tickfont-size",
     "14",
     "--saccade-color-by-direction",
     "--saccade-type-color",
@@ -538,7 +570,12 @@ STATIC_FLAGS = [
 
 def test_every_new_static_option_round_trips(monkeypatch, capsys):
     first, second, printed = _round_trip(monkeypatch, capsys, STATIC_FLAGS)
-    for flag in ("--sample-raw-gaze", "--no-full-monitor", "--colorbars"):
+    for flag in (
+        "--sample-raw-gaze",
+        "--no-full-monitor",
+        "--no-fixation-colorbar",
+        "--no-heatmap-colorbar",
+    ):
         assert flag in printed
     assert "Raw gaze" in {trace.name for trace in first.data}
     assert first.to_json() == second.to_json()
@@ -660,13 +697,15 @@ def test_an_integer_flag_is_printed_as_an_integer():
     command = api.figure_code(
         flavor="cli",
         order_font_size=12.0,
-        colorbar_tickangle=30.0,
-        colorbar_tickfont_size=14.0,
+        fixation_colorbar_tickangle=30.0,
+        heatmap_colorbar_tickangle=30.0,
+        fixation_colorbar_tickfont_size=14.0,
+        heatmap_colorbar_tickfont_size=14.0,
     )
     argv = shlex.split(command.replace(" \\\n", " "))
     args = cli._render_parser().parse_args(argv[2:])
-    assert (args.order_font_size, args.colorbar_tickangle) == (12, 30)
-    assert args.colorbar_tickfont_size == 14
+    assert (args.order_font_size, args.fixation_colorbar_tickangle) == (12, 30)
+    assert args.heatmap_colorbar_tickfont_size == 14
     replay = api.figure_code(kind="animation", flavor="cli", anim_max_frames=200.0)
     argv = shlex.split(replay.replace(" \\\n", " "))
     assert cli._render_parser().parse_args(argv[2:]).anim_max_frames == 200

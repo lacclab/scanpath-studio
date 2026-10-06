@@ -57,6 +57,7 @@ from .constants import (
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
+    WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
@@ -87,11 +88,13 @@ class FigureSettings:
     x_field: str = "x"
     y_field: str = "y"
     show_words: bool = True
-    #: The word boxes' outline colour, and their fill — a colour drawn at
-    #: ``word_box_fill_opacity``. A comparison outlines each reading's boxes in
-    #: its scanpath's ``box_color`` style (its fixation colour by default)
-    #: instead, so ``word_box_color`` is static/replay only.
+    #: The word boxes' outline colour at ``word_box_line_opacity``, and their
+    #: fill — a colour drawn at ``word_box_fill_opacity``. A comparison outlines
+    #: each reading's boxes in its scanpath's ``box_color`` style (its fixation
+    #: colour by default) instead, so ``word_box_color`` is static/replay only;
+    #: the line opacity applies to every outline.
     word_box_color: str = WORD_BOX_COLOR
+    word_box_line_opacity: float = WORD_BOX_LINE_OPACITY
     word_box_fill_color: str = WORD_BOX_FILL_COLOR
     word_box_fill_opacity: float = WORD_BOX_FILL_OPACITY
     show_word_labels: bool = True
@@ -104,7 +107,9 @@ class FigureSettings:
     show_saccade_arrows: bool = False
     heatmap_style: str = "Word boxes"
     heatmap_norm: str = "Linear"
-    duration_mass_sigma_chars: float = 1.0
+    #: The Interpolated heatmap's Gaussian σ in px; ``None`` picks it from the
+    #: data (`interpolated_sigma_px`).
+    heatmap_sigma_px: float | None = None
     marker_size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
     #: How duration maps onto ``marker_size_range`` — one of
     #: ``constants.MARKER_SIZE_SCALES``. The fixed scales ("sqrt", "linear",
@@ -117,7 +122,16 @@ class FigureSettings:
     duration_size_legend: bool = True
     order_font_size: int | None = 10
     order_font_color: str = "#111111"
-    show_colorbars: bool = False
+    #: Each colour scale's bar has its own switch and style: the fixations'
+    #: (a numeric ``color_by``) and the heatmap's.
+    show_fixation_colorbar: bool = True
+    fixation_colorbar_orientation: str = "Vertical"
+    fixation_colorbar_tickangle: int = 0
+    fixation_colorbar_tickfont_size: int = 12
+    show_heatmap_colorbar: bool = True
+    heatmap_colorbar_orientation: str = "Vertical"
+    heatmap_colorbar_tickangle: int = 0
+    heatmap_colorbar_tickfont_size: int = 12
     fixation_color_range: tuple[float, float] | None = None
     heatmap_range: tuple[float, float] | None = None
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE
@@ -150,9 +164,6 @@ class FigureSettings:
     #: ``None`` gives B the same ``fixation_flags`` as A.
     fixation_flags_b: dict | None = None
     span_border_color: str = "#000000"
-    colorbar_orientation: str = "Vertical"
-    colorbar_tickangle: int = 0
-    colorbar_tickfont_size: int = 12
     line_spacing: float = DEFAULT_LINE_SPACING
     scale_text_to_boxes: bool = True
     background_image: str | None = None
@@ -170,6 +181,8 @@ class FigureSettings:
     show_connectors: bool = False
     connector_y: Sequence[float] | None = None
     illustration_reasons: Sequence[str] | None = None
+    #: The Illustration label's text; empty writes "Illustration · <reasons>".
+    illustration_text: str = ""
     playback_speed: float = 1.0
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
@@ -566,6 +579,14 @@ def _fit_display_size(
     return max(w, 100), max(h, 100)
 
 
+#: The two colour bars' settings (fixations', heatmap's) and their defaults —
+#: the one list the app's settings dicts and saved config copy them by.
+COLORBAR_DEFAULTS: dict = {
+    f.name: f.default
+    for f in fields(FigureSettings)
+    if f.name.endswith("_colorbar") or "_colorbar_" in f.name
+}
+
 # Extra figure size (px) reserved OUTSIDE the equal-aspect plot region for a
 # right-side colorbar or a top legend. Without this, Plotly's automargin shrinks
 # the scaleanchor'd plot domain to fit them — and because the word labels are
@@ -601,10 +622,10 @@ def _decoration_margins(
     fitted_w: int,
     fitted_h: int,
     *,
-    colorbar: bool,
     legend: bool,
+    colorbar_right: bool = False,
+    colorbar_below: bool = False,
     bottom: int = 0,
-    colorbar_horizontal: bool = False,
     coordinate_grid: bool = False,
 ) -> dict:
     """Grow a spatial figure so a right/bottom colorbar + top legend sit in
@@ -613,11 +634,12 @@ def _decoration_margins(
     Returns ``{"width", "height", "margin"}`` for ``fig.update_layout``: the plot
     region stays ``fitted_w x fitted_h`` (so the true-to-scale word labels keep
     matching the boxes); ``bottom`` reserves additional space below the plot for
-    transport controls (the animation figure); ``colorbar_horizontal`` reserves
-    that space below for a horizontal colorbar rather than to the right.
+    transport controls (the animation figure); ``colorbar_right`` /
+    ``colorbar_below`` reserve room for a vertical / horizontal colour bar —
+    both, when the fixations' and the heatmap's bars point different ways.
     """
-    right = _COLORBAR_RESERVE_PX if (colorbar and not colorbar_horizontal) else 0
-    cb_bottom = _COLORBAR_BOTTOM_PX if (colorbar and colorbar_horizontal) else 0
+    right = _COLORBAR_RESERVE_PX if colorbar_right else 0
+    cb_bottom = _COLORBAR_BOTTOM_PX if colorbar_below else 0
     top = _LEGEND_RESERVE_PX if legend else 0
     left = _GRID_LEFT_RESERVE_PX if coordinate_grid else 0
     grid_bottom = _GRID_BOTTOM_RESERVE_PX if coordinate_grid else 0
@@ -625,6 +647,15 @@ def _decoration_margins(
         "width": fitted_w + left + right,
         "height": fitted_h + top + bottom + cb_bottom + grid_bottom,
         "margin": dict(l=left, r=right, t=top, b=bottom + cb_bottom + grid_bottom),
+    }
+
+
+def _colorbar_reserves(*bars: tuple[bool, str]) -> dict:
+    """``colorbar_right`` / ``colorbar_below`` for `_decoration_margins`, from
+    each bar's ``(drawn, orientation)``."""
+    return {
+        "colorbar_right": any(on and o != "Horizontal" for on, o in bars),
+        "colorbar_below": any(on and o == "Horizontal" for on, o in bars),
     }
 
 
@@ -688,46 +719,52 @@ def _colorbar_owners(fig: go.Figure) -> list:
 def _arrange_colorbars(fig: go.Figure) -> None:
     """Give each of several colour bars its own place (round-7 review, finding 16).
 
-    `_colorbar_dict` puts every bar at one spot, so a heatmap's scale and the
-    fixations' were drawn over each other. With two or more, vertical bars stand
-    side by side to the right of the plot and horizontal ones stack below it,
-    the figure growing by the room they take — the plot region, and so the
-    true-to-scale text, keep their size. One bar keeps its geometry exactly.
+    `_colorbar_dict` puts every bar of one orientation at one spot, so a
+    heatmap's scale and the fixations' were drawn over each other. With two or
+    more pointing the same way, vertical bars stand side by side to the right
+    of the plot and horizontal ones stack below it, the figure growing by the
+    room they take — the plot region, and so the true-to-scale text, keep
+    their size. A bar alone in its orientation keeps its geometry exactly (a
+    vertical and a horizontal bar each already have their reserved margin).
     Each bar is its own mapping (variable, units, palette, range): none is
     merged into another, so every scale stays readable.
     """
     owners = _colorbar_owners(fig)
-    if len(owners) < 2:
-        return
+    below = [o for o in owners if o.colorbar.orientation == "h"]
+    right = [o for o in owners if o.colorbar.orientation != "h"]
     layout = fig.layout
-    margin = layout.margin
-    left, right = float(margin.l or 0), float(margin.r or 0)
-    top, bottom = float(margin.t or 0), float(margin.b or 0)
-    # Every spatial builder sizes its figure; Plotly's own default otherwise.
-    width = float(layout.width or 700)
-    height = float(layout.height or 450)
-    first = owners[0].colorbar
-    tick_px = float(first.tickfont.size or 12)
-    rotated = abs(float(first.tickangle or 0)) > 30
-    extra_slots = len(owners) - 1
-    if first.orientation == "h":
+    if len(below) > 1:
+        first = below[0].colorbar
+        tick_px = float(first.tickfont.size or 12)
+        rotated = abs(float(first.tickangle or 0)) > 30
         # Title above the bar, the bar, its tick labels below.
         row_px = 56.0 + 2.0 * tick_px + (2.0 * tick_px if rotated else 0.0)
+        height = float(layout.height or 450)
+        top, bottom = float(layout.margin.t or 0), float(layout.margin.b or 0)
         plot_h = max(height - top - bottom, 1.0)
         base_y = float(first.y if first.y is not None else -0.04)
-        for i, owner in enumerate(owners):
+        for i, owner in enumerate(below):
             owner.colorbar.y = base_y - i * row_px / plot_h
-        grow = extra_slots * row_px
+        grow = (len(below) - 1) * row_px
         fig.update_layout(height=height + grow, margin=dict(b=bottom + grow))
-    else:
+    if len(right) > 1:
+        first = right[0].colorbar
+        tick_px = float(first.tickfont.size or 12)
         # The bar, its tick labels, then its title read sideways.
         step_px = 70.0 + 3.0 * tick_px
-        plot_w = max(width - left - right, 1.0)
+        # Every spatial builder sizes its figure; Plotly's own default otherwise.
+        width = float(layout.width or 700)
+        left, margin_r = float(layout.margin.l or 0), float(layout.margin.r or 0)
+        plot_w = max(width - left - margin_r, 1.0)
         base_x = float(first.x if first.x is not None else 1.02)
-        for i, owner in enumerate(owners):
+        for i, owner in enumerate(right):
             owner.colorbar.x = base_x + i * step_px / plot_w
-        new_right = max(right, float(_COLORBAR_RESERVE_PX)) + extra_slots * step_px
-        fig.update_layout(width=width + (new_right - right), margin=dict(r=new_right))
+        new_right = (
+            max(margin_r, float(_COLORBAR_RESERVE_PX)) + (len(right) - 1) * step_px
+        )
+        fig.update_layout(
+            width=width + (new_right - margin_r), margin=dict(r=new_right)
+        )
 
 
 # Text in Plotly is sized in screen pixels with no native "data unit" mode, so
@@ -1669,6 +1706,7 @@ def build_word_boxes(
     color: str = WORD_BOX_COLOR,
     fill_color: str = WORD_BOX_FILL_COLOR,
     fill_opacity: float = WORD_BOX_FILL_OPACITY,
+    line_opacity: float = WORD_BOX_LINE_OPACITY,
 ) -> list:
     """Rectangles for the word interest areas.
 
@@ -1676,12 +1714,16 @@ def build_word_boxes(
     (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
     assigns against. On a tiling corpus each outline therefore runs on across
     the space after its word, and the word *label* is centred in it (BUG-97).
-    ``color`` is the outline; the fill is ``fill_color`` at ``fill_opacity``
-    (0 = no fill), which leaves the outline itself fully opaque.
+    ``color`` is the outline, drawn at ``line_opacity`` (0 = no outline); the
+    fill is ``fill_color`` at ``fill_opacity`` (0 = no fill). Each is its own
+    alpha, so one never fades the other. A fully opaque outline keeps ``color``
+    as given, so any colour Plotly accepts still works there.
     """
     from .measures import word_box_bounds
 
     fill = color_with_alpha(fill_color, fill_opacity)
+    if line_opacity < 1:
+        color = color_with_alpha(color, line_opacity)
     shapes = []
     for x0, y0, x1, y1 in zip(*word_box_bounds(words)):
         shapes.append(
@@ -2574,11 +2616,12 @@ def _render_scanpath_figure(
     show_saccade_arrows = settings.show_saccade_arrows
     heatmap_style = settings.heatmap_style
     heatmap_norm = settings.heatmap_norm
-    duration_mass_sigma_chars = settings.duration_mass_sigma_chars
+    heatmap_sigma_px = settings.heatmap_sigma_px
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
-    show_colorbars = settings.show_colorbars
+    show_colorbars = settings.show_fixation_colorbar
+    show_heatmap_colorbar = settings.show_heatmap_colorbar
     fixation_color_range = settings.fixation_color_range
     heatmap_range = settings.heatmap_range
     fixation_colorscale = settings.fixation_colorscale
@@ -2611,9 +2654,10 @@ def _render_scanpath_figure(
     color_by_line = settings.color_by_line or settings.color_by == "line"
     fixation_flags = settings.fixation_flags
     span_border_color = settings.span_border_color
-    colorbar_orientation = settings.colorbar_orientation
-    colorbar_tickangle = settings.colorbar_tickangle
-    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    # The fixations' colour bar; the heatmap's is `cb_style` below.
+    colorbar_orientation = settings.fixation_colorbar_orientation
+    colorbar_tickangle = settings.fixation_colorbar_tickangle
+    colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
     line_spacing = settings.line_spacing
     scale_text_to_boxes = settings.scale_text_to_boxes
     background_image = settings.background_image
@@ -2638,11 +2682,11 @@ def _render_scanpath_figure(
     legend_active = False
     heatmap_rendered = False
     is_numeric_color = False
-    # Shared colour-bar styling (orientation / tick angle / tick size).
+    # The heatmap's colour-bar styling (orientation / tick angle / tick size).
     cb_style = dict(
-        orientation=colorbar_orientation,
-        tickangle=colorbar_tickangle,
-        tickfont_size=colorbar_tickfont_size,
+        orientation=settings.heatmap_colorbar_orientation,
+        tickangle=settings.heatmap_colorbar_tickangle,
+        tickfont_size=settings.heatmap_colorbar_tickfont_size,
     )
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
 
@@ -2762,6 +2806,7 @@ def _render_scanpath_figure(
                 color=settings.word_box_color,
                 fill_color=settings.word_box_fill_color,
                 fill_opacity=settings.word_box_fill_opacity,
+                line_opacity=settings.word_box_line_opacity,
             )
             if show_words
             else []
@@ -2810,43 +2855,22 @@ def _render_scanpath_figure(
         y_max = (
             y_max_data if y_max_data is not None else float(fixations[y_field].max())
         )
-        if heatmap_style in {"Interpolated", "Duration mass"}:
-            # Interpolated is fixation-centred. Duration mass first distributes
-            # dwell time onto the discrete character grid, then renders those
-            # character centres as the support surface.
-            sigma_px = None
-            heatmap_points = fixations
-            heatmap_weights = weights
-            heatmap_x_field, heatmap_y_field = x_field, y_field
-            if heatmap_style == "Duration mass" and not words.empty:
-                from .preprocessing import duration_mass_table
-
-                mass = duration_mass_table(
-                    words, fixations, sigma_chars=duration_mass_sigma_chars
-                )
-                if not mass.empty:
-                    heatmap_points = mass
-                    heatmap_weights = mass["duration_mass_ms"]
-                    heatmap_x_field, heatmap_y_field = "center_x", "center_y"
-                    char_width = pd.to_numeric(mass["width"], errors="coerce").median()
-                    if pd.notna(char_width):
-                        sigma_px = max(float(char_width) * 0.35, 1.0)
+        if heatmap_style == "Interpolated":
             _add_interpolated_heatmap(
                 fig,
-                heatmap_points,
-                x_field=heatmap_x_field,
-                y_field=heatmap_y_field,
+                fixations,
+                x_field=x_field,
+                y_field=y_field,
                 x_min=x_min,
                 x_max=x_max,
                 y_min=y_min,
                 y_max=y_max,
-                weights=heatmap_weights,
+                weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
-                show_colorbars=show_colorbars,
+                show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
-                sigma_px=sigma_px,
-                title="Duration mass" if heatmap_style == "Duration mass" else None,
+                sigma_px=heatmap_sigma_px,
             )
         elif not words.empty:
             _add_word_level_heatmap(
@@ -2858,7 +2882,7 @@ def _render_scanpath_figure(
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
-                show_colorbars=show_colorbars,
+                show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
             )
@@ -2875,7 +2899,7 @@ def _render_scanpath_figure(
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
-                show_colorbars=show_colorbars,
+                show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
             )
@@ -2893,7 +2917,7 @@ def _render_scanpath_figure(
                 [float(v) for v in values],
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
-                show_colorbars=show_colorbars,
+                show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_title=word_heatmap_title or "Value",
                 colorbar_style=cb_style,
@@ -2912,7 +2936,7 @@ def _render_scanpath_figure(
                     measure,
                     heatmap_colorscale=heatmap_colorscale,
                     heatmap_range=heatmap_range,
-                    show_colorbars=show_colorbars,
+                    show_colorbars=show_heatmap_colorbar,
                     heatmap_norm=heatmap_norm,
                     colorbar_style=cb_style,
                 )
@@ -3264,9 +3288,11 @@ def _render_scanpath_figure(
         _decoration_margins(
             fitted_w,
             fitted_h,
-            colorbar=show_colorbars and (is_numeric_color or heatmap_rendered),
+            **_colorbar_reserves(
+                (show_colorbars and is_numeric_color, colorbar_orientation),
+                (show_heatmap_colorbar and heatmap_rendered, cb_style["orientation"]),
+            ),
             legend=legend_active,
-            colorbar_horizontal=colorbar_orientation == "Horizontal",
             coordinate_grid=show_coordinate_grid,
         )
         if spatial_axes
@@ -3288,12 +3314,17 @@ def _render_scanpath_figure(
         font=font_settings,
         shapes=shapes,
     )
-    add_illustration_label(fig, illustration_reasons)
+    add_illustration_label(fig, illustration_reasons, text=settings.illustration_text)
     return fig
 
 
-def add_illustration_label(fig: go.Figure, reasons: Sequence[str] | None) -> go.Figure:
-    """Stamp a figure and its metadata when it is schematic or transformed."""
+def add_illustration_label(
+    fig: go.Figure, reasons: Sequence[str] | None, *, text: str = ""
+) -> go.Figure:
+    """Stamp a figure and its metadata when it is schematic or transformed.
+
+    ``text`` replaces the drawn wording; empty draws "Illustration · <reasons>".
+    The reasons are recorded in the metadata either way."""
     reasons = [str(reason) for reason in (reasons or []) if reason]
     if not reasons:
         return fig
@@ -3304,7 +3335,7 @@ def add_illustration_label(fig: go.Figure, reasons: Sequence[str] | None) -> go.
         yref="paper",
         xanchor="right",
         yanchor="bottom",
-        text="Illustration · " + "; ".join(reasons),
+        text=str(text).strip() or "Illustration · " + "; ".join(reasons),
         showarrow=False,
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",
@@ -3461,7 +3492,8 @@ def _draw_word_value_heatmap(
     if not nonzero_rows:
         return
     vals = [v for _, v in nonzero_rows]
-    z_min_raw = heatmap_range[0] if heatmap_range else float(min(vals))
+    # Auto starts at 0: an empty word is the bottom of the scale.
+    z_min_raw = heatmap_range[0] if heatmap_range else 0.0
     z_max_raw = heatmap_range[1] if heatmap_range else float(max(vals))
     z_min = float(_apply_heatmap_norm(z_min_raw, heatmap_norm))
     z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
@@ -3656,6 +3688,14 @@ def _gaussian_blur_2d(
 _INTERP_GRID = 240  # cells along the wider axis
 _INTERP_SIGMA_FRAC = 0.02  # sigma as a fraction of the larger data span
 _INTERP_MIN_SIGMA_PX = 8.0
+
+
+def interpolated_sigma_px(x_span: float, y_span: float) -> float:
+    """The Interpolated heatmap's automatic Gaussian σ, in px: 2% of the data's
+    larger span (fixations, word boxes and shown raw gaze), at least 8 px."""
+    return max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
+
+
 _INTERP_OPACITY = 0.45
 _INTERP_FLOOR_FRAC = 0.02  # cells below this fraction of the peak render transparent
 _INTERP_MIN_CELLS = 10  # cells along the narrower axis, at least
@@ -3718,9 +3758,7 @@ def _add_interpolated_heatmap(
 
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
-    sigma_px = float(
-        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
-    )
+    sigma_px = float(sigma_px or interpolated_sigma_px(x_span, y_span))
     # An axis with (next to) no extent — coincident fixations, one row or one
     # column of a fixation-only import — is widened around its centre to the
     # blob's own size (±3 sigma), so the edges match the span the cells and the
@@ -4599,8 +4637,8 @@ def _render_scanpath_animation(
     :func:`make_scanpath_figure`: ``color_by`` (numeric → ``fixation_colorscale``
     pinned to the whole trial's range so colours stay stable as the trail grows,
     categorical → discrete palette + legend), ``color_by_line``, and an optional
-    colorbar (styled by ``colorbar_orientation`` / ``colorbar_tickangle`` /
-    ``colorbar_tickfont_size``, like the static figure). The dual overlay
+    colorbar (styled by the ``fixation_colorbar_*`` settings, like the static
+    figure). The dual overlay
     colours as :func:`make_comparison_figure` does: the metric (on one range
     shared by both readings) or one shared category→colour mapping fills the
     markers, and each reading's flat A/B colour becomes its marker outline.
@@ -4642,10 +4680,11 @@ def _render_scanpath_animation(
     fixation_color_range = settings.fixation_color_range
     fixation_flags = settings.fixation_flags
     fixation_flags_b = settings.fixation_flags_b
-    show_colorbars = settings.show_colorbars
-    colorbar_orientation = settings.colorbar_orientation
-    colorbar_tickangle = settings.colorbar_tickangle
-    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    # The replay has no heatmap: its one bar is the fixations'.
+    show_colorbars = settings.show_fixation_colorbar
+    colorbar_orientation = settings.fixation_colorbar_orientation
+    colorbar_tickangle = settings.fixation_colorbar_tickangle
+    colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
     saccade_color = settings.saccade_color
     saccade_style = settings.saccade_style
     saccade_width = settings.saccade_width
@@ -4720,6 +4759,7 @@ def _render_scanpath_animation(
             color=settings.word_box_color,
             fill_color=settings.word_box_fill_color,
             fill_opacity=settings.word_box_fill_opacity,
+            line_opacity=settings.word_box_line_opacity,
         )
         if show_words and not stimulus_words.empty
         else []
@@ -6046,7 +6086,8 @@ def _comparison_word_heatmap_data(
     if heatmap_range is not None:
         raw_min, raw_max = map(float, heatmap_range)
     elif all_values:
-        raw_min, raw_max = min(all_values), max(all_values)
+        # Auto starts at 0, as the single-trial word heatmap does.
+        raw_min, raw_max = 0.0, max(all_values)
     else:
         raw_min, raw_max = 0.0, 1.0
     z_min = float(_apply_heatmap_norm(raw_min, heatmap_norm))
@@ -6188,15 +6229,22 @@ def _make_split_comparison_figure(
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
     fixation_symbol = settings.fixation_symbol
-    show_colorbars = settings.show_colorbars
+    # The fixations' colour bar and the heatmap's, each with its own style.
+    show_colorbars = settings.show_fixation_colorbar
+    show_heatmap_colorbar = settings.show_heatmap_colorbar
     show_heatmap = settings.show_heatmap
     heatmap_metric = settings.heatmap_metric
     heatmap_colorscale = settings.heatmap_colorscale
     heatmap_range = settings.heatmap_range
     heatmap_norm = settings.heatmap_norm
-    colorbar_orientation = settings.colorbar_orientation
-    colorbar_tickangle = settings.colorbar_tickangle
-    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    colorbar_orientation = settings.fixation_colorbar_orientation
+    colorbar_tickangle = settings.fixation_colorbar_tickangle
+    colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
+    heat_cb_style = dict(
+        orientation=settings.heatmap_colorbar_orientation,
+        tickangle=settings.heatmap_colorbar_tickangle,
+        tickfont_size=settings.heatmap_colorbar_tickfont_size,
+    )
     text_color = settings.text_color
     highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
@@ -6383,12 +6431,18 @@ def _make_split_comparison_figure(
     # (VIZ-23), to their right when vertical — so the figure grows by it rather
     # than Plotly's automargin shrinking the panels under text already sized for
     # them (the single-trial figure's `_decoration_margins` rule).
-    has_colorbar = _comparison_metric_colorbar(
-        fixations, color_by, show_colorbars
-    ) or bool(show_heatmap and show_colorbars and any(heatmap_maps))
-    colorbar_horizontal = colorbar_orientation == "Horizontal"
-    bottom_px = _COLORBAR_BOTTOM_PX if (has_colorbar and colorbar_horizontal) else 0
-    right_px = _COLORBAR_RESERVE_PX if (has_colorbar and not colorbar_horizontal) else 0
+    reserves = _colorbar_reserves(
+        (
+            _comparison_metric_colorbar(fixations, color_by, show_colorbars),
+            colorbar_orientation,
+        ),
+        (
+            bool(show_heatmap and show_heatmap_colorbar and any(heatmap_maps)),
+            heat_cb_style["orientation"],
+        ),
+    )
+    bottom_px = _COLORBAR_BOTTOM_PX if reserves["colorbar_below"] else 0
+    right_px = _COLORBAR_RESERVE_PX if reserves["colorbar_right"] else 0
     grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
     grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     # The t band was the (now-removed) title; keep a slim band only for the
@@ -6486,6 +6540,7 @@ def _make_split_comparison_figure(
                 color=spec["box_color"],
                 fill_color=settings.word_box_fill_color,
                 fill_opacity=settings.word_box_fill_opacity,
+                line_opacity=settings.word_box_line_opacity,
             ):
                 box = dict(box)
                 box["xref"] = xref
@@ -6596,7 +6651,7 @@ def _make_split_comparison_figure(
         )
         fig.update_layout(**{xaxis_key: xaxis, yaxis_key: yaxis})
 
-    if show_heatmap and show_colorbars and any(heatmap_maps):
+    if show_heatmap and show_heatmap_colorbar and any(heatmap_maps):
         fig.add_trace(
             _comparison_heatmap_colorbar_trace(
                 colorscale=heatmap_colorscale,
@@ -6604,7 +6659,7 @@ def _make_split_comparison_figure(
                 z_max=heatmap_max,
                 title=heatmap_title,
                 heatmap_norm=heatmap_norm,
-                colorbar_style=cb_style,
+                colorbar_style=heat_cb_style,
             )
         )
     _add_category_legend(fig, category_legend, category_label or "")
@@ -6682,15 +6737,22 @@ def _render_comparison_figure(
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
     fixation_symbol = settings.fixation_symbol
-    show_colorbars = settings.show_colorbars
+    # The fixations' colour bar and the heatmap's, each with its own style.
+    show_colorbars = settings.show_fixation_colorbar
+    show_heatmap_colorbar = settings.show_heatmap_colorbar
     show_heatmap = settings.show_heatmap
     heatmap_metric = settings.heatmap_metric
     heatmap_colorscale = settings.heatmap_colorscale
     heatmap_range = settings.heatmap_range
     heatmap_norm = settings.heatmap_norm
-    colorbar_orientation = settings.colorbar_orientation
-    colorbar_tickangle = settings.colorbar_tickangle
-    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    colorbar_orientation = settings.fixation_colorbar_orientation
+    colorbar_tickangle = settings.fixation_colorbar_tickangle
+    colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
+    heat_cb_style = dict(
+        orientation=settings.heatmap_colorbar_orientation,
+        tickangle=settings.heatmap_colorbar_tickangle,
+        tickfont_size=settings.heatmap_colorbar_tickfont_size,
+    )
     text_color = settings.text_color
     highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
@@ -6826,7 +6888,7 @@ def _render_comparison_figure(
                 )
             )
         fig.update_layout(shapes=existing)
-        if show_colorbars and any(heatmap_maps):
+        if show_heatmap_colorbar and any(heatmap_maps):
             fig.add_trace(
                 _comparison_heatmap_colorbar_trace(
                     colorscale=heatmap_colorscale,
@@ -6834,7 +6896,7 @@ def _render_comparison_figure(
                     z_max=heatmap_max,
                     title=f"{heatmap_title} · left A / right B",
                     heatmap_norm=heatmap_norm,
-                    colorbar_style=cb_style,
+                    colorbar_style=heat_cb_style,
                 )
             )
 
@@ -6912,6 +6974,7 @@ def _render_comparison_figure(
                     color=spec["box_color"],
                     fill_color=settings.word_box_fill_color,
                     fill_opacity=settings.word_box_fill_opacity,
+                    line_opacity=settings.word_box_line_opacity,
                 )
             )
         if show_word_labels and draws_stimulus[_idx]:
@@ -6959,10 +7022,16 @@ def _render_comparison_figure(
     # it; a vertical one keeps today's layout (it hangs off the right edge).
     bottom_px = (
         _COLORBAR_BOTTOM_PX
-        if (
-            colorbar_orientation == "Horizontal"
-            and _comparison_metric_colorbar(fixations, color_by, show_colorbars)
-        )
+        if _colorbar_reserves(
+            (
+                _comparison_metric_colorbar(fixations, color_by, show_colorbars),
+                colorbar_orientation,
+            ),
+            (
+                bool(show_heatmap and show_heatmap_colorbar and any(heatmap_maps)),
+                heat_cb_style["orientation"],
+            ),
+        )["colorbar_below"]
         else 0
     )
     grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
@@ -8047,7 +8116,7 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "heatmap_metric",
         "heatmap_style",
         "heatmap_norm",
-        "duration_mass_sigma_chars",
+        "heatmap_sigma_px",
         "heatmap_range",
         "heatmap_colorscale",
         "show_raw_gaze",

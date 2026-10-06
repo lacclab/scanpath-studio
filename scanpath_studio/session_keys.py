@@ -41,8 +41,9 @@ from types import MappingProxyType
 # config (the recording setup below the divider only since EXP-19).
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
-# The ⬚ Word boxes section's style: outline, fill, fill opacity.
+# The ⬚ Word boxes section's style: outline + its opacity, fill + its opacity.
 GLOBAL_WORD_BOX_COLOR = "global_word_box_color"
+GLOBAL_WORD_BOX_LINE_OPACITY = "global_word_box_line_opacity"
 GLOBAL_WORD_BOX_FILL_COLOR = "global_word_box_fill_color"
 GLOBAL_WORD_BOX_FILL_OPACITY = "global_word_box_fill_opacity"
 GLOBAL_SHOW_LABELS = "global_show_labels"
@@ -61,12 +62,17 @@ GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
 GLOBAL_RAW_GAZE_COLOR = "global_raw_gaze_color"
 GLOBAL_RAW_GAZE_MARKER_SIZE = "global_raw_gaze_marker_size"
 GLOBAL_RAW_GAZE_OPACITY = "global_raw_gaze_opacity"
-GLOBAL_SHOW_COLORBARS = "global_show_colorbars"
+# Each colour scale's bar — the fixations' and the heatmap's — has its own
+# switch and style.
+GLOBAL_SHOW_FIXATION_COLORBAR = "global_show_fixation_colorbar"
+GLOBAL_SHOW_HEATMAP_COLORBAR = "global_show_heatmap_colorbar"
 GLOBAL_HOLLOW_FIXATIONS = "global_hollow_fixations"
 GLOBAL_SCALE_TEXT_TO_BOXES = "global_scale_text_to_boxes"
 GLOBAL_COLOR_BY = "global_color_by"
 GLOBAL_HEATMAP_STYLE = "global_heatmap_style"
-GLOBAL_DURATION_MASS_SIGMA_CHARS = "global_duration_mass_sigma_chars"
+# The Interpolated heatmap's blur: automatic, or a fixed σ in px.
+GLOBAL_HEATMAP_SIGMA_AUTO = "global_heatmap_sigma_auto"
+GLOBAL_HEATMAP_SIGMA_PX = "global_heatmap_sigma_px"
 GLOBAL_HEATMAP_NORM = "global_heatmap_norm"
 GLOBAL_HEATMAP_METRIC = "global_heatmap_metric"
 GLOBAL_CRITICAL_SPAN_STYLE = "global_critical_span_style"
@@ -79,6 +85,7 @@ GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
 GLOBAL_ALIGN_ALGORITHM = "global_align_algorithm"
 GLOBAL_ALIGN_CONNECTORS = "global_align_connectors"
 GLOBAL_ILLUSTRATION_LABEL = "global_illustration_label"
+GLOBAL_ILLUSTRATION_TEXT = "global_illustration_text"
 GLOBAL_PREPROC_ENABLED = "global_preproc_enabled"
 GLOBAL_PREPROC_BLINK_ADJACENT = "global_preproc_blink_adjacent"
 GLOBAL_PREPROC_SHORT_POLICY = "global_preproc_short_policy"
@@ -133,7 +140,8 @@ GLOBAL_SHOW_COORDINATE_GRID = "global_show_coordinate_grid"
 GLOBAL_COORDINATE_GRID_AUTO = "global_coordinate_grid_auto"
 GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
 # EXP-5: title/caption on the figure (moved here from being Export-only).
-GLOBAL_SHOW_TITLE_CAPTION = "global_show_title_caption"
+GLOBAL_SHOW_TITLE = "global_show_title"
+GLOBAL_SHOW_CAPTION = "global_show_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
 GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
 # EXP-18: settings that change the figure and used to travel in the saved config
@@ -141,9 +149,12 @@ GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
 # (one mode/threshold/symbol/colour group per category; `oob` and `blink` have no
 # threshold — geometry and blink tests, not durations) — plus Compare's A/B
 # legend and the replay speed, which travelled in neither.
-GLOBAL_COLORBAR_ORIENTATION = "global_colorbar_orientation"
-GLOBAL_COLORBAR_TICKANGLE = "global_colorbar_tickangle"
-GLOBAL_COLORBAR_TICKFONT_SIZE = "global_colorbar_tickfont_size"
+GLOBAL_FIXATION_COLORBAR_ORIENTATION = "global_fixation_colorbar_orientation"
+GLOBAL_FIXATION_COLORBAR_TICKANGLE = "global_fixation_colorbar_tickangle"
+GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE = "global_fixation_colorbar_tickfont_size"
+GLOBAL_HEATMAP_COLORBAR_ORIENTATION = "global_heatmap_colorbar_orientation"
+GLOBAL_HEATMAP_COLORBAR_TICKANGLE = "global_heatmap_colorbar_tickangle"
+GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE = "global_heatmap_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
 GLOBAL_FIXCLASS_SHORT_MODE = "global_fixclass_short_mode"
 GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS = "global_fixclass_short_threshold_ms"
@@ -308,6 +319,17 @@ PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
 # Legacy inverse of `show_order`, still parsed so pre-Share links keep working.
 PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
+# The one switch title and caption shared before each got its own; still read
+# (it turns both on or off), never written.
+PARAM_SHOW_TITLE_CAPTION = "show_title_caption"
+# The colour-bar settings the fixations and the heatmap shared before each had
+# its own; still read (each sets both bars), never written.
+PARAM_LEGACY_COLORBAR = (
+    "show_colorbars",
+    "colorbar_orientation",
+    "colorbar_tickangle",
+    "colorbar_tickfont_size",
+)
 
 # DATA-27 (Task 12): every public corpus on the deep link.
 #
@@ -410,10 +432,13 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
         "show_raw_gaze": GLOBAL_SHOW_RAW_GAZE,
-        "show_colorbars": GLOBAL_SHOW_COLORBARS,
+        "show_fixation_colorbar": GLOBAL_SHOW_FIXATION_COLORBAR,
+        "show_heatmap_colorbar": GLOBAL_SHOW_HEATMAP_COLORBAR,
+        "heatmap_sigma_auto": GLOBAL_HEATMAP_SIGMA_AUTO,
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
-        "show_title_caption": GLOBAL_SHOW_TITLE_CAPTION,
+        "show_title": GLOBAL_SHOW_TITLE,
+        "show_caption": GLOBAL_SHOW_CAPTION,
         "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
@@ -468,6 +493,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "word_hover_fields": GLOBAL_WORD_HOVER_FIELDS,
         "fixation_hover_fields": GLOBAL_FIXATION_HOVER_FIELDS,
         "illustration_label": GLOBAL_ILLUSTRATION_LABEL,
+        "illustration_text": GLOBAL_ILLUSTRATION_TEXT,
         "preproc_short_policy": GLOBAL_PREPROC_SHORT_POLICY,
         "title_pattern": GLOBAL_TITLE_PATTERN,
         "caption_pattern": GLOBAL_CAPTION_PATTERN,
@@ -477,7 +503,8 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         COMPARE_LAYOUT_PARAM: SINGLE_COMPARE_LAYOUT,
         COMPARE_STIMULUS_PARAM: SINGLE_COMPARE_STIMULUS,
         # EXP-18.
-        "colorbar_orientation": GLOBAL_COLORBAR_ORIENTATION,
+        "fixation_colorbar_orientation": GLOBAL_FIXATION_COLORBAR_ORIENTATION,
+        "heatmap_colorbar_orientation": GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
         "span_border_color": GLOBAL_SPAN_BORDER_COLOR,
         "fixclass_short_mode": GLOBAL_FIXCLASS_SHORT_MODE,
         "fixclass_short_symbol": GLOBAL_FIXCLASS_SHORT_SYMBOL,
@@ -511,8 +538,10 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
         # EXP-18.
-        "colorbar_tickangle": GLOBAL_COLORBAR_TICKANGLE,
-        "colorbar_tickfont_size": GLOBAL_COLORBAR_TICKFONT_SIZE,
+        "fixation_colorbar_tickangle": GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+        "fixation_colorbar_tickfont_size": GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+        "heatmap_colorbar_tickangle": GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        "heatmap_colorbar_tickfont_size": GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         "fixclass_short_threshold_ms": GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         "fixclass_long_threshold_ms": GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
         # EXP-19.
@@ -529,7 +558,7 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "line_spacing": GLOBAL_LINE_SPACING,
-        "duration_mass_sigma_chars": GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        "heatmap_sigma_px": GLOBAL_HEATMAP_SIGMA_PX,
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         "preproc_merge_distance_chars": GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         "saccade_width": GLOBAL_SACCADE_WIDTH,
@@ -541,6 +570,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
+        "word_box_line_opacity": GLOBAL_WORD_BOX_LINE_OPACITY,
         "word_box_fill_opacity": GLOBAL_WORD_BOX_FILL_OPACITY,
         # EXP-18.
         "playback_speed": SINGLE_PLAYBACK_SPEED,
@@ -710,7 +740,13 @@ URL_OPTIONAL_PARAMS = frozenset(
 # holding every part from the public release, so a link has nothing to add —
 # but `onestop_public` + `onestop_regime` must keep opening the regime it named.
 URL_LEGACY_PARAMS = frozenset(
-    {PARAM_ONESTOP_VARIANT, PARAM_ONESTOP_REGIME, PARAM_ONESTOP_PARTS}
+    {
+        PARAM_ONESTOP_VARIANT,
+        PARAM_ONESTOP_REGIME,
+        PARAM_ONESTOP_PARTS,
+        PARAM_SHOW_TITLE_CAPTION,
+        *PARAM_LEGACY_COLORBAR,
+    }
 )
 
 # The exact key set of `url_state._URL_PRESETS` — every param a deep link can
@@ -742,15 +778,18 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         GLOBAL_STIMULUS_IMAGE_SCALE,
-        GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        GLOBAL_HEATMAP_SIGMA_PX,
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_COORDINATE_GRID_SPACING,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
+        GLOBAL_WORD_BOX_LINE_OPACITY,
         GLOBAL_WORD_BOX_FILL_OPACITY,
-        GLOBAL_COLORBAR_TICKANGLE,
-        GLOBAL_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+        GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
         CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
@@ -803,7 +842,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 6
+PLOT_CONFIG_SCHEMA_VERSION = 7
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -845,10 +884,12 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_PALETTE,
         GLOBAL_COLOR_BY,
         GLOBAL_HEATMAP_STYLE,
-        GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        GLOBAL_HEATMAP_SIGMA_PX,
+        GLOBAL_HEATMAP_SIGMA_AUTO,
         GLOBAL_HEATMAP_NORM,
         GLOBAL_HEATMAP_METRIC,
-        GLOBAL_SHOW_COLORBARS,
+        GLOBAL_SHOW_FIXATION_COLORBAR,
+        GLOBAL_SHOW_HEATMAP_COLORBAR,
         GLOBAL_FIXATION_COLORSCALE,
         GLOBAL_HEATMAP_COLORSCALE,
         GLOBAL_FIXATION_COLOR_RANGE,
@@ -869,6 +910,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_ALIGN_ALGORITHM,
         GLOBAL_ALIGN_CONNECTORS,
         GLOBAL_ILLUSTRATION_LABEL,
+        GLOBAL_ILLUSTRATION_TEXT,
         GLOBAL_PREPROC_ENABLED,
         GLOBAL_PREPROC_BLINK_ADJACENT,
         GLOBAL_PREPROC_SHORT_POLICY,
@@ -882,9 +924,12 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         GLOBAL_STIMULUS_IMAGE_SCALE,
-        GLOBAL_COLORBAR_ORIENTATION,
-        GLOBAL_COLORBAR_TICKANGLE,
-        GLOBAL_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_FIXATION_COLORBAR_ORIENTATION,
+        GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+        GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+        GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
+        GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         # sizing
         GLOBAL_MARKER_SIZE_RANGE,
         GLOBAL_MARKER_SIZE_SCALE,
@@ -938,7 +983,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         # compare_view (BUG-72) — a `global_*` key, unlike the view's other two.
         GLOBAL_SHOW_COMPARE_LEGEND,
         # labels
-        GLOBAL_SHOW_TITLE_CAPTION,
+        GLOBAL_SHOW_TITLE,
+        GLOBAL_SHOW_CAPTION,
         GLOBAL_TITLE_PATTERN,
         GLOBAL_CAPTION_PATTERN,
         # raw_gaze (VIZ-43)
@@ -947,6 +993,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_RAW_GAZE_OPACITY,
         # word_boxes
         GLOBAL_WORD_BOX_COLOR,
+        GLOBAL_WORD_BOX_LINE_OPACITY,
         GLOBAL_WORD_BOX_FILL_COLOR,
         GLOBAL_WORD_BOX_FILL_OPACITY,
     }
@@ -983,6 +1030,44 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
 def compare_state_keys(index: int) -> frozenset:
     """The `cmp{index}_*` session keys one `compare` config entry restores."""
     return frozenset(t.format(idx=index) for t in COMPARE_STATE_KEY_TEMPLATES)
+
+
+#: Session keys that were renamed, each to the keys it now sets. A recovery
+#: cache or saved design written before the rename still holds the old name.
+LEGACY_SESSION_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "global_show_title_caption": (GLOBAL_SHOW_TITLE, GLOBAL_SHOW_CAPTION),
+        "global_show_colorbars": (
+            GLOBAL_SHOW_FIXATION_COLORBAR,
+            GLOBAL_SHOW_HEATMAP_COLORBAR,
+        ),
+        "global_colorbar_orientation": (
+            GLOBAL_FIXATION_COLORBAR_ORIENTATION,
+            GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
+        ),
+        "global_colorbar_tickangle": (
+            GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+            GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        ),
+        "global_colorbar_tickfont_size": (
+            GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+            GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
+        ),
+    }
+)
+
+
+def rename_legacy_keys(values: Mapping) -> dict:
+    """``values`` (a recovery-cache session or a saved design) with each renamed
+    key moved to what it now sets; a new key already there wins. Returns a
+    copy."""
+    out = dict(values)
+    for old, new_keys in LEGACY_SESSION_KEYS.items():
+        if old in out:
+            value = out.pop(old)
+            for new in new_keys:
+                out.setdefault(new, value)
+    return out
 
 
 def keep_legacy_marker_scale(values: Mapping) -> dict:

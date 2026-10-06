@@ -1,0 +1,1 @@
+The fixations and the heatmap each have their own colour bar settings (show, orientation, tick angle and size), under their layer in the rail; `render` takes `--no-fixation-colorbar` / `--fixation-colorbar-*` and the heatmap equivalents, and links or settings files using the old shared settings apply them to both.

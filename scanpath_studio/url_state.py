@@ -47,8 +47,10 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     CUSTOM_PALETTE,
+    DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
+    HEATMAP_SIGMA_BOUNDS,
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
     MANUAL_SAMPLE_CHOICE,
@@ -101,6 +103,7 @@ from .session_keys import (
     FIX_RANGE_PARAM,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
+    PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
     SETUP_PARAMS,
@@ -278,6 +281,16 @@ def _parse_saccade_style_label(v) -> str:
     raise ValueError(f"unknown line style {name!r}")
 
 
+def _parse_heatmap_style(value) -> str:
+    """A heatmap style; the retired *Duration mass* opens as *Interpolated*,
+    the smoothed style it was a variant of."""
+    if value == "Duration mass":
+        return "Interpolated"
+    if value not in ("Word boxes", "Interpolated"):
+        raise ValueError(f"not one of the widget's options: {value!r}")
+    return value
+
+
 def _parse_colorbar_orientation(v) -> str:
     return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
 
@@ -353,13 +366,19 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "anim_autoplay": "global_anim_autoplay",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
-    "show_colorbars": "global_show_colorbars",
+    # Each colour scale's bar has its own switch; the one they shared before,
+    # `show_colorbars`, is read below as both (with the old style params).
+    "show_fixation_colorbar": "global_show_fixation_colorbar",
+    "show_heatmap_colorbar": "global_show_heatmap_colorbar",
+    "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
-    # EXP-5: title/caption on the figure — off by default.
-    "show_title_caption": "global_show_title_caption",
+    # EXP-5: title and caption on the figure — each off by default. The one
+    # switch they shared before, `show_title_caption`, is read below.
+    "show_title": "global_show_title",
+    "show_caption": "global_show_caption",
     # EXP-18: three switches that change the figure and never rode the link —
     # the stimulus-image layer, Show full monitor, and Compare's A/B legend.
     "show_stimulus_image": "global_show_stimulus_image",
@@ -386,6 +405,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # toggles but no scale opens on the relative one — see `_apply_url_preset`.
     "marker_size_scale": "global_marker_size_scale",
     "illustration_label": "global_illustration_label",
+    "illustration_text": "global_illustration_text",
     # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
     # algorithm). Since VIZ-23 it applies on all three render paths, so a link
     # that dropped it reopened a visibly different figure.
@@ -441,7 +461,8 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # fixation flags. *Discard* changes which fixations are drawn at all, so a
     # link without it showed the recipient a different scanpath — and without
     # the Illustration label the sender's figure carried.
-    "colorbar_orientation": "global_colorbar_orientation",
+    "fixation_colorbar_orientation": "global_fixation_colorbar_orientation",
+    "heatmap_colorbar_orientation": "global_heatmap_colorbar_orientation",
     "span_border_color": "global_span_border_color",
     **{
         f"fixclass_{cat}_{part}": f"global_fixclass_{cat}_{part}"
@@ -491,8 +512,10 @@ _SHARE_INT_PARAMS = {
     "anim_grid_step_ms": "global_anim_grid_step_ms",
     "anim_max_frames": "global_anim_max_frames",
     # EXP-18: colour-bar tick styling and the two fixation-flag thresholds.
-    "colorbar_tickangle": "global_colorbar_tickangle",
-    "colorbar_tickfont_size": "global_colorbar_tickfont_size",
+    "fixation_colorbar_tickangle": "global_fixation_colorbar_tickangle",
+    "fixation_colorbar_tickfont_size": "global_fixation_colorbar_tickfont_size",
+    "heatmap_colorbar_tickangle": "global_heatmap_colorbar_tickangle",
+    "heatmap_colorbar_tickfont_size": "global_heatmap_colorbar_tickfont_size",
     "fixclass_short_threshold_ms": "global_fixclass_short_threshold_ms",
     "fixclass_long_threshold_ms": "global_fixclass_long_threshold_ms",
     # EXP-19: the pixel canvas and the base font — the recording setup's half
@@ -510,7 +533,8 @@ _SHARE_FLOAT_PARAMS = {
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
     "fixation_opacity": "global_fixation_opacity",
-    "duration_mass_sigma_chars": "global_duration_mass_sigma_chars",
+    # The Interpolated heatmap's fixed blur σ (px); its Auto switch is a toggle.
+    "heatmap_sigma_px": "global_heatmap_sigma_px",
     # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
     # sharing; the uploaded image itself can't ride a link).
     "stimulus_image_opacity": "global_stimulus_image_opacity",
@@ -523,6 +547,7 @@ _SHARE_FLOAT_PARAMS = {
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
+    "word_box_line_opacity": "global_word_box_line_opacity",
     "word_box_fill_opacity": "global_word_box_fill_opacity",
     # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
     # a link without it reopened a figure that disclosed something else.
@@ -598,12 +623,17 @@ _URL_PRESETS = {
     # BUG-75 — figure text from a link is text, never markup.
     "title_pattern": ("global_title_pattern", _strip_markup),
     "caption_pattern": ("global_caption_pattern", _strip_markup),
+    "illustration_text": ("global_illustration_text", _strip_markup),
+    "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
-    "colorbar_orientation": (
-        "global_colorbar_orientation",
-        _parse_colorbar_orientation,
-    ),
+    **{
+        f"{bar}_colorbar_orientation": (
+            f"global_{bar}_colorbar_orientation",
+            _parse_colorbar_orientation,
+        )
+        for bar in ("fixation", "heatmap")
+    },
     **{
         f"fixclass_{cat}_{part}": (f"global_fixclass_{cat}_{part}", parse)
         for cat in ("short", "long", "oob", "blink")
@@ -648,7 +678,7 @@ _MARKER_BOUNDS = (4, 40)
 _URL_BOUNDED = {
     "global_preproc_short_threshold_ms": (1.0, 500.0),
     "global_preproc_merge_distance_chars": (0.25, 10.0),
-    "global_duration_mass_sigma_chars": (0.25, 10.0),
+    "global_heatmap_sigma_px": HEATMAP_SIGMA_BOUNDS,
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_order_font_size": (6, 72),
@@ -667,13 +697,20 @@ _URL_BOUNDED = {
     # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
     "global_raw_gaze_opacity": (0.1, 1.0),
-    # 0 is a real choice here — outlines only, no fill.
+    # 0 is a real choice for both — outlines only / fill only.
+    "global_word_box_line_opacity": (0.0, 1.0),
     "global_word_box_fill_opacity": (0.0, 1.0),
     # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
     # a `number_input` with only a minimum, capped at a minute here so a link
     # cannot carry a number no fixation reaches.
-    "global_colorbar_tickangle": (-90, 90),
-    "global_colorbar_tickfont_size": (6, 20),
+    **{
+        key: bounds
+        for bar in ("fixation", "heatmap")
+        for key, bounds in (
+            (f"global_{bar}_colorbar_tickangle", (-90, 90)),
+            (f"global_{bar}_colorbar_tickfont_size", (6, 20)),
+        )
+    },
     "global_fixclass_short_threshold_ms": (1, 60_000),
     "global_fixclass_long_threshold_ms": (1, 60_000),
     "cmp1_fixclass_short_threshold_ms": (1, 60_000),
@@ -1032,6 +1069,41 @@ def _apply_url_preset() -> str | None:
                 SETUP_PROVENANCE_STATE_KEY, {g: str(p) for g, p in arrived.items()}
             )
 
+    # The colour-bar settings the two bars shared before each had its own:
+    # each sets both.
+    for legacy, (suffix, coerce) in {
+        "show_colorbars": ("show_{bar}_colorbar", _coerce_bool),
+        "colorbar_orientation": (
+            "{bar}_colorbar_orientation",
+            _parse_colorbar_orientation,
+        ),
+        "colorbar_tickangle": ("{bar}_colorbar_tickangle", int),
+        "colorbar_tickfont_size": ("{bar}_colorbar_tickfont_size", int),
+    }.items():
+        if legacy not in qp:
+            continue
+        try:
+            value = coerce(qp[legacy])
+        except (ValueError, TypeError):
+            st.warning(f"Ignored bad URL param ?{legacy}={qp[legacy]!r}")
+            continue
+        for bar in ("fixation", "heatmap"):
+            state_key = "global_" + suffix.format(bar=bar)
+            st.session_state.setdefault(state_key, _clamp_url_value(state_key, value))
+
+    # The switch title and caption shared before each had its own: both.
+    if PARAM_SHOW_TITLE_CAPTION in qp:
+        try:
+            both = _coerce_bool(qp[PARAM_SHOW_TITLE_CAPTION])
+        except (ValueError, TypeError):
+            st.warning(
+                f"Ignored bad URL param ?{PARAM_SHOW_TITLE_CAPTION}="
+                f"{qp[PARAM_SHOW_TITLE_CAPTION]!r}"
+            )
+        else:
+            st.session_state.setdefault("global_show_title", both)
+            st.session_state.setdefault("global_show_caption", both)
+
     # Heatmap / fixation colorscale only render under the Advanced expander —
     # auto-open it so the URL value is exposed in the rail.
     if "heatmap_colorscale" in qp or "fixation_colorscale" in qp:
@@ -1244,9 +1316,7 @@ _CHOICE_STATE_PARSERS = {
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
-    "global_heatmap_style": _closed_choice(
-        ("Word boxes", "Interpolated", "Duration mass")
-    ),
+    "global_heatmap_style": _parse_heatmap_style,
     "global_heatmap_norm": _closed_choice(("Linear", "Log")),
     "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
     "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
@@ -1255,7 +1325,8 @@ _CHOICE_STATE_PARSERS = {
     "global_saccade_render_mode": _closed_choice(("Straight", "Arc")),
     "global_saccade_color_mode": _closed_choice(tuple(SACCADE_COLOR_MODES)),
     "global_fixation_symbol": _closed_choice(tuple(FIXATION_SYMBOLS)),
-    "global_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
+    "global_fixation_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
+    "global_heatmap_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
     "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
     "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
     **{
@@ -1345,6 +1416,9 @@ def sanitize_session_value(key: str, value):
 #              scanpath B (`selection.compare`: its reader, trial, dataset and
 #              screen). Older files carry neither, so they restore no
 #              comparison and leave the current mode alone.
+#   v6 -> v7 : the fixations' and the heatmap's colour bars got their own
+#              settings, and title and caption their own switch; each shared
+#              value moves to both (`_migrate_config_6_to_7`).
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1353,7 +1427,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 6
+PLOT_CONFIG_SCHEMA = 7
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1476,6 +1550,36 @@ def _migrate_config_5_to_6(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_6_to_7(config: dict) -> dict:
+    """Schema 7 split two shared settings: the fixations and the heatmap each
+    got their own colour bar (`coloring.show_colorbars` / `colorbar_*` →
+    `show_{bar}_colorbar` / `{bar}_colorbar_*`), and title and caption their
+    own switch (`labels.show_title_caption` → `show_title` + `show_caption`).
+    Each old value now sets both."""
+    migrated = dict(config)
+    coloring = migrated.get("coloring")
+    if isinstance(coloring, dict):
+        coloring = dict(coloring)
+        if "show_colorbars" in coloring:
+            value = coloring.pop("show_colorbars")
+            for bar in ("fixation", "heatmap"):
+                coloring.setdefault(f"show_{bar}_colorbar", value)
+        for name in ("orientation", "tickangle", "tickfont_size"):
+            if f"colorbar_{name}" in coloring:
+                value = coloring.pop(f"colorbar_{name}")
+                for bar in ("fixation", "heatmap"):
+                    coloring.setdefault(f"{bar}_colorbar_{name}", value)
+        migrated["coloring"] = coloring
+    labels = migrated.get("labels")
+    if isinstance(labels, dict) and "show_title_caption" in labels:
+        labels = dict(labels)
+        value = labels.pop("show_title_caption")
+        labels.setdefault("show_title", value)
+        labels.setdefault("show_caption", value)
+        migrated["labels"] = labels
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -1484,6 +1588,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     3: _migrate_config_3_to_4,
     4: _migrate_config_4_to_5,
     5: _migrate_config_5_to_6,
+    6: _migrate_config_6_to_7,
 }
 
 
@@ -1864,6 +1969,12 @@ def _restore_plot_config(
         )
     elif "illustration" not in config and has_valid_plot_section:
         put("global_illustration_label", "Auto")
+    # BUG-75: figure text from a config is text, never markup. Absent in a
+    # config saved before it existed, which leaves the automatic wording.
+    if isinstance(illustration.get("text"), str):
+        put("global_illustration_text", _strip_markup(illustration["text"]))
+    elif has_valid_plot_section:
+        put("global_illustration_text", "")
 
     preprocessing = section("preprocessing")
     if "enabled" in preprocessing:
@@ -1927,19 +2038,22 @@ def _restore_plot_config(
         put_valid(
             style in ("Word boxes", "Interpolated", "Duration mass"),
             "global_heatmap_style",
-            style,
+            "Interpolated" if style == "Duration mass" else style,
             "heatmap style",
         )
-    if "duration_mass_sigma_chars" in coloring:
-        put_float(
-            coloring["duration_mass_sigma_chars"],
-            "global_duration_mass_sigma_chars",
-            0.25,
-            10.0,
-            "duration-mass sigma",
+    # The Interpolated blur: Auto, and the fixed σ (px) used when it is off.
+    # Absent from a file written before it existed: automatic, as then.
+    if isinstance(config.get("coloring"), dict):
+        put(
+            "global_heatmap_sigma_auto",
+            bool(coloring.get("heatmap_sigma_auto", True)),
         )
-    elif isinstance(config.get("coloring"), dict):
-        put("global_duration_mass_sigma_chars", 1.0)
+        put_float(
+            coloring.get("heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX),
+            "global_heatmap_sigma_px",
+            *HEATMAP_SIGMA_BOUNDS,
+            "heatmap blur",
+        )
     if "heatmap_norm" in coloring:
         put_valid(
             coloring["heatmap_norm"] in ("Linear", "Log"),
@@ -1961,8 +2075,9 @@ def _restore_plot_config(
             coloring["heatmap_metric"],
             "heatmap metric",
         )
-    if "show_colorbars" in coloring:
-        put("global_show_colorbars", bool(coloring["show_colorbars"]))
+    for bar in ("fixation", "heatmap"):
+        if f"show_{bar}_colorbar" in coloring:
+            put(f"global_show_{bar}_colorbar", bool(coloring[f"show_{bar}_colorbar"]))
     for cfg_key, state_key in (
         ("fixation_colorscale", "global_fixation_colorscale"),
         ("heatmap_colorscale", "global_heatmap_colorscale"),
@@ -2094,30 +2209,26 @@ def _restore_plot_config(
             3.0,
             "stimulus image scale",
         )
-    co = coloring.get("colorbar_orientation")
-    if co is not None:
-        put_valid(
-            co in ("Vertical", "Horizontal"),
-            "global_colorbar_orientation",
-            co,
-            "color bar orientation",
-        )
-    if "colorbar_tickangle" in coloring:
-        put_int(
-            coloring["colorbar_tickangle"],
-            "global_colorbar_tickangle",
-            -90,
-            90,
-            "color bar tick angle",
-        )
-    if "colorbar_tickfont_size" in coloring:
-        put_int(
-            coloring["colorbar_tickfont_size"],
-            "global_colorbar_tickfont_size",
-            6,
-            20,
-            "color bar tick size",
-        )
+    for bar in ("fixation", "heatmap"):
+
+        def _bar_value(name: str, bar: str = bar):
+            return coloring.get(f"{bar}_{name}")
+
+        co = _bar_value("colorbar_orientation")
+        if co is not None:
+            put_valid(
+                co in ("Vertical", "Horizontal"),
+                f"global_{bar}_colorbar_orientation",
+                co,
+                f"{bar} color bar orientation",
+            )
+        for name, lo, hi, label in (
+            ("colorbar_tickangle", -90, 90, "tick angle"),
+            ("colorbar_tickfont_size", 6, 20, "tick size"),
+        ):
+            value = _bar_value(name)
+            if value is not None:
+                put_int(value, f"global_{bar}_{name}", lo, hi, f"{bar} {label}")
     # Store them even when their layer is off — the rail draws them as given
     # (`controls._explicit_pair`). VIZ-46: a stored range means
     # *explicit*, so a config saved while the range was auto (`null`) restores
@@ -2350,8 +2461,9 @@ def _restore_plot_config(
 
     # EXP-5: title/caption on the figure, moved here from being Export-only.
     labels = section("labels")
-    if "show_title_caption" in labels:
-        put("global_show_title_caption", bool(labels["show_title_caption"]))
+    for cfg_key in ("show_title", "show_caption"):
+        if cfg_key in labels:
+            put(f"global_{cfg_key}", bool(labels[cfg_key]))
     # BUG-75: a config can come from someone else, like a link — no markup.
     if isinstance(labels.get("title_pattern"), str):
         put("global_title_pattern", _strip_markup(labels["title_pattern"]))
@@ -2360,7 +2472,8 @@ def _restore_plot_config(
     elif "labels" not in config and has_valid_plot_section:
         # Pre-EXP-5 configs have no labels block; pin the off defaults so the
         # frozen state-key set is still fully written.
-        put("global_show_title_caption", False)
+        put("global_show_title", False)
+        put("global_show_caption", False)
         put("global_title_pattern", "")
         put("global_caption_pattern", "")
 
@@ -2449,13 +2562,12 @@ def _restore_plot_config(
         col = word_boxes.get(cfg_key)
         if isinstance(col, str) and _HEX_COLOR.fullmatch(col):
             put(state_key, col)
-    if "fill_opacity" in word_boxes:
-        put_float(
-            word_boxes["fill_opacity"],
-            "global_word_box_fill_opacity",
-            *_URL_BOUNDED["global_word_box_fill_opacity"],
-            "word box fill opacity",
-        )
+    for cfg_key, state_key, label in (
+        ("line_opacity", "global_word_box_line_opacity", "word box line opacity"),
+        ("fill_opacity", "global_word_box_fill_opacity", "word box fill opacity"),
+    ):
+        if cfg_key in word_boxes:
+            put_float(word_boxes[cfg_key], state_key, *_URL_BOUNDED[state_key], label)
 
     # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
     # Validated against the segmented controls' exact options for the same
@@ -2969,9 +3081,13 @@ def _build_share_query(
     # EXP-22: a `{trials.font_size}`-style field reads a metadata table, and
     # the tables belong to the sender's dataset — they never ride a link. The
     # pattern travels; its value only resolves where the same table is attached.
-    if st.session_state.get("global_show_title_caption") and any(
-        f"{{{table}." in str(st.session_state.get(key) or "")
-        for key in ("global_title_pattern", "global_caption_pattern")
+    if any(
+        st.session_state.get(show)
+        and f"{{{table}." in str(st.session_state.get(key) or "")
+        for show, key in (
+            ("global_show_title", "global_title_pattern"),
+            ("global_show_caption", "global_caption_pattern"),
+        )
         for table in ("participants", "trials", "texts")
     ):
         caveats.append(

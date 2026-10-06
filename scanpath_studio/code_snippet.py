@@ -1158,7 +1158,6 @@ _CLI_EMITTERS: dict[str, Any] = {
         {
             "Word boxes": "word-boxes",
             "Interpolated": "interpolated",
-            "Duration mass": "duration-mass",
         },
     ),
     "heatmap_norm": _mapped("--heatmap-norm", {"Linear": "linear", "Log": "log"}),
@@ -1168,7 +1167,7 @@ _CLI_EMITTERS: dict[str, Any] = {
         {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
     ),
     "fixation_flags": _fixation_flags,
-    "duration_mass_sigma_chars": _valued("--duration-mass-sigma"),
+    "heatmap_sigma_px": _valued("--heatmap-sigma"),
     "marker_size_range": _marker_size_range,
     "marker_size_scale": _valued("--marker-size-scale"),
     "marker_duration_range": _two_numbers("--marker-duration-range"),
@@ -1211,13 +1210,31 @@ _CLI_EMITTERS: dict[str, Any] = {
     # true only while the figure *was* fitted; one that wasn't reproduced
     # framed on the monitor anyway.
     "fit_to_monitor": _flag_when("--no-full-monitor", False),
-    "show_colorbars": _flag_when("--colorbars", True),
-    "colorbar_orientation": _mapped(
-        "--colorbar-orientation", {"Vertical": "vertical", "Horizontal": "horizontal"}
-    ),
-    "colorbar_tickangle": _int_valued("--colorbar-tickangle"),
-    "colorbar_tickfont_size": _int_valued("--colorbar-tickfont-size"),
+    **{
+        key: emitter
+        for bar in ("fixation", "heatmap")
+        for key, emitter in (
+            (f"show_{bar}_colorbar", _flag_when(f"--no-{bar}-colorbar", False)),
+            (
+                f"{bar}_colorbar_orientation",
+                _mapped(
+                    f"--{bar}-colorbar-orientation",
+                    {"Vertical": "vertical", "Horizontal": "horizontal"},
+                ),
+            ),
+            (
+                f"{bar}_colorbar_tickangle",
+                _int_valued(f"--{bar}-colorbar-tickangle"),
+            ),
+            (
+                f"{bar}_colorbar_tickfont_size",
+                _int_valued(f"--{bar}-colorbar-tickfont-size"),
+            ),
+        )
+    },
+    "illustration_text": _valued("--illustration-text"),
     "word_box_color": _valued("--word-box-color"),
+    "word_box_line_opacity": _valued("--word-box-line-opacity"),
     "word_box_fill_color": _valued("--word-box-fill-color"),
     "word_box_fill_opacity": _valued("--word-box-fill-opacity"),
     "raw_gaze_color": _valued("--raw-gaze-color"),

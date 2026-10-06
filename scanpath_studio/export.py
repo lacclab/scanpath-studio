@@ -1359,7 +1359,7 @@ def render_export_options(
     is the whole loaded dataset. Picking the "All" scope switches the scope
     picker — and the export itself — to ``combos_all`` so the trial filters
     are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath
-    rail's **📐 Figure & canvas** → *Title & caption on the figure* (EXP-5) —
+    rail's **📐 Figure & canvas** → *Title* / *Caption* (EXP-5) —
     this panel no longer has its own copy of that setting.
     """
     st = st_module
@@ -1519,8 +1519,9 @@ def render_export_options(
         path_pattern = _render_naming_options(st, combos, key_prefix)
         if title_pattern or caption_pattern:
             st.caption(
-                "Title & caption on the figure — set on the Scanpath rail's "
-                f"**{ICONS['figure']} Figure & canvas** → *Title & caption*, and applied here too."
+                "Title and caption on the figure — set on the Scanpath rail's "
+                f"**{ICONS['figure']} Figure & canvas** → *Title* / *Caption*, and "
+                "applied here too."
             )
 
     return ExportOptions(

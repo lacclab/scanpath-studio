@@ -93,7 +93,8 @@ class TestEveryFunctionTakesEitherKind:
             fixations,
             *demo_trial,
             color_by="duration_ms",
-            show_colorbars=True,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
             fixation_hover_fields=["duration_ms"],
         )
         text = fig.to_json()
@@ -121,7 +122,8 @@ class TestEveryFunctionTakesEitherKind:
             *data,
             *demo_trial,
             color_by="CURRENT_FIX_DURATION",
-            show_colorbars=True,
+            show_fixation_colorbar=True,
+            show_heatmap_colorbar=True,
             column_names=data.column_names,
         )
         assert "CURRENT_FIX_DURATION" in fig.to_json()

@@ -2341,7 +2341,7 @@ def _render_compare_dataset_cell(
     from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
 
     host.selectbox(
-        "**Scanpath B from**",
+        "Scanpath B from",
         options=names,
         key=COMPARE_SOURCE_KEY,
         # ENG-36: this widget renders only in Compare mode on the Scanpath view,
@@ -2854,7 +2854,7 @@ def _render_compare_selector(
 
     # UX-189: the label is shown, like A's *Select Trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
-        "**Scanpath B**",
+        "Scanpath B",
         options=labels,
         key=sel_key,
         format_func=lambda v: label_display.get(v, v),
@@ -4685,7 +4685,7 @@ def _render_anim_info_box(
         span_a = animation_playback_ms([trial_fixations], 1.0)[0]
         span_b = animation_playback_ms([fixations_b], 1.0)[0]
         st.info(
-            f"**A** trial time {span_a / 1000:.1f}s · **B** {span_b / 1000:.1f}s "
+            f"**A** reading time {span_a / 1000:.1f}s · **B** {span_b / 1000:.1f}s "
             f"· Playback ×{playback_speed:g}: {playback_ms / 1000:.1f}s"
         )
         # The different-texts caveat used to live here too; it is under the
@@ -4710,7 +4710,7 @@ def _render_anim_info_box(
         grid += ". Spacing was increased automatically to keep the animation manageable"
     if not dual:
         st.info(
-            f"Trial time: {reading_span_ms / 1000:.1f}s · "
+            f"Reading time: {reading_span_ms / 1000:.1f}s · "
             f"Playback at ×{playback_speed:g}: {playback_ms / 1000:.1f}s\n\n"
             f"{grid}"
         )

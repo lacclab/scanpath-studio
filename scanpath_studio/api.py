@@ -52,6 +52,7 @@ for _name in (
 
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
+from . import export as _export  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
@@ -66,7 +67,6 @@ from .constants import (  # noqa: E402
     palette_settings,
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
-from . import export as _export  # noqa: E402
 from .export import annotate_figure  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
@@ -116,7 +116,8 @@ def build_authored_scanpath(
 def load_authored_scanpath(
     source: str | Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load a scanpath-author JSON file (or its text) as normalized word/fixation frames."""
+    """Load an authoring file — the JSON the app's **Download authoring file**
+    saves — or its text, as normalized word/fixation frames."""
     from .authoring import parse_authoring_document
 
     raw = str(source)
@@ -258,7 +259,9 @@ def _as_dataframe(
     items = _data.expand_table_inputs(table)
     for item in items:
         if not isinstance(item, pd.DataFrame) and not Path(item).is_file():
-            raise FileNotFoundError(f"{label} table not found: {item}")
+            raise FileNotFoundError(
+                f"{label} table not found: {item} (looked in {Path.cwd()})"
+            )
     # #374 F3: a zip holding both EyeLink reports gives each table its own.
     return _data.read_tables(items, plan_for=plan_for, kind=kind)
 
@@ -297,14 +300,14 @@ def _metadata_id_plan(id_column, infer, *extra):
 
 _SCHEMA_SPECS: dict = {
     "words": {
-        "title": "Words/IA",
-        "noun": "words/IA",
+        "title": "Words",
+        "noun": "words",
         "param": "word_schema",
         # (schema key, human label, candidate column names) — the fields whose
         # absence makes `validate_word_schema` fail.
         "required": (
             ("trial", "Trial ID", _data.TRIAL_CANDIDATES),
-            ("word_id", "Word/IA ID", _data.WORD_ID_CANDIDATES),
+            ("word_id", "Word ID", _data.WORD_ID_CANDIDATES),
         ),
         # …plus one "either group A or group B" requirement.
         "group_label": "Word box",
@@ -460,6 +463,21 @@ def _check_mapped_columns(kind: str, frame: pd.DataFrame, schema: dict) -> None:
     )
 
 
+def _known_schema_keys(kind: str, frame: pd.DataFrame) -> set:
+    """Every key a ``kind`` column mapping can set."""
+    spec = _SCHEMA_SPECS[kind]
+    keys = set(spec["propose"](frame.iloc[:0])) | {"block"}
+    keys |= {key for key, _, _ in spec["required"]}
+    keys |= {key for group in spec["groups"] for key in group}
+    return keys
+
+
+def _unknown_schema_keys(kind: str, frame: pd.DataFrame, schema: dict) -> list:
+    """The keys of ``schema`` that name no field (#374: ``x_pos`` for ``x``)."""
+    known = _known_schema_keys(kind, frame)
+    return [key for key in schema if key not in known]
+
+
 def _schema_error(
     kind: str, frame: pd.DataFrame, schema: dict, problems: list, explicit: bool = False
 ) -> SchemaError:
@@ -472,7 +490,19 @@ def _schema_error(
     missing from *their* mapping rather than at failed detection."""
     spec = _SCHEMA_SPECS[kind]
     param = spec["param"]
-    lines = [f"{spec['title']} schema problems: {'; '.join(problems)}"]
+    lines = [f"{spec['title']} column mapping problems: {'; '.join(problems)}"]
+    unknown = _unknown_schema_keys(kind, frame, schema) if explicit else []
+    if unknown:
+        import difflib
+
+        known = sorted(_known_schema_keys(kind, frame))
+        for key in unknown:
+            close = difflib.get_close_matches(key, known, n=1) or [
+                k for k in known if key.startswith(f"{k}_") or key.endswith(f"_{k}")
+            ]
+            hint = f" — did you mean {close[0]!r}?" if close else ""
+            lines.append(f"{param} has a key that is not a field: {key!r}{hint}")
+        lines.append(f"Fields: {', '.join(known)}")
 
     if explicit:
         bullets = [
@@ -517,11 +547,13 @@ def _schema_error(
         lines.append(
             f"Missing from the {param} you passed:"
             if explicit
-            else f"Could not infer these canonical fields from the {spec['noun']} table:"
+            else f"Could not find these columns in the {spec['noun']} table:"
         )
         lines.extend(bullets)
     resolved = ", ".join(
-        f"{key}={value!r}" for key, value in schema.items() if value is not None
+        f"{key}={value!r}"
+        for key, value in schema.items()
+        if value is not None and key not in unknown
     )
     lines.append(
         f"Fields the {param} does set: {resolved or '(none)'}"
@@ -733,7 +765,7 @@ def load_scanpath_data(
     keep_columns: Iterable[str] | None = None,
     names: str = NAMES_SOURCE,
 ) -> ScanpathData:
-    """Load and normalize a words/IA table and/or a fixations table.
+    """Load and normalize a words table and/or a fixations table.
 
     The columns keep the names your files give them:
     ``CURRENT_FIX_DURATION``, not ``duration_ms``. A column Scanpath Studio
@@ -760,29 +792,29 @@ def load_scanpath_data(
     mapped directly in each schema. Either table may be omitted for datasets
     that ship only one report: the
     missing side comes back as an empty canonical frame and the plots simply
-    skip that layer. Words without a participant column (stimulus-level AoIs)
-    are copied onto every reading in the fixations — each reading matched by
+    skip that layer. Words without a participant column (stimulus-level AOIs)
+    are copied onto every trial in the fixations — each trial matched by
     its trial id, else the trial id it had before a repeat's ``_r2`` suffix,
-    else its ``text_id`` (trial ids that embed the reader), with a
-    ``data.StimulusJoinWarning`` (a ``UserWarning``) when some readings match
-    none — and fixations without x/y but with a word/AoI ID are placed at
+    else its ``text_id`` (trial ids that embed the participant), with a
+    ``data.StimulusJoinWarning`` (a ``UserWarning``) when some trials match
+    none — and fixations without x/y but with a word/AOI ID are placed at
     word-box centers. Columns named in ``data.INTERNAL_COLUMNS`` are the
     pipeline's bookkeeping (``data.drop_internal_columns`` removes them).
 
-    Normalization keeps the mapped fields and the recognised optional ones
+    Normalization keeps the mapped fields and the recognized optional ones
     (eye, EyeLink's interest-area measures, linguistic features …) and drops the
     rest. ``keep_columns`` names further columns of your own to carry through
     under their own names — a pupil size, a detection confidence — from
-    whichever table has them, so a figure can colour, hover or plot by them
-    (the app's *Keep columns*; ``render --keep-columns`` on the command line).
+    whichever table has them, so a figure can color, hover or plot by them
+    (the app's *Extra fields to keep*; ``render --keep-columns`` on the command line).
 
     Returns the normalized ``(words, fixations)`` frames the plotting
     functions expect. Raises ``ValueError`` if a required field can't be found —
     the message names the canonical field, the column names auto-detection
     looked for, and the columns the table actually has — and
     ``data.StimulusJoinError`` (a ``ValueError``) when a stimulus-level words
-    table shares neither a trial id nor a ``text_id`` with any reading (or,
-    multipart, with every screen a reading has fixations on).
+    table shares neither a trial id nor a ``text_id`` with any trial (or,
+    multipart, with every screen a trial has fixations on).
     """
     _check_names_choice(names)
     if words is None and fixations is None:
@@ -799,7 +831,7 @@ def load_scanpath_data(
         # BUG-53: a word spelled "None" or "NA" is a word, not a missing cell.
         words_df = _as_dataframe(
             words,
-            "words/IA",
+            "words",
             plan_for=lambda header: _data.verbatim_text_plan(header, word_schema),
             kind="words",
         )
@@ -890,7 +922,7 @@ def load_scanpath_data(
 def _with_optional_fields(
     keep_columns: Iterable[str] | None, registry: list
 ) -> set | None:
-    """``keep_columns`` as the normalizers take it: ``None`` (every recognised
+    """``keep_columns`` as the normalizers take it: ``None`` (every recognized
     optional field, nothing else) when none are named, else those names *plus*
     every optional field — a non-``None`` set would otherwise limit them."""
     if not keep_columns:
@@ -909,21 +941,21 @@ def load_participant_metadata(
     """Load a participant-level metadata table.
 
     ``table`` is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
-    **one row per reader**: an id column plus anything known about them
+    **one row per participant**: an id column plus anything known about them
     (``native_language``, ``age``, a comprehension score). ``id_column``
-    defaults to the first recognised spelling (``participant_id``, ``subject``,
+    defaults to the first recognized spelling (``participant_id``, ``subject``,
     ``RECORDING_SESSION_LABEL``, …).
 
     Pass ``participants`` — a normalized frame or a list of ids — to have the
     join validated against the data you actually loaded; the returned object's
-    ``.report`` then names the readers missing from either side.
+    ``.report`` then names the participants missing from either side.
 
     Returns a
     `ParticipantMetadata`: the cleaned frame,
     a field registry (name, label, grain, dtype, missingness), and the join
     report. Nothing is broadcast onto the words/fixations frames — use
     `scanpath_studio.metadata.project` to attach chosen columns to a
-    per-trial frame, or ``.values_for(pid)`` for one reader.
+    per-trial frame, or ``.values_for(pid)`` for one participant.
 
     >>> words, fixations = load_sample_data()
     >>> meta = load_participant_metadata(
@@ -966,16 +998,16 @@ def load_trial_metadata(
 
     The sibling of
     [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata], one
-    grain down: ``table`` has **one row per reading** — a trial-id column plus anything
-    known about that reading (a list name, a condition, a per-trial comprehension
+    grain down: ``table`` has **one row per trial** — a trial-id column plus anything
+    known about that trial (a list name, a condition, a per-trial comprehension
     score).
 
     **The key is yours to state, and it changes what the table means.** Keyed by
-    trial id alone, a row describes a *text*, and every reader's reading of it
-    inherits that row; pass ``participant_column`` to key by reader **and**
-    trial, so a row describes one *reading*. Nothing in a file says which world
+    trial id alone, a row describes a *text*, and every trial of it
+    inherits that row; pass ``participant_column`` to key by participant **and**
+    trial, so a row describes one *trial*. Nothing in a file says which world
     a corpus is in, so this is never inferred — unlike ``id_column``, which
-    defaults to the first recognised spelling (``trial_id``, ``item_id``,
+    defaults to the first recognized spelling (``trial_id``, ``item_id``,
     ``TRIAL_INDEX``, …).
 
     Pass ``trials`` — a normalized fixations/words frame, or any frame with
@@ -1039,8 +1071,8 @@ def load_text_metadata(
     ``table`` has **one row per text** — a text-id column plus anything known about that
     text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like
     [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata]: never
-    keyed by reader, since a text is a stimulus rather than something one reader owns.
-    ``id_column`` defaults to the first recognised spelling (``text_id``,
+    keyed by participant, since a text is a stimulus rather than something one participant owns.
+    ``id_column`` defaults to the first recognized spelling (``text_id``,
     ``paragraph_id``, ``stimulus_id``, …) and may be several columns to build a
     composite id, the same way the uploaded data's own Text ID mapping does.
 
@@ -1087,7 +1119,7 @@ def load_text_metadata(
 
 def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """Return the bundled OneStop demo, normalized and ready to plot: two
-    readers, twelve paragraphs each, every one of them with fixations. Under
+    participants, twelve trials each, every one of them with fixations. Under
     the demo's own column names; ``names="canonical"`` for the internal ones
     (see [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]).
 
@@ -1175,7 +1207,7 @@ def check_data_health(
     fixations: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Values that loaded as numbers but cannot be right — the Data page's *Data checks*.
+    """Values that loaded as numbers but cannot be right — the Data Management page's *Data checks*.
 
     Checks the normalized tables (from
     [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data] /
@@ -1495,7 +1527,7 @@ def plot_corpus_figure(
     base_font_size: int = 14,
     font_family: str = FONT_FAMILY,
 ) -> go.Figure:
-    """Headless corpus profile/distribution/difference plot with shared colours.
+    """Headless corpus profile/distribution/difference plot with shared colors.
 
     ``profile`` expects ``word_id`` plus ``value_col`` (and optional ``lo`` /
     ``hi``); ``distribution`` expects ``value_col``; ``difference`` expects
@@ -1573,10 +1605,10 @@ def list_trials(
     *,
     raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Plottable ``(participant_id, trial_id)`` combos.
+    """One row per plottable trial: its participant id and trial id.
 
-    Combos present in both frames when both are loaded; for single-report
-    datasets (words-only or fixations-only), combos from whichever frame has
+    Trials present in both frames when both are loaded; for single-report
+    datasets (words-only or fixations-only), trials from whichever frame has
     data. ``raw_gaze`` (a frame from
     [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) adds the trials that
     only its samples cover — every trial, for a dataset recorded as raw gaze
@@ -1687,7 +1719,9 @@ def _resolve_trial(
     """
     combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
     if combos.empty:
-        raise ValueError("No (participant, trial) combo exists in the data.")
+        raise ValueError(
+            "The data holds no trial with both a participant and a trial id."
+        )
     scoped = combos
     # Ids written before composite ids escaped a `_` inside a part
     # (`data.compose_id`) still find their reading when that is unambiguous.
@@ -1715,8 +1749,8 @@ def _resolve_trial(
                 )
             raise ValueError(
                 f"No trial matches participant={participant!r}, trial={trial!r}: "
-                f"participant {str(participant)!r} has {len(scoped)} trial(s), none "
-                f"of them {str(trial)!r}. {_value_hint(scoped, 'trial_id', trial)}"
+                f"participant {str(participant)!r} has {len(scoped)} "
+                f"trial{'' if len(scoped) == 1 else 's'}, none of them {str(trial)!r}. {_value_hint(scoped, 'trial_id', trial)}"
             )
         scoped = narrowed
     if len(scoped) > 1 and not default_first:
@@ -1739,8 +1773,8 @@ def _resolve_trial(
         raise ValueError(
             f"Ambiguous selection: {len(scoped)} trials match "
             f"participant={participant!r}, trial={trial!r} (first few: {preview}). "
-            f"{fix} list_trials(words, fixations, raw_gaze=…) lists all "
-            f"{len(combos)} combos."
+            f"{fix} list_trials(words, fixations) lists all "
+            f"{len(combos)} trials."
         )
     row = scoped.iloc[0]
     return str(row["participant_id"]), str(row["trial_id"])
@@ -1776,8 +1810,8 @@ def _select_trial(
         raise ValueError(
             f"Fixations for participant={pid!r}, trial={tid!r} have no usable "
             "coordinates. AOI-sequence datasets (no x/y) need a words table "
-            "whose word/AoI ids match the fixations' so fixations can be "
-            "placed at word-box centers."
+            "whose word/AOI ids match the fixations', so each fixation can be "
+            "placed at its word box's center."
         )
     return trial_words, trial_fixations, pid, tid
 
@@ -1795,7 +1829,7 @@ def _select_part(
     """Resolve one logical trial and, for multipart data, exactly one screen.
 
     ``screen_param`` is the keyword the caller took the screen as, so an error
-    names the one to fix (``screen_b=`` for a comparison's second reading)."""
+    names the one to fix (``screen_b=`` for a comparison's second trial)."""
     trial_words, trial_fixations, pid, tid = _select_trial(
         words, fixations, participant, trial, raw_gaze=raw_gaze
     )
@@ -1814,8 +1848,8 @@ def _select_part(
     if catalog.empty:
         if screen is not None:
             raise ValueError(
-                f"{screen_param}= was supplied for a single-screen trial "
-                f"(participant={pid!r}, trial={tid!r})."
+                f"{screen_param}= names a screen, but participant={pid!r}, "
+                f"trial={tid!r} has only one; leave {screen_param}= out."
             )
         return trial_words, trial_fixations, pid, tid, None
     available = catalog[SCREEN_ID].astype(str).tolist()
@@ -1886,15 +1920,73 @@ def _figure_kwargs(overrides: dict) -> dict:
     return settings
 
 
+_SPELLINGS = (("grey", "gray"), ("colour", "color"))
+
+
+def _spelling_variants(text: str) -> list[str]:
+    """``text`` as written, all-US and all-UK (#374: the palette names moved to
+    US spelling, and both spellings must keep naming the same palette)."""
+    import re
+
+    out = [text]
+    for pick in (1, 0):
+        variant = text
+        for pair in _SPELLINGS:
+            variant = re.sub(pair[1 - pick], pair[pick], variant, flags=re.IGNORECASE)
+        out.append(variant)
+    return list(dict.fromkeys(out))
+
+
+def resolve_palette(value: object) -> str:
+    """The `constants.PALETTES` name ``value`` stands for: the app's name in
+    either spelling (``"Print / grayscale"`` or ``"Print / greyscale"``), the
+    short name (``"print"``), any case. Raises ``ValueError`` otherwise."""
+    from .constants import PALETTES
+
+    error = None
+    for candidate in _spelling_variants(str(value)):
+        try:
+            name = normalize_palette(candidate)
+        except ValueError as exc:
+            error = error or exc
+            continue
+        if name in PALETTES:
+            return name
+        for spelled in _spelling_variants(name):
+            if spelled in PALETTES:
+                return spelled
+    raise error or ValueError(f"Unknown palette {value!r}.")
+
+
+def _check_colorscales(overrides: dict) -> None:
+    """#374: a name Plotly doesn't know raised its own lower-cased
+    ``PlotlyError`` from inside the builder; name the option instead."""
+    from plotly.colors import get_colorscale
+    from plotly.exceptions import PlotlyError
+
+    for key in ("heatmap_colorscale", "fixation_colorscale"):
+        value = overrides.get(key)
+        if not isinstance(value, str):
+            continue
+        try:
+            get_colorscale(value)
+        except PlotlyError:
+            raise ValueError(
+                f"{key}={value!r} is not a Plotly color scale. Any named scale "
+                "works, e.g. Viridis, Greens, Blues, Cividis; append _r to "
+                "reverse one."
+            ) from None
+
+
 def _expand_palette(overrides: dict) -> dict:
-    """Expand a ``palette=`` override into the colour kwargs it stands for.
+    """Expand a ``palette=`` override into the color kwargs it stands for.
 
-    ``palette`` names a set of colour defaults tuned for a medium — screen,
-    colourblind viewers, a black & white print, a projector. It's a *preset*, so
-    any colour the caller also passes explicitly wins over it::
+    ``palette`` names a set of color defaults tuned for a medium — screen,
+    colorblind viewers, a black & white print, a projector. It's a *preset*, so
+    any color the caller also passes explicitly wins over it::
 
-        sps.plot_scanpath(w, f, palette="Print / greyscale")
-        sps.plot_scanpath(w, f, palette="Default (colourblind-safe)", saccade_color="#000")
+        sps.plot_scanpath(w, f, palette="Print / grayscale")
+        sps.plot_scanpath(w, f, palette="Default (colorblind-safe)", saccade_color="#000")
 
     The palette itself isn't a figure kwarg, so it's consumed here rather than
     forwarded. Raises on an unknown name — a silent fallback to the default
@@ -1905,10 +1997,11 @@ def _expand_palette(overrides: dict) -> dict:
     choices raises rather than drawing the default.
     """
     overrides = normalize_option_values(overrides)
+    _check_colorscales(overrides)
     name = overrides.get("palette")
     if name is None:
         return overrides
-    name = normalize_palette(name)  # "print", "high-contrast", any case
+    name = resolve_palette(name)  # "print", "high-contrast", any case or spelling
     expanded = dict(overrides)
     expanded.pop("palette")
     # `word_label_color` is `text_color` on the figure builders.
@@ -1917,6 +2010,23 @@ def _expand_palette(overrides: dict) -> dict:
     for key, value in settings.items():
         expanded.setdefault(key, value)
     return expanded
+
+
+_NAMED_FIGURE_PARAMS = frozenset(
+    {
+        "canvas_size",
+        "base_font_size",
+        "font_family",
+        "title",
+        "caption",
+        "screen",
+        "raw_gaze",
+        "illustration",
+        "illustration_label",
+        "fix_index_range",
+        "column_names",
+    }
+)
 
 
 def _reject_unknown_options(overrides: dict, valid, func_name: str) -> None:
@@ -1929,15 +2039,18 @@ def _reject_unknown_options(overrides: dict, valid, func_name: str) -> None:
         return
     parts = []
     for key in unknown:
-        close = difflib.get_close_matches(key, sorted(valid), n=3, cutoff=0.6)
+        # The builders' named parameters too: `canvas=` means `canvas_size=`.
+        close = difflib.get_close_matches(
+            key, sorted(set(valid) | _NAMED_FIGURE_PARAMS), n=3, cutoff=0.6
+        )
         suffix = (
             f" (did you mean {', '.join(repr(c) for c in close)}?)" if close else ""
         )
         parts.append(f"{key!r}{suffix}")
     raise TypeError(
         f"{func_name}() got an unexpected keyword argument: {', '.join(parts)}. "
-        f"Valid figure options: {', '.join(sorted(valid))}. "
-        f"api.figure_options() lists them with their defaults."
+        f"help({func_name}) lists its parameters and figure_options() the "
+        "figure options with their defaults."
     )
 
 
@@ -1950,7 +2063,7 @@ _COLUMN_OPTIONS = {
         "fixations",
         "--color-by",
         (UNIFORM_COLOR_FIELD, "line"),
-        f"Use {UNIFORM_COLOR_FIELD!r} for one flat colour, 'line' to colour by "
+        f"Use {UNIFORM_COLOR_FIELD!r} for one flat color, 'line' to color by "
         "text line, or one of the columns below.",
     ),
     "highlight_column": (
@@ -1993,7 +2106,7 @@ def _canonical_options(
 
     ``heatmap_metric`` is checked here too: the heatmap weights by the fixation
     duration or counts fixations, and any other value used to count silently —
-    which, once the dataset's own names are accepted, a misspelt name would."""
+    which, once the dataset's own names are accepted, a misspelled name would."""
     out = dict(overrides)
 
     def canonical(option: str, value) -> str:
@@ -2058,7 +2171,7 @@ def _check_column_options(
 
     Only explicit values are checked: ``highlight_column`` defaults to OneStop's
     ``is_in_aspan``, which most corpora do not have and which the builder then
-    rightly skips. An empty table is not checked — there is nothing to colour."""
+    rightly skips. An empty table is not checked — there is nothing to color."""
     frames = {"words": words, "fixations": fixations}
     for name, (kind, flag, synthetic, advice) in _COLUMN_OPTIONS.items():
         value = overrides.get(name)
@@ -2068,12 +2181,14 @@ def _check_column_options(
         present = [str(column) for column in frame.columns]
         if frame.empty or str(value) in present:
             continue
-        close = difflib.get_close_matches(str(value), present, n=3, cutoff=0.6)
+        # Internal helper columns (`_text_id_mapped`) are not the user's to name.
+        visible = [column for column in present if not column.startswith("_")]
+        close = difflib.get_close_matches(str(value), visible, n=3, cutoff=0.6)
         hint = f" Closest: {', '.join(repr(c) for c in close)}." if close else ""
         raise ValueError(
             f"{name}={value!r} ({flag} on the CLI) names no column of the "
-            f"{kind} table.{hint} {advice} Columns present ({len(present)}): "
-            f"{_column_preview(frame)}."
+            f"{kind} table.{hint} {advice} Columns present ({len(visible)}): "
+            f"{_column_preview(frame[visible])}."
         )
 
 
@@ -2091,8 +2206,7 @@ def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
     ``kind="animation"`` [`animate_scanpath`][scanpath_studio.api.animate_scanpath]
     (whose builder supports a subset), and ``kind="comparison"``
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]. The values are the
-    *effective* defaults — `CANONICAL_FIGURE_DEFAULTS` where it sets one, the builder's
-    default otherwise — so a scripted caller can diff its intended
+    defaults a call actually renders with (the app's Scanpath design) — so a scripted caller can diff its intended
     settings against what it would get::
 
         {k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
@@ -2153,7 +2267,7 @@ def _apply_drift_correction(
     """Snap fixations to their assigned text line, in place of the raw y.
 
     Mirrors what the app does on the static plot (``tabs.render_single_trial_tab``):
-    run ``alignment.correct``, colour the corrected fixations by line, and
+    run ``alignment.correct``, color the corrected fixations by line, and
     optionally draw original→corrected connectors. Returns the fixations to plot.
     """
     if method is None or str(method).lower() == "off":
@@ -2191,6 +2305,22 @@ def _apply_drift_correction(
     return corrected
 
 
+def _check_canvas_size(canvas_size) -> None:
+    """#374: ``canvas_size="1920x1080"`` was read character by character into a
+    1 x 9 px canvas and drew an empty figure."""
+    if canvas_size is None:
+        return
+    try:
+        pair = not isinstance(canvas_size, str) and len(tuple(canvas_size)) == 2
+    except TypeError:
+        pair = False
+    if not pair:
+        raise ValueError(
+            "canvas_size must be a (width, height) pair in pixels, e.g. "
+            f"(2560, 1440); got {canvas_size!r} (--canvas WxH on the CLI)."
+        )
+
+
 def plot_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2216,7 +2346,7 @@ def plot_scanpath(
 
     ``words`` / ``fixations`` are normalized frames from
     [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]. ``participant`` /
-    ``trial`` may be omitted when the frames contain exactly one combo. ``canvas_size``
+    ``trial`` may be omitted when the frames hold exactly one trial. ``canvas_size``
     is the monitor size in px; by default it is estimated from the data extents — pass
     the real monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
     true to scale. For a multipart trial, ``screen`` selects one child screen; omitting
@@ -2238,9 +2368,16 @@ def plot_scanpath(
     the app's fixation-index window.
 
     ``title`` / ``caption`` stamp a title/caption band onto the figure
-    without shrinking the plot area, exactly like the rail's *Title* / *Caption*
-    rows — literal text here, not the rail's ``{trial_id}``-style
-    pattern, since the caller already knows which trial this is.
+    without shrinking the plot area, like the app's *Title & labels* — literal
+    text here, not the app's ``{trial_id}``-style pattern, since the caller
+    already knows which trial this is.
+
+    ``illustration=True`` applies the Illustration preset (snapped fixations,
+    arced saccades, uniform colors, no heatmap or word boxes); keywords you pass
+    still win. ``illustration_label`` is ``"auto"`` (label the figure when it no
+    longer shows the data as recorded), ``"show"`` or ``"hide"``. ``palette=``
+    (``"default"``, ``"print"`` or ``"high-contrast"``, or the app's names) sets
+    a group of colors at once; a color you pass explicitly wins.
 
     Remaining keywords override the app's defaults and are forwarded to
     `plots.make_scanpath_figure` (e.g. ``show_heatmap=True``,
@@ -2278,6 +2415,7 @@ def plot_scanpath(
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
+    _check_canvas_size(canvas_size)
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     gaze_names = None
@@ -2432,11 +2570,11 @@ def animate_scanpath(
     style [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]' — the
     same keys (``fix_color``, ``marker_size_range``, ``opacity``, ``hollow``,
     ``saccade_color``, ``saccade_style``, ``saccade_width``), resolved the same
-    way, so the replay and the static comparison draw each reading alike. The
+    way, so the replay and the static comparison draw each trial alike. The
     replay has no saccade-class filter, so a style naming ``saccade_classes``
     raises ``ValueError``. A lone replay ignores both.
 
-    ``trial_b=(participant, trial)`` co-animates a second reading on the same
+    ``trial_b=(participant, trial)`` co-animates a second trial on the same
     clock, like the app's Animate + Compare. It is looked up in ``words_b`` /
     ``fixations_b`` when given, else in ``words`` / ``fixations`` — the way
     [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
@@ -2446,7 +2584,7 @@ def animate_scanpath(
     its first recorded screen without it, as A is with ``screen``.
 
     **Two datasets.** Both readings are drawn in A's coordinates, so a
-    co-animation is an overlay, and a reading from another dataset has to share
+    co-animation is an overlay, and a trial from another dataset has to share
     A's screen. Name that dataset with ``dataset_b`` (or give its ``setup_b``)
     and the pair is checked the way `compare_scanpaths` checks an overlay: two
     different canvases raise ``IncomparableScreensError``, a ``ValueError``,
@@ -2456,7 +2594,7 @@ def animate_scanpath(
     screen, so state both when you know them — and ``canvas_size`` covers A
     when you only have a resolution. ``dataset_b`` also prefixes B's
     participant ids with the dataset's name, as `compare_scanpaths` does, so a
-    hover says whose reader it is. ``words_b`` / ``fixations_b`` passed without
+    hover says whose participant it is. ``words_b`` / ``fixations_b`` passed without
     either are taken to be from A's dataset, as `render` passes them for
     ``--compare-with`` alone, and are not checked: two readings of one corpus
     can span different extents, and inferring a canvas from each would refuse
@@ -2468,7 +2606,7 @@ def animate_scanpath(
     key raises a ``ValueError`` naming the valid ones. The shared options default to the same values as
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath] (`CANONICAL_FIGURE_DEFAULTS`),
     so the replay matches the static figure. ``palette=`` works here too; the
-    colours it implies that the animation doesn't support are dropped rather than
+    colors it implies that the animation doesn't support are dropped rather than
     raising, since the caller named a look, not those individual keys.
 
     ``title`` / ``caption`` — same as
@@ -2480,6 +2618,7 @@ def animate_scanpath(
     raw-gaze layer, and nothing detects fixations from samples. Draw samples with
     [`plot_scanpath`][scanpath_studio.api.plot_scanpath]`(raw_gaze=…)`.
     """
+    _check_canvas_size(canvas_size)
     if "raw_gaze" in animation_overrides:
         raise ValueError(
             "animate_scanpath replays fixations and has no raw-gaze layer, and "
@@ -2498,8 +2637,8 @@ def animate_scanpath(
     unknown = explicit - valid
     if unknown:
         raise ValueError(
-            f"Options not supported by the animation: {sorted(unknown)}. "
-            f"Valid overrides: {sorted(valid)}."
+            f"animate_scanpath() does not support: {', '.join(sorted(unknown))}. "
+            "figure_options('animation') lists the options it takes."
         )
     for side in ("style_a", "style_b"):
         style = animation_overrides.get(side)
@@ -3020,10 +3159,10 @@ def compare_scanpaths(
     one the trial does not have, raises ``ValueError``.
 
     **Two datasets.** Pass ``words_b`` / ``fixations_b`` to draw B from a
-    *different* corpus. Two corpora can hold the same ``(participant_id,
+    *different* dataset. Two datasets can hold the same ``(participant_id,
     trial_id)`` and the builder slices by exactly that pair, so B's participant
     ids are namespaced with ``dataset_b`` inside the throwaway merged frames —
-    without it one reading would silently render as two. The frames you pass in
+    without it one trial would silently render as two. The frames you pass in
     are never modified, and nothing in the returned figure's data depends on the
     namespace beyond the trace labels.
 
@@ -3059,8 +3198,8 @@ def compare_scanpaths(
     left out. These three are this figure's only: the co-animation draws one set
     of boxes, in ``word_box_color`` / ``word_box_fill_color``, and no raw gaze,
     and ignores them. ``heatmap_colorscale`` gives that reading's word-box
-    heatmap its own colour scale (``heatmap_colorscale`` when left out) on the
-    range both share; when A's and B's differ, each gets its own colour bar.
+    heatmap its own color scale (``heatmap_colorscale`` when left out) on the
+    range both share; when A's and B's differ, each gets its own color bar.
 
     **Filters, per scanpath.** ``fixation_flags`` and
     ``saccade_classes`` filter both scanpaths, as they filter
@@ -3068,13 +3207,13 @@ def compare_scanpaths(
     in ``style_a`` / ``style_b`` give that scanpath its own, overriding them —
     e.g. ``style_b={"fixation_flags": {"short": {"mode": "Discard",
     "threshold_ms": 80}}, "saccade_classes": ["regression"]}``. The app's
-    Compare mode draws A under the rail's filters and B under B's own.
+    Compare mode draws A under the plot controls' filters and B under its own.
     ``fix_index_range`` windows both scanpaths; ``fix_index_range_b`` gives B a
     window of its own (the app's B slider).
 
     **Raw gaze.** ``raw_gaze`` is a frame from
     [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]; each reading's samples
-    are drawn under its scanpath, in that scanpath's colour (``raw_gaze_marker_size``
+    are drawn under its scanpath, in that scanpath's color (``raw_gaze_marker_size``
     / ``raw_gaze_opacity`` style them). It serves both readings of a
     same-dataset comparison; across datasets it is A's, and ``raw_gaze_b`` is
     B's. Passing either turns the layer on; ``show_raw_gaze=False`` keeps it off.
@@ -3087,6 +3226,7 @@ def compare_scanpaths(
     names (or ``column_names``) name the options and the figure's text, and
     either dataset's frames may come under their own names.
     """
+    _check_canvas_size(canvas_size)
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import (
         align_compare_columns,
@@ -3131,6 +3271,13 @@ def compare_scanpaths(
     if raw_gaze_b is None and not cross_dataset:
         raw_gaze_b = raw_gaze
 
+    for side, pair in (("trial_a", trial_a), ("trial_b", trial_b)):
+        if isinstance(pair, str) or len(tuple(pair)) != 2:
+            raise ValueError(
+                f"{side} must be a (participant, trial) pair, e.g. "
+                f"('l37_1129', 'l37_1129_2_1_1_Ele_r0'); got {pair!r}. "
+                "list_trials(words, fixations) lists the pairs."
+            )
     # Ids written before composite ids escaped a `_` inside a part still name
     # their reading when that is unambiguous (`data.respell_reading`).
     pid_a, tid_a = _data.respell_reading(*trial_a, _data.trial_keys(fixations))
@@ -3337,10 +3484,10 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
 ) -> Path:
-    """Save a figure by extension: ``.html`` (interactive, browser-free) or
-    ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs a Chrome/Chromium;
-    run ``plotly_get_chrome -y`` once if missing). ``width`` / ``height`` set the
-    raster output size in px (overriding the figure's intrinsic layout size);
+    """Save a figure by extension: ``.html`` (interactive, needs no browser) or
+    ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs Chrome, Chromium or
+    Edge; run ``plotly_get_chrome -y`` once if none is installed). ``width`` /
+    ``height`` set the image size in px (overriding the figure's own size);
     both ignored for ``.html``. Returns the written path.
 
     ``width_mm`` or ``width_in`` with ``dpi`` (default 300) sizes a PNG for
@@ -3349,6 +3496,16 @@ def save_figure(
     dpi written into the file. They replace ``scale``."""
     path = Path(path)
     suffix = path.suffix.lower()
+    if suffix not in (".html", ".png", ".svg", ".pdf"):
+        raise ValueError(
+            f"save_figure writes .html, .png, .svg or .pdf, not {suffix or path.name!r}. "
+            "For a GIF or MP4 replay, use "
+            "scanpath_studio.animation_export.export_animation."
+        )
+    if not path.parent.is_dir():
+        raise FileNotFoundError(
+            f"Can't write {path}: the folder {path.parent} does not exist."
+        )
     if width_mm is not None or width_in is not None:
         if width_mm is not None and width_in is not None:
             raise ValueError("Pass width_mm or width_in, not both.")
@@ -3397,14 +3554,11 @@ def save_figure(
             raise  # filesystem problem — the original error says it best
         except Exception as exc:  # Kaleido raises various types
             raise RuntimeError(
-                f"Static {suffix} export failed: {exc} — if Kaleido can't find "
-                "a Chrome/Chromium binary, run `plotly_get_chrome -y` once, or "
-                "save as .html instead."
+                f"Static {suffix} export failed ({exc}). Kaleido needs Chrome, "
+                "Chromium or Edge — install one, or run `plotly_get_chrome -y` "
+                "once — or save as .html, which needs no browser."
             ) from exc
-        return path
-    raise ValueError(
-        f"Unsupported extension {suffix!r} — use .html, .png, .svg, or .pdf."
-    )
+    return path
 
 
 def save_figure_layers(
@@ -3492,7 +3646,7 @@ def figure_code(
                               show_heatmap=True, flavor="cli"))
 
     ``source`` names how the data is loaded — ``"demo"``, ``"synthetic"``, ``"files"``,
-    ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"benchmark"``, ``"author"``, or
+    ``"potec"``, ``"onestop"``, ``"author"``, or
     ``"unknown"`` for data a snippet can't name — with ``source_options`` carrying that
     loader's arguments (``{"root": …}``, ``{"words": [...], "fixations": [...]}``, and
     so on). With ``show_raw_gaze=True`` the raw-gaze table is read too: the demo's own,
@@ -3505,8 +3659,8 @@ def figure_code(
     ``screen`` / ``compare_screen`` are A's and B's screens of a multipart trial
     (``screen=`` / ``screen_b=``, ``--screen`` / ``--compare-screen``).
 
-    ``compare_dataset`` names the corpus scanpath B was loaded from when it is a
-    *second* one. B's participant id belongs to that corpus rather than
+    ``compare_dataset`` names the dataset scanpath B was loaded from when it is a
+    *second* one. B's participant id belongs to that dataset rather than
     the one the snippet loads, so both forms then load B's own tables and name
     B in them — ``words_b=`` / ``fixations_b=`` / ``dataset_b=``, and
     ``--compare-words`` / ``--compare-fixations`` beside ``--compare-with`` —
@@ -3524,7 +3678,7 @@ def figure_code(
     With ``participant`` / ``trial`` left empty the snippet renders the first
     available trial, as ``render`` does. ``canvas_size`` defaults to the screen
     ``render`` assumes for the source (the demo's 2560×1440, PoTeC's 1680×1050,
-    …), so both flavours draw the same figure; ``output`` defaults to
+    …), so both flavors draw the same figure; ``output`` defaults to
     ``scanpath.html`` for an animation — ``render --animate`` writes only HTML —
     and to a PNG otherwise.
 
@@ -3617,12 +3771,12 @@ def figure_code(
 def cache_status() -> dict:
     """Describe the on-device recovery cache a local app run keeps.
 
-    The app stores completed uploaded datasets, column mappings, view settings and
-    annotations under the user's cache directory so a refresh or restart resumes
+    The app stores completed uploaded datasets, column mappings, view settings,
+    saved designs, metadata tables and annotations under the user's cache directory so a refresh or restart resumes
     where it left off — on localhost/desktop only, never on a hosted deployment. This
     reports that store without launching the app: ``enabled``, ``directory``,
     ``datasets`` (name + per-frame row counts), ``rows``, ``annotations``,
-    ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
+    ``designs``, ``metadata``, ``settings``, ``bytes``, ``saved_at``, plus ``exists`` / ``readable`` for a
     missing or unreadable manifest, ``damaged`` (name + reason) for a stored
     dataset whose entry or files are broken — the app restores the others and
     keeps that one in the cache rather than dropping it — and

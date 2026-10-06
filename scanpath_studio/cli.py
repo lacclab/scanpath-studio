@@ -130,10 +130,10 @@ def _drift_algorithm(value: str) -> str:
 
 def _palette_name(value: str) -> str:
     """``--palette``: a short name (``print``) or the app's (#374)."""
-    from .plots import normalize_palette
+    from .api import resolve_palette
 
     try:
-        return normalize_palette(value)
+        return resolve_palette(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from None
 

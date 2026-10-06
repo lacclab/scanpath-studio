@@ -151,7 +151,7 @@ def test_a_screen_for_a_single_screen_trial_is_refused():
     words, fixations = api.build_authored_scanpath("One page")
     words = words.assign(participant_id="p", trial_id="t1")
     fixations = fixations.assign(participant_id="p", trial_id="t1")
-    with pytest.raises(ValueError, match="screen_b= was supplied"):
+    with pytest.raises(ValueError, match="screen_b= names a screen"):
         api.compare_scanpaths(
             words, fixations, ("p", "t1"), ("p", "t1"), screen_b="page1"
         )

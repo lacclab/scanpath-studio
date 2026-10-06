@@ -838,7 +838,7 @@ def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
         ]
     )
     err = capsys.readouterr().err
-    assert "for 1 reader(s)" in err, err
+    assert "for 1 participant." in err, err
 
 
 # -----------------------------------------------------------------------------

@@ -5617,6 +5617,7 @@ def render_name_field(host, token: str) -> None:
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
+        required=True,
         on_change=_stage_upload_name if uploaded else None,
         help="Shown in the list of datasets and the dataset picker. Saved with "
         f"**{ICONS['confirm']} Save changes**.",
@@ -8087,6 +8088,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         if source == MANUAL_SAMPLE_CHOICE
         else "My scanpath",
         key=name_key,
+        required=True,
     )
     can_save = events_valid and not words.empty and not fixations.empty and not dropped
     if can_save:

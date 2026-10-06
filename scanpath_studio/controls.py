@@ -1787,6 +1787,9 @@ def _design_save_dialog() -> None:
                 "Design name",
                 key="design_new_name",
                 placeholder="e.g. Paper figure",
+                # Streamlit 1.65 blocks the form's Save until there is a name;
+                # `save_design_preset` still refuses a blank one server-side.
+                required=True,
                 help="Stores every plot setting on screen now — layers, "
                 "colours, filter, figure and canvas.",
             )
@@ -1827,6 +1830,7 @@ def _render_design_rename(row, name: str) -> None:
             value=name,
             key=f"design_rename_{name}",
             label_visibility="collapsed",
+            required=True,
         )
         # Both need an explicit `key`: a submit button's identity is its label,
         # and these two shared the empty one — the icon is not part of it, so

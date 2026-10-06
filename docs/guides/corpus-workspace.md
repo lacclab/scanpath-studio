@@ -28,6 +28,9 @@ between consecutive fixations.
 | **Per reader** | How does this reader behave across trials? |
 | **Groups** | How do conditions or populations differ? |
 
+The address bar names the open view (`?corpus_subtab=Per+reader`), so a
+bookmark or a copied link reopens it.
+
 Choose a measure, how to aggregate it, and the spread to show. A line under the
 measure says what it is, its unit, and what each plotted value is (one word,
 one reader's mean, …), with a link to its definition; a line under the spread

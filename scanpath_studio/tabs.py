@@ -6321,8 +6321,8 @@ def render_single_trial_tab(
                     # what genuinely does not apply goes grey, with the reason
                     # in its tooltip.
                     layout_gate = cmp_gate or (
-                        f"{ICONS['warning']} An animated comparison replays "
-                        " An animated comparison is always an overlay."
+                        f"{ICONS['warning']} An animated comparison is always "
+                        "an overlay."
                         if animate
                         else ""
                     )

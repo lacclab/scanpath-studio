@@ -44,3 +44,44 @@ def test_an_old_config_sets_both_bars():
         assert st.session_state[f"global_show_{bar}_colorbar"] is False
         assert st.session_state[f"global_{bar}_colorbar_orientation"] == "Horizontal"
         assert st.session_state[f"global_{bar}_colorbar_tickfont_size"] == 9
+
+
+def test_a_cached_session_or_design_moves_the_renamed_keys():
+    from scanpath_studio.session_keys import rename_legacy_keys
+
+    out = rename_legacy_keys(
+        {
+            "global_show_colorbars": False,
+            "global_colorbar_tickangle": 30,
+            "global_show_title_caption": True,
+            # A new key already there wins over the old one.
+            "global_show_caption": False,
+        }
+    )
+    assert "global_show_colorbars" not in out
+    assert out["global_show_fixation_colorbar"] is False
+    assert out["global_show_heatmap_colorbar"] is False
+    assert out["global_heatmap_colorbar_tickangle"] == 30
+    assert out["global_show_title"] is True
+    assert out["global_show_caption"] is False
+
+
+def test_the_schema_7_migration_moves_the_shared_settings():
+    from scanpath_studio.url_state import _migrate_plot_config
+
+    migrated, note = _migrate_plot_config(
+        {
+            "schema": 6,
+            "coloring": {"show_colorbars": True, "colorbar_tickfont_size": 9},
+            "labels": {"show_title_caption": False},
+        }
+    )
+    assert note is None
+    assert migrated["schema"] == 7
+    assert migrated["coloring"] == {
+        "show_fixation_colorbar": True,
+        "show_heatmap_colorbar": True,
+        "fixation_colorbar_tickfont_size": 9,
+        "heatmap_colorbar_tickfont_size": 9,
+    }
+    assert migrated["labels"] == {"show_title": False, "show_caption": False}

@@ -99,6 +99,7 @@ from .session_keys import (
     SINGLE_PLAYBACK_SPEED,
     compare_state_keys,
     keep_legacy_marker_scale,
+    rename_legacy_keys,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 
@@ -1249,6 +1250,8 @@ def designs_from_json(text: str) -> dict[str, dict]:
             str(key): value for key, value in values.items() if _is_design_key(key)
         }
         designs[clean] = keep_legacy_marker_scale(design) if schema < 2 else design
+        # A design saved before a key was renamed holds the old name.
+        designs[clean] = rename_legacy_keys(designs[clean])
     return designs
 
 
@@ -3952,7 +3955,7 @@ def _trial_rows(
 
     Cached on the frame's fingerprint and the trial: ``frame`` is the filtered
     corpus, and slicing it by string ids is a full scan the rail would otherwise
-    repeat on every rerun while *Title & caption* is on."""
+    repeat on every rerun while *Title* or *Caption* is on."""
     if frame is None or frame.empty or trial_fixations.empty:
         return pd.DataFrame()
     ids = tuple(
@@ -6942,9 +6945,10 @@ def render_plot_controls(
     # --- Figure & canvas --------------------------------------------------
     # UX-80/81: one popover, four named groups inside it and nothing nested —
     #
-    #   🖥️ Screen & framing   Show full monitor + the monitor's pixel size
-    #                         (`canvas_renderer`, screen half only)
-    #   📊 Axes & grid        the coordinate grid, colour bar, axis fields
+    #   🖥️ Screen & framing   Crop to data (the monitor's size is the Data
+    #                         page's Recording setup)
+    #   📊 Axes & grid        the coordinate grid and the axis fields (each
+    #                         colour bar is under its own layer)
     #   🏷️ Title & labels     the Illustration disclosure + the EXP-5 title
     #   💬 Hover              the word and fixation tooltip fields (moved here
     #                         from 📄 Stimulus and 👁️ Fixations)

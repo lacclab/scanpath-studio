@@ -141,7 +141,7 @@ class TestSettingsFileMode:
         self, monkeypatch, animate, compare
     ):
         config = _save(monkeypatch, animate=animate, compare=compare)
-        assert config["schema"] == 6
+        assert config["schema"] == 7
         assert config["mode"] == {"animate": animate, "compare": compare}
         if compare:
             assert config["selection"]["compare"] == {

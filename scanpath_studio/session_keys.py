@@ -839,7 +839,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 6
+PLOT_CONFIG_SCHEMA_VERSION = 7
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -1026,6 +1026,44 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
 def compare_state_keys(index: int) -> frozenset:
     """The `cmp{index}_*` session keys one `compare` config entry restores."""
     return frozenset(t.format(idx=index) for t in COMPARE_STATE_KEY_TEMPLATES)
+
+
+#: Session keys that were renamed, each to the keys it now sets. A recovery
+#: cache or saved design written before the rename still holds the old name.
+LEGACY_SESSION_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "global_show_title_caption": (GLOBAL_SHOW_TITLE, GLOBAL_SHOW_CAPTION),
+        "global_show_colorbars": (
+            GLOBAL_SHOW_FIXATION_COLORBAR,
+            GLOBAL_SHOW_HEATMAP_COLORBAR,
+        ),
+        "global_colorbar_orientation": (
+            GLOBAL_FIXATION_COLORBAR_ORIENTATION,
+            GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
+        ),
+        "global_colorbar_tickangle": (
+            GLOBAL_FIXATION_COLORBAR_TICKANGLE,
+            GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
+        ),
+        "global_colorbar_tickfont_size": (
+            GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
+            GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
+        ),
+    }
+)
+
+
+def rename_legacy_keys(values: Mapping) -> dict:
+    """``values`` (a recovery-cache session or a saved design) with each renamed
+    key moved to what it now sets; a new key already there wins. Returns a
+    copy."""
+    out = dict(values)
+    for old, new_keys in LEGACY_SESSION_KEYS.items():
+        if old in out:
+            value = out.pop(old)
+            for new in new_keys:
+                out.setdefault(new, value)
+    return out
 
 
 def keep_legacy_marker_scale(values: Mapping) -> dict:

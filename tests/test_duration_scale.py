@@ -396,7 +396,7 @@ def test_an_older_settings_file_keeps_the_relative_scale():
     old = {"schema": 4, "sizing": {"marker_size_range": [8, 24]}, "layers": {}}
     migrated, note = _migrate_plot_config(old)
     assert note is None
-    assert migrated["schema"] == PLOT_CONFIG_SCHEMA == 6
+    assert migrated["schema"] == PLOT_CONFIG_SCHEMA == 7
     assert migrated["sizing"]["marker_size_scale"] == "relative"
     assert "marker_size_scale" not in old["sizing"]  # the caller's dict is untouched
     # A schema-1 file walks the whole chain to the same answer.

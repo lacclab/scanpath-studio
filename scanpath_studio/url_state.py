@@ -1403,6 +1403,9 @@ def sanitize_session_value(key: str, value):
 #              scanpath B (`selection.compare`: its reader, trial, dataset and
 #              screen). Older files carry neither, so they restore no
 #              comparison and leave the current mode alone.
+#   v6 -> v7 : the fixations' and the heatmap's colour bars got their own
+#              settings, and title and caption their own switch; each shared
+#              value moves to both (`_migrate_config_6_to_7`).
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1411,7 +1414,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 6
+PLOT_CONFIG_SCHEMA = 7
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1534,6 +1537,36 @@ def _migrate_config_5_to_6(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_6_to_7(config: dict) -> dict:
+    """Schema 7 split two shared settings: the fixations and the heatmap each
+    got their own colour bar (`coloring.show_colorbars` / `colorbar_*` →
+    `show_{bar}_colorbar` / `{bar}_colorbar_*`), and title and caption their
+    own switch (`labels.show_title_caption` → `show_title` + `show_caption`).
+    Each old value now sets both."""
+    migrated = dict(config)
+    coloring = migrated.get("coloring")
+    if isinstance(coloring, dict):
+        coloring = dict(coloring)
+        if "show_colorbars" in coloring:
+            value = coloring.pop("show_colorbars")
+            for bar in ("fixation", "heatmap"):
+                coloring.setdefault(f"show_{bar}_colorbar", value)
+        for name in ("orientation", "tickangle", "tickfont_size"):
+            if f"colorbar_{name}" in coloring:
+                value = coloring.pop(f"colorbar_{name}")
+                for bar in ("fixation", "heatmap"):
+                    coloring.setdefault(f"{bar}_colorbar_{name}", value)
+        migrated["coloring"] = coloring
+    labels = migrated.get("labels")
+    if isinstance(labels, dict) and "show_title_caption" in labels:
+        labels = dict(labels)
+        value = labels.pop("show_title_caption")
+        labels.setdefault("show_title", value)
+        labels.setdefault("show_caption", value)
+        migrated["labels"] = labels
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -1542,6 +1575,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     3: _migrate_config_3_to_4,
     4: _migrate_config_4_to_5,
     5: _migrate_config_5_to_6,
+    6: _migrate_config_6_to_7,
 }
 
 
@@ -2026,13 +2060,8 @@ def _restore_plot_config(
             "heatmap metric",
         )
     for bar in ("fixation", "heatmap"):
-        # A config saved while the two bars shared one switch sets both.
-        own = f"show_{bar}_colorbar"
-        if own in coloring or "show_colorbars" in coloring:
-            put(
-                f"global_{own}",
-                bool(coloring.get(own, coloring.get("show_colorbars"))),
-            )
+        if f"show_{bar}_colorbar" in coloring:
+            put(f"global_show_{bar}_colorbar", bool(coloring[f"show_{bar}_colorbar"]))
     for cfg_key, state_key in (
         ("fixation_colorscale", "global_fixation_colorscale"),
         ("heatmap_colorscale", "global_heatmap_colorscale"),
@@ -2165,9 +2194,9 @@ def _restore_plot_config(
             "stimulus image scale",
         )
     for bar in ("fixation", "heatmap"):
-        # Each bar's own key, else the one both shared in an older config.
+
         def _bar_value(name: str, bar: str = bar):
-            return coloring.get(f"{bar}_{name}", coloring.get(name))
+            return coloring.get(f"{bar}_{name}")
 
         co = _bar_value("colorbar_orientation")
         if co is not None:
@@ -2419,11 +2448,6 @@ def _restore_plot_config(
     for cfg_key in ("show_title", "show_caption"):
         if cfg_key in labels:
             put(f"global_{cfg_key}", bool(labels[cfg_key]))
-    # A config saved while the two shared one switch.
-    if "show_title_caption" in labels:
-        for cfg_key in ("show_title", "show_caption"):
-            if cfg_key not in labels:
-                put(f"global_{cfg_key}", bool(labels["show_title_caption"]))
     # BUG-75: a config can come from someone else, like a link — no markup.
     if isinstance(labels.get("title_pattern"), str):
         put("global_title_pattern", _strip_markup(labels["title_pattern"]))

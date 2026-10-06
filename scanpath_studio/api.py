@@ -2155,8 +2155,8 @@ def plot_scanpath(
     the app's fixation-index window.
 
     ``title`` / ``caption`` stamp a title/caption band onto the figure
-    without shrinking the plot area, exactly like the rail's *Title & caption on
-    the figure* control — literal text here, not the rail's ``{trial_id}``-style
+    without shrinking the plot area, exactly like the rail's *Title* / *Caption*
+    rows — literal text here, not the rail's ``{trial_id}``-style
     pattern, since the caller already knows which trial this is.
 
     Remaining keywords override the app's defaults and are forwarded to

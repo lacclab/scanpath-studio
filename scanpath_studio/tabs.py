@@ -322,6 +322,7 @@ from scanpath_studio.session_keys import (
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
+    SINGLE_TRIAL_ID,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -9839,8 +9840,38 @@ def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
     )
 
 
-def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text"):
-    """Pick one text/passage; returns ``(text_col, text_id)`` (``None`` if none)."""
+#: The Scanpath trial whose text Per text last opened on (#374 F39).
+_PTEXT_SEEDED_FROM = "_ptext_seeded_from"
+
+
+def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
+    """The text of the trial the Scanpath view shows, while it is new to Per
+    text — ``None`` once Per text has opened on it (so a text picked here is
+    kept) or when the pool does not hold it."""
+    trial = st.session_state.get(SINGLE_TRIAL_ID)
+    if trial is None or st.session_state.get(_PTEXT_SEEDED_FROM) == trial:
+        return None
+    st.session_state[_PTEXT_SEEDED_FROM] = trial
+    for col in ("unique_trial_id", "trial_id"):
+        if col in words.columns:
+            match = words.loc[words[col].astype(str) == str(trial), text_col]
+            if not match.empty:
+                return match.iloc[0]
+    return None
+
+
+def _text_picker(
+    words: pd.DataFrame,
+    *,
+    key: str,
+    host=None,
+    label: str = "Text",
+    follow_scanpath: bool = False,
+):
+    """Pick one text/passage; returns ``(text_col, text_id)`` (``None`` if none).
+
+    ``follow_scanpath`` opens on the text of the trial last viewed in Scanpath,
+    when the pool holds it (#374 F39)."""
     host = host or st
     text_col = _text_column(words)
     if text_col is None or "word_id" not in words.columns:
@@ -9851,6 +9882,11 @@ def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text
             f"{row.text}  ({plural(row.n_participants, 'reader')})": row.text
             for row in counts.itertuples()
         }
+        current = _scanpath_trial_text(words, text_col) if follow_scanpath else None
+        if current is not None:
+            wanted = next((k for k, v in labels.items() if v == current), None)
+            if wanted is not None:
+                st.session_state[key] = wanted
         chosen = host.selectbox(label, list(labels), key=key)
         return text_col, labels[chosen]
     vals = sorted(words[text_col].astype(str).unique())
@@ -9956,7 +9992,9 @@ def render_per_text_tab(
     # one screen.
     multipart = has_screen_identity(words_filtered)
     top = st.columns([3, 2, 2] if multipart else [3, 2])
-    text_col, text_id = _text_picker(words_filtered, key="ptext_text", host=top[0])
+    text_col, text_id = _text_picker(
+        words_filtered, key="ptext_text", host=top[0], follow_scanpath=True
+    )
     if text_col is None or text_id is None:
         st.info("No text/passage column found.")
         return

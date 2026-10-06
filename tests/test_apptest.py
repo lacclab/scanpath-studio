@@ -3828,6 +3828,31 @@ class TestCorpusAnalysisTab:
             elif view in tabs._COMPUTED_READER_VIEWS:
                 assert phrase not in captions, view
 
+    def test_per_text_opens_on_the_scanpath_trials_text(self):
+        """#374 F39: Per text opened on the first text, not on the text of the
+        trial the user had open in Scanpath."""
+        from scanpath_studio import api
+
+        words = api.load_sample_data(names="canonical").words
+        trial_col = "unique_trial_id" if "unique_trial_id" in words else "trial_id"
+        # The last text in the pool, so it is never the picker's default.
+        text_col = next(
+            c
+            for c in ("unique_text_id", "text_id", "unique_paragraph_id")
+            if c in words
+        )
+        last = max(words[text_col].astype(str).unique())
+        trial = str(words.loc[words[text_col].astype(str) == last, trial_col].iloc[0])
+
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per text"
+        at.session_state["single_trial_id"] = trial
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        picked = at.selectbox(key="ptext_text").value
+        assert picked.startswith(f"{last} "), picked
+
     def test_data_without_ia_columns_says_it_has_no_measures(self):
         """AN-32 (reversing BUG-78's derivation): the page computes no reading
         measure, so boxes + fixations alone (the synthetic trial, a Tobii/SMI

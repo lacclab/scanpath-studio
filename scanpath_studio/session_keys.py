@@ -135,7 +135,8 @@ GLOBAL_SHOW_COORDINATE_GRID = "global_show_coordinate_grid"
 GLOBAL_COORDINATE_GRID_AUTO = "global_coordinate_grid_auto"
 GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
 # EXP-5: title/caption on the figure (moved here from being Export-only).
-GLOBAL_SHOW_TITLE_CAPTION = "global_show_title_caption"
+GLOBAL_SHOW_TITLE = "global_show_title"
+GLOBAL_SHOW_CAPTION = "global_show_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
 GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
 # EXP-18: settings that change the figure and used to travel in the saved config
@@ -310,6 +311,9 @@ PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
 # Legacy inverse of `show_order`, still parsed so pre-Share links keep working.
 PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
+# The one switch title and caption shared before each got its own; still read
+# (it turns both on or off), never written.
+PARAM_SHOW_TITLE_CAPTION = "show_title_caption"
 
 # DATA-27 (Task 12): every public corpus on the deep link.
 #
@@ -415,7 +419,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_colorbars": GLOBAL_SHOW_COLORBARS,
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
-        "show_title_caption": GLOBAL_SHOW_TITLE_CAPTION,
+        "show_title": GLOBAL_SHOW_TITLE,
+        "show_caption": GLOBAL_SHOW_CAPTION,
         "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
@@ -714,7 +719,12 @@ URL_OPTIONAL_PARAMS = frozenset(
 # holding every part from the public release, so a link has nothing to add —
 # but `onestop_public` + `onestop_regime` must keep opening the regime it named.
 URL_LEGACY_PARAMS = frozenset(
-    {PARAM_ONESTOP_VARIANT, PARAM_ONESTOP_REGIME, PARAM_ONESTOP_PARTS}
+    {
+        PARAM_ONESTOP_VARIANT,
+        PARAM_ONESTOP_REGIME,
+        PARAM_ONESTOP_PARTS,
+        PARAM_SHOW_TITLE_CAPTION,
+    }
 )
 
 # The exact key set of `url_state._URL_PRESETS` — every param a deep link can
@@ -944,7 +954,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         # compare_view (BUG-72) — a `global_*` key, unlike the view's other two.
         GLOBAL_SHOW_COMPARE_LEGEND,
         # labels
-        GLOBAL_SHOW_TITLE_CAPTION,
+        GLOBAL_SHOW_TITLE,
+        GLOBAL_SHOW_CAPTION,
         GLOBAL_TITLE_PATTERN,
         GLOBAL_CAPTION_PATTERN,
         # raw_gaze (VIZ-43)

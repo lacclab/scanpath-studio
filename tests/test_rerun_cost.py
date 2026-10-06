@@ -294,9 +294,10 @@ class TestTheCombosRowIsMaskedOnceAtMost:
         calls = self._masks(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
-        # EXP-5's master toggle. Off by default — which is exactly why a thunk
-        # beats a hoisted mask: on the default path nothing ever asks.
-        at.session_state["global_show_title_caption"] = bool(state)
+        # EXP-5's switches. Off by default — which is exactly why a thunk beats
+        # a hoisted mask: on the default path nothing ever asks.
+        at.session_state["global_show_title"] = bool(state)
+        at.session_state["global_show_caption"] = bool(state)
         for key, value in state.items():
             at.session_state[key] = value
         at.run(timeout=120)

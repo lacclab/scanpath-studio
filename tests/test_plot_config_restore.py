@@ -988,7 +988,7 @@ def test_restoring_annotations_leaves_the_view_settings_alone():
         "global_coordinate_grid_auto": False,
         "global_coordinate_grid_spacing": 250.0,
         "global_illustration_label": "Hide",
-        "global_show_title_caption": True,
+        "global_show_title": True,
         "global_title_pattern": "Mine",
     }
     config = {

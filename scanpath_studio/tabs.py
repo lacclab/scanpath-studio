@@ -3981,9 +3981,8 @@ def _build_studio_config(
         },
         # EXP-5: title/caption pattern, moved here from being Export-only.
         "labels": {
-            "show_title_caption": bool(
-                st.session_state.get("global_show_title_caption", False)
-            ),
+            "show_title": bool(st.session_state.get("global_show_title", False)),
+            "show_caption": bool(st.session_state.get("global_show_caption", False)),
             "title_pattern": viz_settings.get("title_pattern", ""),
             "caption_pattern": viz_settings.get("caption_pattern", ""),
         },

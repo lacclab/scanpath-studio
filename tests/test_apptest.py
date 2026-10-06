@@ -4575,7 +4575,7 @@ class TestFigureAndCanvasSubGroups:
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         # Open the four conditional bodies at once.
-        at.session_state["global_show_title_caption"] = True
+        at.session_state["global_show_title"] = True
         at.session_state["global_title_pattern"] = "{participant_id}"
         at.session_state["global_show_coordinate_grid"] = True
         at.session_state["global_coordinate_grid_auto"] = False

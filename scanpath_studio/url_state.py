@@ -101,6 +101,7 @@ from .session_keys import (
     FIX_RANGE_PARAM,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
+    PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
     SETUP_PARAMS,
@@ -358,8 +359,10 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "coordinate_grid_auto": "global_coordinate_grid_auto",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
-    # EXP-5: title/caption on the figure — off by default.
-    "show_title_caption": "global_show_title_caption",
+    # EXP-5: title and caption on the figure — each off by default. The one
+    # switch they shared before, `show_title_caption`, is read below.
+    "show_title": "global_show_title",
+    "show_caption": "global_show_caption",
     # EXP-18: three switches that change the figure and never rode the link —
     # the stimulus-image layer, Show full monitor, and Compare's A/B legend.
     "show_stimulus_image": "global_show_stimulus_image",
@@ -1035,6 +1038,19 @@ def _apply_url_preset() -> str | None:
             st.session_state.setdefault(
                 SETUP_PROVENANCE_STATE_KEY, {g: str(p) for g, p in arrived.items()}
             )
+
+    # The switch title and caption shared before each had its own: both.
+    if PARAM_SHOW_TITLE_CAPTION in qp:
+        try:
+            both = _coerce_bool(qp[PARAM_SHOW_TITLE_CAPTION])
+        except (ValueError, TypeError):
+            st.warning(
+                f"Ignored bad URL param ?{PARAM_SHOW_TITLE_CAPTION}="
+                f"{qp[PARAM_SHOW_TITLE_CAPTION]!r}"
+            )
+        else:
+            st.session_state.setdefault("global_show_title", both)
+            st.session_state.setdefault("global_show_caption", both)
 
     # Heatmap / fixation colorscale only render under the Advanced expander —
     # auto-open it so the URL value is exposed in the rail.
@@ -2360,8 +2376,14 @@ def _restore_plot_config(
 
     # EXP-5: title/caption on the figure, moved here from being Export-only.
     labels = section("labels")
+    for cfg_key in ("show_title", "show_caption"):
+        if cfg_key in labels:
+            put(f"global_{cfg_key}", bool(labels[cfg_key]))
+    # A config saved while the two shared one switch.
     if "show_title_caption" in labels:
-        put("global_show_title_caption", bool(labels["show_title_caption"]))
+        for cfg_key in ("show_title", "show_caption"):
+            if cfg_key not in labels:
+                put(f"global_{cfg_key}", bool(labels["show_title_caption"]))
     # BUG-75: a config can come from someone else, like a link — no markup.
     if isinstance(labels.get("title_pattern"), str):
         put("global_title_pattern", _strip_markup(labels["title_pattern"]))
@@ -2370,7 +2392,8 @@ def _restore_plot_config(
     elif "labels" not in config and has_valid_plot_section:
         # Pre-EXP-5 configs have no labels block; pin the off defaults so the
         # frozen state-key set is still fully written.
-        put("global_show_title_caption", False)
+        put("global_show_title", False)
+        put("global_show_caption", False)
         put("global_title_pattern", "")
         put("global_caption_pattern", "")
 
@@ -2978,9 +3001,13 @@ def _build_share_query(
     # EXP-22: a `{trials.font_size}`-style field reads a metadata table, and
     # the tables belong to the sender's dataset — they never ride a link. The
     # pattern travels; its value only resolves where the same table is attached.
-    if st.session_state.get("global_show_title_caption") and any(
-        f"{{{table}." in str(st.session_state.get(key) or "")
-        for key in ("global_title_pattern", "global_caption_pattern")
+    if any(
+        st.session_state.get(show)
+        and f"{{{table}." in str(st.session_state.get(key) or "")
+        for show, key in (
+            ("global_show_title", "global_title_pattern"),
+            ("global_show_caption", "global_caption_pattern"),
+        )
         for table in ("participants", "trials", "texts")
     ):
         caveats.append(

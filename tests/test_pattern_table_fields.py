@@ -131,7 +131,7 @@ def _share_app():
     from scanpath_studio.url_state import _build_share_query
 
     st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
-    st.session_state["global_show_title_caption"] = True
+    st.session_state["global_show_title"] = True
     st.session_state["global_title_pattern"] = st.session_state["_pattern"]
     _query, caveats = _build_share_query(DEMO_CHOICE)
     st.session_state["_caveats"] = caveats

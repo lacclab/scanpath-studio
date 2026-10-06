@@ -989,7 +989,7 @@ def test_the_published_title_is_the_one_the_figure_actually_carries():
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file(APP_SCRIPT)
-    at.session_state["global_show_title_caption"] = True
+    at.session_state["global_show_title"] = True
     at.session_state["global_title_pattern"] = "{participant_id}|{trial_index}"
     at.run(timeout=200)
     assert not at.exception, at.exception
@@ -1022,13 +1022,13 @@ def test_turning_the_title_off_clears_the_published_one():
 
     at = AppTest.from_file(APP_SCRIPT)
     at.session_state["data_source_choice"] = "Synthetic test trial"
-    at.session_state["global_show_title_caption"] = True
+    at.session_state["global_show_title"] = True
     at.session_state["global_title_pattern"] = "{participant_id}"
     at.run(timeout=150)
     assert not at.exception, at.exception
     assert at.session_state[cs.SNIPPET_STATE_KEY].title
 
-    at.session_state["global_show_title_caption"] = False
+    at.session_state["global_show_title"] = False
     at.run(timeout=150)
     assert not at.exception, at.exception
     assert at.session_state[cs.SNIPPET_STATE_KEY].title == ""

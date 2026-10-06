@@ -536,7 +536,8 @@ def _restore_config_app():
             "span_border_color": "#000000",
         },
         "labels": {
-            "show_title_caption": True,
+            "show_title": True,
+            "show_caption": True,
             "title_pattern": "{participant_id} · {trial_id}",
             "caption_pattern": "{text_id} · {n_fixations} fixations",
         },

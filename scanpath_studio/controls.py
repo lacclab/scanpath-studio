@@ -849,7 +849,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # EXP-5: title/caption on the figure (Figure & canvas group). Off by default;
     # the two patterns are only meaningful while the toggle is on — see
     # `_collect_viz_settings`, which reports them empty otherwise.
-    "global_show_title_caption": False,
+    "global_show_title": False,
+    "global_show_caption": False,
     "global_title_pattern": "",
     "global_caption_pattern": "",
 }
@@ -3779,6 +3780,7 @@ def _check_row(
     check_share: float = 0.26,
     disabled: bool = False,
     on_change=None,
+    args: tuple = (),
     persist_state: str | None = None,
 ):
     """A ``label | ☑ Show | …`` row; return ``(value, rest)`` (UX-159).
@@ -3806,6 +3808,7 @@ def _check_row(
             key=key,
             disabled=disabled,
             on_change=on_change,
+            args=args,
             persist_state=persist_state,
         ),
         rest_col,
@@ -4014,6 +4017,8 @@ def render_pattern_input(
     placeholder: str | None = None,
     label_left: bool = False,
     disabled: bool = False,
+    label_visibility: str = "visible",
+    preview: bool = True,
 ) -> str:
     """A pattern text box with live validation and a rendered preview.
 
@@ -4059,9 +4064,12 @@ def render_pattern_input(
             help=help,
             placeholder=placeholder,
             disabled=disabled,
+            label_visibility=label_visibility,
         )
     value = st.session_state.get(key, "")
-    if not value:
+    if not value or not preview:
+        # `preview=False` (a switched-off title) asks nothing of ``fields``,
+        # whose values are computed on demand.
         return ""
     error = pattern_error(value, fields)
     if error:
@@ -5020,13 +5028,11 @@ def _collect_viz_settings(
         # EXP-5: empty when the toggle is off, regardless of stored pattern text,
         # so turning it off can never leave a stale pattern silently applied.
         title_pattern=(
-            ss.get("global_title_pattern") or ""
-            if ss.get("global_show_title_caption")
-            else ""
+            ss.get("global_title_pattern") or "" if ss.get("global_show_title") else ""
         ),
         caption_pattern=(
             ss.get("global_caption_pattern") or ""
-            if ss.get("global_show_title_caption")
+            if ss.get("global_show_caption")
             else ""
         ),
     )
@@ -7135,18 +7141,13 @@ def render_plot_controls(
     # Export panel's bulk section reads these two patterns back instead of
     # keeping its own copy, and the live figure on screen (all three render
     # paths) carries the same title/caption a bulk export would produce.
-    def _on_toggle_title_caption() -> None:
-        # Pre-fill a friendly starting pattern the first time this is switched
-        # on, rather than an empty box the user has to know the field syntax
-        # to fill in. `_seed_viz_state`'s `_pin` already seeded both keys to
-        # "" earlier this run, so a plain `setdefault` below would be a no-op —
-        # this has to run as the toggle's own callback (before that seeding
-        # happens on the next rerun) to actually take.
-        if st.session_state.get("global_show_title_caption"):
-            if not st.session_state.get("global_title_pattern"):
-                st.session_state["global_title_pattern"] = DEFAULT_TITLE_PATTERN
-            if not st.session_state.get("global_caption_pattern"):
-                st.session_state["global_caption_pattern"] = DEFAULT_CAPTION_PATTERN
+    def _prefill(show_key: str, pattern_key: str, default: str) -> None:
+        # Switching one on fills an empty box with a starting pattern, rather
+        # than leaving one the user has to know the field syntax to fill. It
+        # has to be the switch's callback: `_seed_viz_state` already seeded the
+        # pattern to "" this run, so a `setdefault` here would be a no-op.
+        if st.session_state.get(show_key) and not st.session_state.get(pattern_key):
+            st.session_state[pattern_key] = default
 
     with labels, _popover_rows("fig_labels"):
         label_help = (
@@ -7177,62 +7178,64 @@ def render_plot_controls(
             help=text_help,
             label_visibility="collapsed",
         )
-        show_title_caption, _ = _check_row(
-            "Title & caption",
-            key="global_show_title_caption",
-            persist_state="session",
-            on_change=_on_toggle_title_caption,
-            help="Render a title and/or caption into the figure — on screen, in "
-            "**This trial** export, and in a bulk export — so a figure dropped "
-            "into a paper or a slide carries its own provenance. The plot itself "
-            "is not scaled down; the figure grows to make room.",
+        # EXP-22: the *selected* trial's frames, not the corpus the rail was
+        # handed — its tables name the `{table.field}` fields the boxes validate
+        # against and the list shows, and "one value per trial" has to be read
+        # off one trial.
+        _sel_fix = (
+            fix_range_fixations if fix_range_fixations is not None else pd.DataFrame()
         )
-        if show_title_caption:
-            # EXP-22: the *selected* trial's frames, not the corpus the rail
-            # was handed — its tables name the `{table.field}` fields the boxes
-            # validate against and the list shows, and "one value per trial"
-            # has to be read off one trial.
-            _sel_fix = (
-                fix_range_fixations
-                if fix_range_fixations is not None
-                else pd.DataFrame()
-            )
-            _title_caption_fields = pattern_fields(
-                "p01",
-                "t01",
-                _trial_rows(words, _sel_fix),
-                _sel_fix,
-                {},
-                dataset_name=current_dataset_name(),
-                metadata_rows=_selected_metadata_rows(_sel_fix),
-                # DATA-66: the field list offers the dataset's own names too.
-                column_names=_rail_names(),
-            )
-            # EXP-5: two text boxes, two previews and a field list, inline — the
-            # overlay's width is the point, and Streamlit won't nest a popover.
-            box = st.container()
-            render_pattern_input(
-                box,
+        _title_caption_fields = pattern_fields(
+            "p01",
+            "t01",
+            _trial_rows(words, _sel_fix),
+            _sel_fix,
+            {},
+            dataset_name=current_dataset_name(),
+            metadata_rows=_selected_metadata_rows(_sel_fix),
+            # DATA-66: the field list offers the dataset's own names too.
+            column_names=_rail_names(),
+        )
+        any_shown = False
+        for name, show_key, pattern_key, default, help_text in (
+            (
                 "Title",
+                "global_show_title",
                 "global_title_pattern",
-                _title_caption_fields,
-                # No placeholder here, unlike the Compare A/B labels: a
-                # placeholder promises "this is what an empty box gives you",
-                # and an empty box here gives *no title at all*. Both boxes are
-                # pre-filled with the defaults on the run the toggle is switched
-                # on, so there is nothing an empty one needs to explain (UX-31).
-                help="Leave empty for no title.",
-                label_left=True,
-            )
-            render_pattern_input(
-                box,
+                DEFAULT_TITLE_PATTERN,
+                "A line of text above the plot. {field} inserts a value of this "
+                "trial; the figure grows to make room.",
+            ),
+            (
                 "Caption",
+                "global_show_caption",
                 "global_caption_pattern",
-                _title_caption_fields,
-                help="Leave empty for no caption.",
-                label_left=True,
+                DEFAULT_CAPTION_PATTERN,
+                "A line of text below the plot. {field} inserts a value of this "
+                "trial; the figure grows to make room.",
+            ),
+        ):
+            shown, rest = _check_row(
+                name,
+                key=show_key,
+                persist_state="session",
+                on_change=_prefill,
+                args=(show_key, pattern_key, default),
+                help=help_text,
             )
-            render_pattern_help(box, _title_caption_fields)
+            any_shown = any_shown or shown
+            render_pattern_input(
+                rest,
+                name,
+                pattern_key,
+                _title_caption_fields,
+                help=help_text,
+                disabled=not shown,
+                label_visibility="collapsed",
+                preview=shown,
+            )
+        if any_shown:
+            render_pattern_help(st.container(), _title_caption_fields)
 
     # The tooltips' fields, for words and for fixations — figure-wide rather
     # than one layer's, so they sit together here instead of closing the

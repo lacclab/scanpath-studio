@@ -696,6 +696,8 @@ def figure_kwargs(
             continue
         if key in _DERIVED_SETTINGS:
             continue
+        if not explicit and _inert(key, settings):
+            continue  # #374 F29: styles nothing that is drawn
         if key == "heatmap_range" and _heatmap_self_scaled(settings, kind):
             continue  # kept for Word boxes, but it pins nothing here
         value = settings[key]
@@ -722,6 +724,81 @@ def figure_kwargs(
         if explicit or _comparable(value) != _comparable(default):
             out[key] = value
     return out
+
+
+#: #374 F29: options that style one layer → the switch that draws it. With
+#: the layer off they change nothing, so a snippet leaves them out.
+_LAYER_OPTIONS = {
+    "show_words": (
+        "word_box_color",
+        "word_box_line_opacity",
+        "word_box_fill_color",
+        "word_box_fill_opacity",
+    ),
+    "show_order": ("order_font_size", "order_font_color"),
+    "show_heatmap": (
+        "heatmap_metric",
+        "heatmap_style",
+        "heatmap_norm",
+        "heatmap_sigma_px",
+        "heatmap_range",
+        "heatmap_colorscale",
+        "show_heatmap_colorbar",
+        "heatmap_colorbar_orientation",
+        "heatmap_colorbar_tickangle",
+        "heatmap_colorbar_tickfont_size",
+    ),
+    "show_saccades": (
+        "saccade_color",
+        "saccade_style",
+        "saccade_width",
+        "saccade_color_mode",
+        "saccade_class_colors",
+        "saccade_type_legend",
+        "show_saccade_arrows",
+    ),
+}
+_STYLED_BY = {
+    option: layer for layer, opts in _LAYER_OPTIONS.items() for option in opts
+}
+_FIXATION_SCALE_OPTIONS = frozenset(
+    {
+        "fixation_colorscale",
+        "fixation_color_range",
+        "show_fixation_colorbar",
+        "fixation_colorbar_orientation",
+        "fixation_colorbar_tickangle",
+        "fixation_colorbar_tickfont_size",
+    }
+)
+
+
+def _inert(key: str, settings: dict) -> bool:
+    """Whether ``key`` changes nothing on this figure: it styles a layer that
+    is off, a highlight with no highlight column, class colours in *Uniform*,
+    or a colour scale on uniformly coloured fixations."""
+    from .constants import UNIFORM_COLOR_FIELD
+
+    layer = _STYLED_BY.get(key)
+    if layer is not None and settings.get(layer, True) is False:
+        return True
+    if key == "saccade_class_colors":
+        return not _classes_coloured(settings)
+    if key in ("critical_span_style", "highlight_text_color", "span_border_color"):
+        if not settings.get("highlight_column", "x"):
+            return True
+        style = settings.get("critical_span_style")
+        if key == "highlight_text_color":
+            return style not in (None, "Mark text")
+        if key == "span_border_color":
+            return style not in (None, "Mark border")
+    if key in _FIXATION_SCALE_OPTIONS:
+        return settings.get("color_by", "x") in (
+            None,
+            "",
+            UNIFORM_COLOR_FIELD,
+        ) and not settings.get("color_by_line")
+    return False
 
 
 def _heatmap_self_scaled(settings: dict, kind: str) -> bool:
@@ -972,18 +1049,6 @@ def _classes_coloured(settings: dict) -> bool:
     return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
 
 
-def _flag_can_override(key: str, settings: dict) -> bool:
-    """Whether ``render`` can restate ``key`` after a ``--palette``.
-
-    `--saccade-type-color` restates class colours in either coloured mode: it
-    implies By type on its own, and recolours the two-way fold beside
-    `--saccade-color-by-direction` (EXP-20; before that it switched the fold to
-    the five-way split, so the fold's colours had no flag at all)."""
-    if key == "saccade_class_colors":
-        return _classes_coloured(settings)
-    return key in _CLI_EMITTERS
-
-
 def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
     """The ``--palette`` a CLI snippet can name instead of spelling it out.
 
@@ -992,17 +1057,11 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
     `render` flag and were named unsupported, and the class colours became five
     ``--saccade-type-color`` flags — which switch saccades to *By type*, so any
     palette choice produced a command drawing a different figure. A palette
-    matches when every colour it writes that this kind draws either equals the
-    figure's or has a flag to restate it; one that explains none (the default
-    palette on a stock figure) is not named at all.
-
-    EXP-20 gave every colour a flag, which turned "can be restated" from rare
-    into always — and exposed that a restatement is not free: a colour the
-    figure still has at its *default* is one `figure_kwargs` never writes, so
-    naming a palette that moves it costs a flag to move it back
-    (`_restate_against_palette`). Before this, a figure whose text colour merely
-    happened to equal *Print / greyscale*'s was reproduced in greyscale. The
-    palette named is the one whose colours save the most flags net of those.
+    matches when every colour it writes that the figure draws equals the
+    figure's (#374 F29: a palette whose colours later flags take back read as
+    if the screen used it, while its Palette box said *Custom*); one that
+    explains none (the default palette on a stock figure) is not named at all.
+    Of those, the one that saves the most flags is named.
 
     Returns ``(name, colours)`` — the colours the named palette supplies — or
     ``(None, {})``."""
@@ -1016,17 +1075,16 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
         colors = {k: v for k, v in _palette_colors(name).items() if k in defaults}
         score = 0
         for key, value in colors.items():
-            if key == "saccade_class_colors" and not _classes_coloured(settings):
+            if _inert(key, settings):
                 continue
             current = _effective_color(key, settings.get(key, defaults[key]))
             default = _effective_color(key, defaults[key])
-            at_default = _comparable(current) == _comparable(default)
             if _comparable(current) == _comparable(value):
-                score += int(not at_default)
-            elif not _flag_can_override(key, settings):
+                score += int(_comparable(current) != _comparable(default))
+            else:
+                # #374 F29: a palette is named only when it is the figure's —
+                # never one whose colours a later flag has to take back.
                 break
-            elif at_default:
-                score -= 1  # the palette moved it; a flag has to move it back
         else:
             if score > best_score:
                 best, best_score = (name, colors), score
@@ -1044,6 +1102,8 @@ def _restate_against_palette(
     defaults = api.figure_options(kind)
     out = dict(kwargs)
     for key, value in palette_colors.items():
+        if _inert(key, settings):
+            continue
         current = _effective_color(key, settings.get(key, defaults.get(key)))
         if _comparable(current) == _comparable(value):
             out.pop(key, None)
@@ -1671,6 +1731,8 @@ def python_snippet(
     for name, value in figure_kwargs(
         state.settings, state.kind, explicit=explicit
     ).items():
+        if name == "critical_span_style" and value == "None":
+            value = None  # #374 F29: no marking is Python's None, not 'None'
         call.append(f"    {name}={_py(value)},")
     call.append(")")
     lines += call

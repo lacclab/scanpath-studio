@@ -201,10 +201,10 @@ def test_every_non_default_option_has_a_render_flag(kind):
     cli._render_parser().parse_args(argv[2:])
 
 
-def test_a_named_palette_restates_the_colours_it_moved():
-    """Every colour has a flag now, so a palette is named only when it saves
-    flags — and when it is, the colours it would move off the figure's (a
-    default included, which the diff never writes) are written back."""
+def test_a_palette_is_named_only_when_the_figure_wears_it():
+    """Every colour has a flag, so a palette is named only when it saves
+    flags — and only when each colour it writes that the figure draws is the
+    figure's (#374 F29)."""
     settings = {**api.figure_options("static"), "text_color": "#333333"}
     # *Print / greyscale*'s text colour, and nothing else of it: naming it would
     # turn the fixations, saccades and colour scales grey.
@@ -223,8 +223,14 @@ def test_a_named_palette_restates_the_colours_it_moved():
         "fixation_color": api.figure_options("static")["fixation_color"],
     }
     command, _ = cs.cli_snippet(DEMO, cs.FigureState(kind="static", settings=settings))
+    # #374 F29: a palette one of whose colours the figure no longer wears is
+    # not named — its colours are spelt out instead.
+    assert "--palette" not in command
+    assert "--text-color" in command
+    settings["fixation_color"] = greyscale["fixation_color"]
+    command, _ = cs.cli_snippet(DEMO, cs.FigureState(kind="static", settings=settings))
     assert "--palette 'Print / greyscale'" in command
-    assert "--fixation-color '#0072B2'" in command
+    assert "--fixation-color" not in command and "--text-color" not in command
 
 
 # ---------------------------------------------------------------------------
@@ -502,6 +508,11 @@ def _round_trip(monkeypatch, capsys, flags: list[str]):
 
 #: Every new single-trial option, at once, on the demo trial the raw gaze covers.
 STATIC_FLAGS = [
+    # The layers the styling below applies to (#374 F21/F29: a layer that is off
+    # takes no styling flags).
+    "--word-boxes",
+    "--heatmap",
+    "--fixation-index",
     "--sample-raw-gaze",
     "--raw-gaze-color",
     "#666666",
@@ -652,10 +663,8 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
 
 
 def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
-    """A named `--palette` plus the one class colour the user changed: the
-    printed command restates only that class, so `render` has to keep the
-    palette's colours for the other four — it used to start the class dict from
-    the stock set, which then won over the palette wholesale."""
+    """A palette with one class colour changed: the command spells the
+    colours out (#374 F29), and `render` draws the same figure from it."""
     from scanpath_studio.constants import palette_settings
 
     palette = palette_settings("High contrast")
@@ -675,8 +684,8 @@ def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
         canvas=(2560, 1440),
     )
     command, unsupported = cs.cli_snippet(DEMO, state, output="x.html")
-    assert "--palette 'High contrast'" in command and not unsupported
-    assert command.count("--saccade-type-color") == 1
+    # #374 F29: the figure no longer wears the palette, so it is spelt out.
+    assert "--palette" not in command and not unsupported
     (from_cli,) = _figures(
         monkeypatch, [shlex.split(command.replace(" \\\n", " "))[1:]]
     )
@@ -696,6 +705,9 @@ def test_an_integer_flag_is_printed_as_an_integer():
     a settings dict holding `12.0` printed a command `render` refused."""
     command = api.figure_code(
         flavor="cli",
+        show_order=True,
+        show_heatmap=True,
+        color_by="duration_ms",
         order_font_size=12.0,
         fixation_colorbar_tickangle=30.0,
         heatmap_colorbar_tickangle=30.0,

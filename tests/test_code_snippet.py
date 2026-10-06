@@ -189,7 +189,10 @@ def test_settings_with_no_render_flag_are_named_not_dropped(monkeypatch):
     """EXP-20 left no figure option without a flag, so the mechanism is driven
     by taking one away — it is what a future option without a flag hits."""
     monkeypatch.delitem(cs._CLI_EMITTERS, "fixation_color_range")
-    state = _state(figure={"fixation_color_range": (1.0, 5.0)})
+    # A colour range is drawn only on fixations coloured by a value (#374 F29).
+    state = _state(
+        figure={"fixation_color_range": (1.0, 5.0), "color_by": "duration_ms"}
+    )
     code = cs.reproduction_code(DEMO, state)
     assert "fixation_color_range=(1.0, 5.0)" in code.python
     assert "fixation_color_range" in code.cli_unsupported
@@ -916,6 +919,7 @@ def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
         settings={
             **api.figure_options("static"),
             "fixation_color_range": (1.0, 5.0),
+            "color_by": "duration_ms",
         },
         participant="p1",
         trial="t1",

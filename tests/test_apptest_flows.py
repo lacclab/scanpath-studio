@@ -121,7 +121,7 @@ def _clean(at: AppTest, note: str = "") -> None:
 def _trial_ids(at: AppTest) -> list[str]:
     """The trial ids currently offered by the picker (the live trial pool).
 
-    Favorited trials are labelled ``★ <id>``. The options are the ids as shown
+    Favorited trials are labelled ``<id> ★``. The options are the ids as shown
     (UX-187 / UX-202); `picker_trial_id` gives each id back.
     """
     from tests.conftest import picker_trial_id

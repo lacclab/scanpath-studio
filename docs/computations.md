@@ -971,7 +971,7 @@ One row per trial: reading time, counts, rates.
 
 Rescale a measure for cross-reader comparison.
 
-**Formula.** Per-reader z-score, `(value − reader mean) / reader SD`, when the Normalize toggle is on.
+**Formula.** Per-participant z-score, `(value − participant mean) / participant SD`, when **Z-score per participant** is on.
 
 | | |
 | --- | --- |

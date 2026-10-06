@@ -1159,8 +1159,8 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_AGGREGATION,
         summary="Rescale a measure for cross-reader comparison.",
         formula=(
-            "Per-reader z-score, `(value − reader mean) / reader SD`, when the "
-            "Normalize toggle is on."
+            "Per-participant z-score, `(value − participant mean) / participant SD`, "
+            "when **Z-score per participant** is on."
         ),
         code="scanpath_studio/aggregation.py:add_normalized_column",
         missing=(

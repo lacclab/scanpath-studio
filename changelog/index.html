@@ -1927,10 +1927,17 @@ behind each line, and the releases before 0.28.0, are in
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>.
 <em>Unreleased</em> is what is on <code>main</code> and not yet on PyPI.</p>
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<p><strong>Added</strong></p>
+<ul>
+<li>The dataset setup guide now ends on a step about saving: Add dataset, and Save setup to reuse the mapping next time. (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
+</ul>
 <p><strong>Changed</strong></p>
 <ul>
 <li>When the fixation table maps a Word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> ID, fixations now count for exactly that word, and a blank means no word; without one, a fixation counts for the word box it falls in and is no longer snapped to a word up to 50 px away. (<a href="https://github.com/lacclab/scanpath-studio/issues/352">#352</a>)</li>
 <li>In Compare, the Saccades popover now lays out like Fixations: the Line group becomes Scanpath A's colour, style and width, with Scanpath B's group under it, instead of greyed figure-wide rows followed by a duplicate per-scanpath block. (<a href="https://github.com/lacclab/scanpath-studio/issues/361">#361</a>)</li>
+<li>In Compare, the Word boxes popover now has a Scanpath A and a Scanpath B group, each with its own line and fill colour (the new box_fill_color style key, on the Share link, CLI --style-a/--style-b and the API too). (<a href="https://github.com/lacclab/scanpath-studio/issues/363">#363</a>)</li>
+<li>The hosted app's run-locally tip now says a local install is faster and handles much larger datasets. (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
+<li>The add-dataset wizard's Setup help popover is now a compact two-row menu (Show setup guide · More documentation). (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>

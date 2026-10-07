@@ -61,6 +61,20 @@ app proposes, describe the **Recording setup**, then click **:material/check: Ad
 [Loading data](guides/loading-data.md) lists the accepted formats and what each
 table needs.
 
+## Updating { #updating }
+
+**:material/help: Help → :material/info: About** shows the version you are
+running. On your own computer — the desktop app or a pip install —
+**:material/update: Check for updates** asks GitHub whether a newer release is
+out; it is the only time the app goes online for this. If there is one, it
+shows the command that updates your install (`pip install -U scanpath-studio`
+for pip) or, in the desktop app, a button that downloads the new version.
+`scanpath-studio version --check` does the same from a terminal.
+
+Between releases the version names the exact build: `0.35.0.post3+g8f18219` is
+three commits after release 0.35.0, at commit `8f18219`, and `.dirty` at the
+end means it has uncommitted changes. Quote the whole version in a bug report.
+
 ## Next steps
 
 - [Tutorials](tutorials/index.md) walk through common tasks, from checking a

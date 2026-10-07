@@ -267,3 +267,62 @@ def test_the_api_reports_the_build_and_checks(monkeypatch):
     result = sps.check_for_updates(timeout=2.0)
     assert result.status == "update_available"
     assert result.latest.version == "99.0.0"
+
+
+def _about_script():
+    from scanpath_studio import app
+
+    app._about_dialog()
+
+
+def _local_run(monkeypatch, tag="v99.0.0"):
+    """About on a loopback server, with GitHub answering `tag`."""
+    from scanpath_studio import app
+
+    monkeypatch.setattr(app, "server_bound_to_loopback", lambda: True)
+    monkeypatch.setattr(updates, "latest_release", lambda timeout=5.0: _latest(tag)())
+    app._latest_release_cached.clear()
+
+
+def test_about_offers_check_for_updates_on_a_local_run(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _local_run(monkeypatch)
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception, at.exception
+    at.button(key="about_check_updates").click().run()
+    assert not at.exception, at.exception
+    assert any("v99.0.0 is out" in info.value for info in at.info)
+    # the command that updates this install
+    assert any(code.language == "bash" and code.value for code in at.code)
+    assert any("What's new in v99.0.0" in md.value for md in at.markdown)
+
+
+def test_about_says_when_this_is_the_latest(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _local_run(monkeypatch)
+    # Whether this tree is a release or a dev build depends on the checkout's
+    # tags, so pin the answer rather than the comparison (covered above).
+    monkeypatch.setattr(
+        updates,
+        "check_for_updates",
+        lambda **kw: updates.UpdateCheck(
+            "up_to_date", "0.35.0", "v0.35.0 is the latest release."
+        ),
+    )
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    assert not at.exception, at.exception
+    assert any("is the latest release" in ok.value for ok in at.success)
+
+
+def test_about_has_no_update_check_on_a_hosted_server(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+
+    monkeypatch.setattr(app, "server_bound_to_loopback", lambda: False)
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception, at.exception
+    assert not [button for button in at.button if button.key == "about_check_updates"]

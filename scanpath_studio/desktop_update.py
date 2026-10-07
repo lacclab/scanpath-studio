@@ -324,15 +324,12 @@ def _can_write(folder: Path, system: str) -> bool:
     if system != "win32":
         return os.access(folder, os.W_OK)
     try:
-        handle, probe = tempfile.mkstemp(prefix=".scanpath-write-test-", dir=folder)
+        # Delete-on-close (O_TEMPORARY): the OS removes it even while
+        # antivirus holds it, so no probe is ever left behind.
+        with tempfile.TemporaryFile(prefix=".scanpath-write-test-", dir=folder):
+            return True
     except OSError:
         return False
-    os.close(handle)
-    try:
-        os.unlink(probe)
-    except OSError:
-        pass
-    return True
 
 
 def _not_ours(state: Path) -> bool:
@@ -736,13 +733,25 @@ class UpdateResult:
     at: float | None = None
 
 
+#: The state folders this process holds :data:`LOCK` in. Where ``flock`` is
+#: emulated with POSIX record locks (NFS, CIFS), the lock is the process's,
+#: so two About tabs would not exclude each other without this.
+_HELD: set[str] = set()
+_HELD_GUARD = threading.Lock()
+
+
 class _Lock:
     """An attempt's hold on :data:`LOCK`; :meth:`release` is idempotent."""
 
-    def __init__(self, handle) -> None:
+    def __init__(self, handle, key: str) -> None:
         self._handle = handle
+        self._key = key
 
     def release(self) -> None:
+        with _HELD_GUARD:
+            key, self._key = self._key, None
+            if key is not None:
+                _HELD.discard(key)
         handle, self._handle = self._handle, None
         if handle is None:
             return
@@ -764,10 +773,20 @@ class _Lock:
 def _lock(state: Path) -> _Lock:
     """Take :data:`LOCK` in ``state``, or refuse: another attempt holds it.
 
-    ``flock`` and ``msvcrt.locking`` both conflict between two opens of the
-    file in one process too, so two About tabs exclude each other.
+    Two About tabs share one process, so :data:`_HELD` excludes them there;
+    the file lock excludes ``--update`` or a second copy of the app.
     """
-    handle = open(state / LOCK, "a+b")
+    key = os.path.normcase(os.path.realpath(state))
+    with _HELD_GUARD:
+        if key in _HELD:
+            raise UpdateFailed("An update is already under way.")
+        _HELD.add(key)
+    try:
+        handle = open(state / LOCK, "a+b")
+    except BaseException:
+        with _HELD_GUARD:
+            _HELD.discard(key)
+        raise
     try:
         if os.name == "nt":
             import msvcrt
@@ -779,15 +798,16 @@ def _lock(state: Path) -> _Lock:
 
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        handle.close()
+        _Lock(handle, key).release()
         raise UpdateFailed("An update is already under way.") from None
     except OSError:
-        handle.close()
         if os.name == "nt":  # locking() says only that the byte is taken
+            _Lock(handle, key).release()
             raise UpdateFailed("An update is already under way.") from None
-        # A file system without locks: go ahead unguarded, as before the lock.
-        return _Lock(None)
-    return _Lock(handle)
+        # A file system without locks: only this process is guarded.
+        handle.close()
+        return _Lock(None, key)
+    return _Lock(handle, key)
 
 
 def _make_state(state: Path) -> None:
@@ -1324,9 +1344,11 @@ def _start_swap(plan: SwapPlan, *, popen: Callable, handshake_timeout_s: float) 
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200
         )
         # Out of any job the app runs in, which may end its processes when the
-        # app quits. A job that forbids that refuses the flag outright; then
-        # the helper starts inside it, and if the job does end it, it ends
-        # before the swap begins (it waits for the app to quit first).
+        # app quits. A job that forbids that refuses the flag outright, and
+        # the helper starts inside it. Such a job closing as the app quits
+        # usually ends the helper before it begins (it waits for the app to
+        # quit first), but could end it mid-swap; the next launch of whatever
+        # is in place then finds no helper, and the attempt goes stale.
         breakaway = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
         attempts = [{"creationflags": flags | breakaway}, {"creationflags": flags}]
     else:

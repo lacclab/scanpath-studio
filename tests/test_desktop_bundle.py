@@ -566,14 +566,35 @@ def test_only_the_test_feed_lets_update_fetch_a_local_file(monkeypatch, tmp_path
     assert seen["allow_file"] is feed
 
 
-def test_selfcheck_builds_the_os_trust_store_context(monkeypatch, capsys):
-    # Importing truststore proves little in a frozen bundle; building its
-    # context reaches the OS's certificate APIs.
+def test_selfcheck_shakes_hands_through_the_os_trust_store(monkeypatch, capsys):
+    # truststore reaches the OS's certificate store only during a handshake,
+    # so building its context would prove nothing; the smoke test names a
+    # server, and a failed handshake fails the selfcheck.
     from scanpath_studio import updates
 
     def broken():
         raise RuntimeError("no certificate store")
 
     monkeypatch.setattr(updates, "_ssl_context", broken)
+    monkeypatch.setenv("SCANPATH_SELFCHECK_TLS_URL", "https://github.com/")
     assert launcher.selfcheck() == 1
     assert "trust store" in capsys.readouterr().out
+
+
+def test_an_http_answer_is_a_successful_handshake(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    def urlopen(url, timeout, context):
+        raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    assert launcher._tls_handshake_failure("https://github.com/") is None
+
+
+def test_the_smoke_test_asks_for_the_handshake():
+    import inspect
+
+    assert "SCANPATH_SELFCHECK_TLS_URL=TLS_URL" in inspect.getsource(
+        smoke_test._run_selfcheck
+    )

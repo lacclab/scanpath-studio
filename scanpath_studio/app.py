@@ -1621,6 +1621,10 @@ def _run_desktop_update(
             # Its handshake (up to HANDSHAKE_TIMEOUT_S) is the card's last
             # step, Restarting, and Cancel still stops it there.
             desktop_update.start_swap(plan)
+            # At once: the helper is waiting for this process to quit, and a
+            # rerun (a click on Cancel, now too late) would stop this script
+            # at its next Streamlit call, before a later exit_soon.
+            desktop_update.exit_soon()
     except desktop_update.UpdateFailed as error:
         message = str(error)
         if "nothing was changed" not in message.lower():
@@ -1632,7 +1636,6 @@ def _run_desktop_update(
         "(on Windows that can take a minute or two); you can close this one.",
         icon=ICONS["update"],
     )
-    desktop_update.exit_soon()
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------

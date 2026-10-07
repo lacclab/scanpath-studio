@@ -492,9 +492,16 @@ else:
 """
 
 
+#: Exited processes kept referenced: Windows reuses a pid only once every
+#: handle to its process is closed, and a reused one (the helper's own
+#: powershell.exe, say) would read as an app that never quits.
+_EXITED = []
+
+
 def _dead_pid():
     proc = subprocess.Popen([sys.executable, "-c", "pass"])
     proc.wait()
+    _EXITED.append(proc)
     return proc.pid
 
 
@@ -595,8 +602,8 @@ def _ps_file(shell):
 
 
 def _run_ps(plan, shell, **kwargs):
-    """The PowerShell helper for ``plan`` — under 5.1 exactly as `start_swap`
-    runs it, as an encoded command."""
+    """The PowerShell helper for ``plan`` — under 5.1 as `start_swap` runs
+    it: an encoded command, with a hidden console of its own."""
     script = plan.state / "helper.ps1"
     script.write_text(du.helper_script(plan), encoding="utf-8-sig")
     argv = (
@@ -604,6 +611,11 @@ def _run_ps(plan, shell, **kwargs):
         if shell == "pwsh"
         else du.helper_command(script, "win32")
     )
+    if sys.platform == "win32":
+        # A console of its own, as start_swap gives it: `-WindowStyle Hidden`
+        # would otherwise hide the console running the tests.
+        kwargs.setdefault("creationflags", 0x08000000 | 0x200)
+        kwargs.setdefault("stdin", subprocess.DEVNULL)
     return subprocess.run(argv, timeout=120, check=False, **kwargs)
 
 
@@ -1361,14 +1373,14 @@ def test_a_windows_install_its_acl_keeps_this_account_out_of_is_refused(
     tmp_path, cache_home, monkeypatch
 ):
     install = _install(tmp_path, "win32")
-    real = tempfile.mkstemp
+    real = tempfile.TemporaryFile
 
-    def mkstemp(**kwargs):
+    def temporary_file(**kwargs):
         if Path(kwargs["dir"]) == install.root:
             raise PermissionError(13, "Access is denied")
         return real(**kwargs)
 
-    monkeypatch.setattr(du.tempfile, "mkstemp", mkstemp)
+    monkeypatch.setattr(du.tempfile, "TemporaryFile", temporary_file)
     # os.access, which reads no ACL, says yes
     assert os.access(install.root, os.W_OK)
     assert "can't change" in du.refusal(_check(), install, machine="amd64")
@@ -1617,7 +1629,8 @@ def test_the_sh_helper_keeps_the_new_version_when_the_rollback_fails(
 def test_the_powershell_helper_keeps_the_new_version_when_the_rollback_fails(
     tmp_path, shell, mode, reason
 ):
-    plan = _swap_fixture(tmp_path, "win32", mode, boot_timeout_s=5.0)
+    # Time for a cold Python start under Defender to break the rollback first.
+    plan = _swap_fixture(tmp_path, "win32", mode, boot_timeout_s=15.0)
     try:
         done = _run_ps(plan, shell)
         assert done.returncode == 1

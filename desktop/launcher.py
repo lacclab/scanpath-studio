@@ -407,6 +407,23 @@ def _open_browser_when_ready(port: int) -> None:
         print(f"Could not open a browser automatically — open {url} yourself.")
 
 
+def _tls_handshake_failure(url: str) -> str | None:
+    """Why an HTTPS request to ``url`` through the update check's TLS context
+    failed, or ``None``: any HTTP answer means the handshake succeeded."""
+    import urllib.error
+    import urllib.request
+
+    from scanpath_studio.updates import _ssl_context
+
+    try:
+        with urllib.request.urlopen(url, timeout=30, context=_ssl_context()):
+            return None
+    except urllib.error.HTTPError:
+        return None
+    except Exception as error:
+        return str(error) or type(error).__name__
+
+
 def selfcheck() -> int:
     """Headless sanity pass over the frozen bundle; returns an exit code."""
     # Import the whole UI module tree (tabs, controls, wizard, the sortables
@@ -425,15 +442,16 @@ def selfcheck() -> int:
         return 1
 
     # #394: the update check and download (and dataset downloads, #391)
-    # verify GitHub against the OS's own certificate store. Build that context
-    # here, where the frozen truststore meets the real OS, not just imports it.
-    from scanpath_studio.updates import _ssl_context
-
-    try:
-        _ssl_context()
-    except Exception as error:
-        print(f"selfcheck FAILED: no TLS context from the OS trust store: {error}")
-        return 1
+    # verify GitHub against the OS's own certificate store. truststore reaches
+    # the OS only during a handshake, so the smoke test, which has a network,
+    # names a server to shake hands with; the staged copy's selfcheck during
+    # an update names none and skips this.
+    tls_url = os.environ.get("SCANPATH_SELFCHECK_TLS_URL", "").strip()
+    if tls_url:
+        failure = _tls_handshake_failure(tls_url)
+        if failure:
+            print(f"selfcheck FAILED: no TLS through the OS trust store: {failure}")
+            return 1
 
     words, fixations = api.load_sample_data()
     combos = api.list_trials(words, fixations)

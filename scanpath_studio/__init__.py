@@ -33,7 +33,12 @@ __all__ = [
     "save_figure",
     "save_figure_layers",
 ]
-__version__ = "0.35.0"
+# The release this tree descends from: the number `/release` bumps (with
+# CITATION.cff), `pyproject.toml` builds with, and publish.yml checks a tag
+# against. `__version__` is the exact build, worked out from it lazily
+# (build_info.py, #139) — "0.35.0" at the release itself,
+# "0.35.0.post3+g8f18219" three commits after it.
+__release__ = "0.35.0"
 
 # Public headless API (see api.py / datasets.py / eyegenbench.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
@@ -65,6 +70,12 @@ _API_EXPORTS = (
 
 
 def __getattr__(name: str):
+    if name == "__version__":
+        from .build_info import build_info
+
+        # Worked out once (it may run `git describe`), then a plain attribute.
+        globals()["__version__"] = build_info().version
+        return globals()["__version__"]
     if name in _API_EXPORTS:
         from . import api
 

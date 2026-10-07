@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -260,3 +261,25 @@ def test_every_install_kind_has_a_name():
         "uv",
         "pip",
     }
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_dunder_version_is_the_build():
+    import scanpath_studio
+
+    assert scanpath_studio.__version__ == bi.build_info().version
+    assert Version(scanpath_studio.__version__)  # always PEP 440
+
+
+def test_the_release_literal_is_what_builds_and_gates_read():
+    init = (ROOT / "scanpath_studio" / "__init__.py").read_text(encoding="utf-8")
+    assert re.search(r'^__release__ = "[^"]+"$', init, re.MULTILINE)
+    assert not re.search(r"^__version__ = ", init, re.MULTILINE)
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'attr = "scanpath_studio.__release__"' in pyproject
+    publish = (ROOT / ".github" / "workflows" / "publish.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "s/^__release__ = " in publish

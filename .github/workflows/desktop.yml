@@ -41,6 +41,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # #139: the spec stamps the bundle from `git describe`, which needs
+          # the tags — a dispatched build of main then reports its own build.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7

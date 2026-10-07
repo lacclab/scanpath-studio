@@ -105,8 +105,9 @@ Issues = "https://github.com/lacclab/scanpath-studio/issues"
 scanpath-studio = "scanpath_studio.cli:main"
 
 [tool.setuptools.dynamic]
-# Single source of truth for the version: scanpath_studio/__version__
-version = { attr = "scanpath_studio.__version__" }
+# Single source of truth for the release number: scanpath_studio.__release__
+# (`__version__` is the exact build, worked out from it at runtime — #139).
+version = { attr = "scanpath_studio.__release__" }
 
 [tool.setuptools]
 include-package-data = true

@@ -74,7 +74,7 @@ scanpath_studio/
 ├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache)
 ├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
-├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
+├─ __init__.py       exposes __release__ (the hand-set release), __version__ (the exact build, lazily — build_info.py), main(), and lazy re-exports of the api.py surface
 ├─ onestop_shard.py  one-shot prep: shard the ~15 GB OneStop lacclab CSVs into per-pid Parquet
 ├─ update_sample_data.py regenerate the bundled demo subset (+ synthesized raw-gaze overlay) from the full OneStop CSVs
 └─ sample_data/      bundled demo corpus (CSV + Parquet)
@@ -378,13 +378,15 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
 1. `python scripts/changelog_fragments.py release <version>` writes the
    `changelog.d/` fragments into a `CHANGELOG.md` section and deletes them
    (ENG-86).
-2. Bump `__version__` in `scanpath_studio/__init__.py` — the single source of
-   truth; `pyproject.toml` reads it dynamically (`[tool.setuptools.dynamic]`).
+2. Bump `__release__` in `scanpath_studio/__init__.py` — the single source of
+   truth for the release number; `pyproject.toml` reads it dynamically
+   (`[tool.setuptools.dynamic]`). `__version__` is worked out from it at
+   runtime (#139).
 3. Bump `version` + `date-released` in `CITATION.cff` to match
    (`tests/test_citation.py` enforces version parity).
 4. Commit on a branch and land it through a PR — `main` is protected. Once it
    has merged, tag the merge commit on `main` with `v<version>` and push the
-   tag (`publish.yml` refuses a tag that does not match `__version__`, ENG-62).
+   tag (`publish.yml` refuses a tag that does not match `__release__`, ENG-62).
 5. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
    publishes via PyPI Trusted Publishing (requires `pypi` environment set up
    on GitHub with the project name `scanpath-studio`).

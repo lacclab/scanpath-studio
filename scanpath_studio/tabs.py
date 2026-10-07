@@ -300,6 +300,7 @@ from scanpath_studio.plots import (
     animation_clip_frame_ms,
     animation_playback_ms,
     animation_timeline_summary,
+    apply_legend_layout,
     break_at_gaps,
     build_scanpath_replay,
     make_comparison_figure,
@@ -5400,6 +5401,9 @@ def _plan_replay(
         # stamped onto the cached replay in `finished_figure`, and toggling it
         # costs no frame rebuild.
         duration_size_legend=False,
+        # Where the legends sit is layout only too: applied to the finished
+        # figure in `finished_figure`, so moving a legend rebuilds no frame.
+        legend_layout=None,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5512,6 +5516,12 @@ def _build_and_render_animation(
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
+        apply_legend_layout(
+            fig,
+            animation_settings.legend_layout,
+            comparing=anim_inputs["fixations_b"] is not None
+            and not anim_inputs["fixations_b"].empty,
+        )
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")
         )
@@ -5543,6 +5553,8 @@ def _build_and_render_animation(
         title,
         caption,
         bool(animation_settings.duration_size_legend),
+        # Not in `anim_key` (the frames never read it), so the view keys on it.
+        repr(normalize_legend_layout(animation_settings.legend_layout)),
     )
     view = _cached_replay_view(
         clip_inputs,

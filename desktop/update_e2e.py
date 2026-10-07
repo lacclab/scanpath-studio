@@ -52,6 +52,14 @@ def _helper_log(state: Path) -> str:
         return "(no helper.log)"
 
 
+def _started_pid(state: Path) -> int | None:
+    """The pid a relaunched launcher last wrote to ``started``, if any is left."""
+    try:
+        return int((state / desktop_update.STARTED).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def _stop(pid: int | None) -> None:
     if not pid:
         return
@@ -116,9 +124,15 @@ def main() -> None:
     print(
         f"[update-e2e] {executable} --update  (offered: v{FAKE_VERSION} = {archive.name})"
     )
-    ran = subprocess.run(
-        [str(executable), "--update"], env=env, timeout=UPDATE_TIMEOUT_S
-    )
+    try:
+        ran = subprocess.run(
+            [str(executable), "--update"], env=env, timeout=UPDATE_TIMEOUT_S
+        )
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"[update-e2e] --update did not finish within {UPDATE_TIMEOUT_S:.0f}s; "
+            "helper log:\n" + _helper_log(state)
+        ) from None
     if ran.returncode != 0:
         raise SystemExit(f"[update-e2e] --update exited {ran.returncode}")
 
@@ -133,6 +147,9 @@ def main() -> None:
     print(f"[update-e2e] result: {result}")
     try:
         if result.status != "updated":
+            # Best effort: the helper relaunched the old version, which the
+            # smoke test after this must not find holding the port or files.
+            _stop(_started_pid(state))
             raise SystemExit(
                 "[update-e2e] update did not succeed; helper log:\n"
                 + _helper_log(state)

@@ -19,9 +19,13 @@ jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Worst case is roughly 75 minutes: two notarization submissions each
-    # allowed `--wait --timeout 30m`, plus the build and two smoke runs. 120
-    # leaves headroom without letting a genuinely hung job burn a runner.
+    # Worst case is roughly 100 minutes, on macOS: two notarization
+    # submissions each allowed `--wait --timeout 30m`, the build, three smoke
+    # runs (before and after stapling, and after the update), and the
+    # end-to-end update (`update_e2e.py` allows `--update` 15 minutes and the
+    # swap and relaunch 7 more). Windows has no notarization but adds the
+    # installer's smoke run. 120 leaves headroom without letting a genuinely
+    # hung job burn a runner.
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -273,6 +277,10 @@ jobs:
 
       - name: End-to-end update (macOS)
         if: runner.os == 'macOS' && steps.signing.outputs.enabled == 'true'
+        # The update installs the notarized .dmg's app, so the smoke run after
+        # it asserts the stapled ticket too, as "Re-verify the stapled bundle" does.
+        env:
+          SCANPATH_EXPECT_NOTARIZED: "1"
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/Applications"
@@ -298,8 +306,12 @@ jobs:
           $p = Start-Process -Wait -PassThru (Join-Path $dir 'unins000.exe') `
             -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
           if ($p.ExitCode) { throw "uninstaller exited with $($p.ExitCode)" }
-          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir '_internal')); $i++) { Start-Sleep 2 }
-          if (Test-Path (Join-Path $dir '_internal')) { throw "uninstall after the update left $dir\_internal behind" }
+          # The uninstaller re-launches itself from %TEMP% to delete its own
+          # file, so the removal can finish just after the first process exits.
+          foreach ($left in '_internal', 'unins000.exe') {
+            for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir $left)); $i++) { Start-Sleep 2 }
+            if (Test-Path (Join-Path $dir $left)) { throw "uninstall after the update left $dir\$left behind" }
+          }
 
       # Install silently the way a user would (per-user, no admin), boot the
       # installed copy, then uninstall and check it is gone.

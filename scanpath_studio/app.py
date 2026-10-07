@@ -42,6 +42,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
@@ -1482,12 +1483,19 @@ def _build_info():
     return build_info()
 
 
+#: #394: how long About goes on saying how the last update ended.
+LAST_UPDATE_SHOWN_S = 7 * 24 * 3600
+
+
 def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None:
     """#385: the outcome the update helper left behind, across the restart.
 
     Said only of the build that is running: a record that names neither
-    ``current`` version — a later install by hand — says nothing.
+    ``current`` version — a later install by hand — says nothing, and neither
+    does one older than ``LAST_UPDATE_SHOWN_S``.
     """
+    if last.at is not None and time.time() - last.at > LAST_UPDATE_SHOWN_S:
+        return
     because = f": {last.reason}" if last.reason else ""
     if last.status == "updated":
         if last.version == current:
@@ -1610,7 +1618,13 @@ def _run_desktop_update(
             ),
         ):
             plan = desktop_update.prepare(result, install)
-        desktop_update.start_swap(plan)
+            # Its handshake (up to HANDSHAKE_TIMEOUT_S) is the card's last
+            # step, Restarting, and Cancel still stops it there.
+            desktop_update.start_swap(plan)
+            # At once: the helper is waiting for this process to quit, and a
+            # rerun (a click on Cancel, now too late) would stop this script
+            # at its next Streamlit call, before a later exit_soon.
+            desktop_update.exit_soon()
     except desktop_update.UpdateFailed as error:
         message = str(error)
         if "nothing was changed" not in message.lower():
@@ -1622,7 +1636,6 @@ def _run_desktop_update(
         "(on Windows that can take a minute or two); you can close this one.",
         icon=ICONS["update"],
     )
-    desktop_update.exit_soon()
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------

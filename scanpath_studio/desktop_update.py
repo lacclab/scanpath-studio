@@ -24,13 +24,16 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import math
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tarfile
+import threading
 import time
 import urllib.request
 import zipfile
@@ -543,3 +546,518 @@ def self_test(
         timeout=SELFCHECK_TIMEOUT_S,
         env=env,
     )
+
+
+#: How long the relaunched version has to answer before the old one is put
+#: back — Windows' first-launch scan of a new bundle can take that long.
+BOOT_TIMEOUT_S = 180
+#: How long the helper waits for this process to exit before giving up.
+QUIT_TIMEOUT_S = 60
+#: Between "Restarting into vX" and the exit, so the message reaches the browser.
+RESTART_DELAY_S = 2.0
+#: Launch settings the relaunched app keeps; ``open -n`` starts it with a
+#: fresh environment, so on macOS they are passed on explicitly.
+FORWARDED_ENV = (
+    "SCANPATH_DESKTOP_PORT",
+    "SCANPATH_DESKTOP_NO_BROWSER",
+    "SCANPATH_DESKTOP_BROWSER",
+    "SCANPATH_DESKTOP_NO_LOG_FILE",
+    "SCANPATH_DESKTOP_IDLE_EXIT_S",
+)
+#: The Windows installer's uninstall entry (desktop/windows_installer.iss's
+#: AppId), whose DisplayVersion the helper brings up to date.
+UNINSTALL_KEY = (
+    "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
+    "{6F1C9A52-3B7E-4D21-9C8A-5E2F4B7D1A93}_is1"
+)
+#: What one attempt leaves in the state folder; ``helper.log`` stays for a bug report.
+_ATTEMPT_FOLDERS = ("download", "staged", "old", "failed")
+_ATTEMPT_FILES = (PENDING, "started", "booted", "result.json")
+
+
+@dataclass(frozen=True)
+class SwapPlan:
+    """Everything the helper needs: whom to wait for, what to swap, how to relaunch."""
+
+    pid: int
+    install: Install
+    staged: Path
+    state: Path
+    version: str
+    previous: str
+    relaunch: tuple[str, ...]
+    boot_timeout_s: float = BOOT_TIMEOUT_S
+    quit_timeout_s: float = QUIT_TIMEOUT_S
+
+
+@dataclass(frozen=True)
+class UpdateResult:
+    """How the last update ended: ``updated``, ``rolled_back`` or ``failed``."""
+
+    status: str
+    version: str
+    previous: str
+    reason: str = ""
+    pid: int | None = None
+
+
+def relaunch_command(
+    install: Install, env: Mapping[str, str] | None = None
+) -> tuple[str, ...]:
+    """How the helper starts the app again: through Launch Services on macOS."""
+    if install.system != "darwin":
+        return (str(install.executable),)
+    env = os.environ if env is None else env
+    forwarded = [
+        item
+        for name in FORWARDED_ENV
+        if name in env
+        for item in ("--env", f"{name}={env[name]}")
+    ]
+    return ("open", "-n", *forwarded, str(install.root))
+
+
+_SH_HELPER = r"""#!/bin/sh
+# Scanpath Studio's update helper (#385), written by desktop_update.helper_script.
+# Waits for the app to quit, swaps the new version in, relaunches it, and puts
+# the old version back if the new one never reports in.
+APP_PID=@@PID@@
+ROOT=@@ROOT@@
+STATE=@@STATE@@
+NEW=@@NEW@@
+ENTRIES=@@ENTRIES@@
+QUIT_TICKS=@@QUIT_TICKS@@
+BOOT_TICKS=@@BOOT_TICKS@@
+BOOT_TIMEOUT=@@BOOT_TIMEOUT@@
+VERSION=@@VERSION@@
+PREVIOUS=@@PREVIOUS@@
+
+result() {
+  printf '{"status": "%s", "version": "%s", "previous": "%s", "reason": "%s", "pid": %s}\n' \
+    "$1" "$VERSION" "$PREVIOUS" "$2" "${3:-null}" > "$STATE/result.json.tmp" &&
+    mv -f "$STATE/result.json.tmp" "$STATE/result.json"
+}
+
+relaunch() {
+  nohup @@RELAUNCH@@ >/dev/null 2>&1 &
+}
+
+# Move every entry from $1 to $2; on a failure put back what moved.
+move_all() {
+  moved=""
+  for entry in $ENTRIES; do
+    if mv "$1/$entry" "$2/$entry"; then
+      moved="$moved $entry"
+    else
+      for back in $moved; do mv "$2/$back" "$1/$back"; done
+      return 1
+    fi
+  done
+}
+
+ticks=0
+while kill -0 "$APP_PID" 2>/dev/null; do
+  if [ "$ticks" -ge "$QUIT_TICKS" ]; then
+    result failed "the app did not quit"
+    exit 1
+  fi
+  sleep 0.5
+  ticks=$((ticks + 1))
+done
+
+rm -rf "$STATE/old" "$STATE/failed"
+rm -f "$STATE/started" "$STATE/booted"
+if ! mkdir "$STATE/old" "$STATE/failed"; then
+  result failed "the update folder could not be prepared"
+  relaunch
+  exit 1
+fi
+if ! move_all "$ROOT" "$STATE/old"; then
+  result failed "the old version could not be moved aside"
+  relaunch
+  exit 1
+fi
+if ! move_all "$NEW" "$ROOT"; then
+  move_all "$STATE/old" "$ROOT"
+  result failed "the new version could not be moved into place"
+  relaunch
+  exit 1
+fi
+touch "$ROOT"
+relaunch
+
+ticks=0
+while [ ! -e "$STATE/booted" ]; do
+  if [ "$ticks" -ge "$BOOT_TICKS" ]; then
+    new_pid=$(cat "$STATE/started" 2>/dev/null)
+    if [ -n "$new_pid" ]; then
+      kill "$new_pid" 2>/dev/null
+      sleep 2
+      kill -9 "$new_pid" 2>/dev/null
+    fi
+    rm -f "$STATE/@@PENDING@@" "$STATE/started"
+    if move_all "$ROOT" "$STATE/failed" && move_all "$STATE/old" "$ROOT"; then
+      result rolled_back "the new version did not start within $BOOT_TIMEOUT seconds"
+    else
+      result failed "the new version did not start, and the old one could not be put back"
+    fi
+    touch "$ROOT"
+    relaunch
+    rm -rf "$STATE/failed" "$STATE/staged" "$STATE/download"
+    exit 1
+  fi
+  sleep 0.5
+  ticks=$((ticks + 1))
+done
+
+new_pid=$(cat "$STATE/started" 2>/dev/null)
+result updated "" "${new_pid:-null}"
+rm -rf "$STATE/old" "$STATE/failed" "$STATE/staged" "$STATE/download"
+rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted"
+"""
+
+_PS_HELPER = r"""# Scanpath Studio's update helper (#385), written by desktop_update.helper_script.
+# Waits for the app to quit, swaps the new version in, relaunches it, and puts
+# the old version back if the new one never reports in. Windows PowerShell 5.1.
+$AppPid = @@PID@@
+$Root = @@ROOT@@
+$State = @@STATE@@
+$New = @@NEW@@
+$Entries = @(@@ENTRIES@@)
+$QuitTimeoutMs = @@QUIT_MS@@
+$BootTicks = @@BOOT_TICKS@@
+$BootTimeout = @@BOOT_TIMEOUT@@
+$Version = @@VERSION@@
+$Previous = @@PREVIOUS@@
+$Relaunch = @(@@RELAUNCH@@)
+$UninstallKey = @@UNINSTALL_KEY@@
+$Pending = @@PENDING@@
+
+function Write-Result($Status, $Reason, $NewPid) {
+  $record = [ordered]@{ status = $Status; version = $Version; previous = $Previous; reason = $Reason; pid = $NewPid }
+  $tmp = Join-Path $State 'result.json.tmp'
+  [IO.File]::WriteAllText($tmp, ($record | ConvertTo-Json -Compress))
+  Move-Item -LiteralPath $tmp -Destination (Join-Path $State 'result.json') -Force
+}
+
+function Start-App {
+  $rest = @($Relaunch | Select-Object -Skip 1 | ForEach-Object { '"' + $_ + '"' })
+  if ($rest.Count) {
+    Start-Process -FilePath $Relaunch[0] -ArgumentList $rest -WorkingDirectory $Root
+  } else {
+    Start-Process -FilePath $Relaunch[0] -WorkingDirectory $Root
+  }
+}
+
+# Move every entry from $From to $To, retrying while antivirus holds a file;
+# on a failure put back what moved.
+function Move-All($From, $To) {
+  $moved = @()
+  foreach ($entry in $Entries) {
+    $done = $false
+    for ($try = 0; $try -lt 60 -and -not $done; $try++) {
+      try {
+        Move-Item -LiteralPath (Join-Path $From $entry) -Destination (Join-Path $To $entry) -ErrorAction Stop
+        $done = $true
+      } catch {
+        Start-Sleep -Milliseconds 500
+      }
+    }
+    if (-not $done) {
+      foreach ($back in $moved) {
+        Move-Item -LiteralPath (Join-Path $To $back) -Destination (Join-Path $From $back) -ErrorAction SilentlyContinue
+      }
+      return $false
+    }
+    $moved += $entry
+  }
+  return $true
+}
+
+function Read-NewPid {
+  $file = Join-Path $State 'started'
+  if (Test-Path -LiteralPath $file) { return [int](Get-Content -LiteralPath $file -Raw).Trim() }
+  return $null
+}
+
+$app = Get-Process -Id $AppPid -ErrorAction SilentlyContinue
+if ($app -and -not $app.WaitForExit($QuitTimeoutMs)) {
+  Write-Result 'failed' 'the app did not quit' $null
+  exit 1
+}
+
+foreach ($name in 'old', 'failed') {
+  $path = Join-Path $State $name
+  if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+  New-Item -ItemType Directory -Path $path | Out-Null
+}
+foreach ($name in 'started', 'booted') {
+  Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
+}
+if (-not (Move-All $Root (Join-Path $State 'old'))) {
+  Write-Result 'failed' 'the old version could not be moved aside' $null
+  Start-App
+  exit 1
+}
+if (-not (Move-All $New $Root)) {
+  Move-All (Join-Path $State 'old') $Root | Out-Null
+  Write-Result 'failed' 'the new version could not be moved into place' $null
+  Start-App
+  exit 1
+}
+Start-App
+
+$ticks = 0
+while (-not (Test-Path -LiteralPath (Join-Path $State 'booted'))) {
+  if ($ticks -ge $BootTicks) {
+    $newPid = Read-NewPid
+    if ($newPid) {
+      Stop-Process -Id $newPid -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 2
+    }
+    Remove-Item -LiteralPath (Join-Path $State $Pending), (Join-Path $State 'started') -Force -ErrorAction SilentlyContinue
+    if ((Move-All $Root (Join-Path $State 'failed')) -and (Move-All (Join-Path $State 'old') $Root)) {
+      Write-Result 'rolled_back' "the new version did not start within $BootTimeout seconds" $null
+    } else {
+      Write-Result 'failed' 'the new version did not start, and the old one could not be put back' $null
+    }
+    Start-App
+    foreach ($name in 'failed', 'staged', 'download') {
+      Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    exit 1
+  }
+  Start-Sleep -Milliseconds 500
+  $ticks++
+}
+
+Write-Result 'updated' '' (Read-NewPid)
+if ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath $UninstallKey)) {
+  try {
+    $location = (Get-ItemProperty -LiteralPath $UninstallKey).InstallLocation
+    if ($location -and $location.TrimEnd('\') -eq $Root.TrimEnd('\')) {
+      Set-ItemProperty -LiteralPath $UninstallKey -Name DisplayVersion -Value $Version
+    }
+  } catch { }
+}
+foreach ($name in 'old', 'failed', 'staged', 'download', $Pending, 'started', 'booted') {
+  Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
+}
+"""
+
+_PLAIN_VERSION = re.compile(r"[0-9A-Za-z.+!_-]+")
+
+
+def _ps_quote(text: str) -> str:
+    return "'" + str(text).replace("'", "''") + "'"
+
+
+def helper_script(plan: SwapPlan) -> str:
+    """The helper for ``plan``: PowerShell on Windows, POSIX ``sh`` elsewhere.
+
+    Values are substituted quoted for their shell. The two versions also
+    land inside the result JSON unescaped, so they must be plain version
+    strings.
+    """
+    for version in (plan.version, plan.previous):
+        if not _PLAIN_VERSION.fullmatch(version):
+            raise ValueError(f"not a plain version: {version!r}")
+    boot_ticks = math.ceil(plan.boot_timeout_s * 2)
+    if plan.install.system == "win32":
+        values = {
+            "PID": str(plan.pid),
+            "ROOT": _ps_quote(plan.install.root),
+            "STATE": _ps_quote(plan.state),
+            "NEW": _ps_quote(plan.staged),
+            "ENTRIES": ", ".join(_ps_quote(entry) for entry in plan.install.payload),
+            "QUIT_MS": str(math.ceil(plan.quit_timeout_s * 1000)),
+            "BOOT_TICKS": str(boot_ticks),
+            "BOOT_TIMEOUT": str(math.ceil(plan.boot_timeout_s)),
+            "VERSION": _ps_quote(plan.version),
+            "PREVIOUS": _ps_quote(plan.previous),
+            "RELAUNCH": ", ".join(_ps_quote(arg) for arg in plan.relaunch),
+            "UNINSTALL_KEY": _ps_quote(UNINSTALL_KEY),
+            "PENDING": _ps_quote(PENDING),
+        }
+        template = _PS_HELPER
+    else:
+        values = {
+            "PID": str(plan.pid),
+            "ROOT": shlex.quote(str(plan.install.root)),
+            "STATE": shlex.quote(str(plan.state)),
+            "NEW": shlex.quote(str(plan.staged)),
+            "ENTRIES": shlex.quote(" ".join(plan.install.payload)),
+            "QUIT_TICKS": str(math.ceil(plan.quit_timeout_s * 2)),
+            "BOOT_TICKS": str(boot_ticks),
+            "BOOT_TIMEOUT": str(math.ceil(plan.boot_timeout_s)),
+            "VERSION": shlex.quote(plan.version),
+            "PREVIOUS": shlex.quote(plan.previous),
+            "RELAUNCH": " ".join(shlex.quote(arg) for arg in plan.relaunch),
+            "PENDING": PENDING,
+        }
+        template = _SH_HELPER
+    for name, value in values.items():
+        template = template.replace(f"@@{name}@@", value)
+    return template
+
+
+def helper_command(script: Path, system: str) -> list[str]:
+    """How to run the helper script on ``system``."""
+    if system == "win32":
+        return [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-File",
+            str(script),
+        ]
+    return ["/bin/sh", str(script)]
+
+
+def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
+    """Record the attempt and start the helper, detached; the caller then exits.
+
+    The helper's output goes to ``helper.log`` in the state folder, which
+    stays after the attempt for a bug report.
+    """
+    pending = plan.state / PENDING
+    _write_json(
+        pending,
+        {
+            "root": str(plan.install.root),
+            "version": plan.version,
+            "previous": plan.previous,
+            "at": time.time(),
+        },
+    )
+    windows = plan.install.system == "win32"
+    script = plan.state / ("helper.ps1" if windows else "helper.sh")
+    # Windows PowerShell 5.1 reads a file without a BOM in the ANSI code page,
+    # which would garble a non-ASCII user folder.
+    script.write_text(helper_script(plan), encoding="utf-8-sig" if windows else "utf-8")
+    if windows:
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200
+        )
+        detach = {"creationflags": flags}
+    else:
+        detach = {"start_new_session": True}
+    try:
+        with open(plan.state / "helper.log", "w", encoding="utf-8") as log:
+            popen(
+                helper_command(script, plan.install.system),
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                env=child_env(),
+                **detach,
+            )
+    except OSError as error:
+        pending.unlink(missing_ok=True)
+        raise UpdateFailed(
+            "The helper that swaps the versions couldn't be started."
+        ) from error
+
+
+def clear_attempt(state: Path) -> None:
+    """Remove what an earlier attempt left, keeping only ``helper.log``."""
+    for name in _ATTEMPT_FOLDERS:
+        shutil.rmtree(state / name, ignore_errors=True)
+    for name in _ATTEMPT_FILES:
+        (state / name).unlink(missing_ok=True)
+
+
+def _ours(state: Path, install: Install) -> bool:
+    pending = _pending(state)
+    return pending is not None and pending.get("root") == str(install.root)
+
+
+def note_start(
+    install: Install | None = None,
+    *,
+    state: Path | None = None,
+    pid: int | None = None,
+) -> None:
+    """At launch: if a helper is waiting for this install, say which process we are.
+
+    Never raises: a launch must not fail over an update's bookkeeping.
+    """
+    try:
+        install = current_install() if install is None else install
+        if install is None:
+            return
+        state = state_dir(install) if state is None else state
+        if _ours(state, install):
+            (state / "started").write_text(
+                str(os.getpid() if pid is None else pid), encoding="utf-8"
+            )
+    except Exception:
+        pass
+
+
+def note_boot(install: Install | None = None, *, state: Path | None = None) -> None:
+    """Once the server answers: confirm a pending update, or clear an abandoned one.
+
+    Never raises. An attempt is abandoned when no helper is waiting on it
+    and its files are older than ``STALE_AFTER_S``: a cancelled download, a
+    failed self-test, or a helper that died.
+    """
+    try:
+        install = current_install() if install is None else install
+        if install is None:
+            return
+        state = state_dir(install) if state is None else state
+        if _ours(state, install):
+            (state / "booted").write_text("", encoding="utf-8")
+            return
+        cutoff = time.time() - STALE_AFTER_S
+        for name in (*_ATTEMPT_FOLDERS, PENDING, "started", "booted"):
+            path = state / name
+            if path.exists() and path.stat().st_mtime < cutoff:
+                if path.is_dir():
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def last_result(
+    install: Install | None = None, *, state: Path | None = None
+) -> UpdateResult | None:
+    """How the last update on this install ended — ``None`` if there is no record."""
+    try:
+        if state is None:
+            install = current_install() if install is None else install
+            if install is None:
+                return None
+            state = state_dir(install)
+        data = _read_json(state / "result.json")
+        if data is None:
+            return None
+        pid = data.get("pid")
+        return UpdateResult(
+            status=str(data["status"]),
+            version=str(data["version"]),
+            previous=str(data["previous"]),
+            reason=str(data.get("reason") or ""),
+            pid=int(pid) if pid not in (None, "") else None,
+        )
+    except Exception:
+        return None
+
+
+def exit_soon(delay: float = RESTART_DELAY_S) -> None:
+    """Quit this process ``delay`` seconds from now, the way the idle watcher does.
+
+    The server runs in this process and owns the main thread, so
+    ``os._exit`` from a timer is the only way out; the delay lets the
+    "Restarting" message reach the browser first.
+    """
+    timer = threading.Timer(delay, os._exit, args=(0,))
+    timer.daemon = True
+    timer.start()

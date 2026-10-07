@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 import zipfile
@@ -453,3 +455,275 @@ def test_a_failed_self_test_refuses_the_update(tmp_path):
 
     with pytest.raises(du.UpdateFailed, match="self-test"):
         du.self_test(tmp_path, "linux", run=run)
+
+
+FAKE_APP = """
+import os, sys, time
+from pathlib import Path
+state, mode = Path(sys.argv[1]), sys.argv[2]
+with open(state / "launches", "a") as log:
+    log.write(f"{os.getpid()}\\n")
+(state / "started").write_text(str(os.getpid()))
+if mode == "boot":
+    (state / "booted").write_text("")
+else:
+    time.sleep(30)
+"""
+
+
+def _dead_pid():
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait()
+    return proc.pid
+
+
+def _swap_fixture(tmp_path, system, mode, boot_timeout_s=30.0):
+    """An installed v1, a staged v2, and a plan whose relaunch is the fake app."""
+    install = _install(tmp_path / "i", system)
+    for entry in install.payload:
+        path = install.root / entry
+        if entry == "_internal":
+            (path / "old.txt").write_text("v1")
+    state = tmp_path / "state"
+    staged = state / "staged" / "ScanpathStudio"
+    for entry in install.payload:
+        if entry == "_internal":
+            (staged / entry).mkdir(parents=True)
+            (staged / entry / "new.txt").write_text("v2")
+        else:
+            staged.mkdir(parents=True, exist_ok=True)
+            (staged / entry).write_text("v2")
+    fake = tmp_path / "fake_app.py"
+    fake.write_text(FAKE_APP)
+    plan = du.SwapPlan(
+        pid=_dead_pid(),
+        install=install,
+        staged=staged,
+        state=state,
+        version="99.0.0",
+        previous="0.36.0",
+        relaunch=(sys.executable, str(fake), str(state), mode),
+        boot_timeout_s=boot_timeout_s,
+        quit_timeout_s=5.0,
+    )
+    du._write_json(state / du.PENDING, {"root": str(install.root), "at": time.time()})
+    return plan
+
+
+def _kill_launched(state):
+    for line in (
+        (state / "launches").read_text().split()
+        if (state / "launches").exists()
+        else []
+    ):
+        try:
+            os.kill(int(line), 9)
+        except OSError:
+            pass
+
+
+def _wait_for(path, seconds=20.0):
+    deadline = time.monotonic() + seconds
+    while not path.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+
+
+def _run_helper(plan, argv):
+    script = plan.state / (
+        "helper.ps1" if plan.install.system == "win32" else "helper.sh"
+    )
+    script.write_text(
+        du.helper_script(plan),
+        encoding="utf-8-sig" if plan.install.system == "win32" else "utf-8",
+    )
+    return subprocess.run([*argv, str(script)], timeout=120, check=False)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_swaps_relaunches_and_cleans_up(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    try:
+        done = _run_helper(plan, ["/bin/sh"])
+        assert done.returncode == 0
+        root = plan.install.root
+        assert (root / "ScanpathStudio").read_text() == "v2"
+        assert (root / "_internal" / "new.txt").exists()
+        result = du.last_result(state=plan.state)
+        assert result.status == "updated" and result.version == "99.0.0"
+        assert result.pid is not None
+        for leftover in ("old", "failed", "staged", du.PENDING, "started", "booted"):
+            assert not (plan.state / leftover).exists(), leftover
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_rolls_back_when_the_new_version_never_boots(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "hang", boot_timeout_s=2.0)
+    try:
+        done = _run_helper(plan, ["/bin/sh"])
+        assert done.returncode == 1
+        root = plan.install.root
+        assert (root / "ScanpathStudio").read_text() == "v1"
+        assert (root / "_internal" / "old.txt").exists()
+        result = du.last_result(state=plan.state)
+        assert result.status == "rolled_back"
+        assert "did not start" in result.reason
+        # the old version was relaunched after the rollback
+        _wait_for(plan.state / "started")
+        assert len((plan.state / "launches").read_text().split()) == 2
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+def test_the_powershell_helper_swaps_relaunches_and_cleans_up(tmp_path):
+    plan = _swap_fixture(tmp_path, "win32", "boot")
+    try:
+        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        assert done.returncode == 0
+        assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v2"
+        assert du.last_result(state=plan.state).status == "updated"
+        assert not (plan.state / "old").exists()
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+def test_the_powershell_helper_rolls_back(tmp_path):
+    plan = _swap_fixture(tmp_path, "win32", "hang", boot_timeout_s=2.0)
+    try:
+        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        assert done.returncode == 1
+        assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v1"
+        assert du.last_result(state=plan.state).status == "rolled_back"
+    finally:
+        _kill_launched(plan.state)
+
+
+def test_the_sh_helper_quotes_awkward_paths(tmp_path):
+    plan = _swap_fixture(tmp_path / "it's a dir", "linux", "boot")
+    script = tmp_path / "helper.sh"
+    script.write_text(du.helper_script(plan))
+    if shutil.which("sh"):
+        assert subprocess.run(["sh", "-n", str(script)], check=False).returncode == 0
+    assert "'\"'\"'" in script.read_text()  # shlex.quote's escape of the '
+
+
+def test_the_powershell_helper_quotes_awkward_paths(tmp_path):
+    plan = _swap_fixture(tmp_path / "it's a dir", "win32", "boot")
+    text = du.helper_script(plan)
+    assert "it''s a dir" in text
+    assert du.UNINSTALL_KEY in text
+
+
+def test_helper_versions_must_be_plain(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    bad = du.SwapPlan(**{**plan.__dict__, "version": '1"; rm -rf /'})
+    with pytest.raises(ValueError):
+        du.helper_script(bad)
+
+
+def test_relaunch_command_per_os(tmp_path):
+    mac = du.install_at(
+        Path("/Applications/ScanpathStudio.app/Contents/MacOS/ScanpathStudio"), "darwin"
+    )
+    env = {"SCANPATH_DESKTOP_NO_BROWSER": "1", "UNRELATED": "x"}
+    assert du.relaunch_command(mac, env) == (
+        "open",
+        "-n",
+        "--env",
+        "SCANPATH_DESKTOP_NO_BROWSER=1",
+        "/Applications/ScanpathStudio.app",
+    )
+    linux = du.install_at(Path("/opt/ScanpathStudio/ScanpathStudio"), "linux")
+    assert du.relaunch_command(linux, env) == ("/opt/ScanpathStudio/ScanpathStudio",)
+
+
+def test_start_swap_records_the_attempt_and_detaches(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    (plan.state / du.PENDING).unlink()
+    seen = {}
+
+    def popen(argv, **kwargs):
+        seen["argv"], seen["kwargs"] = argv, kwargs
+
+    du.start_swap(plan, popen=popen)
+    assert du._read_json(plan.state / du.PENDING)["root"] == str(plan.install.root)
+    assert seen["argv"] == ["/bin/sh", str(plan.state / "helper.sh")]
+    assert seen["kwargs"]["start_new_session"] is True
+    assert seen["kwargs"]["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+
+
+def test_a_helper_that_cannot_start_leaves_no_attempt(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+
+    def popen(argv, **kwargs):
+        raise OSError("no sh")
+
+    with pytest.raises(du.UpdateFailed):
+        du.start_swap(plan, popen=popen)
+    assert not (plan.state / du.PENDING).exists()
+
+
+def test_the_relaunched_app_reports_in_for_its_own_install(tmp_path):
+    install = _install(tmp_path)
+    state = tmp_path / "state"
+    state.mkdir()
+    du._write_json(state / du.PENDING, {"root": str(install.root), "at": time.time()})
+    du.note_start(install, state=state, pid=4242)
+    assert (state / "started").read_text() == "4242"
+    du.note_boot(install, state=state)
+    assert (state / "booted").exists()
+
+
+def test_another_installs_attempt_is_left_alone(tmp_path):
+    install = _install(tmp_path)
+    state = tmp_path / "state"
+    state.mkdir()
+    du._write_json(state / du.PENDING, {"root": "/somewhere/else", "at": time.time()})
+    du.note_start(install, state=state, pid=1)
+    du.note_boot(install, state=state)
+    assert not (state / "started").exists() and not (state / "booted").exists()
+
+
+def test_an_abandoned_attempt_is_cleared_at_boot(tmp_path):
+    install = _install(tmp_path)
+    state = tmp_path / "state"
+    (state / "staged").mkdir(parents=True)
+    (state / "download").mkdir()
+    old = time.time() - du.STALE_AFTER_S - 10
+    os.utime(state / "staged", (old, old))
+    os.utime(state / "download", (old, old))
+    du._write_json(
+        state / "result.json", {"status": "failed", "version": "1", "previous": "0"}
+    )
+    du.note_boot(install, state=state)
+    assert not (state / "staged").exists() and not (state / "download").exists()
+    assert (state / "result.json").exists()
+
+
+def test_a_recent_attempt_is_not_cleared(tmp_path):
+    install = _install(tmp_path)
+    state = tmp_path / "state"
+    (state / "staged").mkdir(parents=True)
+    du.note_boot(install, state=state)
+    assert (state / "staged").exists()
+
+
+def test_the_boot_hooks_never_raise(tmp_path, monkeypatch):
+    monkeypatch.setattr(du, "state_dir", lambda install: 1 / 0)
+    install = _install(tmp_path)
+    du.note_start(install)
+    du.note_boot(install)
+    assert du.last_result(install) is None
+
+
+def test_clear_attempt_keeps_only_the_log(tmp_path):
+    state = tmp_path / "state"
+    for folder in ("download", "staged", "old", "failed"):
+        (state / folder).mkdir(parents=True)
+    for name in (du.PENDING, "started", "booted", "result.json", "helper.log"):
+        (state / name).write_text("x")
+    du.clear_attempt(state)
+    assert sorted(path.name for path in state.iterdir()) == ["helper.log"]

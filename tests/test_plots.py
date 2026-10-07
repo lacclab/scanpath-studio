@@ -2,6 +2,7 @@
 
 from itertools import pairwise
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
@@ -13,6 +14,7 @@ from scanpath_studio.plots import (
     _image_to_data_uri,
     _latin_advance,
     _line_pitch,
+    _padded_monospace_font,
     _png_pixel_size,
     _saccade_arrow_markers,
     _width_fit_font,
@@ -2551,6 +2553,64 @@ class TestTrueToScaleText:
             line_spacing=10.0,
         )
         assert self._label_size(a) == pytest.approx(self._label_size(b))
+
+
+class TestPaddedMonospaceFont:
+    """A monospace box holding its word plus half the gap either side gives the
+    font exactly: the slope of box width over word length is one character
+    cell. Neither a line-spacing guess nor a safety margin may shrink it."""
+
+    CELL = 21.6  # 18 px Courier (0.6 em) drawn at 2 device px per CSS px
+
+    def _layout(self, lines, *, pad_cells=1.0, cross=False):
+        rows, y = [], 20.0
+        for line in lines:
+            x = 20.0
+            if cross:
+                rows.append(dict(text="+", x=x, y=y, width=self.CELL, height=99.0))
+            for k, word in enumerate(line):
+                cells = len(word) + (pad_cells / 2 if k == 0 else pad_cells)
+                rows.append(
+                    dict(text=word, x=x, y=y, width=cells * self.CELL, height=99.0)
+                )
+                x += cells * self.CELL
+            y += 99.0
+            cross = False
+        return pd.DataFrame(rows)
+
+    LINES = [
+        ["Since", "the", "2008", "financial", "crisis,", "the", "gap"],
+        ["between", "the", "rich", "and", "the", "poor", "has", "grown"],
+        ["and", "the", "situation", "has", "gotten", "worse"],
+    ]
+
+    def test_half_a_space_each_side_reads_the_font_exactly(self):
+        words = self._layout(self.LINES, cross=True)
+        assert _padded_monospace_font(words) == pytest.approx(self.CELL / 0.6)
+
+    def test_extra_word_spacing_is_padding_too(self):
+        words = self._layout(self.LINES, pad_cells=3.0)
+        assert _padded_monospace_font(words) == pytest.approx(self.CELL / 0.6)
+
+    def test_the_label_is_not_shrunk_by_line_spacing_or_margin(self):
+        words = self._layout(self.LINES)
+        font = _word_label_font_px(
+            words,
+            scale=1.0,
+            line_spacing=3.0,
+            manual_font_px=10,
+            scale_text_to_boxes=True,
+        )
+        assert font == pytest.approx(self.CELL / 0.6)
+
+    def test_boxes_that_disagree_fall_back(self):
+        words = self._layout(self.LINES)
+        rng = np.random.default_rng(0)
+        words["width"] = words["width"] * rng.uniform(0.7, 1.3, len(words))
+        assert _padded_monospace_font(words) is None
+
+    def test_one_word_length_is_not_enough(self, normalized_words_df):
+        assert _padded_monospace_font(normalized_words_df) is None
 
 
 class TestLinePitchAndScript:

@@ -1,0 +1,1 @@
+Dataset downloads now trust the certificates your operating system trusts, so they no longer fail with CERTIFICATE_VERIFY_FAILED on a python.org Python on macOS or behind a network that inspects HTTPS.

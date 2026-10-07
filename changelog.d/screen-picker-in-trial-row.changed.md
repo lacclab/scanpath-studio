@@ -1,1 +1,0 @@
-The screen picker sits at the right end of the trial row as a compact dropdown with ◀ ▶, instead of a row of its own under each trial row, with the sort, filter and chips menus after it at the row's end.

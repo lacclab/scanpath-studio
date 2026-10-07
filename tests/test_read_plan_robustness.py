@@ -266,6 +266,31 @@ class TestFilesTheReadersUsedToRefuse:
         frame = read_table(path, plan=_plan(read_table_columns(path)))
         assert frame["IA_LABEL"].tolist() == ["Straße"]
 
+    @pytest.mark.parametrize("name", ["fixations.tsv", "fixations.txt"])
+    def test_a_utf16_data_viewer_export_reads(self, tmp_path, name):
+        """Data Viewer writes UTF-16 with a BOM; the Latin-1 fallback used to
+        read it as one garbled column and ``Unnamed: n`` for the rest."""
+        path = tmp_path / name
+        body = pd.DataFrame({**CORE, "IA_LABEL": ["Straße"]}).to_csv(
+            index=False, sep="\t"
+        )
+        path.write_bytes(body.encode("utf-16"))
+        columns = read_table_columns(path)
+        assert columns == list(CORE)
+        frame = read_table(path, plan=_plan(columns))
+        assert frame["IA_LABEL"].tolist() == ["Straße"]
+
+    def test_a_utf16_export_inside_a_zip_reads(self, tmp_path):
+        path = tmp_path / "fixations.zip"
+        body = pd.DataFrame({**CORE, "IA_LABEL": ["Straße"]}).to_csv(
+            index=False, sep="\t"
+        )
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("fixations.txt", body.encode("utf-16"))
+        assert read_table_columns(path) == list(CORE)
+        frame = read_table(path, plan=_plan(read_table_columns(path)))
+        assert frame["IA_LABEL"].tolist() == ["Straße"]
+
     def test_an_empty_file_says_it_is_empty(self, tmp_path):
         path = tmp_path / "empty.csv"
         path.write_bytes(b"")

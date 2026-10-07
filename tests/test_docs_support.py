@@ -32,6 +32,7 @@ from scanpath_studio import api, cli, tour  # noqa: E402
         ("corpus", cli._corpus_parser),
         ("check", cli._check_parser),
         ("cache", cli._cache_parser),
+        ("version", cli._version_parser),
     ],
 )
 def test_the_cli_reference_lists_every_flag(command, parser):

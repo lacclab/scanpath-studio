@@ -3957,6 +3957,60 @@ def cache(argv: list[str]) -> None:
     print("Delete with `scanpath-studio cache --clear`.")
 
 
+def _version_parser() -> argparse.ArgumentParser:
+    """The `version` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio version",
+        description="Show which build of Scanpath Studio this is and how it was "
+        "installed. With --check, also ask GitHub whether a newer release is out "
+        "and how to update — the only time this command uses the network.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Ask GitHub for the latest release and say how to update this install.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        metavar="SECONDS",
+        help="How long to wait for GitHub (default 5).",
+    )
+    return parser
+
+
+def version(argv: list[str]) -> None:
+    """Print which build this is, and with ``--check`` whether a newer release is out (#139).
+
+    The terminal counterpart of Help → About and ``api.check_for_updates``.
+    Exits 1 only when the check itself could not be made.
+    """
+    args = _version_parser().parse_args(argv)
+    from .build_info import INSTALL_KINDS, build_info, install_kind
+
+    info = build_info()
+    print(f"scanpath-studio {info.version}")
+    print(f"Build:      {info.describe()}")
+    print(f"Installed:  {INSTALL_KINDS[install_kind(info)]}")
+    if not args.check:
+        return
+    from .updates import check_for_updates
+
+    result = check_for_updates(args.timeout)
+    if result.status == "error":
+        print(result.message, file=sys.stderr)
+        raise SystemExit(1)
+    print()
+    print(result.message)
+    if result.command:
+        print(f"Update:     {result.command}")
+    if result.download is not None:
+        print(f"Download:   {result.download.url}")
+    if result.status == "update_available" and result.latest is not None:
+        print(f"What's new: {result.latest.url}")
+
+
 def _check_parser() -> argparse.ArgumentParser:
     """The `check` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4129,6 +4183,10 @@ usage:
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
+  scanpath-studio version [--check]
+                                   show this build and how it was installed;
+                                   --check asks GitHub whether a newer
+                                   release is out
   scanpath-studio --version        print the version
 
 Unrecognized flags are forwarded to `streamlit run` (e.g.
@@ -4139,7 +4197,7 @@ SCANPATH_LOCAL_FS=1."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.
-_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache")
+_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache", "version")
 
 
 def _commands() -> tuple[str, ...]:
@@ -4249,6 +4307,8 @@ def main(argv: list[str] | None = None) -> None:
         check(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
+    elif argv[0] == "version":
+        version(argv[1:])
     elif argv[0] in ("-h", "--help"):
         print(_help_text())
     elif argv[0] in ("-V", "--version"):

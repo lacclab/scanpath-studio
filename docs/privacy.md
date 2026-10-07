@@ -75,7 +75,13 @@ trial identifiers should not be exposed there.
 Downloading a public corpus contacts its host, and only when you click
 **⬇ Download** — or, headlessly, the first time `scanpath-studio render --potec`
 or `--onestop` (the Public variant) runs against a folder that doesn't have it
-yet. The scanpath, animation and comparison figures load the Plotly
+yet. **Check for updates** (Help → About, or `scanpath-studio version --check`)
+asks GitHub's API (`api.github.com`) for the latest release, only when you click
+it; the request carries nothing but the app's version, in its User-Agent.
+In the desktop app, **Update & restart** then downloads that release's
+archive for your computer from GitHub (`github.com`, which serves the file
+from its download servers) — only when you click it. The
+scanpath, animation and comparison figures load the Plotly
 charting library from the app's own server — the copy installed with the app —
 so drawing a figure contacts no other host and works without an internet
 connection, the desktop app included. A figure you download as **HTML** is

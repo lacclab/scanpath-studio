@@ -1200,6 +1200,7 @@ ICONS: dict[str, str] = {
     "code": ":material/code:",
     "doi": ":material/bookmark:",
     "ai": ":material/smart_toy:",
+    "update": ":material/update:",
     "missing_bundle": ":material/inventory_2:",
 }
 

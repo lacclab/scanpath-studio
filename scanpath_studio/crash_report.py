@@ -35,7 +35,6 @@ from urllib.parse import urlencode
 import streamlit as st
 from streamlit.errors import FragmentHandledException
 
-from scanpath_studio import __version__
 from scanpath_studio.constants import CITATION, ICONS
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,12 +47,16 @@ def report_url(error: BaseException) -> str:
     can carry file paths or values from the user's data, so those are left for
     the user to paste from the details below.
     """
+    from scanpath_studio import __version__
+
     title = f"Crash: {type(error).__name__} (v{__version__})"
     return f"{CITATION['bug_report_url']}&{urlencode({'title': title})}"
 
 
 def crash_message(error: BaseException) -> str:
     """The markdown shown above the traceback."""
+    from scanpath_studio import __version__
+
     return (
         "**Scanpath Studio ran into an unexpected error.** This is most likely "
         "a bug in the app, not something you did — please let us know so we "

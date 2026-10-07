@@ -9,6 +9,8 @@ Open the **Export** subtab in the Scanpath view.
 - **Export bundle** writes figures and tables for this trial, the filtered
   trials, or the whole dataset, plus a `plot_config.json` recording the main
   settings they were drawn with (the full set is **Share → File**).
+  On a dataset whose trials span several screens, **Screens** narrows it to
+  the ones you pick, such as only the reading pages; leave it empty for all.
   Options add separable layers for a vector editor, raw gaze, annotations, and
   more tables. Tables are written per trial, or combined into one file each.
   Word tables carry the reading measures your data brought; the export computes

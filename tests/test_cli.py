@@ -670,6 +670,18 @@ def test_render_multipart_manifest_lists_and_renders_all_screens(tmp_path, capsy
     assert (tmp_path / "parent__screen-001-intro.html").is_file()
     assert (tmp_path / "parent__screen-002-question.html").is_file()
 
+    # --screens: only the screens named, each keeping its place in the trial.
+    chosen = tmp_path / "chosen.html"
+    cli.main([*common, "--screens", "question", "-o", str(chosen)])
+    assert (tmp_path / "chosen__screen-002-question.html").is_file()
+    assert not (tmp_path / "chosen__screen-001-intro.html").exists()
+    with pytest.raises(SystemExit, match="no screen 'nope'"):
+        cli.main([*common, "--screens", "nope", "-o", str(chosen)])
+    with pytest.raises(SystemExit, match="--screen renders one screen"):
+        cli.main(
+            [*common, "--screens", "intro", "--screen", "intro", "-o", str(chosen)]
+        )
+
 
 def test_render_fixations_only_multifile(tmp_path):
     """Fixations-only, multi-file glob input renders without a words table."""

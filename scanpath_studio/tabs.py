@@ -252,7 +252,7 @@ from scanpath_studio.export import (
     annotate_figure,
     apply_export_scope,
     bulk_export,
-    count_export_units,
+    count_export,
     describe_plan,
     html_plotlyjs,
     pattern_fields,
@@ -261,6 +261,7 @@ from scanpath_studio.export import (
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
+    screen_choices,
     strip_local_paths,
     summarize_export,
 )
@@ -8007,7 +8008,7 @@ def _c_export_unit_count(
     ``None`` when screens contradict each other (Build export reports it) —
     returned, not raised, so that answer is cached too rather than re-walked
     on every rerun."""
-    scope_name, participant, trial, text = scope
+    scope_name, participant, trial, text, screens = scope
     scoped = apply_export_scope(
         _combos,
         ExportOptions(
@@ -8018,10 +8019,20 @@ def _c_export_unit_count(
         ),
     )
     try:
-        units = count_export_units(scoped, _words, _fixations, _raw_gaze)
+        return count_export(scoped, _words, _fixations, _raw_gaze, screens)
     except ValueError:
         return None
-    return len(scoped), units
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_export_screen_choices(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    frame_keys: tuple,
+) -> list[str]:
+    """The Export panel's *Screens* options, cached on the frames' fingerprints."""
+    return screen_choices(_words, _fixations, _raw_gaze)
 
 
 def _render_bulk_export(
@@ -8045,6 +8056,18 @@ def _render_bulk_export(
     raw_gaze_all: pd.DataFrame | None = None,
 ) -> None:
     """Render configurable bulk-export UI (artifact picker + run + download)."""
+    # The whole dataset's screens, so the picker does not change with the scope.
+    every_raw_gaze = raw_gaze_all if raw_gaze_all is not None else raw_gaze
+    screen_options = _c_export_screen_choices(
+        words_all,
+        fixations_all,
+        every_raw_gaze,
+        (
+            frame_fingerprint(words_all),
+            frame_fingerprint(fixations_all),
+            frame_fingerprint(every_raw_gaze),
+        ),
+    )
     options = render_export_options(
         st,
         combos,
@@ -8054,6 +8077,7 @@ def _render_bulk_export(
         caption_pattern=figure_settings.get("caption_pattern", ""),
         selected_participant=selected_participant,
         selected_trial=selected_trial,
+        screen_options=screen_options,
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
@@ -8075,28 +8099,7 @@ def _render_bulk_export(
         frame_fingerprint(active_fix),
         frame_fingerprint(active_raw_gaze),
     )
-    run_col, info_col = st.columns([1, 3])
-    with run_col:
-        nothing_ticked = not (
-            options.figure_formats()
-            or options.include_plot_config
-            or options.include_annotations
-            or options.any_table()
-        )
-        run = st.button(
-            "Build export",
-            type="primary",
-            disabled=active_combos.empty or nothing_ticked,
-            help="Tick at least one thing to include above."
-            if nothing_ticked
-            else None,
-        )
-        stop_slot = st.empty()
-    task_key = _bulk_export_task_key()
-    if not run and progress.running(task_key):
-        # A build an earlier run left going — the user clicked something else
-        # mid-build. That run can no longer hand its bundle over, so stop it.
-        progress.cancel(task_key)
+    counts = None
     if not active_combos.empty:
         # What Build export is about to write: a parent trial can hold many
         # screens, and each screen one file per format (and per layer).
@@ -8111,10 +8114,37 @@ def _render_bulk_export(
                 options.scope_participant,
                 options.scope_trial,
                 options.scope_text,
+                options.screens,
             ),
         )
-        if counts is not None:
-            info_col.caption(describe_plan(plan_from_counts(*counts, options)))
+    # Screens no trial in scope shows would build an empty bundle.
+    no_screens = options.screens is not None and counts == (0, 0)
+    run_col, info_col = st.columns([1, 3])
+    with run_col:
+        nothing_ticked = not (
+            options.figure_formats()
+            or options.include_plot_config
+            or options.include_annotations
+            or options.any_table()
+        )
+        run = st.button(
+            "Build export",
+            type="primary",
+            disabled=active_combos.empty or nothing_ticked or no_screens,
+            help="Tick at least one thing to include above."
+            if nothing_ticked
+            else "No trial here shows the screens picked above."
+            if no_screens
+            else None,
+        )
+        stop_slot = st.empty()
+    task_key = _bulk_export_task_key()
+    if not run and progress.running(task_key):
+        # A build an earlier run left going — the user clicked something else
+        # mid-build. That run can no longer hand its bundle over, so stop it.
+        progress.cancel(task_key)
+    if counts is not None:
+        info_col.caption(describe_plan(plan_from_counts(*counts, options)))
     if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
         info_col.warning(
             "Export stopped — no bundle was built. Click **Build export** to restart.",

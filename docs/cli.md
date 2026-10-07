@@ -170,7 +170,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
 
 `--animate --compare-with` replays **both** scanpaths on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
-`--compare-with` cannot be combined with `--all-screens`: a comparison
+`--compare-with` cannot be combined with `--all-screens` or `--screens`: a comparison
 is a single figure of two trials, each drawn from one screen. Pick A's with
 `--screen` and B's with `--compare-screen`; B's is looked up in B's own trial,
 so it can be a later page, or a page of the second dataset.
@@ -284,6 +284,8 @@ or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic
 `__screen-001-<id>` file per screen of the selected parent trial.
+`--screens Title,Paragraph` writes only the screens named, each still numbered
+by its place in the trial.
 
 ## Recovery cache
 

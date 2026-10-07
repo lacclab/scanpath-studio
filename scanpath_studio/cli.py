@@ -692,6 +692,12 @@ def _render_parser() -> argparse.ArgumentParser:
         "inserted before the output extension.",
     )
     parser.add_argument(
+        "--screens",
+        metavar="ID[,ID...]",
+        help="Like --all-screens, but only these screens of the parent trial "
+        "(comma-separated screen ids, e.g. Title,Paragraph); see --list-parts.",
+    )
+    parser.add_argument(
         "--screen-transition",
         choices=["instant", "recorded"],
         default="instant",
@@ -2330,7 +2336,12 @@ def _print_reproduction_code(
     if "width_mm" in save_kwargs or "width_in" in save_kwargs:
         save_kwargs.pop("scale", None)  # the print width replaces it
     caveats = []
-    if args.all_screens:
+    if args.screens:
+        caveats.append(
+            "--screens renders the screens named; the snippet rebuilds one "
+            "screen. Use api.render_parent_trial(..., screens=[...]) for the set."
+        )
+    elif args.all_screens:
         caveats.append(
             "--all-screens renders every screen of the parent trial; the "
             "snippet rebuilds one screen. Use api.render_parent_trial(...) for "
@@ -2349,7 +2360,8 @@ def _print_reproduction_code(
     if args.all_screens and args.screen_transition != "instant":
         caveats.append(
             f"--screen-transition {args.screen_transition} only affects the "
-            "--all-screens metadata, which the single-figure snippet omits."
+            "--all-screens / --screens metadata, which the single-figure "
+            "snippet omits."
         )
     source = _snippet_source_from_args(args)
     if args.raw_gaze:
@@ -2529,6 +2541,16 @@ def _save_kwargs(args) -> dict:
     return kwargs
 
 
+def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
+    """``--screens``' comma-separated ids, or ``None`` when not given."""
+    if value is None:
+        return None
+    screens = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not screens:
+        raise SystemExit("--screens names no screen; pass e.g. --screens Paragraph.")
+    return screens
+
+
 def render(argv: list[str]) -> None:
     # Bound, not inlined: DATA-27's --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
@@ -2636,9 +2658,17 @@ def render(argv: list[str]) -> None:
     # per child screen of a multipart trial. There is no defined pairing between
     # the two, and without this guard the compare branch left `figures` unbound
     # and the run died on an UnboundLocalError instead of saying so.
+    # --screens is --all-screens cut to the screens named.
+    chosen_screens = _parse_screen_list(args.screens)
+    if chosen_screens is not None:
+        if args.screen is not None:
+            raise SystemExit(
+                "--screen renders one screen and --screens several; pass one of them."
+            )
+        args.all_screens = True
     if args.compare_with is not None and args.all_screens:
         raise SystemExit(
-            "--compare-with cannot be combined with --all-screens: a comparison "
+            "--compare-with cannot be combined with --all-screens or --screens: a comparison "
             "is a single figure of two trials. Render one screen at a time with "
             "--screen SCREEN_ID."
         )
@@ -3411,6 +3441,7 @@ def render(argv: list[str]) -> None:
                     trial,
                     animate=True,
                     transition_mode=args.screen_transition,
+                    screens=chosen_screens,
                     **animation_options,
                 )
                 fig = next(iter(figures.values()))
@@ -3535,6 +3566,7 @@ def render(argv: list[str]) -> None:
                     fixations,
                     participant,
                     trial,
+                    screens=chosen_screens,
                     **static_options,
                 )
                 fig = next(iter(figures.values()))
@@ -3553,6 +3585,10 @@ def render(argv: list[str]) -> None:
             for position, (screen_id, screen_figure) in enumerate(
                 figures.items(), start=1
             ):
+                # The screen's place in its trial, which --screens can skip past.
+                meta = screen_figure.layout.meta
+                if isinstance(meta, dict) and meta.get("screen_index"):
+                    position = int(meta["screen_index"])
                 safe_screen = "".join(
                     char if char.isalnum() or char in "-_" else "_"
                     for char in str(screen_id)

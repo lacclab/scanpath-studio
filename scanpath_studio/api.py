@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import difflib
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -2996,9 +2996,16 @@ def render_parent_trial(
     *,
     animate: bool = False,
     transition_mode: str = "instant",
+    screens: Sequence[str] | None = None,
     **options,
 ) -> dict[str, go.Figure]:
     """Render every screen of one logical trial without stitching coordinates.
+
+    ``screens`` renders only those screen ids (one id may be given as a
+    string), in the trial's own order, as the app's Export → *Screens* does;
+    an id the trial does not have raises ``ValueError``. ``None`` renders them
+    all. ``screen_index`` in each figure's meta stays the screen's place in the
+    trial.
 
     The ordered mapping is keyed by ``screen_id``. Each value is the same figure
     returned by [`plot_scanpath`][scanpath_studio.api.plot_scanpath] or
@@ -3026,20 +3033,36 @@ def render_parent_trial(
     )
     canonical_fixations = _cn.to_canonical_frame(fixations)
     if catalog.empty:
+        if screens is not None:
+            raise ValueError(
+                f"Trial {tid!r} of participant {pid!r} has no screens to choose from."
+            )
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}
 
     screen_ids = catalog[SCREEN_ID].astype(str).tolist()
+    if isinstance(screens, str):
+        screens = [screens]
+    if screens is not None:
+        missing = [str(s) for s in screens if str(s) not in screen_ids]
+        if missing:
+            raise ValueError(
+                f"Trial {tid!r} of participant {pid!r} has no screen "
+                f"{', '.join(map(repr, missing))}; its screens are "
+                f"{', '.join(screen_ids)}."
+            )
+    chosen = None if screens is None else {str(s) for s in screens}
+    # The screens drawn, in the trial's order; a recorded transition runs to
+    # the next one *drawn*, and the last drawn has none.
+    drawn = [s for s in screen_ids if chosen is None or s in chosen]
     rendered: dict[str, go.Figure] = {}
-    for position, screen_id in enumerate(screen_ids):
+    for position, screen_id in enumerate(drawn):
         renderer = animate_scanpath if animate else plot_scanpath
         fig = renderer(words, fixations, pid, tid, screen=screen_id, **options)
         delay = 0.0
-        if animate and transition_mode == "recorded" and position < len(screen_ids) - 1:
+        if animate and transition_mode == "recorded" and position < len(drawn) - 1:
             current = extract_part(canonical_fixations, pid, tid, screen_id)
-            following = extract_part(
-                canonical_fixations, pid, tid, screen_ids[position + 1]
-            )
+            following = extract_part(canonical_fixations, pid, tid, drawn[position + 1])
             if not current.empty and not following.empty:
                 current_end = (
                     pd.to_numeric(current["timestamp_ms"], errors="coerce")
@@ -3057,7 +3080,7 @@ def render_parent_trial(
                 "participant_id": pid,
                 "trial_id": tid,
                 "screen_id": screen_id,
-                "screen_index": position + 1,
+                "screen_index": screen_ids.index(screen_id) + 1,
                 "transition_mode": transition_mode,
                 "transition_after_ms": delay,
             }

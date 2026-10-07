@@ -11,7 +11,12 @@ import pytest
 
 from scanpath_studio import api
 from scanpath_studio.annotations import deserialize, serialize
-from scanpath_studio.export import ExportOptions, bulk_export
+from scanpath_studio.export import (
+    ExportOptions,
+    bulk_export,
+    plan_export,
+    screen_choices,
+)
 from scanpath_studio.measures import compute_per_word_measures, enrich_fixations
 from scanpath_studio.multipart import (
     SCREEN_ID,
@@ -212,6 +217,70 @@ def test_bulk_export_writes_deterministic_per_screen_folders():
         paths = archive.namelist()
     assert any("screens/screen-001-intro/fixations.csv" in path for path in paths)
     assert any("screens/screen-002-question/fixations.csv" in path for path in paths)
+
+
+def test_bulk_export_keeps_only_the_chosen_screens():
+    words, fixations = make_multipart_synthetic_data()
+    combos = api.list_trials(words, fixations)
+    assert screen_choices(words, fixations) == ["intro", "question"]
+    options = ExportOptions(
+        include_png=False,
+        include_svg=False,
+        include_plot_config=False,
+        include_fixations=True,
+        screens=("question",),
+    )
+    plan = plan_export(combos, words, fixations, options)
+    assert (plan.trials, plan.units) == (1, 1)
+    payload, progress = bulk_export(
+        combos,
+        words,
+        fixations,
+        canvas_width=1200,
+        canvas_height=800,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={},
+        options=options,
+    )
+    assert progress.total_trials == 1
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        paths = archive.namelist()
+        readme = archive.read("README.md").decode()
+    assert any("screens/screen-002-question/" in path for path in paths)
+    assert not any("intro" in path for path in paths)
+    assert "Screens: only question" in readme
+    # A screen no trial shows leaves nothing to export.
+    none = plan_export(combos, words, fixations, ExportOptions(screens=("missing",)))
+    assert (none.trials, none.units) == (0, 0)
+
+
+def test_parent_render_draws_only_the_chosen_screens():
+    words, fixations = make_multipart_synthetic_data()
+    figures = api.render_parent_trial(
+        words, fixations, "synthetic", "multipart_demo", screens=["question"]
+    )
+    assert list(figures) == ["question"]
+    assert figures["question"].layout.meta["screen_index"] == 2
+    # One id as a string; a recorded transition never points past the last
+    # screen drawn.
+    only_intro = api.render_parent_trial(
+        words,
+        fixations,
+        "synthetic",
+        "multipart_demo",
+        animate=True,
+        transition_mode="recorded",
+        screens="intro",
+    )
+    assert list(only_intro) == ["intro"]
+    assert only_intro["intro"].layout.meta["transition_after_ms"] == 0
+    with pytest.raises(ValueError, match="no screen 'nope'"):
+        api.render_parent_trial(
+            words, fixations, "synthetic", "multipart_demo", screens=["nope"]
+        )
 
 
 @pytest.mark.parametrize("with_figure", [True, False])
@@ -581,3 +650,25 @@ def test_per_sentence_keeps_each_screens_sentences_apart():
     assert list(summary[SCREEN_ID]) == ["intro", "question"]
     assert list(summary["sentence_id"]) == [1, 1]
     assert summary["Mean total fixation duration (ms)"].nunique() == 2
+
+
+def _export_options_app():
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.export import render_export_options
+
+    combos = pd.DataFrame({"participant_id": ["p"], "trial_id": ["t"]})
+    options = render_export_options(st, combos, screen_options=["intro", "question"])
+    st.write(f"screens={options.screens}")
+
+
+def test_export_panel_offers_a_screens_picker():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_export_options_app).run()
+    picker = at.multiselect(key="export_screens")
+    assert picker.options == ["intro", "question"]
+    assert any("screens=None" in md.value for md in at.markdown)
+    picker.set_value(["question"]).run()
+    assert any("screens=('question',)" in md.value for md in at.markdown)

@@ -891,3 +891,14 @@ def test_prepare_refuses_before_downloading(tmp_path, cache_home):
     with pytest.raises(du.UpdateFailed, match="checksum"):
         du.prepare(_check(digest=""), install, opener=opener, machine="x86_64")
     assert opener.seen == []
+
+
+def test_ci_runs_the_end_to_end_update_on_every_os():
+    workflow = (ROOT / ".github/workflows/desktop.yml").read_text(encoding="utf-8")
+    assert workflow.count("desktop/update_e2e.py") == 3
+
+
+def test_the_e2e_driver_is_stdlib_plus_the_package():
+    source = (ROOT / "desktop/update_e2e.py").read_text(encoding="utf-8")
+    assert "from scanpath_studio import desktop_update" in source
+    assert "import streamlit" not in source

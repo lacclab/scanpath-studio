@@ -23,13 +23,19 @@ released.
   macOS `.app` it also redirects output to `~/Library/Logs/Scanpath Studio/` and
   quits once the last app window or tab has been closed for `IDLE_EXIT_GRACE_S`
   (150s — just past Streamlit's own two-minute session-retention window), since
-  a bundle with no Cocoa run loop cannot answer Cmd-Q.
+  a bundle with no Cocoa run loop cannot answer Cmd-Q. `--update` runs About's
+  *Update & restart* headless (#385).
 - Launch environment variables: `SCANPATH_DESKTOP_PORT` pins the server port
   (default: a free one), `SCANPATH_DESKTOP_NO_BROWSER=1` opens nothing,
   `SCANPATH_DESKTOP_BROWSER=default` uses a default-browser tab,
   `SCANPATH_DESKTOP_IDLE_EXIT_S` sets the quit delay after the last window
   closes (`0` keeps it running), and `SCANPATH_DESKTOP_NO_LOG_FILE=1` keeps the
-  macOS app's output on stdout.
+  macOS app's output on stdout. `SCANPATH_UPDATE_FEED` (a local JSON release in
+  GitHub's shape, honoured only by `--update`) is what CI's end-to-end run
+  offers the fresh build through.
+- `update_e2e.py` — CI's end-to-end check of the in-app updater: offers the
+  fresh build back as a newer release and requires the swap, the relaunch and
+  the boot report (#385).
 - `scanpath_studio.spec` — the PyInstaller build definition.
 - `entitlements.plist` — hardened-runtime entitlements (one key; the reasoning
   for each omission is in `plans/eng-21-signing-notarization.md` → *Entitlements*.

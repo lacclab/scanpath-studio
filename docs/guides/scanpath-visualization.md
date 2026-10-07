@@ -34,7 +34,7 @@ and a **▾** with its settings.
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |
 | :material/cleaning_services: Flag fixations | which fixations and saccades are drawn |
-| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields |
+| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields, legends |
 
 Color ranges start on **Auto**, scaled to each trial. Pin a range to keep it
 fixed as you step through trials and filters, so they stay comparable; its
@@ -70,6 +70,27 @@ a blink column in your fixations (`is_blink`, `blink`, `blink_before`,
 `blink_after`), and without one nothing is flagged.
 For saccades, choose which reading types are drawn: hide everything but
 regressions, for example. Filtering changes only the figure, never your data.
+
+## Place the legends
+
+**:material/aspect_ratio: Figure & canvas → :material/legend_toggle: Legends** has a
+row for each legend the figure can draw: **Compare (A/B)**, **Saccade types**,
+**Fixation colours** (a categorical **Color by**, and the Highlight entries) and
+the duration **Size key**. Each row sets where the legend goes, how its items
+run and its text size:
+
+- **Spot**: **Above**, **Below**, **Left** or **Right** of the plot, or
+  **Inside** one of its four corners. An outside spot makes the figure larger
+  instead of shrinking the plot, so the text stays true to scale. Legends
+  sharing a side line up one after the other.
+- **Arrangement**: **Stacked** (one item under the other) or **Side by side**.
+- **Size**: the text size in px; empty uses the figure's own.
+
+On **Auto** a legend stays where it is drawn by default. These rows only place a
+legend: whether it is drawn at all is still its own switch, under its layer. The
+size key's circles keep the true marker sizes wherever it goes; its **Size**
+sets the labels. Share links, settings files, saved designs, `render --legend`
+and the API's `legend_layout` all carry the placement.
 
 ## Replay and compare
 

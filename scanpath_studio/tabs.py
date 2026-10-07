@@ -300,6 +300,7 @@ from scanpath_studio.plots import (
     animation_clip_frame_ms,
     animation_playback_ms,
     animation_timeline_summary,
+    apply_legend_layout,
     break_at_gaps,
     build_scanpath_replay,
     make_comparison_figure,
@@ -317,6 +318,7 @@ from scanpath_studio.plots import (
     make_word_matrix_heatmap,
     make_word_profile_figure,
     make_word_rate_figure,
+    normalize_legend_layout,
     replay_page,
     replay_size_key_range,
     set_replay_clock,
@@ -1884,6 +1886,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
         ),
         duration_size_legend=viz_settings.get("duration_size_legend", True),
+        legend_layout=viz_settings.get("legend_layout"),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
         **{
@@ -4399,6 +4402,10 @@ def _build_studio_config(
             "order_font_color": figure_settings["order_font_color"],
             "base_font_size": int(base_font_size),
         },
+        # Figure & canvas → Legends: every legend, Auto included, so a file
+        # restores the placement it was saved with rather than leaving a
+        # moved legend where the receiving session had it.
+        "legends": normalize_legend_layout(figure_settings.get("legend_layout")),
         "text": {
             "scale_text_to_boxes": bool(
                 figure_settings.get("scale_text_to_boxes", True)
@@ -5394,6 +5401,9 @@ def _plan_replay(
         # stamped onto the cached replay in `finished_figure`, and toggling it
         # costs no frame rebuild.
         duration_size_legend=False,
+        # Where the legends sit is layout only too: applied to the finished
+        # figure in `finished_figure`, so moving a legend rebuilds no frame.
+        legend_layout=None,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5506,6 +5516,12 @@ def _build_and_render_animation(
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
+        apply_legend_layout(
+            fig,
+            animation_settings.legend_layout,
+            comparing=anim_inputs["fixations_b"] is not None
+            and not anim_inputs["fixations_b"].empty,
+        )
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")
         )
@@ -5537,6 +5553,8 @@ def _build_and_render_animation(
         title,
         caption,
         bool(animation_settings.duration_size_legend),
+        # Not in `anim_key` (the frames never read it), so the view keys on it.
+        repr(normalize_legend_layout(animation_settings.legend_layout)),
     )
     view = _cached_replay_view(
         clip_inputs,

@@ -10,8 +10,10 @@ raises; a check that could not be made says why in ``UpdateCheck.message``.
 
 from __future__ import annotations
 
+import http.client
 import json
 import platform
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -47,6 +49,11 @@ DESKTOP_ARCHIVES = {
     ("linux", "x86_64"): "ScanpathStudio-linux-x86_64.tar.gz",
 }
 
+_OFFLINE = "Couldn't reach GitHub to check — are you offline?"
+_BAD_CERT = (
+    "GitHub's certificate couldn't be verified on this computer, so the check "
+    "was not made."
+)
 _UNREADABLE = (
     "GitHub sent an answer this version of the app can't read; try again later."
 )
@@ -102,10 +109,31 @@ class UpdateCheckError(Exception):
     """A check that could not be made; ``str()`` is the reason, for people."""
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """TLS trust for the request: certifi's bundle when present, else the system's.
+
+    A frozen desktop build's Python may not find a system CA store; certifi
+    (a dependency of requests, via streamlit) ships its own.
+    """
+    try:
+        import certifi
+    except ImportError:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+def _urlopen(request: urllib.request.Request, timeout: float):
+    return urllib.request.urlopen(request, timeout=timeout, context=_ssl_context())
+
+
 def latest_release(
-    timeout: float = TIMEOUT_S, *, opener: Callable = urllib.request.urlopen
+    timeout: float = TIMEOUT_S, *, opener: Callable | None = None
 ) -> Release:
-    """GitHub's latest release of Scanpath Studio. Raises :class:`UpdateCheckError`."""
+    """GitHub's latest release of Scanpath Studio. Raises :class:`UpdateCheckError`.
+
+    ``opener(request, timeout)`` replaces the HTTP call (tests pass a fake).
+    """
+    opener = _urlopen if opener is None else opener
     request = urllib.request.Request(
         LATEST_RELEASE_API,
         headers={
@@ -118,10 +146,17 @@ def latest_release(
             payload = json.load(response)
     except urllib.error.HTTPError as error:
         raise UpdateCheckError(_http_reason(error)) from error
-    except OSError as error:  # URLError, a refused connection, a timeout
-        raise UpdateCheckError(
-            "Couldn't reach GitHub to check — are you offline?"
-        ) from error
+    except (ssl.SSLCertVerificationError, urllib.error.URLError) as error:
+        if isinstance(error, ssl.SSLCertVerificationError) or isinstance(
+            getattr(error, "reason", None), ssl.SSLCertVerificationError
+        ):
+            raise UpdateCheckError(_BAD_CERT) from error
+        raise UpdateCheckError(_OFFLINE) from error
+    except (
+        OSError,
+        http.client.HTTPException,
+    ) as error:  # a refused connection, a timeout, a dropped answer
+        raise UpdateCheckError(_OFFLINE) from error
     except ValueError as error:
         raise UpdateCheckError(_UNREADABLE) from error
     return _release_from(payload)

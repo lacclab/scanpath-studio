@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
+import ssl
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -78,6 +80,13 @@ def test_latest_release_reads_githubs_answer():
     [
         (urllib.error.URLError("no route"), "are you offline"),
         (TimeoutError("slow"), "are you offline"),
+        (http.client.IncompleteRead(b""), "are you offline"),
+        (http.client.RemoteDisconnected("closed"), "are you offline"),
+        (
+            urllib.error.URLError(ssl.SSLCertVerificationError("bad cert")),
+            "certificate",
+        ),
+        (ssl.SSLCertVerificationError("bad cert"), "certificate"),
         (
             _http_error(
                 403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1791500000"}
@@ -91,6 +100,19 @@ def test_latest_release_reads_githubs_answer():
 def test_a_failed_lookup_says_why(error, reason):
     with pytest.raises(updates.UpdateCheckError, match=reason):
         updates.latest_release(opener=_opener(error=error))
+
+
+def test_the_default_opener_verifies_tls_with_a_context(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(request, **kwargs):
+        seen.update(kwargs)
+        return io.BytesIO(json.dumps(_payload()).encode())
+
+    monkeypatch.setattr(updates.urllib.request, "urlopen", fake_urlopen)
+    assert updates.latest_release(2.0).version == "0.36.0"
+    assert isinstance(seen["context"], ssl.SSLContext)
+    assert seen["timeout"] == 2.0
 
 
 @pytest.mark.parametrize(

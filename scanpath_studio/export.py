@@ -81,6 +81,7 @@ from .plots import (
     FigureSettings,
     _plotly_literal,
     make_scanpath_figure,
+    normalize_legend_layout,
     split_scanpath_layers,
 )
 from .preprocessing import (
@@ -1120,6 +1121,10 @@ def _plot_config_dict(
             "duration_size_legend": bool(settings.get("duration_size_legend", True)),
             "order_font_size": settings.get("order_font_size"),
         },
+        # Where each legend was placed (Figure & canvas → Legends); absent = Auto.
+        # Every legend, Auto included, as the settings file writes them: a
+        # partial section would leave a restoring session's moved legends.
+        "legends": normalize_legend_layout(settings.get("legend_layout")),
         # True-to-scale reading text: records how the word labels were sized so
         # the figure can be reproduced exactly (see plots._word_label_font_px).
         "text": {

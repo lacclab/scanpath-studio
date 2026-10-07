@@ -894,6 +894,19 @@ def _render_parser() -> argparse.ArgumentParser:
         "to short/long only.",
     )
     viz.add_argument(
+        "--legend",
+        dest="legend_layout",
+        action="append",
+        metavar="SPEC",
+        help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
+        "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
+        "colour categories), size-key; POSITION one of auto, above, below, "
+        "left, right, top-left, top-right, bottom-left, bottom-right (the last "
+        "four inside the plot); ARRANGEMENT stacked or side-by-side; SIZE the "
+        "text size in px — e.g. --legend saccades=right,stacked,14. Whether a "
+        "legend is drawn at all is still its own switch.",
+    )
+    viz.add_argument(
         "--saccade-classes",
         dest="saccade_classes",
         metavar="CLASSES",
@@ -2075,6 +2088,26 @@ _CRITICAL_SPAN_STYLES = {
 _FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
 
 
+def _parse_legend_layout(specs: list[str]) -> dict:
+    """``["saccades=right,stacked,14"]`` → the ``legend_layout`` dict.
+
+    One ``KIND=SPEC`` per flag; SPEC is ``plots.parse_legend_spec``'s spelling,
+    the one the ``legend_<kind>`` link parameters use too.
+    """
+    from .plots import normalize_legend_layout, parse_legend_spec
+
+    layout: dict = {}
+    for spec in specs:
+        kind, _, text = spec.partition("=")
+        kind = kind.strip().lower().replace("-", "_")
+        try:
+            layout[kind] = parse_legend_spec(text)
+            normalize_legend_layout(layout)
+        except ValueError as exc:
+            raise SystemExit(f"--legend {spec!r}: {exc}") from None
+    return layout
+
+
 def _parse_fixation_flags(specs: list[str]) -> dict:
     """``["short=discard,threshold_ms=80"]`` → the ``fixation_flags`` dict.
 
@@ -3148,6 +3181,8 @@ def render(argv: list[str]) -> None:
         ]
     if args.fixation_flags:
         overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
+    if args.legend_layout:
+        overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
     # VIZ-31: the reading-class filter. Independent of the colour mode above —
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.

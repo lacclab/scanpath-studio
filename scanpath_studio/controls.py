@@ -39,6 +39,10 @@ from .constants import (
     HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    LEGEND_ARRANGEMENT_LABELS,
+    LEGEND_KIND_LABELS,
+    LEGEND_KINDS,
+    LEGEND_POSITION_LABELS,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
     OUT_OF_TEXT_COLOR,
@@ -711,6 +715,17 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
     "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
     "global_duration_size_legend": True,
+    # 📐 Figure & canvas → Legends: where each legend sits (all Auto = as drawn
+    # before the setting existed). Size None = the figure's own text size.
+    **{
+        f"global_legend_{kind}_{part}": default
+        for kind in LEGEND_KINDS
+        for part, default in (
+            ("position", "auto"),
+            ("arrangement", "auto"),
+            ("size", None),
+        )
+    },
     "global_saccade_class_color_forward": SACCADE_CLASS_COLORS["forward"],
     "global_saccade_class_color_skip": SACCADE_CLASS_COLORS["skip"],
     "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
@@ -1473,7 +1488,7 @@ def _drop_linked_view_params() -> None:
     """
     from . import session_keys as _sk
 
-    for param in _sk.URL_PRESET_PARAMS:
+    for param in (*_sk.URL_PRESET_PARAMS, *_sk.LEGEND_PARAMS):
         st.query_params.pop(param, None)
 
 
@@ -5384,6 +5399,45 @@ def _seed_viz_state(
     return color_fields, numeric_fields, highlight_options
 
 
+#: What each Legends row places (📐 Figure & canvas → Legends).
+_LEGEND_ROW_HELP = {
+    "compare": "The A/B legend naming the two scanpaths (Compare's *Legend*).",
+    "saccades": "The saccade-type legend (↗️ Saccades → Color by type → Legend).",
+    "colors": "The legend of a categorical Color by, and the Highlight entries.",
+    "size_key": "The duration size key (👁️ Fixations → Size key). Its circles "
+    "keep the true marker sizes; Size sets its labels.",
+}
+
+
+def _collect_legend_layout(ss) -> dict | None:
+    """The legend placements set under 📐 Figure & canvas → Legends.
+
+    Only the legends moved off *Auto* are listed; ``None`` when none is, which
+    every builder reads as "as it always drew". A stale value a link or an old
+    config left behind falls back to *Auto* rather than failing the figure.
+    """
+    layout = {}
+    for kind in LEGEND_KINDS:
+        position = ss.get(f"global_legend_{kind}_position") or "auto"
+        arrangement = ss.get(f"global_legend_{kind}_arrangement") or "auto"
+        size = ss.get(f"global_legend_{kind}_size")
+        if position not in LEGEND_POSITION_LABELS:
+            position = "auto"
+        if arrangement not in LEGEND_ARRANGEMENT_LABELS:
+            arrangement = "auto"
+        try:
+            size = int(size) if size else None
+        except (TypeError, ValueError):
+            size = None
+        if position != "auto" or arrangement != "auto" or size:
+            layout[kind] = {
+                "position": position,
+                "arrangement": arrangement,
+                "size": size,
+            }
+    return layout or None
+
+
 def _collect_viz_settings(
     trial_fixations: pd.DataFrame,
     words: pd.DataFrame | None,
@@ -5525,6 +5579,7 @@ def _collect_viz_settings(
             ss.get("global_marker_duration_range") or DEFAULT_MARKER_DURATION_RANGE
         ),
         duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
+        legend_layout=_collect_legend_layout(ss),
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
         **{
@@ -7559,6 +7614,7 @@ def render_plot_controls(
     axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
     labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
     hover = _rail_subsection(figure_grp, f"{ICONS['hover']} Hover")
+    legends = _rail_subsection(figure_grp, f"{ICONS['legend']} Legends")
     # UX-163: each block's rows take the popover layout (`_popover_rows`) — the
     # framing switch, the grid and the colour bar become `label | ☑ Show | …`
     # rows carrying what they govern (greyed while off), the monitor size and
@@ -7825,6 +7881,65 @@ def render_plot_controls(
             persist_state="session",
             help="Fields shown when hovering a fixation, in this order.",
         )
+
+    # Where each legend sits. In addition to each layer's own *Show legend*
+    # switch, never instead of it: a legend that is off stays off wherever it
+    # is placed. Auto everywhere draws the figure as it always was.
+    with legends, _popover_rows("fig_legends"):
+        for kind in LEGEND_KINDS:
+            # A row whose legend the current figure cannot draw greys out, its
+            # values kept (no `index=`/`value=`), like every gated rail control.
+            gated_off = {
+                "compare": None
+                if comparing
+                else "Only in Compare: the A/B legend names the two scanpaths.",
+                "saccades": "Only on the static figure: the replay and Compare "
+                "draw no saccade-type legend."
+                if animating or comparing
+                else None,
+            }.get(kind)
+            field = _sub_row(
+                LEGEND_KIND_LABELS[kind],
+                caption_help=gated_off or _LEGEND_ROW_HELP[kind],
+            )
+            pos_col, arr_col, size_col = field.columns(
+                [0.44, 0.34, 0.22], gap=_LABEL_GAP, vertical_alignment="center"
+            )
+            pos_col.selectbox(
+                f"{LEGEND_KIND_LABELS[kind]} legend position",
+                disabled=bool(gated_off),
+                options=list(LEGEND_POSITION_LABELS),
+                format_func=LEGEND_POSITION_LABELS.__getitem__,
+                key=f"global_legend_{kind}_position",
+                persist_state="session",
+                label_visibility="collapsed",
+                help="Where this legend sits. Above, Below, Left and Right are "
+                "outside the plot (the figure grows to make room); the Inside "
+                "spots sit over it. Auto: where it is drawn by default.",
+            )
+            arr_col.selectbox(
+                f"{LEGEND_KIND_LABELS[kind]} legend arrangement",
+                disabled=bool(gated_off),
+                options=list(LEGEND_ARRANGEMENT_LABELS),
+                format_func=LEGEND_ARRANGEMENT_LABELS.__getitem__,
+                key=f"global_legend_{kind}_arrangement",
+                persist_state="session",
+                label_visibility="collapsed",
+                help="Stacked: one item under the other. Side by side: in a "
+                "row. Auto: a row above or below the plot, a stack elsewhere.",
+            )
+            size_col.number_input(
+                f"{LEGEND_KIND_LABELS[kind]} legend text size",
+                disabled=bool(gated_off),
+                min_value=6,
+                max_value=72,
+                step=1,
+                key=f"global_legend_{kind}_size",
+                persist_state="session",
+                placeholder="Auto",
+                label_visibility="collapsed",
+                help="Text size in px. Empty: the figure's own.",
+            )
 
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when
@@ -8162,7 +8277,7 @@ def reset_viz_settings() -> None:
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
     # VIZ-45 — and the raw-gaze layer's dataset default, the same way.
     _forget_raw_gaze_default(st.session_state)
-    for param in _sk.URL_PRESET_PARAMS:
+    for param in (*_sk.URL_PRESET_PARAMS, *_sk.LEGEND_PARAMS):
         st.query_params.pop(param, None)
 
 

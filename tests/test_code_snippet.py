@@ -16,6 +16,7 @@ import pytest
 
 from scanpath_studio import api, cli, url_state
 from scanpath_studio import code_snippet as cs
+from scanpath_studio.plots import palette_slug
 from tests.conftest import APP_SCRIPT
 
 
@@ -46,9 +47,9 @@ def figure_kwargs_of(state: cs.FigureState, **kwargs) -> dict:
 
 
 def test_only_the_changed_options_are_written():
-    state = _state(figure={"show_heatmap": False, "color_by": "duration_ms"})
+    state = _state(figure={"show_heatmap": True, "color_by": "duration_ms"})
     assert figure_kwargs_of(state) == {
-        "show_heatmap": False,
+        "show_heatmap": True,
         "color_by": "duration_ms",
     }
 
@@ -189,7 +190,10 @@ def test_settings_with_no_render_flag_are_named_not_dropped(monkeypatch):
     """EXP-20 left no figure option without a flag, so the mechanism is driven
     by taking one away — it is what a future option without a flag hits."""
     monkeypatch.delitem(cs._CLI_EMITTERS, "fixation_color_range")
-    state = _state(figure={"fixation_color_range": (1.0, 5.0)})
+    # A colour range is drawn only on fixations coloured by a value (#374 F29).
+    state = _state(
+        figure={"fixation_color_range": (1.0, 5.0), "color_by": "duration_ms"}
+    )
     code = cs.reproduction_code(DEMO, state)
     assert "fixation_color_range=(1.0, 5.0)" in code.python
     assert "fixation_color_range" in code.cli_unsupported
@@ -643,7 +647,7 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
         [
             "render",
             "--sample",
-            "--no-heatmap",
+            "--heatmap",
             "--color-by",
             "duration_ms",
             "--print-code",
@@ -654,8 +658,8 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
     )
     printed = capsys.readouterr().out
     assert "sps.plot_scanpath(" in printed
-    assert "show_heatmap=False" in printed
-    assert "--no-heatmap" in printed
+    assert "show_heatmap=True" in printed
+    assert "--heatmap" in printed
     # `--print-code` is additive: the figure is still rendered.
     assert out.exists()
 
@@ -776,7 +780,7 @@ def test_a_palette_choice_reproduces_through_the_cli(
     printed = capsys.readouterr().out
     assert "--saccade-type-color" not in printed
     assert "No `render` flag" not in printed
-    assert shlex.quote(palette) in printed
+    assert f"--palette {palette_slug(palette)}" in printed  # #374: no quotes
     replay = shlex.split(printed.strip().replace(" \\\n", " "))[1:]
     first, second = _rendered_figures(
         monkeypatch, [original[:-4] + original[-2:], replay]
@@ -874,15 +878,15 @@ def test_the_panel_says_what_to_do_before_a_figure_exists():
 def test_the_panel_writes_the_snippet_for_the_published_state():
     state = cs.FigureState(
         kind="static",
-        settings={**api.figure_options("static"), "show_heatmap": False},
+        settings={**api.figure_options("static"), "show_heatmap": True},
         participant="l7_101",
         trial="1_Adv_1",
         canvas=(2560, 1440),
     )
     at = _panel(**{cs.SNIPPET_STATE_KEY: state})
     code = at.session_state["_snippet_code_current"]
-    assert "show_heatmap=False" in code.python
-    assert "--no-heatmap" in code.cli
+    assert "show_heatmap=True" in code.python
+    assert "--heatmap" in code.cli
     # Python is the flavour on show by default; the CLI is one click away.
     assert at.code[0].language == "python"
 
@@ -916,6 +920,7 @@ def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
         settings={
             **api.figure_options("static"),
             "fixation_color_range": (1.0, 5.0),
+            "color_by": "duration_ms",
         },
         participant="p1",
         trial="t1",
@@ -1325,7 +1330,7 @@ def test_render_accepts_a_second_datasets_command_line(kind, capsys):
     state = _state(
         kind=kind,
         canvas=(2560, 1440),
-        figure={"show_legend": True} if kind == "animation" else {},
+        figure={"show_legend": False} if kind == "animation" else {},
         compare=cs.CompareTarget(
             participant="p2",
             trial="t2",
@@ -1350,7 +1355,7 @@ def test_render_accepts_a_second_datasets_command_line(kind, capsys):
     assert args.compare_stimulus == "b"
     assert (args.label_a, args.label_b) == ("Reader A", "Reader B")
     if kind == "animation":
-        assert args.animate and args.show_legend
+        assert args.animate and args.show_legend is False
 
 
 @pytest.fixture()

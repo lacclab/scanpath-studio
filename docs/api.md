@@ -3,7 +3,7 @@
 The public API follows one pipeline:
 
 ```text
-load data → list trials → plot or measure → save
+load data → list trials → plot → save
 ```
 
 ```python
@@ -25,7 +25,7 @@ names, which are the same for every dataset. On the bundled demo, the first
 steps print this (run when the docs are built):
 
 ```python exec="true" source="above" result="text" session="api"
-import scanpath_studio as sps  # markdown-exec: hide
+import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 print(sps.list_trials(words, fixations).head(3))
@@ -95,7 +95,7 @@ print(
     sps.figure_code(
         participant="l7_1090",
         trial="l7_1090_2_1_1_Ele_r0",
-        show_heatmap=False,
+        show_heatmap=True,
         color_by="duration_ms",
     )
 )
@@ -108,7 +108,10 @@ print(
 ## Figure options
 
 Every keyword the figure builders take, with the default it renders with, the
-`render` flag that sets it on the command line, and which builders accept it:
+values it takes when there is a fixed set (any case, and `-` or `_` for a
+space, so the CLI's `"log"` and `"mark-border"` work; anything else raises a
+`ValueError`), the `render` flag that sets it on the command line, and which
+builders accept it:
 `plot` is `plot_scanpath`, `animate` is `animate_scanpath`, `compare` is
 `compare_scanpaths`.
 
@@ -133,4 +136,4 @@ print(figure_options_table())
 For a batch loop, see [Automation](automation.md#batch-pattern). GIF and MP4
 export uses
 `scanpath_studio.animation_export.export_animation` and requires Kaleido plus
-Chrome/Chromium.
+Chrome, Chromium or Edge.

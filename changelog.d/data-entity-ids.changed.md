@@ -1,0 +1,1 @@
+The Data page's Participants, Trials and Texts tabs list the ids in your data, with counts, when no separate table is attached — and the Participants and Trials tabs add every column that holds one value per reader or trial.

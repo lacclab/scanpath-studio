@@ -8,7 +8,7 @@ three places that outlive the running process:
   people's bookmarks, papers, issue trackers and embedded review apps;
 * the **settings and setup files** (🔗 Share → File, written by
   ``tabs._build_studio_config`` and read by ``url_state._restore_plot_config``;
-  ✏️ Edit dataset → Save setup, written by ``wizard._wizard_setup_config``) —
+  ✏️ Edit dataset → Download setup file, written by ``wizard._wizard_setup_config``) —
   files sit on disk for months;
 * the **pre-widget seeding** both of the above rely on: values are written into
   ``st.session_state`` *before* the widget exists, so the key is the only thing
@@ -185,11 +185,21 @@ GLOBAL_DISPLAY_DPI = "global_display_dpi"
 GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
 GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
 
+# --- Export → Current figure's print size (#374, F28) -------------------------
+# Not `global_*`: the size a file is written at is not part of a design. On the
+# link and in the settings file, but only while a width is set.
+EXPORT_FIGURE_WIDTH = "export_figure_width"
+EXPORT_FIGURE_WIDTH_UNIT = "export_figure_width_unit"
+EXPORT_FIGURE_DPI = "export_figure_dpi"
+
 # --- Trial-picker keys a link / config seeds (utils.select_trial owns them) --
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
 # widget keys, seeded before the picker renders.
 SINGLE_SELECT_TRIAL_MODE = "single_select_trial_mode"
 SINGLE_TRIAL_ID = "single_trial_id"
+#: #374 — one-shot: the trial a link or settings file chose, so the per-dataset
+#: trial memory never takes it for one carried over (`utils.select_trial`).
+SINGLE_TRIAL_CHOSEN = "_single_trial_chosen"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
@@ -231,7 +241,7 @@ TRIAL_ANNOTATIONS = "trial_annotations"
 # (pinned equal to it by the contract test).
 DESIGN_PRESETS = "_design_presets"
 # The column mapping is seeded key-by-key from a setup file's `column_mapping`
-# section (✏️ Edit dataset → Save setup) and stored the same way in the recovery
+# section (✏️ Edit dataset → Download setup file) and stored the same way in the recovery
 # cache; the prefix is the contract, the suffixes are data-dependent.
 COLUMN_MAPPING_PREFIX = "col_map_"
 
@@ -248,6 +258,12 @@ CMP_OPACITY = "cmp{idx}_opacity"
 CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 # The word-box outline override ("" = the scanpath's own fixation colour).
 CMP_BOX_COLOR = "cmp{idx}_box_color"
+# The word-box fill override ("" = the figure's `global_word_box_fill_color`).
+CMP_BOX_FILL_COLOR = "cmp{idx}_box_fill_color"
+# The raw-gaze sample colour override ("" = the scanpath's own fixation colour).
+CMP_RAW_GAZE_COLOR = "cmp{idx}_raw_gaze_color"
+# The heatmap colour-scale override ("" = the figure's `global_heatmap_colorscale`).
+CMP_HEATMAP_COLORSCALE = "cmp{idx}_heatmap_colorscale"
 
 # --- CMP-24: scanpath B's own filters in Compare ----------------------------
 # A's filters are the rail's ordinary ones (`global_fixclass_*`,
@@ -344,6 +360,21 @@ PARAM_LEGACY_COLORBAR = (
 # OneStop's regimes keep tokens of their own (`onestop_<regime>`, DATA-63) and
 # are emitted in preference to this pair, as `onestop_public` was before them.
 PARAM_CORPUS = "corpus"
+
+# #374 F14: a dataset the user added, by its name. Its files can't travel in a
+# link, so the name is what lets the recipient's app open it when it holds a
+# dataset of that name, and say which dataset is missing when it doesn't —
+# rather than apply the view to whatever else is open. Read in `app.main`, like
+# `corpus`; emitted only for an added dataset.
+PARAM_DATASET = "dataset"
+
+# Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
+# and its value is the option's label verbatim — so neither the key nor the
+# labels (`tabs.CORPUS_SUBTABS`) can be renamed without breaking a bookmarked
+# view — unless the old label stays readable (`tabs.CORPUS_SUBTAB_ALIASES`). Streamlit reads and writes these itself; `_apply_url_preset` and
+# `_build_share_query` never see them.
+CORPUS_SUBTAB = "corpus_subtab"
+URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
 
 # The bundle *directory* is deliberately NOT here and never goes in a link: it is
 # a local filesystem path, so putting it on the wire would leak the sender's
@@ -455,6 +486,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
 # string / choice / colour
 SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        "export_width_unit": EXPORT_FIGURE_WIDTH_UNIT,
         "color_by": GLOBAL_COLOR_BY,
         "heatmap_style": GLOBAL_HEATMAP_STYLE,
         "heatmap_norm": GLOBAL_HEATMAP_NORM,
@@ -520,7 +552,14 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "fixclass_blink_color": GLOBAL_FIXCLASS_BLINK_COLOR,
         # EXP-19.
         **_compare_style_params(
-            "fix_color", "saccade_color", "saccade_style", "label_pattern", "box_color"
+            "fix_color",
+            "saccade_color",
+            "saccade_style",
+            "label_pattern",
+            "box_color",
+            "box_fill_color",
+            "raw_gaze_color",
+            "heatmap_colorscale",
         ),
         # CMP-24.
         "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
@@ -534,6 +573,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
 # int
 SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        "export_dpi": EXPORT_FIGURE_DPI,
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
@@ -557,6 +597,7 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 # float
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        "export_width": EXPORT_FIGURE_WIDTH,
         "line_spacing": GLOBAL_LINE_SPACING,
         "heatmap_sigma_px": GLOBAL_HEATMAP_SIGMA_PX,
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
@@ -652,6 +693,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_REGIME,
         PARAM_ONESTOP_PARTS,
         PARAM_CORPUS,
+        PARAM_DATASET,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
         COMPARE_SCREEN_PARAM,
@@ -689,6 +731,15 @@ COMPARE_B_FILTER_PARAMS: Mapping[str, str] = MappingProxyType(
         "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
     }
 )
+#: #374 F28 — Export → Current figure's print size. On the link only while a
+#: width is set: without one the PNG is drawn at the screen size, the default.
+EXPORT_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "export_width": EXPORT_FIGURE_WIDTH,
+        "export_width_unit": EXPORT_FIGURE_WIDTH_UNIT,
+        "export_dpi": EXPORT_FIGURE_DPI,
+    }
+)
 COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         **_compare_style_params(
@@ -701,6 +752,9 @@ COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
             "opacity",
             "label_pattern",
             "box_color",
+            "box_fill_color",
+            "raw_gaze_color",
+            "heatmap_colorscale",
         ),
         **COMPARE_B_FILTER_PARAMS,
     }
@@ -727,10 +781,12 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SOURCE_PARAM,
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
+        PARAM_DATASET,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
+        *EXPORT_PARAMS,
     }
 )
 
@@ -802,6 +858,9 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_VIEWING_DISTANCE_MM,
         GLOBAL_DISPLAY_DPI,
         GLOBAL_STIMULUS_FONT_PT,
+        # #374 F28.
+        EXPORT_FIGURE_WIDTH,
+        EXPORT_FIGURE_DPI,
         *(
             template.format(idx=idx)
             for template in (CMP_SACCADE_WIDTH, CMP_MARKER_SIZE_RANGE, CMP_OPACITY)
@@ -837,7 +896,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# 🔗 Share → File (the settings file) and the Save setup file
+# 🔗 Share → File (the settings file) and the Download setup file file
 # ---------------------------------------------------------------------------
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
@@ -856,6 +915,9 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_OPACITY,
         CMP_LABEL_PATTERN,
         CMP_BOX_COLOR,
+        CMP_BOX_FILL_COLOR,
+        CMP_RAW_GAZE_COLOR,
+        CMP_HEATMAP_COLORSCALE,
     }
 )
 
@@ -1005,6 +1067,7 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
         SINGLE_TRIAL_ID,
+        SINGLE_TRIAL_CHOSEN,
         # CMP-11 — the compare view's own two settings, restored from the
         # config's `compare_view` section. They are not `global_*` keys (compare
         # mode owns them, not the rail), which is why they live here rather than
@@ -1023,6 +1086,10 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         COMPARE_SOURCE_STATE_KEY,
         PENDING_COMPARE_STATE_KEY,
         SINGLE_COMPARE_SCREEN_ID,
+        # #374 F28 — the config's `export` section.
+        EXPORT_FIGURE_WIDTH,
+        EXPORT_FIGURE_WIDTH_UNIT,
+        EXPORT_FIGURE_DPI,
     }
 )
 

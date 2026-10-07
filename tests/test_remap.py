@@ -616,7 +616,7 @@ class TestStimulusLevelWordsRemap:
         (problem,) = problems["words"]
         assert problem.startswith(MAPPING_FAILURE_LEAD)
         assert "in the fixations finds them" in problem
-        assert "share neither a trial ID nor a Text ID" in problem
+        assert "share neither a Trial ID nor a Text ID" in problem
         assert saved is entry
         assert self._boxes(saved["words"]) == self._boxes(words)
 
@@ -949,7 +949,7 @@ def _setup_file_restore_app():
 
 
 class TestEditorSetupExport:
-    """The ✏️ Edit dataset footer's ⬇️ Save setup — the add screen's own export,
+    """The ✏️ Edit dataset footer's ⬇️ Download setup file — the add screen's own export,
     for the screen that edits what it created.
 
     It exists so an already-added dataset's mapping can travel: a share link
@@ -1097,7 +1097,7 @@ class TestEditorSetupExport:
         from scanpath_studio.tabs import render_dataset_editor_footer
 
         source = inspect.getsource(render_dataset_editor_footer)
-        assert "f\"{ICONS['download']} Save setup\"" in source
+        assert "f\"{ICONS['download']} Download setup file\"" in source
         assert "f\"{ICONS['confirm']} Save changes\"" in source
         assert "_editor_setup_config" in source
         assert "column_mapping_notes" in source
@@ -1310,7 +1310,7 @@ class TestStimulusProvenanceOnRemap:
             )
         assert not problems
         notices = st.session_state.get(tabs.STIMULUS_JOIN_NOTICE_KEY)
-        assert notices and "1 of 2 readings have word boxes" in notices[0]
+        assert notices and "1 of 2 trials have word boxes" in notices[0]
 
 
 class TestLegacyStoredRepeats:
@@ -1566,7 +1566,7 @@ class TestPendingChangePreview:
         assert census["Trials with word boxes"] == ("2 of 2", "0 of 1")
         assert census["Trials in the trial table"] == ("2 of 2", "0 of 1")
         # The readers are untouched.
-        assert census["Readers in the participant table"] == ("1 of 1", "1 of 1")
+        assert census["Participants in the participant table"] == ("1 of 1", "1 of 1")
 
     def test_the_editor_shows_it_and_counts_on_request(self):
         from streamlit.testing.v1 import AppTest

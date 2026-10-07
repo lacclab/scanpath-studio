@@ -108,8 +108,43 @@ class TestTrendFigures:
         assert len(band.x) == 2 * len(df)  # forward then reversed
         assert line.mode == "lines+markers"
         assert list(line.x) == list(df["trial_index"])
-        assert fig.layout.xaxis.title.text == "Trial Index"
+        assert fig.layout.xaxis.title.text == "Trial index"
         assert fig.layout.yaxis.title.text == "Fixation duration (ms)"
+
+    def test_the_trend_breaks_at_a_filtered_out_trial(self):
+        """#374 F35: no segment, and no band, crosses a missing trial."""
+        df = pd.DataFrame(
+            {
+                "trial_index": [1, 2, 5, 6],
+                "value": [10.0, 12.0, 11.0, 9.0],
+                "sem": [1.0, 1.0, 1.0, 1.0],
+            }
+        )
+        fig = plots.make_trend_figure(
+            df,
+            x_col="trial_index",
+            x_label="Trial order (TRIAL_INDEX)",
+            y_label="ms",
+            title="t",
+            break_gaps=True,
+            **_FW,
+        )
+        band, line = fig.data
+        assert list(line.x) == [1, 2, None, 5, 6]
+        assert list(band.x) == [1, 2, 2, 1, None, 5, 6, 6, 5]
+        assert fig.layout.xaxis.title.text == "Trial order (TRIAL_INDEX)"
+        # Non-integer positions (time, fractions) are never broken.
+        assert plots.break_at_gaps([0.5, 3.5], [1, 2]) == ([0.5, 3.5], [1, 2])
+
+    def test_the_trial_order_axis_names_its_column(self, demo):
+        """#374 F35: the demo carries two index columns that disagree."""
+        from scanpath_studio.data import trial_order_label
+
+        assert trial_order_label(demo.fixations) == "Trial order (trial_index)"
+        no_index = demo.fixations.drop(
+            columns=[c for c in ("trial_index", "TRIAL_INDEX") if c in demo.fixations]
+        )
+        assert trial_order_label(no_index) == "Trial order (by fixation time)"
 
     def test_per_participant_lines_overlay_the_trend(self, demo):
         """The Groups subtab's "Per-reader behind" overlay (AN-17)."""
@@ -158,7 +193,7 @@ class TestPerTextFigures:
             per, measure_label=_TFD.axis_label, max_panels=1, **_FW
         )
         assert len(fig.data) == 1  # no cohort overlay → one trace per panel
-        assert f"showing 1 of {len(demo.readers)} readers" in fig.layout.title.text
+        assert f"showing 1 of {len(demo.readers)} participants" in fig.layout.title.text
 
     def test_word_matrix_heatmap(self, demo):
         per = per_reader_word_measure(demo.words, demo.text_col, demo.text_id, _TFD)
@@ -200,7 +235,7 @@ class TestPerTextFigures:
         assert len(fig.data[0].x) == 2 * len(prof)
         assert list(fig.data[1].x) == list(prof.sort_values("word_id")["word_id"])
         assert fig.layout.showlegend is False
-        assert "cohort mean ± SD" in fig.layout.title.text
+        assert "cohort mean, SD band" in fig.layout.title.text
         assert fig.layout.xaxis.title.text == "Word (reading order)"
         assert fig.layout.yaxis.title.text == _TFD.axis_label
 
@@ -328,13 +363,13 @@ class TestPerReaderFigures:
     @pytest.mark.parametrize("kind,expected", [("violin", "violin"), ("box", "box")])
     def test_distribution_figure(self, demo, kind, expected):
         groups = reader_vs_cohort_values(demo.fixations, demo.participant, _FIX_DUR)
-        assert set(groups) == {"This reader", "Cohort"}
+        assert set(groups) == {"This participant", "Cohort"}
         fig = plots.make_distribution_figure(
             groups, metric_label=_FIX_DUR.axis_label, kind=kind, **_FW
         )
         assert [t.type for t in fig.data] == [expected, expected]
-        assert [t.name for t in fig.data] == ["This reader", "Cohort"]
-        assert len(fig.data[0].y) == groups["This reader"].size
+        assert [t.name for t in fig.data] == ["This participant", "Cohort"]
+        assert len(fig.data[0].y) == groups["This participant"].size
         assert fig.layout.yaxis.title.text == _FIX_DUR.axis_label
         assert fig.layout.showlegend is False
 
@@ -423,11 +458,12 @@ class TestGroupComparisonFigures:
             _FIX_DUR.label,
             _SACC.label,
         ]
+        assert all(t.error_y.array is None for t in fig.data)
+        assert fig.layout.title.text == "Group means per measure"
+        medians = plots.make_paired_bars_figure(df, aggregate="median", **_FW)
+        assert medians.layout.title.text == "Group medians per measure"
         # Each group is legended once, on the first subplot only.
         assert sum(bool(t.showlegend) for t in fig.data) == 2
-        for trace in fig.data:
-            assert trace.error_y.array[0] >= 0
-            assert trace.error_y.arrayminus[0] >= 0
 
     def test_difference_profile(self, demo):
         diff = group_word_difference(

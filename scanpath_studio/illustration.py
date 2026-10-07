@@ -5,6 +5,12 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+from .constants import AUTHOR_CHOICE, SYNTHETIC_CHOICE
+
+#: The reason recorded when *Show* labels a figure nothing was detected on; the
+#: figure draws "Illustration" alone for it (#374).
+MANUAL_LABEL_REASON = "manual label"
+
 
 def illustration_reasons(
     settings: dict,
@@ -53,8 +59,9 @@ def illustration_reasons(
         for window, full in windows
     ):
         reasons.append("fixation subset")
-    source_name = str(data_source or "").lower()
-    if synthetic or "synthetic" in source_name or "author" in source_name:
+    # #374: the app's own made-up sources only, never a user's dataset whose
+    # name happens to contain "synthetic" or "author".
+    if synthetic or data_source in (SYNTHETIC_CHOICE, AUTHOR_CHOICE):
         reasons.append("synthetic source")
     playback_speed = settings.get("playback_speed", 1.0)
     try:
@@ -71,5 +78,5 @@ def resolve_label_reasons(mode: str, reasons: Sequence[str]) -> list[str]:
     if mode == "Hide":
         return []
     if mode == "Show" and not reasons:
-        return ["manual label"]
+        return [MANUAL_LABEL_REASON]
     return list(reasons)

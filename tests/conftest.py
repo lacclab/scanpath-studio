@@ -235,7 +235,8 @@ def picker_trial_id(option: str) -> str:
     the parts with ``_`` and put back the ``r0`` a split id no longer shows. An
     id that did not split is shown as it is.
     """
-    shown = str(option).removeprefix("★ ").strip()
+    # #374 F27: the badges follow the trial.
+    shown = str(option).removesuffix(" ★").strip()
     parts = shown.split(" · ")
     if len(parts) == 1:
         return shown
@@ -245,7 +246,7 @@ def picker_trial_id(option: str) -> str:
 
 
 def arm_debug_dialog(at) -> None:
-    """Ask for the ❓ Help → Debug modal on the *next* run (UX-179).
+    """Ask for the ❓ Help → About → Debug modal on the *next* run (UX-179).
 
     Call it before **every** ``at.run()`` in a flow that drives the dialog, not
     just the first. In a browser an interaction inside a dialog reruns only the

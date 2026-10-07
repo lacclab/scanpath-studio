@@ -17,7 +17,7 @@ to clear just that one.
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **:material/cleaning_services: Filter → :material/blur_on: Fixations** in the plot rail and set
+when timing helps. Open **:material/cleaning_services: Flag fixations → :material/blur_on: Fixations** in the plot rail and set
 **Highlight** for:
 
 - out-of-bounds points;
@@ -35,19 +35,19 @@ Return to the trial filters and, under **By trial annotation**, put `exclude` in
 **Excluding tags** — not in **With any of these tags**, which would keep only
 the rejected trials. This turns the review decisions into the active pool
 without deleting the source data. Before you narrow the pool, save the full
-record with **:material/database: Data → Annotations → Export**: it lists every trial you
+record with **:material/database: Data Management → Annotations → Export**: it lists every trial you
 tagged, including the ones the filter now hides.
 
 These filters read the trial's own star and tags. On a dataset with several
 screens per trial, a star or tag on a single screen does not keep or hide its
 trial, and its tags are not offered in the pickers; find those on
-**:material/database: Data → Annotations**.
+**:material/database: Data Management → Annotations**.
 
 ## 4. Verify the retained pool
 
 Check at least one trial from each participant or condition. Then open the
 :material/database: **Data Management** page and confirm that the participant, text, trial,
-fixation, and word counts under **What's in the … dataset → Stats** are
+fixation, and word counts under **What's in … → Stats** are
 plausible. Those follow the filters; the dataset table above them counts the
 whole dataset.
 

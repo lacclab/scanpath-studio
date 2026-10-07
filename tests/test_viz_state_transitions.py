@@ -53,9 +53,9 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
 
 @pytest.mark.parametrize("preset", ["scanpath", "heatmap", "illustration"])
-def test_compare_on_then_off_puts_the_preset_back(monkeypatch, preset):
-    """Switching Compare (a design setting) on reads Custom; switching it off
-    again returns every setting to the preset, so the badge must follow."""
+def test_compare_on_and_off_keeps_the_preset(monkeypatch, preset):
+    """#374 F25: Compare is a mode, not a design setting — switching it on or
+    off leaves the preset highlighted."""
     store = _viz_store()
     store["single_compare_toggle"] = False
     monkeypatch.setattr(controls.st, "session_state", store)
@@ -63,7 +63,7 @@ def test_compare_on_then_off_puts_the_preset_back(monkeypatch, preset):
     controls._apply_view_preset(preset)
     assert controls._active_quick_view() == preset
     store["single_compare_toggle"] = True
-    assert controls._active_quick_view() == "custom"
+    assert controls._active_quick_view() == preset
     store["single_compare_toggle"] = False
     assert controls._active_quick_view() == preset
     # Back on the preset, a later edit drifts from it as before.
@@ -304,3 +304,30 @@ class TestTrialFiltersKeepTheDesign:
         at.session_state["global_show_saccades"] = False
         self._run(at)
         assert at.session_state["_quick_view_selection"] == "custom"
+
+
+def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
+    """#374 F16: the Heatmap design is the word colours and nothing else, so a
+    highlighted span is switched off with the other layers."""
+    store = _viz_store()
+    store["global_critical_span_style"] = "Mark text"
+    monkeypatch.setattr(controls.st, "session_state", store)
+
+    controls._apply_view_preset("heatmap")
+    assert store["global_critical_span_style"] == "None"
+    assert controls._active_quick_view() == "heatmap"
+    controls._apply_view_preset("scanpath")
+    assert store["global_critical_span_style"] == "Mark text"
+
+
+@pytest.mark.timeout(180)
+def test_animate_says_why_layers_are_greyed():
+    """#374 F23: the reason is on screen under the Animate row, not only in
+    each greyed row's tooltip."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
+    at.run()
+    reason = "Replay draws its own fixations"
+    assert not any(reason in c.value for c in at.caption)
+    at.toggle(key="single_animate").set_value(True).run()
+    assert not at.exception
+    assert any(reason in c.value for c in at.caption)

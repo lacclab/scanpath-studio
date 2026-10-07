@@ -1234,7 +1234,7 @@ class TestInventory:
         )
         assert f"Version: {__version__}" in readme
         assert "one trial (participant p1, trial t2)" in readme
-        assert "1 trial(s), 1 screen export unit(s)" in readme
+        assert "- 1 trial" in readme
 
 
 class TestExportPlan:

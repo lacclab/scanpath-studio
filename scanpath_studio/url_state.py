@@ -12,7 +12,7 @@ import copy
 import json
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from urllib.parse import urlencode
 
@@ -91,6 +91,7 @@ from .controls import (
 )
 from .data import composite_respelling_map, respell_reading
 from .experimental_setup import format_provenance_param, parse_provenance_param
+from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
     COMPARE_LAYOUT_PARAM,
@@ -100,9 +101,11 @@ from .session_keys import (
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
     COMPARE_STYLE_PARAMS,
+    EXPORT_PARAMS,
     FIX_RANGE_PARAM,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
+    PARAM_DATASET,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
@@ -150,7 +153,7 @@ def _parse_saccade_classes(v) -> list[str]:
 
     Comma-separated class names (``regression,return_sweep``). An unknown name
     raises, so a link written against a build with different classes surfaces the
-    reader's "Ignored bad URL param" warning instead of quietly showing a figure
+    reader's "Ignored the link's invalid …" warning instead of quietly showing a figure
     with the wrong saccades in it. The result is ordered by
     ``SACCADE_CLASS_ORDER`` to match what the multiselect writes.
     """
@@ -172,7 +175,7 @@ def _parse_choice(value, options: tuple[str, ...], what: str) -> str:
     """Match ``value`` case-insensitively against a closed vocabulary.
 
     Raising (rather than falling back to the default) is what turns a mangled
-    link into the reader's "Ignored bad URL param" warning instead of a wedged
+    link into the reader's "Ignored the link's invalid …" warning instead of a wedged
     widget — the same contract `_parse_align_algorithm` follows. Hyphens are
     accepted for the layout so the CLI's `--compare-layout side-by-side` and the
     link agree on one spelling.
@@ -208,11 +211,11 @@ def _parse_hex_color(v) -> str:
     A colour reaches Plotly straight from session state on the render path, so
     ``?order_font_color=zzz`` used to raise inside the figure builder — before
     the picker that would have coerced it ever rendered. Raising here instead
-    turns a mangled link into the reader's "Ignored bad URL param" warning.
+    turns a mangled link into the reader's "Ignored the link's invalid …" warning.
     """
     text = str(v).strip()
     if not _HEX_COLOR.fullmatch(text):
-        raise ValueError(f"not a #rrggbb colour: {text!r}")
+        raise ValueError(f"not a #rrggbb color: {text!r}")
     return text
 
 
@@ -276,7 +279,7 @@ def _parse_playback_speed(v) -> float:
     """A replay speed → the ⚙ Playback slider's own option (EXP-18).
 
     It is an `st.select_slider`, which raises on a value outside its options,
-    so ``?playback_speed=3.3`` is rejected here (the "Ignored bad URL param"
+    so ``?playback_speed=3.3`` is rejected here (the "Ignored the link's invalid …"
     warning) rather than wedging the popover. The options belong to `tabs`,
     which imports this module — hence the import at call time.
     """
@@ -287,6 +290,15 @@ def _parse_playback_speed(v) -> float:
         if math.isclose(speed, option):
             return option
     raise ValueError(f"not a playback speed the slider offers: {v!r}")
+
+
+# #374 F28: Export → Current figure's Width and DPI boxes take
+# `PRINT_WIDTH_BOUNDS` / `PRINT_DPI_BOUNDS` (from export, shared by every surface).
+
+
+def _parse_print_unit(v) -> str:
+    """``mm`` or ``in``, the Width box's two units."""
+    return _parse_choice(str(v).strip().lower(), ("mm", "in"), "width unit")
 
 
 def _parse_fixclass_mode(v) -> str:
@@ -323,7 +335,7 @@ def _parse_heatmap_style(value) -> str:
 
 
 def _parse_colorbar_orientation(v) -> str:
-    return _parse_choice(v, ("Vertical", "Horizontal"), "colour-bar orientation")
+    return _parse_choice(v, ("Vertical", "Horizontal"), "color bar orientation")
 
 
 def _parse_align_algorithm(v) -> str:
@@ -421,6 +433,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     **_cmp_style_params("hollow"),
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    # #374 F28: Export → Current figure's print size (only while a width is set).
+    "export_width_unit": "export_figure_width_unit",
     "preproc_short_policy": "global_preproc_short_policy",
     "color_by": "global_color_by",
     "heatmap_style": "global_heatmap_style",
@@ -502,7 +516,14 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     },
     # EXP-19: Compare's per-scanpath colours, line style and legend label.
     **_cmp_style_params(
-        "fix_color", "saccade_color", "saccade_style", "label_pattern", "box_color"
+        "fix_color",
+        "saccade_color",
+        "saccade_style",
+        "label_pattern",
+        "box_color",
+        "box_fill_color",
+        "raw_gaze_color",
+        "heatmap_colorscale",
     ),
     # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
     # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
@@ -534,9 +555,12 @@ _SHARE_COLOR_PARAMS = (
     "fixclass_long_color",
     "fixclass_oob_color",
     "fixclass_blink_color",
-    *_cmp_style_params("fix_color", "saccade_color", "box_color"),
+    *_cmp_style_params(
+        "fix_color", "saccade_color", "box_color", "box_fill_color", "raw_gaze_color"
+    ),
 )
 _SHARE_INT_PARAMS = {
+    "export_dpi": "export_figure_dpi",
     "order_font_size": "global_order_font_size",
     # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
     # says "look at this replay" should reproduce the same smoothness.
@@ -559,6 +583,7 @@ _SHARE_INT_PARAMS = {
     "cmp_b_fixclass_long_threshold_ms": "cmp1_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
+    "export_width": "export_figure_width",
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
     "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
     "line_spacing": "global_line_spacing",
@@ -622,6 +647,15 @@ _GATED_URL_PARAMS = {
     "align_connectors": drift_correction_enabled,
 }
 
+
+def _parse_colorscale(value: str) -> str:
+    """One of the app's colour scales, else ``ValueError`` (the reader's "Ignored
+    bad URL param" warning) rather than a name the rail's picker cannot show."""
+    if value not in COLORSCALES:
+        raise ValueError(f"not one of the app's color scales: {value!r}")
+    return value
+
+
 _URL_PRESETS = {
     # Booleans (read side of _SHARE_TOGGLE_PARAMS) + the legacy aliases.
     "hide_fixation_numbers": ("global_show_order", lambda v: not _coerce_bool(v)),
@@ -656,6 +690,13 @@ _URL_PRESETS = {
     "caption_pattern": ("global_caption_pattern", _strip_markup),
     "illustration_text": ("global_illustration_text", _strip_markup),
     "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
+    # #374 F28 — a closed vocabulary, like the rest.
+    "export_width_unit": ("export_figure_width_unit", _parse_print_unit),
+    # Compare's per-scanpath heatmap colour scale: an app colour scale only.
+    **{
+        param: (key, _parse_colorscale)
+        for param, key in _cmp_style_params("heatmap_colorscale").items()
+    },
     # EXP-18 — the settings that joined the link, each a closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
     **{
@@ -755,6 +796,9 @@ _URL_BOUNDED = {
     "global_monitor_width_mm": (100.0, 3000.0),
     "global_viewing_distance_mm": (100.0, 3000.0),
     "global_display_dpi": (20.0, 1000.0),
+    # #374 F28 — mirrors the Export subtab's number boxes.
+    "export_figure_width": PRINT_WIDTH_BOUNDS,
+    "export_figure_dpi": PRINT_DPI_BOUNDS,
     "global_stimulus_font_pt": (4.0, 144.0),
     **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
     **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
@@ -1036,7 +1080,7 @@ def _apply_url_preset() -> str | None:
                 try:
                     st.session_state.setdefault(f"{prefix}_slider", int(qp["trial"]))
                 except (ValueError, TypeError):
-                    st.warning(f"Ignored bad URL param ?trial={qp['trial']!r}")
+                    st.warning(f"Ignored the link's invalid trial={qp['trial']}.")
 
     _apply_url_palette(qp)
 
@@ -1054,7 +1098,7 @@ def _apply_url_preset() -> str | None:
         try:
             value = coerce(raw)
         except (ValueError, TypeError):
-            st.warning(f"Ignored bad URL param ?{url_key}={raw!r}")
+            st.warning(f"Ignored the link's invalid {url_key}={raw}.")
             continue
         # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
         # the slider / number_input on render.
@@ -1116,7 +1160,7 @@ def _apply_url_preset() -> str | None:
         try:
             value = coerce(qp[legacy])
         except (ValueError, TypeError):
-            st.warning(f"Ignored bad URL param ?{legacy}={qp[legacy]!r}")
+            st.warning(f"Ignored the link's invalid {legacy}={qp[legacy]}.")
             continue
         for bar in ("fixation", "heatmap"):
             state_key = "global_" + suffix.format(bar=bar)
@@ -1128,8 +1172,8 @@ def _apply_url_preset() -> str | None:
             both = _coerce_bool(qp[PARAM_SHOW_TITLE_CAPTION])
         except (ValueError, TypeError):
             st.warning(
-                f"Ignored bad URL param ?{PARAM_SHOW_TITLE_CAPTION}="
-                f"{qp[PARAM_SHOW_TITLE_CAPTION]!r}"
+                f"Ignored the link's invalid {PARAM_SHOW_TITLE_CAPTION}="
+                f"{qp[PARAM_SHOW_TITLE_CAPTION]}."
             )
         else:
             st.session_state.setdefault("global_show_title", both)
@@ -1196,7 +1240,7 @@ def _apply_url_preset() -> str | None:
             try:
                 events = event_records_frame(json.loads(str(qp["author_events"])))
             except (ValueError, TypeError, RecursionError):
-                st.warning("Ignored malformed authored-fixation data in the URL.")
+                st.warning("Ignored the link's unreadable hand-made scanpath.")
             else:
                 st.session_state.setdefault("_authored_events_frame", events)
                 # Prevent the authoring widget's text-change initializer from
@@ -1228,6 +1272,96 @@ def link_sets(state_key: str) -> bool:
         url_key in params and target == state_key
         for url_key, (target, _coerce) in _URL_PRESETS.items()
     )
+
+
+def linked_state_keys() -> frozenset[str]:
+    """The session keys the open deep link carries a value for (#374 F25).
+
+    What the rail's design highlight is recomputed from on a link's first run:
+    a link built from a customized view opens on Custom, not on the design
+    whose own few settings it happens to match."""
+    try:
+        params = st.query_params
+    except Exception:
+        return frozenset()
+    return frozenset(
+        target
+        for url_key, (target, _coerce) in _URL_PRESETS.items()
+        if url_key in params
+    )
+
+
+#: #374 F14 — a link to an added dataset this session doesn't hold, kept so the
+#: notice stays up (the link's params are dropped once it is read) until
+#: another dataset is opened: ``{"message": str, "choice": str | None}``.
+LINK_DATASET_MISSING_KEY = "_link_dataset_missing"
+
+
+def missing_dataset_message(
+    name: str, participant: str | None = None, trial: str | None = None
+) -> str:
+    """What a recipient reads when a link names a dataset they don't have."""
+    shown = str(name).replace("*", r"\*")
+    if trial and participant:
+        what = f"trial {trial} of participant {participant} in **{shown}**"
+    elif trial:
+        what = f"trial {trial} in **{shown}**"
+    else:
+        what = f"**{shown}**"
+    return (
+        f"This link shows {what}, which isn't here. Ask the sender for the data "
+        f"files and its setup file ({ICONS['edit']} Edit dataset → Download setup file), "
+        f"then add it with {ICONS['add']} Add dataset → Import files. Nothing "
+        "from the link was applied."
+    )
+
+
+def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
+    """Open the added dataset a link names (`?dataset=`, #374 F14).
+
+    Returns the dataset to open when this session holds one of that name. When
+    it doesn't, the link's view is **not** applied to whatever else is open:
+    every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
+    link's params are cleared so the next run does not seed them again, and a
+    notice saying which dataset is missing — and how to get it — is parked
+    under :data:`LINK_DATASET_MISSING_KEY`. ``current`` is the dataset open now,
+    which the notice is tied to.
+    """
+    try:
+        params = st.query_params
+        name = params.get(PARAM_DATASET)
+    except Exception:
+        return None
+    if not name or params.get("source"):
+        return None
+    if name in (st.session_state.get("_datasets") or {}):
+        return str(name)
+    message = missing_dataset_message(
+        str(name), params.get("participant"), params.get("trial_id")
+    )
+    for key in seeded:
+        st.session_state.pop(key, None)
+    params.clear()
+    st.session_state[LINK_DATASET_MISSING_KEY] = {
+        "message": message,
+        "choice": current,
+    }
+    return None
+
+
+def link_dataset_notice(current: str | None) -> str | None:
+    """The missing-dataset notice while it holds — until another dataset is
+    opened than the one that was open when the link was read."""
+    held = st.session_state.get(LINK_DATASET_MISSING_KEY)
+    if not isinstance(held, dict):
+        return None
+    if held.get("choice") is None:
+        # A fresh session has no dataset open until the picker resolves one.
+        held["choice"] = current
+    elif held.get("choice") != current:
+        st.session_state.pop(LINK_DATASET_MISSING_KEY, None)
+        return None
+    return str(held.get("message") or "") or None
 
 
 def scope_link_setup(choice: str | None) -> None:
@@ -1308,8 +1442,23 @@ _BOOL_STATE_KEYS = frozenset(
         "single_compare_toggle",
         "cmp0_hollow",
         "cmp1_hollow",
+        "single_fix_range_all_trials",
+        "single_fix_range_user_set",
+        "single_compare_fix_range_user_set",
     }
 )
+#: Free-text settings (the label and title/caption patterns): a string.
+_TEXT_STATE_KEYS = frozenset(
+    {
+        "global_illustration_text",
+        "global_title_pattern",
+        "global_caption_pattern",
+        "cmp0_label_pattern",
+        "cmp1_label_pattern",
+    }
+)
+#: A data field the rail heals against the loaded data: a string, or unset.
+_FIELD_STATE_KEYS = frozenset({"global_word_hover_measure"})
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
 #: have to be numbers.
@@ -1332,9 +1481,12 @@ def _closed_choice(options) -> Callable[[object], object]:
 #: passes (a deselected segmented control stores it, and the rail coerces it).
 _CHOICE_STATE_PARSERS = {
     "global_align_algorithm": _parse_align_algorithm,
-    "global_saccade_classes": lambda v: _parse_saccade_classes(
-        ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
-    ),
+    **{
+        key: lambda v: _parse_saccade_classes(
+            ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
+        )
+        for key in ("global_saccade_classes", "cmp1_saccade_classes")
+    },
     "single_compare_layout": _parse_compare_layout,
     "single_compare_stimulus": _parse_compare_stimulus,
     "single_playback_speed": _parse_playback_speed,
@@ -1343,6 +1495,7 @@ _CHOICE_STATE_PARSERS = {
         for i in (0, 1)
     },
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
+    "global_marker_size_scale": _closed_choice(tuple(MARKER_SIZE_SCALES)),
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
@@ -1351,6 +1504,10 @@ _CHOICE_STATE_PARSERS = {
     "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
     "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
     "global_heatmap_colorscale": _closed_choice(tuple(COLORSCALES)),
+    # "" follows the figure's colour scale.
+    **{
+        f"cmp{i}_heatmap_colorscale": _closed_choice(("", *COLORSCALES)) for i in (0, 1)
+    },
     "global_saccade_style": _closed_choice(tuple(SACCADE_DASH_OPTIONS)),
     "global_saccade_render_mode": _closed_choice(("Straight", "Arc")),
     "global_saccade_color_mode": _closed_choice(tuple(SACCADE_COLOR_MODES)),
@@ -1360,7 +1517,8 @@ _CHOICE_STATE_PARSERS = {
     "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
     "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
     **{
-        f"global_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        f"{side}_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        for side in ("global", "cmp1")
         for c in _FIXCLASS_CATEGORIES
     },
     **{
@@ -1399,7 +1557,13 @@ def sanitize_session_value(key: str, value):
     """
     if key in _COLOR_STATE_KEYS:
         if not isinstance(value, str):
-            raise TypeError(f"not a colour: {value!r}")
+            raise TypeError(f"not a color: {value!r}")
+        if (
+            value == ""
+            and key.endswith(("_box_color", "_box_fill_color", "_raw_gaze_color"))
+            and key.startswith("cmp")
+        ):
+            return value  # follows the scanpath's colour / the figure's fill
         return _parse_hex_color(value)
     bounds = _URL_BOUNDED.get(key)
     if bounds is not None:
@@ -1419,6 +1583,21 @@ def sanitize_session_value(key: str, value):
         if not isinstance(value, bool):
             raise TypeError(f"not a switch value: {value!r}")
         return value
+    if key in _TEXT_STATE_KEYS:
+        if not isinstance(value, str):
+            raise TypeError(f"not text: {value!r}")
+        return value
+    if key in _FIELD_STATE_KEYS:
+        if value is not None and not isinstance(value, str):
+            raise TypeError(f"not a field name: {value!r}")
+        return value
+    if key in ("single_fix_range", "single_compare_fix_range") and value is not None:
+        # The fixation window: re-expanded to each trial's own range, so it
+        # only has to be two whole numbers.
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise TypeError(f"not a two-number range: {value!r}")
+        a, b = (int(_bounded_number(v, None, None)) for v in value)
+        return (min(a, b), max(a, b))
     parser = _CHOICE_STATE_PARSERS.get(key)
     if parser is not None and value is not None:
         return parser(value)
@@ -1639,16 +1818,15 @@ def _migrate_plot_config(config: dict) -> tuple[dict, str | None]:
     working = copy.deepcopy(config)
     if version > PLOT_CONFIG_SCHEMA:
         return working, (
-            "This plot config was saved by a newer version of Scanpath Studio "
-            f"(format v{version}; this build understands up to v{PLOT_CONFIG_SCHEMA}). "
-            "Settings it doesn't recognise were ignored."
+            "This settings file was saved by a newer version of Scanpath Studio; "
+            "settings this one doesn't recognize were ignored."
         )
     while version < PLOT_CONFIG_SCHEMA:
         migrate = _PLOT_CONFIG_MIGRATIONS.get(version)
         if migrate is None:
             note = (
-                f"Couldn't fully upgrade this plot config (no migration from format "
-                f"v{version} to v{PLOT_CONFIG_SCHEMA}); applied what still fit."
+                "This settings file is from an older version that can't be fully "
+                "read; applied what still fit."
             )
             working["schema"] = version
             return working, note
@@ -1677,7 +1855,7 @@ def _match_selection(
     if tid in (None, ""):
         return None, "it names no trial"
     if combos is None or combos.empty:
-        return None, "the trial pool is empty"
+        return None, "no trials pass the current filters"
     tid = str(tid)
     participant_given = pid not in (None, "")
     readings = list(zip(combos["participant_id"], combos["trial_id"], strict=True))
@@ -1691,7 +1869,7 @@ def _match_selection(
         ]
         if match.empty:
             return None, (
-                f"reader {pid}'s trial {tid} is not in the current trial pool"
+                f"participant {pid}'s trial {tid} isn't in the filtered trials"
             )
         return match.iloc[0], ""
     trial_ids = {str(t) for _, t in readings}
@@ -1699,12 +1877,12 @@ def _match_selection(
         tid = composite_respelling_map([tid], trial_ids).get(tid, tid)
     match = combos[combos["trial_id"].astype(str) == tid]
     if match.empty:
-        return None, f"trial {tid} is not in the current trial pool"
+        return None, f"trial {tid} isn't in the filtered trials"
     readers = match["participant_id"].astype(str).unique()
     if len(readers) > 1:
         return None, (
-            f"trial {tid} belongs to {len(readers)} readers in the current pool "
-            "and no reader was named"
+            f"trial {tid} belongs to {len(readers)} participants and the link "
+            "names none"
         )
     return match.iloc[0], ""
 
@@ -1733,6 +1911,9 @@ def _restore_selection(
         "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
     )
     st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
+    # Read once by `utils.select_trial`: a trial chosen here is never mistaken
+    # for one carried over from another dataset that happens to share its id.
+    st.session_state[f"_{key_prefix}_trial_chosen"] = str(row[trial_field])
     if selection.get("screen_id") not in (None, ""):
         st.session_state[f"{key_prefix}_screen_id"] = str(selection["screen_id"])
     return True
@@ -1776,7 +1957,7 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> str | None:
     }
     _row, reason = _match_selection(selection, combos)
     if reason:
-        return f"The link's reading couldn't be opened: {reason}."
+        return f"The link's trial couldn't be opened: {reason}."
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
@@ -1848,7 +2029,7 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
     st.session_state.pop(PENDING_TRIAL_KEY, None)
     _row, reason = _match_selection(selection, combos)
     if reason:
-        return f"Couldn't open that reading: {reason}."
+        return f"Couldn't open that trial: {reason}."
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
@@ -2089,7 +2270,7 @@ def _restore_plot_config(
             coloring["heatmap_norm"] in ("Linear", "Log"),
             "global_heatmap_norm",
             coloring["heatmap_norm"],
-            "heatmap colour scaling",
+            "heatmap color scaling",
         )
     if "color_by" in coloring:
         put_valid(
@@ -2114,7 +2295,12 @@ def _restore_plot_config(
     ):
         val = coloring.get(cfg_key)
         if val is not None:
-            put_valid(val in COLORSCALES, state_key, val, cfg_key.replace("_", " "))
+            put_valid(
+                val in COLORSCALES,
+                state_key,
+                val,
+                cfg_key.replace("_", " ").replace("colorscale", "color scale"),
+            )
     sac = coloring.get("saccade_color")
     if isinstance(sac, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sac):
         put("global_saccade_color", sac)
@@ -2165,7 +2351,7 @@ def _restore_plot_config(
             mode in SACCADE_COLOR_MODES,  # VIZ-19 added "Forward / regression"
             "global_saccade_color_mode",
             mode,
-            "saccade colour mode",
+            "saccade color mode",
         )
     if "saccade_type_legend" in coloring:
         put("global_saccade_type_legend", bool(coloring["saccade_type_legend"]))
@@ -2359,6 +2545,24 @@ def _restore_plot_config(
             )
         except (TypeError, ValueError):
             skipped.append("playback speed")
+
+    # #374 F28 — Export → Current figure's print size; a blank width is the
+    # screen-size PNG.
+    export = section("export")
+    if "width" in export:
+        if export["width"] in (None, ""):
+            put("export_figure_width", None)
+        else:
+            put_float(
+                export["width"], "export_figure_width", *PRINT_WIDTH_BOUNDS, "width"
+            )
+    if "unit" in export:
+        try:
+            put("export_figure_width_unit", _parse_print_unit(export["unit"]))
+        except (TypeError, ValueError):
+            skipped.append("width unit")
+    if "dpi" in export:
+        put_int(export["dpi"], "export_figure_dpi", *PRINT_DPI_BOUNDS, "DPI")
 
     canvas = section("canvas_px")
     if "width" in canvas:
@@ -2642,6 +2846,26 @@ def _restore_plot_config(
                 bc == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bc)
             ):
                 put(f"cmp{idx}_box_color", bc)
+            # Likewise "" for the fill: follow the figure's.
+            bf = entry.get("box_fill_color")
+            if isinstance(bf, str) and (
+                bf == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bf)
+            ):
+                put(f"cmp{idx}_box_fill_color", bf)
+            # And for the raw-gaze samples: follow the fixation colour.
+            rg = entry.get("raw_gaze_color")
+            if isinstance(rg, str) and (
+                rg == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", rg)
+            ):
+                put(f"cmp{idx}_raw_gaze_color", rg)
+            # "" again follows: the figure's heatmap colour scale.
+            if "heatmap_colorscale" in entry:
+                put_valid(
+                    entry["heatmap_colorscale"] in ("", *COLORSCALES),
+                    f"cmp{idx}_heatmap_colorscale",
+                    entry["heatmap_colorscale"],
+                    f"scanpath {idx + 1} heatmap color scale",
+                )
             if "saccade_style" in entry:
                 put_valid(
                     entry["saccade_style"] in SACCADE_DASH_OPTIONS,
@@ -2712,9 +2936,9 @@ def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | Non
     from .compare_source import secondary_dataset_options
 
     if not isinstance(compare, dict) or compare.get("trial_id") in (None, ""):
-        return None, "the file names no second reading"
+        return None, "the file names no second trial"
     if compare.get("participant_id") in (None, ""):
-        return None, "the file's second reading names no reader"
+        return None, "the file's second trial names no participant"
     source = compare.get("source")
     if source in (None, "") or source == st.session_state.get("data_source_choice"):
         _row, reason = _match_selection(compare, combos)
@@ -2806,13 +3030,13 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
         config = json.loads(uploaded.getvalue().decode("utf-8"))
         if not isinstance(config, dict):
             raise ValueError("expected a JSON object")
-    except (ValueError, UnicodeDecodeError) as exc:
-        st.toast(f"Couldn't read plot config: {exc}", icon=ICONS["warning"])
+    except (ValueError, UnicodeDecodeError):
+        st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     try:
         applied, skipped = _restore_plot_config(config, combos, fixations)
     except Exception as exc:  # backstop for an unexpectedly shaped config
-        st.toast(f"Couldn't apply plot config: {exc}", icon=ICONS["warning"])
+        st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return
     st.session_state["_plot_config_skipped"] = skipped
     staged = st.session_state.get(PENDING_PREPROC_RESTORE_KEY) or {}
@@ -2832,11 +3056,11 @@ _PLOT_CONFIG_TOAST_KEY = "_plot_config_restored_toast"
 def _toast_restored(applied: int, any_skipped: bool) -> None:
     if applied:
         st.toast(
-            f"Restored {plural(applied, 'setting')} from plot config.",
+            f"Restored {plural(applied, 'setting')} from the settings file.",
             icon=ICONS["success"],
         )
     elif not any_skipped:
-        st.toast("Plot config had no recognized settings.", icon=ICONS["warning"])
+        st.toast("The settings file had no recognized settings.", icon=ICONS["warning"])
 
 
 def _build_share_query(
@@ -2911,17 +3135,21 @@ def _build_share_query(
         # upload. What it *can* do is name the route that saves them the
         # re-mapping, which is a real second half of "load the same data": the
         # column mapping and recording setup are exportable as JSON from the
-        # add-dataset screen's ⬇️ Save setup, and re-applied from that screen's
+        # add-dataset screen's ⬇️ Download setup file, and re-applied from that screen's
         # *Restore a saved setup*. The caveat used to stop at "load the same
         # data" and leave the mapping to be redone by hand.
+        #
+        # #374 F14: the link names the dataset, so the recipient's app can open
+        # one of that name and say which is missing when it has none.
+        if data_choice in (st.session_state.get("_datasets") or {}):
+            params[PARAM_DATASET] = str(data_choice)
         caveats.append(
-            "This data source can't be rebuilt from a link — the recipient will "
-            "need to load the same files themselves. Send them the dataset's "
-            f"**⬇ Save setup** JSON (on the {ICONS['add']} Add dataset screen, beside "
-            f"{ICONS['confirm']} Add dataset) along with the files: it carries the column mapping "
-            "and recording setup, and they re-apply it from *Restore a saved "
-            "setup* on that same screen. The view settings below travel in the "
-            "link itself."
+            "This dataset's files can't travel in a link — the recipient needs "
+            "them too. Send them with its setup file "
+            f"({ICONS['edit']} **Edit dataset → Download setup file**): they add the "
+            f"dataset with {ICONS['add']} **Add dataset → Import files** and "
+            "restore the setup there. The link names the dataset and carries "
+            "the view settings."
         )
 
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
@@ -2963,7 +3191,7 @@ def _build_share_query(
             # cannot travel, and the link must say so rather than arrive as a
             # single scanpath the recipient has no way to know was a pair.
             caveats.append(
-                "The compared scanpath names a second reader, so it isn't "
+                "The compared scanpath names a second participant, so it isn't "
                 "included at this privacy setting — the link opens the first "
                 "scanpath only."
             )
@@ -3091,6 +3319,11 @@ def _build_share_query(
         )
         if orphaned or restated:
             params.pop(url_key)
+    # #374 F28 — the print size travels only while a width is set; without
+    # one the PNG is drawn at the screen size, which needs nothing said.
+    if not st.session_state.get(EXPORT_PARAMS["export_width"]):
+        for url_key in EXPORT_PARAMS:
+            params.pop(url_key, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 
@@ -3256,7 +3489,7 @@ def _render_share_link_widget(query: str) -> None:
           <div class="sps-share-row">
             <input id="sps-share-url" type="text" readonly
                    aria-label="Shareable link" />
-            <button id="sps-share-action" type="button">Refresh &amp; Copy</button>
+            <button id="sps-share-action" type="button">Copy link</button>
           </div>
           <div id="sps-share-status" class="sps-share-status"></div>
         </div>
@@ -3336,6 +3569,9 @@ def _render_share_link_widget(query: str) -> None:
         # One control row plus the transient copy-status line. The previous
         # 110 px frame reserved a visibly empty block before the note below.
         height=76,
+        alt="Shareable link with a copy button",
+        # #374 F19: its Copy button must be reachable from the keyboard.
+        focusable=True,
     )
 
 
@@ -3396,10 +3632,10 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=AUTHOR_CHOICE,
             options={"path": "scanpath.json"},
             note=(
-                "An authored scanpath lives in this session — save it with "
-                "**Download authoring file** on the ✍️ authoring screen first "
-                "(it downloads as `scanpath.json`, the name the snippet reads), "
-                "then run the snippet beside it."
+                "An authored scanpath exists only in the app — save it with "
+                "**Download authoring file** on *Author a scanpath* first (it "
+                "saves as `scanpath.json`, which the snippet reads), then run "
+                "the snippet beside it."
             ),
         )
 
@@ -3531,6 +3767,18 @@ def _samples_only(stored: dict) -> bool:
     )
 
 
+def _snippet_save_kwargs() -> dict:
+    """`save_figure`'s size keywords for the PNG the Export subtab writes."""
+    from scanpath_studio.export import png_save_kwargs
+
+    ss = st.session_state
+    return png_save_kwargs(
+        ss.get(EXPORT_PARAMS["export_width"]),
+        ss.get(EXPORT_PARAMS["export_width_unit"]) or "mm",
+        ss.get(EXPORT_PARAMS["export_dpi"]),
+    )
+
+
 def _render_code_snippet_body(data_choice: str) -> None:
     """Render the **reproduce this figure in code** block of the Share subtab.
 
@@ -3566,11 +3814,14 @@ def _render_code_snippet_body(data_choice: str) -> None:
         "snippet stays readable. Tick this for the full explicit form — every "
         "figure option at its current value.",
     )
+    output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(
         _snippet_source(data_choice),
         state,
         explicit=bool(explicit),
-        output=_SNIPPET_OUTPUT.get(state.kind, "scanpath.png"),
+        output=output,
+        # #374 F28: the PNG Export → Current figure writes, at its pixel size.
+        save_kwargs=_snippet_save_kwargs() if output.endswith(".png") else None,
     )
     # Inspectable from AppTest without re-deriving it (same trick as
     # `_share_query_current` above).
@@ -3637,7 +3888,7 @@ def _render_share_body(
         if not visible:
             return
         if settings_file is None:
-            st.caption("A settings file needs a figure to describe.")
+            st.caption("Open a trial first; the settings file describes its figure.")
         else:
             settings_file()
         return

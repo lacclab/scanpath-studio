@@ -41,6 +41,7 @@ scanpath_studio/
 ├─ eyegenbench_geometry.py  recovers word boxes for those corpora, which the harmonised output discards, in four labelled fidelity tiers (`resolve_geometry`)
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
 ├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
+├─ crash_report.py  what an uncaught error shows: `run_app` runs the app (its import included) inside `guarded`, which draws a "this is a bug — report it" note with the bug-report / Q&A links above the traceback. Every entry script calls it: `streamlit_app.py` (Cloud, tests) and `streamlit_entry.py` (what `scanpath-studio run` and the desktop app launch — not `app.py`, whose own imports a guard inside it could not cover). Every `@st.dialog` / `@st.fragment` also carries `@guarded()`, since Streamlit calls one directly when it reruns on its own (a test enforces it); widget callbacks run before the script and are not covered
 ├─ easter_egg.py     UX-39: triple-click the title, googly eyes. Browser-only on purpose — no session key, no rerun, nothing to expose on the other three surfaces
 ├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
 ├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
@@ -142,10 +143,11 @@ converts to `x/y/width/height`), and they are used **exactly as given**:
 `measures.word_box_bounds` is the one accessor and returns `x .. x + width`
 unmodified (BUG-83 — on a tiling corpus such as the OneStop demo each box carries
 the space after its word, and a fixation there belongs to that word, as in
-EyeLink's report). The only thing derived from geometry is the
-**fixation→word assignment** in `measures.assign_fixations_to_words`: bounding-box
-containment, then nearest word-center within 50 px
-(`measures.LINE_MISREGISTRATION_PX`), else `word_id = NaN`. That
+EyeLink's report). The **fixation→word assignment** is the data's own when the
+fixation table maps a Word/IA ID — used exactly as given, a blank staying blank.
+Only when it has none does `measures.assign_fixations_to_words` derive it from
+geometry: bounding-box containment, else `word_id = NaN` (no snapping to a
+nearby word). That
 assignment feeds the reading measures and the "out-of-text" flag
 (`measures.fixation_in_text_mask`); "color by line" derives visual lines from
 word-box `y` clustering (`measures.cluster_word_lines`) because `line_idx` is
@@ -271,7 +273,7 @@ CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
 lint+format checks on every pull request, and one `pytest --cov` leg that fails
 below `[tool.coverage.report] fail_under` in `pyproject.toml` (ENG-37). The
 browsable HTML report and the README's coverage badge are published with the
-docs site on push to main — see `.github/workflows/docs.yml` → *Coverage report*
+docs site for each release tag — see `.github/workflows/docs.yml` → *Coverage report*
 — so there is no third-party coverage service and no secret to manage. The two
 one-shot data-prep scripts (`onestop_shard.py`, `update_sample_data.py`) are
 omitted from the measurement: they walk corpora that cannot exist in CI.

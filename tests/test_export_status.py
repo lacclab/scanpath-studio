@@ -397,6 +397,7 @@ def test_png_and_svg_are_saved_by_the_browser(monkeypatch, fmt, scale):
         "width": 640,
         "height": 480,
         "scale": scale,
+        "dpi": None,  # no print width is set
         "label": f"⬇ Download {fmt}",
     }
 
@@ -450,7 +451,7 @@ def test_the_plot_camera_saves_the_export_png(monkeypatch):
 
     embedded: list[str] = []
     monkeypatch.setattr(
-        tabs, "_embed_html_iframe", lambda html, height: embedded.append(html)
+        tabs, "_embed_html_iframe", lambda html, height, **_: embedded.append(html)
     )
     at = AppTest.from_function(_true_scale_chart_app).run(timeout=30)
 
@@ -488,7 +489,7 @@ def test_an_unnamed_chart_keeps_plotlys_file_name(monkeypatch):
 
     embedded: list[str] = []
     monkeypatch.setattr(
-        tabs, "_embed_html_iframe", lambda html, height: embedded.append(html)
+        tabs, "_embed_html_iframe", lambda html, height, **_: embedded.append(html)
     )
     at = AppTest.from_function(_unnamed_true_scale_chart_app).run(timeout=30)
 
@@ -555,7 +556,7 @@ def test_pdf_without_a_browser_warns_once_and_disables_download(monkeypatch):
 
     assert not at.exception, at.exception
     warnings = "\n".join(warning.value for warning in at.warning)
-    assert warnings.count(animation_export.CHROME_INSTALL_HINT) == 1
+    assert warnings.count("PDF export needs Chrome, Chromium or Edge") == 1
     (button,) = _download_buttons(at)
     assert button.disabled
 

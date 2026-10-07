@@ -110,9 +110,9 @@ class TestSameDataset:
 
     @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
     @pytest.mark.parametrize("show_legend", [True, False])
-    def test_split_panel_titles_follow_the_legend_toggle(self, layout, show_legend):
-        """BUG-90: with the legend off the top margin is 0, which clipped the
-        upper panel's title while the lower one still showed. Both or neither."""
+    def test_split_panels_are_always_titled_a_and_b(self, layout, show_legend):
+        """#374 F26: each panel says which scanpath it is, legend or not — and
+        the top band is reserved for it (BUG-90 clipped the upper title)."""
         words, fixations = _pair()
         fig = api.compare_scanpaths(
             words,
@@ -124,7 +124,8 @@ class TestSameDataset:
             canvas_size=(1920, 1080),
         )
         titles = [a for a in fig.layout.annotations if a.name != "duration_size_key"]
-        assert len(titles) == (2 if show_legend else 0)
+        assert [t.text.split(" · ")[0] for t in titles] == ["A", "B"]
+        assert fig.layout.margin.t > 0
 
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""
@@ -253,7 +254,7 @@ class TestCrossDataset:
                 canvas_size=(1920, 1080),
             )
         message = str(excinfo.value)
-        assert "400x300" in message
+        assert "400×300" in message
         assert "B's screen was read off its data" in message
         assert "setup_b=" in message
 
@@ -504,7 +505,7 @@ class TestCoAnimationAcrossTwoDatasets:
         it (400x300 for these frames), never assumed to be A's."""
         from scanpath_studio.experimental_setup import IncomparableScreensError
 
-        with pytest.raises(IncomparableScreensError, match="400x300") as excinfo:
+        with pytest.raises(IncomparableScreensError, match="400×300") as excinfo:
             self._animate(dataset_b="PoTeC", canvas_size=(1920, 1080))
         # …and the refusal says the screen was inferred, and how to state it.
         message = str(excinfo.value)
@@ -603,7 +604,8 @@ def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layou
 
 class TestBoxOutline:
     """Each reading's word boxes are outlined in its fixation colour unless its
-    style names a `box_color` — the Compare rail's *Line A* / *Line B*."""
+    style names a `box_color` — the *Line* row of the Compare rail's per-scanpath
+    word-box groups."""
 
     @staticmethod
     def _outlines(**styles) -> set:
@@ -638,3 +640,127 @@ class TestBoxOutline:
             style_b={"fix_color": "#0000aa"},
         )
         assert outlines == {"#123456", "#0000aa"}
+
+
+class TestBoxFill:
+    """Each reading's word boxes are filled with the figure's fill colour unless
+    its style names a `box_fill_color` — the Compare rail's per-scanpath *Fill*."""
+
+    @staticmethod
+    def _fills(**kwargs) -> set:
+        from scanpath_studio.plots import _shape_layer
+
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            show_words=True,
+            word_box_fill_opacity=0.3,
+            **kwargs,
+        )
+        return {
+            shape.fillcolor
+            for shape in fig.layout.shapes
+            if _shape_layer(shape) == "word_boxes"
+        }
+
+    def test_the_default_is_the_figures_fill(self):
+        assert len(self._fills(word_box_fill_color="#00aa00")) == 1
+
+    def test_a_box_fill_color_overrides_it_per_scanpath(self):
+        same = self._fills(word_box_fill_color="#00aa00")
+        split = self._fills(
+            word_box_fill_color="#00aa00", style_b={"box_fill_color": "#aa00aa"}
+        )
+        assert len(split) == 2 and same < split
+
+
+class TestRawGazeColor:
+    """Each reading's raw-gaze samples take its fixation colour unless its style
+    names a `raw_gaze_color` — the Compare rail's per-scanpath raw-gaze *Color*."""
+
+    @staticmethod
+    def _colors(**styles) -> set:
+        words, fixations = _pair()
+        raw = pd.concat(
+            [
+                pd.DataFrame(
+                    {
+                        "participant_id": p,
+                        "trial_id": t,
+                        "x": [100.0, 110.0],
+                        "y": [100.0, 105.0],
+                        "timestamp_ms": [0.0, 2.0],
+                    }
+                )
+                for p, t in (("p1", "t1"), ("p2", "t2"))
+            ],
+            ignore_index=True,
+        )
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            raw_gaze=raw,
+            show_raw_gaze=True,
+            **styles,
+        )
+        return {t.marker.color for t in fig.data if "raw gaze" in (t.name or "")}
+
+    def test_the_default_is_each_scanpaths_colour(self):
+        colors = self._colors(
+            style_a={"fix_color": "#aa0000"}, style_b={"fix_color": "#0000aa"}
+        )
+        assert colors == {"#aa0000", "#0000aa"}
+
+    def test_a_raw_gaze_color_overrides_it_per_scanpath(self):
+        colors = self._colors(
+            style_a={"fix_color": "#aa0000"},
+            style_b={"fix_color": "#0000aa", "raw_gaze_color": "#00aa00"},
+        )
+        assert colors == {"#aa0000", "#00aa00"}
+
+
+class TestHeatmapColorscale:
+    """Each reading's word-box heatmap takes the figure's colour scale unless its
+    style names a `heatmap_colorscale` — then each gets its own colour bar, on
+    the one shared range."""
+
+    @staticmethod
+    def _bars(layout: str, **styles) -> list:
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            canvas_size=(1920, 1080),
+            show_heatmap=True,
+            heatmap_colorscale="Reds",
+            **styles,
+        )
+        return [
+            t.marker
+            for t in fig.data
+            if t.name == "comparison heatmap colorbar" and t.marker.showscale
+        ]
+
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_one_bar_while_the_scales_agree(self, layout):
+        bars = self._bars(layout)
+        assert len(bars) == 1
+
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_a_bar_each_on_one_range_when_they_differ(self, layout):
+        bars = self._bars(layout, style_b={"heatmap_colorscale": "Blues"})
+        assert len(bars) == 2
+        assert bars[0].colorscale != bars[1].colorscale
+        assert (bars[0].cmin, bars[0].cmax) == (bars[1].cmin, bars[1].cmax)

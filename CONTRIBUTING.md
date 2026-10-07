@@ -66,6 +66,14 @@ uv run --extra lint ruff check .     # lint
 uv run --extra lint ruff format .    # auto-format
 ```
 
+`tests/test_browser_smoke.py` drives the running app in a real browser and
+skips unless Playwright is installed. To run it locally:
+
+```bash
+uv run --extra test --with playwright playwright install chromium
+uv run --extra test --with playwright pytest tests/test_browser_smoke.py
+```
+
 Use **this project's ruff**, not whatever is on `PATH`: the `lint` extra
 (`pip install -e ".[lint]"`, or `uv sync --extra lint` / `uv run --extra lint …`
 — a plain `uv sync` installs no extras) holds the exact version CI runs, pinned
@@ -181,8 +189,10 @@ Only when several sessions share one checkout:
 ### Docs site
 
 User-facing docs live in `docs/` (MkDocs Material, published to GitHub Pages
-on push to `main` by `.github/workflows/docs.yml`; every pull request runs the
-same strict build in `ci.yml`):
+by `.github/workflows/docs.yml` for each release tag, so the site matches the
+release on PyPI; every pull request runs the same strict build in `ci.yml`).
+For a docs fix that should go out before the next release, run the *Docs*
+workflow by hand: it rebuilds the latest tag, or the branch you name. Locally:
 
 ```bash
 pip install -e ".[docs]"
@@ -233,7 +243,8 @@ The version lives in **one** place — `__version__` in
 
 - `pyproject.toml` is the **one** place dependencies are declared (`>=`
   bounds). Add or bump a dependency there and nowhere else.
-- The Streamlit Community Cloud demo installs from `environment.yml`, which
+- The Streamlit Community Cloud demo deploys the `stable` branch (moved to each
+  release by `publish.yml`) and installs from `environment.yml`, which
   pip-installs this package, so it follows `pyproject.toml` onto the latest
   releases with nothing to keep in sync. Community Cloud uses the first
   dependency file it finds — `uv.lock`, `Pipfile`, `environment.yml`,
@@ -256,6 +267,9 @@ The version lives in **one** place — `__version__` in
    publishing, and `.github/workflows/desktop.yml` builds the per-OS
    standalone desktop bundles and attaches them to the GitHub release for
    the tag — check both workflows succeeded.
+   The tag also publishes the docs site (`.github/workflows/docs.yml`) and
+   moves the `stable` branch, which the hosted demo deploys from, to the
+   release.
    On the macOS leg, check the log says the bundle was notarized: a missing
    signing secret only logs a warning, so an unsigned build still goes out
    green. Then download the released `.dmg` on a Mac that has never seen it

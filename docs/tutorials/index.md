@@ -5,7 +5,7 @@ with [Getting started](../getting-started.md).
 
 <div class="grid cards" markdown>
 
-- :material-clipboard-pulse:{ .lg .middle } **[Data collection](data-collection.md)**
+- :material-clipboard-pulse:{ .lg .middle } **[Check data collection](data-collection.md)**
 
     Check a pilot or completed session and record issues.
 
@@ -19,7 +19,7 @@ with [Getting started](../getting-started.md).
 
 - :material-chart-box:{ .lg .middle } **[Corpus analysis](corpus-analysis.md)**
 
-    Summarize texts, readers, or groups and download the table.
+    Summarize texts, participants, or groups and download the table.
 
 </div>
 

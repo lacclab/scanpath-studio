@@ -106,3 +106,13 @@ def test_the_recipients_figure_carries_no_link(monkeypatch):
     figures = [html for html in embedded if "Session expired" in html]
     assert figures, "the titled figure was not embedded"
     assert not any("evil.example" in html for html in figures)
+
+
+def test_figure_alt_is_the_title_as_plain_words():
+    import plotly.graph_objects as go
+
+    from scanpath_studio import tabs
+
+    fig = go.Figure(layout={"title": {"text": "P1 &amp; T2<br><sup>Adv</sup>"}})
+    assert tabs._figure_alt(fig, "fallback") == "P1 & T2 — Adv"
+    assert tabs._figure_alt(go.Figure(), "Scanpath figure") == "Scanpath figure"

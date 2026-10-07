@@ -27,9 +27,15 @@ The app guesses columns from their names. Pick the right one under
 
 ### Can I load only one table?
 
-Yes. A words table alone shows the text and any reading measures it carries; a
+Yes. A Words table alone shows the text and any reading measures it carries; a
 fixations table alone shows gaze positions without text. Most features need
 both.
+
+### Can I open PoTeC or OneStop in the online demo?
+
+No. The online demo has only the bundled demo data, and it doesn't download
+corpora. In the desktop app or a pip install, each public corpus downloads
+once, with one click, and stays on your computer.
 
 ### My zip file is refused as too large
 
@@ -42,9 +48,10 @@ total). The error names the setting that raises it, for example
 ### Does the app compute reading measures?
 
 No. Corpus Analysis and Export show the measures your interest-area report
-provides, as they are; [Computations](computations.md) defines each one.
+provides, as your eye-tracking software defines them; [Computations](computations.md)
+gives how Scanpath Studio would compute each.
 
-### Does :material/cleaning_services: Filter change my data?
+### Does :material/cleaning_services: Flag fixations change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as
 they are.
@@ -74,8 +81,8 @@ data to the online demo. See [Privacy](privacy.md).
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app keeps a recovery copy of your
-datasets and settings (when it listens only on this computer, as
+Not on a local or desktop install: the app saves your datasets and
+settings on this computer (when it listens only on this computer, as
 `scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
@@ -83,16 +90,36 @@ so export your annotations and settings before you leave
 
 If one saved dataset's files go missing or are damaged, the rest of the
 session still comes back. The app names the dataset that didn't, keeps its
-saved copy as it is, and offers **Retry** and **Remove from cache**. Saved
+saved copy as it is, and offers **Retry** and **Remove saved copy**. Saved
 metadata tables that can't be read are kept the same way. If the
-whole recovery copy can't be read, the app opens without it and stops saving
+whole saved copy can't be read, the app opens without it and stops saving
 over it until you retry or clear it.
 
-### How do I turn the recovery copy off, or delete it?
+### How do I stop saving, or delete what is saved?
 
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
-delete what is saved, close the app and run `scanpath-studio cache --clear`.
+delete what is saved and start over, use **Clear what is saved…** under
+**Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
 See [Recovery cache](cli.md#recovery-cache).
+
+## Help and versions
+
+### Where do I ask a question or report a bug?
+
+Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a).
+Report a bug as a
+[GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
+with the version, your operating system and how you run the app (pip, the
+desktop app or the online demo). :material/help: **Help → About** shows the
+version and links both; on the command line, `scanpath-studio --version`.
+
+### Will my links, settings and scripts work after an update?
+
+Scanpath Studio is in beta, so they may not. Until 1.0, any release may change
+the app, its share links and saved settings, the Python API and the CLI. The
+[Changelog](changelog.md) lists every change. To reproduce a result exactly,
+note the version you used and install that one:
+`pip install scanpath-studio==<version>`.
 
 ## Citing
 

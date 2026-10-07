@@ -11,8 +11,8 @@ Currently one metric is implemented for real:
   Soviet Physics Doklady 10:707–710): the minimal number of insertions, deletions
   and substitutions to turn one word-index sequence into the other. Each scanpath
   is reduced to the ordered list of word indices its fixations land on (each
-  fixation's own recorded word/AOI label when present, otherwise a bounding-box
-  assignment with a small line-misregistration tolerance); NLD divides that edit
+  fixation's own recorded word/AOI label when present, otherwise the word box
+  it falls in); NLD divides that edit
   distance by the longer sequence's length, so it sits in ``[0, 1]`` (0 =
   identical, 1 = maximally different). Lower is better. Eyettention (Deng et al.,
   2023) uses this same ``NLD = LD / max(|S|, |T|)`` as its scanpath-similarity
@@ -35,7 +35,6 @@ import numpy as np
 import pandas as pd
 
 from .measures import (
-    LINE_MISREGISTRATION_PX,
     _assign_word_ids_single,
     rebased_fixation_onsets,
 )
@@ -90,8 +89,6 @@ def normalized_levenshtein(a: Sequence, b: Sequence) -> float:
 def assign_single_trial_word_ids(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
-    *,
-    nearest_within_px: float = LINE_MISREGISTRATION_PX,
 ) -> np.ndarray:
     """Word id for every fixation via bounding-box containment, single trial.
 
@@ -100,15 +97,14 @@ def assign_single_trial_word_ids(
     model scanpaths carry synthetic ids (e.g. ``"Model 1"``) that don't match the
     real trial's, so the grouped :func:`measures.assign_fixations_to_words` would
     find no matching word boxes and return all-NaN. Here every fixation is tested
-    against the one ``words`` frame passed in. Fixations outside every box snap to
-    the nearest word centre within ``nearest_within_px`` (line-misregistration
-    tolerance), else NaN.
+    against the one ``words`` frame passed in. A fixation outside every box gets
+    NaN.
 
     Returns a float array aligned to ``fixations`` rows (NaN = out of text).
     """
     if fixations.empty or words.empty:
         return np.full(len(fixations), np.nan)
-    return _assign_word_ids_single(fixations, words, nearest_within_px)
+    return _assign_word_ids_single(fixations, words)
 
 
 def _ordered_fixations(fixations: pd.DataFrame) -> pd.DataFrame:
@@ -121,41 +117,36 @@ def _ordered_fixations(fixations: pd.DataFrame) -> pd.DataFrame:
 def ordered_word_ids(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
-    *,
-    nearest_within_px: float = 50.0,
 ) -> np.ndarray:
     """Per-fixation word id in reading order; NaN where out of text.
 
-    Prefers each fixation's own ``word_id`` (the corpus AOI label, or — for
-    generated scanpaths — the word it was drawn over); only fixations without one
-    are mapped geometrically via :func:`assign_single_trial_word_ids`.
+    When the fixations carry word ids (the corpus AOI label, or — for generated
+    scanpaths — the word each was drawn over) they are used as given, blanks
+    included; only fixations with none at all are mapped geometrically via
+    :func:`assign_single_trial_word_ids`.
     """
     ordered = _ordered_fixations(fixations)
     if ordered.empty or words.empty:
         return np.array([], dtype=float)
-    geometric = assign_single_trial_word_ids(
-        ordered, words, nearest_within_px=nearest_within_px
-    )
     if "word_id" in ordered.columns:
         existing = pd.to_numeric(ordered["word_id"], errors="coerce").to_numpy(
             dtype=float
         )
-        return np.where(np.isnan(existing), geometric, existing)
-    return geometric
+        if not np.isnan(existing).all():
+            return existing
+    return assign_single_trial_word_ids(ordered, words)
 
 
 def aoi_sequence(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
-    *,
-    nearest_within_px: float = 50.0,
 ) -> list[int]:
     """Temporal sequence of fixated word ids (out-of-text fixations dropped).
 
     Fixations are read in ``timestamp_ms`` order when that column is present
     (it always is after normalization), so the sequence reflects reading order.
     """
-    word_ids = ordered_word_ids(fixations, words, nearest_within_px=nearest_within_px)
+    word_ids = ordered_word_ids(fixations, words)
     return [int(w) for w in word_ids if pd.notna(w)]
 
 

@@ -64,6 +64,16 @@ def plain(text: str) -> str:
     return _WHITESPACE_RUN.sub(" ", _MD_MARKS.sub("", text)).strip()
 
 
+def tooltip(*parts: str | None) -> str:
+    """A CSS tooltip's text: ``parts`` joined with " — ", plain, no icon codes.
+
+    Escaped for an HTML attribute. Every ``data-tip`` goes through this (#374
+    F36): an icon shortcode left in one printed as text, ":material_warning:".
+    """
+    text = " — ".join(plain(part) for part in parts if part)
+    return html.escape(_ICON_CODE.sub("", text).strip(), quote=True)
+
+
 def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> None:
     """Render one row's title into its own (left) column.
 
@@ -91,8 +101,7 @@ def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> 
             unsafe_allow_html=True,
         )
         return
-    tip = _ICON_CODE.sub("", f"{text} — {plain(help)}")
-    tip = html.escape(tip, quote=True)
+    tip = tooltip(text, help)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help{emph}">{html.escape(text)}</span>'
@@ -154,9 +163,18 @@ def labeled(
     row_label(label_col, display if display is not None else label, help)
     if kind in WRAPPING_KINDS:
         kwargs.setdefault("wrap", True)
+    # #374 F19: the collapsed label is only the accessible name, which a
+    # screen reader reads verbatim — so no icon shortcode or `**` in it.
     return getattr(field_col, kind)(
-        label, help=help, label_visibility="collapsed", **kwargs
+        accessible_name(label), help=help, label_visibility="collapsed", **kwargs
     )
+
+
+def accessible_name(label: str) -> str:
+    """``label`` as words: icon shortcodes and markdown bold removed (#374 F19).
+
+    Streamlit sets a widget's ``aria-label`` to its label string as written."""
+    return " ".join(re.sub(r":material/\w+:|\*\*", " ", label).split())
 
 
 def panel_field(host, kind: str, label: str, **kwargs):

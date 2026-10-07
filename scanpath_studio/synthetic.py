@@ -147,9 +147,9 @@ EXPECTED = {
 #: The AOI table's columns, in file order, with what each one holds.
 EXAMPLE_AOI_COLUMNS: dict[str, str] = {
     "participant_id": "who read the text.",
-    "trial_id": "one reading of a text; participant_id + trial_id together "
+    "trial_id": "one trial (one reading of a text); participant_id + trial_id together "
     "identify it, in both tables.",
-    "text_id": "which text was shown. Readers who read the same text share it.",
+    "text_id": "which text was shown; shared by everyone who read it.",
     "word_id": "the word's number within its text, from 0.",
     "text": "the word as displayed.",
     "x": "left edge of the word's box, in screen pixels.",
@@ -163,9 +163,9 @@ EXAMPLE_AOI_COLUMNS: dict[str, str] = {
 
 #: The fixation table's columns, in file order, with what each one holds.
 EXAMPLE_FIXATION_COLUMNS: dict[str, str] = {
-    "participant_id": "who read the text; matches the AOI table.",
-    "trial_id": "which reading; matches the AOI table.",
-    "text_id": "which text was shown; matches the AOI table.",
+    "participant_id": "who read the text; matches the Words table.",
+    "trial_id": "which trial; matches the Words table.",
+    "text_id": "which text was shown; matches the Words table.",
     "timestamp_ms": "fixation onset, in ms from the start of the trial.",
     "duration_ms": "fixation duration, in ms.",
     "x": "horizontal gaze position, in screen pixels.",
@@ -204,8 +204,8 @@ def example_readme() -> str:
     words, fixations = example_import_tables()
     return f"""# Scanpath Studio example tables
 
-One reader reading a six-word text on two lines ("The cat sat / on the mat")
-once. On **Add dataset**, upload `{EXAMPLE_AOI_FILE}` as **AOIs** and
+One participant reading a six-word text on two lines ("The cat sat / on the mat")
+once. On **Add dataset**, upload `{EXAMPLE_AOI_FILE}` as **Words** and
 `{EXAMPLE_FIXATION_FILE}` as **Fixations**; every column maps automatically.
 Unzip first: a zip dropped on one upload box is read as one table.
 
@@ -221,8 +221,7 @@ downward. Times are milliseconds.
 {_column_notes(EXAMPLE_FIXATION_COLUMNS)}
 
 The fixation table has no word column: each fixation is assigned to the word
-box it falls in, else to the nearest word centre within 50 px. The fixation at
-(700, 700) is outside every box on purpose, and counts as out of text.
+box it falls in. The fixation at (700, 700) is outside every box on purpose, and counts as out of text.
 """
 
 

@@ -62,7 +62,7 @@ jobs:
           # release that bundles months of work overruns that (v0.29.0's
           # section was 172,795) — which published to PyPI and then failed
           # here. Over the cap the changelog's headline half is kept and the
-          # rest is linked; leave headroom for the install line appended below.
+          # rest is linked; leave headroom for the intro prepended below.
           python scripts/changelog_notes.py "$VERSION" --format markdown \
             --max-chars 120000 \
             --details-url "https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md" \
@@ -70,11 +70,14 @@ jobs:
           if [ ! -s "$NOTES_FILE" ]; then
             printf 'Release %s of scanpath-studio.' "$TAG" > "$NOTES_FILE"
           fi
+          # The release page is what an announcement links to, so it opens
+          # with what the tool is and how to get it, then the changelog.
+          BODY_FILE="$(mktemp)"
+          cat .github/release-intro.md "$NOTES_FILE" > "$BODY_FILE"
           if printf '%s' "$VERSION" | grep -Eq '(a|b|rc)[0-9]+$'; then
-            printf '\n\n---\nInstall/upgrade: `pip install -U --pre scanpath-studio`\n' >> "$NOTES_FILE"
-          else
-            printf '\n\n---\nInstall/upgrade: `pip install -U scanpath-studio`\n' >> "$NOTES_FILE"
+            printf '\n\n---\nThis is a pre-release: `pip install -U --pre scanpath-studio`\n' >> "$BODY_FILE"
           fi
+          NOTES_FILE="$BODY_FILE"
           # Idempotent: edit notes if the release already exists, else create it.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes-file "$NOTES_FILE"
@@ -88,6 +91,13 @@ jobs:
             fi
             gh release create "$TAG" --verify-tag --title "$TAG" $PRERELEASE --notes-file "$NOTES_FILE"
           fi
+
+      # The hosted demo deploys from the `stable` branch, so it runs the
+      # release rather than whatever main holds. A plain push: each release is
+      # a later commit on main, so it fast-forwards; anything else should fail.
+      - name: Point the demo's branch at this release
+        if: success()
+        run: git push origin "HEAD:refs/heads/stable"
 
       - name: Notify Slack
         if: success()

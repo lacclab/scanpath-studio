@@ -1,0 +1,1 @@
+In Compare, the Saccades popover now lays out like Fixations: the Line group becomes Scanpath A's colour, style and width, with Scanpath B's group under it, instead of greyed figure-wide rows followed by a duplicate per-scanpath block.

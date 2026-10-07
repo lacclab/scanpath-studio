@@ -1,0 +1,1 @@
+Comparing with a trial whose id already reads like a de-duplicated label ("x [p2]") no longer hides another reader's trial of the same id: every candidate keeps its own entry in the Compare to picker.

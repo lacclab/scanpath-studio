@@ -168,6 +168,44 @@ def _welcome_tour_replay_app():
     render_spotlight_tour()
 
 
+def _welcome_after_restore_app():
+    import streamlit as st
+
+    from scanpath_studio import persistence
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    st.session_state[persistence._RESTORED_PAYLOAD_KEY] = {"datasets": 0}
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+def _welcome_names_dataset_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    st.session_state["data_source_choice"] = "Dataset 1"
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+class TestWelcomeNamesWhatIsOpen:
+    """#374 F32: no "A demo dataset is loaded" over a returning user's data."""
+
+    def test_a_restored_session_does_not_open_the_tour(self):
+        at = AppTest.from_function(_welcome_after_restore_app).run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_seen"] is True
+        assert not any(b.key == "tour_sp_next" for b in at.button)
+
+    def test_the_welcome_names_the_open_dataset(self):
+        at = AppTest.from_function(_welcome_names_dataset_app).run()
+        assert not at.exception, at.exception
+        text = " ".join(m.value for m in at.markdown)
+        assert "**Dataset 1** is open; **Next**" in text
+        assert "demo dataset is loaded" not in text
+
+
 class TestTourOptOut:
     """UX-12: "Don't show this again", persisted in the ``sps_tour_optout`` cookie."""
 
@@ -257,77 +295,6 @@ class TestWelcomeTourOptOutSync:
         # already rendered this run and both checkboxes can be on screen at
         # once.
         assert at.session_state["_tour_dismissed"] is True
-
-
-def _two_tutorial_optout_checkboxes_app():
-    """Stand-ins for the picker card and the running tutorial's own footer —
-    the two real surfaces that render this same per-tutorial preference,
-    each under its own widget key (see ``_render_tutorial_optout``)."""
-    import streamlit as st
-
-    from scanpath_studio.tour import _render_tutorial_optout
-
-    _render_tutorial_optout("load_inspect", st)
-    _render_tutorial_optout("load_inspect", st, key_suffix="_running")
-
-
-class TestPerTutorialOptOutSync:
-    """UX-110: the picker card's checkbox and the running tutorial's own
-    footer checkbox are two widgets sharing one preference (one dismissed-id
-    set, one cookie) — ticking either must show as ticked in the other."""
-
-    def test_both_default_off_and_use_distinct_keys(self):
-        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
-        at.run()
-        assert not at.exception, at.exception
-        picker = at.checkbox(key="tutorial_dont_autoshow_load_inspect")
-        running = at.checkbox(key="tutorial_dont_autoshow_load_inspect_running")
-        assert picker.value is False
-        assert running.value is False
-
-    def test_checking_the_picker_card_shows_checked_on_the_running_footer(self):
-        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
-        at.run()
-        at.checkbox(key="tutorial_dont_autoshow_load_inspect").check().run()
-        assert not at.exception, at.exception
-        assert (
-            at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").value is True
-        )
-
-    def test_unchecking_the_running_footer_shows_unchecked_on_the_picker_card(self):
-        """The reverse direction, starting from both already checked — proves
-        this isn't just "the second widget's first render picks up the first
-        one's value" but a live sync, not a one-way default.
-
-        The picker card renders *before* the running footer in this harness
-        (mirroring app.py's render order: the dialog is a modal decided by an
-        earlier user action, the fragment card renders every script run), so
-        a change made in the footer needs one more render of the picker card
-        to show — same as any other Streamlit UI reacting to state it doesn't
-        own itself. That one extra idle ``.run()`` below stands in for "the
-        user looks at the picker card again"."""
-        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
-        at.run()
-        at.checkbox(key="tutorial_dont_autoshow_load_inspect").check().run()
-        assert (
-            at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").value is True
-        )
-
-        at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").uncheck().run()
-        assert not at.exception, at.exception
-        at.run()
-        assert at.checkbox(key="tutorial_dont_autoshow_load_inspect").value is False
-
-    def test_tutorial_opted_out_reflects_either_checkbox(self):
-        # Read via `at.session_state`, not a fresh top-level `st.session_state`
-        # in the test process — the latter is a disconnected proxy once a
-        # script has actually run under AppTest.
-        at = AppTest.from_function(_two_tutorial_optout_checkboxes_app)
-        at.run()
-        assert "load_inspect" not in at.session_state["_tutorial_dismissed_ids"]
-        at.checkbox(key="tutorial_dont_autoshow_load_inspect_running").check().run()
-        assert not at.exception, at.exception
-        assert "load_inspect" in at.session_state["_tutorial_dismissed_ids"]
 
 
 def test_welcome_tour_text_is_concise():
@@ -498,6 +465,36 @@ class TestUseCaseTutorials:
         )
         assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
 
+    def test_the_filter_is_named_when_it_is_why_a_tutorial_cannot_start(self):
+        """#374 F31: "need two readings with the same text id" was wrong when
+        the dataset had them and a filter hid them."""
+        import pandas as pd
+
+        from scanpath_studio.tour import (
+            _TUTORIAL_BY_ID,
+            build_tutorial_context,
+            filtered_reason,
+        )
+
+        compare = _TUTORIAL_BY_ID["compare_readings"]
+        both = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["t1", "t2"],
+                "text_id": ["same", "same"],
+            }
+        )
+        words, fixations = pd.DataFrame({"w": [1]}), pd.DataFrame({"f": [1]})
+        narrowed = build_tutorial_context(words, fixations, both.iloc[:1])
+        assert filtered_reason(compare, narrowed) is None  # no snapshot: not filtered
+        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both)
+        assert filtered_reason(compare, narrowed) == (
+            "no two trials in the pool share a text."
+        )
+        # The dataset itself lacks the pair: the filter is not the cause.
+        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both.iloc[:1])
+        assert filtered_reason(compare, narrowed) is None
+
     def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
         """UX-83: starting a tutorial navigates to its first step's view right
         away, instead of leaving the card on the page you were already on and
@@ -602,6 +599,26 @@ class TestFaq:
         for question, answer in faq_items():
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
+
+    def test_where_data_goes_says_only_what_applies_here(self, monkeypatch):
+        """#374 F22: the hosted demo's FAQ must not claim uploads stay local."""
+        from scanpath_studio import persistence, tour
+
+        def answer() -> str:
+            (text,) = [a for q, a in tour.faq_items() if q == tour._WHERE_DATA_GOES]
+            return text
+
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
+        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: False)
+        hosted = answer()
+        assert hosted.startswith("To the server this app runs on")
+        assert "Nowhere" not in hosted and "not kept" in hosted
+
+        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: True)
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
+        local = answer()
+        assert local.startswith("Nowhere")
+        assert "recovery copy" in local and "server" not in local
 
     def test_no_entry_is_for_someone_editing_the_code(self):
         """BUG-85: docs/faq.md dropped "I edited the code and nothing changed?"
@@ -1052,7 +1069,7 @@ class TestSpotlightSelectorsResolve:
         control_source = inspect.getsource(controls.render_plot_controls)
 
         assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
-        assert "f\"{ICONS['plot_filter']} **Filter**{" in control_source
+        assert "f\"{ICONS['plot_filter']} **Flag fixations**{" in control_source
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
@@ -1175,12 +1192,44 @@ def test_the_setup_guide_counts_the_parts_it_names():
     "2 · Upload data tables" contradicted both)."""
     from scanpath_studio import tour
 
-    intro, *parts = tour._WIZARD_GUIDE_STEPS
+    intro, *parts, save = tour._WIZARD_GUIDE_STEPS
     assert "three parts" in intro["body"]
     assert len(parts) == 3
     for number, part in enumerate(parts, start=1):
         assert part["title"].startswith(f"{number} · ")
+        assert part["step_id"]
+    # The closing card is not a fourth part: no number, no wizard part to open.
+    assert save["step_id"] is None
+    assert not save["title"][0].isdigit()
     import inspect
 
     source = inspect.getsource(tour.render_spotlight_wizard_guide)
     assert 'f"Part {step_idx} of {n_parts}"' in source
+
+
+def test_the_setup_guide_ends_on_saving():
+    """The guide's last card points at the footer that saves the dataset —
+    ✅ Add dataset and ⬇️ Download setup file — not at Recording setup."""
+    from scanpath_studio import tour, wizard
+
+    save = tour._WIZARD_GUIDE_STEPS[-1]
+    assert save["selector"] == ".st-key-wizard_footer_row"
+    assert "Add dataset" in save["body"] and "Download setup file" in save["body"]
+    import inspect
+
+    # The selector names the footer's own container key.
+    assert 'container(key="wizard_footer_row")' in inspect.getsource(
+        wizard._wizard_footer
+    )
+
+
+def test_the_setup_guide_progress_names_the_save_step():
+    at = AppTest.from_function(_wizard_guide_app)
+    at.run()
+    from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
+
+    at.session_state["wizard_guide_step"] = len(_WIZARD_GUIDE_STEPS) - 1
+    at.run()
+    (bar,) = at.get("progress")
+    assert "Last step" in bar.proto.text
+    assert "Part 4" not in bar.proto.text

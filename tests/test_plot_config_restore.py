@@ -181,7 +181,7 @@ class TestPlotConfigRestore:
         assert ss["_skipped"] == []
 
     def test_a_settings_file_leaves_the_column_mapping_alone(self):
-        """UX-179: the mapping is ✏️ Edit dataset → Save setup's, not this file's.
+        """UX-179: the mapping is ✏️ Edit dataset → Download setup file's, not this file's.
 
         An old session backup still carries one; restoring it as a settings
         file must not re-map the open dataset under the user.
@@ -334,8 +334,8 @@ class TestPlotConfigRestore:
         for label in ("color-by field", "heatmap style", "X axis field"):
             assert label in skipped
         assert (
-            "trial selection (reader p9's trial missing is not in the current "
-            "trial pool)" in skipped
+            "trial selection (participant p9's trial missing isn't in the "
+            "filtered trials)" in skipped
         )
 
     @pytest.mark.parametrize(
@@ -343,12 +343,12 @@ class TestPlotConfigRestore:
         [
             # A supplied reader is binding: p9 is not in the pool, and p1/p2's
             # trial `t1` is not a stand-in for p9's.
-            ({"participant_id": "p9", "trial_id": "t1"}, None, "reader p9's"),
+            ({"participant_id": "p9", "trial_id": "t1"}, None, "participant p9's"),
             # No reader named and only one reader has `t2`: that reading.
             ({"trial_id": "t2"}, "t2", None),
             ({"participant_id": "", "trial_id": "t2"}, "t2", None),
             # No reader named, and two readers have `t1`: reported, not guessed.
-            ({"trial_id": "t1"}, None, "belongs to 2 readers"),
+            ({"trial_id": "t1"}, None, "belongs to 2 participants"),
             ({"participant_id": "p2", "trial_id": "t1"}, "t1", None),
         ],
     )

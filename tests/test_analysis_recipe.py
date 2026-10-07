@@ -44,7 +44,7 @@ class TestAnalysisChoices:
             "text": {"field": "unique_paragraph_id", "id": "3_1"},
             "measure": {"key": "tfd", "label": MEASURES["tfd"].label},
             "aggregation": "mean",
-            "normalization": "z-score within reader",
+            "normalization": "z-score per participant",
             "spread": "SEM",
             "min_readers": 2,
         }

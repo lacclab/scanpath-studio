@@ -25,6 +25,8 @@ from . import app, wizard_shell
 from .column_names import ColumnNames, for_tables
 from .constants import (
     _VIEW_DATA,
+    CITATION,
+    DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DEMO_CHOICE,
     FONT_FAMILY,
@@ -52,6 +54,7 @@ from .controls import (
     multi_field_flag,
     value_preview_tip,
 )
+from .crash_report import guarded
 from .data import (
     FIX_OPTIONAL_FIELDS,
     PARTICIPANT_CANDIDATES,
@@ -70,6 +73,7 @@ from .data import (
     extract_columns_from_source_file,
     frame_cache,
     frame_fingerprint,
+    looks_like_condition,
     normalization_issues,
     normalize_raw_gaze,
     pick_column,
@@ -92,6 +96,7 @@ from .experimental_setup import (
     SetupSnapshot,
     font_pt_to_px,
 )
+from .menu import view_label
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
@@ -370,6 +375,8 @@ def _finalize_wizard_dataset() -> None:
     # the mapping that produced it is still fresh — instead of a page-wide
     # banner it will learn to ignore. See `app._trial_identity_alert_dialog`.
     st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
+    # #374 F30: and confirm it, with its counts, once its frames are loaded.
+    st.session_state[DATASET_ADDED_KEY] = ds_name
     # UX-199: on a deployment that saves nothing, the first upload says so.
     app.arm_backup_reminder()
 
@@ -505,6 +512,7 @@ def _render_leave_prompt(host) -> None:
 
 
 @st.dialog("Leave setup?")
+@guarded()
 def _leave_prompt_dialog(destination: str) -> None:
     """The modal body — UX-79. Opened by :func:`_render_leave_prompt`.
 
@@ -526,7 +534,8 @@ def _leave_prompt_dialog(destination: str) -> None:
     `_tutorial_library_dialog`, which hit the same trap first).
     """
     st.warning(
-        f"**Leave setup and go to {destination}?** This dataset isn't added yet "
+        f"**Leave setup and go to {view_label(destination)}?** This dataset isn't "
+        "added yet "
         "— the files you uploaded won't be kept.",
         icon=ICONS["warning"],
     )
@@ -842,7 +851,7 @@ def _render_identity_field(
     if has_fix:
         tables.append(("fix", "Fixations", raw_fix, fix_schema))
     if has_words:
-        tables.append(("words", "AOI", raw_words, word_schema))
+        tables.append(("words", WORDS_TABLE_LABEL, raw_words, word_schema))
 
     tinted: dict[str, list[str]] = {}
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
@@ -881,6 +890,8 @@ def _render_identity_field(
             key=key,
             help=help_text,
             label_visibility="collapsed",
+            # #374 F13: an id is one column or a few, never every column.
+            select_all=False,
             on_change=_mark_field_touched,
             args=(key,),
         )
@@ -929,6 +940,33 @@ _DERIVE_TABLE_PREFIX = {
     "Words / IA": "col_map_words",
     "Raw gaze": "col_map_raw_gaze",
 }
+
+#: #374 F12 — the word table's one name on the add and edit screens. Issue
+#: #375 may revisit it; every label and message reads it from here.
+WORDS_TABLE_LABEL = "Words (interest areas)"
+
+#: How the derive picker shows each table (its values stay the keys above,
+#: which saved setups carry).
+_DERIVE_TABLE_DISPLAY = {"Words / IA": WORDS_TABLE_LABEL}
+
+#: #374 F12 — the one-line caption above each upload row: what goes there, in
+#: EyeLink's terms.
+ROW_CAPTIONS = {
+    "fixations": "One row per fixation — e.g. EyeLink's Fixation Report.",
+    "words": "One row per word with its box — e.g. EyeLink's Interest Area Report.",
+}
+
+
+def _row_note(block, text: str):
+    """A caption line across the top of an upload row's mapping side (#374
+    F12), returned so later notes for the row (a mixed ZIP's) land under it.
+
+    Drawn right of the row's name column: that column is an overlay spanning
+    the whole block (`styles.py`), so a full-width line would sit under it."""
+    note = block.columns(_META_ROW_W, gap="small")[1]
+    note.caption(text)
+    return note
+
 
 #: UX-129 — one shared column-width tuple for every derivation line (Table ·
 #: Column · How · pattern · Lowercase · ➕ Another · Apply), so the five
@@ -1012,7 +1050,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         [0.26, 0.74], gap="small", vertical_alignment="center"
     )
     enabled = toggle_col.toggle(
-        "Derive columns from the filename",
+        "Derive columns from text",
         key="wizard_filename_split",
         help=(
             "When identity lives only inside a text value — no column carries "
@@ -1021,7 +1059,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             "delimiter into positional columns, or pull out named regex "
             "groups for parts of variable length (e.g. a stimulus name). "
             "Pick the table first, then any of its own columns — defaults to "
-            f"the uploaded filename (captured as `source_file`). {ICONS['add']} Another "
+            f"the uploaded filename (captured as `source_file`). {ICONS['add']} Add line "
             "adds a second line when one column's text isn't enough."
         ),
     )
@@ -1077,6 +1115,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             help="Which uploaded table to derive from — its own columns are "
             "offered next, since two tables' `source_file` rarely mean the "
             "same thing.",
+            # #374 F12: the value stays "Words / IA" — saved setups name it.
+            format_func=lambda t: _DERIVE_TABLE_DISPLAY.get(t, t),
         )
         table_frame = frames[selected_table]
         table_columns = (
@@ -1117,7 +1157,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                     key=delim_key,
                     max_chars=8,
                     label_visibility="collapsed",
-                    help="Character(s) to split the filename on — e.g. "
+                    help="Character(s) to split the text on — e.g. "
                     "`reader0_b0_scanpath` → reader0 / b0 / scanpath.",
                 )
                 or "_"
@@ -1141,7 +1181,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 try:
                     re.compile(pattern)
                 except re.error as exc:
-                    controls_col.error(f"Invalid regex: {exc}")
+                    controls_col.error(f"Invalid pattern: {exc}")
                     pattern = ""
 
         drafts.append(
@@ -1156,7 +1196,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         )
 
     if another_col.button(
-        f"{ICONS['add']} Another",
+        f"{ICONS['add']} Add line",
         key="wizard_filename_another",
         width="stretch",
         help="Add another mapping line — for when identity has to be pulled "
@@ -1371,8 +1411,8 @@ def _wizard_trial_step(
     _render_identity_field(
         "trial",
         "Trial ID *",
-        "The column holding your unique trial ID — or several to build one on "
-        "the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + text.",
+        "The column telling one participant's trials apart (e.g. TRIAL_INDEX) — "
+        "or several to build one, joined with `_`. Unique within a participant.",
         cells if cells is not None else [body] * 2,
         raw_words,
         raw_fix,
@@ -1392,7 +1432,7 @@ def _wizard_trial_step(
     if has_fix:
         sets["Fixations"] = _trial_id_values(raw_fix, fix_schema)
     if has_words:
-        sets["Words/IA"] = _trial_id_values(raw_words, word_schema)
+        sets["Words"] = _trial_id_values(raw_words, word_schema)
     # UX-67 r2: the count is a caption under the picker it counts, not a banner.
     # One `st.success` per identifier stacked three coloured boxes onto a screen
     # whose whole point is that the mapping fits on it — and put the number far
@@ -1404,7 +1444,7 @@ def _wizard_trial_step(
         cell = cell_by_table.get(table)
         if values is None or cell is None:
             continue
-        cell.caption(f"~{plural(len(values), 'trial')}")
+        cell.caption(plural(len(values), "Trial ID"))
     # Only a real problem still gets a box, and it renders where UX-67 put the
     # blockers: directly above **Add dataset**.
     present = {k: v for k, v in sets.items() if v is not None}
@@ -1491,7 +1531,7 @@ def _wizard_participant_text_step(
         if n is not None:
             # UX-67 r2: under the picker that produced it, as small text
             # rather than a banner.
-            cell_by_table.get(slug, fallback_cell).caption(f"~{n:,} {noun}")
+            cell_by_table.get(slug, fallback_cell).caption(plural(n, noun))
 
 
 def _clean_multiselect_state(key: str, valid) -> None:
@@ -1511,8 +1551,8 @@ def wide_frame_warning(n_extra_fields: int, n_rows: int) -> str | None:
         return None
     return (
         f"Keeping {n_extra_fields} additional fields across up to {n_rows:,} rows "
-        "can noticeably slow caching, grouping, and browser transfer. Keep only "
-        "the measures and metadata you plan to use; you can revise this mapping later."
+        "can slow the app noticeably. Keep only the measures and metadata you "
+        "plan to use."
     )
 
 
@@ -1645,6 +1685,10 @@ def _row_body(host):
     return body
 
 
+#: The table each upload row's prefix reads.
+_PREFIX_KIND = {"col_map_words": "words", "col_map_fix": "fixations"}
+
+
 def _wizard_table_keep_picker(
     host, raw, schema, registry, prefix: str, *, noun: str
 ) -> tuple[set, list]:
@@ -1682,6 +1726,12 @@ def _wizard_table_keep_picker(
     if not detected and not unclaimed:
         return set(), []
     host = _row_body(host)
+    # #374 F13: a column already mapped (TRIAL_INDEX as the Trial ID) is never
+    # pre-kept, and an unmapped one that reads as a condition or an item id is.
+    mapped = set(cats["mapped"])
+    sample = app.upload_sample(prefix, _PREFIX_KIND.get(prefix))
+    if sample.empty:
+        sample = raw
 
     opts: list = []
     labels: dict = {}
@@ -1702,13 +1752,15 @@ def _wizard_table_keep_picker(
         # AN-32: not the leftover measures — the ones the app uses are mapped on
         # the *Reading measures* lines above, and pre-keeping the rest (last-run
         # dwell, trial dwell/count, …) only widened every table by default.
-        if d["category"] in ("meta", "linguistic"):
+        if d["category"] in ("meta", "linguistic") and src not in mapped:
             default.append(src)
         if d["category"] == "meta":
             meta_dest_by_source[src] = d["dest"]
     for col in unclaimed:
         opts.append(col)
         labels.setdefault(col, col)
+        if col in sample.columns and looks_like_condition(sample[col]):
+            default.append(col)
 
     key = f"wizard_keep_{prefix}"
     if key not in st.session_state:
@@ -1756,7 +1808,7 @@ def _wizard_restore_config(host) -> None:
         type=["json"],
         key="wizard_config_restore",
         help="Re-apply a column mapping + field choices you saved earlier "
-        "(⬇️ Save setup at the foot of this page).",
+        "(⬇️ Download setup file at the foot of this page).",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
@@ -1771,8 +1823,19 @@ def _wizard_restore_config(host) -> None:
     st.session_state["_wizard_config_last"] = signature
     try:
         config = json.loads(uploaded.getvalue().decode("utf-8"))
-    except (ValueError, UnicodeDecodeError) as exc:
-        host.warning(f"Couldn't read config: {exc}")
+    except (ValueError, UnicodeDecodeError):
+        host.warning("That file isn't a saved setup (not valid JSON).")
+        return
+    _setup_sections = (
+        "data_source",
+        "column_mapping",
+        "experimental_setup",
+        "filename_derive",
+        "keep_and_filter",
+    )
+    if not isinstance(config, dict) or not any(k in config for k in _setup_sections):
+        # #374: an unrelated JSON used to toast "Restored" with nothing restored.
+        host.warning("That file holds no saved setup, so nothing was restored.")
         return
     if isinstance(config, dict):
         # Overwrite: the wizard's mapping widgets were already created on a prior
@@ -1848,7 +1911,7 @@ def _wizard_restore_config(host) -> None:
                         restored.setdefault(key, canvas[source])
             st.session_state["_wizard_restored_setup"] = restored
             st.session_state.pop("_wizard_setup_restored_applied", None)
-        st.toast("Restored the saved mapping — review it below.", icon=ICONS["success"])
+        st.toast("Restored the saved setup — review it below.", icon=ICONS["success"])
         st.rerun()
 
 
@@ -1985,7 +2048,7 @@ def _render_setup_download(host) -> None:
         # footer now uses — "Download setup (JSON)" wrapped to two, making the
         # pair 55 px and 40 px tall side by side. What it saves and how to load
         # it back is on the tooltip, where the sentence was already.
-        f"{ICONS['download']} Save setup",
+        f"{ICONS['download']} Download setup file",
         data=json.dumps(_wizard_setup_config(), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
@@ -2006,7 +2069,7 @@ _FOOTER_ROW_W = (1.4, 1.4, 8.0)
 
 
 def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> None:
-    """⬇️ Save setup · ✅ Add dataset, one line, matched widths (UX-93).
+    """⬇️ Download setup file · ✅ Add dataset, one line, matched widths (UX-93).
 
     One place for all three endings — blocked on required fields, blocked on a
     mapping the pipeline rejected, and finished — which is what keeps them the
@@ -2072,7 +2135,9 @@ _SCREEN_ESTIMATE = "Estimate from my data"
 _SCREEN_DEFAULT = "Use a common default (2560×1440)"
 
 _GEOM_KNOW = "I know them"
-_GEOM_DEFAULT = "Use typical lab values (597 mm / 800 mm)"
+#: The setup headings as drawn (UX-58's short forms) — what blockers name.
+_SETUP_HEADINGS = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+_GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)"
 _GEOM_SKIP = "Skip — I don't need visual-angle units"
 
 _TEXT_BOXES = "Scale to the word boxes"
@@ -2397,10 +2462,8 @@ def _wizard_setup_step(
         # and the point size falls back to being read as pixels.
         if geom_mode == _GEOM_SKIP:
             text_host.warning(
-                "Converting points to pixels needs the monitor's physical width, "
-                "which was skipped above. The size is being read as **pixels**; "
-                "answer *Physical size & viewing distance* for a true pt → px "
-                "conversion."
+                "Converting points to pixels needs the monitor width, skipped "
+                "under **Physical size**, so the size is read as **pixels**."
             )
             base_font = int(min(max(round(font_pt), 6), 72))
         else:
@@ -2474,9 +2537,8 @@ def _wizard_setup_step(
     if publish and unanswered and st.session_state.get(ADD_ATTEMPTED_KEY):
         host.error(
             "Still to answer: "
-            + ", ".join(f"**{SETUP_GROUP_LABELS[g]}**" for g in unanswered)
-            + ". Each needs to say how you know it before the dataset can be "
-            "added."
+            + ", ".join(f"**{_SETUP_HEADINGS[g]}**" for g in unanswered)
+            + ". Pick an answer for each, then press Add dataset again."
         )
         _mark_missing_setup_groups(unanswered)
     return snapshot
@@ -2648,14 +2710,14 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     questions_df = app._read_uploaded_frame(
         uploader_label="Comprehension questions (optional)",
         upload_help="The multipleye_comprehension_questions_*.xlsx workbook — "
-        "adds the questions to the Stimulus & Context panel.",
+        "adds the questions to the Stimulus & context panel.",
         state_prefix="mpe_questions",
         multi=False,
         container=body,
     )
     participant_df = app._read_uploaded_frame(
         uploader_label="participant_data.csv (optional)",
-        upload_help="Reader metadata (age / gender / languages…) → Trial Info chips.",
+        upload_help="Participant metadata (age / gender / languages…) → Trial Info chips.",
         state_prefix="mpe_participant",
         multi=False,
         container=body,
@@ -2787,7 +2849,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             else " · no AOI boxes (upload *_aoi.csv for word boxes)"
         )
         body.success(
-            f"~**{fixations_norm['participant_id'].nunique()}** readers · "
+            f"~**{fixations_norm['participant_id'].nunique()}** participants · "
             f"**{fixations_norm['trial_id'].nunique()}** page-trials" + boxes_msg
         )
         st.session_state["_wizard_finalize_payload"] = {
@@ -2916,8 +2978,10 @@ def _wizard_name_header(host, active: bool) -> None:
     box.text_input(
         "Dataset name",
         key="wizard_dataset_name",
-        help="Shown in the Data source list so you can switch back to it.",
+        help="Shown in the dataset list so you can switch back to it.",
         placeholder="Name this dataset",
+        # Streamlit 1.65: a cleared name is not committed — the last one stays.
+        required=True,
         # UX-113: the numbered stage heading above ("1 Dataset name") already
         # says this — the widget's own label just repeated it verbatim.
         label_visibility="collapsed",
@@ -2926,10 +2990,12 @@ def _wizard_name_header(host, active: bool) -> None:
     box.text_area(
         "Description",
         key="wizard_dataset_description",
-        placeholder="Optional — what this dataset is: the readers, the texts, "
+        placeholder="Optional — what this dataset is: the participants, the texts, "
         "the language.",
         help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
         height=68,
+        # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
+        on_change="ignore",
     )
 
 
@@ -3063,6 +3129,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # Help, minus the "arm-then-bounce" dance that menu entries need).
         # "Setup help", not "Help": the nav's ❓ Help is on screen too, and this
         # one holds only the setup guide and the loading-data docs.
+        # Its two entries are menu rows — tertiary, icon + label, left-aligned
+        # — and the same kind of control as each other: a content-width
+        # button stacked over a stretched link button read as two unrelated
+        # widgets of two different widths.
         with help_col.popover(f"{ICONS['help']} Setup help", width="content"):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
@@ -3072,11 +3142,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # UX-66 r2: named for what it *is* rather than for the page it
                 # opens — "Data guide" reads like one more wizard step on a row
                 # of wizard controls, which is the one thing it is not.
-                f"{ICONS['docs']} More documentation ↗",
+                "More documentation ↗",
                 "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                icon=ICONS["docs"],
+                type="tertiary",
                 help="What your export needs, how this wizard maps it, and the "
                 "recording setup it asks for.",
-                width="stretch",
             )
         # The way out, on the row that stays on screen.
         #
@@ -3095,11 +3166,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         if cancel_col.button(
             "✕ Cancel",
             key="cancel_add_data",
-            # UX-66 r2: the same filled blue as ✅ Add dataset. The two are the
-            # ends of the same decision — commit or leave — and a ghost button
-            # beside a filled one reads as the disabled half of a pair rather
-            # than as the other way out.
-            type="primary",
+            # #374 F30: secondary. UX-66 r2 made it the same filled blue as
+            # ✅ Add dataset, which put the page's loudest button on the way
+            # out, at the top, before anything had been added.
+            type="secondary",
             help="Leave the wizard and go back to the dataset you were on.",
             width="content",
         ):
@@ -3227,7 +3297,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             gap="small",
         )
         guide.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
+            f"{ICONS['upload']} Upload at least one of **Fixations**, "
+            f"**{WORDS_TABLE_LABEL}**, or "
             "**Raw gaze** below to get started.",
             width="content",
         )
@@ -3243,15 +3314,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
             icon=ICONS["download"],
             key="wizard_example_download",
             on_click="ignore",
-            help="Two tiny tables, one AOI table and one fixation table, that "
+            help="Two tiny tables, one Words table and one fixation table, that "
             "import with every column mapped automatically. The README inside "
             "explains each column, its unit, and the IDs.",
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
-                f"{ICONS['tip']} **Working with a large dataset?** It's faster — and keeps your "
-                "data on your own machine — to run Scanpath Studio locally:\n\n"
+                f"{ICONS['tip']} **Working with your own data?** Use the "
+                f"[desktop app]({CITATION['desktop_url']}) ↗ (Windows, macOS, "
+                "Linux): it keeps your data on your computer, is faster, and "
+                "handles much larger datasets than this hosted copy. Or install "
+                "it with pip:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 
@@ -3266,7 +3340,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
 
     def upload_box(
-        host, *, label, help_text, prefix, multi, noun, kind=None, short_label=None
+        host,
+        *,
+        label,
+        help_text,
+        prefix,
+        multi,
+        noun,
+        kind=None,
+        short_label=None,
+        notes_host=None,
     ):
         # UX-113: the title reads like every mapping field's — dotted underline,
         # the description on hover (`.sps-fhelp`) — instead of Streamlit's own
@@ -3327,8 +3410,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # this narrow column — and no leading "✓", which read as a stray
             # mark once split from a sentence it no longer shares a line with.
             counts = stats.container(key=f"wiz_upload_counts_{prefix}")
-            counts.caption(f"{len(frame):,} {noun}")
-            counts.caption(f"{n_columns} columns")
+            counts.caption(plural(len(frame), noun))
+            counts.caption(plural(n_columns, "column"))
+            # #374 F3: a zip holding both EyeLink reports reads only the ones
+            # this row takes — say which, and where the rest go.
+            # Drawn beside the row (`notes_host`), not in this narrow column.
+            for note in app.upload_zip_notes(
+                st.session_state.get(f"{prefix}_upload"), kind
+            ):
+                (notes_host or host).caption(f"{ICONS['info']} {note}")
         return frame
 
     # UX-122/UX-127/UX-129: none of the six tables upload at the top of this
@@ -3380,7 +3470,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         inline_field_label(
             meta_heading,
             "Metadata",
-            "Optional per-reader, per-trial and per-text tables. Once "
+            "Optional per-participant, per-trial and per-text tables. Once "
             "attached, their columns behave like fields in the data: "
             "filters, chips, trial sorting, inspection and export.",
             emphasis=True,
@@ -3473,17 +3563,20 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # just row 1's (which the uploader itself was already taller than,
     # defeating `vertical_alignment="center"` on row 1 alone).
     fix_block = s2.container(key="wiz_map_block_col_map_fix")
+    # #374 F12: which export goes in this row, in EyeLink's own terms.
+    fix_note = _row_note(fix_block, ROW_CAPTIONS["fixations"])
     row_fix = fix_block.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
         label="Fixations table(s)",
         short_label="Fixations",
-        help_text="One or more files (e.g. one per participant); concatenated. "
+        help_text="One row per fixation (EyeLink Fixation Report); files stack. "
         + _upload_types_note,
         prefix="col_map_fix",
         multi=True,
-        noun="fixations",
+        noun="fixation",
         kind="fixations",
+        notes_host=fix_note,
     )
     has_fix = not raw_fix.empty
     if has_fix:
@@ -3495,19 +3588,21 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
     words_block = s2.container(key="wiz_map_block_col_map_words")
+    words_note = _row_note(words_block, ROW_CAPTIONS["words"])
     row_words = words_block.columns(
         _ID_ROW1_W, gap="small", vertical_alignment="center"
     )
     raw_words = upload_box(
         row_words[0].container(key="wiz_map_upload_col_map_words"),
-        label="Words / IA table(s)",
-        short_label="AOIs",
-        help_text="One or more files (e.g. one per text); concatenated. "
-        + _upload_types_note,
+        label=f"{WORDS_TABLE_LABEL} table(s)",
+        short_label=WORDS_TABLE_LABEL,
+        help_text="One row per word box (EyeLink Interest Area Report); files "
+        "stack. " + _upload_types_note,
         prefix="col_map_words",
         kind="words",
         multi=True,
-        noun="words",
+        noun="word",
+        notes_host=words_note,
     )
     has_words = not raw_words.empty
     if has_words:
@@ -3567,7 +3662,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         "are detected from it. " + _upload_types_note,
         prefix="col_map_raw_gaze",
         multi=False,
-        noun="gaze points",
+        noun="gaze point",
     )
 
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
@@ -3613,8 +3708,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # still benefits from the reminder that each is optional on its own
         # but at least one is required.
         derive_host.caption(
-            f"{ICONS['upload']} Upload at least one of **Fixations**, **AOIs**, or "
-            "**Raw gaze** below to get started."
+            f"{ICONS['upload']} Each table is optional; the dataset needs at least one."
         )
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
             derive_host,
@@ -3674,9 +3768,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         _wizard_participant_text_step(
             "participant",
             "Participant ID",
-            "readers",
-            "The reader column — or several to compose an id. Leave empty for a "
-            "single anonymous reader.",
+            "participant",
+            "The participant column — or several to build one. Leave empty for one "
+            "participant (Fixations) or boxes shared by all (Words).",
             s2,
             raw_words,
             raw_fix,
@@ -3692,11 +3786,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         _wizard_participant_text_step(
             "text_id",
             "Text ID",
-            "texts",
-            "The text column — or several to compose an id. An AOI table with "
-            "no Participant ID attaches to a reading by it when their trial ids "
-            "differ. Leave empty to use the trial id; a repeated reading keeps "
-            "the first reading's, without its _r2 suffix.",
+            "text",
+            "The text column — or several to compose an id. Map your item "
+            "column here if trial order was randomized: `TRIAL_INDEX` only "
+            "orders a participant's trials. A Words table with no Participant "
+            "ID attaches to a trial by it when the Trial IDs differ. Leave "
+            "empty to use the Trial ID (a repeated trial keeps the same text).",
             s2,
             raw_words,
             raw_fix,
@@ -3824,12 +3919,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # table above it.
             aoi_extra = _row_body(extra_rows["words"])
             aggregate_char_boxes_on = aoi_extra.toggle(
-                "Aggregate character AOIs into word boxes",
+                "Merge character boxes into word boxes",
                 key="wizard_aggregate_char_boxes",
-                help="For interest-area tables with one row per *character* "
-                "(e.g. CJK corpora): collapse the characters of each word "
-                "(grouped by the Trial + Word/IA id above) into one bounding "
-                "box.",
+                help="For a Words table with one row per *character* (e.g. Chinese "
+                "or Japanese): merge the characters sharing a Trial ID and "
+                "Word/IA ID into one word box.",
             )
             # UX-113: only relevant once aggregating — a table whose rows are
             # grouped into sub-screen blocks that each restart their own word
@@ -3913,7 +4007,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     problems: list = []
     if words_problems:
-        problems.append("Words/IA: " + "; ".join(words_problems))
+        line = "Words table: " + "; ".join(words_problems) + "."
+        if any(p.startswith("need either") for p in words_problems):
+            # #374 F12: say what to do, not only what is missing.
+            line += (
+                " Without word boxes the text can't be drawn: map the box "
+                "columns, re-export the Interest Area Report with IA_LEFT, "
+                "IA_RIGHT, IA_TOP and IA_BOTTOM, or remove this table to see "
+                "fixations alone."
+            )
+        problems.append(line)
     if fix_problems:
         problems.append("Fixations: " + "; ".join(fix_problems))
     # A raw-gaze-ONLY upload: an incomplete raw-gaze mapping is the only thing
@@ -3942,7 +4045,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             word_schema,
             WORD_OPTIONAL_FIELDS,
             "col_map_words",
-            noun="AOI",
+            noun=WORDS_TABLE_LABEL,
         )
         keep_by_prefix["col_map_words"] = kept
         filter_fields += meta
@@ -4014,7 +4117,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s6 = body.container()
 
     setup_blockers = [
-        SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None
+        _SETUP_HEADINGS[g] for g, p in setup_snapshot.provenance.items() if p is None
     ]
     # `nothing_uploaded` is its own term (not folded into `problems`/
     # `setup_blockers`): a restored setup config can answer every group with
@@ -4060,8 +4163,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 s6,
                 disabled=False,
                 on_click=_mark_add_attempted,
-                help_text="Some required fields are still empty — they are "
-                "marked in red above.",
+                help_text="Some required fields are still empty — click to mark "
+                "them in red.",
             )
         st.session_state["_composite_trial_columns"] = None
         return _UploadResult(
@@ -4162,7 +4265,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # carries on without them, so say which and what was done, where the
         # other blockers are: directly above ✅ Add dataset.
         tables = (
-            ("Words/IA", raw_words, word_schema, has_words),
+            ("Words table", raw_words, word_schema, has_words),
             ("Fixations", raw_fix, fix_schema, has_fix),
         )
         for table, raw, schema, present in tables:
@@ -4198,10 +4301,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # of tables that share every trial but spell the readers differently
         # passed it — and every scanpath then drew over no text.
         s6.warning(
-            f"{ICONS['warning']} The two tables share trial ids but no reader: no fixation's "
+            f"{ICONS['warning']} The two tables share Trial IDs but no participant: no fixation's "
             "participant + trial has word boxes, so every scanpath would be "
             "drawn without its text. Check that **Participant ID** names the "
-            "same readers, spelled the same way, in both tables."
+            "same participants, spelled the same way, in both tables."
         )
 
     raw_gaze_norm = pd.DataFrame()
@@ -4296,10 +4399,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
             help_text=(
-                "Upload a Fixations, Words/IA, or Raw gaze table above to get started."
+                f"Upload a Fixations, {WORDS_TABLE_LABEL} or Raw gaze table above "
+                "to get started."
                 if nothing_uploaded
-                else "Answer the Recording setup section first: "
-                + ", ".join(setup_blockers)
+                else "Answer Recording setup first: " + ", ".join(setup_blockers)
                 if setup_blockers
                 else "Store this dataset and switch to it."
             ),

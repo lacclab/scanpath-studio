@@ -106,7 +106,7 @@ A directory load also reads:
 - **Reader metadata** from `participant_data.csv` (age, gender, languages, …) →
   the trial chip strip and Corpus Analysis grouping facets.
 - **Comprehension questions** from `multipleye_comprehension_questions_*.xlsx` →
-  the Stimulus & Context panel, joined by stimulus.
+  the Stimulus & context panel, joined by stimulus.
 - **Pre-computed reading measures** from `reading_measures/` → canonical `IA_*`
   columns attached to **per-reader** word boxes (FFD, FPRT, RPD, TFT, skip,
   regression counts). They follow MultiplEYE's definitions, not the app's, and are

@@ -454,7 +454,7 @@ PALETTES: dict[str, dict] = {
     # Lightness-only encoding: everything survives a black & white print or
     # photocopy, because nothing depends on hue at all.
     "Print / greyscale": {
-        "description": "Greys only — nothing depends on hue, so it survives a "
+        "description": "Grays only — nothing depends on hue, so it survives a "
         "black & white print. Pair with marker shape.",
         "fixation_color": "#1a1a1a",
         "fixation_colorscale": "Greys",
@@ -496,6 +496,20 @@ PALETTES: dict[str, dict] = {
     },
 }
 DEFAULT_PALETTE = "Default (colourblind-safe)"
+#: #374: the names a person reads. The keys above are stored values (settings
+#: files, Share links, ``palette=``) and keep their spelling; every place that
+#: shows a palette shows it through `palette_label`.
+PALETTE_LABELS = {
+    "Default (colourblind-safe)": "Default (colorblind-safe)",
+    "Print / greyscale": "Print / grayscale",
+}
+
+
+def palette_label(name: str) -> str:
+    """A palette's display name (US spelling); any other value as it is."""
+    return PALETTE_LABELS.get(name, name)
+
+
 # Not a palette — the honest answer when the live colours match none of them.
 # A palette only *presets* the individual colour keys, so the moment one of those
 # pickers is changed the selector would otherwise keep naming a palette the figure
@@ -642,6 +656,10 @@ CITATION = {
     "doi": "10.5281/zenodo.22933884",
     "url": "https://github.com/lacclab/scanpath-studio",
     "docs_url": "https://lacclab.github.io/scanpath-studio/",
+    # Where a user asks, reports, and gets the desktop app.
+    "questions_url": "https://github.com/lacclab/scanpath-studio/discussions/categories/q-a",
+    "bug_report_url": "https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md",
+    "desktop_url": "https://github.com/lacclab/scanpath-studio/releases/latest",
     "lab_url": "https://lacclab.github.io/",
     "corpus_note": (
         "Bundled demo data is a subset of OneStop Eye Movements: "
@@ -1024,6 +1042,10 @@ TRIAL_IDENTITY_FULL_KEY = "_trial_identity_full_scan"
 #: button can name the right screen: ``"add"`` or ``"edit"``.
 TRIAL_IDENTITY_CHECK_KEY = "_trial_identity_check_after"
 
+#: #374 F30 — the name of the dataset ✅ Add dataset just stored, popped by
+#: ``app.main`` once its frames are loaded to confirm what arrived.
+DATASET_ADDED_KEY = "_dataset_added_name"
+
 
 # --- UX-138 · the icon vocabulary ---------------------------------------------
 # One Material Symbols (Rounded) icon per *concept* the app draws as chrome — a
@@ -1051,6 +1073,9 @@ ICONS: dict[str, str] = {
     "faq": ":material/quiz:",
     "about": ":material/info:",
     "course": ":material/school:",
+    "question": ":material/forum:",
+    "bug": ":material/bug_report:",
+    "desktop": ":material/computer:",
     # Plot rail: design presets, layer sections and figure groups.
     "preset_scanpath": ":material/timeline:",
     "preset_custom": ":material/build:",
@@ -1104,7 +1129,7 @@ ICONS: dict[str, str] = {
     "close": ":material/close:",
     "open": ":material/open_in_new:",
     "mute": ":material/notifications_off:",
-    # Data → Saved on this computer, and ❓ Help → Debug.
+    # Data → Saved on this computer, and ❓ Help → About → Debug.
     "recovery": ":material/history:",
     "debug": ":material/bug_report:",
     # Data page and the add-dataset wizard.
@@ -1224,7 +1249,7 @@ def icons_to_html(text: str) -> str:
 #: in `tabs` because the tutorial steps in `tour` open a subtab by its label too,
 #: and `tests/conftest.py` imports them rather than repeating the strings.
 SUBTAB_ANNOTATIONS = f"{ICONS['annotations']} Annotations"
-SUBTAB_STIMULUS = f"{ICONS['stimulus']} Stimulus & Context"
+SUBTAB_STIMULUS = f"{ICONS['stimulus']} Stimulus & context"
 SUBTAB_COMPARISONS = f"{ICONS['comparisons']} Comparisons"
 SUBTAB_LINE_ASSIGNMENT = f"{ICONS['line_assignment']} Line assignment"
 SUBTAB_EXPORT = f"{ICONS['export']} Export"

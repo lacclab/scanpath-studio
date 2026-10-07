@@ -17,13 +17,23 @@ from streamlit.components.v1 import declare_component
 PLOTLYJS_FILENAME = "plotly.min.js"
 
 
-def embed_html_iframe(html: str, *, height: int) -> None:
+def embed_html_iframe(
+    html: str, *, height: int, alt: str | None = None, focusable: bool = False
+) -> None:
     """Render script-bearing HTML in an iframe without the deprecated API.
 
     ``st.iframe`` replaced the old components embed in Streamlit 1.58. Keeping
     this in one module prevents the plot, guided-tour, and Share surfaces from
     drifting onto different embed APIs.  The compatibility import is deliberately
     lazy so current Streamlit runs never import or call the deprecated function.
+
+    ``alt`` names a *visible* embed — a figure, the Share link box — for
+    assistive technology (Streamlit 1.65). The zero-height script carriers
+    leave it unset: there is nothing on screen to describe.
+
+    ``focusable`` puts the frame in the tab order, and with it the controls
+    inside it (a figure's zoom buttons, #374 F19). Off by default: a script
+    carrier must never take a Tab stop.
     """
     # Tiny script-only embeds need an explicit body. Streamlit's srcdoc
     # autosizing observer otherwise races the parser and tries to observe a null
@@ -34,7 +44,9 @@ def embed_html_iframe(html: str, *, height: int) -> None:
     source = html
     if not html[:1024].lstrip().lower().startswith(_DOCUMENT_STARTS):
         source = f"<!doctype html><html><body>{html}</body></html>"
-    st.iframe(source, height=max(1, int(height)), tab_index=-1)
+    st.iframe(
+        source, height=max(1, int(height)), tab_index=0 if focusable else -1, alt=alt
+    )
 
 
 _DOCUMENT_STARTS = ("<!doctype", "<html", "<head", "<body")

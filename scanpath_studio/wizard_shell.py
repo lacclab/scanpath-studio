@@ -45,6 +45,7 @@ from enum import Enum
 import streamlit as st
 
 from .constants import ICONS, icon_html
+from .fields import tooltip
 
 #: Prefix for the accordion's per-step open flags. Deliberately *not* the
 #: ``col_map_`` prefix — ``tabs._collect_column_mapping`` sweeps that whole
@@ -150,8 +151,8 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         "edit_data",
         1,
         "Data tables & column mapping",
-        "How each source column maps onto the app's canonical fields — the one "
-        "thing that decides what every measure downstream is computed from. Any "
+        "Which of your columns the app reads as participant, trial, word, "
+        "position and duration — everything drawn follows from it. Any "
         "metadata tables attached to the dataset are here too.",
         True,
     ),
@@ -166,7 +167,7 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         "edit_identity",
         3,
         "Trial identity",
-        "Whether the Trial ID above actually identifies one reading — checked "
+        "Whether the Trial ID above actually identifies one trial — checked "
         "on the whole dataset, before any filtering.",
         False,
     ),
@@ -254,10 +255,7 @@ def part(
     mark = f"{icon_html(_badge_concept(status))} " if status else ""
     title = html.escape(step.title)
     if note:
-        title = (
-            f'<span class="sps-fhelp" data-tip="{html.escape(note, quote=True)}">'
-            f"{title}</span>"
-        )
+        title = f'<span class="sps-fhelp" data-tip="{tooltip(note)}">{title}</span>'
     title_html = (
         f'<div class="sps-wiz-part"><span class="sps-wiz-part-n">{step.number}</span>'
         f"{mark}{title}</div>"

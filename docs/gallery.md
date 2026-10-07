@@ -24,17 +24,17 @@ pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
 
 ## A reading
 
-The full figure, as `plot_scanpath` draws it by default: each fixation where
-it landed, sized by its duration and numbered in order, the saccades between
-them, and every word tinted by the time spent on it, over the text at its
-recorded position. The orange words are the answer to the trial's question.
+The app's *Scanpath* design, which `plot_scanpath` draws by default: each
+fixation where it landed, sized by its duration, and the saccades between
+them, over the text at its recorded position. The orange words are the answer
+to the trial's question.
 
 ```python exec="true" html="true" source="below" session="gallery"
 fig = sps.plot_scanpath(words, fixations, pid, tid)
 print(embed(fig))  # markdown-exec: hide
 ```
 
-## Where the reader dwelt
+## Where the participant dwelt
 
 The heatmap on its own, here as a smooth duration-weighted density rather than
 one tint per word; the app's **:material/local_fire_department: Heatmap** controls offer both.
@@ -45,6 +45,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    show_heatmap=True,
     heatmap_style="Interpolated",
     show_fixations=False,
     show_saccades=False,
@@ -54,19 +55,17 @@ print(embed(fig))  # markdown-exec: hide
 
 ## Fixations by text line
 
-Each fixation coloured by the line of text it was assigned to: a quick check
-for vertical drift, which shows up as one line's colour creeping onto the next.
+Each fixation colored by the line of text it was assigned to: a quick check
+for vertical drift, which shows up as one line's color creeping onto the next.
 
 ```python exec="true" html="true" source="below" session="gallery"
-fig = sps.plot_scanpath(
-    words, fixations, pid, tid, color_by_line=True, show_heatmap=False
-)
+fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
 print(embed(fig))  # markdown-exec: hide
 ```
 
 ## Saccades by reading class
 
-Each saccade coloured by its role in reading: forward, skip, refixation, return
+Each saccade colored by its role in reading: forward, skip, refixation, return
 sweep, or regression.
 
 ```python exec="true" html="true" source="below" session="gallery"
@@ -77,7 +76,6 @@ fig = sps.plot_scanpath(
     tid,
     saccade_color_mode="By type",
     saccade_type_legend=False,
-    show_heatmap=False,
 )
 print(embed(fig, legend=saccade_class_legend()))  # markdown-exec: hide
 ```
@@ -97,15 +95,14 @@ fig = sps.plot_scanpath(
     fixation_snap_to_word=True,
     saccade_render_mode="Arc",
     fix_index_range=(124, 139),
-    show_heatmap=False,
 )
 print(embed(fig))  # markdown-exec: hide
 ```
 
-## Two readers, one text
+## Two participants, one text
 
-The first fifty fixations of two readings of the same paragraph, on one canvas
-in two colours. The readings can also sit side by side, or come from two
+The first fifty fixations of two trials of the same paragraph, on one canvas
+in two colors. The trials can also sit side by side, or come from two
 different datasets.
 
 ```python exec="true" html="true" source="below" session="gallery"
@@ -115,7 +112,6 @@ fig = sps.compare_scanpaths(
     (pid, tid),
     ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
     fix_index_range=(1, 50),
-    show_heatmap=False,
     show_legend=True,
 )
 print(embed(fig))  # markdown-exec: hide
@@ -123,7 +119,7 @@ print(embed(fig))  # markdown-exec: hide
 
 ## Raw gaze under the fixations
 
-Gaze samples, coloured by time, under the fixations, which are drawn hollow so
+Gaze samples, colored by time, under the fixations, which are drawn hollow so
 the samples show through. The demo ships no recorded samples, so this trial's
 are synthesized from its fixations: the figure shows the layer, not real data.
 
@@ -137,7 +133,6 @@ fig = sps.plot_scanpath(
     raw_gaze=raw_gaze,
     hollow_fixations=True,
     show_saccades=False,
-    show_heatmap=False,
 )
 print(embed(fig))  # markdown-exec: hide
 ```
@@ -155,7 +150,7 @@ print(embed(fig))  # markdown-exec: hide
 ## A text, word by word
 
 Beyond single trials: the total fixation duration on every word of one text,
-averaged over the demo's readers, with ± one standard deviation as a band. The
+averaged over the demo's participants, with ± one standard deviation as a band. The
 app's :material/bar_chart: **Corpus Analysis** view draws this and more.
 
 ```python exec="true" html="true" source="below" session="gallery"

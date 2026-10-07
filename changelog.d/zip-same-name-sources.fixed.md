@@ -1,0 +1,1 @@
+Files that share a name in different folders of a ZIP, or of a multi-file upload, now keep distinct source_file labels (reader-a/fixations, reader-b/fixations), so mapping that label as participant or trial no longer merges two readers into one.

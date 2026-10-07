@@ -26,10 +26,16 @@ NOT_A_DESIGN_SETTING = {
     # An uploaded file is not a setting, and Streamlit refuses to assign a value
     # to an uploader's key (see `controls._is_restorable_global`).
     "global_stimulus_image_upload",
-    # The Compare box-outline pickers are shadows: they show the colour drawn
-    # and write the real `cmp{idx}_box_color`, which a design does record.
+    # The Compare box-outline / fill pickers are shadows: they show the colour
+    # drawn and write the real `cmp{idx}_box_color` / `cmp{idx}_box_fill_color`
+    # (and the raw-gaze one `cmp{idx}_raw_gaze_color`),
+    # which a design does record.
     "cmp0_box_color__pick",
     "cmp1_box_color__pick",
+    "cmp0_box_fill_color__pick",
+    "cmp1_box_fill_color__pick",
+    "cmp0_raw_gaze_color__pick",
+    "cmp1_raw_gaze_color__pick",
 }
 
 B_FILTERS = {
@@ -153,8 +159,9 @@ class TestComingBackToTheDesign:
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
         return _run(at)
 
-    def test_compare_on_then_off_restores_a_saved_design(self, at):
-        """The built-ins are covered in test_viz_state_transitions: this harness
+    def test_compare_on_then_off_keeps_a_saved_design(self, at):
+        """#374 F25: Compare is a mode, so a saved design stays highlighted.
+        The built-ins are covered in test_viz_state_transitions: this harness
         renders the rail without the app's palette sync, which a built-in needs."""
         _do(at, "save:mine")
         _do(at, "apply:mine")
@@ -162,7 +169,7 @@ class TestComingBackToTheDesign:
         assert at.session_state["_quick_view_selection"] == "design:mine"
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = True
         _run(at)
-        assert at.session_state["_quick_view_selection"] == "custom"
+        assert at.session_state["_quick_view_selection"] == "design:mine"
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
         _run(at)
         assert at.session_state["_quick_view_selection"] == "design:mine"

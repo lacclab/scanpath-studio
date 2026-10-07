@@ -143,7 +143,8 @@ class TestKnownInconsistenciesAreRecorded:
         assert "between" in bounds.precedence
         assert "word_char_advance" in bounds.precedence
         assert "word_glyph_span" in bounds.precedence
-        assert "7.4%" in bounds.precedence  # the half-space shift it reverted
+        # #374: the reverted half-space shift (7.4%) is history — changelog, not page.
+        assert "7.4%" not in bounds.precedence
 
 
 class TestMeasureEntry:

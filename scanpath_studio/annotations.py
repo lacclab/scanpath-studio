@@ -172,7 +172,7 @@ def _check_record(index: int, record: object) -> None:
         not isinstance(tags, list)
         or any(isinstance(t, bool) or not isinstance(t, _ID_TYPES) for t in tags)
     ):
-        raise AnnotationsFileError(f"{where}: tags must be a list of words")
+        raise AnnotationsFileError(f"{where}: tags must be a list of text labels")
     note = record.get("note", "")
     if note is not None and not isinstance(note, str):
         raise AnnotationsFileError(f"{where}: note must be text")
@@ -851,10 +851,14 @@ def render_trial_annotations(
             "radio",
             "Annotation scope",
             options=["Parent trial", "This screen"],
+            # #374: the stored option keeps its name; "parent" is internal.
+            format_func=lambda option: (
+                "Whole trial" if option == "Parent trial" else option
+            ),
             key=scope_key,
             horizontal=True,
-            help="Parent annotations follow the logical trial; screen annotations "
-            "describe only the active coordinate space.",
+            help="Whole trial: every screen of this trial. This screen: only the "
+            "screen on view.",
         )
         if scope == "This screen":
             annotation_screen = str(screen_id)
@@ -897,7 +901,7 @@ def render_trial_annotations(
             f"{ICONS['favorite']} Favorite (star this trial)",
             display=f"{ICONS['favorite']} Favorite",
             key=star_key,
-            help="Mark this trial as a favorite.",
+            help="Star this trial (with scope *This screen*, this screen only).",
             on_change=_save_entry_callback,
             args=save_args,
         )
@@ -1137,11 +1141,18 @@ def _delete_dataset_annotations(records: list[dict]) -> None:
     _refresh_dataset_widgets(f"Deleted {_plural(removed, 'annotation')}.")
 
 
-def _annotations_frame(records: list[dict], trials: frozenset) -> pd.DataFrame:
+def _annotations_frame(
+    records: list[dict], trials: frozenset, trial_labels=None
+) -> pd.DataFrame:
+    """The Annotations table. ``trial_labels`` maps a trial id to the trial
+    picker's label for it (#374 F5: one trial label everywhere)."""
+    shown = trial_labels or {}
     frame = pd.DataFrame(
         {
             "Participant": [r["participant_id"] for r in records],
-            "Trial": [r["trial_id"] for r in records],
+            "Trial": [
+                shown.get(str(r["trial_id"]), str(r["trial_id"])) for r in records
+            ],
             "Screen": [r.get("screen_id", "") for r in records],
             "Favorite": [r["star"] for r in records],
             "Tags": [r["tags"] for r in records],
@@ -1159,7 +1170,9 @@ def _annotations_frame(records: list[dict], trials: frozenset) -> pd.DataFrame:
     return frame
 
 
-def render_dataset_annotations(trials, *, dataset_name: str, open_trials=None) -> None:
+def render_dataset_annotations(
+    trials, *, dataset_name: str, open_trials=None, trial_labels=None
+) -> None:
     """🗂️ Data → **Annotations**: every annotation the open dataset holds.
 
     One table — participant, trial, favorite, tags, note — with **Export** (this
@@ -1178,7 +1191,8 @@ def render_dataset_annotations(trials, *, dataset_name: str, open_trials=None) -
 
     ``open_trials`` — the trials the Scanpath picker can show, after the trial
     filters — gives each row an **Open** button (:func:`_open_annotation`);
-    without it the table has none.
+    without it the table has none. ``trial_labels`` writes each trial as
+    the trial picker does.
     """
     trials = _trial_set(trials)
     records = store_to_records(_store())
@@ -1232,12 +1246,11 @@ def render_dataset_annotations(trials, *, dataset_name: str, open_trials=None) -
         st.caption(
             f"{_plural(elsewhere, 'annotation')} here "
             f"{'is' if elsewhere == 1 else 'are'} on trials this dataset hasn't "
-            "loaded (*In dataset* unticked) — from an earlier load of it, or "
-            "saved before annotations were kept per dataset. They stay with this "
+            "loaded (*In dataset* unticked). They stay with this "
             "dataset; to move them to another, **Export** them here and "
             "**Import** them there."
         )
-    frame = _annotations_frame(records, trials)
+    frame = _annotations_frame(records, trials, trial_labels)
     column_config = {}
     if open_trials is not None:
         frame.insert(0, "Open", _OPEN_LABEL)
@@ -1246,7 +1259,7 @@ def render_dataset_annotations(trials, *, dataset_name: str, open_trials=None) -
             "",
             type="tertiary",
             width="small",
-            help="Show this reading — and its screen, for a screen annotation — "
+            help="Show this trial — and its screen, for a screen annotation — "
             "in the Scanpath view.",
             on_click=_open_annotation,
             args=(open_key, records, trials, _trial_set(open_trials)),

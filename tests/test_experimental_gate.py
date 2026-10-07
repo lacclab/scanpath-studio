@@ -630,7 +630,7 @@ class TestPerSentenceGate:
     def test_it_is_hidden_by_default(self):
         assert not constants.sentence_analysis_enabled()
         assert "Per sentence" not in tabs.corpus_subtabs()
-        assert tabs.corpus_subtabs() == ("Per text", "Per reader", "Groups")
+        assert tabs.corpus_subtabs() == ("Per text", "Per participant", "Groups")
 
     def test_the_experimental_flag_brings_it_back(self, monkeypatch):
         monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
@@ -650,7 +650,11 @@ class TestPerSentenceGate:
         at.session_state["corpus_subtab"] = "Per sentence"
         at.run()
         assert not at.exception, at.exception
-        assert [t.label for t in at.tabs][-3:] == ["Per text", "Per reader", "Groups"]
+        assert [t.label for t in at.tabs][-3:] == [
+            "Per text",
+            "Per participant",
+            "Groups",
+        ]
         assert calls == []
 
 
@@ -710,7 +714,8 @@ class TestComputedMeasuresGate:
         )
 
     @pytest.mark.parametrize(
-        ("subtab", "view_key"), [("Per reader", "prdr_view"), ("Groups", "pgrp_view")]
+        ("subtab", "view_key"),
+        [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
     )
     def test_corpus_analysis_drops_the_computed_views(self, subtab, view_key):
         at = AppTest.from_file(APP_SCRIPT)
@@ -725,7 +730,7 @@ class TestComputedMeasuresGate:
     def test_a_session_on_a_hidden_view_falls_back(self):
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["main_nav"] = "Corpus Analysis"
-        at.session_state["corpus_subtab"] = "Per reader"
+        at.session_state["corpus_subtab"] = "Per participant"
         at.session_state["prdr_view"] = "Reading summary"
         at.run(timeout=60)
         assert not at.exception, at.exception
@@ -734,7 +739,7 @@ class TestComputedMeasuresGate:
     def test_fixation_duration_over_time_opens_on_a_fixation_measure(self):
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["main_nav"] = "Corpus Analysis"
-        at.session_state["corpus_subtab"] = "Per reader"
+        at.session_state["corpus_subtab"] = "Per participant"
         at.session_state["prdr_view"] = "Fixation duration over time"
         at.run(timeout=60)
         assert not at.exception, at.exception

@@ -9,11 +9,11 @@ Choose the participant and trial. Keep only layers that answer the question:
 
 - **Fixations + saccades + text** for a conventional scanpath;
 - **Heatmap + text** for spatial concentration;
-- **Compare** for two readings of the same text;
+- **Compare** for two trials of the same text;
 - **Animate** for a talk or supplement.
 
-Set the experimental monitor size correctly before adjusting marker sizes or
-fonts; it defines the figure's coordinate system.
+Set the monitor size first, under :material/database: **Data Management → Edit
+dataset → Recording setup**; it defines the figure's coordinate system.
 
 ## 2. Make one clean figure
 
@@ -33,8 +33,10 @@ Open **Export → Current figure** and choose:
 PNG and SVG are saved by your browser from the figure on screen, and HTML
 needs nothing either (it loads Plotly from the internet when opened, or tick
 **Self-contained HTML** for a larger file that opens offline); PDF, GIF
-and MP4 need Chrome, Chromium or Edge. For a
-still figure, the plot's own camera button saves the same PNG.
+and MP4 need Chrome, Chromium or Edge. For print, give the PNG a **Width**
+(mm or in) and a **DPI**: 180 mm at 600 dpi is 4,252 px wide, and
+**Share → Code** writes the same size. Without a width, the plot's own camera
+button saves the same PNG.
 
 ## 3. Export a batch when needed
 
@@ -52,7 +54,7 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.
 
 Keep `plot_config.json` with the batch (or a **:material/share: Share → File** settings file
 for a single figure). The bundle's `README.md` records the package version and
-which readings it was built from, and `index.csv` lists every file with its
+which trials it was built from, and `index.csv` lists every file with its
 participant, trial and screen, and any that failed. Record the dataset version and
 the trial filters you used in the caption or analysis log — the export does not
 store them.

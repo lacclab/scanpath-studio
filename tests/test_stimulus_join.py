@@ -86,7 +86,7 @@ class TestReaderEmbeddedTrialIds:
         join = plan_stimulus_join(words, fixations)
         assert join is not None
         assert (join.key, join.readings, join.matched) == ("text_id", 4, 4)
-        assert join.describe().startswith("Words attach to readings by Text ID")
+        assert join.describe().startswith("Words attach to trials by Text ID")
 
     def test_a_mapped_text_column_of_any_name_joins(self):
         """Nothing about `unique_paragraph_id` is special: a Text ID mapped to
@@ -323,7 +323,7 @@ class TestNoJoinRefuses:
         f = normalize_fixations(fixations, data_module.propose_fix_schema(fixations))
         join = plan_stimulus_join(w, f)
         assert (join.key, join.readings, join.matched) == ("text_id", 4, 2)
-        assert "2 of 4 readings" in join.describe()
+        assert "2 of 4 trials" in join.describe()
 
     def test_the_cli_prints_the_refusal(self, tmp_path, capsys):
         from scanpath_studio import cli
@@ -528,8 +528,8 @@ class TestPerReadingRule:
         )
         join = plan_stimulus_join(words, fixations)
         assert (join.key, join.by_trial, join.by_text) == ("mixed", 1, 1)
-        assert "trial ID (1) and by Text ID (1)" in join.describe()
-        assert "all 2 readings have word boxes" in join.describe()
+        assert "Trial ID (1) and by Text ID (1)" in join.describe()
+        assert "all 2 trials have word boxes" in join.describe()
 
     def test_a_repeat_keeps_its_boxes_under_a_coarser_text_id(self):
         """Trial = paragraph, Text ID = article (two paragraphs per article):
@@ -620,7 +620,7 @@ class TestHeadlessSurfaces:
         fixations.loc[fixations["participant_id"] == "l42", "unique_paragraph_id"] = (
             "unknown"
         )
-        with pytest.warns(UserWarning, match="2 of 4 readings have word boxes"):
+        with pytest.warns(UserWarning, match="2 of 4 trials have word boxes"):
             sps.load_scanpath_data(
                 words=_text_words(), fixations=fixations, names="canonical"
             )
@@ -657,7 +657,7 @@ class TestHeadlessSurfaces:
         )
         result = self._run_cli(tmp_path, fixations)
         assert result.returncode == 0, result.stderr
-        assert "2 of 4 readings have word boxes" in result.stderr
+        assert "2 of 4 trials have word boxes" in result.stderr
 
     def test_the_cli_refusal_names_the_schema_flags(self, tmp_path):
         result = self._run_cli(
@@ -758,7 +758,7 @@ class TestMultipartScreens:
             )
         text = str(err.value)
         assert "has no boxes for that screen ('p9')" in text
-        assert "neither a trial ID nor a Text ID" not in text
+        assert "neither a Trial ID nor a Text ID" not in text
 
     def test_blank_screens_still_pair_with_blank_screens(self):
         words = _aoi(["A", "A"], ["tA", "tA"], ["one", "two"]).assign(page=["p1", None])
@@ -835,8 +835,8 @@ class TestMessages:
             {**_FIX_SCHEMA, "text_id": "text"},
         )
         text = plan_stimulus_join(words, fixations).describe()
-        assert "1 of 2 readings have word boxes" in text
-        assert "1 reading shares neither a trial ID nor a Text ID" in text
+        assert "1 of 2 trials have word boxes" in text
+        assert "1 trial shares neither a Trial ID nor a Text ID" in text
 
     def test_readings_left_out_by_an_ambiguous_text_are_told_why(self):
         words = normalize_words(
@@ -850,8 +850,8 @@ class TestMessages:
         join = plan_stimulus_join(words, fixations)
         assert (join.matched, join.ambiguous_readings) == (1, 1)
         text = join.describe()
-        assert "1 reading shares neither" in text
-        assert "1 reading names a Text ID the AOI table gives to more than one" in text
+        assert "1 trial shares neither" in text
+        assert "1 trial names a Text ID the Words table gives to more than one" in text
         assert "'X'" in text and "that Text ID cannot pick" in text
 
     def test_a_multipart_partial_join_is_refused_up_front(self):
@@ -861,7 +861,7 @@ class TestMessages:
         fixations = _fix(["r1", "r1"], ["r1_A", "r1_A"], ["tA", "tA"]).assign(
             page=["p1", "p3"]
         )
-        with pytest.raises(StimulusJoinError, match="1 of 2 reading screens") as err:
+        with pytest.raises(StimulusJoinError, match="1 of 2 trial screens") as err:
             sps.load_scanpath_data(
                 words=words,
                 fixations=fixations,

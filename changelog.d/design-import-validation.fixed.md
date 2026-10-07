@@ -1,0 +1,1 @@
+Importing a designs file now checks every setting the way a link is checked: an invalid value is skipped and named in the import message instead of crashing the app when the design is applied, and a file from a newer version says so.

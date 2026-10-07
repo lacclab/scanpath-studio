@@ -220,7 +220,7 @@ class TestAnimationParity:
         label = _labels(_anim())[0]
         assert label.textfont.color == WORD_LABEL_COLOR  # one colour, not a list
         assert "Word #" in label.hovertemplate
-        assert "Total fixation" not in label.hovertemplate
+        assert "TFD" not in label.hovertemplate
 
     def test_trace_inventory_is_unchanged(self):
         fig = _anim()
@@ -303,7 +303,7 @@ class TestAnimationWordLabels:
 
     def test_word_hover_measure_adds_its_line(self):
         label = _labels(_anim(word_hover_measure="total_fixation_duration_ms"))[0]
-        assert "Total fixation" in label.hovertemplate
+        assert "TFD" in label.hovertemplate
         assert label.customdata.shape[1] == 3  # word_id, line, measure
 
 

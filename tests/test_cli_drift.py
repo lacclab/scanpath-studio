@@ -174,7 +174,7 @@ def test_render_animate_warns_drift_is_ignored(tmp_path, monkeypatch, capsys):
     )
     err = capsys.readouterr().err
     assert "ignoring" in err
-    assert "drift_correction" in err and "drift_connectors" in err
+    assert "--drift-correction" in err and "--drift-connectors" in err
     assert "drift_correction" not in captured and "drift_connectors" not in captured
 
 

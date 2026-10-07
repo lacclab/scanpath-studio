@@ -78,7 +78,7 @@ class TestAvailableWithThisDataset:
         )
         assert len(lines) == 4
         assert "over the text, for 1 trial" in lines[0]
-        assert "TFD, FFD" in lines[1]
+        assert "TFD, First fixation duration — FFD" in lines[1]
         assert lines[2].endswith("**Raw gaze:** none")
         assert lines[3].endswith("one per trial")
 
@@ -148,4 +148,7 @@ class TestTheWizard:
         assert not at.exception, at.exception
         text = " ".join(c.value for c in at.caption)
         assert "Available with this dataset" in text
-        assert "**Reading measures:** TFD, FFD" in text
+        assert (
+            "**Reading measures:** Total fixation duration — TFD, First fixation duration — FFD"
+            in text
+        )

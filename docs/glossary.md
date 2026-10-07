@@ -50,10 +50,14 @@ Word box
     interest area (IA) in EyeLink's terms. It is taken from the data exactly as
     given, never recomputed
     ([`geom.word_box_bounds`](computations.md#geom-word-box-bounds)). A
-    fixation counts for the word its data names (an imported word/IA id), else
-    the word whose box contains it, else the word with the nearest centre
-    within 50 px
+    fixation counts for the word its data names when the data has a word/IA
+    id (a blank there means no word); without one, for the word whose box
+    contains it, else for no word
     ([`assign.fixation_to_word`](computations.md#assign-fixation-to-word)).
+
+Words (interest areas)
+:   The table of words and their word boxes, such as EyeLink's Interest Area
+    Report.
 
 Canvas
 :   The recorded screen in pixels, such as 2560 × 1440 — the coordinate
@@ -65,8 +69,9 @@ True to scale
     ([`disp.true_scale`](computations.md#disp-true-scale)).
 
 Recording setup
-:   The monitor's physical size and the viewing distance. Together with the
-    canvas they give pixels per degree of visual angle
+:   How the text was shown: the screen resolution (the canvas), the monitor's
+    size and viewing distance, and the text size, each marked measured,
+    estimated or assumed. Size and distance give pixels per degree of visual angle
     ([`geom.pixels_per_degree`](computations.md#geom-pixels-per-degree)).
 
 Screen
@@ -80,6 +85,10 @@ Critical span
     trial's question (`is_in_aspan`) — highlighted in the figure.
 
 ## Reading measures
+
+Scanpath Studio shows these as your interest-area report provides them. The
+definitions below are how it would compute them (experimental); the values you
+load mean what your eye-tracking software defines.
 
 First fixation duration (FFD)
 :   How long the first fixation on a word lasted, whenever it came
@@ -130,7 +139,7 @@ Dataset
     uploaded, each listed under :material/database: **Data Management**.
 
 Participant metadata
-:   An optional table with one row per reader, whose columns become trial
+:   An optional table with one row per participant, whose columns become trial
     filters without being copied onto the words or fixations.
 
 Illustration

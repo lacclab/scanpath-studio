@@ -30,6 +30,7 @@ import streamlit as st
 from streamlit.runtime.scriptrunner import StopException
 
 from .constants import ICONS
+from .crash_report import guarded
 
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
@@ -282,7 +283,7 @@ def debug_enabled() -> bool:
 
 #: UX-100 — the toggle's own widget key, mirrored into :data:`DEBUG_STATE_KEY`.
 #: The two used to be the same key, which was fine while the toggle rendered on
-#: every run; it now lives in the ❓ Help → Debug **dialog**, whose body is a fragment
+#: every run; it now lives in the Debug **dialog**, whose body is a fragment
 #: that runs only while the modal is open — and Streamlit drops a widget's key at
 #: the end of any run in which it did not render, so debug mode switched itself
 #: off the moment the modal was dismissed. Splitting them makes the durable flag
@@ -297,7 +298,7 @@ def _mirror_debug_toggle() -> None:
 
 
 def render_debug_toggle(host=None) -> None:
-    """Render the "🐛 Debug mode" toggle into the ❓ Help → Debug dialog.
+    """Render the "🐛 Debug mode" toggle into the ❓ Help → About → Debug dialog.
 
     The single gate (**UX-37**). Flipping it on shows the log panel under it
     in the same dialog run (:func:`_debug_dialog`).
@@ -313,8 +314,8 @@ def render_debug_toggle(host=None) -> None:
         f"{ICONS['debug']} Debug mode",
         key=_DEBUG_TOGGLE_KEY,
         on_change=_mirror_debug_toggle,
-        help="Show the captured log below, with a snapshot of what's loaded "
-        "and a JSON download to attach to a bug report.",
+        help="Show the captured log, a snapshot of what's loaded and a JSON "
+        "for bug reports. Also lists the *Synthetic test trial* dataset.",
     )
 
 
@@ -366,7 +367,7 @@ def render_debug_panel(host=None) -> None:
             )
         with cols[1]:
             st.write("")
-            if st.button("Clear", key="_debug_clear", width="stretch"):
+            if st.button("Clear log", key="_debug_clear", width="stretch"):
                 _buffer().clear()
                 # The dialog body is a fragment: an app-scoped rerun would close
                 # the modal on the empty log it just asked for.
@@ -422,12 +423,10 @@ def render_debug_panel(host=None) -> None:
         st.divider()
         st.caption(
             "App / session state",
-            help="A snapshot of what this browser session currently holds: the "
-            "active view, the dataset it was loaded from, the size of every "
-            "table in memory (rows × columns), and how many session-state keys "
-            "exist. It is a read-out, not a control — nothing here changes the "
-            "app. Send it with a bug report: it says which data and which view "
-            "produced the log above.",
+            help="What this browser session holds: the size of every table in "
+            "memory (rows × columns) and how many session-state keys exist. A "
+            "read-out only — nothing here changes the app. Send it with a bug "
+            "report.",
         )
         snapshot = _state_snapshot()
         st.dataframe(snapshot, hide_index=True, width="stretch")
@@ -447,27 +446,31 @@ def render_debug_panel(host=None) -> None:
         )
 
 
-#: UX-179 — the ❓ Help → Debug nav entry's request flag. Same arm-then-serve
-#: shape as the entry's siblings: a nav selection cannot open a dialog itself
-#: (the router reruns), so ``menu._arm_help_action`` sets this and ``app.main``
-#: serves it early, beside FAQ and About.
+#: UX-179 — the Debug drawer's request flag. #374 F31 moved its way in from a
+#: ❓ Help nav entry to a button at the foot of About: one dialog cannot open
+#: another, so the button sets this and reruns, and ``app.main`` serves it
+#: early, beside FAQ and About.
 _DEBUG_DIALOG_KEY = "_debug_dialog_requested"
 
 
 def _arm_debug() -> None:
-    """Request the Debug dialog. Called by the nav entry (``menu.py``)."""
+    """Request the Debug dialog. Called by About's Debug button."""
     st.session_state[_DEBUG_DIALOG_KEY] = True
 
 
 def maybe_show_debug() -> None:
-    """Open the Debug dialog if the ❓ Help → Debug entry armed it."""
+    """Open the Debug dialog if About's Debug button armed it."""
     if st.session_state.pop(_DEBUG_DIALOG_KEY, False):
         _debug_dialog()
 
 
-@st.dialog(f"{ICONS['debug']} Debug", width="large")
+@st.dialog(f"{ICONS['debug']} Debug", width="large", position="right")
+@guarded()
 def _debug_dialog() -> None:
-    """The Debug modal: the gate, then — once it is on — the log panel.
+    """The Debug drawer: the gate, then — once it is on — the log panel.
+
+    A right-side drawer (Streamlit 1.65) rather than a centred modal, so the
+    view the log describes stays in sight beside it; the user can widen it.
 
     The toggle is the whole of the feature's switch (UX-37), so it sits here
     even while it is off; the panel under it appears in the same fragment run

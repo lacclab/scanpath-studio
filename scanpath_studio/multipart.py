@@ -73,7 +73,9 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
     if not has_id:
         numeric_index = pd.to_numeric(out[SCREEN_INDEX], errors="coerce")
         if numeric_index.isna().any():
-            raise ValueError("screen_index contains missing or non-numeric values.")
+            raise ValueError(
+                "`screen_index` (screen order) has blank or non-numeric cells."
+            )
         out[SCREEN_ID] = numeric_index.astype(int).astype(str)
     else:
         # `stable_id`, not a plain `.astype(str)` — BUG-44's hazard applies here
@@ -100,28 +102,41 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
     else:
         numeric_index = pd.to_numeric(out[SCREEN_INDEX], errors="coerce")
         if numeric_index.isna().any() or (numeric_index <= 0).any():
-            raise ValueError("screen_index must contain positive integers.")
+            raise ValueError("`screen_index` (screen order) must count from 1.")
         if (numeric_index % 1 != 0).any():
-            raise ValueError("screen_index must contain whole numbers.")
+            raise ValueError("`screen_index` (screen order) must be whole numbers.")
         out[SCREEN_INDEX] = numeric_index.astype(int)
 
     pairs = out[parents + [SCREEN_ID, SCREEN_INDEX]].drop_duplicates()
     if pairs.duplicated(parents + [SCREEN_ID], keep=False).any():
-        raise ValueError("A screen_id maps to more than one screen_index in a trial.")
+        raise ValueError("Within a trial, one Screen ID has two `screen_index` values.")
     if pairs.duplicated(parents + [SCREEN_INDEX], keep=False).any():
-        raise ValueError("A screen_index maps to more than one screen_id in a trial.")
+        raise ValueError("Within a trial, two Screen IDs share one `screen_index`.")
 
     for column in (CANVAS_WIDTH, CANVAS_HEIGHT):
         if column not in out.columns:
             continue
         values = pd.to_numeric(out[column], errors="coerce")
         if values.notna().any() and (values.dropna() <= 0).any():
-            raise ValueError(f"{column} must be positive when supplied.")
+            raise ValueError(f"{_FIELD_LABELS[column]} must be positive.")
         out[column] = values
         counts = out.groupby(list(PART_KEY), dropna=False)[column].nunique(dropna=True)
         if (counts > 1).any():
-            raise ValueError(f"{column} conflicts within one screen.")
+            raise ValueError(f"{_FIELD_LABELS[column]} changes within one screen.")
     return out
+
+
+#: What a user calls each screen column in a message (the add screen's names).
+_FIELD_LABELS = {
+    SCREEN_INDEX: "`screen_index`",
+    CANVAS_WIDTH: "Screen canvas width",
+    CANVAS_HEIGHT: "Screen canvas height",
+}
+
+
+def _screens(parts: list) -> str:
+    """Up to three ``(participant, trial, screen)`` keys, as ``p01/3/page_2``."""
+    return ", ".join("/".join(str(v) for v in part) for part in parts[:3])
 
 
 def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
@@ -151,6 +166,8 @@ def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
             dropna=True
         )
         if (conflicts > 1).any():
+            # tabs.py matches this text exactly (the screen_index case), so it
+            # keeps its wording until that check reads something sturdier (#374).
             raise ValueError(f"Multipart metadata {column!r} conflicts across tables.")
     catalog = (
         combined.groupby(list(PART_KEY), as_index=False, dropna=False)
@@ -169,8 +186,7 @@ def validate_matching_parts(words: pd.DataFrame, fixations: pd.DataFrame) -> Non
         return
     if has_screen_identity(words) != has_screen_identity(fixations):
         raise ValueError(
-            "Multipart identity is present in only one report; map screen_id in "
-            "both words and fixations, or omit it from both."
+            "Screen ID is set in only one table; set it in both or neither."
         )
     word_parts = set(map(tuple, words[list(PART_KEY)].drop_duplicates().to_numpy()))
     fixation_parts = set(
@@ -181,12 +197,10 @@ def validate_matching_parts(words: pd.DataFrame, fixations: pd.DataFrame) -> Non
         missing_fix = sorted(word_parts - fixation_parts)
         details = []
         if missing_words:
-            details.append(f"no words for {missing_words[:3]}")
+            details.append(f"no words for {_screens(missing_words)}")
         if missing_fix:
-            details.append(f"no fixations for {missing_fix[:3]}")
-        raise ValueError(
-            "Multipart reports contain orphan screens: " + "; ".join(details)
-        )
+            details.append(f"no fixations for {_screens(missing_fix)}")
+        raise ValueError("Some screens are in one table only: " + "; ".join(details))
 
 
 def extract_part(

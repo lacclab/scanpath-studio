@@ -24,7 +24,13 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
-from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME, SAMPLE_INDEX
+from .constants import (
+    DEFAULT_FIGURE_SIZE,
+    PACKAGE_NAME,
+    SAMPLE_INDEX,
+    UPLOAD_FILE_TYPES,
+    plural,
+)
 from .multipart import (
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
@@ -797,16 +803,15 @@ def load_onestop_server_bundle(
         # error and stop. Common cause: pid was excluded from the IA report
         # (no exported reading data), or shards haven't been generated yet.
         missing = [
-            p.name
+            f"{p.parent.name}/{p.name}"
             for p, ok in [(ia_shard, ia_present), (fix_shard, fix_present)]
             if not ok
         ]
         st.error(
-            f"No scanpath data for participant {participant!r}. "
-            f"Missing shards: {', '.join(missing)}. "
-            f"If the pid was added since the last shard run, regenerate with: "
-            f"`python -m scanpath_studio.onestop_shard --data-dir <ONESTOP_DATA_DIR>`. "
-            f"Pids with no IA report (e.g. metadata-status excluded) cannot be visualized."
+            f"No data for participant {participant!r} on this server: they have "
+            f"no reading data, or its files ({', '.join(missing)}) are missing. "
+            "Whoever runs the server can regenerate them with "
+            "`python -m scanpath_studio.onestop_shard --data-dir <ONESTOP_DATA_DIR>`."
         )
         st.stop()
 
@@ -1286,6 +1291,10 @@ TEXT_ID_CANDIDATES = [
     "presented_stimulus_name",  # Tobii Pro Lab — the stimulus *is* the text
     "media_name",  # Tobii Studio / Gazepoint
     "stimulus",  # SMI BeGaze
+    # #374 F13: an EyeLink export's own item column (`item`, `ITEM_ID`, …) —
+    # last, so a named text/paragraph column still wins.
+    "item",
+    "item_id",
 ]
 TEXT_CANDIDATES = [
     "text",
@@ -1520,7 +1529,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
         "measure_nfix",
         "n_fixations",
         "Fix. count",
-        "Number of fixations on the AOI",
+        "Number of fixations on the word",
         "numeric",
         ("IA_FIXATION_COUNT", "fixation_count", "n_fixations"),
     ),
@@ -1552,7 +1561,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
         "measure_reg_in_count",
         "number_of_regressions_in",
         "Reg. in (n)",
-        "Number of regressions into the AOI",
+        "Number of regressions into the word",
         "numeric",
         ("IA_REGRESSION_IN_COUNT", "number_of_regressions_in", "regression_in_count"),
     ),
@@ -1568,7 +1577,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
         "measure_landing_distance",
         "initial_landing_distance",
         "Landing dist.",
-        "Centred initial landing distance, letters",
+        "Centered initial landing distance, letters",
         "numeric",
         ("initial_landing_distance", "landing_distance"),
     ),
@@ -1610,6 +1619,52 @@ def _apply_reading_measures(
             )
         elif canonical in df.columns:
             del df[canonical]
+
+
+#: The duration measures a word nobody fixated does not have (BUG-63). Total
+#: fixation duration is not one of them: the word was read past and got 0 ms.
+UNFIXATED_BLANK_MEASURES: tuple[str, ...] = (
+    "first_fixation_ms",
+    "first_pass_gaze_duration_ms",
+    "regression_path_duration_ms",
+    "single_fixation_duration_ms",
+)
+
+
+def _blank_unfixated_measures(df: pd.DataFrame) -> None:
+    """Blank the imported FFD / FPRT / RPD / single-fixation duration of a word
+    nobody fixated (BUG-63's rule, on the imported path — #374 F1).
+
+    An EyeLink IA report writes ``0`` there, and every mean then counted a
+    skipped word as a 0 ms fixation. "Never fixated" is a fixation count of 0;
+    where no count is mapped (or the cell is blank), a total fixation duration
+    of 0 says the same. Total fixation duration itself keeps its 0.
+
+    The mirror image, as on the computed path: second pass is "fewer than two
+    runs ⇒ 0", but an imported IA_SECOND_RUN_DWELL_TIME leaves those cells
+    blank, so its mean would cover only re-read words. Where the fixation count
+    is known, a blank second pass becomes 0."""
+    if "second_pass_duration_ms" in df.columns and "n_fixations" in df.columns:
+        known = pd.to_numeric(df["n_fixations"], errors="coerce").notna()
+        second = pd.to_numeric(df["second_pass_duration_ms"], errors="coerce")
+        df["second_pass_duration_ms"] = second.mask(known & second.isna(), 0.0)
+    present = [column for column in UNFIXATED_BLANK_MEASURES if column in df.columns]
+    if not present:
+        return
+    unfixated = pd.Series(False, index=df.index)
+    count = (
+        pd.to_numeric(df["n_fixations"], errors="coerce")
+        if "n_fixations" in df.columns
+        else pd.Series(np.nan, index=df.index)
+    )
+    unfixated |= count.eq(0)
+    if "total_fixation_duration_ms" in df.columns:
+        total = pd.to_numeric(df["total_fixation_duration_ms"], errors="coerce")
+        unfixated |= count.isna() & total.eq(0)
+    if not unfixated.any():
+        return
+    for column in present:
+        df[column] = pd.to_numeric(df[column], errors="coerce").mask(unfixated)
 
 
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
@@ -1742,9 +1797,7 @@ def validate_word_schema(schema: dict[str, str | None]) -> list:
     has_xywh = all(schema.get(k) for k in ["x", "y", "width", "height"])
     has_box = all(schema.get(k) for k in ["left", "right", "top", "bottom"])
     if not has_xywh and not has_box:
-        problems.append(
-            "need either (x, y, width, height) or (left, right, top, bottom)"
-        )
+        problems.append("missing Word box (its edges, or x/y with width and height)")
     return problems
 
 
@@ -1767,8 +1820,8 @@ def validate_fix_schema(schema: dict[str, str | None]) -> list:
     has_xy = schema.get("x") and schema.get("y")
     if not has_xy and not schema.get("word_id"):
         problems.append(
-            "need either (X, Y) coordinates or a Word/IA ID "
-            "(AOI-only fixations are placed at word-box centers)"
+            "missing X and Y (or a Word/IA ID, to place each fixation at its "
+            "word's center)"
         )
     return problems
 
@@ -2358,15 +2411,22 @@ def mapping_value_preview(
 _UNPARSED_CONSEQUENCE = {
     "duration": "those fixations are read as 0 ms long",
     "timestamp": "those fixations are read as starting at 0",
-    "x": "those fixations are placed at their word's centre when they have a word id, "
+    "x": "those fixations are placed at their word's center when they have a word id, "
     "and left off the plot otherwise",
-    "y": "those fixations are placed at their word's centre when they have a word id, "
+    "y": "those fixations are placed at their word's center when they have a word id, "
     "and left off the plot otherwise",
     "word_id": "those rows have no word id",
 }
+#: The same for the Words table, where x/y are a box's corner, not a gaze (#374).
+_UNPARSED_WORD_CONSEQUENCE = dict.fromkeys(
+    ("x", "y", "width", "height", "left", "right", "top", "bottom"),
+    "those word boxes have no position",
+)
 
 
-def numeric_parse_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list[str]:
+def numeric_parse_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = True
+) -> list[str]:
     """Plain-language warnings for mapped numeric columns that did not parse.
 
     One line per column, naming the table, the column, how many of its cells
@@ -2401,7 +2461,10 @@ def numeric_parse_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list
                 "were not guessed at — re-export the table with a '.' decimal point "
                 "and no thousands separator"
             )
-        consequence = _UNPARSED_CONSEQUENCE.get(key, "those cells are left empty")
+        consequences = (
+            _UNPARSED_CONSEQUENCE if fixations else _UNPARSED_WORD_CONSEQUENCE
+        )
+        consequence = consequences.get(key, "those cells are left empty")
         issues.append(f"{line}; {consequence}.")
     return issues
 
@@ -2537,7 +2600,7 @@ def normalization_issues(
     are gaze positions rather than box origins — positions that are screen
     fractions rather than pixels (DATA-40)."""
     issues = identity_issues(raw, schema, table=table)
-    issues += numeric_parse_issues(raw, schema, table=table)
+    issues += numeric_parse_issues(raw, schema, table=table, fixations=fixations)
     if fixations:
         issues += screen_fraction_issues(raw, schema, table=table)
     return issues
@@ -2820,20 +2883,21 @@ def _schema_identity_columns(schema: dict) -> list[str]:
     return columns
 
 
-def read_table_columns(file_like_or_path) -> list[str]:
+def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[str]:
     """A table's column names, without parsing its rows.
 
     The header pass that :func:`plan_table_read` plans from. Delimited text
     reads zero rows and columnar formats read their schema; anything else
     (Excel, a zip of several members) falls back to reading the table, because
     there is no cheaper way to learn its columns and those formats are not the
-    ones that hurt.
+    ones that hurt. ``kind`` (``"words"`` / ``"fixations"``) picks a mixed
+    zip's members the way :func:`zip_member_split` does (#374, F3).
     """
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     _rewind(file_like_or_path)
     try:
         if name.endswith(".zip"):
-            return _zipped_table_columns(file_like_or_path)
+            return _zipped_table_columns(file_like_or_path, kind=kind)
         if name.endswith(".parquet"):
             import pyarrow.parquet as pq
 
@@ -2888,7 +2952,7 @@ def _member_layout(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[list, st
     return _header(io.BytesIO(line + b"\n"), sep), sep
 
 
-def _zipped_table_columns(file_like_or_path) -> list[str]:
+def _zipped_table_columns(file_like_or_path, *, kind: str | None = None) -> list[str]:
     """Column names of a ``.zip``'s members, without decompressing the rows.
 
     A OneStop report is a single ~4 GB CSV inside its zip, so the fallback of
@@ -2904,11 +2968,14 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
             if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
         ]
         if not infos:
-            raise ValueError("the zip archive contains no readable table files")
+            raise ValueError(
+                "the zip holds no table file (CSV, TSV, TXT, Excel, Parquet or Feather)"
+            )
         # DATA-16/S6: the same declared-size guard the full read applies. A
         # cheaper way to learn an archive's columns must not also be a way
         # around its decompression limits.
         _check_zip_limits(infos)
+        infos = _zip_split(zf, infos, kind).used_infos
         for info in infos:
             name = info.filename.lower()
             if not name.endswith((".tsv", ".tab", ".csv", ".txt")):
@@ -2916,7 +2983,7 @@ def _zipped_table_columns(file_like_or_path) -> list[str]:
                 # read: defer to `_read_zipped_table`, which reads every member
                 # under a running byte budget (declared sizes are forgeable, so
                 # the check above is not sufficient on its own).
-                return list(_read_zipped_table(file_like_or_path).columns)
+                return list(_read_zipped_table(file_like_or_path, kind=kind).columns)
             names, _sep = _member_layout(zf, info)
             columns.extend(c for c in names if c not in columns)
     return columns
@@ -2957,6 +3024,75 @@ def read_mapped_table(
     schema = dict(declared) if declared else propose(pd.DataFrame(columns=header))
     plan = plan_table_read(header, schema, registry, filter_fields=filter_fields)
     return read_table(file_like_or_path, plan=plan)
+
+
+def source_labels(paths: Sequence[str]) -> list[str]:
+    """The ``source_file`` label for each path — its stem, unless that stem
+    is shared with another path.
+
+    ``reader-a/fixations.csv`` and ``reader-b/fixations.csv`` both have the
+    stem ``fixations``, and a label is mapped as participant or trial identity,
+    so two readers would silently become one. A shared stem is qualified by
+    the fewest trailing folders that tell it apart from the paths it clashes
+    with (``reader-a/fixations``) — only folders that *differ*, so the shared
+    part of an absolute path (``/Users/<name>/…``) never enters a label. Paths
+    in the same folder then keep their extension (``fix.csv`` / ``fix.tsv``),
+    and paths that are the same get a ``#n`` occurrence number. Backslashes
+    count as folder separators, so a zip made on Windows labels as one made
+    elsewhere.
+
+    A browser upload carries no folders, so two same-named uploads read
+    ``fixations#1`` / ``fixations#2`` in the app where the same files read from
+    disk (API, CLI) get their folders. :func:`source_file_name` recovers the
+    file name from any of these forms.
+    """
+    split = []
+    for path in paths:
+        parts = [
+            p for p in str(path).replace("\\", "/").split("/") if p not in ("", ".")
+        ]
+        parts = parts or [str(path)]
+        split.append((tuple(parts[:-1]), parts[-1]))
+    stems = [Path(name).stem for _, name in split]
+
+    def shared_tail(a: tuple, b: tuple) -> int:
+        n = 0
+        while n < min(len(a), len(b)) and a[-1 - n] == b[-1 - n]:
+            n += 1
+        return n
+
+    labels = list(stems)
+    for i, (folders, name) in enumerate(split):
+        clashes = [j for j, stem in enumerate(stems) if j != i and stem == stems[i]]
+        if not clashes:
+            continue
+        others = [split[j][0] for j in clashes if split[j][0] != folders]
+        depth = min(
+            len(folders), max((shared_tail(folders, o) + 1 for o in others), default=0)
+        )
+        same_folder = any(split[j][0] == folders for j in clashes)
+        tail = Path(name).name if same_folder else stems[i]
+        if same_folder and any(split[j] == split[i] for j in clashes):
+            tail = stems[i]
+        labels[i] = "/".join([*folders[len(folders) - depth :], tail])
+    seen: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label] = counts.get(label, 0) + 1
+    for i, label in enumerate(labels):
+        if counts[label] > 1:
+            seen[label] = seen.get(label, 0) + 1
+            labels[i] = f"{label}#{seen[label]}"
+    return labels
+
+
+def source_file_name(label: str) -> str:
+    """The file stem inside a :func:`source_labels` label — without the folders
+    that qualify it, its ``#n`` occurrence number or a kept extension — for
+    code that parses identity out of a file's name (MultiplEYE uploads)."""
+    name = re.sub(r"#\d+$", "", str(label).rsplit("/", 1)[-1])
+    stem = Path(name).stem
+    return stem if Path(name).suffix.lower().lstrip(".") in UPLOAD_FILE_TYPES else name
 
 
 def _tag_and_concat(
@@ -3060,19 +3196,18 @@ def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
     for info in infos:
         if int(info.file_size) > ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES:
             raise ValueError(
-                f"{info.filename!r} in the zip archive expands to "
-                f"{_format_bytes(info.file_size)}, above the per-file limit of "
-                f"{_format_bytes(ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)}. Raise "
-                f"{ZIP_MAX_MEMBER_ENV} (in GB) if this machine has the memory "
-                "to parse it, or split the table into smaller files — one per "
-                "participant reads far more comfortably than one of everything."
+                f"{info.filename!r} in the zip unpacks to "
+                f"{_format_bytes(info.file_size)}, over the "
+                f"{_format_bytes(ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)} per-file "
+                "limit. Split it into smaller files (one per participant works "
+                f"well). Running it yourself? {ZIP_MAX_MEMBER_ENV} (GB) raises it."
             )
     if total > ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES:
         raise ValueError(
-            f"the zip archive expands to {_format_bytes(total)}, above the "
-            f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} decompression "
-            f"limit. Raise {ZIP_MAX_TOTAL_ENV} (in GB) if this machine has the "
-            "memory to parse it, or split the archive into smaller uploads."
+            f"the zip unpacks to {_format_bytes(total)}, over the "
+            f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} limit. Split it "
+            "into smaller uploads. Running it yourself? "
+            f"{ZIP_MAX_TOTAL_ENV} (GB) raises it."
         )
     if total >= ZIP_RATIO_CHECK_MIN_BYTES:
         ratio = total / max(compressed, 1)
@@ -3127,22 +3262,227 @@ class _BudgetedZipMember(io.RawIOBase):
         self.consumed += read
         if self.consumed > self._budget:
             raise ValueError(
-                f"{self._name!r} in the zip archive decompresses past the "
-                f"{_format_bytes(self._budget)} {self._limit_label} "
-                "(its declared size was wrong). Refusing to read it."
+                f"{self._name!r} in the zip is larger than the archive says, "
+                f"past the {_format_bytes(self._budget)} {self._limit_label}, so "
+                "it was not read. Re-create the zip and upload it again."
             )
         return read
 
 
+#: What each table kind's members are called in the mixed-zip message (#374 F3).
+_ZIP_KIND_NOUNS = {
+    "fixations": ("fixation report", "fixation reports"),
+    "words": ("interest-area report", "interest-area reports"),
+}
+#: The wizard row each kind belongs in, as the message names it.
+_ZIP_KIND_ROWS = {"fixations": "Fixations", "words": "Words"}
+
+
+def table_kind_of_columns(columns: Iterable[str]) -> str | None:
+    """Whether a header looks like a fixation table or a word (interest-area)
+    table — ``"fixations"``, ``"words"`` or ``None`` when it is neither or both.
+
+    Reuses the mapping's own detection: a fixation table has a duration column
+    and no word box, a word table has a word box and no fixation duration. An
+    EyeLink Fixation Report and Interest Area Report land on opposite sides.
+    """
+    frame = pd.DataFrame(columns=list(dict.fromkeys(map(str, columns))))
+    words = propose_word_schema(frame)
+    has_box = all(words.get(k) for k in ("x", "y", "width", "height")) or all(
+        words.get(k) for k in _BOX_EDGES
+    )
+    has_duration = bool(propose_fix_schema(frame).get("duration"))
+    if has_duration and not has_box:
+        return "fixations"
+    if has_box and not has_duration:
+        return "words"
+    return None
+
+
+@dataclass(frozen=True)
+class ZipMemberSplit:
+    """Which members of a zip one table reads (#374 F3).
+
+    A ZIP of per-participant folders commonly holds both EyeLink reports. Its
+    members are grouped by column set, each set classified by
+    :func:`table_kind_of_columns`; when the archive holds both kinds, the table
+    being read keeps the members of its own kind and the rest are *left out* —
+    never concatenated into one frame, which put a "fixation" at every word.
+    """
+
+    used: tuple[str, ...]
+    left_out: tuple[str, ...] = ()
+    kind: str | None = None
+    left_out_kind: str | None = None
+    used_infos: tuple = ()
+
+    @property
+    def mixed(self) -> bool:
+        return bool(self.left_out)
+
+    def message(self) -> str:
+        """The one-line note the upload row shows ("" when nothing was left out)."""
+        if not self.left_out or self.kind not in _ZIP_KIND_NOUNS:
+            return ""
+        n_used, n_out = len(self.used), len(self.left_out)
+        noun = _ZIP_KIND_NOUNS[self.kind][n_used != 1]
+        if self.left_out_kind in _ZIP_KIND_NOUNS:
+            other = _ZIP_KIND_NOUNS[self.left_out_kind][n_out != 1]
+            row = _ZIP_KIND_ROWS[self.left_out_kind]
+            tail = f" — add the ZIP to the {row} row too."
+        else:
+            other, tail = ("other file" if n_out == 1 else "other files"), "."
+        verb = "was" if n_out == 1 else "were"
+        return (
+            f"Using the {n_used} {noun} in this ZIP; {n_out} {other} {verb} "
+            f"left out{tail}"
+        )
+
+
+def _zip_member_columns(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> list[str]:
+    """One member's column names — the header line for delimited text, else
+    the member read (under the per-file budget) and its schema taken."""
+    name = info.filename.lower()
+    if name.endswith((".tsv", ".tab", ".csv", ".txt")):
+        return _member_layout(zf, info)[0]
+    with zf.open(info) as inner:
+        stream = _BudgetedZipMember(
+            inner, ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES, info.filename
+        )
+        buf = io.BytesIO(stream.read())
+    buf.name = info.filename
+    return read_table_columns(buf)
+
+
+def _zip_split(
+    zf: zipfile.ZipFile, infos: list[zipfile.ZipInfo], kind: str | None
+) -> ZipMemberSplit:
+    """Split ``infos`` into the members ``kind`` reads and those it leaves out."""
+    every = ZipMemberSplit(
+        used=tuple(i.filename for i in infos), kind=kind, used_infos=tuple(infos)
+    )
+    if kind not in _ZIP_KIND_NOUNS or len(infos) < 2:
+        return every
+    by_columns: dict[tuple, str | None] = {}
+    kinds = []
+    for info in infos:
+        columns = tuple(_zip_member_columns(zf, info))
+        if columns not in by_columns:
+            by_columns[columns] = table_kind_of_columns(columns)
+        kinds.append(by_columns[columns])
+    present = {k for k in kinds if k}
+    if len(present) < 2 or kind not in present:
+        return every
+    used = [i for i, k in zip(infos, kinds) if k == kind]
+    out_kinds = {k for k in kinds if k != kind}
+    return ZipMemberSplit(
+        used=tuple(i.filename for i in used),
+        left_out=tuple(i.filename for i, k in zip(infos, kinds) if k != kind),
+        kind=kind,
+        left_out_kind=out_kinds.pop() if len(out_kinds) == 1 else None,
+        used_infos=tuple(used),
+    )
+
+
+def zip_member_split(file_like_or_path, kind: str | None) -> ZipMemberSplit:
+    """Which members of a ``.zip`` the ``kind`` table reads, and which it
+    leaves out (#374 F3) — what the upload row reports. A non-zip, or a zip
+    holding one kind of table, uses everything."""
+    name = getattr(file_like_or_path, "name", str(file_like_or_path))
+    if not name.lower().endswith(".zip"):
+        return ZipMemberSplit(used=(name,), kind=kind)
+    _rewind(file_like_or_path)
+    try:
+        with zipfile.ZipFile(file_like_or_path) as zf:
+            infos = [
+                i
+                for i in zf.infolist()
+                if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
+            ]
+            _check_zip_limits(infos)
+            return _zip_split(zf, infos, kind)
+    finally:
+        _rewind(file_like_or_path)
+
+
+#: Rows :func:`read_table_sample` parses, and the bytes it reads of a zip member.
+_SAMPLE_ROWS = 2000
+_SAMPLE_BYTES = 4 * 1024 * 1024
+
+
+def read_table_sample(
+    file_like_or_path, *, kind: str | None = None, nrows: int = _SAMPLE_ROWS
+) -> pd.DataFrame:
+    """The first rows of a delimited table, every column parsed (#374 F13).
+
+    What the wizard judges an unmapped column's values by, when its planned
+    read (PERF-6) left that column out. Delimited text only — a plain file or
+    a zip's first member of ``kind`` (:func:`zip_member_split`); anything else,
+    or a file that will not parse, gives an empty frame, which the caller reads
+    as "no evidence".
+    """
+    name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
+    delimited = (".tsv", ".tab", ".csv", ".txt")
+    _rewind(file_like_or_path)
+    try:
+        if name.endswith(delimited):
+            sep = _sniff_delimiter(file_like_or_path, name)
+            return _read_delimited(file_like_or_path, sep, None, nrows=nrows)
+        if not name.endswith(".zip"):
+            return pd.DataFrame()
+        with zipfile.ZipFile(file_like_or_path) as zf:
+            infos = [
+                i
+                for i in zf.infolist()
+                if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
+            ]
+            _check_zip_limits(infos)
+            used = _zip_split(zf, infos, kind).used_infos
+            info = next(
+                (i for i in used if i.filename.lower().endswith(delimited)), None
+            )
+            if info is None:
+                return pd.DataFrame()
+            sep = _member_layout(zf, info)[1]
+            with zf.open(info) as inner:
+                head = inner.read(_SAMPLE_BYTES)
+        # Cut at the last whole line: the read stops mid-row.
+        if len(head) == _SAMPLE_BYTES and b"\n" in head:
+            head = head[: head.rindex(b"\n") + 1]
+        return _read_delimited(io.BytesIO(head), sep, None, nrows=nrows)
+    except Exception:  # no evidence, not an error: the real read reports it
+        return pd.DataFrame()
+    finally:
+        _rewind(file_like_or_path)
+
+
+def looks_like_condition(values: pd.Series) -> bool:
+    """Whether a column reads as a condition or an item id — a few repeated
+    values, such as ``Adv`` / ``Ele`` or ``2_1`` … ``2_12`` (#374 F13).
+
+    Between 2 and 50 distinct values, each used at least twice on average; a
+    fractional number is a measurement, never a condition."""
+    filled = values.dropna()
+    if filled.empty:
+        return False
+    if pd.api.types.is_float_dtype(filled) and not (filled % 1 == 0).all():
+        return False
+    distinct = filled.nunique()
+    return 2 <= distinct <= 50 and distinct * 2 <= len(filled)
+
+
 def _read_zipped_table(
-    file_like_or_path, *, plan: ReadPlan | None = None
+    file_like_or_path, *, plan: ReadPlan | None = None, kind: str | None = None
 ) -> pd.DataFrame:
     """Read table(s) from a ``.zip`` archive (e.g. ``data.csv.zip``).
 
     Each member is dispatched on its own extension, so a zip may wrap any
     supported format. A multi-member archive is concatenated just like a
     multi-file upload — every member's rows tagged with its stem in
-    ``source_file``. pandas infers compression only from string paths, not from
+    ``source_file`` (qualified by its folders when two members share a stem,
+    :func:`source_labels`). With ``kind``, an archive that mixes fixation and
+    interest-area reports keeps only the members that fit it
+    (:func:`zip_member_split`, #374 F3). pandas infers compression only from string paths, not from
     uploaded file-like objects, so we open the archive ourselves. Raises
     ``ValueError`` if the archive holds no data file (macOS ``__MACOSX``/dotfile
     cruft is ignored), or if it would decompress past the DATA-16 size limits
@@ -3155,8 +3495,11 @@ def _read_zipped_table(
             if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
         ]
         if not infos:
-            raise ValueError("the zip archive contains no readable table files")
+            raise ValueError(
+                "the zip holds no table file (CSV, TSV, TXT, Excel, Parquet or Feather)"
+            )
         _check_zip_limits(infos)
+        infos = _zip_split(zf, infos, kind).used_infos
         remaining = ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES
         frames, labels = [], []
         for info in infos:
@@ -3214,8 +3557,8 @@ def _read_zipped_table(
                             _read_by_extension(buf, name, member_plan, sep=sep)
                         )
             remaining -= stream.consumed
-            labels.append(Path(member).stem)
-    return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
+            labels.append(member)
+    return _tag_and_concat(frames, source_labels(labels), SOURCE_FILE_COLUMN)
 
 
 # BUG-5: guard the memory-constrained hosted demo against a too-large upload.
@@ -3247,17 +3590,21 @@ def upload_exceeds_limit(
     return uploaded_files_total_bytes(uploaded) > threshold_bytes
 
 
-def read_table(file_like_or_path, *, plan: ReadPlan | None = None) -> pd.DataFrame:
+def read_table(
+    file_like_or_path, *, plan: ReadPlan | None = None, kind: str | None = None
+) -> pd.DataFrame:
     """Read a tabular file by extension: csv, tsv, parquet, feather, or a
     ``.zip`` wrapping one or more of those (e.g. ``data.csv.zip``). A
     multi-member zip is concatenated like a multi-file upload.
 
     ``plan`` (PERF-6) is a :class:`ReadPlan` from :func:`plan_table_read`,
-    narrowing the read to the columns normalization keeps."""
+    narrowing the read to the columns normalization keeps. ``kind``
+    (``"words"`` / ``"fixations"``) is the table being read: a zip that mixes
+    the two keeps only the members that fit it (:func:`zip_member_split`)."""
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     try:
         if name.endswith(".zip"):
-            return _read_zipped_table(file_like_or_path, plan=plan)
+            return _read_zipped_table(file_like_or_path, plan=plan, kind=kind)
         return _read_by_extension(file_like_or_path, name, plan)
     except pd.errors.EmptyDataError as exc:
         raise _empty_file_error(name) from exc
@@ -3290,6 +3637,7 @@ def read_tables(
     source_column: str | None = SOURCE_FILE_COLUMN,
     *,
     plan_for=None,
+    kind: str | None = None,
 ) -> pd.DataFrame:
     """Read one or many tabular files and concatenate them into one frame.
 
@@ -3297,11 +3645,13 @@ def read_tables(
     list mixing those (a ``.zip`` member counts as a file too). ``plan_for`` is
     called with each file's column names and returns the :class:`ReadPlan` to
     read it under (PERF-6); omit it to parse every column. Each part gets a
-    ``source_file`` column holding the file's stem (unless the data already has
+    ``source_file`` column holding the file's stem — qualified by its folders
+    when two files share one (:func:`source_labels`) — (unless the data already has
     that column, or ``source_column=None``) — *including a single file*, so
     datasets that key identity in the filename can recover it (the upload wizard
     maps ``source_file`` as the trial / participant id). Columns are aligned by
-    name across files; fields absent from a file become NaN for its rows."""
+    name across files; fields absent from a file become NaN for its rows.
+    ``kind`` picks a mixed zip's members (:func:`zip_member_split`)."""
     items = expand_table_inputs(inputs)
     frames, labels = [], []
     for item in items:
@@ -3309,10 +3659,16 @@ def read_tables(
         # participant is the common upload shape, and an export can gain or
         # lose a column between them — a shared plan would name a column some
         # file hasn't got, which `usecols` raises on.
-        plan = plan_for(read_table_columns(item)) if plan_for is not None else None
-        frames.append(read_table(item, plan=plan))
-        labels.append(Path(getattr(item, "name", str(item))).stem)
-    return _tag_and_concat(frames, labels, source_column, always_tag=True)
+        plan = (
+            plan_for(read_table_columns(item, kind=kind))
+            if plan_for is not None
+            else None
+        )
+        frames.append(read_table(item, plan=plan, kind=kind))
+        labels.append(getattr(item, "name", str(item)))
+    return _tag_and_concat(
+        frames, source_labels(labels), source_column, always_tag=True
+    )
 
 
 def _load_bundled(name: str) -> pd.DataFrame:
@@ -3477,9 +3833,8 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     fixations = _resolve_sample_image_paths(_load_bundled("fixations"))
     if words.empty or fixations.empty:
         st.error(
-            "Bundled sample data not found. Expected ia.{parquet,csv} and "
-            "fixations.{parquet,csv} under the installed package's sample_data "
-            "directory."
+            "The bundled demo is missing from this installation. Reinstall "
+            "Scanpath Studio, then reload the page."
         )
         return pd.DataFrame(), pd.DataFrame()
     return words, fixations
@@ -3583,7 +3938,7 @@ def infer_word_schema(words: pd.DataFrame) -> dict[str, str] | None:
     schema = propose_word_schema(words)
     problems = validate_word_schema(schema)
     if problems:
-        st.error(f"Words/IA schema problems: {'; '.join(problems)}")
+        st.error(f"Words table problems: {'; '.join(problems)}")
         return None
     return schema
 
@@ -3612,7 +3967,7 @@ SYNTHETIC_PARTICIPANT = "(all)"
 
 #: The two keys a stimulus-level AOI table can attach to a reading through
 #: (DATA-49), as the wizard names them.
-STIMULUS_JOIN_LABELS = {"trial_id": "trial ID", "text_id": "Text ID"}
+STIMULUS_JOIN_LABELS = {"trial_id": "Trial ID", "text_id": "Text ID"}
 #: The mapped trial id a repeated reading had before
 #: `_disambiguate_repeated_readings` suffixed it with `_r2`, `_r3` … — on the
 #: fixations only, and only when a suffix was given. The stimulus join reads it
@@ -3772,14 +4127,14 @@ class StimulusJoin:
     def label(self) -> str:
         """The route as the wizard's fields name it (``"Text ID"``)."""
         if self.key == "mixed":
-            return f"trial ID ({self.by_trial:,}) and by Text ID ({self.by_text:,})"
+            return f"Trial ID ({self.by_trial:,}) and by Text ID ({self.by_text:,})"
         return STIMULUS_JOIN_LABELS.get(self.key or "", "")
 
     def _unit(self, n: int) -> str:
         return (
-            _count(n, "reading screen", "reading screens")
+            _count(n, "trial screen", "trial screens")
             if self.multipart
-            else _count(n, "reading", "readings")
+            else _count(n, "trial", "trials")
         )
 
     def _why_unmatched(self) -> str:
@@ -3789,15 +4144,15 @@ class StimulusJoin:
         if plain:
             verb = "shares" if plain == 1 else "share"
             parts.append(
-                f" {self._unit(plain)} {verb} neither a trial ID nor a Text ID "
-                "with the AOI table."
+                f" {self._unit(plain)} {verb} neither a Trial ID nor a Text ID "
+                "with the Words table."
             )
         if self.missing_screen_readings:
             screens = ", ".join(repr(s) for s in self.missing_screens[:3])
             verb = "matches" if self.missing_screen_readings == 1 else "match"
             which = "that screen" if len(self.missing_screens) == 1 else "those screens"
             parts.append(
-                f" {self._unit(self.missing_screen_readings)} {verb} an AOI trial "
+                f" {self._unit(self.missing_screen_readings)} {verb} a Words-table trial "
                 f"that has no boxes for {which} ({screens})."
             )
         if self.ambiguous_readings:
@@ -3810,7 +4165,7 @@ class StimulusJoin:
             )
             verb = "names" if self.ambiguous_readings == 1 else "name"
             parts.append(
-                f" {self._unit(self.ambiguous_readings)} {verb} a Text ID the AOI "
+                f" {self._unit(self.ambiguous_readings)} {verb} a Text ID the Words "
                 f"table gives to more than one of its trials ({shown}), so "
                 f"{texts} cannot pick one set of boxes."
             )
@@ -3825,8 +4180,8 @@ class StimulusJoin:
             reading, aoi = self.mismatch_example
             example = f" (e.g. {reading!r} against {aoi!r})"
         return (
-            f" {self._unit(self.text_mismatches)} {verb} the boxes of the AOI "
-            f"trial {pron} trial ID matches, but a different Text ID from that "
+            f" {self._unit(self.text_mismatches)} {verb} the boxes of the Words-"
+            f"table trial {pron} Trial ID matches, but a different Text ID from that "
             f"trial's{example}: check that Text ID names the same texts in both "
             "tables."
         )
@@ -3835,7 +4190,7 @@ class StimulusJoin:
         """One sentence for the wizard and the log: the route and its coverage."""
         if self.key is None or (self.multipart and self.unmatched):
             return self.problem()
-        unit = "reading screens" if self.multipart else "readings"
+        unit = "trial screens" if self.multipart else "trials"
         lead = f"Words attach to {unit} by {self.label}"
         if not self.unmatched:
             return (
@@ -3850,23 +4205,23 @@ class StimulusJoin:
     def problem(self) -> str:
         """Why the join is refused, and what to map instead."""
         advice = (
-            " Map Text ID (`text_id`) in both tables to the column naming the "
-            "text each row belongs to, or give the AOI table the fixations' own "
-            "trial IDs."
+            " Map **Text ID** in both tables to the column naming the text "
+            "each row belongs to, or give the Words table the fixations' own "
+            "Trial IDs."
         )
         if self.matched:
             # Only a multipart dataset refuses a partial join: every screen a
             # reading has fixations on needs its boxes (`validate_matching_parts`).
             return (
-                "The AOI table has no Participant ID, so its word boxes are shared "
-                f"by every reading of a text, but only {self.matched:,} of "
+                "The Words table has no Participant ID, so its word boxes are shared "
+                f"by every trial of a text, but only {self.matched:,} of "
                 f"{self._unit(self.readings)} find theirs, and a multipart dataset "
                 "needs boxes for every screen it has fixations on."
                 f"{self._why_unmatched()}{advice}"
             )
         return (
-            "The AOI table has no Participant ID, so its word boxes are shared by "
-            f"every reading of a text, but none of the {self._unit(self.readings)} "
+            "The Words table has no Participant ID, so its word boxes are shared by "
+            f"every trial of a text, but none of the {self._unit(self.readings)} "
             "in the fixations finds them: the dataset would have no word boxes."
             f"{self._why_unmatched()}{advice}"
         )
@@ -4192,8 +4547,8 @@ def repair_stranded_stimulus_words(
         )
     except Exception:  # a repair must never break the load
         _LOGGER.warning(
-            "Could not repair a stored AOI table left on the placeholder "
-            "reader; press Save changes on the Edit dataset screen to retry.",
+            "Could not repair a stored Words table left on the placeholder "
+            "participant; press Save changes on the Edit dataset screen to retry.",
             exc_info=True,
         )
         return None
@@ -4494,7 +4849,7 @@ def harmonize_frames_reporting(
     padded: list[tuple[str, str]] = []
     words, fixations = _restore_zero_padding(words, fixations, padded)
     rewrites += [
-        (table, column, ", respelt to match the other table")
+        (table, column, ", respelled to match the other table")
         for table, column in padded
     ]
     words, join = _broadcast_stimulus_words(words, fixations)
@@ -4526,7 +4881,7 @@ def harmonize_frames_reporting(
         .where(fixations[BASE_TRIAL_ID].notna(), False)
         .any()
     ):
-        rewrites.append(("fixations", "trial_id", " + _rN for a repeated reading"))
+        rewrites.append(("fixations", "trial_id", " + _rN for a repeated trial"))
     return words, fixations, join, tuple(rewrites)
 
 
@@ -4597,6 +4952,18 @@ def _disambiguate_repeated_readings(
 def has_explicit_trial_index(frame: pd.DataFrame) -> bool:
     """True when the data already carries a per-trial index column."""
     return any(c in frame.columns for c in ("trial_index", "TRIAL_INDEX"))
+
+
+def trial_order_label(frame: pd.DataFrame) -> str:
+    """The axis title for :func:`derive_trial_index`'s values: the column it
+    reads, or how it ordered the trials without one (#374 F35 — the demo
+    carries both ``trial_index`` and ``TRIAL_INDEX``, which differ)."""
+    for col in ("trial_index", "TRIAL_INDEX"):
+        if col in frame.columns:
+            return f"Trial order ({col})"
+    if "timestamp_ms" in frame.columns:
+        return "Trial order (by fixation time)"
+    return "Trial order (as listed)"
 
 
 def derive_trial_index(frame: pd.DataFrame) -> pd.Series:
@@ -4922,6 +5289,41 @@ def coerce_flag(col: pd.Series) -> pd.Series:
 _MISSING_FLAG_STRINGS = {"", ".", "na", "nan", "n/a", "-", "none", "null", "<na>"}
 
 
+_TRUE_FLAG_SPELLINGS = {"true", "t", "yes", "y", "1", "1.0"}
+_FALSE_FLAG_SPELLINGS = {"false", "f", "no", "n", "0", "0.0"}
+_FLAG_SPELLINGS = {
+    **dict.fromkeys(_TRUE_FLAG_SPELLINGS, True),
+    **dict.fromkeys(_FALSE_FLAG_SPELLINGS, False),
+}
+
+
+def coerce_bool_or_na(col: pd.Series) -> pd.Series:
+    """A user-supplied true/false column as a nullable boolean.
+
+    Real booleans stay as they are, numbers go by ``!= 0``, and the strings
+    ``true/false``, ``t/f``, ``yes/no``, ``y/n``, ``1/0`` (any case, trimmed)
+    are read by their meaning — never by truthiness, under which the string
+    ``"False"`` is true. Missing cells and any other spelling are ``<NA>``, so
+    a caller decides what an unknown means (round 11).
+    """
+    if pd.api.types.is_bool_dtype(col):
+        return col.astype("boolean")
+    if pd.api.types.is_numeric_dtype(col):
+        return (col != 0).astype("boolean").mask(col.isna())
+    out = pd.Series(pd.NA, index=col.index, dtype="boolean")
+    is_str = col.map(type).eq(str).to_numpy()
+    is_bool = col.map(type).eq(bool).to_numpy()
+    if is_bool.any():
+        out[is_bool] = col[is_bool].astype(bool).to_numpy()
+    numeric = pd.to_numeric(col.where(~is_str & ~is_bool), errors="coerce")
+    is_number = numeric.notna().to_numpy()
+    out[is_number] = (numeric[is_number] != 0).to_numpy()
+    if is_str.any():
+        spelled = col[is_str].str.strip().str.lower()
+        out[is_str] = spelled.map(_FLAG_SPELLINGS).astype("boolean").to_numpy()
+    return out
+
+
 def coerce_measure_flag(col: pd.Series) -> pd.Series:
     """A supplied reading-measure flag (skip, regression in/out) as a nullable
     boolean: true, false, or missing.
@@ -5128,8 +5530,8 @@ def normalize_words(
     _renormalizing: bool = False,
 ) -> pd.DataFrame:
     if not _renormalizing:
-        words = _drop_reserved_columns(words, schema, table="Words/IA")
-    _warn_normalization_issues(words, schema, table="Words/IA")
+        words = _drop_reserved_columns(words, schema, table="Words table")
+    _warn_normalization_issues(words, schema, table="Words table")
     words = _drop_rows_missing_identity(words, schema)
     # The explicit index makes scalar assignments (e.g. the stimulus-level
     # participant placeholder) fill every row even when assigned first.
@@ -5219,6 +5621,7 @@ def normalize_words(
     # AN-32: after the passthrough and the extras, so the mapping has the last
     # word on every measure it names.
     _apply_reading_measures(df, words, schema)
+    _blank_unfixated_measures(df)
 
     df = _preserve_composite_columns(df, words, schema["trial"])
     return df
@@ -6000,6 +6403,7 @@ def diagnose_trial_identity(
         "repeated_fixation_id_trials": 0,
         "backwards_clock_trials": 0,
         "multi_valued_columns": {},
+        "mixed_source_shapes": False,
         "sampled_from": None,
     }
     key_frame = fixations if fixations is not None and not fixations.empty else words
@@ -6087,8 +6491,27 @@ def diagnose_trial_identity(
     report["multi_valued_columns"] = dict(
         sorted(multi.items(), key=lambda kv: (-kv[1], kv[0]))
     )
+    # #374 F3: when `source_file` is what varies, the files may be two kinds of
+    # table joined into one (a fixation report and an interest-area report) —
+    # adding `source_file` to the Trial ID would only hide that.
+    report["mixed_source_shapes"] = SOURCE_FILE_COLUMN in multi and any(
+        _mixed_source_shapes(frame) for frame in (words, fixations)
+    )
     report["affected_trials"] = len(flagged)
     return report
+
+
+def _mixed_source_shapes(frame: pd.DataFrame | None) -> bool:
+    """Whether the files behind ``frame`` filled different columns (#374 F3).
+
+    Each ``source_file``'s rows are reduced to the set of columns they hold any
+    value in; two files of one export share that set, while a fixation report
+    and an interest-area report joined into one table do not.
+    """
+    if frame is None or frame.empty or SOURCE_FILE_COLUMN not in frame.columns:
+        return False
+    filled = frame.notna().groupby(frame[SOURCE_FILE_COLUMN], sort=False).any()
+    return len(filled.drop_duplicates()) > 1
 
 
 def _as_tuple(key) -> tuple:
@@ -6109,31 +6532,42 @@ def trial_identity_warning(report: dict[str, object]) -> str | None:
     total = int(report.get("trials") or 0)
     sampled_from = report.get("sampled_from")
     scope = (
-        f"of {total} trials sampled from {int(sampled_from):,}"
+        f"of {total:,} sampled trials (out of {int(sampled_from):,})"
         if sampled_from
-        else f"of {total} trials"
+        else f"of {total:,} trials"
     )
     lead = (
-        f"**{affected} {scope} look like more than one reading "
+        f"**{affected:,} {scope} look like more than one trial "
         f"under the current Trial ID.**"
     )
     multi = report.get("multi_valued_columns") or {}
+    if report.get("mixed_source_shapes"):
+        return (
+            f"{lead} Their rows come from files with different columns — one "
+            "table probably holds both fixation and interest-area reports. "
+            "Upload each report in its own row: Fixations, or Words (interest "
+            "areas)."
+        )
     if multi:
         col, count = next(iter(multi.items()))
         return (
             f"{lead} `{col}` takes more than one value inside a trial "
-            f"({count} trials) — adding it to the Trial ID mapping would "
-            "separate them."
+            f"({plural(count, 'trial')}) — adding it to the Trial ID mapping "
+            "would separate them."
         )
     parts = []
     if report.get("duplicate_word_rows"):
-        parts.append(f"{report['duplicate_word_rows']} duplicated word rows")
+        parts.append(plural(report["duplicate_word_rows"], "duplicated word row"))
     if report.get("repeated_fixation_id_trials"):
         parts.append(
-            f"{report['repeated_fixation_id_trials']} with a repeated fixation id"
+            f"{plural(report['repeated_fixation_id_trials'], 'trial')} with a "
+            "repeated fixation ID"
         )
     if report.get("backwards_clock_trials"):
-        parts.append(f"{report['backwards_clock_trials']} whose clock runs backwards")
+        parts.append(
+            f"{plural(report['backwards_clock_trials'], 'trial')} whose fixation "
+            "onsets run backwards"
+        )
     return f"{lead} Evidence: {', '.join(parts)}."
 
 

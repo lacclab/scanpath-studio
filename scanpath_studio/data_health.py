@@ -153,7 +153,7 @@ CHECKS: tuple[_Check, ...] = (
     _Check(
         "fixation_position",
         "fixations",
-        "Fixations with no finite position",
+        "Fixations with no usable position",
         ("x", "y"),
         _position_masks,
         "They stay in every table and export, but the plot cannot place them: "
@@ -164,7 +164,7 @@ CHECKS: tuple[_Check, ...] = (
     _Check(
         "raw_gaze_position",
         "raw_gaze",
-        "Raw-gaze samples with no finite position",
+        "Raw-gaze samples with no usable position",
         ("x", "y"),
         _position_masks,
         "They stay in the table and its export; the raw-gaze layer leaves them "
@@ -173,12 +173,12 @@ CHECKS: tuple[_Check, ...] = (
     _Check(
         "word_box_size",
         "words",
-        "Word boxes with no area or no finite position",
+        "Word boxes with no area or no usable position",
         ("x", "y", "width", "height"),
         _box_masks,
         "They stay in every table and export. A box with no area holds no "
-        "fixation, so fixations reach such a word only through the nearest-word "
-        "fallback, and the box draws as a line or not at all; a box with an "
+        "fixation, so fixations reach such a word only through the data's own "
+        "word ids, and the box draws as a line or not at all; a box with an "
         "infinite size or position is left out of the figure.",
     ),
     _Check(

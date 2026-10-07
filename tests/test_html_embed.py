@@ -40,3 +40,13 @@ def test_text_deep_inside_a_fragment_does_not_make_it_a_document(embedded):
     fragment = "<div>" + "x" * 100_000 + "<body>" + "</div>"
     html_embed.embed_html_iframe(fragment, height=10)
     assert embedded == [f"<!doctype html><html><body>{fragment}</body></html>"]
+
+
+def test_alt_reaches_the_iframe(monkeypatch):
+    # Streamlit 1.65's `alt` names a visible embed for assistive technology; the
+    # script carriers leave it unset.
+    calls = []
+    monkeypatch.setattr(html_embed.st, "iframe", lambda source, **kw: calls.append(kw))
+    html_embed.embed_html_iframe("<div>fig</div>", height=10, alt="Scanpath figure")
+    html_embed.embed_html_iframe("<script>1</script>", height=0)
+    assert [c["alt"] for c in calls] == ["Scanpath figure", None]

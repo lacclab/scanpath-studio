@@ -1,11 +1,11 @@
 # Data format
 
-Scanpath Studio reads up to three tables — **words / areas-of-interest**,
+Scanpath Studio reads up to three tables — **words (interest areas)**,
 **fixations**, and (optionally) **raw gaze** — as **CSV, TSV, TXT, Parquet,
 Feather, or Excel**, or a `.zip` of any of them. Columns are auto-detected from
 common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake-case conventions;
-the app's **Column
-mapping** panel (and the
+**Edit dataset**'s
+**Data tables & column mapping** (and the
 `word_schema` / `fix_schema` arguments of
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]) override
 any guess.
@@ -14,22 +14,20 @@ any guess.
 
 | Table | Holds | Key columns (auto-detected) |
 |-------|-------|-----------------------------|
-| **Words / IA** | one row per word / interest area, with its on-screen box | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
-| **Fixations** | one row per fixation | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id |
+| **Words (interest areas)** | one row per word / interest area, with its on-screen box (EyeLink's Interest Area Report) | trial id, word id, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`); optionally participant id and word text |
+| **Fixations** | one row per fixation (EyeLink's Fixation Report) | trial id, duration (ms), and x/y or a word/IA id; optionally participant id, timestamp, fixation id |
 | **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y; optionally timestamp |
-| **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
+| **Participant metadata** *(optional)* | one row per participant | participant id, plus anything you know about them |
 | **Trial metadata** *(optional)* | one row per trial | trial id, plus anything you know about that trial |
 | **Text metadata** *(optional)* | one row per text | text id, plus anything you know about that text |
 
 **Without timestamps.** A fixations table with no timestamp column still
-loads: its rows are taken to be in reading order. Reading time and reading
-speed are then an estimate — the fixations laid end to end by their durations,
-leaving out the time between them — and the summaries label them so
-(`reading_time_source`). The replay uses the same clock.
+loads: its rows are taken to be in reading order. The replay then lays the
+fixations end to end by their durations, leaving out the time between them.
 
 A raw gaze table with no timestamp column keeps its samples in file order and
 gives them no time: each sample is numbered 1, 2, … within its trial
-(`sample_index`), the plot colours the samples by that order under a
+(`sample_index`), the plot colors the samples by that order under a
 *Sample order* legend title and the hover reads `sample n`, and the exported
 table carries the sample number. Nothing assumes a sampling rate.
 
@@ -52,16 +50,16 @@ Raw gaze can be the only table, too. Its samples are drawn as recorded, and for
 a dataset with no fixations the :material/grain: **Raw gaze** layer is on by default. Nothing
 is derived from the samples: no fixations are detected from them, so the
 fixation and saccade layers, the animated replay and Compare need a fixations
-table, and Corpus Analysis needs an AOI report that carries reading measures.
+table, and Corpus Analysis needs a Words table that carries reading measures.
 
 ## Participant metadata
 
-Attach a table of **one row per reader** — native language, age, a
+Attach a table of **one row per participant** — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
 the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public
 corpus, or a dataset you added earlier, the same uploader is on :material/database: **Data Management → :material/edit: Edit dataset**
 under **Metadata → Participants**. Its columns then behave like fields in the
-data: they filter trials (the filter funnel's *By reader* section), show up as
+data: they filter trials (the filter funnel's *By participant* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
 sessions.
@@ -76,16 +74,16 @@ Three rules are worth knowing:
 
 - **The table is never copied onto your fixations.** It stays its own table and
   is exported separately (`metadata/participants.csv`).
-- **Nothing is guessed.** The join is reported before anything uses it: readers
-  in your data with no row, rows describing readers you did not load, and
+- **Nothing is guessed.** The join is reported before anything uses it: participants
+  in your data with no row, rows describing participants you did not load, and
   duplicate rows. Duplicates that *disagree* are dropped and named rather than
   resolved by taking the first one, so the field reads as missing. Duplicates
   that do not disagree are combined: each field keeps the one value the rows
   hold, so one row's age and another's language both survive.
-- **A missing reader is missing, not excluded.** Attaching a table that forgets
-  someone never removes them from the pool. A numeric range keeps the readers
+- **A missing participant is missing, not excluded.** Attaching a table that forgets
+  someone never removes them from the pool. A numeric range keeps the participants
   with no value too, unless you untick **Keep unknown values** under it; the
-  line under the box says how many readers that concerns. An infinite value
+  line under the box says how many participants that concerns. An infinite value
   counts as no value. The same choice sits under every numeric trial filter,
   for the trial and text tables as well.
 
@@ -96,7 +94,7 @@ and [`load_participant_metadata()`](api.md) in the Python API.
 
 The same idea one grain down: a table of **one row per trial** — a list
 name, a presentation order, a per-trial comprehension score, whatever your
-design recorded about the trial rather than about the reader. It attaches
+design recorded about the trial rather than about the participant. It attaches
 beside the participant table — under **Metadata** in part 2 of the add-dataset
 wizard, and on :material/database: **Data Management → :material/edit: Edit dataset** under **Metadata → Trials** for a
 dataset that is already loaded — and its columns behave like fields in the data in the same
@@ -111,11 +109,11 @@ t02,A,2,0
 ```
 
 **The key decides what a row means.** Keyed by trial id alone, a row describes
-a *text*, and every reader's reading of it inherits that row — right for a design
+a *text*, and every participant's reading of it inherits that row — right for a design
 where the trial id names the material. The app always keys the table this way:
 its **Trial ID column** picker takes one column, or several to build the id the
-way the data's own Trial ID mapping does. Keyed by reader **and** trial, a row
-describes **one reading**, which is what you need as soon as the same reader
+way the data's own Trial ID mapping does. Keyed by participant **and** trial, a row
+describes **one reading**, which is what you need as soon as the same participant
 reads the same text twice — and that table attaches headlessly only, with
 `--trial-metadata-reader-column` on the CLI or `participant_column=` in the
 Python API.
@@ -130,8 +128,8 @@ Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and
 The third grain: a table of **one row per text** — a genre, a difficulty rating,
 a stimulus-level comprehension score. It attaches beside the other two (under
 **Metadata → Texts** in the wizard and on :material/edit: **Edit dataset**), keyed by text id
-alone — never by reader, since a text is a stimulus rather than something one
-reader owns — and, like the trial table, the id may be built from several
+alone — never by participant, since a text is a stimulus rather than something one
+participant owns — and, like the trial table, the id may be built from several
 columns. Its columns behave like fields in the data in the same way, travel with
 exports (`metadata/texts.csv`) and saved sessions, and follow the same join
 rules.
@@ -148,7 +146,7 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   its text's boxes. Each reading finds them by its own trial ID, then (for a
   repeated reading, whose trial ID ends in `_r2`) by the trial ID it had before
   that suffix, then by its **Text ID**, for example when the trial ID includes
-  the reader. A Text ID that the words table gives to more than one of its
+  the participant. A Text ID that the words table gives to more than one of its
   trials is not used. The Text ID route needs a Text ID mapped for the
   fixations (auto-detected or picked, even when its values equal the trial
   IDs); without one, their Text ID is only a copy of the trial ID and is never
@@ -158,13 +156,13 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   finds any boxes, the add-dataset screen
   stops with a message (the Python API and CLI raise the same error) rather
   than adding a dataset with no word boxes; a multi-screen dataset stops the
-  same way when any screen a reader looked at has no boxes. When some readings
+  same way when any screen a participant looked at has no boxes. When some readings
   find none, the screen, the API and the CLI warn with the counts. When it
   works, the screen says how the words attached.
 - **Text ID falls back to the trial ID** when it isn't mapped. A repeated
   reading takes its first reading's trial ID (without the `_r2`), so per-text
   grouping counts a re-reading as the same text.
-- **AoI-only fixations** — fixations with a word/IA id but no x/y are placed at
+- **AOI-only fixations** — fixations with a word/IA id but no x/y are placed at
   the matching word-box centers.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial
   ID* to several columns (e.g. participant + paragraph + repeated-reading) and a
@@ -230,14 +228,19 @@ and must cover every row in the declared parent:
 
 ## Reading measures
 
-The per-AOI reading measures — TFD, FFD, first-pass time (FPRT), regression
+The per-word reading measures — TFD, FFD, first-pass time (FPRT), regression
 path (RPD), second-pass and single-fixation duration, fixation count, skip,
 regressions in / out and their count, landing position and distance — are
-fields of the **AOI table**. Map them under **Reading measures** (two lines
+fields of the **Words (interest areas)** table. Map them under **Reading measures** (two lines
 under the word box) when you add a dataset, or later on :material/edit: Edit dataset. An
 EyeLink interest-area report maps them automatically from its `IA_*` names
 (`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, `IA_FIRST_RUN_DWELL_TIME`,
 `IA_REGRESSION_PATH_DURATION`, …); every one is optional.
+
+A word nobody fixated has no FFD, FPRT, RPD or single-fixation duration. An
+EyeLink report writes `0` there; Scanpath Studio leaves those cells empty
+(fixation count 0, or with no count mapped, a TFD of 0), so a skipped word is
+left out of their means. Its TFD stays 0.
 
 The **Corpus Analysis** page shows only the measures you mapped — it computes
 none of its own, and without any it says so. Exports and the word hover carry

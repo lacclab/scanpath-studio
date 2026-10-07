@@ -55,7 +55,7 @@ def test_a_rejected_mapping_says_what_is_wrong_and_where_to_fix_it():
 
     at = open_data_view(at, timeout=180)
     said = " ".join(w.value for w in at.warning) + " ".join(e.value for e in at.error)
-    assert "screen_id" in said, f"the failure was not explained: {said!r}"
+    assert "Screen ID" in said, f"the failure was not explained: {said!r}"
 
 
 def test_the_rejected_mapping_stays_editable_so_it_can_be_undone():
@@ -180,7 +180,7 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
     at = _upload_apptest(wizard_active=True)
 
     assert not at.exception, "a rejected upload killed the whole app"
-    assert any("screen_id" in e.value for e in at.error)
+    assert any("Screen ID" in e.value for e in at.error)
     # …and it cannot be added as a dataset in that state.
     finalize = [b for b in at.button if b.key == "wizard_finalize"]
     assert finalize and finalize[0].disabled
@@ -192,7 +192,7 @@ def test_a_collapsed_wizard_upload_recovers_like_any_other_bad_mapping(
     at = _upload_apptest(wizard_active=False)
 
     assert not at.exception
-    assert any("screen_id" in e.value for e in at.error)
+    assert any("Screen ID" in e.value for e in at.error)
 
 
 def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypatch):
@@ -272,7 +272,7 @@ def test_the_wizard_says_when_the_readers_do_not_line_up(monkeypatch):
     at = _upload_apptest(wizard_active=True)
 
     assert not at.exception
-    assert any("share trial ids but no reader" in w.value for w in at.warning)
+    assert any("share Trial IDs but no participant" in w.value for w in at.warning)
 
 
 def test_a_words_table_that_joins_nothing_is_said_on_every_page(monkeypatch):

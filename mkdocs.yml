@@ -1,7 +1,7 @@
 site_name: Scanpath Studio
 site_description: >-
-  Interactive workbench for visualizing eye-tracking-while-reading scanpaths,
-  computing reading measures, and exporting figures and tabular data.
+  Interactive workbench for eye-tracking-while-reading data: draw, replay and
+  compare scanpaths over the text, and export figures and tables.
 site_url: https://lacclab.github.io/scanpath-studio/
 repo_url: https://github.com/lacclab/scanpath-studio
 repo_name: lacclab/scanpath-studio
@@ -81,7 +81,7 @@ nav:
       - Get started: getting-started.md
       - Tutorials:
           - tutorials/index.md
-          - Data collection: tutorials/data-collection.md
+          - Check data collection: tutorials/data-collection.md
           - Data filtering: tutorials/data-filtering.md
           - Exporting figures: tutorials/exporting-figures.md
           - Corpus analysis: tutorials/corpus-analysis.md
@@ -89,7 +89,7 @@ nav:
           - guides/index.md
           - Scanpath visualization: guides/scanpath-visualization.md
           - Loading public and own data: guides/loading-data.md
-          - Corpus workspace: guides/corpus-workspace.md
+          - Corpus Analysis: guides/corpus-workspace.md
           - Outputs and sharing: guides/outputs-sharing.md
       - FAQ: faq.md
   - Gallery: gallery.md
@@ -198,9 +198,9 @@ plugins:
         Scanpath Studio is an interactive Streamlit workbench, a Python API
         (`import scanpath_studio as sps`) and a CLI (`scanpath-studio`) for
         eye-tracking-while-reading data: it draws fixations, saccades and
-        heatmaps over the text at its true on-screen position, computes
-        per-word reading measures (FFD, FPRT, RPD, TFD, skips, regressions),
-        compares readers, and exports figures and tables. The bundled demo is
+        heatmaps over the text at its true on-screen position, shows the
+        per-word reading measures your data brings (FFD, FPRT, RPD, TFD, skips,
+        regressions), compares participants, and exports figures and tables. The bundled demo is
         a subset of the OneStop Eye Movements corpus.
       full_output: llms-full.txt
       sections:

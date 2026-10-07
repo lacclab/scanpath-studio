@@ -127,7 +127,7 @@ MEASURES: dict[str, Measure] = {
         ),
         Measure(
             "fprt",
-            "First-pass gaze — FPRT",
+            "First-pass reading time — FPRT",
             "words",
             "first_pass_gaze_duration_ms",
             "ms",
@@ -171,7 +171,7 @@ MEASURES: dict[str, Measure] = {
         ),
         Measure(
             "landing_distance",
-            "Centred landing distance",
+            "Centered landing distance",
             "words",
             "initial_landing_distance",
             "letters",
@@ -737,7 +737,7 @@ def reader_vs_cohort_values(
     *,
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
-    """``{"This reader": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
+    """``{"This participant": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
         return {}
     work = frame.copy()
@@ -749,7 +749,7 @@ def reader_vs_cohort_values(
     me = work.loc[is_target, "_m"].dropna().to_numpy()
     others = work.loc[~is_target, "_m"].dropna().to_numpy()
     if me.size:
-        out["This reader"] = me
+        out["This participant"] = me
     if others.size:
         out["Cohort"] = others
     return out
@@ -1286,7 +1286,7 @@ def landing_positions(
     way the letter position is: counted from where the glyphs end.
 
     Not clipped: a first fixation the word got although it lies outside the box
-    horizontally (the 50 px nearest-word fallback, or an imported ``word_id``)
+    horizontally (an imported ``word_id``)
     reads below 0 or above 1, rather than piling onto an edge it did not land on.
     """
     from .measures import word_glyph_span
@@ -1578,18 +1578,21 @@ def paired_group_summary(
     spec_b: Mapping,
     *,
     agg: str = "mean",
-    spread: str = "SEM",
     label_a: str = "Group A",
     label_b: str = "Group B",
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
     normalize: bool = False,
 ) -> pd.DataFrame:
-    """Per-measure group means + error for the paired bars (AN-20).
+    """Per-measure group summaries for the paired bars (AN-20).
 
-    Returns ``[measure, group, value, err_lo, err_hi, n]``. ``measures`` may mix
-    word- and fixation-level measures; pass ``words``/``fixations`` so each reads
-    its backing frame (``frame`` is the fallback).
+    Returns ``[measure, group, value, n_observations]``: ``value`` is ``agg``
+    over every word or fixation of the group pooled across participants, and
+    ``n_observations`` counts those pooled values. No error bars this release
+    (#374): a spread over pooled words from the same few participants reads as
+    a precision the data does not have. ``measures`` may mix word- and
+    fixation-level measures; pass ``words``/``fixations`` so each reads its
+    backing frame (``frame`` is the fallback).
     """
     label_a, label_b = distinct_group_labels(label_a, label_b)
     rows = []
@@ -1603,24 +1606,15 @@ def paired_group_summary(
             continue
         for spec, label in ((spec_a, label_a), (spec_b, label_b)):
             vals = measure_values(apply_group(src, spec), m, normalize=normalize)
-            center = aggregate_value(vals, agg)
-            lo, hi = spread_bounds(vals, center, spread, agg=agg)
             rows.append(
                 {
                     "measure": m.label,
                     "group": label,
-                    # Clamp to ≥0: an asymmetric band (e.g. mean + IQR on skewed
-                    # data) can put the centre outside [lo, hi], and a negative
-                    # Plotly error-bar length renders in the wrong direction.
-                    "value": center,
-                    "err_lo": max(center - lo, 0.0),
-                    "err_hi": max(hi - center, 0.0),
-                    "n": int(vals.size),
+                    "value": aggregate_value(vals, agg),
+                    "n_observations": int(vals.size),
                 }
             )
-    return pd.DataFrame(
-        rows, columns=["measure", "group", "value", "err_lo", "err_hi", "n"]
-    )
+    return pd.DataFrame(rows, columns=["measure", "group", "value", "n_observations"])
 
 
 def group_mean_difference(

@@ -17,7 +17,7 @@ Canonical output columns added to words:
 - first_fix_x, first_fix_y — landing position of the first-pass first fixation
 
 The fixations dataframe is also enriched with:
-- word_id            — assigned via bbox containment + nearest-word fallback
+- word_id            — the data's own when it has one, else bbox containment
 - saccade_amplitude  — pixel distance from the previous fixation in the trial.
                        Always pixels (BUG-25): EyeLink's degree-valued
                        NEXT_SAC_AMPLITUDE / PREVIOUS_SAC_AMPLITUDE keep their
@@ -34,12 +34,6 @@ import pandas as pd
 
 from .multipart import grouping_columns
 
-# Default line-misregistration tolerance (px): a fixation that falls outside
-# every word box snaps to the nearest word centre within this radius before it
-# is left unassigned. Shared by the grouped assigner here and the single-frame
-# helper used for model scanpaths in :mod:`scanpath_studio.similarity`.
-LINE_MISREGISTRATION_PX = 50.0
-
 # A recorded ``timestamp_ms`` series is trusted as real reading time only when
 # its span covers at least this fraction of the summed fixation durations.
 # Fixations don't overlap, so a genuine recording spans at least its total
@@ -52,23 +46,19 @@ REAL_TIMESTAMP_DWELL_FRAC = 0.5
 def _assign_word_ids_single(
     fix_chunk: pd.DataFrame,
     word_chunk: pd.DataFrame,
-    nearest_within_px: float = LINE_MISREGISTRATION_PX,
 ) -> np.ndarray:
     """Vectorized fixation→word_id assignment for a single trial's frames.
 
     Tests every fixation in ``fix_chunk`` against every word box in
     ``word_chunk`` (no participant/trial grouping — the caller is responsible
     for slicing to one trial, or for passing frames whose ids deliberately
-    don't match, as the model scanpaths do). Fixations outside every box snap
-    to the nearest word centre within ``nearest_within_px`` (line-
-    misregistration tolerance), else NaN.
+    don't match, as the model scanpaths do). A fixation outside every box gets
+    NaN: there is no snapping to a nearby word.
 
     Returns a float array aligned to ``fix_chunk`` rows (NaN = out of text).
     """
     wx0, wy0, wx1, wy1 = word_box_bounds(word_chunk)
     wids = word_chunk["word_id"].to_numpy()
-    wcx = (wx0 + wx1) / 2.0
-    wcy = (wy0 + wy1) / 2.0
 
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
@@ -77,18 +67,6 @@ def _assign_word_ids_single(
         fx[:, None], fy[:, None], wx0[None, :], wy0[None, :], wx1[None, :], wy1[None, :]
     )
     word_idx = np.where(in_box.any(axis=1), in_box.argmax(axis=1), -1)
-
-    # Fallback: nearest word center within nearest_within_px.
-    unassigned = word_idx == -1
-    if unassigned.any() and nearest_within_px > 0:
-        dists = np.sqrt(
-            (fx[unassigned, None] - wcx[None, :]) ** 2
-            + (fy[unassigned, None] - wcy[None, :]) ** 2
-        )
-        nearest = dists.argmin(axis=1)
-        within = dists[np.arange(len(nearest)), nearest] <= nearest_within_px
-        word_idx[unassigned] = np.where(within, nearest, -1)
-
     return np.where(word_idx >= 0, wids[np.clip(word_idx, 0, None)], np.nan)
 
 
@@ -323,16 +301,15 @@ def assign_fixations_to_words(
     words: pd.DataFrame,
     *,
     overwrite: bool = False,
-    nearest_within_px: float = LINE_MISREGISTRATION_PX,
 ) -> pd.DataFrame:
-    """Assign each fixation to a word via bounding-box containment.
+    """Give each fixation the word it belongs to.
 
-    If a fixation does not fall inside any word box, assign it to the nearest
-    word center within `nearest_within_px` pixels (a common practice for line
-    misregistration). Beyond that radius, the fixation gets word_id=NaN.
-
-    If `overwrite=False` and the fixations already carry word_id values, those
-    are kept; only NaN rows get re-assigned.
+    When the fixations carry a ``word_id`` (the user mapped one, e.g. EyeLink's
+    ``CURRENT_FIX_INTEREST_AREA_ID``), it is used exactly as given — a blank
+    stays blank, since the data's own "no word" is an answer, not a gap — and
+    nothing is computed. Only a frame with no word ids at all (or
+    ``overwrite=True``) is assigned from geometry: the word box the fixation
+    falls in, else NaN.
 
     Box edges come from :func:`word_box_bounds` — the experiment's own
     rectangles (BUG-83) — so on a tiling corpus a fixation on the space after a
@@ -347,14 +324,16 @@ def assign_fixations_to_words(
         out["word_id"] = np.nan
 
     need_idx = out["word_id"].isna()
-    if not need_idx.any():
+    if not need_idx.all():
         return out
 
     # Per (participant, trial), do a fast vectorized box-test against that
     # trial's words.
     keys = grouping_columns(out)
     if keys != grouping_columns(words):
-        raise ValueError("Words and fixations use different multipart identities.")
+        raise ValueError(
+            "Screen ID is set in only one table; set it in both or neither."
+        )
     groups = out[need_idx].groupby(keys, sort=False)
     word_groups = words.groupby(keys, sort=False)
 
@@ -367,9 +346,7 @@ def assign_fixations_to_words(
             continue
         if wchunk.empty:
             continue
-        assignments.loc[fix_chunk.index] = _assign_word_ids_single(
-            fix_chunk, wchunk, nearest_within_px
-        )
+        assignments.loc[fix_chunk.index] = _assign_word_ids_single(fix_chunk, wchunk)
 
     out.loc[need_idx, "word_id"] = assignments
     return out

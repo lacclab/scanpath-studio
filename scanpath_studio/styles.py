@@ -172,7 +172,7 @@ def get_app_css() -> str:
         padding-bottom: 0.1rem;
         border-bottom-color: rgba(128, 128, 128, 0.45);
     }
-    /* The open dataset: a tint *and* the Current badge — never colour alone. */
+    /* The open dataset: a tint *and* the Current badge — never color alone. */
     .st-key-dataset_table_grid [class*="st-key-dsrow_current_"] {
         background: var(--sps-accent-soft);
     }
@@ -394,6 +394,13 @@ def get_app_css() -> str:
     div[data-testid="stPopoverBody"] {
         min-width: min(28rem, 90vw);
     }
+    /* The wizard's *Setup help* is a two-row menu, not a panel of controls:
+       as wide as its rows, like the nav's own ❓ Help menu, rather than 28rem
+       of empty popover to the right of two short labels. The body is
+       portalled out of the wizard, so it is found by the row it holds. */
+    div[data-testid="stPopoverBody"]:has(.st-key-wizard_guide_replay) {
+        min-width: 0;
+    }
     div[data-testid="stPopoverBody"] p { line-height: 1.45; }
 
     /* === Streamlit's spinners (UX-165) ======================================
@@ -439,7 +446,7 @@ def get_app_css() -> str:
         box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
     }
     /* One track, as wide as the card's container — which the size box's own
-       rule caps at the figure's width (loading.size_box_html) — so "centre"
+       rule caps at the figure's width (loading.size_box_html) — so "center"
        means over the figure, and every width resolves from the column down: a
        track sized by its content would grow past a narrow column, or collapse
        to the card. */
@@ -566,7 +573,7 @@ def get_app_css() -> str:
     /* === Visual polish ==========================================================
        Tasteful, theme-robust chrome styling (header, tabs, chips, cards, buttons).
        Colors are either the brand blue (which reads on both the light and dark
-       themes) or translucent neutrals (grey/blue at low alpha) that tint whatever
+       themes) or translucent neutrals (gray/blue at low alpha) that tint whatever
        background sits behind them, so a single rule set works in both themes
        without depending on a theme class Streamlit doesn't expose. The scientific
        scanpath plot itself is untouched — only the surrounding UI is styled. */
@@ -585,7 +592,7 @@ def get_app_css() -> str:
            the OS preference, not the theme picked in ⋮ → Settings. But
            Streamlit does set `color-scheme` on `.stApp` to match the active
            theme, and `light-dark()` resolves against it — so this follows a
-           theme switch instantly, without a rerun. The two colours are
+           theme switch instantly, without a rerun. The two colors are
            `constants.APP_THEME` / `APP_THEME_DARK`'s backgroundColor, pinned
            by tests/test_theme.py. */
         --sps-page-bg: light-dark(#ffffff, #0e1117);
@@ -599,7 +606,7 @@ def get_app_css() -> str:
 
     /* UX-7 empty-state panels — "no trials match" and "this corpus isn't here
        yet". Both used to be a warning banner + a caption + a body paragraph +
-       a button: four blocks, three background colours, one message. They are now
+       a button: four blocks, three background colors, one message. They are now
        a single amber-tinted card, so the diagnosis visibly belongs to the
        headline above it. Amber (not red) on purpose: nothing is broken, the user
        just has to choose something. */
@@ -709,15 +716,38 @@ def get_app_css() -> str:
     /* macOS hides an overlay scrollbar until you scroll, so a table wider than
        its column read as clipped columns, not as one to scroll. Styling the
        scrollbar keeps it drawn whenever the table overflows. */
-    .sps-chip-table-wrap::-webkit-scrollbar {
+    .sps-chip-table-wrap::-webkit-scrollbar,
+    .st-key-dataset_table_grid::-webkit-scrollbar {
         height: 6px;
     }
-    .sps-chip-table-wrap::-webkit-scrollbar-thumb {
+    .sps-chip-table-wrap::-webkit-scrollbar-thumb,
+    .st-key-dataset_table_grid::-webkit-scrollbar-thumb {
         background: color-mix(in srgb, currentColor 30%, transparent);
         border-radius: 3px;
     }
-    .sps-chip-table-wrap::-webkit-scrollbar-track {
+    .sps-chip-table-wrap::-webkit-scrollbar-track,
+    .st-key-dataset_table_grid::-webkit-scrollbar-track {
         background: transparent;
+    }
+    /* Firefox has no ::-webkit-scrollbar (and Chrome ignores those rules once
+       the standard properties are set, hence the guard). */
+    @supports not selector(::-webkit-scrollbar) {
+        .sps-chip-table-wrap,
+        .st-key-dataset_table_grid {
+            scrollbar-width: thin;
+        }
+    }
+    /* #374 F11 — and an edge shadow on the side that has more, so a cut
+       column reads as "scroll" even where scrollbars are hidden. The two
+       `local` covers scroll with the content and hide each shadow at its
+       end; the two `scroll` shadows stay at the edges. */
+    .sps-chip-table-wrap,
+    .st-key-dataset_table_grid {
+        background:
+            linear-gradient(to right, var(--sps-page-bg) 40%, transparent) left / 2rem 100% no-repeat local,
+            linear-gradient(to left, var(--sps-page-bg) 40%, transparent) right / 2rem 100% no-repeat local,
+            radial-gradient(farthest-side at 0 50%, rgba(128, 128, 128, 0.35), transparent) left / 0.7rem 100% no-repeat scroll,
+            radial-gradient(farthest-side at 100% 50%, rgba(128, 128, 128, 0.35), transparent) right / 0.7rem 100% no-repeat scroll;
     }
     .sps-chip-table-wrap table.sps-chip-table {
         width: auto;
@@ -844,7 +874,7 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* UX-153 — a rail row with no switch (🧹 Filter, 📐 Figure & canvas) is
+    /* UX-153 — a rail row with no switch (🧹 Flag fixations, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
        is stretched over the whole row by an `::after` overlay, which keeps the
        row's look, and the popover still anchors on the ▾ itself. The row is
@@ -887,13 +917,23 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /* #374 F19 — the picker and rail-switch names are bold here, not as `**`
+       in the label string: Streamlit reads a label verbatim as the widget's
+       accessible name, so the markdown was announced. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
+    .st-key-data_source_picker [data-testid="stWidgetLabel"] p,
+    .st-key-single_trial_id [data-testid="stWidgetLabel"] p,
+    .st-key-single_compare_trial [data-testid="stWidgetLabel"] p,
+    .st-key-cmp_dataset [data-testid="stWidgetLabel"] p {
+        font-weight: 600;
+    }
     /* UX-153 — every toggle in these rows takes `wrap=True`, which switches
        off Streamlit's truncate mode (and the native `title=` tooltip it
        stamps), and with it the `min-width: 0` chain that let the label
        shrink to an ellipsis. Both are put back here. The `p *` arm is for a
-       bold label's <strong>: the ≤1200px rule further down lets rail labels
-       wrap, which would break "Raw gaze" onto two lines in a row that is one
-       line by contract; this selector outranks it. */
+       bold label's <strong>, which must not wrap "Raw gaze" onto two lines in
+       a row that is one line by contract. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stWidgetLabel"] p * {
         white-space: nowrap;
@@ -917,13 +957,13 @@ def get_app_css() -> str:
        carries `margin-bottom: 1rem` that Streamlit cancels with a matching
        negative margin on `stMarkdownContainer` — which fixes the layout but not
        `scrollHeight`, and the margin still counts there. So exactly the three
-       name-only sections (📄 Stimulus · 🧹 Filter · 📐 Figure & canvas, the ones
+       name-only sections (📄 Stimulus · 🧹 Flag fixations · 📐 Figure & canvas, the ones
        drawn with a name instead of a switch) scrolled 8px and lost 11px of
        width to the scrollbar's gutter, while the five with a toggle did not.
        Zeroing both margins is the fix rather than `overflow: visible`, because
        it removes the overhang instead of hiding it — the row keeps the
        horizontal clipping Streamlit put there. Nothing moves: the label is
-       centred by the flex row either way. */
+       centerd by the flex row either way. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"],
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
@@ -1003,7 +1043,7 @@ def get_app_css() -> str:
        seam instead of only the glyph's own box. `:has(button:hover:enabled)`
        rather than `:hover` keeps a disabled ▾ inert — it is disabled exactly
        when its mode is off, and a hover response would promise a menu that,
-       while it does open, is entirely greyed. */
+       while it does open, is entirely grayed. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         > div:has([data-testid="stPopover"] button:hover:enabled) {
         background: var(--sps-accent-soft);
@@ -1014,7 +1054,7 @@ def get_app_css() -> str:
        comparison picker's ◀ ▶ ⇅ in tabs.py, and the main trial picker's ◀ ▶ ⇅
        in utils.py), each with its own `st.columns` and its own width unit, so
        they used to render at different heights and two different shapes —
-       square icon buttons beside pill-shaped labelled ones.
+       square icon buttons beside pill-shaped labeled ones.
        Rather than hand-tuning each call site, every trigger in the block goes in
        a container keyed `railbtn_*` and takes its geometry from here.
 
@@ -1067,10 +1107,10 @@ def get_app_css() -> str:
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
     /* The chip strip's ✏️ (edit chips) control is additionally nudged down onto
        the first chip row's baseline:
-       the strip wraps, so the columns are TOP-aligned (a centred control would
+       the strip wraps, so the columns are TOP-aligned (a centerd control would
        drift to the middle of a tall strip), and this offset is the strip's own
        top margin. (UX-11 also fixed the ✏️ sitting visibly high, when it was
-       centred against a one-line strip. Its sideways `margin-left: -0.6rem` is
+       centerd against a one-line strip. Its sideways `margin-left: -0.6rem` is
        gone as of UX-27 — it was the reason the pencil landed 9.6px short of the
        other two rows' right edges.) */
     .st-key-railbtn_chip_trail { margin-top: 0.1rem; }
@@ -1354,7 +1394,7 @@ def get_app_css() -> str:
     }
     /* UX-113 — `_FOOTER_ROW_W`'s compact desktop ratio (1.4 : 1.4 : 8 rest,
        matching the ✕ Cancel width elsewhere) gives each button column too few
-       pixels to keep "Save setup" / "Add dataset" on one line, at any width
+       pixels to keep "Download setup file" / "Add dataset" on one line, at any width
        (not only a mobile one — the ratio itself is the problem). Streamlit
        sets each `stColumn`'s own `flex: 1 1 calc(<share>% - Npx)` via a real
        stylesheet class (not inline), so a bare `min-width` floor doesn't just
@@ -1378,9 +1418,9 @@ def get_app_css() -> str:
     }
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(1),
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(2) {
-        flex: 0 0 10.5rem !important;
-        width: 10.5rem !important;
-        min-width: 10.5rem !important;
+        flex: 0 0 12.5rem !important;
+        width: 12.5rem !important;
+        min-width: 12.5rem !important;
     }
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(3) {
         flex: 0 0 0 !important;
@@ -1715,7 +1755,7 @@ def get_app_css() -> str:
     }
 
     /* AN-32 — the Corpus Analysis page with no reading measures to show: its
-       sections, drawn as a greyed tab strip so what it offers stays visible. */
+       sections, drawn as a grayed tab strip so what it offers stays visible. */
     .sps-corpus-off {
         display: flex;
         gap: 1.5rem;
@@ -1742,7 +1782,7 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-72 — the two halves of the rail's 🧹 Filter section. A rule and a
+    /* UX-72 — the two halves of the rail's 🧹 Flag fixations section. A rule and a
        small label: enough to group, cheap in height. (UX-74 briefly used this
        for every section's contents and was reverted — the sections read better
        with their `⚙️ …` popovers.) */
@@ -1985,7 +2025,7 @@ def get_app_css() -> str:
         justify-content: center;
     }
     /* An icon-only button still carries the label's right margin, which is what
-       pushes these two off-centre. */
+       pushes these two off-center. */
     .st-key-scanpath_rail [class*="st-key-design_row_"] button [data-testid="stIconMaterial"] {
         margin: 0 !important;
         font-size: 1.1rem;
@@ -2088,10 +2128,10 @@ def get_app_css() -> str:
     /* Multiselect placeholder text ("All texts", "Choose options", …) is
        BaseWeb's theme-text at 0.6 alpha → 4.07:1, same sub-AA problem as the
        caption. Fix it the same theme-agnostic way: take the full-strength theme
-       text colour (`inherit`) and mute it with opacity to 0.72 (~5.5:1) — works
-       in whichever theme is active, unlike a hardcoded colour. The selector
+       text color (`inherit`) and mute it with opacity to 0.72 (~5.5:1) — works
+       in whichever theme is active, unlike a hardcoded color. The selector
        hits only the placeholder (the div following the search input); once
-       chips replace it there's no match, so selected tags keep their colour. */
+       chips replace it there's no match, so selected tags keep their color. */
     [data-testid="stMultiSelect"] [data-baseweb="select"] div:has(> input) + div {
         color: inherit !important;
         opacity: 0.72 !important;
@@ -2218,23 +2258,46 @@ def get_app_css() -> str:
         }
     }
 
-    /* Then: let the rail's labels wrap. They are `nowrap` above so short labels
-       don't break mid-word in the rail's normal width — but below ~1200px the
-       rail is narrow enough that no-wrap means the text simply runs out of the
-       card. Wrapping at spaces (never mid-word) is the lesser evil, and is what
-       keeps the AC's "no overlap or clipping" true. */
-    @media (max-width: 1200px) {
-        /* The `p *` arm matters: a bolded toggle label ("**Animate**") puts the
-           text in a <strong> that Streamlit gives `overflow-wrap: anywhere`,
-           which beats what this rule sets on the parent <p> — so without it the
-           rail still broke "Anima/te" and "Com/pare" mid-word here. */
-        .st-key-scanpath_rail h5,
-        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p,
-        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p * {
-            white-space: normal;
-            word-break: normal;
-            overflow-wrap: normal;
+    /* #374 F11 — the rail keeps a floor of 260px; the figure takes the rest
+       (it scales uniformly, so a narrower plot column costs nothing but
+       size). At a ⅕ share the rail fell to ~170px at 1024px, and its one-line
+       rows (UX-153) cut every name to "An…", "Fi…". Only side by side: below
+       640px Streamlit stacks the columns, and the rail is full width anyway.
+       This replaces a ≤1200px rule that let rail labels wrap, which never
+       took effect on the switch rows — UX-153 keeps those on one line. */
+    @media (min-width: 640px) {
+        [data-testid="stHorizontalBlock"]:has(
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail
+        ) {
+            /* The floor would otherwise wrap the rail under the figure: the
+               two flex bases (⅘ + 260px) no longer fit one line. */
+            flex-wrap: nowrap;
         }
+        [data-testid="stHorizontalBlock"]:has(
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail
+        ) > [data-testid="stColumn"]:first-child {
+            min-width: 0;
+        }
+        [data-testid="stColumn"]:has(
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > .st-key-scanpath_rail
+        ) {
+            min-width: 260px;
+        }
+    }
+    /* ...and where the floor bites, the 4rem gutter beside it gives 2.5rem
+       back to the picker row above the figure. */
+    @media (min-width: 640px) and (max-width: 1300px) {
+        [data-testid="stHorizontalBlock"]:has(
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail
+        ) {
+            column-gap: 1.5rem !important;
+        }
+    }
+    @media (max-width: 1200px) {
         .st-key-scanpath_rail { padding-left: 0.6rem; padding-right: 0.6rem; }
         /* A button label must never break mid-word ("Scanp/ath"). */
         .st-key-scanpath_rail button p {
@@ -2331,6 +2394,52 @@ def mapping_menu_css() -> str:
         /* The row is as wide as the menu now, so the label has the room it
            needs; keep it on one line so the virtualizer's row height holds. */
         white-space: nowrap;
+    }
+    /* #374 F13 — a mapped column's chip wraps instead of being cut to a stub
+       ("T…", "RECORDI…"): the mapping cells are a seventh of the row, less
+       with the setup guide open, and the chip is the user's one check that the
+       detection is right. Hovering still shows the full name (`title`). */
+    [class*="st-key-col_map_"][class*="_cell"] {
+        container-type: inline-size;
+    }
+    [class*="st-key-col_map_"][class*="_cell"] [data-tag] {
+        height: auto;
+        max-width: 100%;
+    }
+    [class*="st-key-col_map_"][class*="_cell"] [data-tag] > span[title] {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        line-height: 1.25;
+    }
+    /* Narrow (the guide open, or a small window): the clear-all ⊗ goes — each
+       chip has its own × — and the caret floats over the corner, so the chips
+       get the cell's whole width rather than the third of it left beside two
+       buttons. */
+    @container (max-width: 190px) {
+        [class*="st-key-col_map_"][class*="_cell"] [data-testid="stMultiSelect"]
+            button[aria-label="Clear all"] {
+            display: none;
+        }
+        [class*="st-key-col_map_"][class*="_cell"] [data-testid="stMultiSelect"]
+            [role="group"] {
+            position: relative;
+        }
+        [class*="st-key-col_map_"][class*="_cell"] [data-testid="stMultiSelect"]
+            button[aria-label="Open"] {
+            position: absolute;
+            right: 0;
+            top: 0.25rem;
+        }
+        [class*="st-key-col_map_"][class*="_cell"]
+            [data-testid="stMultiSelectTagsContainer"] {
+            flex: 1 1 100%;
+            min-width: 0;
+            padding-right: 1.1rem;
+        }
+        [class*="st-key-col_map_"][class*="_cell"] [data-tag] > span[title] {
+            font-size: 0.8rem;
+        }
     }
     </style>
     """

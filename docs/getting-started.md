@@ -73,8 +73,19 @@ running. On your own computer — the desktop app or a pip install —
 **:material/update: Check for updates** asks GitHub whether a newer release is
 out; it is the only time the app goes online for this. If there is one, it
 shows the command that updates your install (`pip install -U scanpath-studio`
-for pip) or, in the desktop app, a button that downloads the new version.
-`scanpath-studio version --check` does the same from a terminal.
+for pip) or, in the desktop app, **:material/update: Update & restart** — see
+below — beside a download link. `scanpath-studio version --check` does the
+same from a terminal.
+
+In the desktop app, **:material/update: Update & restart** does the rest:
+it downloads the new version, checks it against the checksum GitHub
+publishes (on macOS also that it is signed by the same developers), tests
+it, and restarts into it — your datasets and settings come back with it. If
+the new version doesn't start within four minutes, the app puts the old
+one back and says so in About. It needs to be able to write where the app
+is installed; when it can't (for example, on a shared Mac where an
+administrator installed it), About says why and offers the download
+instead.
 
 Between releases the version names the exact build: `0.35.0.post3+g8f18219` is
 three commits after release 0.35.0, at commit `8f18219`, and `.dirty` at the

@@ -11,8 +11,9 @@ from email.message import Message
 from pathlib import Path
 
 import pytest
+import truststore
 
-from scanpath_studio import updates
+from scanpath_studio import desktop_update, updates
 from scanpath_studio.build_info import BuildInfo, from_describe
 
 RELEASE = BuildInfo("0.35.0", "0.35.0")
@@ -111,7 +112,10 @@ def test_the_default_opener_verifies_tls_with_a_context(monkeypatch):
 
     monkeypatch.setattr(updates.urllib.request, "urlopen", fake_urlopen)
     assert updates.latest_release(2.0).version == "0.36.0"
-    assert isinstance(seen["context"], ssl.SSLContext)
+    # Verified against the OS certificate store, as dataset downloads are
+    # (#391) — not OpenSSL's CA list, which a python.org Python on macOS ships
+    # empty and a TLS-inspecting proxy's root is never in.
+    assert isinstance(seen["context"], truststore.SSLContext)
     assert seen["timeout"] == 2.0
 
 
@@ -326,3 +330,193 @@ def test_about_has_no_update_check_on_a_hosted_server(monkeypatch):
     at = AppTest.from_function(_about_script).run()
     assert not at.exception, at.exception
     assert not [button for button in at.button if button.key == "about_check_updates"]
+
+
+def _desktop_update_check(version="99.0.0"):
+    release = updates._release_from(
+        _payload(
+            f"v{version}",
+            [
+                "ScanpathStudio-macos-arm64.dmg",
+                "ScanpathStudio-windows-x86_64.zip",
+                "ScanpathStudio-windows-x86_64-setup.exe",
+                "ScanpathStudio-linux-x86_64.tar.gz",
+            ],
+        )
+    )
+    return updates.UpdateCheck(
+        "update_available",
+        "0.36.0",
+        f"v{version} is out; this is v0.36.0.",
+        latest=release,
+        install_kind="desktop",
+        download=release.assets[0],
+    )
+
+
+def _desktop_about(monkeypatch, *, refusal=None):
+    _local_run(monkeypatch)
+    monkeypatch.setattr(
+        updates, "check_for_updates", lambda **kw: _desktop_update_check()
+    )
+    monkeypatch.setattr(desktop_update, "current_install", lambda: "INSTALL")
+    monkeypatch.setattr(desktop_update, "refusal", lambda check, install: refusal)
+    monkeypatch.setattr(desktop_update, "last_result", lambda: None)
+
+
+def test_the_desktop_app_offers_update_and_restart(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    assert not at.exception, at.exception
+    assert at.button(key="about_update_restart").label == "Update & restart"
+
+
+def test_a_refused_update_says_why_and_still_offers_the_download(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch, refusal="This account can't change /Applications.")
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    assert not at.exception, at.exception
+    assert not [b for b in at.button if b.key == "about_update_restart"]
+    assert any("can't change" in caption.value for caption in at.caption)
+
+
+def test_update_and_restart_swaps_then_quits(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        desktop_update,
+        "prepare",
+        lambda check, install: (
+            calls.append("prepare")
+            or desktop_update.SwapPlan(
+                1, None, Path("/s"), Path("/st"), "99.0.0", "0.36.0", ("x",)
+            )
+        ),
+    )
+    monkeypatch.setattr(desktop_update, "start_swap", lambda plan: calls.append("swap"))
+    monkeypatch.setattr(desktop_update, "exit_soon", lambda: calls.append("exit"))
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    at.button(key="about_update_restart").click().run()
+    assert not at.exception, at.exception
+    assert calls == ["prepare", "swap", "exit"]
+    assert any("Restarting into v99.0.0" in ok.value for ok in at.success)
+
+
+def test_a_failed_update_changes_nothing_and_says_so(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+
+    def fail(check, install):
+        raise desktop_update.UpdateFailed("The download stopped before it finished.")
+
+    monkeypatch.setattr(desktop_update, "prepare", fail)
+    monkeypatch.setattr(desktop_update, "exit_soon", lambda: pytest.fail("quit"))
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    at.button(key="about_update_restart").click().run()
+    assert not at.exception, at.exception
+    assert any("stopped before it finished" in e.value for e in at.error)
+    assert any("Nothing was changed" in e.value for e in at.error)
+
+
+def test_a_helper_that_never_started_is_said_once(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+    monkeypatch.setattr(desktop_update, "prepare", lambda check, install: "PLAN")
+
+    def no_helper(plan):
+        raise desktop_update.UpdateFailed(
+            "The helper that swaps the versions didn't start, so nothing was changed."
+        )
+
+    monkeypatch.setattr(desktop_update, "start_swap", no_helper)
+    monkeypatch.setattr(desktop_update, "exit_soon", lambda: pytest.fail("quit"))
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    at.button(key="about_update_restart").click().run()
+    assert not at.exception, at.exception
+    (error,) = [e.value for e in at.error if "helper" in e.value]
+    assert error.lower().count("nothing was changed") == 1
+
+
+@pytest.mark.parametrize(
+    ("result", "build", "where", "says"),
+    [
+        (
+            # The old version stayed, and this is it.
+            ("rolled_back", "the new version did not start within 240 seconds"),
+            "0.35.0",
+            "warning",
+            "The update to v0.36.0 didn't go through: the new version did not "
+            "start within 240 seconds. This is still v0.35.0.",
+        ),
+        (
+            # A double failure left the new version's files in place.
+            ("failed", "the new version did not start, and could not be removed"),
+            "0.36.0",
+            "warning",
+            "The update to v0.36.0 didn't finish cleanly: the new version did not "
+            "start, and could not be removed. If something misbehaves, download "
+            "v0.36.0 again from the release page.",
+        ),
+        (
+            ("failed", ""),
+            "0.35.0",
+            "warning",
+            "The update to v0.36.0 didn't go through. This is still v0.35.0.",
+        ),
+        (("updated", ""), "0.36.0", "caption", "Updated from v0.35.0"),
+    ],
+)
+def test_about_reports_how_the_last_update_ended(
+    monkeypatch, result, build, where, says
+):
+    at = _about_with_last_update(monkeypatch, result, build)
+    shown = [element.value for element in getattr(at, where)]
+    assert any(says in value for value in shown), shown
+    assert not any(": ." in element.value for element in at.warning)
+
+
+@pytest.mark.parametrize(
+    ("result", "build"),
+    [
+        # A later version installed by hand: the record is about neither.
+        (("rolled_back", "the new version did not start"), "0.37.0"),
+        (("updated", ""), "0.37.0"),
+    ],
+)
+def test_about_says_nothing_of_an_update_that_is_not_this_build(
+    monkeypatch, result, build
+):
+    at = _about_with_last_update(monkeypatch, result, build)
+    assert not at.warning
+    assert not any("Updated from" in caption.value for caption in at.caption)
+
+
+def _about_with_last_update(monkeypatch, result, build):
+    """About, with the helper's record of an update from v0.35.0 to v0.36.0."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+
+    _local_run(monkeypatch)
+    status, reason = result
+    monkeypatch.setattr(
+        desktop_update,
+        "last_result",
+        lambda: desktop_update.UpdateResult(status, "0.36.0", "0.35.0", reason),
+    )
+    monkeypatch.setattr(app, "_build_info", lambda: BuildInfo(build, build))
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception, at.exception
+    return at

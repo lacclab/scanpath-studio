@@ -19,9 +19,13 @@ jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Worst case is roughly 75 minutes: two notarization submissions each
-    # allowed `--wait --timeout 30m`, plus the build and two smoke runs. 120
-    # leaves headroom without letting a genuinely hung job burn a runner.
+    # Worst case is roughly 100 minutes, on macOS: two notarization
+    # submissions each allowed `--wait --timeout 30m`, the build, three smoke
+    # runs (before and after stapling, and after the update), and the
+    # end-to-end update (`update_e2e.py` allows `--update` 15 minutes and the
+    # swap and relaunch 7 more). Windows has no notarization but adds the
+    # installer's smoke run. 120 leaves headroom without letting a genuinely
+    # hung job burn a runner.
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -256,6 +260,58 @@ jobs:
             "/DOutputDir=$PWD" "/DOutputBaseFilename=$('${{ matrix.installer }}' -replace '\.exe$', '')" `
             desktop/windows_installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # #385: the in-app updater, end to end. Install this build, offer it back
+      # as a newer release through a local feed, run `--update`, and require
+      # the swap, the relaunch and the new copy's "booted" report — then
+      # smoke-test what is installed now. macOS needs the Developer ID team the
+      # updater checks the download against, so it runs where signing does.
+      - name: End-to-end update (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/opt"
+          tar -C "$RUNNER_TEMP/opt" -xzf ${{ matrix.archive }}
+          python desktop/update_e2e.py "$RUNNER_TEMP/opt/ScanpathStudio/ScanpathStudio" ${{ matrix.archive }}
+          python desktop/smoke_test.py "$RUNNER_TEMP/opt/ScanpathStudio/ScanpathStudio"
+
+      - name: End-to-end update (macOS)
+        if: runner.os == 'macOS' && steps.signing.outputs.enabled == 'true'
+        # The update installs the notarized .dmg's app, so the smoke run after
+        # it asserts the stapled ticket too, as "Re-verify the stapled bundle" does.
+        env:
+          SCANPATH_EXPECT_NOTARIZED: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/Applications"
+          ditto "$APP" "$RUNNER_TEMP/Applications/ScanpathStudio.app"
+          python desktop/update_e2e.py "$RUNNER_TEMP/Applications/ScanpathStudio.app" ${{ matrix.archive }}
+          python desktop/smoke_test.py "$RUNNER_TEMP/Applications/ScanpathStudio.app"
+
+      # Installed the way users install it (per-user, the default folder), so
+      # the update must leave the installer's uninstaller working.
+      - name: End-to-end update (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = Start-Process -Wait -PassThru '.\${{ matrix.installer }}' `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode) { throw "installer exited with $($p.ExitCode)" }
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\Scanpath Studio'
+          python desktop/update_e2e.py (Join-Path $dir 'ScanpathStudio.exe') ${{ matrix.archive }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python desktop/smoke_test.py (Join-Path $dir 'ScanpathStudio.exe')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $p = Start-Process -Wait -PassThru (Join-Path $dir 'unins000.exe') `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode) { throw "uninstaller exited with $($p.ExitCode)" }
+          # The uninstaller re-launches itself from %TEMP% to delete its own
+          # file, so the removal can finish just after the first process exits.
+          foreach ($left in '_internal', 'unins000.exe') {
+            for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir $left)); $i++) { Start-Sleep 2 }
+            if (Test-Path (Join-Path $dir $left)) { throw "uninstall after the update left $dir\$left behind" }
+          }
 
       # Install silently the way a user would (per-user, no admin), boot the
       # installed copy, then uninstall and check it is gone.

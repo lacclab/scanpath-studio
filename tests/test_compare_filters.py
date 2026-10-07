@@ -228,7 +228,11 @@ class TestTheRail:
         at = _boot_compare()
         keys = {w.key for w in at.selectbox} | {w.key for w in at.multiselect}
         assert {"cmp1_fixclass_short_mode", "cmp1_saccade_classes"} <= keys
-        assert "single_compare_fix_range" in {s.key for s in at.slider}
+        # B's window slider: drawn under a per-trial widget key; the window
+        # itself stays `single_compare_fix_range` (the slider's own docstring).
+        assert any(
+            str(s.key).startswith("_single_compare_fix_range__w") for s in at.slider
+        )
         # A's flags used to be greyed out in Compare.
         assert not at.selectbox(key="global_fixclass_short_mode").disabled
         assert not at.multiselect(key="global_saccade_classes").disabled

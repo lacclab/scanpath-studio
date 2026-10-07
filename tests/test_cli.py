@@ -2121,3 +2121,69 @@ def test_style_spec_reads_a_box_color():
     }
     with pytest.raises(SystemExit):
         _parse_style_spec(["box_color=red"], "--style-a")
+
+
+def test_version_command_names_the_build_and_install(capsys):
+    from scanpath_studio.build_info import INSTALL_KINDS, build_info, install_kind
+
+    cli.main(["version"])
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == f"scanpath-studio {__version__}"
+    assert out[1] == f"Build:      {build_info().describe()}"
+    assert out[2] == f"Installed:  {INSTALL_KINDS[install_kind()]}"
+    assert len(out) == 3  # no --check, no network
+
+
+def test_version_check_prints_the_answer(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    release = updates.Release(
+        "99.0.0",
+        "v99.0.0",
+        "2026-10-09T10:00:00Z",
+        "https://github.com/lacclab/scanpath-studio/releases/tag/v99.0.0",
+    )
+    monkeypatch.setattr(updates, "latest_release", lambda timeout=5.0: release)
+    cli.main(["version", "--check"])
+    out = capsys.readouterr().out
+    assert "v99.0.0 is out (released 9 Oct 2026)" in out
+    assert "Update:     " in out
+    assert (
+        "What's new: https://github.com/lacclab/scanpath-studio/releases/tag/v99.0.0"
+        in out
+    )
+
+
+def test_version_check_waits_as_long_as_it_is_told(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    waited = []
+
+    def latest(timeout=5.0):
+        waited.append(timeout)
+        return updates.Release("99.0.0", "v99.0.0", "2026-10-09T10:00:00Z", "u")
+
+    monkeypatch.setattr(updates, "latest_release", latest)
+    cli.main(["version", "--check", "--timeout", "2"])
+    cli.main(["version", "--check"])
+    assert waited == [2.0, 5.0]
+
+
+def test_a_failed_version_check_exits_1(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    def offline(timeout=5.0):
+        raise updates.UpdateCheckError(
+            "Couldn't reach GitHub to check — are you offline?"
+        )
+
+    monkeypatch.setattr(updates, "latest_release", offline)
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["version", "--check"])
+    assert exited.value.code == 1
+    assert "offline" in capsys.readouterr().err
+
+
+def test_version_is_a_listed_command(capsys):
+    cli.main(["--help"])
+    assert "scanpath-studio version [--check]" in capsys.readouterr().out

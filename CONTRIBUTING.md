@@ -235,9 +235,12 @@ Loading data you already have needs no code at all; that's
 
 ## Versioning
 
-The version lives in **one** place — `__version__` in
+The release number lives in **one** place — `__release__` in
 [`scanpath_studio/__init__.py`](scanpath_studio/__init__.py).
 `pyproject.toml` reads it dynamically, so bump only that file.
+`scanpath_studio.__version__` is the exact build, worked out at runtime: the
+release itself, or between releases `0.35.0.post3+g8f18219` — three commits
+after v0.35.0, at commit `8f18219` (#139).
 
 ## Dependencies
 
@@ -256,14 +259,14 @@ The version lives in **one** place — `__version__` in
 1. Write the unreleased fragments into a new version section of
    [`CHANGELOG.md`](CHANGELOG.md):
    `python scripts/changelog_fragments.py release X.Y.Z` (it deletes them).
-2. Bump `__version__` in `scanpath_studio/__init__.py`.
+2. Bump `__release__` in `scanpath_studio/__init__.py`.
 3. Bump `version` + `date-released` in [`CITATION.cff`](CITATION.cff) to match
    (`tests/test_citation.py` enforces version parity, so a mismatch fails CI).
 4. `main` is protected, so commit these on a branch and merge them through a
    PR. Then tag the merged commit on `main` and push the tag:
    `git fetch origin && git tag vX.Y.Z origin/main && git push origin vX.Y.Z`.
    `.github/workflows/publish.yml` refuses a tag that does not match
-   `__version__` (ENG-62), then builds and publishes to PyPI via trusted
+   `__release__` (ENG-62), then builds and publishes to PyPI via trusted
    publishing, and `.github/workflows/desktop.yml` builds the per-OS
    standalone desktop bundles and attaches them to the GitHub release for
    the tag — check both workflows succeeded.

@@ -2141,7 +2141,16 @@ def _delimiter_of(header_line: bytes, name: str) -> str:
 
 
 def _first_line(head: bytes) -> bytes:
-    """The header line of a text table's opening bytes."""
+    """The header line of a text table's opening bytes.
+
+    A UTF-16 or UTF-32 file (EyeLink Data Viewer's default export) is decoded
+    first, so the line is cut at its newline character rather than at the
+    first newline *byte*, and comes back as UTF-8.
+    """
+    encoding = _bom_encoding(head)
+    if encoding is not None and encoding != "utf-8-sig":
+        line = head.decode(encoding, "ignore").split("\n", 1)[0].rstrip("\r")
+        return line.encode("utf-8")
     return head.split(b"\n", 1)[0].rstrip(b"\r")
 
 
@@ -2162,6 +2171,26 @@ _ZIP_MAGIC = b"PK\x03\x04"
 #: for Western European text first, since that is what Excel writes there, then
 #: Latin-1, which decodes any byte and so always ends the search.
 _TEXT_ENCODINGS = ("utf-8", "cp1252", "latin-1")
+
+#: Byte-order marks, longest first (UTF-32 LE's begins with UTF-16 LE's). A
+#: file that opens with one is read in that encoding alone: the fallback above
+#: would decode EyeLink Data Viewer's UTF-16 export as Latin-1, which never
+#: fails, and every column but the first would come out as ``Unnamed: n``.
+_BOMS = (
+    (b"\xff\xfe\x00\x00", "utf-32"),
+    (b"\x00\x00\xfe\xff", "utf-32"),
+    (b"\xef\xbb\xbf", "utf-8-sig"),
+    (b"\xff\xfe", "utf-16"),
+    (b"\xfe\xff", "utf-16"),
+)
+
+
+def _bom_encoding(head: bytes) -> str | None:
+    """The encoding a byte-order mark at the start of ``head`` declares."""
+    for bom, encoding in _BOMS:
+        if head.startswith(bom):
+            return encoding
+    return None
 
 
 def _peek(file_like_or_path, size: int = 8) -> bytes:
@@ -2207,8 +2236,11 @@ def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFra
     whole upload fail with a raw ``UnicodeDecodeError``. Each encoding in
     ``_TEXT_ENCODINGS`` is tried in turn; a stream that cannot be rewound (a zip
     member) re-raises, and :func:`_read_zipped_table` retries it from memory.
+    A byte-order mark settles the encoding outright (a UTF-16 Data Viewer
+    export).
     """
-    for encoding in _TEXT_ENCODINGS:
+    bom = _bom_encoding(_peek(buf, 4)) if _can_reread(buf) else None
+    for encoding in (bom,) if bom else _TEXT_ENCODINGS:
         try:
             return pd.read_csv(
                 buf,
@@ -2219,7 +2251,7 @@ def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFra
                 **extra,
             )
         except UnicodeDecodeError:
-            if encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
+            if bom or encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
                 raise
             _rewind(buf)
             _LOGGER.info(

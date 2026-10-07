@@ -19,9 +19,13 @@ jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Worst case is roughly 75 minutes: two notarization submissions each
-    # allowed `--wait --timeout 30m`, plus the build and two smoke runs. 120
-    # leaves headroom without letting a genuinely hung job burn a runner.
+    # Worst case is roughly 100 minutes, on macOS: two notarization
+    # submissions each allowed `--wait --timeout 30m`, the build, three smoke
+    # runs (before and after stapling, and after the update), and the
+    # end-to-end update (`update_e2e.py` allows `--update` 15 minutes and the
+    # swap and relaunch 7 more). Windows has no notarization but adds the
+    # installer's smoke run. 120 leaves headroom without letting a genuinely
+    # hung job burn a runner.
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -35,12 +39,17 @@ jobs:
             archive: ScanpathStudio-macos-arm64.dmg
           - os: windows-latest
             archive: ScanpathStudio-windows-x86_64.zip
+            installer: ScanpathStudio-windows-x86_64-setup.exe
 
     env:
       APP: dist/ScanpathStudio.app
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # #139: the spec stamps the bundle from `git describe`, which needs
+          # the tags — a dispatched build of main then reports its own build.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -227,6 +236,112 @@ jobs:
         run: Compress-Archive -Path dist/ScanpathStudio -DestinationPath ${{ matrix.archive }}
         shell: pwsh
 
+      # The installer most Windows users download: one Setup.exe instead of
+      # "extract, then find ScanpathStudio.exe". It wraps the same onedir
+      # folder; the zip above stays a release asset for the portable route and
+      # for #385's in-app updater. Inno Setup is pinned like the rest of the
+      # CI tooling.
+      - name: Build the installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --version 6.7.1 --allow-downgrade --no-progress -y
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $version = python -c "import scanpath_studio; print(scanpath_studio.__version__)"
+          $release = python -c "import scanpath_studio; print(scanpath_studio.__release__)"
+          # Windows file versions are integers only — the same trim the macOS
+          # spec applies to __release__ for CFBundleShortVersionString.
+          $numeric = [regex]::Match($release, '^\d+(\.\d+){0,2}').Value
+          if (-not $numeric) { $numeric = '0' }
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc /Q "/DAppVersion=$version" "/DNumericVersion=$numeric" `
+            "/DSourceDir=$((Resolve-Path dist/ScanpathStudio).Path)" `
+            "/DOutputDir=$PWD" "/DOutputBaseFilename=$('${{ matrix.installer }}' -replace '\.exe$', '')" `
+            desktop/windows_installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # #385: the in-app updater, end to end. Install this build, offer it back
+      # as a newer release through a local feed, run `--update`, and require
+      # the swap, the relaunch and the new copy's "booted" report — then
+      # smoke-test what is installed now. macOS needs the Developer ID team the
+      # updater checks the download against, so it runs where signing does.
+      - name: End-to-end update (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/opt"
+          tar -C "$RUNNER_TEMP/opt" -xzf ${{ matrix.archive }}
+          python desktop/update_e2e.py "$RUNNER_TEMP/opt/ScanpathStudio/ScanpathStudio" ${{ matrix.archive }}
+          python desktop/smoke_test.py "$RUNNER_TEMP/opt/ScanpathStudio/ScanpathStudio"
+
+      - name: End-to-end update (macOS)
+        if: runner.os == 'macOS' && steps.signing.outputs.enabled == 'true'
+        # The update installs the notarized .dmg's app, so the smoke run after
+        # it asserts the stapled ticket too, as "Re-verify the stapled bundle" does.
+        env:
+          SCANPATH_EXPECT_NOTARIZED: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/Applications"
+          ditto "$APP" "$RUNNER_TEMP/Applications/ScanpathStudio.app"
+          python desktop/update_e2e.py "$RUNNER_TEMP/Applications/ScanpathStudio.app" ${{ matrix.archive }}
+          python desktop/smoke_test.py "$RUNNER_TEMP/Applications/ScanpathStudio.app"
+
+      # Installed the way users install it (per-user, the default folder), so
+      # the update must leave the installer's uninstaller working.
+      - name: End-to-end update (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = Start-Process -Wait -PassThru '.\${{ matrix.installer }}' `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode) { throw "installer exited with $($p.ExitCode)" }
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\Scanpath Studio'
+          python desktop/update_e2e.py (Join-Path $dir 'ScanpathStudio.exe') ${{ matrix.archive }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python desktop/smoke_test.py (Join-Path $dir 'ScanpathStudio.exe')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $p = Start-Process -Wait -PassThru (Join-Path $dir 'unins000.exe') `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode) { throw "uninstaller exited with $($p.ExitCode)" }
+          # The uninstaller re-launches itself from %TEMP% to delete its own
+          # file, so the removal can finish just after the first process exits.
+          foreach ($left in '_internal', 'unins000.exe') {
+            for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir $left)); $i++) { Start-Sleep 2 }
+            if (Test-Path (Join-Path $dir $left)) { throw "uninstall after the update left $dir\$left behind" }
+          }
+
+      # Install silently the way a user would (per-user, no admin), boot the
+      # installed copy, then uninstall and check it is gone.
+      - name: Smoke test the installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'ScanpathStudio-installed'
+          $p = Start-Process -Wait -PassThru '.\${{ matrix.installer }}' `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir"
+          if ($p.ExitCode) { throw "installer exited with $($p.ExitCode)" }
+          python desktop/smoke_test.py (Join-Path $dir 'ScanpathStudio.exe')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $p = Start-Process -Wait -PassThru (Join-Path $dir 'unins000.exe') `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode) { throw "uninstaller exited with $($p.ExitCode)" }
+          # The uninstaller re-launches itself from %TEMP% to delete its own
+          # file, so the removal can finish just after the first process exits.
+          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir '_internal')); $i++) { Start-Sleep 2 }
+          if (Test-Path (Join-Path $dir '_internal')) { throw "uninstall left $dir\_internal behind" }
+
+      - name: Upload the installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.installer }}
+          path: ${{ matrix.installer }}
+          if-no-files-found: error
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -274,12 +389,13 @@ jobs:
               --notes "Release $TAG (notes added by the PyPI publish workflow)." \
               || gh release view "$TAG" >/dev/null
           fi
-          # The .dmg glob is load-bearing: the macOS asset stopped being a
-          # tarball in ENG-21, and a missing pattern here drops it from the
+          # The .dmg and -setup.exe globs are load-bearing: the macOS asset
+          # stopped being a tarball in ENG-21, the Windows installer joined the
+          # zip later, and a missing pattern here drops an asset from the
           # release silently — `if-no-files-found` guards the artifact upload,
           # not this loop.
           shopt -s nullglob
-          assets=(ScanpathStudio-*.tar.gz ScanpathStudio-*.zip ScanpathStudio-*.dmg)
+          assets=(ScanpathStudio-*.tar.gz ScanpathStudio-*.zip ScanpathStudio-*.dmg ScanpathStudio-*-setup.exe)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "::error::no ScanpathStudio-* archives were downloaded"
             exit 1

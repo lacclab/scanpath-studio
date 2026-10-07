@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import truststore
 
 from scanpath_studio import datasets, progress
 
@@ -60,9 +61,10 @@ class _Response(io.BytesIO):
 def _serving(response: _Response, opened: list | None = None):
     """An `urlopen` that hands back ``response``, noting each call's timeout."""
 
-    def urlopen(url, timeout=None):
+    def urlopen(url, timeout=None, context=None):
         if opened is not None:
             opened.append(timeout)
+            opened.append(context)
         return response
 
     return urlopen
@@ -83,9 +85,13 @@ def test_a_download_reads_what_has_arrived_and_times_out(monkeypatch, tmp_path, 
         )
     else:
         datasets._fetch_bytes("https://example.invalid/r", detail="archive")
-    (timeout,) = opened
+    timeout, context = opened
     assert timeout is not None
     assert timeout == datasets._DOWNLOAD_TIMEOUT_S
+    # HTTPS is verified against the OS certificate store, not OpenSSL's CA
+    # list — which a python.org Python on macOS ships empty, so every download
+    # failed there with CERTIFICATE_VERIFY_FAILED.
+    assert isinstance(context, truststore.SSLContext)
     assert response.reads and set(response.reads) == {"read1"}
 
 

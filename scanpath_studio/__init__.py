@@ -9,6 +9,7 @@ __all__ = [
     "build_authored_scanpath",
     "cache_status",
     "check_data_health",
+    "check_for_updates",
     "clear_cache",
     "compare_scanpaths",
     "figure_code",
@@ -32,6 +33,7 @@ __all__ = [
     "render_parent_trial",
     "save_figure",
     "save_figure_layers",
+    "version_info",
 ]
 # The release this tree descends from: the number `/release` bumps (with
 # CITATION.cff), `pyproject.toml` builds with, and publish.yml checks a tag

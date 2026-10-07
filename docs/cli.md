@@ -306,6 +306,29 @@ off wherever it is set, `--no-persist` for one launch, and `SCANPATH_STUDIO_STAT
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
 
+## Version and updates
+
+`scanpath-studio --version` prints the version. `version` says which build it
+is and how it was installed; `--check` also asks GitHub whether a newer release
+is out and prints the command that updates your install — the only time the
+command uses the network:
+
+```bash
+scanpath-studio version           # the build, and how it was installed
+scanpath-studio version --check   # …and whether a newer release is out
+```
+
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three
+commits after 0.35.0, at commit `8f18219`. The same check is
+**:material/help: Help → :material/info: About → :material/update: Check for updates**
+in the app, and `check_for_updates()` in the [API](api.md#version-and-updates).
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("version"))
+```
+
 ## Full reference
 
 Generated from the parsers the commands themselves use, so every flag is here
@@ -333,4 +356,4 @@ print(cli_help())
     print(cli_reference("cache"))
     ```
 
-`corpus` and `check` are listed in full in their own sections above.
+`corpus`, `check` and `version` are listed in full in their own sections above.

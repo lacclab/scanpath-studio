@@ -253,3 +253,17 @@ def test_a_failed_check_is_a_result_not_an_exception():
     result = updates.check_for_updates(latest=offline, info=RELEASE, kind="pip")
     assert (result.status, result.latest) == ("error", None)
     assert "offline" in result.message
+
+
+def test_the_api_reports_the_build_and_checks(monkeypatch):
+    import scanpath_studio as sps
+    from scanpath_studio.build_info import build_info
+
+    assert sps.version_info() == build_info()
+    assert {"version_info", "check_for_updates"} <= set(sps.__all__)
+    monkeypatch.setattr(
+        updates, "latest_release", lambda timeout=5.0: _latest("v99.0.0")()
+    )
+    result = sps.check_for_updates(timeout=2.0)
+    assert result.status == "update_available"
+    assert result.latest.version == "99.0.0"

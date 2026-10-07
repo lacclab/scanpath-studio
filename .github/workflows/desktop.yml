@@ -35,6 +35,7 @@ jobs:
             archive: ScanpathStudio-macos-arm64.dmg
           - os: windows-latest
             archive: ScanpathStudio-windows-x86_64.zip
+            installer: ScanpathStudio-windows-x86_64-setup.exe
 
     env:
       APP: dist/ScanpathStudio.app
@@ -227,6 +228,59 @@ jobs:
         run: Compress-Archive -Path dist/ScanpathStudio -DestinationPath ${{ matrix.archive }}
         shell: pwsh
 
+      # The installer most Windows users download: one Setup.exe instead of
+      # "extract, then find ScanpathStudio.exe". It wraps the same onedir
+      # folder; the zip above stays a release asset for the portable route and
+      # for #385's in-app updater. Inno Setup is pinned like the rest of the
+      # CI tooling.
+      - name: Build the installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --version 6.7.1 --allow-downgrade --no-progress -y
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $version = python -c "import scanpath_studio; print(scanpath_studio.__version__)"
+          # Windows file versions are integers only — the same trim the macOS
+          # spec applies to CFBundleShortVersionString.
+          $numeric = [regex]::Match($version, '^\d+(\.\d+){0,2}').Value
+          if (-not $numeric) { $numeric = '0' }
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc /Q "/DAppVersion=$version" "/DNumericVersion=$numeric" `
+            "/DSourceDir=$((Resolve-Path dist/ScanpathStudio).Path)" `
+            "/DOutputDir=$PWD" "/DOutputBaseFilename=$('${{ matrix.installer }}' -replace '\.exe$', '')" `
+            desktop/windows_installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # Install silently the way a user would (per-user, no admin), boot the
+      # installed copy, then uninstall and check it is gone.
+      - name: Smoke test the installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'ScanpathStudio-installed'
+          $p = Start-Process -Wait -PassThru '.\${{ matrix.installer }}' `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir"
+          if ($p.ExitCode) { throw "installer exited with $($p.ExitCode)" }
+          python desktop/smoke_test.py (Join-Path $dir 'ScanpathStudio.exe')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $p = Start-Process -Wait -PassThru (Join-Path $dir 'unins000.exe') `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode) { throw "uninstaller exited with $($p.ExitCode)" }
+          # The uninstaller re-launches itself from %TEMP% to delete its own
+          # file, so the removal can finish just after the first process exits.
+          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir '_internal')); $i++) { Start-Sleep 2 }
+          if (Test-Path (Join-Path $dir '_internal')) { throw "uninstall left $dir\_internal behind" }
+
+      - name: Upload the installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.installer }}
+          path: ${{ matrix.installer }}
+          if-no-files-found: error
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -274,12 +328,13 @@ jobs:
               --notes "Release $TAG (notes added by the PyPI publish workflow)." \
               || gh release view "$TAG" >/dev/null
           fi
-          # The .dmg glob is load-bearing: the macOS asset stopped being a
-          # tarball in ENG-21, and a missing pattern here drops it from the
+          # The .dmg and -setup.exe globs are load-bearing: the macOS asset
+          # stopped being a tarball in ENG-21, the Windows installer joined the
+          # zip later, and a missing pattern here drops an asset from the
           # release silently — `if-no-files-found` guards the artifact upload,
           # not this loop.
           shopt -s nullglob
-          assets=(ScanpathStudio-*.tar.gz ScanpathStudio-*.zip ScanpathStudio-*.dmg)
+          assets=(ScanpathStudio-*.tar.gz ScanpathStudio-*.zip ScanpathStudio-*.dmg ScanpathStudio-*-setup.exe)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "::error::no ScanpathStudio-* archives were downloaded"
             exit 1

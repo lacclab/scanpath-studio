@@ -159,7 +159,8 @@ gains `fetch-depth: 0` so a dispatched build from `main` can see its tag.
 - `AGENTS.md`, `CLAUDE.md` (*On release*), `CONTRIBUTING.md` (*Releasing*) and
   `.claude/skills/release/SKILL.md` — bump `__release__` instead of
   `__version__`. Architecture map gains `build_info.py` / `updates.py`.
-- One changelog fragment, `changelog.d/139.added.md`.
+- Two changelog fragments: `changelog.d/139.changed.md` (the build version)
+  and `changelog.d/139.added.md` (*Check for updates*).
 
 ## Section 3 — one-click *Update & restart* in the desktop app (#385)
 

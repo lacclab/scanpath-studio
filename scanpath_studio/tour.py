@@ -258,7 +258,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Move between screens",
                 "A multipart trial (one reading spread over several screens) adds a "
-                "screen navigator under the picker. Each screen is its own "
+                "screen picker at the right end of the trial row. Each screen is its own "
                 "coordinate space, so nothing is ever drawn across two of them.",
                 ".st-key-tour_grp_screen_picker",
                 optional=True,
@@ -689,7 +689,7 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['chips']} Trial at a glance",
         "body": "These chips show the trial's **identity, conditions, and summary "
         "stats**. Choose which fields appear — and drag to reorder — with "
-        f"**{ICONS['edit']} Edit chips** at the right of the strip.",
+        f"**{ICONS['edit']}** at the end of the trial row, which also hides them.",
     },
     {
         "selector": ".st-key-tour_grp_view_modes",

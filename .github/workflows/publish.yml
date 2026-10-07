@@ -16,6 +16,12 @@ jobs:
       contents: write  # required to create the GitHub release
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: the last step fast-forwards `stable` to this tag, and
+          # git can only prove a fast-forward when it has the commit `stable`
+          # points at. A one-commit checkout refused the push ("fetch first"),
+          # which left the demo on v0.35.0 through v0.36.0 and v0.37.0.
+          fetch-depth: 0
 
       # ENG-62: a tag pushed without bumping the version rebuilt the old one,
       # `skip-existing` below let PyPI skip it without a word, and the job went
@@ -23,9 +29,9 @@ jobs:
       # that 404s. Refuse up front instead.
       - name: Tag matches the package version
         run: |
-          VERSION="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
+          VERSION="$(sed -n 's/^__release__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
           if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match __version__ ${VERSION} — bump scanpath_studio/__init__.py (and CITATION.cff) before tagging."
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match __release__ ${VERSION} — bump scanpath_studio/__init__.py (and CITATION.cff) before tagging."
             exit 1
           fi
 

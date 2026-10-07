@@ -877,7 +877,7 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* UX-153 — a rail row with no switch (🧹 Flag fixations, 📐 Figure & canvas) is
+    /* UX-153 — a rail row with no switch (Filters & highlights, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
        is stretched over the whole row by an `::after` overlay, which keeps the
        row's look, and the popover still anchors on the ▾ itself. The row is
@@ -960,7 +960,7 @@ def get_app_css() -> str:
        carries `margin-bottom: 1rem` that Streamlit cancels with a matching
        negative margin on `stMarkdownContainer` — which fixes the layout but not
        `scrollHeight`, and the margin still counts there. So exactly the three
-       name-only sections (📄 Stimulus · 🧹 Flag fixations · 📐 Figure & canvas, the ones
+       name-only sections (📄 Stimulus · Filters & highlights · 📐 Figure & canvas, the ones
        drawn with a name instead of a switch) scrolled 8px and lost 11px of
        width to the scrollbar's gutter, while the five with a toggle did not.
        Zeroing both margins is the fix rather than `overflow: visible`, because
@@ -1687,14 +1687,21 @@ def get_app_css() -> str:
        show through, and the z-index keeps it over them.
 
        Scoped to this container's key: only the wizard gets a sticky bar, not
-       every page. */
+       every page.
+
+       The sticky element is the bar's `stLayoutWrapper`, not the keyed block
+       itself: a sticky box only travels inside its parent, and the wrapper is
+       exactly the bar's height, so a sticky *bar* scrolled away with the page. */
     /* DATA-35 — the ✏️ Edit dataset screen wears the add-dataset screen's bar,
        because the ask was that the two look the same. Same rule, two keys. */
-    .st-key-dataset_editor_bar,
-    .st-key-wiz_sticky_bar {
+    [data-testid="stLayoutWrapper"]:has(> .st-key-dataset_editor_bar),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-wiz_sticky_bar) {
         position: sticky;
         top: 3.2rem;
         z-index: 60;
+    }
+    .st-key-dataset_editor_bar,
+    .st-key-wiz_sticky_bar {
         background: var(--sps-page-bg);
         padding: 0.35rem 0 0.4rem;
         margin-bottom: 0.2rem;
@@ -1810,7 +1817,7 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-72 — the two halves of the rail's 🧹 Flag fixations section. A rule and a
+    /* UX-72 — the two halves of the rail's Filters & highlights section. A rule and a
        small label: enough to group, cheap in height. (UX-74 briefly used this
        for every section's contents and was reverted — the sections read better
        with their `⚙️ …` popovers.) */

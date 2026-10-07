@@ -131,6 +131,15 @@ GLOBAL_MARKER_SIZE_RANGE = "global_marker_size_range"
 GLOBAL_MARKER_SIZE_SCALE = "global_marker_size_scale"
 GLOBAL_MARKER_DURATION_RANGE = "global_marker_duration_range"
 GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
+# 📐 Figure & canvas → Legends: where each legend sits. One key per legend and
+# part, ``global_legend_<kind>_{position,arrangement,size}``, for the kinds in
+# `constants.LEGEND_KINDS` (spelled out here, as everything in this file is).
+LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key")
+LEGEND_STATE_KEYS = frozenset(
+    f"global_legend_{kind}_{part}"
+    for kind in LEGEND_KIND_NAMES
+    for part in ("position", "arrangement", "size")
+)
 GLOBAL_FIXATION_COLOR_RANGE = "global_fixation_color_range"
 GLOBAL_HEATMAP_COLOR_RANGE = "global_heatmap_color_range"
 GLOBAL_SHOW_STIMULUS_IMAGE = "global_show_stimulus_image"
@@ -779,8 +788,16 @@ URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 # one public corpus that still travels under its own older token. EXP-19's two
 # groups are here because they are emitted only when they differ from the
 # recipient's own defaults — see `SETUP_PARAMS` above.
+# Each legend's placement as one param, ``legend_<kind>=SPOT[,ARRANGEMENT][,SIZE]``
+# (`plots.parse_legend_spec`, the spelling `render --legend` takes), written only
+# for a legend moved off Auto — so they are optional, below.
+LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
+    {f"legend_{kind}": kind for kind in LEGEND_KIND_NAMES}
+)
+
 URL_OPTIONAL_PARAMS = frozenset(
     {
+        *LEGEND_PARAMS,
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
@@ -931,6 +948,8 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
 # vice versa) means the saved-config format moved.
 PLOT_CONFIG_STATE_KEYS = frozenset(
     {
+        # Figure & canvas → Legends.
+        *LEGEND_STATE_KEYS,
         # layers
         GLOBAL_SHOW_WORDS,
         GLOBAL_SHOW_LABELS,

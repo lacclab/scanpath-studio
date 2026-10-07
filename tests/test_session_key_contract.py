@@ -517,6 +517,13 @@ def _restore_config_app():
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
+        # Figure & canvas → Legends: every legend, as the writer saves them.
+        "legends": {
+            "compare": {"position": "left", "arrangement": "stacked", "size": 14},
+            "saccades": {"position": "right", "arrangement": "auto", "size": None},
+            "colors": {"position": "below", "arrangement": "side-by-side"},
+            "size_key": {"position": "top-left", "arrangement": "stacked"},
+        },
         # #374 F28 — Export → Current figure's print size.
         "export": {"width": 180.0, "unit": "mm", "dpi": 600},
         "canvas_px": {"width": 1000, "height": 800},

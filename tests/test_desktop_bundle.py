@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -394,3 +395,206 @@ def test_codesign_accepts_the_entitlements(tmp_path):
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def _desktop_check(status="update_available"):
+    from scanpath_studio import updates
+
+    return updates.UpdateCheck(status, "0.36.0", f"{status} message")
+
+
+def test_update_flag_prepares_and_starts_the_swap(monkeypatch, capsys):
+    from scanpath_studio import desktop_update, updates
+
+    calls = []
+    monkeypatch.setattr(updates, "check_for_updates", lambda **kw: _desktop_check())
+    monkeypatch.setattr(desktop_update, "current_install", lambda: "INSTALL")
+    plan = SimpleNamespace(version="99.0.0", state=Path("/state"))
+    monkeypatch.setattr(
+        desktop_update,
+        "prepare",
+        lambda check, install, **kw: calls.append(("prepare", install, kw)) or plan,
+    )
+    monkeypatch.setattr(
+        desktop_update, "start_swap", lambda plan: calls.append(("swap", plan))
+    )
+    monkeypatch.delenv(desktop_update.FEED_ENV, raising=False)
+    assert launcher.update() == 0
+    assert calls[0][:2] == ("prepare", "INSTALL")
+    assert calls[0][2]["allow_file"] is False
+    assert calls[1] == ("swap", plan)
+    assert "update ok" in capsys.readouterr().out
+
+
+def test_update_flag_with_nothing_newer_exits_cleanly(monkeypatch, capsys):
+    from scanpath_studio import desktop_update, updates
+
+    monkeypatch.setattr(
+        updates, "check_for_updates", lambda **kw: _desktop_check("up_to_date")
+    )
+    monkeypatch.setattr(
+        desktop_update, "prepare", lambda *a, **k: pytest.fail("prepared")
+    )
+    assert launcher.update() == 0
+    monkeypatch.setattr(
+        updates, "check_for_updates", lambda **kw: _desktop_check("error")
+    )
+    assert launcher.update() == 1
+
+
+def test_update_flag_reports_a_refusal(monkeypatch, capsys):
+    from scanpath_studio import desktop_update, updates
+
+    def refuse(*args, **kwargs):
+        raise desktop_update.UpdateFailed("nope, and why")
+
+    monkeypatch.setattr(updates, "check_for_updates", lambda **kw: _desktop_check())
+    monkeypatch.setattr(desktop_update, "prepare", refuse)
+    assert launcher.update() == 1
+    assert "update FAILED: nope, and why" in capsys.readouterr().out
+
+
+def test_update_flag_reads_the_test_feed(monkeypatch, tmp_path):
+    from scanpath_studio import desktop_update, updates
+
+    feed = tmp_path / "feed.json"
+    feed.write_text('{"tag_name": "v99.0.0", "assets": []}')
+    monkeypatch.setenv(desktop_update.FEED_ENV, str(feed))
+    seen = {}
+
+    def check(latest=None, **kw):
+        seen["release"] = latest()
+        return _desktop_check("up_to_date")
+
+    monkeypatch.setattr(updates, "check_for_updates", check)
+    assert launcher.update() == 0
+    assert seen["release"].version == "99.0.0"
+
+
+def test_the_boot_is_confirmed_once_the_server_answers(monkeypatch):
+    from scanpath_studio import desktop_update
+
+    noted = []
+    monkeypatch.setattr(launcher, "_wait_for_server", lambda url, timeout_s=0: True)
+    monkeypatch.setattr(desktop_update, "note_boot", lambda: noted.append(True))
+    launcher._confirm_boot_when_ready(1234)
+    assert noted == [True]
+    monkeypatch.setattr(launcher, "_wait_for_server", lambda url, timeout_s=0: False)
+    launcher._confirm_boot_when_ready(1234)
+    assert noted == [True]
+
+
+def test_the_launcher_stays_stdlib_only_at_import():
+    source = Path(launcher.__file__).read_text(encoding="utf-8")
+    header = source.split("\ndef ", 1)[0]
+    assert "scanpath_studio" not in header.split('"""', 2)[-1]
+
+
+# --- #394: the launcher's update hooks --------------------------------------
+
+
+@pytest.fixture
+def launch_calls(monkeypatch):
+    """`launcher.main` with everything it starts replaced by a record of it."""
+    from scanpath_studio import cli
+
+    calls = []
+
+    class Thread:
+        def __init__(self, target, args=(), daemon=None):
+            self.target = target
+
+        def start(self):
+            calls.append(self.target.__name__)
+
+    monkeypatch.setattr(launcher, "_redirect_output_to_log", lambda: None)
+    monkeypatch.setattr(launcher, "_resolve_port", lambda: 8765)
+    monkeypatch.setattr(launcher, "_idle_exit_grace", lambda: 0.0)
+    monkeypatch.setattr(launcher, "threading", SimpleNamespace(Thread=Thread))
+    monkeypatch.setattr(
+        launcher, "_note_update_start", lambda: calls.append("note_start")
+    )
+    monkeypatch.setattr(launcher, "update", lambda: calls.append("update") or 0)
+    monkeypatch.setattr(launcher, "selfcheck", lambda: calls.append("selfcheck") or 0)
+    monkeypatch.setattr(cli, "launch_app", lambda argv: calls.append("launch_app"))
+    monkeypatch.setenv("SCANPATH_DESKTOP_NO_BROWSER", "1")
+    return calls
+
+
+def test_a_launch_reports_in_before_the_server_starts(monkeypatch, launch_calls):
+    # The helper waits on `started`, then on `booted` once the server answers.
+    monkeypatch.setattr(launcher.sys, "argv", ["ScanpathStudio"])
+    launcher.main()
+    assert launch_calls == ["note_start", "_confirm_boot_when_ready", "launch_app"]
+
+
+@pytest.mark.parametrize("flag", ["--update", "--selfcheck"])
+def test_update_and_selfcheck_runs_never_report_in(monkeypatch, launch_calls, flag):
+    # Neither is the relaunched app a helper waits for: a staged copy's
+    # --selfcheck must not confirm an update of the install beside it.
+    monkeypatch.setattr(launcher.sys, "argv", ["ScanpathStudio", flag])
+    with pytest.raises(SystemExit) as exited:
+        launcher.main()
+    assert exited.value.code == 0
+    assert launch_calls == [flag.lstrip("-")]
+
+
+@pytest.mark.parametrize("feed", [True, False])
+def test_only_the_test_feed_lets_update_fetch_a_local_file(monkeypatch, tmp_path, feed):
+    from scanpath_studio import desktop_update, updates
+
+    if feed:
+        monkeypatch.setenv(desktop_update.FEED_ENV, str(tmp_path / "feed.json"))
+    else:
+        monkeypatch.delenv(desktop_update.FEED_ENV, raising=False)
+    monkeypatch.setattr(
+        updates,
+        "check_for_updates",
+        lambda latest=None: updates.UpdateCheck(
+            "update_available", "0.36.0", "v99.0.0 is out.", install_kind="desktop"
+        ),
+    )
+    monkeypatch.setattr(desktop_update, "current_install", lambda: "INSTALL")
+    seen = {}
+
+    def prepare(check, install, *, allow_file, on_step):
+        seen["allow_file"] = allow_file
+        raise desktop_update.UpdateFailed("stop here")
+
+    monkeypatch.setattr(desktop_update, "prepare", prepare)
+    assert launcher.update() == 1
+    assert seen["allow_file"] is feed
+
+
+def test_selfcheck_shakes_hands_through_the_os_trust_store(monkeypatch, capsys):
+    # truststore reaches the OS's certificate store only during a handshake,
+    # so building its context would prove nothing; the smoke test names a
+    # server, and a failed handshake fails the selfcheck.
+    from scanpath_studio import updates
+
+    def broken():
+        raise RuntimeError("no certificate store")
+
+    monkeypatch.setattr(updates, "_ssl_context", broken)
+    monkeypatch.setenv("SCANPATH_SELFCHECK_TLS_URL", "https://github.com/")
+    assert launcher.selfcheck() == 1
+    assert "trust store" in capsys.readouterr().out
+
+
+def test_an_http_answer_is_a_successful_handshake(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    def urlopen(url, timeout, context):
+        raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    assert launcher._tls_handshake_failure("https://github.com/") is None
+
+
+def test_the_smoke_test_asks_for_the_handshake():
+    import inspect
+
+    assert "SCANPATH_SELFCHECK_TLS_URL=TLS_URL" in inspect.getsource(
+        smoke_test._run_selfcheck
+    )

@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.37.1] - 2026-10-07
+
+### Added
+- Choose where each legend sits: Figure & canvas → Legends places the Compare, saccade-type, colour and size-key legends above, below, beside or inside the plot, stacked or in a row, at any text size. ([#384](https://github.com/lacclab/scanpath-studio/issues/384))
+
+### Changed
+- The plot rail's Flag fixations section is now Filters & highlights, with a filter icon. ([#396](https://github.com/lacclab/scanpath-studio/issues/396))
+
+### Fixed
+- The desktop app's Update & restart is sturdier: a failed download says why (a missing file, a full disk) instead of asking whether you are offline, Cancel works until the moment it restarts, two updates started at once no longer collide, and About stops mentioning the last update after a week. ([#394](https://github.com/lacclab/scanpath-studio/issues/394))
+- Changing trials no longer leaves a scanpath's fixation index range narrowed to a few fixations, and the plot now says so whenever the index range hides some of a trial's fixations. ([#395](https://github.com/lacclab/scanpath-studio/issues/395))
+- A line's first word now sits at the left edge of its box, as it was shown in the experiment, instead of being centred in a box that carries only the gap after it. ([#397](https://github.com/lacclab/scanpath-studio/issues/397))
+- Stretch text to AOI boxes now reads the exact font from monospace word boxes padded with half a space on each side, instead of drawing the text several percent too small. ([#397](https://github.com/lacclab/scanpath-studio/issues/397))
+- The hosted demo follows each release again; it had stayed on v0.35.0. ([#400](https://github.com/lacclab/scanpath-studio/issues/400))
+
+## [0.37.0] - 2026-10-07
+
+### Added
+- Help → About can check for updates: it shows whether a newer release is out and the command that updates your install, or the download for the desktop app; also scanpath-studio version --check and api.check_for_updates(), and only ever when asked. ([#139](https://github.com/lacclab/scanpath-studio/issues/139))
+- The desktop app updates itself: Help → About → Check for updates → Update & restart downloads, checks and tests the new version, then restarts into it, and puts the old one back if it doesn't start. ([#385](https://github.com/lacclab/scanpath-studio/issues/385))
+
+### Changed
+- Every build now reports its own version: between releases it is a development build such as 0.35.0.post3+g8f18219 (three commits after 0.35.0), shown in About, scanpath-studio --version, crash reports and exports, and as scanpath_studio.__version__; the hand-set release number is scanpath_studio.__release__. ([#139](https://github.com/lacclab/scanpath-studio/issues/139))
+
+### Fixed
+- Dataset downloads now trust the certificates your operating system trusts, so they no longer fail with CERTIFICATE_VERIFY_FAILED on a python.org Python on macOS or behind a network that inspects HTTPS. ([#391](https://github.com/lacclab/scanpath-studio/issues/391))
+
+## [0.36.0] - 2026-10-07
+
+### Added
+- The chips above the plot can be hidden from the ✏️ menu at the end of the trial row, which keeps their fields for when you show them again; a share link carries the choice. ([#373](https://github.com/lacclab/scanpath-studio/issues/373))
+- A Windows installer (ScanpathStudio-windows-x86_64-setup.exe): one download that installs the desktop app for your account, adds it to the Start menu and uninstalls from Settings → Apps, with no unzipping. The .zip is still there for running without installing. ([#387](https://github.com/lacclab/scanpath-studio/issues/387))
+
+### Changed
+- The dataset and trial dropdowns (and Compare's) open as wide as their longest option, so long names are read in full. ([#381](https://github.com/lacclab/scanpath-studio/issues/381))
+- The scanpath plot is centred in its column and grows to fill the column when the window has room, rather than stopping at its true size; the chip table keeps each trial on one line. ([#381](https://github.com/lacclab/scanpath-studio/issues/381))
+- The screen picker sits at the right end of the trial row as a compact dropdown with ◀ ▶, instead of a row of its own under each trial row, with the sort, filter and chips menus after it at the row's end. ([#381](https://github.com/lacclab/scanpath-studio/issues/381))
+- The Export subtab asks *Self-contained HTML* only once HTML is the chosen format, under that format — the bundle asks its own. ([#382](https://github.com/lacclab/scanpath-studio/issues/382))
+
+### Removed
+- The Export subtab's *Download this comparison as a bundle* expander. ([#382](https://github.com/lacclab/scanpath-studio/issues/382))
+
+### Fixed
+- A metadata table uploaded to one dataset no longer attaches itself to the next dataset you open; switching datasets now empties the metadata uploaders. ([#380](https://github.com/lacclab/scanpath-studio/issues/380))
+- A UTF-16 table, such as an EyeLink Data Viewer report, now reads its column names instead of showing every column as "Unnamed". ([#383](https://github.com/lacclab/scanpath-studio/issues/383))
+
 ## [0.35.0] - 2026-10-07
 
 ### Added

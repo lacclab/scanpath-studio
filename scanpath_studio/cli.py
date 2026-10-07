@@ -692,6 +692,12 @@ def _render_parser() -> argparse.ArgumentParser:
         "inserted before the output extension.",
     )
     parser.add_argument(
+        "--screens",
+        metavar="ID[,ID...]",
+        help="Like --all-screens, but only these screens of the parent trial "
+        "(comma-separated screen ids, e.g. Title,Paragraph); see --list-parts.",
+    )
+    parser.add_argument(
         "--screen-transition",
         choices=["instant", "recorded"],
         default="instant",
@@ -885,13 +891,26 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="fixation_flags",
         action="append",
         metavar="SPEC",
-        help="The app's Flag fixations, repeatable. SPEC is "
+        help="The app's Filters & highlights for fixations, repeatable. SPEC is "
         "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
         "CATEGORY one of short, long, oob (outside every word box), blink and "
         "MODE one of off, highlight, discard — e.g. --fixation-flag "
         "short=discard,threshold_ms=80. discard drops those fixations from the "
         "drawing only; measures and exports are untouched. threshold_ms applies "
         "to short/long only.",
+    )
+    viz.add_argument(
+        "--legend",
+        dest="legend_layout",
+        action="append",
+        metavar="SPEC",
+        help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
+        "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
+        "colour categories), size-key; POSITION one of auto, above, below, "
+        "left, right, top-left, top-right, bottom-left, bottom-right (the last "
+        "four inside the plot); ARRANGEMENT stacked or side-by-side; SIZE the "
+        "text size in px — e.g. --legend saccades=right,stacked,14. Whether a "
+        "legend is drawn at all is still its own switch.",
     )
     viz.add_argument(
         "--saccade-classes",
@@ -1600,7 +1619,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="compare_fixation_flags",
         action="append",
         metavar="SPEC",
-        help="Flag fixations for the SECOND scanpath only, repeatable; "
+        help="Filters & highlights for the SECOND scanpath only, repeatable; "
         "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
         "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
     )
@@ -2075,6 +2094,26 @@ _CRITICAL_SPAN_STYLES = {
 _FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
 
 
+def _parse_legend_layout(specs: list[str]) -> dict:
+    """``["saccades=right,stacked,14"]`` → the ``legend_layout`` dict.
+
+    One ``KIND=SPEC`` per flag; SPEC is ``plots.parse_legend_spec``'s spelling,
+    the one the ``legend_<kind>`` link parameters use too.
+    """
+    from .plots import normalize_legend_layout, parse_legend_spec
+
+    layout: dict = {}
+    for spec in specs:
+        kind, _, text = spec.partition("=")
+        kind = kind.strip().lower().replace("-", "_")
+        try:
+            layout[kind] = parse_legend_spec(text)
+            normalize_legend_layout(layout)
+        except ValueError as exc:
+            raise SystemExit(f"--legend {spec!r}: {exc}") from None
+    return layout
+
+
 def _parse_fixation_flags(specs: list[str]) -> dict:
     """``["short=discard,threshold_ms=80"]`` → the ``fixation_flags`` dict.
 
@@ -2297,7 +2336,12 @@ def _print_reproduction_code(
     if "width_mm" in save_kwargs or "width_in" in save_kwargs:
         save_kwargs.pop("scale", None)  # the print width replaces it
     caveats = []
-    if args.all_screens:
+    if args.screens:
+        caveats.append(
+            "--screens renders the screens named; the snippet rebuilds one "
+            "screen. Use api.render_parent_trial(..., screens=[...]) for the set."
+        )
+    elif args.all_screens:
         caveats.append(
             "--all-screens renders every screen of the parent trial; the "
             "snippet rebuilds one screen. Use api.render_parent_trial(...) for "
@@ -2316,7 +2360,8 @@ def _print_reproduction_code(
     if args.all_screens and args.screen_transition != "instant":
         caveats.append(
             f"--screen-transition {args.screen_transition} only affects the "
-            "--all-screens metadata, which the single-figure snippet omits."
+            "--all-screens / --screens metadata, which the single-figure "
+            "snippet omits."
         )
     source = _snippet_source_from_args(args)
     if args.raw_gaze:
@@ -2496,6 +2541,16 @@ def _save_kwargs(args) -> dict:
     return kwargs
 
 
+def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
+    """``--screens``' comma-separated ids, or ``None`` when not given."""
+    if value is None:
+        return None
+    screens = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not screens:
+        raise SystemExit("--screens names no screen; pass e.g. --screens Paragraph.")
+    return screens
+
+
 def render(argv: list[str]) -> None:
     # Bound, not inlined: DATA-27's --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
@@ -2603,9 +2658,17 @@ def render(argv: list[str]) -> None:
     # per child screen of a multipart trial. There is no defined pairing between
     # the two, and without this guard the compare branch left `figures` unbound
     # and the run died on an UnboundLocalError instead of saying so.
+    # --screens is --all-screens cut to the screens named.
+    chosen_screens = _parse_screen_list(args.screens)
+    if chosen_screens is not None:
+        if args.screen is not None:
+            raise SystemExit(
+                "--screen renders one screen and --screens several; pass one of them."
+            )
+        args.all_screens = True
     if args.compare_with is not None and args.all_screens:
         raise SystemExit(
-            "--compare-with cannot be combined with --all-screens: a comparison "
+            "--compare-with cannot be combined with --all-screens or --screens: a comparison "
             "is a single figure of two trials. Render one screen at a time with "
             "--screen SCREEN_ID."
         )
@@ -3148,6 +3211,8 @@ def render(argv: list[str]) -> None:
         ]
     if args.fixation_flags:
         overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
+    if args.legend_layout:
+        overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
     # VIZ-31: the reading-class filter. Independent of the colour mode above —
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.
@@ -3376,6 +3441,7 @@ def render(argv: list[str]) -> None:
                     trial,
                     animate=True,
                     transition_mode=args.screen_transition,
+                    screens=chosen_screens,
                     **animation_options,
                 )
                 fig = next(iter(figures.values()))
@@ -3500,6 +3566,7 @@ def render(argv: list[str]) -> None:
                     fixations,
                     participant,
                     trial,
+                    screens=chosen_screens,
                     **static_options,
                 )
                 fig = next(iter(figures.values()))
@@ -3518,6 +3585,10 @@ def render(argv: list[str]) -> None:
             for position, (screen_id, screen_figure) in enumerate(
                 figures.items(), start=1
             ):
+                # The screen's place in its trial, which --screens can skip past.
+                meta = screen_figure.layout.meta
+                if isinstance(meta, dict) and meta.get("screen_index"):
+                    position = int(meta["screen_index"])
                 safe_screen = "".join(
                     char if char.isalnum() or char in "-_" else "_"
                     for char in str(screen_id)
@@ -3922,6 +3993,60 @@ def cache(argv: list[str]) -> None:
     print("Delete with `scanpath-studio cache --clear`.")
 
 
+def _version_parser() -> argparse.ArgumentParser:
+    """The `version` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio version",
+        description="Show which build of Scanpath Studio this is and how it was "
+        "installed. With --check, also ask GitHub whether a newer release is out "
+        "and how to update — the only time this command uses the network.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Ask GitHub for the latest release and say how to update this install.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        metavar="SECONDS",
+        help="How long to wait for GitHub (default 5).",
+    )
+    return parser
+
+
+def version(argv: list[str]) -> None:
+    """Print which build this is, and with ``--check`` whether a newer release is out (#139).
+
+    The terminal counterpart of Help → About and ``api.check_for_updates``.
+    Exits 1 only when the check itself could not be made.
+    """
+    args = _version_parser().parse_args(argv)
+    from .build_info import INSTALL_KINDS, build_info, install_kind
+
+    info = build_info()
+    print(f"scanpath-studio {info.version}")
+    print(f"Build:      {info.describe()}")
+    print(f"Installed:  {INSTALL_KINDS[install_kind(info)]}")
+    if not args.check:
+        return
+    from .updates import check_for_updates
+
+    result = check_for_updates(args.timeout)
+    if result.status == "error":
+        print(result.message, file=sys.stderr)
+        raise SystemExit(1)
+    print()
+    print(result.message)
+    if result.command:
+        print(f"Update:     {result.command}")
+    if result.download is not None:
+        print(f"Download:   {result.download.url}")
+    if result.status == "update_available" and result.latest is not None:
+        print(f"What's new: {result.latest.url}")
+
+
 def _check_parser() -> argparse.ArgumentParser:
     """The `check` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4094,6 +4219,10 @@ usage:
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
+  scanpath-studio version [--check]
+                                   show this build and how it was installed;
+                                   --check asks GitHub whether a newer
+                                   release is out
   scanpath-studio --version        print the version
 
 Unrecognized flags are forwarded to `streamlit run` (e.g.
@@ -4104,7 +4233,7 @@ SCANPATH_LOCAL_FS=1."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.
-_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache")
+_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache", "version")
 
 
 def _commands() -> tuple[str, ...]:
@@ -4214,6 +4343,8 @@ def main(argv: list[str] | None = None) -> None:
         check(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
+    elif argv[0] == "version":
+        version(argv[1:])
     elif argv[0] in ("-h", "--help"):
         print(_help_text())
     elif argv[0] in ("-V", "--version"):

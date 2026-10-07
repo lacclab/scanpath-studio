@@ -170,7 +170,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
 
 `--animate --compare-with` replays **both** scanpaths on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
-`--compare-with` cannot be combined with `--all-screens`: a comparison
+`--compare-with` cannot be combined with `--all-screens` or `--screens`: a comparison
 is a single figure of two trials, each drawn from one screen. Pick A's with
 `--screen` and B's with `--compare-screen`; B's is looked up in B's own trial,
 so it can be a later page, or a page of the second dataset.
@@ -284,6 +284,8 @@ or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic
 `__screen-001-<id>` file per screen of the selected parent trial.
+`--screens Title,Paragraph` writes only the screens named, each still numbered
+by its place in the trial.
 
 ## Recovery cache
 
@@ -305,6 +307,29 @@ with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching
 off wherever it is set, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
+
+## Version and updates
+
+`scanpath-studio --version` prints the version. `version` says which build it
+is and how it was installed; `--check` also asks GitHub whether a newer release
+is out and prints the command that updates your install — the only time the
+command uses the network:
+
+```bash
+scanpath-studio version           # the build, and how it was installed
+scanpath-studio version --check   # …and whether a newer release is out
+```
+
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three
+commits after 0.35.0, at commit `8f18219`. The same check is
+**:material/help: Help → :material/info: About → :material/update: Check for updates**
+in the app, and `check_for_updates()` in the [API](api.md#version-and-updates).
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("version"))
+```
 
 ## Full reference
 
@@ -333,4 +358,4 @@ print(cli_help())
     print(cli_reference("cache"))
     ```
 
-`corpus` and `check` are listed in full in their own sections above.
+`corpus`, `check` and `version` are listed in full in their own sections above.

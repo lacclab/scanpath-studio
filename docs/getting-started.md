@@ -14,9 +14,14 @@
       there. If macOS refuses to open it, go to **System Settings → Privacy &
       Security** and click **Open Anyway**.
     - **Windows**:
-      [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip).
-      Extract it and run `ScanpathStudio.exe`. The build is not code-signed, so
-      SmartScreen warns the first time: click **More info → Run anyway**.
+      [`ScanpathStudio-windows-x86_64-setup.exe`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe).
+      Run it to install Scanpath Studio for your account (no administrator
+      rights needed), then launch it from the Start menu. The installer is not
+      code-signed, so SmartScreen warns the first time: click
+      **More info → Run anyway**. Uninstall it from **Settings → Apps**. To run
+      it without installing, use
+      [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip)
+      instead: extract it and run `ScanpathStudio.exe`.
     - **Linux**:
       [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
       Extract it and run `./ScanpathStudio/ScanpathStudio`.
@@ -60,6 +65,31 @@ app proposes, describe the **Recording setup**, then click **:material/check: Ad
 
 [Loading data](guides/loading-data.md) lists the accepted formats and what each
 table needs.
+
+## Updating { #updating }
+
+**:material/help: Help → :material/info: About** shows the version you are
+running. On your own computer — the desktop app or a pip install —
+**:material/update: Check for updates** asks GitHub whether a newer release is
+out; it is the only time the app goes online for this. If there is one, it
+shows the command that updates your install (`pip install -U scanpath-studio`
+for pip) or, in the desktop app, **:material/update: Update & restart** — see
+below — beside a download link. `scanpath-studio version --check` does the
+same from a terminal.
+
+In the desktop app, **:material/update: Update & restart** does the rest:
+it downloads the new version, checks it against the checksum GitHub
+publishes (on macOS also that it is signed by the same developers), tests
+it, and restarts into it — your datasets and settings come back with it. If
+the new version doesn't start within four minutes, the app puts the old
+one back and says so in About. It needs to be able to write where the app
+is installed; when it can't (for example, on a shared Mac where an
+administrator installed it), About says why and offers the download
+instead.
+
+Between releases the version names the exact build: `0.35.0.post3+g8f18219` is
+three commits after release 0.35.0, at commit `8f18219`, and `.dirty` at the
+end means it has uncommitted changes. Quote the whole version in a bug report.
 
 ## Next steps
 

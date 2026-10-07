@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import difflib
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -53,6 +53,7 @@ for _name in (
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
 from . import export as _export  # noqa: E402
+from .build_info import BuildInfo  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
@@ -95,6 +96,7 @@ from .plots import (  # noqa: E402
     replay_page,
     split_scanpath_layers,
 )
+from .updates import UpdateCheck  # noqa: E402
 
 
 def build_authored_scanpath(
@@ -185,6 +187,7 @@ _CANONICAL_OPTION_NAMES = {
     "marker_size_scale",
     "marker_duration_range",
     "duration_size_legend",
+    "legend_layout",
     "order_font_size",
     "order_font_color",
     "show_fixation_colorbar",
@@ -2993,9 +2996,16 @@ def render_parent_trial(
     *,
     animate: bool = False,
     transition_mode: str = "instant",
+    screens: Sequence[str] | None = None,
     **options,
 ) -> dict[str, go.Figure]:
     """Render every screen of one logical trial without stitching coordinates.
+
+    ``screens`` renders only those screen ids (one id may be given as a
+    string), in the trial's own order, as the app's Export → *Screens* does;
+    an id the trial does not have raises ``ValueError``. ``None`` renders them
+    all. ``screen_index`` in each figure's meta stays the screen's place in the
+    trial.
 
     The ordered mapping is keyed by ``screen_id``. Each value is the same figure
     returned by [`plot_scanpath`][scanpath_studio.api.plot_scanpath] or
@@ -3023,20 +3033,36 @@ def render_parent_trial(
     )
     canonical_fixations = _cn.to_canonical_frame(fixations)
     if catalog.empty:
+        if screens is not None:
+            raise ValueError(
+                f"Trial {tid!r} of participant {pid!r} has no screens to choose from."
+            )
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}
 
     screen_ids = catalog[SCREEN_ID].astype(str).tolist()
+    if isinstance(screens, str):
+        screens = [screens]
+    if screens is not None:
+        missing = [str(s) for s in screens if str(s) not in screen_ids]
+        if missing:
+            raise ValueError(
+                f"Trial {tid!r} of participant {pid!r} has no screen "
+                f"{', '.join(map(repr, missing))}; its screens are "
+                f"{', '.join(screen_ids)}."
+            )
+    chosen = None if screens is None else {str(s) for s in screens}
+    # The screens drawn, in the trial's order; a recorded transition runs to
+    # the next one *drawn*, and the last drawn has none.
+    drawn = [s for s in screen_ids if chosen is None or s in chosen]
     rendered: dict[str, go.Figure] = {}
-    for position, screen_id in enumerate(screen_ids):
+    for position, screen_id in enumerate(drawn):
         renderer = animate_scanpath if animate else plot_scanpath
         fig = renderer(words, fixations, pid, tid, screen=screen_id, **options)
         delay = 0.0
-        if animate and transition_mode == "recorded" and position < len(screen_ids) - 1:
+        if animate and transition_mode == "recorded" and position < len(drawn) - 1:
             current = extract_part(canonical_fixations, pid, tid, screen_id)
-            following = extract_part(
-                canonical_fixations, pid, tid, screen_ids[position + 1]
-            )
+            following = extract_part(canonical_fixations, pid, tid, drawn[position + 1])
             if not current.empty and not following.empty:
                 current_end = (
                     pd.to_numeric(current["timestamp_ms"], errors="coerce")
@@ -3054,7 +3080,7 @@ def render_parent_trial(
                 "participant_id": pid,
                 "trial_id": tid,
                 "screen_id": screen_id,
-                "screen_index": position + 1,
+                "screen_index": screen_ids.index(screen_id) + 1,
                 "transition_mode": transition_mode,
                 "transition_after_ms": delay,
             }
@@ -3802,3 +3828,41 @@ def clear_cache() -> dict:
 
     clear_local_state()
     return cache_status()
+
+
+def version_info() -> BuildInfo:
+    """Which build of Scanpath Studio this is — no network access.
+
+    ``version`` is what ``scanpath_studio.__version__`` holds: the release itself
+    (``"0.35.0"``), or between releases a PEP 440 version that sorts after it —
+    ``"0.35.0.post3+g8f18219"`` is three commits after v0.35.0, at commit
+    ``8f18219``, and it ends ``.dirty`` with uncommitted changes. ``release`` is
+    the release it descends from (``scanpath_studio.__release__``), ``distance``
+    the commits since (``None`` when unknown), ``commit``, ``dirty``, and
+    ``source`` — how it was worked out: ``"checkout"`` (``git describe``),
+    ``"stamp"`` (a desktop bundle's build stamp), ``"vcs"`` (a
+    ``pip install git+…``) or ``"release"``. ``describe()`` says it in a
+    sentence. The same is in Help → About and ``scanpath-studio version``."""
+    from .build_info import build_info
+
+    return build_info()
+
+
+def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
+    """Ask GitHub whether a newer release than this build is out.
+
+    The one call here that uses the network, and only when made: it reads the
+    latest release from ``api.github.com`` (drafts and pre-releases excluded)
+    and compares it with [`version_info`][scanpath_studio.api.version_info]. It
+    never raises. ``status`` is ``"up_to_date"``, ``"update_available"``,
+    ``"ahead"`` (a development build past the latest release) or ``"error"``
+    (offline, no answer within ``timeout`` seconds, rate-limited, …), and
+    ``message`` says it in a sentence. With an update available, ``command`` is
+    the shell command that updates this install (``pip install -U
+    scanpath-studio``, ``uv tool upgrade scanpath-studio``, ``git pull``, …),
+    ``latest.url`` the release notes, and in the desktop app ``download`` the
+    archive for this computer. The same check is Help → About → *Check for
+    updates* and ``scanpath-studio version --check``."""
+    from .updates import check_for_updates as _check
+
+    return _check(timeout)

@@ -1088,6 +1088,16 @@ def _popover_script(trigger: str) -> str:
                 </script>"""
 
 
+#: What covers the top of the page: Streamlit's fixed header, and the sticky
+#: bar of the add-dataset wizard and of ✏️ Edit dataset (`styles.py` makes each
+#: bar's `stLayoutWrapper` the sticky element).
+_TOP_OVERLAYS = (
+    '[data-testid="stHeader"], '
+    '[data-testid="stLayoutWrapper"]:has(> .st-key-wiz_sticky_bar), '
+    '[data-testid="stLayoutWrapper"]:has(> .st-key-dataset_editor_bar)'
+)
+
+
 def _scroll_into_view_script(selector: str) -> str:
     """Centre `selector`'s first *visible* match within its own scroller.
 
@@ -1103,6 +1113,12 @@ def _scroll_into_view_script(selector: str) -> str:
     visibility couldn't tell whether the panel was really on screen. Every step
     now points at something in the page or on the top menu bar, where
     ``findVisible()`` answers correctly on its own.
+
+    The scroller's top is not all on screen: Streamlit's fixed header and the
+    wizard's sticky bar (`_TOP_OVERLAYS`) cover it. Measured from the
+    scroller's own top, the setup guide's part 2 landed under both — its title
+    and first fields hidden, the card over what was left — so a target now
+    lands below them, and one taller than the room left is aligned by its top.
     """
     return f"""<script>
                 (function () {{
@@ -1115,6 +1131,24 @@ def _scroll_into_view_script(selector: str) -> str:
                             const cs = win.getComputedStyle(e);
                             return cs.visibility !== "hidden" && cs.display !== "none";
                         }});
+                    // Where the uncovered viewport starts: below the fixed
+                    // header, and below a sticky bar where it rests (its `top`
+                    // + height), whether or not it is stuck yet.
+                    const coveredTo = () => {{
+                        let bottom = 0;
+                        for (const el of doc.querySelectorAll({_TOP_OVERLAYS!r})) {{
+                            const r = el.getBoundingClientRect();
+                            if (!r.width || !r.height) continue;
+                            const cs = win.getComputedStyle(el);
+                            if (cs.position === "fixed") {{
+                                bottom = Math.max(bottom, r.bottom);
+                            }} else if (cs.position === "sticky") {{
+                                bottom = Math.max(
+                                    bottom, (parseFloat(cs.top) || 0) + r.height);
+                            }}
+                        }}
+                        return bottom;
+                    }};
                     let tries = 0;
                     (function attempt() {{
                         const el = findVisible();
@@ -1128,13 +1162,15 @@ def _scroll_into_view_script(selector: str) -> str:
                                     && box.scrollHeight > box.clientHeight + 4) {{
                                 const r = el.getBoundingClientRect();
                                 const b = box.getBoundingClientRect();
+                                const top = Math.max(b.top, coveredTo());
+                                const room = b.top + box.clientHeight - top;
                                 const slack = 8;
-                                if (r.top >= b.top - slack
-                                        && r.bottom <= b.top + box.clientHeight + slack) {{
+                                if (r.top >= top - slack
+                                        && r.bottom <= top + room + slack) {{
                                     return;  // already visible within its scroller
                                 }}
-                                box.scrollTop += r.top - b.top
-                                    - Math.max(0, (box.clientHeight - r.height) / 2);
+                                box.scrollTop += r.top - top
+                                    - Math.max(0, (room - r.height) / 2);
                                 return;
                             }}
                         }}
@@ -2215,11 +2251,18 @@ _WIZARD_GUIDE_STEPS = [
 #: While the setup guide is open on a wide screen, the page keeps a gutter the
 #: card's width on the right, so the card sits beside the wizard instead of over
 #: its upload rows and the mappings that open to their right. A narrow screen
-#: has no room for one, and keeps the card floating over the page.
+#: has no room for one and keeps the card floating over the page, so there the
+#: page gets the card's height at its foot instead: whatever the card covers can
+#: still be scrolled up clear of it, the last fields and ✅ Add dataset included.
 _WIZARD_GUIDE_GUTTER_CSS = """
 @media (min-width: 1100px) {
     [data-testid="stMainBlockContainer"] {
         padding-right: calc(410px + 2.5rem) !important;
+    }
+}
+@media (max-width: 1099.98px) {
+    [data-testid="stMainBlockContainer"] {
+        padding-bottom: 22rem !important;
     }
 }
 """

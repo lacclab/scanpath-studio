@@ -51,7 +51,7 @@ No. Corpus Analysis and Export show the measures your interest-area report
 provides, as your eye-tracking software defines them; [Computations](computations.md)
 gives how Scanpath Studio would compute each.
 
-### Does :material/cleaning_services: Flag fixations change my data?
+### Does :material/filter_list: Filters & highlights change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as
 they are.

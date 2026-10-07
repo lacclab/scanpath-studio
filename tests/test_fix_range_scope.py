@@ -232,3 +232,68 @@ def test_a_one_fixation_screen_clears_the_window():
     # No exception is half the assertion: a one-value range slider throws.
     assert _run_on_trial(at, "p1", "t1", 1, start=509, screen="question_10131") is None
     assert at.session_state["single_fix_range_user_set"] is False
+
+
+class TestATrialChangeSurvivesAClosedPopover:
+    """The window slider sits in the 🧹 Filter popover. Once that has been open,
+    the browser sends the window it last showed back on every rerun, so the
+    reset to a new trial's full range held for one run and then the old window
+    came back — clamped to the new trial, silently hiding most of its fixations.
+    The widgets now move to a fresh key whenever the window changes by itself,
+    so the old widget's value has nowhere to land."""
+
+    @staticmethod
+    def _widget_key(at) -> str:
+        return f"_single_fix_range__w{at.session_state['_single_fix_range_widget_gen']}"
+
+    def test_a_new_trial_gets_a_fresh_widget_at_its_full_range(self):
+        at = AppTest.from_function(_slider_app)
+        _run_on_trial(at, "p1", "t1", 6)
+        before = self._widget_key(at)
+        assert _run_on_trial(at, "p1", "t2", 3) == (1, 3)
+        after = self._widget_key(at)
+        assert after != before
+        assert tuple(at.session_state[after]) == (1, 3)
+
+    def test_the_old_widget_value_does_not_come_back(self):
+        at = AppTest.from_function(_slider_app)
+        _run_on_trial(at, "p1", "t1", 6)
+        old = self._widget_key(at)
+        _run_on_trial(at, "p1", "t2", 3)
+        # What the browser would echo for the widget it remembers.
+        at.session_state[old] = (3, 3)
+        assert _run_on_trial(at, "p1", "t2", 3) == (1, 3)
+
+    def test_a_drag_still_sets_the_window(self):
+        at = AppTest.from_function(_slider_app)
+        _run_on_trial(at, "p1", "t1", 10)
+        at.slider(key=self._widget_key(at)).set_value((2, 5)).run()
+        assert at.session_state["single_fix_range"] == (2, 5)
+        assert at.session_state["single_fix_range_user_set"] is True
+        assert _run_on_trial(at, "p1", "t1", 10) == (2, 5)
+
+
+class TestTheWindowSaysSo:
+    """A window that hides fixations is announced above the plot."""
+
+    def test_full_range_says_nothing(self):
+        from scanpath_studio.tabs import _fix_window_note
+
+        assert _fix_window_note((1, 9), (1, 9)) == ""
+        assert _fix_window_note(None, (1, 9)) == ""
+
+    def test_a_narrowed_single_trial(self):
+        from scanpath_studio.tabs import _fix_window_note
+
+        note = _fix_window_note((3, 3), (1, 9))
+        assert note.startswith("Showing only fixation 3 of 1–9")
+
+    def test_compare_names_the_scanpath(self):
+        from scanpath_studio.tabs import _fix_window_note
+
+        assert _fix_window_note((1, 9), (1, 9), (1, 1), (1, 2)).startswith(
+            "Scanpath B shows fixation 1 of 1–2"
+        )
+        assert _fix_window_note((2, 4), (1, 9), (1, 2), (1, 2)).startswith(
+            "Scanpath A shows fixations 2–4 of 1–9"
+        )

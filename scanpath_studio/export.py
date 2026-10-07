@@ -81,6 +81,7 @@ from .plots import (
     FigureSettings,
     _plotly_literal,
     make_scanpath_figure,
+    normalize_legend_layout,
     split_scanpath_layers,
 )
 from .preprocessing import (
@@ -255,6 +256,10 @@ class ExportOptions:
     scope_participant: str | None = None
     scope_trial: str | None = None
     scope_text: str | None = None
+    # Which screens of a multipart trial go in, by `screen_id` — one id across
+    # trials (OneStop's `Paragraph`, MultiplEYE's `page_1`). `None` is every
+    # screen; a trial showing none of the chosen screens is left out.
+    screens: tuple[str, ...] | None = None
 
     def any_table(self) -> bool:
         return (
@@ -1120,6 +1125,10 @@ def _plot_config_dict(
             "duration_size_legend": bool(settings.get("duration_size_legend", True)),
             "order_font_size": settings.get("order_font_size"),
         },
+        # Where each legend was placed (Figure & canvas → Legends); absent = Auto.
+        # Every legend, Auto included, as the settings file writes them: a
+        # partial section would leave a restoring session's moved legends.
+        "legends": normalize_legend_layout(settings.get("legend_layout")),
         # True-to-scale reading text: records how the word labels were sized so
         # the figure can be reproduced exactly (see plots._word_label_font_px).
         "text": {
@@ -1468,8 +1477,12 @@ def render_export_options(
     caption_pattern: str = "",
     selected_participant: str | None = None,
     selected_trial: str | None = None,
+    screen_options: list[str] | None = None,
 ) -> ExportOptions:
     """Render the bulk-export options UI and return a populated ExportOptions.
+
+    ``screen_options`` are the dataset's screen ids (:func:`screen_choices`);
+    when there are any, a *Screens* picker narrows the bundle to some of them.
 
     ``combos`` is the currently filtered trial pool; ``combos_all`` (when given)
     is the whole loaded dataset. Picking the "All" scope switches the scope
@@ -1497,6 +1510,7 @@ def render_export_options(
             selected_participant=selected_participant,
             selected_trial=selected_trial,
         )
+        screens = _render_screen_picker(st, screen_options or [], key_prefix)
 
         # Figures are the headline artifact, so they lead with a single
         # multi-select of formats (pills) rather than a column of checkboxes.
@@ -1692,7 +1706,38 @@ def render_export_options(
         scope_participant=scope_pid,
         scope_trial=scope_trial,
         scope_text=scope_text,
+        screens=screens,
     )
+
+
+def _render_screen_picker(
+    st, screen_options: list[str], key_prefix: str
+) -> tuple[str, ...] | None:
+    """The *Screens* row: which screens of each multipart trial go in. Nothing
+    picked is every screen (``None``); drawn only for a dataset with screens."""
+    if not screen_options:
+        return None
+    key = f"{key_prefix}_screens"
+    # A pick from another dataset names screens this one does not have.
+    held = st.session_state.get(key)
+    if held is not None:
+        kept = [screen for screen in held if screen in screen_options]
+        if kept != list(held):
+            st.session_state[key] = kept
+    picked = (
+        panel_field(
+            st,
+            "multiselect",
+            "Screens",
+            options=screen_options,
+            key=key,
+            placeholder="All screens",
+            help="Export only these screens of each trial. Leave empty for "
+            "every screen; a trial that shows none of them is left out.",
+        )
+        or []
+    )
+    return tuple(picked) if picked else None
 
 
 def _session_dataset_name() -> str:
@@ -2121,23 +2166,51 @@ def _write_inventory(zf: zipfile.ZipFile, inventory: list[dict]) -> None:
     zf.writestr("index.csv", frame.to_csv(index=False))
 
 
+def screen_choices(*frames: pd.DataFrame | None) -> list[str]:
+    """The screen ids ``frames`` carry, for the export's screen picker: in the
+    order they are shown (their lowest ``screen_index``), then by id. Empty when
+    no frame has screens."""
+    parts = [
+        # De-duplicated first: a raw-gaze table can hold millions of samples.
+        frame[
+            [c for c in (SCREEN_ID, SCREEN_INDEX) if c in frame.columns]
+        ].drop_duplicates()
+        for frame in frames
+        if frame is not None and not frame.empty and SCREEN_ID in frame.columns
+    ]
+    if not parts:
+        return []
+    pairs = pd.concat(parts, ignore_index=True).dropna(subset=[SCREEN_ID])
+    pairs[SCREEN_ID] = pairs[SCREEN_ID].astype(str)
+    if SCREEN_INDEX not in pairs.columns:
+        pairs[SCREEN_INDEX] = float("nan")
+    pairs[SCREEN_INDEX] = pd.to_numeric(pairs[SCREEN_INDEX], errors="coerce")
+    first = pairs.groupby(SCREEN_ID)[SCREEN_INDEX].min().reset_index()
+    first = first.sort_values([SCREEN_INDEX, SCREEN_ID], na_position="last")
+    return first[SCREEN_ID].tolist()
+
+
 def export_units(
     combos: pd.DataFrame,
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     raw_gaze: pd.DataFrame | None = None,
+    screens: tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
     """One row per **screen export unit**: each trial in ``combos``, or each of
     its screens when it is a multipart reading. ``combos`` is already scoped.
+
+    ``screens`` (``ExportOptions.screens``) keeps only the units on those
+    screen ids, so a trial without screens has none of them and is left out.
     """
     rows: list[dict] = []
     for combo in combos.to_dict("records"):
         participant, trial = combo["participant_id"], combo["trial_id"]
         parent_words = extract_trial(words, participant, trial)
         parent_fixations = extract_trial(fixations, participant, trial)
-        screens = part_catalog(parent_words, parent_fixations)
+        catalog = part_catalog(parent_words, parent_fixations)
         if (
-            screens.empty
+            catalog.empty
             and parent_words.empty
             and parent_fixations.empty
             and raw_gaze is not None
@@ -2146,13 +2219,20 @@ def export_units(
             # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
             # gaze alone takes its screens from its samples, so each screen's
             # coordinate space is exported on its own instead of pooled.
-            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
-        if screens.empty:
+            catalog = part_catalog(extract_trial(raw_gaze, participant, trial))
+        if catalog.empty:
             rows.append(combo)
         else:
-            for screen in screens.to_dict("records"):
+            for screen in catalog.to_dict("records"):
                 rows.append({**combo, **screen})
-    return pd.DataFrame(rows)
+    units = pd.DataFrame(rows)
+    if screens is None:
+        return units
+    if units.empty or SCREEN_ID not in units.columns:
+        return units.iloc[0:0]
+    chosen = {str(screen) for screen in screens}
+    keep = units[SCREEN_ID].notna() & units[SCREEN_ID].astype(str).isin(chosen)
+    return units[keep].reset_index(drop=True)
 
 
 @dataclass(frozen=True)
@@ -2184,8 +2264,8 @@ def plan_export(
     """The trial, screen and figure-file counts :func:`bulk_export` will
     produce for these inputs and ``options``."""
     scoped = _apply_scope(combos, options)
-    units = count_export_units(scoped, words, fixations, raw_gaze)
-    return plan_from_counts(len(scoped), units, options)
+    trials, units = count_export(scoped, words, fixations, raw_gaze, options.screens)
+    return plan_from_counts(trials, units, options)
 
 
 def count_export_units(
@@ -2202,6 +2282,43 @@ def count_export_units(
     ):
         return len(combos)
     return len(export_units(combos, words, fixations, raw_gaze))
+
+
+def count_export(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+    screens: tuple[str, ...] | None = None,
+) -> tuple[int, int]:
+    """``(trials, units)`` a bundle of ``combos`` exports: with ``screens``
+    chosen, only the trials that show one of them count."""
+    if screens is None:
+        return len(combos), count_export_units(combos, words, fixations, raw_gaze)
+    units = export_units(combos, words, fixations, raw_gaze, screens)
+    if units.empty:
+        return 0, 0
+    trials = units[["participant_id", "trial_id"]].drop_duplicates()
+    return len(trials), len(units)
+
+
+def _keep_unit_trials(combos: pd.DataFrame, units: pd.DataFrame) -> pd.DataFrame:
+    """``combos`` cut to the trials ``units`` still holds — after a screen
+    choice, the trials the bundle actually exports."""
+    if units.empty:
+        return combos.iloc[0:0]
+    keys = set(
+        zip(
+            units["participant_id"].astype(str),
+            units["trial_id"].astype(str),
+            strict=True,
+        )
+    )
+    held = [
+        (str(pid), str(tid)) in keys
+        for pid, tid in zip(combos["participant_id"], combos["trial_id"], strict=True)
+    ]
+    return combos[held]
 
 
 def plan_from_counts(trials: int, units: int, options: ExportOptions) -> ExportPlan:
@@ -2269,6 +2386,8 @@ def _scope_lines(
         f"- {_plural(len(combos), 'trial')}"
         + (f" ({_plural(len(units), 'screen')})" if len(units) != len(combos) else ""),
     ]
+    if options.screens is not None:
+        lines.append(f"- Screens: only {', '.join(options.screens)}")
     return lines
 
 
@@ -2323,6 +2442,11 @@ def bulk_export(
     if pattern_problem:
         raise ValueError(pattern_problem)
     combos = _apply_scope(combos, options)
+    units = export_units(combos, words, fixations, raw_gaze, options.screens)
+    if options.screens is not None:
+        # Only the trials that show a chosen screen are exported — for the
+        # annotations, the README and every per-trial table alike.
+        combos = _keep_unit_trials(combos, units)
     # UX-179's annotations, cut to the exported trials once: the README says
     # the file is there exactly when the writer below writes it (round 10).
     annotations_kept: list[dict] = []
@@ -2361,7 +2485,6 @@ def bulk_export(
             return maps[table], hidden.get(table)
         return every_table.identity(), None
 
-    units = export_units(combos, words, fixations, raw_gaze)
     progress = ExportProgress(total_trials=len(units))
     started = perf_counter()
     emit_status(

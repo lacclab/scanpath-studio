@@ -252,7 +252,7 @@ from scanpath_studio.export import (
     annotate_figure,
     apply_export_scope,
     bulk_export,
-    count_export_units,
+    count_export,
     describe_plan,
     html_plotlyjs,
     pattern_fields,
@@ -261,6 +261,7 @@ from scanpath_studio.export import (
     render_export_options,
     render_pattern,
     render_static_figure_bytes,
+    screen_choices,
     strip_local_paths,
     summarize_export,
 )
@@ -300,6 +301,7 @@ from scanpath_studio.plots import (
     animation_clip_frame_ms,
     animation_playback_ms,
     animation_timeline_summary,
+    apply_legend_layout,
     break_at_gaps,
     build_scanpath_replay,
     make_comparison_figure,
@@ -317,6 +319,7 @@ from scanpath_studio.plots import (
     make_word_matrix_heatmap,
     make_word_profile_figure,
     make_word_rate_figure,
+    normalize_legend_layout,
     replay_page,
     replay_size_key_range,
     set_replay_clock,
@@ -1823,6 +1826,33 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         )
 
 
+def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
+    """Say so when an index window hides some of a trial's fixations.
+
+    The window lives in the Filters & highlights popover, out of sight, so without this a
+    figure missing most of its fixations gave no hint why. ``window_b`` /
+    ``full_b`` only while comparing.
+    """
+
+    def _cut(window, full) -> str | None:
+        if window is None or full is None or tuple(window) == tuple(full):
+            return None
+        lo, hi = (int(v) for v in window)
+        shown = f"fixation {lo}" if lo == hi else f"fixations {lo}–{hi}"
+        return f"{shown} of {int(full[0])}–{int(full[1])}"
+
+    a, b = _cut(window_a, full_a), _cut(window_b, full_b)
+    if not a and not b:
+        return ""
+    if b is None:
+        what = f"Showing only {a}" if window_b is None else f"Scanpath A shows {a}"
+    elif a is None:
+        what = f"Scanpath B shows {b}"
+    else:
+        what = f"Scanpath A shows {a}, and B {b}"
+    return f"{what} — set by **Index range** in Filters & highlights."
+
+
 def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
     """Keep only fixations whose 1-based ``order_in_trial`` is within ``fix_range``.
 
@@ -1943,6 +1973,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
         ),
         duration_size_legend=viz_settings.get("duration_size_legend", True),
+        legend_layout=viz_settings.get("legend_layout"),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
         **{
@@ -4458,6 +4489,10 @@ def _build_studio_config(
             "order_font_color": figure_settings["order_font_color"],
             "base_font_size": int(base_font_size),
         },
+        # Figure & canvas → Legends: every legend, Auto included, so a file
+        # restores the placement it was saved with rather than leaving a
+        # moved legend where the receiving session had it.
+        "legends": normalize_legend_layout(figure_settings.get("legend_layout")),
         "text": {
             "scale_text_to_boxes": bool(
                 figure_settings.get("scale_text_to_boxes", True)
@@ -5453,6 +5488,9 @@ def _plan_replay(
         # stamped onto the cached replay in `finished_figure`, and toggling it
         # costs no frame rebuild.
         duration_size_legend=False,
+        # Where the legends sit is layout only too: applied to the finished
+        # figure in `finished_figure`, so moving a legend rebuilds no frame.
+        legend_layout=None,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5565,6 +5603,12 @@ def _build_and_render_animation(
         set_replay_clock(
             fig, frame_step_ms, playback_speed=playback_speed, autoplay=autoplay
         )
+        apply_legend_layout(
+            fig,
+            animation_settings.legend_layout,
+            comparing=anim_inputs["fixations_b"] is not None
+            and not anim_inputs["fixations_b"].empty,
+        )
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")
         )
@@ -5596,6 +5640,8 @@ def _build_and_render_animation(
         title,
         caption,
         bool(animation_settings.duration_size_legend),
+        # Not in `anim_key` (the frames never read it), so the view keys on it.
+        repr(normalize_legend_layout(animation_settings.legend_layout)),
     )
     view = _cached_replay_view(
         clip_inputs,
@@ -7655,6 +7701,14 @@ def render_single_trial_tab(
         if no_fixations_note:
             # UX-167: above the stage, like every other pre-figure note.
             plot_notes_slot.caption(no_fixations_note)
+        window_note = _fix_window_note(
+            fix_range if windowed else None,
+            full_fix_range,
+            window_b if comparing else None,
+            full_b,
+        )
+        if window_note:
+            plot_notes_slot.info(window_note, icon=ICONS["plot_filter"])
         if animate:
             replay_frames = (
                 trial_words,
@@ -8015,7 +8069,7 @@ def _c_export_unit_count(
     ``None`` when screens contradict each other (Build export reports it) —
     returned, not raised, so that answer is cached too rather than re-walked
     on every rerun."""
-    scope_name, participant, trial, text = scope
+    scope_name, participant, trial, text, screens = scope
     scoped = apply_export_scope(
         _combos,
         ExportOptions(
@@ -8026,10 +8080,20 @@ def _c_export_unit_count(
         ),
     )
     try:
-        units = count_export_units(scoped, _words, _fixations, _raw_gaze)
+        return count_export(scoped, _words, _fixations, _raw_gaze, screens)
     except ValueError:
         return None
-    return len(scoped), units
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_export_screen_choices(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    frame_keys: tuple,
+) -> list[str]:
+    """The Export panel's *Screens* options, cached on the frames' fingerprints."""
+    return screen_choices(_words, _fixations, _raw_gaze)
 
 
 def _render_bulk_export(
@@ -8053,6 +8117,18 @@ def _render_bulk_export(
     raw_gaze_all: pd.DataFrame | None = None,
 ) -> None:
     """Render configurable bulk-export UI (artifact picker + run + download)."""
+    # The whole dataset's screens, so the picker does not change with the scope.
+    every_raw_gaze = raw_gaze_all if raw_gaze_all is not None else raw_gaze
+    screen_options = _c_export_screen_choices(
+        words_all,
+        fixations_all,
+        every_raw_gaze,
+        (
+            frame_fingerprint(words_all),
+            frame_fingerprint(fixations_all),
+            frame_fingerprint(every_raw_gaze),
+        ),
+    )
     options = render_export_options(
         st,
         combos,
@@ -8062,6 +8138,7 @@ def _render_bulk_export(
         caption_pattern=figure_settings.get("caption_pattern", ""),
         selected_participant=selected_participant,
         selected_trial=selected_trial,
+        screen_options=screen_options,
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
@@ -8083,28 +8160,7 @@ def _render_bulk_export(
         frame_fingerprint(active_fix),
         frame_fingerprint(active_raw_gaze),
     )
-    run_col, info_col = st.columns([1, 3])
-    with run_col:
-        nothing_ticked = not (
-            options.figure_formats()
-            or options.include_plot_config
-            or options.include_annotations
-            or options.any_table()
-        )
-        run = st.button(
-            "Build export",
-            type="primary",
-            disabled=active_combos.empty or nothing_ticked,
-            help="Tick at least one thing to include above."
-            if nothing_ticked
-            else None,
-        )
-        stop_slot = st.empty()
-    task_key = _bulk_export_task_key()
-    if not run and progress.running(task_key):
-        # A build an earlier run left going — the user clicked something else
-        # mid-build. That run can no longer hand its bundle over, so stop it.
-        progress.cancel(task_key)
+    counts = None
     if not active_combos.empty:
         # What Build export is about to write: a parent trial can hold many
         # screens, and each screen one file per format (and per layer).
@@ -8119,10 +8175,37 @@ def _render_bulk_export(
                 options.scope_participant,
                 options.scope_trial,
                 options.scope_text,
+                options.screens,
             ),
         )
-        if counts is not None:
-            info_col.caption(describe_plan(plan_from_counts(*counts, options)))
+    # Screens no trial in scope shows would build an empty bundle.
+    no_screens = options.screens is not None and counts == (0, 0)
+    run_col, info_col = st.columns([1, 3])
+    with run_col:
+        nothing_ticked = not (
+            options.figure_formats()
+            or options.include_plot_config
+            or options.include_annotations
+            or options.any_table()
+        )
+        run = st.button(
+            "Build export",
+            type="primary",
+            disabled=active_combos.empty or nothing_ticked or no_screens,
+            help="Tick at least one thing to include above."
+            if nothing_ticked
+            else "No trial here shows the screens picked above."
+            if no_screens
+            else None,
+        )
+        stop_slot = st.empty()
+    task_key = _bulk_export_task_key()
+    if not run and progress.running(task_key):
+        # A build an earlier run left going — the user clicked something else
+        # mid-build. That run can no longer hand its bundle over, so stop it.
+        progress.cancel(task_key)
+    if counts is not None:
+        info_col.caption(describe_plan(plan_from_counts(*counts, options)))
     if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
         info_col.warning(
             "Export stopped — no bundle was built. Click **Build export** to restart.",

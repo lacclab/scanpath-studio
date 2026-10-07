@@ -17,7 +17,7 @@ to clear just that one.
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **:material/cleaning_services: Flag fixations → :material/blur_on: Fixations** in the plot rail and set
+when timing helps. Open **:material/filter_list: Filters & highlights → :material/blur_on: Fixations** in the plot rail and set
 **Highlight** for:
 
 - out-of-bounds points;

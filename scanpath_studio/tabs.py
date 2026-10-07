@@ -1750,7 +1750,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
 def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
     """Say so when an index window hides some of a trial's fixations.
 
-    The window lives in the 🧹 Filter popover, out of sight, so without this a
+    The window lives in the Filters & highlights popover, out of sight, so without this a
     figure missing most of its fixations gave no hint why. ``window_b`` /
     ``full_b`` only while comparing.
     """
@@ -1771,7 +1771,7 @@ def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
         what = f"Scanpath B shows {b}"
     else:
         what = f"Scanpath A shows {a}, and B {b}"
-    return f"{what} — set by **Index range** in 🧹 Filter."
+    return f"{what} — set by **Index range** in Filters & highlights."
 
 
 def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:

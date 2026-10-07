@@ -1679,14 +1679,21 @@ def get_app_css() -> str:
        show through, and the z-index keeps it over them.
 
        Scoped to this container's key: only the wizard gets a sticky bar, not
-       every page. */
+       every page.
+
+       The sticky element is the bar's `stLayoutWrapper`, not the keyed block
+       itself: a sticky box only travels inside its parent, and the wrapper is
+       exactly the bar's height, so a sticky *bar* scrolled away with the page. */
     /* DATA-35 — the ✏️ Edit dataset screen wears the add-dataset screen's bar,
        because the ask was that the two look the same. Same rule, two keys. */
-    .st-key-dataset_editor_bar,
-    .st-key-wiz_sticky_bar {
+    [data-testid="stLayoutWrapper"]:has(> .st-key-dataset_editor_bar),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-wiz_sticky_bar) {
         position: sticky;
         top: 3.2rem;
         z-index: 60;
+    }
+    .st-key-dataset_editor_bar,
+    .st-key-wiz_sticky_bar {
         background: var(--sps-page-bg);
         padding: 0.35rem 0 0.4rem;
         margin-bottom: 0.2rem;

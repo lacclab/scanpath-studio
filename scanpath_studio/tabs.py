@@ -1766,6 +1766,33 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         )
 
 
+def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
+    """Say so when an index window hides some of a trial's fixations.
+
+    The window lives in the Filters & highlights popover, out of sight, so without this a
+    figure missing most of its fixations gave no hint why. ``window_b`` /
+    ``full_b`` only while comparing.
+    """
+
+    def _cut(window, full) -> str | None:
+        if window is None or full is None or tuple(window) == tuple(full):
+            return None
+        lo, hi = (int(v) for v in window)
+        shown = f"fixation {lo}" if lo == hi else f"fixations {lo}–{hi}"
+        return f"{shown} of {int(full[0])}–{int(full[1])}"
+
+    a, b = _cut(window_a, full_a), _cut(window_b, full_b)
+    if not a and not b:
+        return ""
+    if b is None:
+        what = f"Showing only {a}" if window_b is None else f"Scanpath A shows {a}"
+    elif a is None:
+        what = f"Scanpath B shows {b}"
+    else:
+        what = f"Scanpath A shows {a}, and B {b}"
+    return f"{what} — set by **Index range** in Filters & highlights."
+
+
 def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
     """Keep only fixations whose 1-based ``order_in_trial`` is within ``fix_range``.
 
@@ -7613,6 +7640,14 @@ def render_single_trial_tab(
         if no_fixations_note:
             # UX-167: above the stage, like every other pre-figure note.
             plot_notes_slot.caption(no_fixations_note)
+        window_note = _fix_window_note(
+            fix_range if windowed else None,
+            full_fix_range,
+            window_b if comparing else None,
+            full_b,
+        )
+        if window_note:
+            plot_notes_slot.info(window_note, icon=ICONS["plot_filter"])
         if animate:
             replay_frames = (
                 trial_words,

@@ -47,6 +47,8 @@ _NUMBERS = r"\d+(?:\+\d+)*"
 _SLUG = r"[A-Za-z0-9][A-Za-z0-9_-]*"
 _NAME = re.compile(rf"^(?P<ref>{_NUMBERS}|{_SLUG})\.(?P<group>[a-z]+)\.md$")
 _MERGED_PR = re.compile(r"\(#(\d+)\)\s*$")
+#: GitHub's subject for a PR landed as a merge commit rather than squashed.
+_MERGE_COMMIT_PR = re.compile(r"^Merge pull request #(\d+) ")
 
 
 @dataclass(frozen=True)
@@ -66,24 +68,59 @@ class Fragment:
 
 
 def merged_pr(path: Path) -> int | None:
-    """The PR whose squash-merge added *path*, or ``None`` before it merges.
+    """The PR that merged *path*, or ``None`` before it merges.
 
+    Read from the squash-merge subject of the commit that added it, or — for a
+    PR landed as a merge commit — from the oldest "Merge pull request #N" on
+    the current branch's first-parent line that brought that commit in.
     Follows renames, so a fragment that was renamed after it landed still
     resolves to the PR that first added it.
     """
-    try:
-        subjects = subprocess.run(
-            ["git", "log", "--follow", "--diff-filter=A", "--format=%s", "--", path],
+
+    def git(*args: str) -> list[str]:
+        return subprocess.run(
+            ["git", *args],
             cwd=path.parent,
             capture_output=True,
             text=True,
             check=True,
         ).stdout.splitlines()
+
+    try:
+        added = git(
+            "log", "--follow", "--diff-filter=A", "--format=%H %s", "--", str(path)
+        )
+        if not added:
+            return None
+        # git log lists newest first; the first add is the one that counts.
+        commit, _, subject = added[-1].partition(" ")
+        match = _MERGED_PR.search(subject)
+        if match:
+            return int(match[1])
+        # Every PR merge commit on this branch's own line, oldest first; the
+        # first that contains the commit is the PR that brought it in.
+        for line in reversed(
+            git("log", "--first-parent", "--merges", "--format=%H %s")
+        ):
+            merge, _, subject = line.partition(" ")
+            match = _MERGE_COMMIT_PR.match(subject)
+            if match and _contains(path.parent, merge, commit):
+                return int(match[1])
     except (OSError, subprocess.CalledProcessError):
         return None
-    # git log lists newest first; the first add is the one that counts.
-    match = _MERGED_PR.search(subjects[-1]) if subjects else None
-    return int(match[1]) if match else None
+    return None
+
+
+def _contains(cwd: Path, merge: str, commit: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, merge],
+            cwd=cwd,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def load(directory: Path = FRAGMENT_DIR) -> tuple[list[Fragment], list[str]]:

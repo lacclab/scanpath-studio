@@ -82,9 +82,10 @@ connection, the desktop app included. A figure you download as **HTML** is
 different: a saved file has no app server behind it. By default it loads the
 library from **cdn.plot.ly** when you open it, which needs an internet
 connection and tells that host the file was opened (no data travels with the
-request). Tick **Export → Self-contained HTML** and the figure,
-replay and bundle HTML embed the library instead (about 4.8 MB more per file),
-open offline and make no request. HTML written headlessly (`save_figure`,
+request). Tick **Self-contained HTML** — shown on the Export subtab once HTML
+is the chosen format, for the figure, the replay and the bundle — and the HTML
+embeds the library instead (about 4.8 MB more per file), opens offline and
+makes no request. HTML written headlessly (`save_figure`,
 `scanpath-studio render -o figure.html`) always embeds it.
 Streamlit's own usage statistics are switched off on every launch path
 (`scanpath-studio run`, the desktop app and the repository's

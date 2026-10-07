@@ -246,7 +246,7 @@ class ExportOptions:
     text_metadata_fields: tuple[str, ...] | None = None
     # HTML figures embed the Plotly library (opens offline, ~4.8 MB more per
     # file) instead of loading it from cdn.plot.ly when opened. Off by default:
-    # the app's Export subtab sets it from its *Self-contained HTML* choice.
+    # the bundle's *Self-contained HTML* choice, shown while HTML is picked.
     html_self_contained: bool = False
     # When True, export operates on the whole loaded dataset, ignoring the
     # trial-filter funnel; the caller supplies the unfiltered frames.
@@ -330,8 +330,9 @@ class ExportSummary:
     expand_errors: bool
 
 
-#: Session key of the Export subtab's *Self-contained HTML* choice — every HTML file
-#: the subtab writes (the figure, the replay, the bundles) follows it.
+#: Session key of the current figure's *Self-contained HTML* choice — the figure's
+#: and the replay's HTML follow it; the bundle asks its own
+#: (``<key_prefix>_html_self_contained``).
 HTML_SELF_CONTAINED_KEY = "export_html_self_contained"
 
 
@@ -1519,6 +1520,21 @@ def render_export_options(
         include_svg = "SVG" in fig_formats
         include_png = "PNG" in fig_formats
         include_html = "HTML" in fig_formats
+        # Asked only while HTML is picked, as for the current figure above.
+        html_self_contained = include_html and bool(
+            panel_field(
+                st,
+                "checkbox",
+                "Self-contained HTML (opens offline, larger file)",
+                display="Self-contained HTML",
+                value=False,
+                key=f"{key_prefix}_html_self_contained",
+                persist_state="session",
+                help="Tick to make the bundle's HTML figures open without an "
+                "internet connection: each carries the Plotly library, about "
+                "4.8 MB more. Unticked, they load it from cdn.plot.ly when opened.",
+            )
+        )
         # EXP-24: the bundle's static figures need a browser on the server,
         # which the current figure's PNG/SVG do not — said only when it is
         # missing, and only while one of those formats is picked.
@@ -1651,6 +1667,7 @@ def render_export_options(
         include_svg=include_svg,
         include_pdf=include_pdf,
         include_html=include_html,
+        html_self_contained=html_self_contained,
         include_plot_config=include_plot_config,
         include_annotations=include_annotations,
         include_fixations=include_fixations,

@@ -42,6 +42,14 @@ Click **+** beside **Select dataset** and choose **Import files**. Upload a fixa
 
 [Loading data](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md) lists the accepted formats and what each table needs.
 
+## Updating
+
+**Help → About** shows the version you are running. On your own computer — the desktop app or a pip install — **Check for updates** asks GitHub whether a newer release is out; it is the only time the app goes online for this. If there is one, it shows the command that updates your install (`pip install -U scanpath-studio` for pip) or, in the desktop app, **Update & restart** — see below — beside a download link. `scanpath-studio version --check` does the same from a terminal.
+
+In the desktop app, **Update & restart** does the rest: it downloads the new version, checks it against the checksum GitHub publishes (on macOS also that it is signed by the same developers), tests it, and restarts into it — your datasets and settings come back with it. If the new version doesn't start within four minutes, the app puts the old one back and says so in About. It needs to be able to write where the app is installed; when it can't (for example, on a shared Mac where an administrator installed it), About says why and offers the download instead.
+
+Between releases the version names the exact build: `0.35.0.post3+g8f18219` is three commits after release 0.35.0, at commit `8f18219`, and `.dirty` at the end means it has uncommitted changes. Quote the whole version in a bug report.
+
 ## Next steps
 
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md) walk through common tasks, from checking a pilot to exporting a figure.
@@ -1177,6 +1185,28 @@ Delete the on-device recovery cache and return its status afterwards.
 
 Removes only the files this app wrote (`manifest.json` and the dataset Parquet files); anything else in the folder is left alone. A *running* local app writes its session back out at the end of its next change — start it with `scanpath-studio run --no-persist` or `SCANPATH_STUDIO_PERSIST=0` to stop that.
 
+## Version and updates
+
+### scanpath_studio.api.version_info
+
+```
+version_info() -> BuildInfo
+```
+
+Which build of Scanpath Studio this is — no network access.
+
+`version` is what `scanpath_studio.__version__` holds: the release itself (`"0.35.0"`), or between releases a PEP 440 version that sorts after it — `"0.35.0.post3+g8f18219"` is three commits after v0.35.0, at commit `8f18219`, and it ends `.dirty` with uncommitted changes. `release` is the release it descends from (`scanpath_studio.__release__`), `distance` the commits since (`None` when unknown), `commit`, `dirty`, and `source` — how it was worked out: `"checkout"` (`git describe`), `"stamp"` (a desktop bundle's build stamp), `"vcs"` (a `pip install git+…`) or `"release"`. `describe()` says it in a sentence. The same is in Help → About and `scanpath-studio version`.
+
+### scanpath_studio.api.check_for_updates
+
+```
+check_for_updates(timeout: float = 5.0) -> UpdateCheck
+```
+
+Ask GitHub whether a newer release than this build is out.
+
+The one call here that uses the network, and only when made: it reads the latest release from `api.github.com` (drafts and pre-releases excluded) and compares it with version_info. It never raises. `status` is `"up_to_date"`, `"update_available"`, `"ahead"` (a development build past the latest release) or `"error"` (offline, no answer within `timeout` seconds, rate-limited, …), and `message` says it in a sentence. With an update available, `command` is the shell command that updates this install (`pip install -U scanpath-studio`, `uv tool upgrade scanpath-studio`, `git pull`, …), `latest.url` the release notes, and in the desktop app `download` the archive for this computer. The same check is Help → About → *Check for updates* and `scanpath-studio version --check`.
+
 For a batch loop, see [Automation](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern). GIF and MP4 export uses `scanpath_studio.animation_export.export_animation` and requires Kaleido plus Chrome, Chromium or Edge.
 
 # CLI reference
@@ -1422,12 +1452,30 @@ scanpath-studio cache --clear    # delete the recovery cache
 
 The same information is at the foot of the **Data Management** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching off wherever it is set, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR` moves the folder. Hosted deployments never cache. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/#what-happens-to-a-file-you-upload).
 
+## Version and updates
+
+`scanpath-studio --version` prints the version. `version` says which build it is and how it was installed; `--check` also asks GitHub whether a newer release is out and prints the command that updates your install — the only time the command uses the network:
+
+```
+scanpath-studio version           # the build, and how it was installed
+scanpath-studio version --check   # …and whether a newer release is out
+```
+
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. The same check is **Help → About → Check for updates** in the app, and `check_for_updates()` in the [API](https://lacclab.github.io/scanpath-studio/api/#version-and-updates).
+
+**Options**
+
+| Option      | Value     | Default | Description                                                           |
+| ----------- | --------- | ------- | --------------------------------------------------------------------- |
+| `--check`   | switch    | —       | Ask GitHub for the latest release and say how to update this install. |
+| `--timeout` | `SECONDS` | `5.0`   | How long to wait for GitHub (default 5).                              |
+
 ## Full reference
 
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.36.0 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.37.0 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)
@@ -1444,6 +1492,10 @@ usage:
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
+  scanpath-studio version [--check]
+                                   show this build and how it was installed;
+                                   --check asks GitHub whether a newer
+                                   release is out
   scanpath-studio --version        print the version
 
 Unrecognized flags are forwarded to `streamlit run` (e.g.
@@ -1638,7 +1690,7 @@ SCANPATH_LOCAL_FS=1.
 | `--json`  | switch | —       | Print the status as JSON.        |
 | `--clear` | switch | —       | Delete the recovery cache.       |
 
-`corpus` and `check` are listed in full in their own sections above.
+`corpus`, `check` and `version` are listed in full in their own sections above.
 
 # Agent guide (headless use)
 
@@ -3399,14 +3451,14 @@ A paper is in preparation. Until it is out, cite the software by its Zenodo DOI,
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.36.0},
+  version = {0.37.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.36.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.37.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 The DOI always resolves to the latest release; the [Zenodo record](https://doi.org/10.5281/zenodo.22933884) lists a DOI for each version if you need to pin the one you used. The entry above is generated from [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff), the same file behind GitHub's **Cite this repository** button and the app's **Help → About** dialog.
 
@@ -3473,4 +3525,4 @@ Review these artifacts before sharing them. Share links can enter browser histor
 
 ## Network activity
 
-Downloading a public corpus contacts its host, and only when you click **⬇ Download** — or, headlessly, the first time `scanpath-studio render --potec` or `--onestop` (the Public variant) runs against a folder that doesn't have it yet. The scanpath, animation and comparison figures load the Plotly charting library from the app's own server — the copy installed with the app — so drawing a figure contacts no other host and works without an internet connection, the desktop app included. A figure you download as **HTML** is different: a saved file has no app server behind it. By default it loads the library from **cdn.plot.ly** when you open it, which needs an internet connection and tells that host the file was opened (no data travels with the request). Tick **Self-contained HTML** — shown on the Export subtab once HTML is the chosen format, for the figure, the replay and the bundle — and the HTML embeds the library instead (about 4.8 MB more per file), opens offline and makes no request. HTML written headlessly (`save_figure`, `scanpath-studio render -o figure.html`) always embeds it. Streamlit's own usage statistics are switched off on every launch path (`scanpath-studio run`, the desktop app and the repository's `.streamlit/config.toml`). The application adds no analytics service of its own.
+Downloading a public corpus contacts its host, and only when you click **⬇ Download** — or, headlessly, the first time `scanpath-studio render --potec` or `--onestop` (the Public variant) runs against a folder that doesn't have it yet. **Check for updates** (Help → About, or `scanpath-studio version --check`) asks GitHub's API (`api.github.com`) for the latest release, only when you click it; the request carries nothing but the app's version, in its User-Agent. In the desktop app, **Update & restart** then downloads that release's archive for your computer from GitHub (`github.com`, which serves the file from its download servers) — only when you click it. The scanpath, animation and comparison figures load the Plotly charting library from the app's own server — the copy installed with the app — so drawing a figure contacts no other host and works without an internet connection, the desktop app included. A figure you download as **HTML** is different: a saved file has no app server behind it. By default it loads the library from **cdn.plot.ly** when you open it, which needs an internet connection and tells that host the file was opened (no data travels with the request). Tick **Self-contained HTML** — shown on the Export subtab once HTML is the chosen format, for the figure, the replay and the bundle — and the HTML embeds the library instead (about 4.8 MB more per file), opens offline and makes no request. HTML written headlessly (`save_figure`, `scanpath-studio render -o figure.html`) always embeds it. Streamlit's own usage statistics are switched off on every launch path (`scanpath-studio run`, the desktop app and the repository's `.streamlit/config.toml`). The application adds no analytics service of its own.

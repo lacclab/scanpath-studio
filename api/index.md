@@ -601,4 +601,26 @@ Delete the on-device recovery cache and return its status afterwards.
 
 Removes only the files this app wrote (`manifest.json` and the dataset Parquet files); anything else in the folder is left alone. A *running* local app writes its session back out at the end of its next change — start it with `scanpath-studio run --no-persist` or `SCANPATH_STUDIO_PERSIST=0` to stop that.
 
+## Version and updates
+
+### scanpath_studio.api.version_info
+
+```
+version_info() -> BuildInfo
+```
+
+Which build of Scanpath Studio this is — no network access.
+
+`version` is what `scanpath_studio.__version__` holds: the release itself (`"0.35.0"`), or between releases a PEP 440 version that sorts after it — `"0.35.0.post3+g8f18219"` is three commits after v0.35.0, at commit `8f18219`, and it ends `.dirty` with uncommitted changes. `release` is the release it descends from (`scanpath_studio.__release__`), `distance` the commits since (`None` when unknown), `commit`, `dirty`, and `source` — how it was worked out: `"checkout"` (`git describe`), `"stamp"` (a desktop bundle's build stamp), `"vcs"` (a `pip install git+…`) or `"release"`. `describe()` says it in a sentence. The same is in Help → About and `scanpath-studio version`.
+
+### scanpath_studio.api.check_for_updates
+
+```
+check_for_updates(timeout: float = 5.0) -> UpdateCheck
+```
+
+Ask GitHub whether a newer release than this build is out.
+
+The one call here that uses the network, and only when made: it reads the latest release from `api.github.com` (drafts and pre-releases excluded) and compares it with version_info. It never raises. `status` is `"up_to_date"`, `"update_available"`, `"ahead"` (a development build past the latest release) or `"error"` (offline, no answer within `timeout` seconds, rate-limited, …), and `message` says it in a sentence. With an update available, `command` is the shell command that updates this install (`pip install -U scanpath-studio`, `uv tool upgrade scanpath-studio`, `git pull`, …), `latest.url` the release notes, and in the desktop app `download` the archive for this computer. The same check is Help → About → *Check for updates* and `scanpath-studio version --check`.
+
 For a batch loop, see [Automation](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern). GIF and MP4 export uses `scanpath_studio.animation_export.export_animation` and requires Kaleido plus Chrome, Chromium or Edge.

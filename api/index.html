@@ -1556,6 +1556,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#version-and-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version and updates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Version and updates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.version_info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;version_info
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.check_for_updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_for_updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2385,6 +2424,45 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;clear_cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-and-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version and updates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Version and updates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.version_info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;version_info
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.check_for_updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_for_updates
       
     </span>
   </a>
@@ -4332,6 +4410,69 @@ stop that.</p>
 
     </div>
 
+</div><h2 id="version-and-updates">Version and updates<a class="headerlink" href="#version-and-updates" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.version_info" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.version_info</span>
+
+
+<a href="#scanpath_studio.api.version_info" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">version_info</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><span title="scanpath_studio.build_info.BuildInfo">BuildInfo</span></span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Which build of Scanpath Studio this is — no network access.</p>
+<p><code>version</code> is what <code>scanpath_studio.__version__</code> holds: the release itself
+(<code>"0.35.0"</code>), or between releases a PEP 440 version that sorts after it —
+<code>"0.35.0.post3+g8f18219"</code> is three commits after v0.35.0, at commit
+<code>8f18219</code>, and it ends <code>.dirty</code> with uncommitted changes. <code>release</code> is
+the release it descends from (<code>scanpath_studio.__release__</code>), <code>distance</code>
+the commits since (<code>None</code> when unknown), <code>commit</code>, <code>dirty</code>, and
+<code>source</code> — how it was worked out: <code>"checkout"</code> (<code>git describe</code>),
+<code>"stamp"</code> (a desktop bundle's build stamp), <code>"vcs"</code> (a
+<code>pip install git+…</code>) or <code>"release"</code>. <code>describe()</code> says it in a
+sentence. The same is in Help → About and <code>scanpath-studio version</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.check_for_updates" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.check_for_updates</span>
+
+
+<a href="#scanpath_studio.api.check_for_updates" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">check_for_updates</span><span class="p">(</span><span class="n">timeout</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="scanpath_studio.updates.UpdateCheck">UpdateCheck</span></span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Ask GitHub whether a newer release than this build is out.</p>
+<p>The one call here that uses the network, and only when made: it reads the
+latest release from <code>api.github.com</code> (drafts and pre-releases excluded)
+and compares it with <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.version_info&lt;/span&gt;" href="#scanpath_studio.api.version_info"><code>version_info</code></a>. It
+never raises. <code>status</code> is <code>"up_to_date"</code>, <code>"update_available"</code>,
+<code>"ahead"</code> (a development build past the latest release) or <code>"error"</code>
+(offline, no answer within <code>timeout</code> seconds, rate-limited, …), and
+<code>message</code> says it in a sentence. With an update available, <code>command</code> is
+the shell command that updates this install (<code>pip install -U
+scanpath-studio</code>, <code>uv tool upgrade scanpath-studio</code>, <code>git pull</code>, …),
+<code>latest.url</code> the release notes, and in the desktop app <code>download</code> the
+archive for this computer. The same check is Help → About → <em>Check for
+updates</em> and <code>scanpath-studio version --check</code>.</p>
+
+
+    </div>
+
 </div><p>For a batch loop, see <a href="../automation/#batch-pattern">Automation</a>. GIF and MP4
 export uses
 <code>scanpath_studio.animation_export.export_animation</code> and requires Kaleido plus
@@ -4356,7 +4497,7 @@ Chrome, Chromium or Edge.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 18:08:19 UTC">October 7, 2026</span>
   </span>
 
     

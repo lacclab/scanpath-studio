@@ -241,12 +241,30 @@ scanpath-studio cache --clear    # delete the recovery cache
 
 The same information is at the foot of the **Data Management** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching off wherever it is set, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR` moves the folder. Hosted deployments never cache. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/#what-happens-to-a-file-you-upload).
 
+## Version and updates
+
+`scanpath-studio --version` prints the version. `version` says which build it is and how it was installed; `--check` also asks GitHub whether a newer release is out and prints the command that updates your install — the only time the command uses the network:
+
+```
+scanpath-studio version           # the build, and how it was installed
+scanpath-studio version --check   # …and whether a newer release is out
+```
+
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. The same check is **Help → About → Check for updates** in the app, and `check_for_updates()` in the [API](https://lacclab.github.io/scanpath-studio/api/#version-and-updates).
+
+**Options**
+
+| Option      | Value     | Default | Description                                                           |
+| ----------- | --------- | ------- | --------------------------------------------------------------------- |
+| `--check`   | switch    | —       | Ask GitHub for the latest release and say how to update this install. |
+| `--timeout` | `SECONDS` | `5.0`   | How long to wait for GitHub (default 5).                              |
+
 ## Full reference
 
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.36.0 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.37.0 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)
@@ -263,6 +281,10 @@ usage:
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
+  scanpath-studio version [--check]
+                                   show this build and how it was installed;
+                                   --check asks GitHub whether a newer
+                                   release is out
   scanpath-studio --version        print the version
 
 Unrecognized flags are forwarded to `streamlit run` (e.g.
@@ -457,4 +479,4 @@ SCANPATH_LOCAL_FS=1.
 | `--json`  | switch | —       | Print the status as JSON.        |
 | `--clear` | switch | —       | Delete the recovery cache.       |
 
-`corpus` and `check` are listed in full in their own sections above.
+`corpus`, `check` and `version` are listed in full in their own sections above.

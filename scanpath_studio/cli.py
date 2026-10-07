@@ -885,7 +885,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="fixation_flags",
         action="append",
         metavar="SPEC",
-        help="The app's Flag fixations, repeatable. SPEC is "
+        help="The app's Filters & highlights for fixations, repeatable. SPEC is "
         "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
         "CATEGORY one of short, long, oob (outside every word box), blink and "
         "MODE one of off, highlight, discard — e.g. --fixation-flag "
@@ -1600,7 +1600,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="compare_fixation_flags",
         action="append",
         metavar="SPEC",
-        help="Flag fixations for the SECOND scanpath only, repeatable; "
+        help="Filters & highlights for the SECOND scanpath only, repeatable; "
         "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
         "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
     )

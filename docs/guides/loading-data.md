@@ -63,6 +63,13 @@ each value, say how you know it: measured, estimated from your data, or a
 default. That answer travels with the dataset, so others can tell measured
 values from assumed ones.
 
+Beside them, **Font** asks which typeface the text was shown in. Pick it from
+the list (Courier New, Consolas, Arial, Times New Roman, …) or choose **Other…**
+and type its name. The word labels are then drawn in that font wherever it is
+installed, so they line up with the stimulus letter for letter. **I don't
+know** keeps a generic monospace font, which can draw a few percent narrower.
+The same question is on **Edit dataset**.
+
 ## The Data Management page
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.

@@ -30,6 +30,7 @@ import streamlit as st
 from streamlit.runtime.scriptrunner import StopException
 
 from .constants import ICONS
+from .crash_report import guarded
 
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
@@ -466,6 +467,7 @@ def maybe_show_debug() -> None:
 
 
 @st.dialog(f"{ICONS['debug']} Debug", width="large", position="right")
+@guarded()
 def _debug_dialog() -> None:
     """The Debug drawer: the gate, then — once it is on — the log panel.
 

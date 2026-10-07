@@ -153,6 +153,7 @@ from scanpath_studio.controls import (
     unique_field_labels,
     viz_settings_from_state,
 )
+from scanpath_studio.crash_report import guarded
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
     IDENTITY_SCHEMA_FIELDS,
@@ -1123,6 +1124,7 @@ def maybe_show_about() -> None:
 
 
 @st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
+@guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
     from scanpath_studio import __version__
@@ -5283,6 +5285,7 @@ def _dismiss_delete_confirmation() -> None:
 
 
 @st.dialog("Remove this dataset?", on_dismiss=_dismiss_delete_confirmation)
+@guarded()
 def _delete_confirmation_dialog(
     token: str, *, uploaded: set[str], available: list[str]
 ) -> None:
@@ -5648,6 +5651,7 @@ def _open_mapping_editor() -> None:
 
 
 @st.dialog(f"{ICONS['warning']} Check the Trial ID mapping")
+@guarded()
 def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
     """VAL-9 — VAL-7's verdict, raised where the Trial ID was just chosen.
 
@@ -5941,6 +5945,7 @@ def _dismiss_leave_dataset_editor() -> None:
 
 
 @st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
+@guarded()
 def _leave_dataset_editor_dialog() -> None:
     """Confirm discarding an in-progress edit — the add screen's ✕ Cancel.
 
@@ -6210,6 +6215,7 @@ def _dismiss_unreachable_dataset() -> None:
     f"{ICONS['desktop']} Open it on your own computer",
     on_dismiss=_dismiss_unreachable_dataset,
 )
+@guarded()
 def _unreachable_dataset_dialog(token: str) -> None:
     """Why a public corpus did not open here, and where it does.
 
@@ -6575,6 +6581,7 @@ def dataset_table_scope_note(*, filtered: bool, stand_in_for: str | None) -> str
 
 
 @st.fragment
+@guarded()
 def render_dataset_table(
     host=None,
     *,
@@ -10362,4 +10369,6 @@ def _run_app() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from scanpath_studio.crash_report import run_app
+
+    run_app()

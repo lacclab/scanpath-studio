@@ -36,9 +36,16 @@ released.
   No XML comments in it: `codesign` rejects a `--` inside one).
 - `smoke_test.py` — verifies a built bundle (used by CI and locally).
 - `make_icons.py` → `icons/` — generates the committed app icons.
+- `windows_installer.iss` — the Inno Setup script CI compiles into
+  `ScanpathStudio-windows-x86_64-setup.exe`: a per-user install (no admin) of the
+  same onedir folder into `%LOCALAPPDATA%\Programs\Scanpath Studio`, with a
+  Start-menu entry and an uninstaller. Its `AppId` must never change — it is how
+  a newer installer upgrades an older one. Build it locally on Windows with
+  `ISCC.exe /DAppVersion=<v> /DNumericVersion=<x.y.z> /DSourceDir=<abs path to dist\ScanpathStudio> desktop\windows_installer.iss`.
 
 CI builds all three OSes on `v*` tags / manual dispatch and attaches the
-archives to the GitHub release (`.github/workflows/desktop.yml`).
+archives — plus the Windows installer, which it installs, boots and uninstalls
+first — to the GitHub release (`.github/workflows/desktop.yml`).
 
 **Signing.** One-time credential setup — enrolment, certificate, API key and the
 seven repository secrets — is in [`SIGNING.md`](SIGNING.md).

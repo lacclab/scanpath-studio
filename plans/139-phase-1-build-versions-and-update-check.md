@@ -204,7 +204,9 @@ def test_a_pip_install_from_git_names_its_commit():
             "vcs_info": {"vcs": "git", "commit_id": "8f182193aa11bb22cc33dd44ee55ff66"},
         }
     )
-    info = bi.read_vcs_install("0.35.0", read_text=_dist({"direct_url.json": direct_url}))
+    info = bi.read_vcs_install(
+        "0.35.0", read_text=_dist({"direct_url.json": direct_url})
+    )
     assert info.version == "0.35.0+g8f18219"
     assert (info.source, info.distance, info.commit, info.vcs_url) == (
         "vcs",
@@ -274,9 +276,7 @@ def test_resolve_takes_the_first_source_that_knows(tmp_path):
             "v0.35.0 at 8f18219, with uncommitted changes",
         ),
         (
-            bi.BuildInfo(
-                "0.35.0+g8f18219", "0.35.0", None, "8f18219", source="vcs"
-            ),
+            bi.BuildInfo("0.35.0+g8f18219", "0.35.0", None, "8f18219", source="vcs"),
             "Installed from git at 8f18219, based on v0.35.0",
         ),
     ],
@@ -294,7 +294,11 @@ _RELEASE = bi.BuildInfo("0.35.0", "0.35.0")
         ({"frozen": True}, "desktop"),
         ({"info": bi.from_describe("v0.35.0-3-g8f18219")}, "checkout"),
         (
-            {"info": bi.BuildInfo("0.35.0+gabc1234", "0.35.0", None, "abc1234", source="vcs")},
+            {
+                "info": bi.BuildInfo(
+                    "0.35.0+gabc1234", "0.35.0", None, "abc1234", source="vcs"
+                )
+            },
             "vcs",
         ),
         ({"prefix": "/home/r/.local/share/uv/tools/scanpath-studio"}, "uv-tool"),
@@ -656,7 +660,9 @@ def test_the_release_literal_is_what_builds_and_gates_read():
     assert not re.search(r"^__version__ = ", init, re.MULTILINE)
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'attr = "scanpath_studio.__release__"' in pyproject
-    publish = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+    publish = (ROOT / ".github" / "workflows" / "publish.yml").read_text(
+        encoding="utf-8"
+    )
     assert "s/^__release__ = " in publish
 ```
 
@@ -755,12 +761,11 @@ and in the macOS block change `re.match(r"\d+(?:\.\d+){0,2}", __version__)` to `
 `desktop/launcher.py` `selfcheck()` — make the build visible in CI logs: change the final success line to
 
 ```python
-    from scanpath_studio import __version__
+from scanpath_studio import __version__
 
-    print(
-        f"selfcheck ok: v{__version__}, {len(combos)} trials, "
-        f"figure HTML {len(html)} bytes"
-    )
+print(
+    f"selfcheck ok: v{__version__}, {len(combos)} trials, figure HTML {len(html)} bytes"
+)
 ```
 
 `.github/workflows/desktop.yml`, `build` job, the first step `- uses: actions/checkout@v7` becomes:
@@ -930,7 +935,9 @@ def test_latest_release_reads_githubs_answer():
         (urllib.error.URLError("no route"), "are you offline"),
         (TimeoutError("slow"), "are you offline"),
         (
-            _http_error(403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1791500000"}),
+            _http_error(
+                403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1791500000"}
+            ),
             "limit on checks",
         ),
         (_http_error(404), "no published release"),
@@ -976,7 +983,9 @@ def test_an_update_names_the_command_for_this_install():
 
 
 def test_a_development_build_past_the_release_says_so():
-    result = updates.check_for_updates(latest=_latest("v0.35.0"), info=DEV, kind="checkout")
+    result = updates.check_for_updates(
+        latest=_latest("v0.35.0"), info=DEV, kind="checkout"
+    )
     assert result.message == (
         "Development build — 3 commits after v0.35.0, at 8f18219. "
         "The latest release is v0.35.0."
@@ -1014,10 +1023,15 @@ def test_a_git_install_reinstalls_from_its_own_url():
 
 
 def test_the_desktop_app_gets_its_archive(monkeypatch):
-    monkeypatch.setattr(updates, "desktop_archive", lambda: "ScanpathStudio-macos-arm64.dmg")
+    monkeypatch.setattr(
+        updates, "desktop_archive", lambda: "ScanpathStudio-macos-arm64.dmg"
+    )
     result = updates.check_for_updates(
         latest=_latest(
-            assets=["ScanpathStudio-macos-arm64.dmg", "ScanpathStudio-windows-x86_64.zip"]
+            assets=[
+                "ScanpathStudio-macos-arm64.dmg",
+                "ScanpathStudio-windows-x86_64.zip",
+            ]
         ),
         info=RELEASE,
         kind="desktop",
@@ -1027,7 +1041,9 @@ def test_the_desktop_app_gets_its_archive(monkeypatch):
 
 
 def test_a_desktop_archive_not_yet_uploaded_says_so(monkeypatch):
-    monkeypatch.setattr(updates, "desktop_archive", lambda: "ScanpathStudio-macos-arm64.dmg")
+    monkeypatch.setattr(
+        updates, "desktop_archive", lambda: "ScanpathStudio-macos-arm64.dmg"
+    )
     result = updates.check_for_updates(latest=_latest(), info=RELEASE, kind="desktop")
     assert result.status == "update_available"
     assert result.download is None
@@ -1055,14 +1071,18 @@ def test_desktop_archive_per_computer(system, machine, name):
 
 
 def test_the_archive_names_are_the_ones_desktop_yml_builds():
-    workflow = (ROOT / ".github" / "workflows" / "desktop.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "desktop.yml").read_text(
+        encoding="utf-8"
+    )
     for name in set(updates.DESKTOP_ARCHIVES.values()):
         assert f"archive: {name}" in workflow
 
 
 def test_a_failed_check_is_a_result_not_an_exception():
     def offline():
-        raise updates.UpdateCheckError("Couldn't reach GitHub to check — are you offline?")
+        raise updates.UpdateCheckError(
+            "Couldn't reach GitHub to check — are you offline?"
+        )
 
     result = updates.check_for_updates(latest=offline, info=RELEASE, kind="pip")
     assert (result.status, result.latest) == ("error", None)
@@ -1126,7 +1146,9 @@ DESKTOP_ARCHIVES = {
     ("linux", "x86_64"): "ScanpathStudio-linux-x86_64.tar.gz",
 }
 
-_UNREADABLE = "GitHub sent an answer this version of the app can't read; try again later."
+_UNREADABLE = (
+    "GitHub sent an answer this version of the app can't read; try again later."
+)
 
 
 @dataclass(frozen=True)
@@ -1206,13 +1228,18 @@ def latest_release(
 
 def _http_reason(error: urllib.error.HTTPError) -> str:
     headers = error.headers or {}
-    if error.code in (403, 429) and str(headers.get("X-RateLimit-Remaining", "")) == "0":
+    if (
+        error.code in (403, 429)
+        and str(headers.get("X-RateLimit-Remaining", "")) == "0"
+    ):
         try:
             reset = datetime.fromtimestamp(int(headers.get("X-RateLimit-Reset")))
             when = f" after {reset:%H:%M}"
         except (TypeError, ValueError, OverflowError, OSError):
             when = " later"
-        return f"GitHub's limit on checks from this network is used up; try again{when}."
+        return (
+            f"GitHub's limit on checks from this network is used up; try again{when}."
+        )
     if error.code == 404:
         return "GitHub lists no published release of Scanpath Studio."
     return f"GitHub answered with an error (HTTP {error.code}); try again later."
@@ -1241,7 +1268,9 @@ def _release_from(payload: object) -> Release:
         raise UpdateCheckError(_UNREADABLE) from error
 
 
-def desktop_archive(system: str | None = None, machine: str | None = None) -> str | None:
+def desktop_archive(
+    system: str | None = None, machine: str | None = None
+) -> str | None:
     """This computer's desktop archive name, or ``None`` where there is no build."""
     system = sys.platform if system is None else system
     machine = (platform.machine() if machine is None else machine).lower()
@@ -1428,7 +1457,9 @@ def test_a_failed_version_check_exits_1(capsys, monkeypatch):
     from scanpath_studio import updates
 
     def offline(timeout=5.0):
-        raise updates.UpdateCheckError("Couldn't reach GitHub to check — are you offline?")
+        raise updates.UpdateCheckError(
+            "Couldn't reach GitHub to check — are you offline?"
+        )
 
     monkeypatch.setattr(updates, "latest_release", offline)
     with pytest.raises(SystemExit) as exited:
@@ -1453,7 +1484,9 @@ def test_the_api_reports_the_build_and_checks(monkeypatch):
 
     assert sps.version_info() == build_info()
     assert {"version_info", "check_for_updates"} <= set(sps.__all__)
-    monkeypatch.setattr(updates, "latest_release", lambda timeout=5.0: _latest("v99.0.0")())
+    monkeypatch.setattr(
+        updates, "latest_release", lambda timeout=5.0: _latest("v99.0.0")()
+    )
     result = sps.check_for_updates(timeout=2.0)
     assert result.status == "update_available"
     assert result.latest.version == "99.0.0"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -463,7 +464,8 @@ from pathlib import Path
 state, mode = Path(sys.argv[1]), sys.argv[2]
 with open(state / "launches", "a") as log:
     log.write(f"{os.getpid()}\\n")
-(state / "started").write_text(str(os.getpid()))
+if mode != "silent":
+    (state / "started").write_text(str(os.getpid()))
 if mode == "boot":
     (state / "booted").write_text("")
 else:
@@ -477,7 +479,7 @@ def _dead_pid():
     return proc.pid
 
 
-def _swap_fixture(tmp_path, system, mode, boot_timeout_s=30.0):
+def _swap_fixture(tmp_path, system, mode, boot_timeout_s=30.0, skip_staged=None):
     """An installed v1, a staged v2, and a plan whose relaunch is the fake app."""
     install = _install(tmp_path / "i", system)
     for entry in install.payload:
@@ -487,7 +489,9 @@ def _swap_fixture(tmp_path, system, mode, boot_timeout_s=30.0):
     state = tmp_path / "state"
     staged = state / "staged" / "ScanpathStudio"
     for entry in install.payload:
-        if entry == "_internal":
+        if entry == skip_staged:
+            staged.mkdir(parents=True, exist_ok=True)
+        elif entry == "_internal":
             (staged / entry).mkdir(parents=True)
             (staged / entry / "new.txt").write_text("v2")
         else:
@@ -576,6 +580,107 @@ def test_the_sh_helper_rolls_back_when_the_new_version_never_boots(tmp_path):
         _kill_launched(plan.state)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_puts_the_old_version_back_when_the_swap_fails(tmp_path):
+    # The staged copy lacks `_internal`, so moving the new version in fails.
+    plan = _swap_fixture(tmp_path, "linux", "boot", skip_staged="_internal")
+    try:
+        done = _run_helper(plan, ["/bin/sh"])
+        assert done.returncode == 1
+        root = plan.install.root
+        assert (root / "ScanpathStudio").read_text() == "v1"
+        assert (root / "_internal" / "old.txt").exists()
+        result = du.last_result(state=plan.state)
+        assert result.status == "failed"
+        assert "moved into place" in result.reason
+        assert "could not be put back" not in result.reason
+        # nothing waits on this attempt any more, and the old app is running again
+        assert not (plan.state / du.PENDING).exists()
+        _wait_for(plan.state / "launches")
+        assert len((plan.state / "launches").read_text().split()) == 1
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_stops_a_new_version_that_never_wrote_started(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "silent", boot_timeout_s=2.0)
+    try:
+        done = _run_helper(plan, ["/bin/sh"])
+        assert done.returncode == 1
+        assert (plan.install.root / "ScanpathStudio").read_text() == "v1"
+        assert du.last_result(state=plan.state).status == "rolled_back"
+        first = int((plan.state / "launches").read_text().split()[0])
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                os.kill(first, 0)
+            except OSError:
+                break
+            time.sleep(0.1)
+        with pytest.raises(OSError):
+            os.kill(first, 0)
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_never_nests_into_an_existing_entry(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    # something already sits where the old `_internal` would be moved aside to
+    (plan.state / "old").mkdir()
+    done = subprocess.run(
+        [
+            "/bin/sh",
+            "-c",
+            'ENTRIES="_internal"; ' + _move_all_source() + ' move_all "$1" "$2"',
+            "sh",
+            str(plan.install.root),
+            str(plan.state / "old"),
+        ],
+        check=False,
+    )
+    assert done.returncode == 0  # an empty destination moves fine
+    assert (plan.state / "old" / "_internal" / "old.txt").exists()
+    # now the destination holds one already: a failure, and nothing nested
+    (plan.install.root / "_internal").mkdir()
+    (plan.install.root / "_internal" / "again.txt").write_text("x")
+    done = subprocess.run(
+        [
+            "/bin/sh",
+            "-c",
+            'ENTRIES="_internal"; ' + _move_all_source() + ' move_all "$1" "$2"',
+            "sh",
+            str(plan.install.root),
+            str(plan.state / "old"),
+        ],
+        check=False,
+    )
+    assert done.returncode == 1
+    assert not (plan.state / "old" / "_internal" / "_internal").exists()
+    assert (plan.install.root / "_internal" / "again.txt").exists()
+
+
+def _move_all_source():
+    """The helper's own `move_all` function, lifted out of the template."""
+    text = du._SH_HELPER
+    start = text.index("move_all() {")
+    return text[start : text.index("\n}\n", start) + 3]
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+def test_the_powershell_helper_puts_the_old_version_back_when_the_swap_fails(tmp_path):
+    plan = _swap_fixture(tmp_path, "win32", "boot", skip_staged="_internal")
+    try:
+        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        assert done.returncode == 1
+        assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v1"
+        assert du.last_result(state=plan.state).status == "failed"
+        assert not (plan.state / du.PENDING).exists()
+    finally:
+        _kill_launched(plan.state)
+
+
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
 def test_the_powershell_helper_swaps_relaunches_and_cleans_up(tmp_path):
     plan = _swap_fixture(tmp_path, "win32", "boot")
@@ -615,6 +720,29 @@ def test_the_powershell_helper_quotes_awkward_paths(tmp_path):
     text = du.helper_script(plan)
     assert "it''s a dir" in text
     assert du.UNINSTALL_KEY in text
+
+
+def test_a_plan_that_cannot_make_a_script_leaves_no_attempt(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    (plan.state / du.PENDING).unlink()
+    bad = du.SwapPlan(**{**plan.__dict__, "version": '1"; rm -rf /'})
+    started = []
+    with pytest.raises(du.UpdateFailed):
+        du.start_swap(bad, popen=lambda *a, **k: started.append(a))
+    assert not (plan.state / du.PENDING).exists()
+    assert not started
+
+
+def test_windows_runs_the_helper_as_an_encoded_command(tmp_path):
+    script = tmp_path / "helper.ps1"
+    text = "Write-Output 'caf\u00e9'\n"
+    script.write_text(text, encoding="utf-8-sig")
+    argv = du.helper_command(script, "win32")
+    assert argv[0] == "powershell.exe"
+    assert "-File" not in argv and "-ExecutionPolicy" not in argv
+    assert argv[-2] == "-EncodedCommand"
+    decoded = base64.b64decode(argv[-1]).decode("utf-16-le")
+    assert decoded == text and not decoded.startswith("\ufeff")
 
 
 def test_helper_versions_must_be_plain(tmp_path):

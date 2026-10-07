@@ -21,6 +21,7 @@ Everything before step 5 leaves the install untouched. Stdlib and
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import http.client
 import json
@@ -631,6 +632,7 @@ BOOT_TICKS=@@BOOT_TICKS@@
 BOOT_TIMEOUT=@@BOOT_TIMEOUT@@
 VERSION=@@VERSION@@
 PREVIOUS=@@PREVIOUS@@
+LAUNCHED_PID=""
 
 result() {
   printf '{"status": "%s", "version": "%s", "previous": "%s", "reason": "%s", "pid": %s}\n' \
@@ -638,15 +640,27 @@ result() {
     mv -f "$STATE/result.json.tmp" "$STATE/result.json"
 }
 
+# On macOS $! is the short-lived `open`, which is harmless to kill later.
 relaunch() {
   nohup @@RELAUNCH@@ >/dev/null 2>&1 &
+  LAUNCHED_PID=$!
 }
 
-# Move every entry from $1 to $2; on a failure put back what moved.
+# The old version is (or is not) in place and the attempt is over: say so,
+# forget the attempt so the app does not report in for nobody, start it again.
+give_up() {
+  result failed "$1"
+  rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted"
+  relaunch
+  exit 1
+}
+
+# Move every entry from $1 to $2; on a failure put back what moved. An entry
+# that already exists at the destination is a failure, never nested into.
 move_all() {
   moved=""
   for entry in $ENTRIES; do
-    if mv "$1/$entry" "$2/$entry"; then
+    if [ ! -e "$2/$entry" ] && mv "$1/$entry" "$2/$entry"; then
       moved="$moved $entry"
     else
       for back in $moved; do mv "$2/$back" "$1/$back"; done
@@ -668,20 +682,16 @@ done
 rm -rf "$STATE/old" "$STATE/failed"
 rm -f "$STATE/started" "$STATE/booted"
 if ! mkdir "$STATE/old" "$STATE/failed"; then
-  result failed "the update folder could not be prepared"
-  relaunch
-  exit 1
+  give_up "the update folder could not be prepared"
 fi
 if ! move_all "$ROOT" "$STATE/old"; then
-  result failed "the old version could not be moved aside"
-  relaunch
-  exit 1
+  give_up "the old version could not be moved aside"
 fi
 if ! move_all "$NEW" "$ROOT"; then
-  move_all "$STATE/old" "$ROOT"
-  result failed "the new version could not be moved into place"
-  relaunch
-  exit 1
+  if move_all "$STATE/old" "$ROOT"; then
+    give_up "the new version could not be moved into place"
+  fi
+  give_up "the new version could not be moved into place, and the old one could not be put back"
 fi
 touch "$ROOT"
 relaunch
@@ -690,20 +700,33 @@ ticks=0
 while [ ! -e "$STATE/booted" ]; do
   if [ "$ticks" -ge "$BOOT_TICKS" ]; then
     new_pid=$(cat "$STATE/started" 2>/dev/null)
+    # A version that hung before writing `started` is still the process we launched.
+    [ -n "$new_pid" ] || new_pid=$LAUNCHED_PID
     if [ -n "$new_pid" ]; then
       kill "$new_pid" 2>/dev/null
       sleep 2
       kill -9 "$new_pid" 2>/dev/null
     fi
     rm -f "$STATE/@@PENDING@@" "$STATE/started"
-    if move_all "$ROOT" "$STATE/failed" && move_all "$STATE/old" "$ROOT"; then
-      result rolled_back "the new version did not start within $BOOT_TIMEOUT seconds"
+    cleanup=1
+    if move_all "$ROOT" "$STATE/failed"; then
+      if move_all "$STATE/old" "$ROOT"; then
+        result rolled_back "the new version did not start within $BOOT_TIMEOUT seconds"
+      else
+        # Never leave the install empty, and keep the new version's files.
+        move_all "$STATE/failed" "$ROOT"
+        result failed "the new version did not start, and the old one could not be put back"
+        cleanup=0
+      fi
     else
-      result failed "the new version did not start, and the old one could not be put back"
+      result failed "the new version did not start, and could not be removed"
+      cleanup=0
     fi
     touch "$ROOT"
     relaunch
-    rm -rf "$STATE/failed" "$STATE/staged" "$STATE/download"
+    if [ "$cleanup" = 1 ]; then
+      rm -rf "$STATE/old" "$STATE/failed" "$STATE/staged" "$STATE/download"
+    fi
     exit 1
   fi
   sleep 0.5
@@ -732,6 +755,7 @@ $Previous = @@PREVIOUS@@
 $Relaunch = @(@@RELAUNCH@@)
 $UninstallKey = @@UNINSTALL_KEY@@
 $Pending = @@PENDING@@
+$script:Launched = $null
 
 function Write-Result($Status, $Reason, $NewPid) {
   $record = [ordered]@{ status = $Status; version = $Version; previous = $Previous; reason = $Reason; pid = $NewPid }
@@ -740,13 +764,26 @@ function Write-Result($Status, $Reason, $NewPid) {
   Move-Item -LiteralPath $tmp -Destination (Join-Path $State 'result.json') -Force
 }
 
+# Keeps the started process, for the rollback of a version that never wrote
+# `started`; assigned, so nothing reaches the pipeline.
 function Start-App {
   $rest = @($Relaunch | Select-Object -Skip 1 | ForEach-Object { '"' + $_ + '"' })
   if ($rest.Count) {
-    Start-Process -FilePath $Relaunch[0] -ArgumentList $rest -WorkingDirectory $Root
+    $script:Launched = Start-Process -FilePath $Relaunch[0] -ArgumentList $rest -WorkingDirectory $Root -PassThru
   } else {
-    Start-Process -FilePath $Relaunch[0] -WorkingDirectory $Root
+    $script:Launched = Start-Process -FilePath $Relaunch[0] -WorkingDirectory $Root -PassThru
   }
+}
+
+# The old version is (or is not) in place and the attempt is over: say so,
+# forget the attempt so the app does not report in for nobody, start it again.
+function Stop-Update($Reason) {
+  Write-Result 'failed' $Reason $null
+  foreach ($name in $Pending, 'started', 'booted') {
+    Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
+  }
+  Start-App
+  exit 1
 }
 
 # Move every entry from $From to $To, retrying while antivirus holds a file;
@@ -788,22 +825,24 @@ if ($app -and -not $app.WaitForExit($QuitTimeoutMs)) {
 
 foreach ($name in 'old', 'failed') {
   $path = Join-Path $State $name
-  if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
-  New-Item -ItemType Directory -Path $path | Out-Null
+  try {
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop }
+    [IO.Directory]::CreateDirectory($path) | Out-Null
+  } catch {
+    Stop-Update 'the update folder could not be prepared'
+  }
 }
 foreach ($name in 'started', 'booted') {
   Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
 }
 if (-not (Move-All $Root (Join-Path $State 'old'))) {
-  Write-Result 'failed' 'the old version could not be moved aside' $null
-  Start-App
-  exit 1
+  Stop-Update 'the old version could not be moved aside'
 }
 if (-not (Move-All $New $Root)) {
-  Move-All (Join-Path $State 'old') $Root | Out-Null
-  Write-Result 'failed' 'the new version could not be moved into place' $null
-  Start-App
-  exit 1
+  if (Move-All (Join-Path $State 'old') $Root) {
+    Stop-Update 'the new version could not be moved into place'
+  }
+  Stop-Update 'the new version could not be moved into place, and the old one could not be put back'
 }
 Start-App
 
@@ -811,19 +850,32 @@ $ticks = 0
 while (-not (Test-Path -LiteralPath (Join-Path $State 'booted'))) {
   if ($ticks -ge $BootTicks) {
     $newPid = Read-NewPid
+    # A version that hung before writing `started` is still the process we launched.
+    if (-not $newPid -and $script:Launched) { $newPid = $script:Launched.Id }
     if ($newPid) {
       Stop-Process -Id $newPid -Force -ErrorAction SilentlyContinue
       Start-Sleep -Seconds 2
     }
     Remove-Item -LiteralPath (Join-Path $State $Pending), (Join-Path $State 'started') -Force -ErrorAction SilentlyContinue
-    if ((Move-All $Root (Join-Path $State 'failed')) -and (Move-All (Join-Path $State 'old') $Root)) {
-      Write-Result 'rolled_back' "the new version did not start within $BootTimeout seconds" $null
+    $cleanup = $true
+    if (Move-All $Root (Join-Path $State 'failed')) {
+      if (Move-All (Join-Path $State 'old') $Root) {
+        Write-Result 'rolled_back' "the new version did not start within $BootTimeout seconds" $null
+      } else {
+        # Never leave the install empty, and keep the new version's files.
+        Move-All (Join-Path $State 'failed') $Root | Out-Null
+        Write-Result 'failed' 'the new version did not start, and the old one could not be put back' $null
+        $cleanup = $false
+      }
     } else {
-      Write-Result 'failed' 'the new version did not start, and the old one could not be put back' $null
+      Write-Result 'failed' 'the new version did not start, and could not be removed' $null
+      $cleanup = $false
     }
     Start-App
-    foreach ($name in 'failed', 'staged', 'download') {
-      Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
+    if ($cleanup) {
+      foreach ($name in 'old', 'failed', 'staged', 'download') {
+        Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
+      }
     }
     exit 1
   }
@@ -902,18 +954,26 @@ def helper_script(plan: SwapPlan) -> str:
 
 
 def helper_command(script: Path, system: str) -> list[str]:
-    """How to run the helper script on ``system``."""
+    """How to run the helper script on ``system``.
+
+    On Windows the script travels as ``-EncodedCommand`` (its text in
+    UTF-16-LE, base64): Group Policy can set an execution policy that
+    refuses ``-File`` scripts, and ``-ExecutionPolicy Bypass`` does not
+    override a policy set by Group Policy, whereas the policy does not apply
+    to ``-EncodedCommand``. The ~5 KB script stays far under the 32,767
+    character command-line limit.
+    """
     if system == "win32":
+        text = script.read_text(encoding="utf-8-sig")
+        encoded = base64.b64encode(text.encode("utf-16-le")).decode("ascii")
         return [
             "powershell.exe",
             "-NoProfile",
             "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
             "-WindowStyle",
             "Hidden",
-            "-File",
-            str(script),
+            "-EncodedCommand",
+            encoded,
         ]
     return ["/bin/sh", str(script)]
 
@@ -922,23 +982,13 @@ def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
     """Record the attempt and start the helper, detached; the caller then exits.
 
     The helper's output goes to ``helper.log`` in the state folder, which
-    stays after the attempt for a bug report.
+    stays after the attempt for a bug report. The script is written first and
+    the attempt recorded after it, so nothing that can fail is left behind
+    as an attempt "already under way".
     """
     pending = plan.state / PENDING
-    _write_json(
-        pending,
-        {
-            "root": str(plan.install.root),
-            "version": plan.version,
-            "previous": plan.previous,
-            "at": time.time(),
-        },
-    )
     windows = plan.install.system == "win32"
     script = plan.state / ("helper.ps1" if windows else "helper.sh")
-    # Windows PowerShell 5.1 reads a file without a BOM in the ANSI code page,
-    # which would garble a non-ASCII user folder.
-    script.write_text(helper_script(plan), encoding="utf-8-sig" if windows else "utf-8")
     if windows:
         flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200
@@ -947,6 +997,20 @@ def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
     else:
         detach = {"start_new_session": True}
     try:
+        # With a BOM: a human running helper.ps1 to diagnose it gets the same
+        # reading in Windows PowerShell 5.1, which assumes the ANSI code page.
+        script.write_text(
+            helper_script(plan), encoding="utf-8-sig" if windows else "utf-8"
+        )
+        _write_json(
+            pending,
+            {
+                "root": str(plan.install.root),
+                "version": plan.version,
+                "previous": plan.previous,
+                "at": time.time(),
+            },
+        )
         with open(plan.state / "helper.log", "w", encoding="utf-8") as log:
             popen(
                 helper_command(script, plan.install.system),
@@ -956,7 +1020,7 @@ def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
                 env=child_env(),
                 **detach,
             )
-    except OSError as error:
+    except (OSError, ValueError) as error:
         pending.unlink(missing_ok=True)
         raise UpdateFailed(
             "The helper that swaps the versions couldn't be started."

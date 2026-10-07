@@ -1023,9 +1023,12 @@ SELECTOR_ROW_TRIO = [
 #: nominal, like the actions track's.
 SELECTOR_SCREEN_TRACK = 1.0
 
-#: The screen track's minimum width, in rem: a ~7rem dropdown beside the
-#: ~5rem ◀ ▶ pair.
-SELECTOR_SCREEN_FLOOR_REM = 12.5
+#: The screen track's minimum width, in rem: a ~7rem dropdown beside its
+#: ~5rem ◀ ▶ pair, then the row's ⇅ 🔎 ✏️ (~10rem, measured 160px), which follow it.
+SELECTOR_SCREEN_FLOOR_REM = 24.5
+
+#: With a screen track, the actions track keeps only ◀ ▶: its floor, in rem.
+SELECTOR_STEPS_FLOOR_REM = 5.2
 
 #: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
 #: is a single wide element rather than dataset + pick + scrub. Kept for

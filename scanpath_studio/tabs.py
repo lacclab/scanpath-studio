@@ -344,7 +344,7 @@ from scanpath_studio.similarity import (
     nld_by_fixation_index,
     nld_by_time,
 )
-from scanpath_studio.styles import mapping_menu_css
+from scanpath_studio.styles import mapping_menu_css, widen_menu
 from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
     COMPARE_OPTIONS_SNAPSHOT_KEY,
@@ -363,6 +363,7 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     qualified_participant,
     qualify_for_compare,
+    row_tail,
     safe_summary,
     select_trial,
     self_compare_participant,
@@ -478,6 +479,8 @@ def _render_screen_navigator(
         format_func=labels.get,
         help="Each screen is drawn on its own; the trial stays selected.",
     )
+    # Narrow, but its menu opens as wide as the longest screen name.
+    widen_menu(id_key, labels.values())
     # Both steps in ONE keyed `railbtn_*` container, so they take the pill
     # shape and 3px spacing of the ◀ ▶ ⇅ cluster beside them (UX-27).
     trail = cell.container(key=f"railbtn_{key_prefix}_screen_trail", width="content")
@@ -2544,6 +2547,15 @@ def _render_compare_dataset_cell(
         help="The dataset scanpath B comes from. Other datasets keep their own "
         "screen geometry.",
     )
+    widen_menu(
+        COMPARE_SOURCE_KEY,
+        [
+            _dataset_label(name)
+            if ready_by_name.get(name, True)
+            else f"{_dataset_label(name)} (needs setup)"
+            for name in names
+        ],
+    )
 
 
 def _compare_label_display(
@@ -2806,10 +2818,20 @@ def _render_compare_selector(
         lead_col, sel_col, trail_col, *extra = st.columns(
             SELECTOR_ROW_TRIO + extra_track, vertical_alignment="bottom"
         )
-    if extra and screen_cells is not None:
-        screen_cells["b"] = extra[0].container(key="tour_grp_compare_screen_picker")
+    menus = None
+    if extra:
+
+        def _reserve(host) -> None:
+            if screen_cells is not None:
+                screen_cells["b"] = host.container(key="tour_grp_compare_screen_picker")
+
+        menus = row_tail(extra[0], "single_compare", _reserve)
     _render_compare_dataset_cell(lead_col, names, ready_by_name)
-    trail = trail_col.container(key="railbtn_single_compare_trail")
+    trail = trail_col.container(
+        key=f"railbtn_single_compare_trail{'_steps' if menus else ''}"
+    )
+    # ⇅ and the filter close the row after B's screen cell when there is one.
+    cluster = trail if menus is None else menus
     # CMP-6: candidate sorting is visually LAST in the row, after the step
     # buttons. It still executes before the selectbox/slider below, so a change
     # applies to their list on the same run. CMP-10 mirrors the main trial
@@ -2824,12 +2846,12 @@ def _render_compare_selector(
         # popover has to run first because its result is the list the selectbox,
         # the slider and the ◀ ▶ steps all walk.
         step_col = trail.container(key="railbtn_single_compare_step")
-        sort_col = trail.container(key="railbtn_single_compare_sort")
+        sort_col = cluster.container(key="railbtn_single_compare_sort")
     # B always has its own filter set. For "This dataset" it starts from the
     # unfiltered active frames, so narrowing B never changes scanpath A.
     if filter_source is not None:
         _render_compare_filters(
-            trail.container(key="railbtn_single_compare_filter"), filter_source
+            cluster.container(key="railbtn_single_compare_filter"), filter_source
         )
     if source_notice:
         st.caption(source_notice)
@@ -3069,6 +3091,7 @@ def _render_compare_selector(
             )
         ),
     )
+    widen_menu(sel_key, [label_display.get(v, v) for v in labels])
     if n > 1:
         with slider_col:
             st.select_slider(

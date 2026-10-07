@@ -278,7 +278,7 @@ from scanpath_studio.session_keys import (
     PARAM_CORPUS,
     PARAM_DATASET,
 )
-from scanpath_studio.styles import get_app_css
+from scanpath_studio.styles import get_app_css, widen_menu
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
     _REMAP_DIRTY_KEY,
@@ -5240,6 +5240,8 @@ def render_data_source_picker(host=None) -> None:
         key="data_source_picker",
         on_change=_on_data_source_pick,
     )
+    # The menu opens as wide as the longest dataset name.
+    widen_menu("data_source_picker", [_entry_label(entry) for entry in entries])
     # The help icon sits in the label row, right-aligned over +, not beside the
     # label: the bottom-aligned row keeps + level with the picker, so the icon
     # lands on the label's line.

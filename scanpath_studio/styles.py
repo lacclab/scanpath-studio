@@ -6,6 +6,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
     SELECTOR_SCREEN_FLOOR_REM,
+    SELECTOR_STEPS_FLOOR_REM,
 )
 
 
@@ -1150,26 +1151,27 @@ def get_app_css() -> str:
             > [data-testid="stLayoutWrapper"] > [class*="st-key-railbtn_"]) {
             min-width: __SELECTOR_FLOOR_3__;
         }
-        /* The screen cell at a trial row's right end (`SELECTOR_SCREEN_TRACK`):
-           a narrow dropdown + ◀ ▶, held at its floor. */
+        /* A trial row with a screen cell splits its actions: ◀ ▶ stay by the
+           slider on a narrow track of their own, and the row's last track
+           (`SELECTOR_SCREEN_TRACK`) holds the screen dropdown + ◀ ▶ followed by
+           ⇅ 🔎 ✏️ (`utils.row_tail`). Both tracks keep the same floor on A's
+           row and B's, so the two rows line up. Later than the actions floor
+           above, which they override. */
         [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]
-            > [data-testid="stLayoutWrapper"] > [class*="tour_grp_"][class*="screen_picker"]) {
+            > [data-testid="stLayoutWrapper"] > [class*="_trail_steps"]) {
+            min-width: __SELECTOR_STEPS_FLOOR__;
+        }
+        [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > [class*="_row_tail"]) {
             min-width: __SELECTOR_SCREEN_FLOOR__;
         }
     }
-    /* The screen dropdown is narrow, and its menu opens wider than it, so a
-       screen's whole name is read there. The menu is portalled to <body>, out
-       of reach of an ancestor selector (see `mapping_menu_css`), so the rule
-       keys on the open combobox instead: only one menu is open at a time, and
-       it is this one while a screen picker's input is expanded. */
-    body:has([class*="_screen_cell"] [aria-expanded="true"])
-        div:has(> [role="listbox"]) {
-        width: max(var(--trigger-width, 7rem), 16rem) !important;
-        max-width: 92vw !important;
+    [class*="_row_tail"] {
+        flex-wrap: nowrap !important;
     }
-    body:has([class*="_screen_cell"] [aria-expanded="true"])
-        div:has(> [role="listbox"]) [role="option"] {
-        white-space: nowrap;
+    [class*="_row_tail"] > [data-testid="stLayoutWrapper"]:has([class*="screen_picker"]) {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
     }
     /* Its own control keeps the label and value on one line; the value
        ellipsises rather than wrapping the cell taller. */
@@ -2353,8 +2355,44 @@ def get_app_css() -> str:
     """
     for i in (0, 1, 3):
         css = css.replace(f"__SELECTOR_FLOOR_{i}__", selector_track_floor(i))
-    css = css.replace("__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem")
+    css = css.replace(
+        "__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem"
+    ).replace("__SELECTOR_STEPS_FLOOR__", f"{SELECTOR_STEPS_FLOOR_REM}rem")
     return css
+
+
+def menu_width_css(widget_key: str, labels) -> str:
+    """Open ``widget_key``'s dropdown as wide as its longest option.
+
+    The menu is portalled to ``<body>`` and virtualized (see
+    `mapping_menu_css`), so it cannot size itself to its content; it is given
+    a width from the labels instead, never narrower than the control and never
+    wider than the window. The rule keys on the open combobox: one menu is open
+    at a time, and while this widget's input is expanded the menu is its own.
+    """
+    longest = max((len(str(label)) for label in labels), default=0)
+    if not longest:
+        return ""
+    # ~0.58em a character in the app's sans, plus the menu's padding.
+    want = f"{longest * 0.58 + 2.5:.1f}em"
+    scope = f'body:has(.st-key-{widget_key} [aria-expanded="true"])'
+    menu = 'div:has(> [role="listbox"])'
+    return (
+        f"<style>{scope} {menu} {{"
+        f" width: max(var(--trigger-width, 0px), min({want}, 92vw)) !important;"
+        " max-width: 92vw !important; }"
+        f' {scope} {menu} [role="option"] {{ white-space: nowrap; }}</style>'
+    )
+
+
+def widen_menu(widget_key: str, labels) -> None:
+    """Inject `menu_width_css` for ``widget_key`` (a style-only `st.html`,
+    which takes no room in the layout)."""
+    import streamlit as st
+
+    css = menu_width_css(widget_key, labels)
+    if css:
+        st.html(css)
 
 
 def selector_track_floor(index: int) -> str:

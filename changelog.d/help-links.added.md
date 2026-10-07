@@ -1,1 +1,0 @@
-Help → About links to Discussions → Q&A for questions and to the bug-report form, and the FAQ says where to ask, how to report a bug, and that a 0.x release may change links, settings, the API and the CLI.

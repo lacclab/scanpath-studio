@@ -1,1 +1,0 @@
-Questions, answers and context fields in Stimulus & Context are shown as the literal text in the data: Markdown, links, images and HTML in a value no longer format the panel or make the browser fetch a remote image.

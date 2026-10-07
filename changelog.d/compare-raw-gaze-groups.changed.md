@@ -1,1 +1,0 @@
-In Compare, the Raw gaze popover now has a Scanpath A and a Scanpath B group, each with its own sample colour (the new raw_gaze_color style key, also on the Share link, CLI --style-a/--style-b and the API).

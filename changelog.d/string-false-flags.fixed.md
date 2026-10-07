@@ -1,1 +1,0 @@
-Span and answer flags written as the text "False" now read as false: false span rows are no longer highlighted or counted as fixated, an incorrect answer no longer shows as correct, and a true/false filter keeps both of its classes.

@@ -1300,6 +1300,7 @@ def saved_items(status: dict) -> list[str]:
 
 
 @st.dialog(f"{ICONS['delete']} Clear what is saved?")
+@guarded()
 def _clear_saved_dialog(app_url: str) -> None:
     """Confirm *Clear what is saved…*, listing what it deletes (#374 F33)."""
     st.markdown(

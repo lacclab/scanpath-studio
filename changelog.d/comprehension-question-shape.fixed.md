@@ -1,1 +1,0 @@
-A comprehension_questions value of the wrong shape (an object, nulls, nested values) no longer crashes the trial: unreadable records are skipped with one warning, and the Stimulus & Context tab now renders only while it is open.

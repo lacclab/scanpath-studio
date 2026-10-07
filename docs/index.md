@@ -29,25 +29,39 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
   <source src="assets/app_demo.mp4" type="video/mp4">
 </video>
 
-## Start with your task
+## With Scanpath Studio you can
 
 <div class="grid cards" markdown>
 
-- :material-clipboard-pulse:{ .lg .middle } **[Check data collection](tutorials/data-collection.md)**
+- :material-clipboard-pulse:{ .lg .middle } **[Run better data collection](tutorials/data-collection.md)**
 
-    Review a pilot or session for calibration, setup, and recording problems.
+    Pilot your eye tracker, software, and stimulus layout (font, spacing)
+    before you commit. Catch calibration and setup problems that only show up
+    in a plot, and train new experimenters to spot issues such as frequent
+    blinking, or check their sessions as you supervise.
 
-- :material-filter:{ .lg .middle } **[Filter data](tutorials/data-filtering.md)**
+- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection.md#4-record-the-decision)**
 
-    Find unsuitable trials, annotate decisions, and keep the analysis pool.
+    Mark trials or whole sessions for exclusion, and decide whether you need
+    to collect more. Check that fixation detection and line assignment hold up
+    on this dataset by viewing fixations against the raw gaze and word boxes.
+
+- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](tutorials/data-filtering.md)**
+
+    Exclude or flag poorly calibrated, skimming, or non-reading trials, and
+    trials with out-of-bounds, very short, or very long fixations. Find the
+    trials a specific analysis needs, such as those with many blinks.
 
 - :material-file-export:{ .lg .middle } **[Export figures](tutorials/exporting-figures.md)**
 
-    Produce one publication figure or export a consistent batch.
+    Produce one polished figure for a paper or talk, or bulk-export every
+    trial consistently, for example as training data for models that
+    generate scanpaths on images.
 
-- :material-chart-box:{ .lg .middle } **[Analyze a corpus](tutorials/corpus-analysis.md)**
+- :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis.md)**
 
-    Compare texts, participants, conditions, or groups and download the result.
+    Compare model-generated scanpaths with human ones, and contrast groups,
+    conditions, and sessions over time.
 
 </div>
 

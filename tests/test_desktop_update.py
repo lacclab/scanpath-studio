@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
+import shutil
 import subprocess
+import tarfile
 import time
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from scanpath_studio import desktop_update as du
-from scanpath_studio import updates
+from scanpath_studio import progress, updates
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -236,3 +241,215 @@ def test_feed_release_reads_githubs_shape(tmp_path):
     assert release.asset("a.zip").digest == "sha256:ab"
     with pytest.raises(updates.UpdateCheckError):
         du.feed_release(tmp_path / "missing.json")
+
+
+def _asset(data: bytes, *, url=None, digest=None):
+    return updates.Asset(
+        "ScanpathStudio-linux-x86_64.tar.gz",
+        url or f"{du.REPO_DOWNLOADS}v99.0.0/ScanpathStudio-linux-x86_64.tar.gz",
+        len(data),
+        digest if digest is not None else "sha256:" + hashlib.sha256(data).hexdigest(),
+    )
+
+
+def _serving(data: bytes):
+    seen = []
+
+    def opener(request, timeout):
+        seen.append(request.full_url)
+        return io.BytesIO(data)
+
+    opener.seen = seen
+    return opener
+
+
+def test_download_checks_the_digest(tmp_path):
+    data = b"x" * (3 * du.CHUNK + 5)
+    path = du.download(_asset(data), tmp_path, opener=_serving(data))
+    assert path.read_bytes() == data
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_a_download_that_does_not_match_is_thrown_away(tmp_path):
+    data = b"payload"
+    with pytest.raises(du.UpdateFailed, match="doesn't match"):
+        du.download(
+            _asset(data, digest="sha256:" + "0" * 64), tmp_path, opener=_serving(data)
+        )
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("digest", ["", "md5:abc", "sha256:"])
+def test_a_download_without_a_sha256_is_refused(tmp_path, digest):
+    with pytest.raises(du.UpdateFailed, match="checksum"):
+        du.download(_asset(b"x", digest=digest), tmp_path, opener=_serving(b"x"))
+
+
+def test_only_the_projects_own_releases_are_fetched(tmp_path):
+    opener = _serving(b"x")
+    with pytest.raises(du.UpdateFailed, match="own releases"):
+        du.download(
+            _asset(b"x", url="https://evil.test/a.tar.gz"), tmp_path, opener=opener
+        )
+    with pytest.raises(du.UpdateFailed, match="own releases"):
+        du.download(_asset(b"x", url="file:///etc/passwd"), tmp_path, opener=opener)
+    assert opener.seen == []
+
+
+def test_the_feed_may_serve_a_local_file(tmp_path):
+    source = tmp_path / "src.tar.gz"
+    source.write_bytes(b"local")
+    asset = _asset(b"local", url=source.as_uri())
+    path = du.download(asset, tmp_path / "dl", allow_file=True)
+    assert path.read_bytes() == b"local"
+
+
+def test_a_dropped_download_is_an_update_failure(tmp_path):
+    def opener(request, timeout):
+        raise OSError("connection reset")
+
+    with pytest.raises(du.UpdateFailed, match="stopped"):
+        du.download(_asset(b"x"), tmp_path, opener=opener)
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_a_cancelled_download_leaves_nothing(tmp_path):
+    data = b"x" * (2 * du.CHUNK)
+    with progress.task(("test", "update"), title="Updating") as task:
+        task.cancel()
+        with pytest.raises(progress.Cancelled):
+            du.download(_asset(data), tmp_path, opener=_serving(data))
+    assert not list(tmp_path.iterdir())
+
+
+def _zip(path, members):
+    with zipfile.ZipFile(path, "w") as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    return path
+
+
+def _tar(path, members):
+    with tarfile.open(path, "w:gz") as tf:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            info.mode = 0o755
+            tf.addfile(info, io.BytesIO(data))
+    return path
+
+
+def test_stage_unpacks_the_windows_zip(tmp_path):
+    install = _install(tmp_path / "i", "win32")
+    archive = _zip(
+        tmp_path / "a.zip",
+        {"ScanpathStudio/ScanpathStudio.exe": b"v2", "ScanpathStudio/_internal/x": b""},
+    )
+    root = du.stage(archive, tmp_path / "state", install)
+    assert root == tmp_path / "state" / "staged" / "ScanpathStudio"
+    assert (root / "ScanpathStudio.exe").read_bytes() == b"v2"
+
+
+def test_stage_unpacks_the_linux_tarball_keeping_the_executable_bit(tmp_path):
+    install = _install(tmp_path / "i", "linux")
+    archive = _tar(
+        tmp_path / "a.tar.gz",
+        {"ScanpathStudio/ScanpathStudio": b"v2", "ScanpathStudio/_internal/x": b""},
+    )
+    root = du.stage(archive, tmp_path / "state", install)
+    assert (root / "ScanpathStudio").stat().st_mode & 0o100
+
+
+def test_a_tarball_reaching_outside_is_refused(tmp_path):
+    install = _install(tmp_path / "i", "linux")
+    archive = _tar(tmp_path / "a.tar.gz", {"../evil": b"x"})
+    with pytest.raises(du.UpdateFailed, match="unpacked"):
+        du.stage(archive, tmp_path / "state", install)
+
+
+def test_an_archive_without_the_app_is_refused(tmp_path):
+    install = _install(tmp_path / "i", "win32")
+    archive = _zip(tmp_path / "a.zip", {"something/else.txt": b""})
+    with pytest.raises(du.UpdateFailed, match="doesn't contain"):
+        du.stage(archive, tmp_path / "state", install)
+
+
+class _FakeMac:
+    """`subprocess.run` for the macOS staging tools, over real temp folders."""
+
+    def __init__(self, *, staged_team="T1", running_team="T1", spctl=0):
+        self.calls = []
+        self.teams = {"staged": staged_team, "running": running_team}
+        self.spctl = spctl
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append(argv)
+        tool = argv[0]
+        if argv[:2] == ["hdiutil", "attach"]:
+            mount = Path(argv[argv.index("-mountpoint") + 1])
+            exe = mount / "ScanpathStudio.app" / "Contents" / "MacOS" / "ScanpathStudio"
+            exe.parent.mkdir(parents=True)
+            exe.write_text("v2")
+        elif tool == "ditto":
+            shutil.copytree(argv[1], argv[2])
+        elif argv[:2] == ["codesign", "-dv"]:
+            which = "staged" if "staged" in argv[-1] else "running"
+            team = self.teams[which]
+            line = f"TeamIdentifier={team}" if team else "TeamIdentifier=not set"
+            return subprocess.CompletedProcess(argv, 0, "", line + "\n")
+        elif tool == "spctl":
+            return subprocess.CompletedProcess(argv, self.spctl, "", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    def ran(self, *prefix):
+        return any(call[: len(prefix)] == list(prefix) for call in self.calls)
+
+
+def test_stage_copies_the_app_out_of_the_dmg_and_checks_it(tmp_path):
+    install = _install(tmp_path / "i", "darwin")
+    fake = _FakeMac()
+    root = du.stage(tmp_path / "a.dmg", tmp_path / "state", install, run=fake)
+    assert root == tmp_path / "state" / "staged" / "ScanpathStudio.app"
+    assert (root / "Contents" / "MacOS" / "ScanpathStudio").read_text() == "v2"
+    assert fake.ran("codesign", "--verify", "--deep", "--strict")
+    assert fake.ran("spctl", "--assess", "--type", "exec")
+    assert fake.ran("hdiutil", "detach")
+
+
+@pytest.mark.parametrize(
+    ("fake", "says"),
+    [
+        (lambda: _FakeMac(staged_team="OTHER"), "same developers"),
+        (lambda: _FakeMac(spctl=3), "Gatekeeper"),
+    ],
+)
+def test_a_dmg_app_from_elsewhere_is_refused(tmp_path, fake, says):
+    install = _install(tmp_path / "i", "darwin")
+    fake = fake()
+    with pytest.raises(du.UpdateFailed, match=says):
+        du.stage(tmp_path / "a.dmg", tmp_path / "state", install, run=fake)
+    assert fake.ran("hdiutil", "detach")
+
+
+def test_self_test_runs_the_staged_selfcheck_in_a_fresh_environment(tmp_path):
+    seen = {}
+
+    def run(argv, **kwargs):
+        seen["argv"], seen["env"] = argv, kwargs["env"]
+        return subprocess.CompletedProcess(argv, 0, "selfcheck ok", "")
+
+    du.self_test(tmp_path / "ScanpathStudio", "linux", run=run)
+    assert seen["argv"] == [
+        str(tmp_path / "ScanpathStudio" / "ScanpathStudio"),
+        "--selfcheck",
+    ]
+    assert seen["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+    assert seen["env"]["SCANPATH_DESKTOP_NO_LOG_FILE"] == "1"
+
+
+def test_a_failed_self_test_refuses_the_update(tmp_path):
+    def run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, "", "boom")
+
+    with pytest.raises(du.UpdateFailed, match="self-test"):
+        du.self_test(tmp_path, "linux", run=run)

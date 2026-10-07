@@ -21,6 +21,8 @@ Everything before step 5 leaves the install untouched. Stdlib and
 
 from __future__ import annotations
 
+import hashlib
+import http.client
 import json
 import os
 import platform
@@ -28,14 +30,17 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
+import urllib.request
+import zipfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from packaging.version import InvalidVersion, Version
 
-from . import updates
+from . import progress, updates
 from .updates import Asset, Release, UpdateCheck, UpdateCheckError
 
 APP_NAME = "ScanpathStudio"
@@ -359,3 +364,182 @@ def feed_release(path: Path) -> Release:
     except (OSError, ValueError) as error:
         raise UpdateCheckError(f"The update feed {path} couldn't be read.") from error
     return updates._release_from(payload)
+
+
+CHUNK = 1 << 20
+#: The staged copy's ``--selfcheck``. Windows' first scan of a fresh bundle
+#: can take minutes, like the smoke test's budget.
+SELFCHECK_TIMEOUT_S = 300
+
+
+def _allowed(url: str, *, allow_file: bool) -> bool:
+    return url.startswith(REPO_DOWNLOADS) or (allow_file and url.startswith("file:"))
+
+
+def download(
+    asset: Asset,
+    folder: Path,
+    *,
+    allow_file: bool = False,
+    opener: Callable | None = None,
+    timeout: float = 30.0,
+) -> Path:
+    """Fetch ``asset`` into ``folder`` and check it against its sha256 digest.
+
+    Reports bytes to the active progress task, whose cancel checkpoint this
+    loop therefore is. A partial or mismatched file is deleted, never kept.
+    """
+    if not _allowed(asset.url, allow_file=allow_file):
+        raise UpdateFailed(
+            "The download isn't from Scanpath Studio's own releases, so it was "
+            "not fetched."
+        )
+    algorithm, _, expected = asset.digest.partition(":")
+    if algorithm != "sha256" or not expected:
+        raise UpdateFailed(
+            "This release's download has no checksum to verify it against, so "
+            "it can't be installed automatically."
+        )
+    from .build_info import build_info
+
+    opener = updates._urlopen if opener is None else opener
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / asset.name
+    partial = target.with_name(target.name + ".part")
+    request = urllib.request.Request(
+        asset.url, headers={"User-Agent": f"scanpath-studio/{build_info().version}"}
+    )
+    digest = hashlib.sha256()
+    done = 0
+    finished = False
+    try:
+        progress.report(0, asset.size or None, unit="bytes")
+        with opener(request, timeout=timeout) as response, open(partial, "wb") as out:
+            while chunk := response.read(CHUNK):
+                out.write(chunk)
+                digest.update(chunk)
+                done += len(chunk)
+                progress.report(done, asset.size or None, unit="bytes")
+        finished = True
+    except (OSError, http.client.HTTPException) as error:
+        raise UpdateFailed(
+            "The download stopped before it finished; are you offline?"
+        ) from error
+    finally:
+        if not finished:
+            partial.unlink(missing_ok=True)
+    if digest.hexdigest() != expected.lower():
+        partial.unlink(missing_ok=True)
+        raise UpdateFailed(
+            "The download doesn't match the checksum GitHub published for it, "
+            "so it was thrown away."
+        )
+    os.replace(partial, target)
+    return target
+
+
+def _stage_dmg(dmg: Path, target: Path, *, run: Callable) -> Path:
+    """Copy the ``.app`` out of the disk image, read-only and unseen by Finder."""
+    mount = target / "mount"
+    mount.mkdir()
+    _run(
+        run,
+        [
+            "hdiutil",
+            "attach",
+            "-nobrowse",
+            "-readonly",
+            "-mountpoint",
+            str(mount),
+            str(dmg),
+        ],
+        "The downloaded disk image couldn't be opened.",
+    )
+    app = target / f"{APP_NAME}.app"
+    try:
+        if not (mount / f"{APP_NAME}.app").is_dir():
+            raise UpdateFailed(
+                "The download doesn't contain Scanpath Studio where it should."
+            )
+        _run(
+            run,
+            ["ditto", str(mount / f"{APP_NAME}.app"), str(app)],
+            "The new version couldn't be copied out of the disk image.",
+        )
+    finally:
+        try:
+            run(
+                ["hdiutil", "detach", str(mount), "-force"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return app
+
+
+def verify_signature(
+    staged_app: Path, running_app: Path, *, run: Callable = subprocess.run
+) -> None:
+    """The staged ``.app`` must be intact, from this app's team, and pass Gatekeeper."""
+    _run(
+        run,
+        ["codesign", "--verify", "--deep", "--strict", str(staged_app)],
+        "The new version's signature is broken, so it was not installed.",
+    )
+    expected = team_id(running_app, run=run)
+    if expected is None or team_id(staged_app, run=run) != expected:
+        raise UpdateFailed(
+            "The new version isn't signed by the same developers as this one, so "
+            "it was not installed."
+        )
+    _run(
+        run,
+        ["spctl", "--assess", "--type", "exec", str(staged_app)],
+        "macOS's Gatekeeper rejected the new version, so it was not installed.",
+    )
+
+
+def stage(
+    archive: Path, state: Path, install: Install, *, run: Callable = subprocess.run
+) -> Path:
+    """Unpack ``archive`` into ``<state>/staged``; return the new copy's root."""
+    target = state / "staged"
+    shutil.rmtree(target, ignore_errors=True)
+    target.mkdir(parents=True)
+    try:
+        if install.system == "darwin":
+            root = _stage_dmg(archive, target, run=run)
+            verify_signature(root, install.root, run=run)
+        elif install.system == "win32":
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(target)
+            root = target / APP_NAME
+        else:
+            with tarfile.open(archive) as bundle:
+                bundle.extractall(target, filter="data")
+            root = target / APP_NAME
+    except (OSError, zipfile.BadZipFile, tarfile.TarError) as error:
+        raise UpdateFailed("The download couldn't be unpacked.") from error
+    if not executable_in(root, install.system).is_file():
+        raise UpdateFailed(
+            "The download doesn't contain Scanpath Studio where it should."
+        )
+    return root
+
+
+def self_test(
+    staged_root: Path, system: str, *, run: Callable = subprocess.run
+) -> None:
+    """Run the staged copy's ``--selfcheck``: it must load and draw before it replaces this one."""
+    env = child_env()
+    env["SCANPATH_DESKTOP_NO_LOG_FILE"] = "1"
+    _run(
+        run,
+        [str(executable_in(staged_root, system)), "--selfcheck"],
+        "The new version failed its self-test, so it was not installed.",
+        timeout=SELFCHECK_TIMEOUT_S,
+        env=env,
+    )

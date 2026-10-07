@@ -2141,8 +2141,48 @@ _GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)
 _GEOM_SKIP = "Skip — I don't need visual-angle units"
 
 _TEXT_BOXES = "Scale to the word boxes"
-_TEXT_FONT = "I know the stimulus font"
+_TEXT_FONT = "I know the font size"
 _TEXT_DEFAULT = "Use a default (16 px)"
+
+# The fourth question: which typeface the text was shown in. Not a provenance
+# group and not required — "I don't know" is a fine answer (a generic
+# monospace), so it starts there and never holds up *Add dataset*.
+_FONT_KNOW = "I know the font"
+_FONT_UNKNOWN = "I don't know (generic monospace)"
+_FONT_OTHER = "Other…"
+#: The fonts offered under *I know the font*, each with the generic family the
+#: browser falls back to when the font itself is not installed.
+STIMULUS_FONTS = {
+    "Courier New": "monospace",
+    "Consolas": "monospace",
+    "Lucida Console": "monospace",
+    "Menlo": "monospace",
+    "Monaco": "monospace",
+    "DejaVu Sans Mono": "monospace",
+    "Arial": "sans-serif",
+    "Helvetica": "sans-serif",
+    "Verdana": "sans-serif",
+    "Calibri": "sans-serif",
+    "Times New Roman": "serif",
+    "Georgia": "serif",
+}
+_GENERIC_FAMILIES = {"monospace", "sans-serif", "serif", "cursive", "fantasy"}
+
+
+def stimulus_font_css(name: str) -> str:
+    """``"Courier New"`` → ``"'Courier New', monospace"``: the font, then the
+    generic family it belongs to, so a machine without it still draws close."""
+    name = str(name).strip().strip("'\"")
+    if not name or name in _GENERIC_FAMILIES:
+        return FONT_FAMILY
+    return f"'{name}', {STIMULUS_FONTS.get(name, 'monospace')}"
+
+
+def stimulus_font_name(css: str | None) -> str | None:
+    """The named font a CSS stack starts with, or ``None`` for a generic one."""
+    first = str(css or "").split(",")[0].strip().strip("'\"")
+    return None if not first or first in _GENERIC_FAMILIES else first
+
 
 _SETUP_PROVENANCE = {
     _SCREEN_KNOW: Provenance.MEASURED,
@@ -2222,7 +2262,10 @@ def _wizard_setup_step(
     publish: bool = True,
     estimate=None,
 ) -> SetupSnapshot:
-    """Render the three Recording-setup groups and resolve them to a snapshot.
+    """Render the Recording-setup groups and resolve them to a snapshot.
+
+    Three say how each is known (screen, physical size, text size); the fourth,
+    *Font*, names the typeface, and "I don't know" is an answer.
 
     ``estimate`` (DATA-46) is a zero-argument callable giving the *Estimate from
     my data* size; when it is ``None``, ``words_raw`` / ``fix_raw`` must already
@@ -2245,7 +2288,7 @@ def _wizard_setup_step(
     # them level even though what follows differs per answer (two number inputs,
     # an info box, or a caption) and so the columns end at different heights.
     # The description that used to print here is now the section's hover text.
-    screen_host, geom_host, text_host = host.columns(3, gap="medium")
+    screen_host, geom_host, text_host, font_host = host.columns(4, gap="medium")
 
     # The Data Management editor reuses this exact control layout. Seed its
     # three mode choices from the saved snapshot once; the add flow keeps its
@@ -2451,12 +2494,6 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_font_pt",
             **persist,
         )
-        font_family = text_host.text_input(
-            "Font family",
-            value=font_family,
-            key=f"{key_prefix}_setup_font_family",
-            **persist,
-        )
         # pt→px needs a DPI, which needs the physical width. Under a skipped
         # geometry group there is no honest DPI, so the conversion is withheld
         # and the point size falls back to being read as pixels.
@@ -2474,6 +2511,58 @@ def _wizard_setup_step(
         scale_to_boxes = False
         base_font = 16
         text_host.caption("Recorded as **assumed** — a 16 px reading font.")
+
+    # --- Font ------------------------------------------------------------------
+    # Which typeface the words were shown in. The labels are drawn in it, so a
+    # known font makes them match the stimulus letter for letter; the generic
+    # monospace the browser picks otherwise can be several percent narrower.
+    known = stimulus_font_name(font_family)
+    st.session_state.setdefault(
+        f"{key_prefix}_setup_font_mode", _FONT_KNOW if known else _FONT_UNKNOWN
+    )
+    font_mode = font_host.radio(
+        "Font",
+        [_FONT_KNOW, _FONT_UNKNOWN],
+        key=f"{key_prefix}_setup_font_mode",
+        help="The typeface the text was shown in. Word labels are drawn in it, "
+        "so they match the stimulus. Not sure? Leave it on I don't know.",
+        **persist,
+    )
+    if font_mode == _FONT_KNOW:
+        choices = [*STIMULUS_FONTS, _FONT_OTHER]
+        st.session_state.setdefault(
+            f"{key_prefix}_setup_font_name",
+            known if known in STIMULUS_FONTS else _FONT_OTHER if known else choices[0],
+        )
+        picked = font_host.selectbox(
+            "Font name",
+            choices,
+            key=f"{key_prefix}_setup_font_name",
+            label_visibility="collapsed",
+            **persist,
+        )
+        if picked == _FONT_OTHER:
+            st.session_state.setdefault(
+                f"{key_prefix}_setup_font_other",
+                known if known and known not in STIMULUS_FONTS else "",
+            )
+            typed = font_host.text_input(
+                "Font name (other)",
+                key=f"{key_prefix}_setup_font_other",
+                placeholder="e.g. Source Code Pro",
+                label_visibility="collapsed",
+                **persist,
+            )
+            font_family = stimulus_font_css(typed) if typed.strip() else FONT_FAMILY
+        else:
+            font_family = stimulus_font_css(picked)
+        if font_family != FONT_FAMILY:
+            font_host.caption(
+                f"Drawn in **{stimulus_font_name(font_family)}** where it is "
+                "installed on this computer."
+            )
+    else:
+        font_family = FONT_FAMILY
 
     snapshot = SetupSnapshot(
         canvas_width=int(canvas_w),
@@ -2520,9 +2609,11 @@ def _wizard_setup_step(
         recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
     if publish and snapshot.text_provenance is not None:
         st.session_state["global_base_font_size"] = snapshot.base_font_size
-        st.session_state["global_font_family"] = snapshot.font_family
         st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
         recall["base_font_size"] = snapshot.base_font_size
+    if publish:
+        # Its own question, always answered (I don't know is an answer).
+        st.session_state["global_font_family"] = snapshot.font_family
         recall["font_family"] = snapshot.font_family
     if publish and recall:
         _remember_setup(recall)
@@ -2632,6 +2723,14 @@ def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
         label = by_prov.get(group, {}).get(provenance)
         if label is not None:
             st.session_state[_SETUP_MODE_KEYS[group]] = label
+    # The font question, from the file's font: a named one is "I know the font".
+    known = stimulus_font_name(snapshot.font_family)
+    st.session_state["wizard_setup_font_mode"] = _FONT_KNOW if known else _FONT_UNKNOWN
+    if known:
+        listed = known in STIMULUS_FONTS
+        st.session_state["wizard_setup_font_name"] = known if listed else _FONT_OTHER
+        if not listed:
+            st.session_state["wizard_setup_font_other"] = known
     remembered = {
         "monitor_width_mm": snapshot.monitor_width_mm,
         "viewing_distance_mm": snapshot.viewing_distance_mm,

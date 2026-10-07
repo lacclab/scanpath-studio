@@ -37,6 +37,7 @@ import logging
 import os
 import re
 import shutil
+import ssl
 import urllib.request
 import zipfile
 from collections.abc import Callable, Iterable
@@ -44,6 +45,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+import truststore
 
 from . import progress
 
@@ -172,10 +174,25 @@ def _read_body(response, write: Callable[[bytes], object], *, detail: str) -> No
         )
 
 
+def _open_url(url: str):
+    """Open ``url`` for a download, trusting what the operating system trusts.
+
+    Python's own `ssl` defaults read OpenSSL's CA list, which a python.org
+    install on macOS ships empty until *Install Certificates.command* is run,
+    and which never holds the root a TLS-inspecting campus or company proxy
+    re-signs with. Either way every download failed with
+    ``CERTIFICATE_VERIFY_FAILED``. `truststore` verifies against the macOS
+    Keychain / Windows certificate store / the system bundle instead, as the
+    browser does.
+    """
+    context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S, context=context)
+
+
 def _fetch_bytes(url: str, *, detail: str) -> bytes:
     """``url``'s body, read as it arrives with progress (UX-168) — all of it, or
     a `ConnectionError` (`_read_body`)."""
-    with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response:
+    with _open_url(url) as response:
         buffer = io.BytesIO()
         _read_body(response, buffer.write, detail=detail)
         return buffer.getvalue()
@@ -192,7 +209,7 @@ def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
     tmp = dest.with_name(dest.name + ".part")
     try:
         with (
-            urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response,
+            _open_url(url) as response,
             tmp.open("wb") as out,
         ):
             _read_body(response, out.write, detail=detail)

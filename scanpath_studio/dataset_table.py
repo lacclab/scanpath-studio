@@ -47,15 +47,15 @@ TABLE_COUNT_FIELDS: tuple[str, ...] = ("Participants", "Texts", "Trials", "Fixat
 #: The one count kept on a phone-width screen, beside the name and the actions.
 KEY_COUNT_FIELD = "Participants"
 
-NOT_LOADED = "Not loaded"
+NOT_LOADED = "Not counted"
 NOT_REPORTED = "Not reported"
 NOT_APPLICABLE = "Not applicable"
 UNKNOWN = "Unknown"
 
 #: Each missing-value label's meaning, for its hover text.
 GAP_EXPLANATIONS: Mapping[str, str] = {
-    NOT_LOADED: "Not counted yet — this dataset has not been opened in this "
-    "session, and it publishes no figures of its own.",
+    NOT_LOADED: "Not counted yet — this dataset has not been opened, and it "
+    "publishes no figures of its own.",
     NOT_REPORTED: "The corpus' published figures do not include this one. Open "
     "the dataset to count it.",
     NOT_APPLICABLE: "This dataset has nothing of this kind to count.",
@@ -68,7 +68,7 @@ GAP_EXPLANATIONS: Mapping[str, str] = {
 #: counting. Every other field left blank by a load is :data:`UNKNOWN`.
 _NOT_APPLICABLE_WHEN_LOADED: Mapping[str, str] = {
     "Screens": "Every trial is a single screen.",
-    "Words": "This dataset has no AOI (word) table.",
+    "Words": "This dataset has no Words table.",
     "Fixations": "This dataset has no fixation table.",
     "Gaze points": "This dataset has no raw-gaze samples.",
 }
@@ -91,9 +91,10 @@ STATUS_EXPLANATIONS: Mapping[str, str] = {
     LOADED: "Read this session, so it usually opens quickly.",
     AVAILABLE: "Its files are here; opening it reads them, which can take a "
     "while for a large dataset.",
-    NEEDS_DOWNLOAD: "Its files are not in its folder yet: open it to download them.",
+    NEEDS_DOWNLOAD: "Its files are not in its folder yet: open it, then click "
+    "**Download**.",
     NEEDS_SETUP: "Its files were not found and there is no download: open it "
-    "and point it at the folder that holds them.",
+    "and set its **Data directory** to their folder.",
 }
 
 #: Where a row's numbers come from (DATA-36), for the count columns' header.

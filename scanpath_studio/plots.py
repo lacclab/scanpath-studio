@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import copy
 import html
+import itertools
 import math
 import re
 import struct
@@ -21,6 +22,7 @@ import plotly.graph_objects as go
 
 from . import progress
 from .constants import (
+    APP_THEME,
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
     COMPARE_FIXATION_OPACITY,
@@ -39,6 +41,7 @@ from .constants import (
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
+    FIXATION_SYMBOLS,
     FONT_FAMILY,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
@@ -48,6 +51,8 @@ from .constants import (
     SACCADE_CLASS_LABELS,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
+    SACCADE_COLOR_MODES,
+    SACCADE_DASH_OPTIONS,
     SACCADE_DIRECTION_CLASSES,
     SACCADE_DIRECTION_FOLD,
     SACCADE_DIRECTION_LABELS,
@@ -61,6 +66,7 @@ from .constants import (
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
+from .illustration import MANUAL_LABEL_REASON
 from .multipart import SCREEN_ID
 
 COLORBAR_LEN_FRACTION = 0.33
@@ -258,6 +264,122 @@ class FigureSettings:
             if field.default is not MISSING:
                 defaults[name] = field.default
         return defaults
+
+
+#: The figure options that take one of a fixed set of values → those values,
+#: spelt as the builders compare them. `normalize_option_values` reads any
+#: spelling of one (case, spaces, ``-`` / ``_`` and ``/`` ignored, so the CLI's
+#: ``word-boxes`` and ``mark-border`` work) and refuses anything else, so a
+#: script never gets the default drawn in place of a value it misspelt.
+FIGURE_OPTION_CHOICES: dict[str, tuple[str, ...]] = {
+    "heatmap_style": ("Word boxes", "Interpolated"),
+    "heatmap_norm": ("Linear", "Log"),
+    "critical_span_style": ("Mark text", "Mark border", "None"),
+    "saccade_color_mode": tuple(SACCADE_COLOR_MODES),
+    "saccade_render_mode": ("Straight", "Arc"),
+    "saccade_style": tuple(SACCADE_DASH_OPTIONS.values()),
+    "marker_size_scale": tuple(MARKER_SIZE_SCALES),
+    "fixation_symbol": tuple(FIXATION_SYMBOLS),
+    "fixation_colorbar_orientation": ("Vertical", "Horizontal"),
+    "heatmap_colorbar_orientation": ("Vertical", "Horizontal"),
+    "compare_stimulus": ("both", "a", "b"),
+}
+
+
+def _choice_key(value: object) -> str:
+    return "".join(ch for ch in str(value).casefold() if ch.isalnum())
+
+
+#: Other spellings a choice is known by: the CLI's flag names and the app's
+#: labels where they differ from the value (``Dashed`` is ``dash``).
+_CHOICE_ALIASES: dict[str, dict[str, str]] = {
+    "saccade_color_mode": {
+        "type": "By type",
+        "direction": "Forward / regression",
+        "bydirection": "Forward / regression",
+    },
+    "saccade_render_mode": {"arcs": "Arc"},
+    "saccade_style": {
+        _choice_key(label): value for label, value in SACCADE_DASH_OPTIONS.items()
+    },
+}
+
+
+def normalize_option_value(name: str, value: object) -> object:
+    """``value`` for the enumerated figure option ``name``, spelt as the
+    builders compare it; any other option's value is returned as it is.
+
+    Raises ``ValueError`` listing the choices for a value that is none of
+    them. ``critical_span_style=None`` is the app's "None" (no marking)."""
+    choices = FIGURE_OPTION_CHOICES.get(name)
+    if choices is None:
+        return value
+    if value is None and "None" in choices:
+        return "None"
+    key = _choice_key(value)
+    for choice in choices:
+        if _choice_key(choice) == key:
+            return choice
+    alias = _CHOICE_ALIASES.get(name, {}).get(key)
+    if alias is not None:
+        return alias
+    raise ValueError(f"Unknown {name} {value!r}; choose one of {', '.join(choices)}.")
+
+
+#: The palettes' short names (#374): no spaces or brackets, so a shell needs
+#: no quotes — `render --palette print`. The app's own names work too.
+PALETTE_SLUGS = {
+    "default": "Default (colourblind-safe)",
+    "print": "Print / greyscale",
+    "high-contrast": "High contrast",
+}
+_PALETTE_ALIASES = {
+    "colourblindsafe": "Default (colourblind-safe)",
+    "colorblindsafe": "Default (colourblind-safe)",
+    # #374: the names the app shows (US spelling, `PALETTE_LABELS`).
+    "defaultcolorblindsafe": "Default (colourblind-safe)",
+    "greyscale": "Print / greyscale",
+    "grayscale": "Print / greyscale",
+    "printgrayscale": "Print / greyscale",
+}
+
+
+def normalize_palette(value: object) -> str:
+    """The palette ``value`` names — its app name, short name (``print``) or
+    any spelling of either — else ``ValueError`` listing them."""
+    from .constants import PALETTES, palette_label
+
+    key = _choice_key(value)
+    for name in PALETTES:
+        if _choice_key(name) == key:
+            return name
+    for slug, name in PALETTE_SLUGS.items():
+        if _choice_key(slug) == key:
+            return name
+    if key in _PALETTE_ALIASES:
+        return _PALETTE_ALIASES[key]
+    raise ValueError(
+        f"Unknown palette {value!r}; choose one of {', '.join(PALETTE_SLUGS)} "
+        f"({', '.join(palette_label(name) for name in PALETTES)})."
+    )
+
+
+def palette_slug(name: str) -> str:
+    """A palette's short name, for a command line."""
+    return next((slug for slug, full in PALETTE_SLUGS.items() if full == name), name)
+
+
+def normalize_option_values(options: Mapping[str, Any]) -> dict[str, Any]:
+    """``options`` with every enumerated value read by
+    `normalize_option_value` (inside ``style_a`` / ``style_b`` too)."""
+    out = {name: normalize_option_value(name, value) for name, value in options.items()}
+    for side in ("style_a", "style_b"):
+        style = out.get(side)
+        if isinstance(style, Mapping):
+            out[side] = {
+                key: normalize_option_value(key, value) for key, value in style.items()
+            }
+    return out
 
 
 def _sample_colorscale_colors(
@@ -1024,7 +1146,7 @@ def _fixation_category_labels(
     """The discrete label each fixation is coloured by, or ``None`` when the
     colouring is not discrete (uniform, numeric, or a column the frame lacks).
 
-    The same labels the static figure draws: ``"Line N"`` / ``"(off-text)"``
+    The same labels the static figure draws: ``"Line N"`` / ``"Out of bounds"``
     for colour-by-line, against ``words``' own geometry; a categorical column's
     values as strings, ``"(missing)"`` for a gap. Aligned to ``fixations``.
     """
@@ -1037,7 +1159,7 @@ def _fixation_category_labels(
 
         line_ids = assign_fixation_lines(fixations, words)
         return line_ids.map(
-            lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+            lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
         )
     if (
         not color_by
@@ -1094,7 +1216,9 @@ def _add_category_legend(
                     color=color,
                     line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                 ),
-                name=f"{_column_name(color_label)}: {category}",
+                name=category
+                if color_label == "line"
+                else f"{_column_name(color_label)}: {category}",
                 showlegend=True,
                 hoverinfo="skip",
             )
@@ -1246,7 +1370,7 @@ def _glyph_colorbar_trace(marker: dict, values) -> go.Scatter | None:
             colorbar=marker.get("colorbar"),
             size=0,
         ),
-        name="colour scale",
+        name="color scale",
         showlegend=False,
         hoverinfo="skip",
     )
@@ -1736,7 +1860,7 @@ def color_with_alpha(color: str, alpha: float) -> str:
         r, g, b = match.groups()
         return f"rgba({r},{g},{b},{alpha})"
     raise ValueError(
-        f"{color!r} is not a colour a fill can take: use #rrggbb, #rgb or rgb(r, g, b)."
+        f"{color!r} is not a color a fill can take: use #rrggbb, #rgb or rgb(r, g, b)."
     )
 
 
@@ -1949,7 +2073,7 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
 
 
 _HOVER_MEASURE_LABELS: dict[str, str] = {
-    "total_fixation_duration_ms": "Total fixation",
+    "total_fixation_duration_ms": "TFD",
     "first_fixation_ms": "FFD",
     "first_pass_gaze_duration_ms": "FPRT",
     "regression_path_duration_ms": "RPD",
@@ -1976,16 +2100,23 @@ def _labelled_columns(labels: Mapping[str, str] | None) -> Iterator[None]:
 
 
 def _humanize_column(column: str, *, unit: bool = True) -> str:
-    """``total_fixation_duration_ms`` → "Total Fixation Duration (ms)", and
+    """``total_fixation_duration_ms`` → "Total fixation duration (ms)", and
     ``participant_id`` → "Participant ID".
 
     ``unit=False`` drops the unit, for a hover row that writes it after the
     value — which used to read "… Duration Ms: 200 ms"."""
+    from .column_names import _CANONICAL_LABELS, canonical_label
+
     text = str(column)
+    if text in _CANONICAL_LABELS:
+        # #374: the app's own columns read as the rail names them.
+        label = canonical_label(text)
+        return label if unit else label.removesuffix(" (ms)")
     in_ms = text.endswith("_ms")
     if in_ms:
         text = text[: -len("_ms")]
-    title = re.sub(r"\bId\b", "ID", text.replace("_", " ").strip().title())
+    words = text.replace("_", " ").strip()
+    title = re.sub(r"\bid\b", "ID", words[:1].upper() + words[1:], flags=re.IGNORECASE)
     return f"{title} (ms)" if in_ms and unit else title
 
 
@@ -2085,15 +2216,111 @@ def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
     return [str(j + 1) for j in range(n)]
 
 
+#: #374 F7: the fixation hover's lead line is written from these, in this
+#: order, as "Fixation 41 · 336 ms · on “Droppings!” (word 27)".
+_FIXATION_HEAD_FIELDS = ("order_in_trial", "duration_ms", "word_id")
+
+
+def _hover_number(value) -> str:
+    """A hover number without a trailing ``.0`` (``27.0`` → ``27``)."""
+    number = pd.to_numeric(value, errors="coerce")
+    if pd.isna(number):
+        return str(value)
+    return f"{number:.0f}" if float(number).is_integer() else f"{number:g}"
+
+
+def _fixation_hover_head(
+    frame: pd.DataFrame, head: Sequence[str], words: pd.DataFrame | None
+) -> pd.Series:
+    """The fixation hover's lead line, one string per row (#374 F7).
+
+    The word a fixation landed on is named by its text when the trial's word
+    table has it (and its word ids are unique); a fixation on no word reads
+    "outside the text"."""
+    word_text: dict[float, str] = {}
+    if (
+        "word_id" in head
+        and words is not None
+        and not words.empty
+        and {"word_id", "text"} <= set(words.columns)
+    ):
+        ids = pd.to_numeric(words["word_id"], errors="coerce")
+        if ids.notna().all() and ids.is_unique:
+            word_text = dict(zip(ids.astype(float), words["text"].astype(str)))
+    columns = {field: frame[field].tolist() for field in head}
+    # A fixation with no word id is "outside the text" only when it is outside
+    # every word box: the data's own assignment can be blank inside one.
+    outside = [False] * len(frame)
+    if (
+        "word_id" in head
+        and words is not None
+        and not words.empty
+        and {"x", "y"} <= set(frame.columns)
+    ):
+        from .measures import fixation_in_text_mask
+
+        outside = (~fixation_in_text_mask(frame, words)).tolist()
+    lines = []
+    for i in range(len(frame)):
+        parts = []
+        if "order_in_trial" in columns:
+            value = columns["order_in_trial"][i]
+            if pd.notna(value):
+                parts.append(f"Fixation {_hover_number(value)}")
+        if "duration_ms" in columns:
+            value = columns["duration_ms"][i]
+            if pd.notna(value):
+                parts.append(f"{_hover_number(value)} ms")
+        if "word_id" in columns:
+            value = pd.to_numeric(columns["word_id"][i], errors="coerce")
+            if pd.isna(value):
+                if outside[i]:
+                    parts.append("outside the text")
+            else:
+                text = word_text.get(float(value))
+                word = f"word {_hover_number(value)}"
+                parts.append(
+                    f"on “{_plotly_literal(text)}” ({word})" if text else f"on {word}"
+                )
+        lines.append(" · ".join(parts))
+    return pd.Series(lines, index=frame.index, dtype=object)
+
+
+def _hover_cell(value):
+    """One hover value as shown: a missing one is "—" (Plotly printed
+    ``null``), a fraction is cut to four significant digits (#374)."""
+    if value is None:
+        return "—"
+    try:
+        if pd.isna(value):
+            return "—"
+    except (TypeError, ValueError):
+        return value
+    if isinstance(value, (float, np.floating)):
+        return f"{value:.0f}" if float(value).is_integer() else f"{value:.4g}"
+    return value
+
+
+def _hover_cells(series: pd.Series) -> pd.Series:
+    """:func:`_hover_cell` over a hover column."""
+    return series.astype(object).map(_hover_cell)
+
+
 def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
     *,
     line_display: pd.Series | None = None,
     table: str | None = None,
+    fixation: bool = False,
+    words: pd.DataFrame | None = None,
 ) -> tuple[np.ndarray | None, str]:
     """Plotly customdata + template for a user-selected field list (VIZ-26);
-    ``table`` says whose names label the rows (DATA-66)."""
+    ``table`` says whose names label the rows (DATA-66).
+
+    ``fixation=True`` writes the fixation number, duration and word as one
+    plain lead line (#374 F7), the word by its text from ``words``; any other
+    chosen field follows as a ``Label: value`` row."""
     valid = [
         field
         for field in fields
@@ -2103,17 +2330,61 @@ def _hover_payload(
         return None, "<extra></extra>"
     values: list[pd.Series] = []
     rows: list[str] = []
-    for idx, field in enumerate(valid):
+    if fixation:
+        head = [field for field in _FIXATION_HEAD_FIELDS if field in valid]
+        if head:
+            values.append(_fixation_hover_head(frame, head, words))
+            rows.append("%{customdata[0]}")
+            valid = [field for field in valid if field not in head]
+    for idx, field in enumerate(valid, start=len(values)):
         series = (
             line_display
             if field == "line_idx" and line_display is not None
             else frame[field]
         )
-        values.append(_plotly_literal_values(series))
+        values.append(_hover_cells(_plotly_literal_values(series)))
         suffix = " ms" if field.endswith("_ms") else ""
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
     customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
     return customdata, "<br>".join(rows) + "<extra></extra>"
+
+
+#: The highlight key's annotation (#374 F6), so it is drawn once a figure.
+_HIGHLIGHT_KEY_NAME = "highlight_key"
+
+
+def _add_highlight_key(
+    fig: go.Figure, column: str, color: str, *, border: bool = False
+) -> None:
+    """Name the highlighted words on the figure itself (#374 F6): a swatch in
+    the highlight's colour and "Highlighted: is_in_aspan (answer span)", in
+    the plot's bottom-left corner. Drawn once however many panels mark words."""
+    if any(a.name == _HIGHLIGHT_KEY_NAME for a in fig.layout.annotations or ()):
+        return
+    from .column_names import HIGHLIGHT_NOTES
+
+    note = HIGHLIGHT_NOTES.get(str(column))
+    swatch = "▢" if border else "■"
+    text = (
+        f'<span style="color:{color}">{swatch}</span> Highlighted: '
+        f"{_plotly_literal(_column_name(column))}" + (f" ({note})" if note else "")
+    )
+    fig.add_annotation(
+        x=0,
+        y=0,
+        xref="paper",
+        yref="paper",
+        xanchor="left",
+        yanchor="bottom",
+        xshift=6,
+        yshift=6,
+        text=text,
+        showarrow=False,
+        align="left",
+        font=dict(size=12, color="#444444"),
+        bgcolor="rgba(255,255,255,0.75)",
+        name=_HIGHLIGHT_KEY_NAME,
+    )
 
 
 def _add_word_label_trace(
@@ -2172,6 +2443,8 @@ def _add_word_label_trace(
         label_color = [
             highlight_text_color if is_crit else text_color for is_crit in critical_mask
         ]
+        if critical_mask.any():
+            _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
     # BUG-97 — the label is centred in its word's box, as the data defines it.
@@ -2522,14 +2795,14 @@ def _add_raw_gaze_layer(
         color_vals = raw_gaze["timestamp_ms"]
         colorscale = "Viridis"
         customdata = raw_gaze["timestamp_ms"]
-        when = "<br>t: %{customdata} ms"
+        when = "<br>Timestamp: %{customdata} ms"
     elif SAMPLE_INDEX in raw_gaze.columns:
         # No clock (the import mapped none): coloured by the samples' order,
         # and said so — a ramp with no title would read as time.
         color_vals = raw_gaze[SAMPLE_INDEX]
         colorscale = "Viridis"
         customdata = raw_gaze[SAMPLE_INDEX]
-        when = "<br>sample %{customdata}"
+        when = "<br>Sample #: %{customdata}"
         legend_title = "Sample order"
     else:
         color_vals = raw_gaze_color
@@ -2857,6 +3130,7 @@ def _render_scanpath_figure(
             shapes = shapes + build_critical_span_overlay(
                 words, highlight_column, color=span_border_color
             )
+            _add_highlight_key(fig, highlight_column, span_border_color, border=True)
         if shapes:
             fig.update_layout(shapes=shapes)
         if show_word_labels:
@@ -3092,7 +3366,7 @@ def _render_scanpath_figure(
 
             line_ids = assign_fixation_lines(ordered, words)
             color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
             )
             color_label = "line"
             is_numeric_color = False
@@ -3145,7 +3419,9 @@ def _render_scanpath_figure(
             if fixation_hover_fields is None
             else list(fixation_hover_fields)
         )
-        customdata, hovertemplate = _hover_payload(ordered, hover_fields)
+        customdata, hovertemplate = _hover_payload(
+            ordered, hover_fields, fixation=True, words=words
+        )
         glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
         if glyph:
             # VIZ-15: a shape Plotly's marker enum doesn't carry (♥), drawn as
@@ -3219,7 +3495,9 @@ def _render_scanpath_figure(
                         color=color,
                         line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                     ),
-                    name=f"{_column_name(color_label)}: {category}",
+                    name=category
+                    if color_label == "line"
+                    else f"{_column_name(color_label)}: {category}",
                     showlegend=True,
                     hoverinfo="skip",
                 )
@@ -3378,7 +3656,13 @@ def add_illustration_label(
         xanchor="right",
         yanchor="bottom",
         text=_plotly_literal(str(text).strip())
-        or "Illustration · " + "; ".join(reasons),
+        # #374: a label the user switched on with nothing detected says
+        # "Illustration" alone; "· manual label" told a reader nothing.
+        or (
+            "Illustration"
+            if reasons == [MANUAL_LABEL_REASON]
+            else "Illustration · " + "; ".join(reasons)
+        ),
         showarrow=False,
         font=dict(size=10, color="#5f6368"),
         bgcolor="rgba(255,255,255,0.82)",
@@ -3638,7 +3922,7 @@ def _add_density_heatmap(
         if heatmap_range
         else (None, None)
     )
-    base_title = "Fixation density" if weights is None else "Duration (ms)"
+    base_title = "Fixation density" if weights is None else "Dwell time per cell (ms)"
     fig.add_trace(
         go.Heatmap(
             x=(x_edges[:-1] + x_edges[1:]) / 2.0,
@@ -4516,6 +4800,10 @@ def set_replay_clock(
     fig.layout.meta = {**meta, **_replay_clock_meta(times, playback_speed, autoplay)}
 
 
+#: The replay's transport controls are app chrome, drawn in the app's font.
+_REPLAY_UI_FONT = APP_THEME["font"]
+
+
 def _animation_play_buttons(frame_duration):
     """Play / Pause / Restart buttons.
 
@@ -4545,6 +4833,9 @@ def _animation_play_buttons(frame_duration):
             xanchor="left",
             yanchor="bottom",
             pad=dict(b=12, l=8),
+            # #374 F23: the app's font, not the figure's (often a monospace
+            # stimulus font), so the buttons read as the app's own.
+            font=dict(family=_REPLAY_UI_FONT),
             buttons=[
                 dict(
                     label="▶ Play",
@@ -4614,7 +4905,9 @@ def _animation_time_slider(frame_times, total_ms):
             # track, so draw them fully transparent.
             font=dict(color="rgba(0,0,0,0)"),
             currentvalue=dict(
-                font=dict(size=14, color="#444"),
+                font=dict(size=14, color="#444", family=_REPLAY_UI_FONT),
+                # #374 F23/F8: the trial's own clock, first fixation onward.
+                prefix="Trial time ",
                 visible=True,
                 xanchor="right",
             ),
@@ -4633,7 +4926,7 @@ def _animation_time_slider(frame_times, total_ms):
                             transition=dict(duration=0),
                         ),
                     ],
-                    label=f"{frame_times[k] / 1000:.1f} / {total_s:.1f}s",
+                    label=f"{frame_times[k] / 1000:.1f} / {total_s:.1f} s",
                     method="animate",
                 )
                 for k in range(len(frame_times))
@@ -4963,7 +5256,7 @@ def _render_scanpath_animation(
 
             line_ids = assign_fixation_lines(ordered0, words)
             color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
             )
             color_label = "line"
             is_numeric_color = False
@@ -5085,7 +5378,9 @@ def _render_scanpath_animation(
             if fixation_hover_fields is None
             else list(fixation_hover_fields)
         )
-        s["customdata"], s["hovertemplate"] = _hover_payload(ordered, hover_fields)
+        s["customdata"], s["hovertemplate"] = _hover_payload(
+            ordered, hover_fields, fixation=True, words=s.get("words")
+        )
         # The trial's own fixation numbers, as the static figure and the hover
         # show them — never a 1..n renumbering of what survived the filters.
         s["order_text"] = _fixation_order_labels(ordered)
@@ -5689,9 +5984,9 @@ def _add_comparison_raw_gaze_trace(
     if samples is None or samples.empty:
         return
     if "timestamp_ms" in samples.columns:
-        customdata, when = samples["timestamp_ms"], "<br>t: %{customdata} ms"
+        customdata, when = samples["timestamp_ms"], "<br>Timestamp: %{customdata} ms"
     elif SAMPLE_INDEX in samples.columns:  # no clock: the sample's number
-        customdata, when = samples[SAMPLE_INDEX], "<br>sample %{customdata}"
+        customdata, when = samples[SAMPLE_INDEX], "<br>Sample #: %{customdata}"
     else:
         customdata, when = None, ""
     trace = go.Scatter(
@@ -5954,7 +6249,9 @@ def _add_comparison_fixation_trace(
         if fixation_hover_fields is None
         else list(fixation_hover_fields)
     )
-    customdata, hovertemplate = _hover_payload(trial_fix, hover_fields)
+    customdata, hovertemplate = _hover_payload(
+        trial_fix, hover_fields, fixation=True, words=trial_words
+    )
     glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
     # The trace's own legend swatch would mislead under category colours (it
     # shows the first fixation's category) and cannot draw a glyph (♥), so in
@@ -5971,7 +6268,7 @@ def _add_comparison_fixation_trace(
             name=display_name,
             legendgroup=display_name,
             showlegend=False,
-            hovertemplate=f"{display_name} {hovertemplate}",
+            hovertemplate=f"{display_name}<br>{hovertemplate}",
             customdata=customdata,
         ):
             _add(trace)
@@ -6006,7 +6303,7 @@ def _add_comparison_fixation_trace(
                 text=trial_fix["order_in_trial"] if show_order else None,
                 textposition="top center",
                 textfont=order_font,
-                hovertemplate=f"{display_name} {hovertemplate}",
+                hovertemplate=f"{display_name}<br>{hovertemplate}",
                 customdata=customdata,
             )
         )
@@ -6243,7 +6540,7 @@ def _comparison_heatmap_colorbar_traces(
     scales = [spec["heatmap_colorscale"] for spec in trial_specs]
     sides = ("left A", "right B") if overlay else ("A", "B")
     if len(set(scales)) == 1:
-        named = [(scales[0], " · left A / right B" if overlay else "")]
+        named = [(scales[0], " · A left half, B right" if overlay else "")]
     else:
         named = [(scale, f" · {side}") for scale, side in zip(scales, sides)]
     return [
@@ -6468,17 +6765,13 @@ def _make_split_comparison_figure(
         avoid=[spec["color"] for spec in trial_specs],
     )
     category_label = "line" if (color_by_line or color_by == "line") else color_by
-    legend_on = show_legend or bool(category_legend)
 
-    # The panel names are the split layouts' A/B legend, so they follow its
-    # toggle (BUG-90): with it off the top margin is 0, which clipped the upper
-    # title off the canvas while the lower one, sitting in the gap between the
-    # panels, still showed.
-    subplot_titles = (
-        [trial_specs[0]["display_name"], trial_specs[1]["display_name"]]
-        if show_legend
-        else None
-    )
+    # #374 F26: each panel always says which scanpath it is, "A · …" / "B · …",
+    # legend or not — so the top band is reserved for the titles too (BUG-90:
+    # without it the upper title was clipped off the canvas).
+    subplot_titles = [
+        f"{side} · {spec['display_name']}" for side, spec in zip("AB", trial_specs)
+    ]
 
     # Each panel's own axis ranges, from its trial's words + fixations (CMP-8).
     panel_ranges = []
@@ -6538,7 +6831,7 @@ def _make_split_comparison_figure(
     grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     # The t band was the (now-removed) title; keep a slim band only for the
     # optional legend.
-    top_px = (_compare_legend_font(base_font_size)["size"] + 14) if legend_on else 0
+    top_px = _compare_legend_font(base_font_size)["size"] + 14
     figure_width = total_width + grid_left + right_px
     figure_height = total_height + bottom_px + grid_bottom
     plot_area = (
@@ -7270,6 +7563,37 @@ def make_metric_convergence_figure(
     return fig
 
 
+def gap_runs(xs) -> list[slice]:
+    """Split ``xs`` (sorted) into runs with no gap: a new run starts where two
+    whole-number ``xs`` are more than 1 apart — a trial the filters left out
+    (#374 F35). Non-integer ``xs`` are one run."""
+    xs = list(xs)
+    try:
+        whole = all(float(x).is_integer() for x in xs)
+    except (TypeError, ValueError):
+        whole = False
+    if not whole:
+        return [slice(0, len(xs))]
+    cuts = [i for i in range(1, len(xs)) if float(xs[i]) - float(xs[i - 1]) > 1]
+    bounds = [0, *cuts, len(xs)]
+    return [slice(a, b) for a, b in itertools.pairwise(bounds)]
+
+
+def break_at_gaps(xs, ys) -> tuple[list, list]:
+    """``xs``/``ys`` with a ``None`` at every gap (see :func:`gap_runs`), so a
+    Plotly line stops there instead of joining across it."""
+    xs, ys = list(xs), list(ys)
+    out_x: list = []
+    out_y: list = []
+    for i, run in enumerate(gap_runs(xs)):
+        if i:
+            out_x.append(None)
+            out_y.append(None)
+        out_x += xs[run]
+        out_y += ys[run]
+    return out_x, out_y
+
+
 def make_trend_figure(
     df: pd.DataFrame,
     *,
@@ -7281,6 +7605,7 @@ def make_trend_figure(
     font_family: str,
     height: int = 340,
     x_label: str | None = None,
+    break_gaps: bool = False,
 ) -> go.Figure:
     """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
 
@@ -7288,10 +7613,11 @@ def make_trend_figure(
     ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
     subtabs for the trial-index trend. ``x_label`` titles the x axis — the
     caller's name for what ``x_col`` holds (AN-9's frame calls it ``x``, which
-    is no title); without one, ``x_col`` humanized.
+    is no title); without one, ``x_col`` humanized. ``break_gaps`` stops the
+    line and band at a missing whole-number ``x`` (a filtered-out trial).
     """
     if x_label is None:
-        x_label = x_col.replace("_", " ").title()
+        x_label = x_col.replace("_", " ").capitalize()
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     if df is None or df.empty:
@@ -7305,11 +7631,22 @@ def make_trend_figure(
     xs = df[x_col].to_numpy()
     ys = df["value"].to_numpy()
     sem = df["sem"].to_numpy() if "sem" in df.columns else np.zeros(len(xs))
+    runs = gap_runs(xs) if break_gaps else [slice(0, len(xs))]
+    # One closed band per unbroken run, `None`-separated.
+    band_x: list = []
+    band_y: list = []
+    for i, run in enumerate(runs):
+        if i:
+            band_x.append(None)
+            band_y.append(None)
+        band_x += [*xs[run], *xs[run][::-1]]
+        band_y += [*(ys[run] + sem[run]), *(ys[run] - sem[run])[::-1]]
+    line_x, line_y = break_at_gaps(xs, ys) if break_gaps else (xs, ys)
     # ±SEM band (drawn first so the line sits on top).
     fig.add_trace(
         go.Scatter(
-            x=np.concatenate([xs, xs[::-1]]),
-            y=np.concatenate([ys + sem, (ys - sem)[::-1]]),
+            x=band_x,
+            y=band_y,
             fill="toself",
             fillcolor="rgba(31,119,180,0.15)",
             line=dict(width=0),
@@ -7320,8 +7657,8 @@ def make_trend_figure(
     )
     fig.add_trace(
         go.Scatter(
-            x=xs,
-            y=ys,
+            x=line_x,
+            y=line_y,
             mode="lines+markers",
             line=dict(color=COMPARISON_PALETTE[0], width=2),
             marker=dict(size=5, color=COMPARISON_PALETTE[0]),
@@ -7389,6 +7726,7 @@ def make_small_multiples_figure(
     base_font_size: int,
     font_family: str,
     cohort: pd.DataFrame | None = None,
+    aggregate: str = "mean",
     max_panels: int = 12,
     panel_height: int = 110,
 ) -> go.Figure:
@@ -7403,7 +7741,7 @@ def make_small_multiples_figure(
 
     if per_reader is None or per_reader.empty:
         return _no_data_figure(
-            f"{measure_label} per reader",
+            f"{measure_label} per participant",
             font_family=font_family,
             base_font_size=base_font_size,
         )
@@ -7437,7 +7775,7 @@ def make_small_multiples_figure(
                     y=cohort_xy[1],
                     mode="lines",
                     line=dict(color="rgba(120,120,120,0.45)", width=1.2, dash="dot"),
-                    name="Cohort mean",
+                    name=f"Cohort {aggregate}",
                     showlegend=(i == 1),
                     hoverinfo="skip",
                 ),
@@ -7457,15 +7795,15 @@ def make_small_multiples_figure(
                 hovertemplate=(
                     "word %{x}"
                     + ("  %{customdata}" if "word_text" in sub else "")
-                    + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
+                    + f"<br>{measure_label}: %{{y:.3~g}}<extra></extra>"
                 ),
             ),
             row=i,
             col=1,
         )
-    title = f"{measure_label} per reader (word profile)"
+    title = f"{measure_label} per participant (word profile)"
     if n_total > n:
-        title += f" — showing {n} of {n_total} readers"
+        title += f" — showing {n} of {n_total} participants"
     margin_top = 50 + title_gap_px
     margin_bottom = 40
     fig.update_layout(
@@ -7555,6 +7893,7 @@ def make_word_profile_figure(
     spread_label: str = "SD",
     colors: Sequence[str] | None = None,
     height: int = 380,
+    aggregate: str = "mean",
 ) -> go.Figure:
     """Cohort word profile(s): mean line + shaded spread band (AN-3 / AN-15).
 
@@ -7613,7 +7952,7 @@ def make_word_profile_figure(
                 hovertemplate=(
                     "word %{x}"
                     + ("  %{customdata}" if "word_text" in prof else "")
-                    + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
+                    + f"<br>{measure_label}: %{{y:.3~g}}<extra></extra>"
                 ),
             )
         )
@@ -7624,7 +7963,7 @@ def make_word_profile_figure(
         margin=dict(l=60, r=10, t=45, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title=f"{measure_label} by word — cohort mean ± {spread_label}",
+        title=f"{measure_label} by word — cohort {aggregate}, {spread_label} band",
         xaxis=dict(title="Word (reading order)"),
         yaxis=dict(title=measure_label),
         showlegend=not single,
@@ -7716,7 +8055,7 @@ def make_feature_scatter_figure(
                 )
             )
             r = float(np.corrcoef(x, y)[0, 1])
-            r_txt = f"  (r = {r:.2f}, n = {x.size})"
+            r_txt = f" (r = {r:.2f}, n = {x.size})"
         fig.update_layout(
             xaxis=dict(title=feature_label),
             yaxis=dict(title=measure_label),
@@ -7746,7 +8085,7 @@ def make_word_rate_figure(
     """Skip / regression-in rate per word — lollipop bars (AN-6)."""
     if df is None or df.empty:
         return _no_data_figure(
-            "Skip / regression rate per word",
+            "Skip / regression-in rate per word",
             font_family=font_family,
             base_font_size=base_font_size,
             height=height,
@@ -7978,18 +8317,20 @@ def make_paired_bars_figure(
     base_font_size: int,
     font_family: str,
     height: int = 380,
+    aggregate: str = "mean",
 ) -> go.Figure:
-    """Side-by-side group-mean bars per measure with error bars (AN-20).
+    """Side-by-side group bars per measure (AN-20), no error bars (#374).
 
-    ``df`` is ``[measure, group, value, err_lo, err_hi]`` (see
-    ``aggregation.paired_group_summary``). One subplot per measure so differing
-    units keep their own scale.
+    ``df`` is ``[measure, group, value, …]`` (see
+    ``aggregation.paired_group_summary``); ``aggregate`` names what ``value``
+    is, for the title. One subplot per measure so differing units keep their
+    own scale.
     """
     from plotly.subplots import make_subplots
 
     if df is None or df.empty:
         return _no_data_figure(
-            "Group means",
+            f"Group {aggregate}s",
             font_family=font_family,
             base_font_size=base_font_size,
             height=height,
@@ -8014,12 +8355,6 @@ def make_paired_bars_figure(
                     marker_color=color,
                     legendgroup=group,
                     showlegend=(mi == 1),
-                    error_y=dict(
-                        type="data",
-                        symmetric=False,
-                        array=[row.get("err_hi", 0)],
-                        arrayminus=[row.get("err_lo", 0)],
-                    ),
                     hovertemplate=f"{group}<br>{measure}: %{{y:.2f}}<extra></extra>",
                 ),
                 row=1,
@@ -8032,7 +8367,7 @@ def make_paired_bars_figure(
         margin=dict(l=55, r=10, t=55, b=40),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title="Group means per measure",
+        title=f"Group {aggregate}s per measure",
         legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
         barmode="group",
     )
@@ -8138,7 +8473,7 @@ def make_difference_profile_figure(
             hovertemplate=(
                 "word %{x}"
                 + ("  %{customdata}" if "word_text" in df else "")
-                + f"<br>Δ {measure_label}: %{{y:.1f}}<extra></extra>"
+                + f"<br>Δ {measure_label}: %{{y:.3~g}}<extra></extra>"
             ),
         )
     )
@@ -8409,7 +8744,7 @@ def _require_one_screen_per_reading(
                     f"Scanpath {label} (participant={participant!r}, "
                     f"trial={trial!r}) spans {len(screens)} screens ({shown}). "
                     "Each screen is its own coordinate space, so a comparison "
-                    "draws one screen per scanpath: cut each reading to one "
+                    "draws one screen per scanpath: cut each trial to one "
                     "screen first (multipart.extract_part, or "
                     "compare_scanpaths' screen= / screen_b=)."
                 )

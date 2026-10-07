@@ -412,7 +412,7 @@ class TestAppLaunches:
         assert scope_radios, "bulk-export scope radio missing"
         assert scope_radios[0].options[:3] == [
             "This trial",
-            "All",
+            "All, ignoring filters",
             "All filtered trials",
         ], f"unexpected scope options: {scope_radios[0].options}"
 
@@ -575,7 +575,7 @@ class TestDataInspectionTab:
         subheaders = [s.value for s in at.subheader]
         # UX-177: the list of datasets opens the page with no heading of its own.
         assert f"{ICONS['datasets']} Available datasets" not in subheaders
-        section = f"{ICONS['search']} What's in the `Synthetic test trial` dataset"
+        section = f"{ICONS['search']} What's in **Synthetic test trial**"
         assert section in subheaders, f"missing stage {section}: {subheaders}"
         parts = " ".join(
             str(m.value)
@@ -593,13 +593,18 @@ class TestDataInspectionTab:
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
         tab_labels = [t.label for t in at.tabs]
-        for tab in (f"{ICONS['stats']} Stats", "Fixations", "AOIs", "Raw gaze"):
+        for tab in (
+            f"{ICONS['stats']} Stats",
+            "Fixations",
+            "Words (interest areas)",
+            "Raw gaze",
+        ):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
         # The counts are the section's opening answer, so they kept no heading.
         assert "Dataset statistics" not in subheaders
 
         metric_labels = [m.label for m in at.metric]
-        for headline in ("Participants", "Texts", "Trials", "Fixations", "Words"):
+        for headline in ("Participants", "Texts", "Trials", "Fixations", "Word rows"):
             assert headline in metric_labels, f"missing headline metric {headline}"
         # The second statistics row is gone.
         for dropped in ("Mean fixation dur (ms)", "Reading speed (wpm)"):
@@ -728,7 +733,6 @@ class TestDataInspectionTab:
             "help_tutorials",
             "help_faq",
             "help_about",
-            "help_debug",
         ]
 
 
@@ -1067,7 +1071,7 @@ class TestDatasetTable:
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         asks = [w.value for w in at.warning if "Remove" in str(w.value)]
-        assert asks and "its 1 annotation leave" in asks[0]
+        assert asks and "its 1 annotation are deleted" in asks[0]
 
     def test_an_uploads_new_name_is_applied_by_save_changes(self):
         """UX-178: renaming is the editor's **Name** field. An upload's editor
@@ -2230,7 +2234,7 @@ class TestUnmappedRawDataView:
         captions = " ".join(c.value for c in at.caption)
         # R35: the manifest's ISO code renders as a display name.
         assert "English" in captions
-        assert "84 readers" in captions
+        assert "84 participants" in captions
         # R34: full coverage → the plain badge.
         assert "measured word boxes." in captions
         assert "of 55 texts" not in captions
@@ -2721,7 +2725,7 @@ class TestUnmappedRawDataView:
         # The picker's label carries the active sort key (UX-10), so match the
         # stem rather than the whole string.
         picker = next(
-            (s for s in at.selectbox if s.label.startswith("**Select Trial**")), None
+            (s for s in at.selectbox if s.label.startswith("Select trial")), None
         )
         opts = list(picker.options) if picker is not None else []
         # Two per-page trials, not collapsed into one stimulus-level trial.
@@ -3479,8 +3483,8 @@ class TestSetupWizard:
         # differing coverage reads as two different numbers side by side rather
         # than as a sentence about them in a banner.
         captions = [e.value for e in at.caption]
-        assert any("3 trials" in c for c in captions), captions
-        assert any("2 trials" in c for c in captions), captions
+        assert any("3 Trial IDs" in c for c in captions), captions
+        assert any("2 Trial IDs" in c for c in captions), captions
 
     def test_disjoint_trial_ids_warn(self, monkeypatch):
         """Group C.1c: when the tables share no trial ids at all (a likely mapping
@@ -3591,8 +3595,8 @@ class TestSetupWizard:
         ids no longer read as a mapping error."""
         at = self._text_level_upload(monkeypatch)
         captions = " ".join(e.value for e in at.caption)
-        assert "Words attach to readings by Text ID" in captions, captions
-        assert "all 4 readings have word boxes" in captions, captions
+        assert "Words attach to trials by Text ID" in captions, captions
+        assert "all 4 trials have word boxes" in captions, captions
         warn_text = " ".join(e.value for e in at.warning)
         assert "No trial ids are shared" not in warn_text, warn_text
         assert not [e.value for e in at.error]
@@ -3606,9 +3610,9 @@ class TestSetupWizard:
         """DATA-49 round 4: a join worth acting on is never shown as success."""
         at = self._text_level_upload(monkeypatch, text_ids=("1_1_Ele", "nope"))
         warn_text = " ".join(e.value for e in at.warning)
-        assert "2 of 4 readings have word boxes" in warn_text, warn_text
+        assert "2 of 4 trials have word boxes" in warn_text, warn_text
         captions = " ".join(e.value for e in at.caption)
-        assert "Words attach to readings" not in captions, captions
+        assert "Words attach to trials" not in captions, captions
 
     def test_an_aoi_table_nothing_joins_blocks_the_add(self, monkeypatch):
         """DATA-49: no shared trial id and no shared Text ID stops the wizard
@@ -3776,14 +3780,14 @@ class TestSetupWizard:
 @pytest.mark.timeout(120)
 class TestCorpusAnalysisTab:
     """The 'Corpus Analysis' tab hosts the question-oriented analysis sections
-    (Per text / Per reader / Groups). Generations moved to the Scanpath view's
+    (Per text / Per participant / Groups). Generations moved to the Scanpath view's
     Comparisons subtab (ENG-8)."""
 
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
         [
             ("Per text", "ptext_view"),
-            ("Per reader", "prdr_view"),
+            ("Per participant", "prdr_view"),
             ("Groups", "pgrp_view"),
         ],
     )
@@ -3806,6 +3810,53 @@ class TestCorpusAnalysisTab:
         # demo has no `screen_id`, so it must not appear — and its absence is
         # what pins that every single-screen dataset is untouched by the fix.
         assert "ptext_screen" not in keys
+
+    @pytest.mark.parametrize(
+        ("subtab", "view_key"),
+        [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
+    )
+    def test_the_section_caption_names_only_offered_views(self, subtab, view_key):
+        """#374 F15: the caption lists the views in the View list, no others."""
+        from scanpath_studio import tabs
+
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = subtab
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        offered = next(s for s in at.selectbox if s.key == view_key).options
+        captions = " ".join(c.value for c in at.caption)
+        for view, phrase in tabs._VIEW_PHRASES.items():
+            # Options are what the picker shows (`tabs._view_label`).
+            if tabs._view_label(view) in offered:
+                assert phrase in captions, view
+            elif view in tabs._COMPUTED_READER_VIEWS:
+                assert phrase not in captions, view
+
+    def test_per_text_opens_on_the_scanpath_trials_text(self):
+        """#374 F39: Per text opened on the first text, not on the text of the
+        trial the user had open in Scanpath."""
+        from scanpath_studio import api
+
+        words = api.load_sample_data(names="canonical").words
+        trial_col = "unique_trial_id" if "unique_trial_id" in words else "trial_id"
+        # The last text in the pool, so it is never the picker's default.
+        text_col = next(
+            c
+            for c in ("unique_text_id", "text_id", "unique_paragraph_id")
+            if c in words
+        )
+        last = max(words[text_col].astype(str).unique())
+        trial = str(words.loc[words[text_col].astype(str) == last, trial_col].iloc[0])
+
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["corpus_subtab"] = "Per text"
+        at.session_state["single_trial_id"] = trial
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        picked = at.selectbox(key="ptext_text").value
+        assert picked.startswith(f"{last} "), picked
 
     def test_data_without_ia_columns_says_it_has_no_measures(self):
         """AN-32 (reversing BUG-78's derivation): the page computes no reading
@@ -3876,7 +3927,7 @@ class TestCorpusAnalysisTab:
         at.session_state["groups_compare"] = view_key == "cmp_view"
         at.session_state["corpus_subtab"] = {
             "ptext_view": "Per text",
-            "prdr_view": "Per reader",
+            "prdr_view": "Per participant",
         }.get(view_key, "Groups")
         at.session_state[view_key] = view
         at.run(timeout=60)
@@ -3915,7 +3966,7 @@ class TestCorpusAnalysisTab:
             }
             at.session_state["data_source_choice"] = "No clock"
             at.session_state["main_nav"] = "Corpus Analysis"
-            at.session_state["corpus_subtab"] = "Per reader"
+            at.session_state["corpus_subtab"] = "Per participant"
             at.session_state["prdr_view"] = view
             for key, value in state.items():
                 at.session_state[key] = value
@@ -3965,9 +4016,9 @@ class TestCorpusAnalysisTab:
         captions = [c.value for c in at.caption]
         note = next(c for c in captions if "computations/#measure-tfd" in c)
         assert "All time spent on a word" in note and "Unit: ms." in note
-        assert "Each word's value is the mean across its readers." in note
+        assert "Each word's value is the mean across its participants." in note
         assert any(
-            c.startswith("SEM: how precisely the mean is known") for c in captions
+            c.startswith("SEM: how precisely the center is known") for c in captions
         )
 
     def test_group_filter_set_mode_renders(self):
@@ -4836,7 +4887,7 @@ class TestOpenTrialFromCorpusTable:
         assert at.session_state["single_trial_id"] == booted_on
         assert PENDING_TRIAL_KEY not in at.session_state
         assert any(
-            "Couldn't open that reading" in str(w.value)
+            "Couldn't open that trial" in str(w.value)
             and "a-reader-who-is-not-here" in str(w.value)
             for w in at.warning
         ), [w.value for w in at.warning]
@@ -4969,7 +5020,7 @@ class TestLazySubtabBodiesStillRender:
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         headings = " ".join(s.value for s in at.subheader)
-        assert "What's in the" in headings or at.dataframe
+        assert "What's in" in headings or at.dataframe
 
 
 class TestAnimationExportRasterBranch:
@@ -5116,8 +5167,8 @@ class TestDeepLinkToAFilteredOutReader:
         at.run(timeout=180)
         assert not at.exception, at.exception
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "The link's reading couldn't be opened" in warnings
-        assert f"reader {participant}'s trial {trial}" in warnings
+        assert "The link's trial couldn't be opened" in warnings
+        assert f"participant {participant}'s trial {trial}" in warnings
         assert at.session_state["_url_trial_applied"] is True
 
         # The reader comes back into the pool: the consumed link stays put.
@@ -5126,7 +5177,7 @@ class TestDeepLinkToAFilteredOutReader:
         assert not at.exception, at.exception
         assert at.session_state["single_trial_id"] != trial
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "The link's reading couldn't be opened" not in warnings
+        assert "The link's trial couldn't be opened" not in warnings
 
 
 @pytest.mark.timeout(180)
@@ -5391,14 +5442,14 @@ class TestAnnotationsBelongToTheirDataset:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         store = dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY])
         assert len(store) == 1 and next(iter(store.values()))["star"] is True
-        assert any(o.startswith("★ ") for o in self._picker_options(at))
+        assert any("★" in o for o in self._picker_options(at))
 
         # The Bundled Demo has the same (participant, trial) ids — and no star.
         at = self._at(DEMO_CHOICE, self._carry(at))
         assert at.session_state[annotations_mod.OWNER_KEY] == DEMO_CHOICE
         assert at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] == {}
         assert self._picker_options(at)
-        assert not any(o.startswith("★ ") for o in self._picker_options(at))
+        assert not any("★" in o for o in self._picker_options(at))
         editor = self._star_boxes(at)
         assert editor and not any(c.value for c in editor)
 
@@ -5406,7 +5457,7 @@ class TestAnnotationsBelongToTheirDataset:
         at = self._at(self.NAME, self._carry(at))
         assert at.session_state[annotations_mod.OWNER_KEY] == self.NAME
         assert dict(at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY]) == store
-        assert any(o.startswith("★ ") for o in self._picker_options(at))
+        assert any("★" in o for o in self._picker_options(at))
 
 
 def test_column_detection_runs_once_per_table_not_on_every_rerun(monkeypatch):

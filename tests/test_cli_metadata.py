@@ -48,8 +48,8 @@ class TestParticipantMetadata:
         _render(tmp_path, "--participant-metadata", str(path))
 
         err = capsys.readouterr().err
-        assert f"for {len(readers)} reader(s)" in err
-        assert "2 field(s)" in err
+        assert f"for {len(readers)} participants" in err
+        assert "2 fields" in err
         assert "age" in err and "cohort" in err
 
     def test_a_reader_the_table_forgot_is_named(self, tmp_path, sample, capsys):
@@ -65,7 +65,7 @@ class TestParticipantMetadata:
         _render(tmp_path, "--participant-metadata", str(path))
 
         err = capsys.readouterr().err
-        assert "no row in the table" in err
+        assert "in the data, not the table" in err
         assert readers[1] in err
 
     def test_a_row_for_nobody_loaded_is_named_too(self, tmp_path, sample, capsys):
@@ -82,7 +82,7 @@ class TestParticipantMetadata:
         _render(tmp_path, "--participant-metadata", str(path))
 
         err = capsys.readouterr().err
-        assert "not in the data" in err
+        assert "in the table, not the data" in err
         assert "ghost_reader" in err
 
     def test_duplicate_rows_that_disagree_are_dropped_and_named(
@@ -143,7 +143,7 @@ class TestTrialMetadata:
 
         err = capsys.readouterr().err
         assert "keyed by trial id" in err
-        assert f"for {len(trials)} trial(s)" in err
+        assert f"for {len(trials)} trials" in err
 
     def test_keyed_by_reader_and_trial(self, tmp_path, sample, capsys):
         """A row describes one *reading* rather than a text — never inferred,
@@ -167,7 +167,7 @@ class TestTrialMetadata:
         )
 
         err = capsys.readouterr().err
-        assert "keyed by reader + trial" in err
+        assert "keyed by participant + trial" in err
 
     def test_the_reader_column_alone_is_refused(self, tmp_path):
         """It only means something with a table to key."""
@@ -185,7 +185,7 @@ class TestTrialMetadata:
         _render(tmp_path, "--trial-metadata", str(path))
 
         err = capsys.readouterr().err
-        assert "no row in the table" in err
+        assert "in the data, not the table" in err
 
     def test_a_long_key_list_is_truncated_with_a_plain_ellipsis(
         self, tmp_path, sample, capsys
@@ -201,7 +201,7 @@ class TestTrialMetadata:
         _render(tmp_path, "--trial-metadata", str(path))
 
         err = capsys.readouterr().err
-        assert "not in the data" in err
+        assert "in the table, not the data" in err
         assert ", ... (+10)" in err
         assert "…" not in err
 

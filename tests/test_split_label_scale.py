@@ -115,7 +115,11 @@ def test_the_reviewed_pair_keeps_each_panels_text_to_its_boxes():
     9.6 px in B, so A's 16-px font is drawn twice the size of B's."""
     fig = _figure("side_by_side", (1600, 1200))
     assert (fig.layout.width, fig.layout.height) == (1600, 600)
-    assert _label_fonts(fig) == pytest.approx([15.36, 7.68])
+    fonts = _label_fonts(fig)
+    assert fonts[0] == pytest.approx(2 * fonts[1])
+    # 15.36 / 7.68 on the full height; the A/B panel titles' band (#374 F26)
+    # takes a little of it.
+    assert fonts[0] == pytest.approx(15.36, rel=0.03)
 
 
 @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])

@@ -96,7 +96,7 @@ def test_reset_is_explicit_and_restore_brings_the_draft_back():
     at = _custom_draft()
     before = _fixations(at)
     assert _button(at, "Restore previous draft").disabled
-    _button(at, "Reset fixations to the text").click().run()
+    _button(at, "Reset to one fixation per word").click().run()
     reset = _fixations(at)
     assert len(reset) > 2 and all(row["duration_ms"] == 220 for row in reset)
     _button(at, "Restore previous draft").click().run()

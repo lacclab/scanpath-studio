@@ -27,7 +27,7 @@ The app guesses columns from their names. Pick the right one under
 
 ### Can I load only one table?
 
-Yes. A words table alone shows the text and any reading measures it carries; a
+Yes. A Words table alone shows the text and any reading measures it carries; a
 fixations table alone shows gaze positions without text. Most features need
 both.
 
@@ -48,9 +48,10 @@ total). The error names the setting that raises it, for example
 ### Does the app compute reading measures?
 
 No. Corpus Analysis and Export show the measures your interest-area report
-provides, as they are; [Computations](computations.md) defines each one.
+provides, as your eye-tracking software defines them; [Computations](computations.md)
+gives how Scanpath Studio would compute each.
 
-### Does :material/cleaning_services: Filter change my data?
+### Does :material/cleaning_services: Flag fixations change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as
 they are.
@@ -80,8 +81,8 @@ data to the online demo. See [Privacy](privacy.md).
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app keeps a recovery copy of your
-datasets and settings (when it listens only on this computer, as
+Not on a local or desktop install: the app saves your datasets and
+settings on this computer (when it listens only on this computer, as
 `scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
@@ -89,15 +90,16 @@ so export your annotations and settings before you leave
 
 If one saved dataset's files go missing or are damaged, the rest of the
 session still comes back. The app names the dataset that didn't, keeps its
-saved copy as it is, and offers **Retry** and **Remove from cache**. Saved
+saved copy as it is, and offers **Retry** and **Remove saved copy**. Saved
 metadata tables that can't be read are kept the same way. If the
-whole recovery copy can't be read, the app opens without it and stops saving
+whole saved copy can't be read, the app opens without it and stops saving
 over it until you retry or clear it.
 
-### How do I turn the recovery copy off, or delete it?
+### How do I stop saving, or delete what is saved?
 
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
-delete what is saved, close the app and run `scanpath-studio cache --clear`.
+delete what is saved and start over, use **Clear what is saved…** under
+**Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
 See [Recovery cache](cli.md#recovery-cache).
 
 ## Help and versions

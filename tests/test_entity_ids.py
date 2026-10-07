@@ -47,15 +47,15 @@ def test_trials() -> None:
     assert out["Text ID"].tolist() == ["a", "a", "b"]
     assert out["# Fixations"].tolist() == [2, 2, 1]
     # A trial with fixations but no AOI rows counts 0, not a gap.
-    assert out["# AOIs"].tolist() == [3, 3, 0]
+    assert out["# Words"].tolist() == [3, 3, 0]
 
 
 def test_texts() -> None:
     words, fixations = _frames()
     out = _ids_from_data("text", words, fixations, cache_key="x")
-    assert out.columns[:2].tolist() == ["Text ID", "# Readers"]
+    assert out.columns[:2].tolist() == ["Text ID", "# Participants"]
     assert out.set_index("Text ID")["Text"]["a"] == "The cat sat"
-    assert out.set_index("Text ID")["# Readers"]["a"] == 2
+    assert out.set_index("Text ID")["# Participants"]["a"] == 2
 
 
 def test_nothing_to_show() -> None:

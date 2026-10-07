@@ -90,7 +90,7 @@ def test_two_screen_sizes_in_one_dataset_refuse_the_overlay():
     for width_a, width_b in ((800, 1600), (1600, 800)):
         allowed, reason = _run(width_a, width_b).session_state["gate"]
         assert not allowed
-        assert f"{width_a}x900" in reason and f"{width_b}x900" in reason
+        assert f"{width_a}×900" in reason and f"{width_b}×900" in reason
 
 
 def test_each_split_panel_is_drawn_to_its_own_screen():

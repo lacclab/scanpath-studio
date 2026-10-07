@@ -121,7 +121,7 @@ def _clean(at: AppTest, note: str = "") -> None:
 def _trial_ids(at: AppTest) -> list[str]:
     """The trial ids currently offered by the picker (the live trial pool).
 
-    Favorited trials are labelled ``★ <id>``. The options are the ids as shown
+    Favorited trials are labelled ``<id> ★``. The options are the ids as shown
     (UX-187 / UX-202); `picker_trial_id` gives each id back.
     """
     from tests.conftest import picker_trial_id
@@ -331,7 +331,7 @@ class TestTrialFilterFlow:
         assert entry["star"] is True
         assert len(_trial_ids(at)) == DEMO_ADV_TRIALS_IN_PICKER
         picker = next(s for s in at.selectbox if s.key == "single_trial_id")
-        assert any(str(option).startswith("★ ") for option in picker.options)
+        assert any("★" in str(option) for option in picker.options)
 
         # (3) Favorites-only narrows to exactly the starred trial.
         # AppTest cannot replay a selectbox whose format_func reads Streamlit
@@ -369,7 +369,7 @@ class TestTrialFilterFlow:
         body = " ".join(m.value for m in at.markdown)
         assert "No trials match your filters" in body
         # The count has to say what it counts; "(dataset has 1)" did not.
-        assert "**0** of the **1 trials** in this dataset get through." in body
+        assert "**0** of the **1 trial** in this dataset get through." in body
         assert "★ Favorites only" in body
         assert _trial_ids(at) == []
         assert [b for b in at.button if b.key == "clear_all_trial_filters"], (
@@ -502,7 +502,7 @@ class TestBulkExportFlow:
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always
         # there since UX-150 (it renders on click), so look for the zip by label.
-        assert "Download zip" not in self._download_labels(at), (
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at), (
             "the zip download button must only appear after a build"
         )
 
@@ -585,7 +585,9 @@ class TestBulkExportFlow:
         # Streamlit 1.59 it is drivable, so click it rather than only asserting
         # it exists: that is what proves the button is wired to a live payload
         # and that the app survives serving it (ENG-36).
-        zip_button = [b for b in at.get("download_button") if b.label == "Download zip"]
+        zip_button = [
+            b for b in at.get("download_button") if b.label == "⬇ Download bundle (zip)"
+        ]
         assert zip_button, "the zip download button should render after a build"
         zip_button[0].click()
         at.run(timeout=60)
@@ -640,12 +642,12 @@ class TestBulkExportFlow:
         next(b for b in at.button if b.label == "Build export").click()
         at.run(timeout=120)
         assert not at.exception, at.exception
-        assert "Download zip" not in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
         at.run(timeout=60)
         _clean(at, "after the stopped build:")
         warnings = " ".join(str(w.value) for w in at.warning)
         assert "Export stopped" in warnings
-        assert "Download zip" not in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
         # The session is as it was: the choices that led to the build stand.
         assert at.radio(key="bulk_export_scope").value == "This trial"
         assert list(at.pills(key="bulk_export_figfmts").value) == ["HTML", "SVG"]
@@ -701,7 +703,7 @@ class TestBulkExportFlow:
         at.run(timeout=60)
         _clean(at, "after picking PNG + HTML:")
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "bundle figures are drawn on this server" in warnings
+        assert "on the computer running Scanpath Studio" in warnings
 
         next(b for b in at.button if b.label == "Build export").click()
         at.run(timeout=120)
@@ -710,7 +712,7 @@ class TestBulkExportFlow:
         assert partial and "1 of 2 figures made · 1 failed" in partial[0]
         errors = next(e for e in at.expander if e.label.startswith("Export errors"))
         assert errors.proto.expanded is False
-        assert "Download zip" in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" in self._download_labels(at)
 
         at.pills(key="bulk_export_figfmts").set_value(["PNG"])
         at.run(timeout=60)
@@ -721,14 +723,14 @@ class TestBulkExportFlow:
         assert failed and failed[0].startswith("No figures were made")
         errors = next(e for e in at.expander if e.label.startswith("Export errors"))
         assert errors.proto.expanded is True
-        assert "Download zip" in self._download_labels(at)
+        assert "⬇ Download bundle (zip)" in self._download_labels(at)
 
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
     """ENG-30 → UX-179 — 🗂️ Data → *Saved on this computer* is the on-device
-    cache's only in-app surface, so it has to report the real store. It is a
-    read-out: clearing is `scanpath-studio cache --clear` / `api.clear_cache`.
+    cache's only in-app surface, so it has to report the real store. #374 F33
+    gave it one control back: *Clear what is saved…*, behind a confirmation.
     """
 
     @staticmethod
@@ -759,11 +761,39 @@ class TestRecoveryCachePanelFlow:
         # Working in the app writes the cache — the panel's own claim.
         assert (tmp_path / "manifest.json").is_file()
         assert persistence.cache_status(tmp_path)["settings"] > 0
-        # UX-179: a read-out — no saving toggle, no Clear, no Reset.
+        # UX-179: no saving toggle, no Reset.
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         labels = {p.proto.popover.label for p in at.get("popover")}
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
+
+    def test_clear_what_is_saved_lists_then_starts_over(self, tmp_path, monkeypatch):
+        """#374 F33: the confirmation names what goes, and a confirmed clear
+        starts the app over — the session is emptied too, so the run that
+        follows cannot write the old work back."""
+        at = self._boot_local(tmp_path, monkeypatch)
+        _clean(at, "cache panel:")
+        assert (tmp_path / "manifest.json").is_file()
+        at.button(key="saved_here_clear").click()
+        _rerun(at, view=VIEW_DATA)
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "the view, trial and plot settings you left" in body
+        assert (tmp_path / "manifest.json").is_file(), "nothing goes before Delete"
+        # A dialog's click reruns only the dialog in a browser; AppTest replays
+        # the script, so re-arm it as `conftest.arm_debug_dialog` does.
+        from scanpath_studio import app
+
+        at.session_state[app.CLEAR_SAVED_REQUEST_KEY] = True
+        at.button(key="saved_here_clear_confirm").click()
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        # A first visit: the dataset picked before is gone with the session…
+        assert at.session_state["data_source_choice"] != SYNTHETIC_SOURCE
+        assert "Cleared what was saved" in " ".join(str(t.value) for t in at.toast)
+        # …and what is saved now is the fresh session's, not the old work.
+        from scanpath_studio import persistence
+
+        assert persistence.cache_status(tmp_path)["datasets"] == []
 
     def test_the_section_is_only_on_the_data_page(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
@@ -893,13 +923,13 @@ class TestAddDatasetMenu:
         assert at.session_state["data_source_choice"] == MANUAL_SAMPLE_CHOICE
         assert not any(t.key == "author_text" for t in at.text_area)
         assert not any(b.key == "cancel_authoring" for b in at.button)
-        assert any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        assert any(s.label.startswith("Select trial") for s in at.selectbox)
         at.session_state["_author_editing"] = MANUAL_SAMPLE_CHOICE
         at.run(timeout=60)
         _clean(at)
         assert at.text_area(key="author_text").value == "The cat sat\non the mat."
         assert not any("Plot controls" in h.value for h in at.subheader)
-        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        assert not any(s.label.startswith("Select trial") for s in at.selectbox)
         at.text_area(key="author_text").set_value("An edited example.").run(timeout=60)
         _rerun(at, view=VIEW_DATA)
         at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
@@ -909,7 +939,7 @@ class TestAddDatasetMenu:
         _clean(at)
         assert _dataset_names(at)
         assert "My scanpath" not in _dataset_names(at)
-        assert MANUAL_SAMPLE_CHOICE in _dataset_names(at)
+        assert "Hand-drawn sample" in _dataset_names(at)
         at.button(key="create_manual_scanpath_btn").click().run(timeout=60)
         _clean(at)
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
@@ -931,7 +961,7 @@ class TestAddDatasetMenu:
         _clean(at)
         assert at.session_state["data_source_choice"] == AUTHOR_CHOICE
         assert not any("Plot controls" in h.value for h in at.subheader)
-        assert not any(s.label.startswith("**Select Trial**") for s in at.selectbox)
+        assert not any(s.label.startswith("Select trial") for s in at.selectbox)
         authored = at.session_state["_authored_events_frame"].copy()
         at.text_area(key="author_text").set_value("A small manual trial.").run(
             timeout=60
@@ -957,25 +987,12 @@ class TestAddDatasetMenu:
         assert at.button(key="cancel_add_data")
         assert at.get("file_uploader")
 
-    def test_coming_soon_leaves_the_current_dataset_and_trial_selected(self):
-        from scanpath_studio import app
-
+    def test_the_picker_offers_only_datasets(self):
+        """#374 F31: no "More coming soon!" entry; its help says it instead."""
         at = _boot()
-        trial = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
-        trial.select_index(2).run(timeout=60)
-        before_trial = at.selectbox(key=trial.key).value
-        before_source = at.session_state["data_source_choice"]
         picker = at.selectbox(key="data_source_picker")
-        assert "More coming soon!" in picker.options
-        picker.select(app._MORE_DATASETS_PLACEHOLDER).run(timeout=60)
-        _clean(at)
-        assert at.session_state["data_source_choice"] == before_source
-        assert at.selectbox(key="data_source_picker").value == before_source
-        assert at.selectbox(key=trial.key).value == before_trial
-        assert (
-            app._MORE_DATASETS_PLACEHOLDER
-            not in at.session_state["_data_source_entries"]
-        )
+        assert "More coming soon!" not in picker.options
+        assert len(picker.options) == len(at.session_state["_data_source_entries"])
 
 
 @pytest.mark.timeout(180)
@@ -1041,7 +1058,7 @@ class TestAuthoringEditorFlow:
         )
         assert any("target word" in str(w.value) for w in at.warning)
         next(
-            b for b in at.button if b.label == "Reset fixations to the text"
+            b for b in at.button if b.label == "Reset to one fixation per word"
         ).click().run(timeout=60)
         _clean(at, "after resetting the fixations:")
         after = at.session_state["_authored_events_frame"]
@@ -1066,10 +1083,8 @@ class TestAuthoringEditorFlow:
         at = at.run(timeout=60)
         _clean(at, "with an unusable authoring row:")
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "finite X/Y" in warnings, (
-            "an undrawable row was dropped without saying so"
-        )
-        assert "Row 2" in warnings
+        assert "no X/Y" in warnings, "an undrawable row was dropped without saying so"
+        assert "row 2" in warnings
 
     def _linked(self, events: str) -> AppTest:
         at = AppTest.from_file(APP_SCRIPT)
@@ -1083,7 +1098,7 @@ class TestAuthoringEditorFlow:
         drew its navigation — now it is ignored with the existing warning."""
         at = self._linked('[{"x":100},1]')
         _clean(at, "with a malformed authored link:")
-        assert any("malformed authored-fixation" in str(w.value) for w in at.warning)
+        assert any("unreadable hand-made scanpath" in str(w.value) for w in at.warning)
         assert at.session_state["author_text"] == "alpha beta"
 
     def test_valid_authored_link_events_survive_the_first_render(self):
@@ -1208,7 +1223,7 @@ class TestCrossDatasetCompareFlow:
         (warning,) = [
             str(w.value) for w in at.warning if "animated comparison" in str(w.value)
         ]
-        assert warning.endswith("Showing only the first scanpath.")
+        assert warning.endswith("Only scanpath A is replayed.")
         assert "side by side" not in warning
         # And 🔗 Share's snippet reproduces what is drawn — A alone — rather than
         # a co-animation (`trial_b=` / `--compare-with`) the app just refused.

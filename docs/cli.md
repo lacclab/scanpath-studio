@@ -22,7 +22,7 @@ scanpath-studio --server.address 0.0.0.0
 ```
 
 Served on a network, the app also turns off everything that reads or writes the
-server's own folders — the data-location box, the :material/folder_open: folder picker, ⬇ Download
+server's own folders — the *Data directory* box, the :material/folder_open: folder picker, ⬇ Download
 for the public corpora and stimulus-image folders — since any visitor could use
 them. On a lab server you trust, turn them back on with `SCANPATH_LOCAL_FS=1`
 (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
@@ -37,15 +37,15 @@ names the closest one, rather than an argument handed to Streamlit.
 # Inspect available IDs
 scanpath-studio render --sample --list-trials
 
-# Render the bundled sample
+# Render the bundled demo
 scanpath-studio render --sample -o scanpath.html
 
-# Render your data
+# Render your data (replace p1 / t3 with ids from --list-trials)
 scanpath-studio render \
   --words ia.csv --fixations fixations.csv \
   --participant p1 --trial t3 --output scanpath.svg
 
-# Render a portable file saved by the in-app scanpath author
+# Render an authoring file saved from the app's Author a scanpath screen
 scanpath-studio render --authoring authored-scanpath.json -o authored.html
 
 # Inspect and render an ordered multipart trial
@@ -57,10 +57,10 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   -o replay.html
 ```
 
-HTML is interactive and browser-free. PNG, SVG, and PDF require
-Chrome/Chromium (`plotly_get_chrome -y`).
+HTML is interactive and needs no browser. PNG, SVG and PDF need Chrome,
+Chromium or Edge installed (or run `plotly_get_chrome -y` once).
 
-### When a column isn't recognised
+### When a column isn't recognized
 
 Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
 snake_case spellings). When one isn't, `render` stops and prints which field it
@@ -99,11 +99,11 @@ The Python API takes the same corpora through `load_potec` and
 
 ## Compare two scanpaths
 
-`--compare-with PARTICIPANT:TRIAL` draws a second reading beside or over the
+`--compare-with PARTICIPANT:TRIAL` draws a second trial beside or over the
 first — the headless form of the app's **Compare** mode.
 
 ```bash
-# Two readers of the same paragraph, overlaid
+# Two participants on the same paragraph, overlaid
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 -o compare.html
 
@@ -112,7 +112,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-stimulus b \
   -o compare_b.html
 
-# Side by side — each panel draws its own reading's stimulus
+# Side by side — each panel draws its own trial's stimulus
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
   --compare-layout side-by-side -o compare.svg
@@ -132,15 +132,15 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | pick each screen of a multipart trial | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
-| name the two traces | `--label-a TEXT --label-b TEXT` (both or neither) |
+| name the two scanpaths | `--label-a TEXT --label-b TEXT` (both or neither) |
 | style each scanpath | `--style-a SPEC`, `--style-b SPEC` (below) |
-| the A/B legend | `--compare-legend` |
+| the A/B legend (on by default) | `--no-compare-legend` to leave it off |
 | B's own stimulus page (split layouts) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
 | that dataset's raw gaze | `--compare-raw-gaze PATH…` |
 | name that dataset | `--compare-dataset-name NAME` |
 | declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
-| co-animate both readings | add `--animate` (HTML output) |
+| co-animate both scanpaths | add `--animate` (HTML output) |
 
 `--label-a` / `--label-b` also label the `--animate` co-animation, and
 `--style-a` / `--style-b` (below) style it as they style the comparison.
@@ -150,34 +150,34 @@ under :material/blur_on: Fixations, :material/arrow_outward: Saccades, the
 word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`:
 a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`,
 `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`;
-`box_color` outlines that reading's word boxes, its `fix_color` when left out,
+`box_color` outlines that scanpath's word boxes, its `fix_color` when left out,
 `box_fill_color` fills them, `--word-box-fill-color` when left out, and
-`raw_gaze_color` colours its raw-gaze samples, its `fix_color` when left out —
+`raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out —
 all three static comparison only, the `--animate` co-animation draws one set of
-boxes and no raw gaze), `heatmap_colorscale` (a Plotly colour scale for that
-reading's heatmap, `--heatmap-colorscale` when left out; the range stays shared,
-and two different scales get a colour bar each), `saccade_style` (`solid`, `dash`,
+boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that
+scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared,
+and two different scales get a color bar each), `saccade_style` (`solid`, `dash`,
 `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`),
 `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that
 scanpath's default.
 
 ```bash
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-legend \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 ```
 
-`--animate --compare-with` replays **both** readings on one clock, the same dual
+`--animate --compare-with` replays **both** scanpaths on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
 `--compare-with` cannot be combined with `--all-screens`: a comparison
-is a single figure of two readings, each drawn from one screen. Pick A's with
+is a single figure of two trials, each drawn from one screen. Pick A's with
 `--screen` and B's with `--compare-screen`; B's is looked up in B's own trial,
 so it can be a later page, or a page of the second dataset.
 
 **Overlay across two datasets requires matching canvases.** On two different
 canvases `--compare-layout overlay` fails rather than falling back, and so does
-`--animate`, which replays both readings in one coordinate space; pass
+`--animate`, which replays both scanpaths in one coordinate space; pass
 `--compare-layout side-by-side` or `stacked`, without `--animate`. Without
 `--compare-canvas` the second dataset's screen is read off its data, as A's is
 when neither `--canvas` nor a built-in source gives one. That extent rarely
@@ -194,12 +194,13 @@ B's frames directly.
 
 | Goal | Option |
 | --- | --- |
-| hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-order`, `--no-saccades`, `--no-heatmap` |
-| animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honoured, and the rest are named in a warning |
+| add a layer | `--word-boxes`, `--fixation-index`, `--heatmap` (the default is the app's Scanpath design) |
+| hide a layer | `--no-text`, `--no-fixations`, `--no-saccades` |
+| animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honored, and the rest are named in a warning |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
 | color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
-| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honoured by `--animate` and `--compare-with` too) |
+| draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honored by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
 | use a smoothed (Gaussian) heatmap | `--heatmap-style interpolated --heatmap-sigma 20` (σ in px; omit it for the automatic σ) |
@@ -208,6 +209,7 @@ B's frames directly.
 | style the word boxes | `--word-box-color`, `--word-box-line-opacity`, `--word-box-fill-color`, `--word-box-fill-opacity` (0 draws outlines only / fill only) |
 | draw the raw gaze | `--raw-gaze PATH…` (or `--sample-raw-gaze` with `--sample`), `--raw-gaze-schema JSON`, `--raw-gaze-color`, `--raw-gaze-marker-size`, `--raw-gaze-opacity`; `--no-raw-gaze` loads the table but hides the layer |
 | size the figure | `--width`, `--height`, `--scale` |
+| size a PNG for print | `--width-mm MM` or `--width-in IN`, with `--dpi N` (default 300) |
 | title and caption it | `--title`, `--caption` |
 | print the equivalent Python | `--print-code python` (or `cli` / `both`, plus `--print-code-explicit`) |
 
@@ -216,8 +218,8 @@ flag.
 
 Raw gaze is a third table rather than an option: `--raw-gaze` reads it (columns
 auto-detected like `--fixations`) and draws the plotted trial's samples under the
-fixations. With `--compare-with` it covers both readings, each drawn in its
-scanpath's colour, and `--compare-raw-gaze PATH…` is B's when B comes from
+fixations. With `--compare-with` it covers both scanpaths, each drawn in its
+own color, and `--compare-raw-gaze PATH…` is B's when B comes from
 another dataset. `--animate` ignores it with a warning.
 
 ```bash
@@ -238,7 +240,8 @@ scanpath-studio render --raw-gaze gaze_samples.csv -t t3 -o samples.png
 ## Corpus figures
 
 `scanpath-studio corpus` goes the other way: it reads a tidy CSV you already
-have and renders a styled corpus figure
+have (for `--kind profile`, columns `word_id` and `value`) and renders a styled
+corpus figure
 ([`api.plot_corpus_figure`](api.md#scanpath_studio.api.plot_corpus_figure)):
 
 ```bash
@@ -253,7 +256,7 @@ print(cli_reference("corpus"))
 
 ## Data checks
 
-`check` runs the **:material/database: Data** page's **Data checks** on your
+`check` runs the **:material/database: Data Management** page's **Data checks** on your
 tables without opening the app: fixations lasting 0 ms or less or with an
 infinite duration or onset, fixations and raw-gaze samples with no finite
 position, word boxes with no area or no finite position, and per-screen screen
@@ -285,20 +288,21 @@ or **Export → Export bundle** for many figures.
 ## Recovery cache
 
 A local or desktop run caches your session on your own machine — uploaded
-datasets, column mappings, view settings, and annotations — so a refresh or a
+datasets, column mappings, view settings, saved designs, metadata tables and
+annotations — so a refresh or a
 restart resumes where you left off. `cache` shows what is stored and removes it:
 
 ```bash
 scanpath-studio cache            # datasets, rows, size, folder, last written
 scanpath-studio cache --path     # just the folder
 scanpath-studio cache --json     # the same status as JSON
-scanpath-studio cache --clear    # delete the stored session
+scanpath-studio cache --clear    # delete the recovery cache
 ```
 
-The same information is at the foot of the **:material/database: Data** page, under **Saved on
+The same information is at the foot of the **:material/database: Data Management** page, under **Saved on
 this computer**. A running app writes a new copy at its next change, so clear
 with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching
-off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
+off wherever it is set, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
 

@@ -90,7 +90,8 @@ def progress_caption(status: ExportStatus) -> str:
     """
     if status.completed is None or status.total is None:
         return status.message
-    parts = [f"{status.completed:,}/{status.total:,} trials"]
+    # The total counts export units — a multi-screen trial is several.
+    parts = [f"{status.completed:,}/{status.total:,} done"]
     rate = status.rate_per_s
     if rate is not None:
         parts.append(f"{rate:.3g}/s" if rate < 10 else f"{rate:.0f}/s")

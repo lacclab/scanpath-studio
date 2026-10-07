@@ -313,7 +313,7 @@ def test_geometry_badge_never_claims_uniformly_real_geometry():
         "paragraphs_without_real_boxes": 452,
     }
     assert "Reconstructed" in app.geometry_badge(reconstructed)
-    assert "Fixation y uses word-box centres." in app.geometry_badge(reconstructed)
+    assert "Fixation y uses word-box centers." in app.geometry_badge(reconstructed)
     recorded = {**full, "recorded_fixation_y_fraction": 1.0}
     assert app.geometry_badge(recorded).endswith("Recorded fixation y.")
     mixed_y = {**full, "recorded_fixation_y_fraction": 0.625}

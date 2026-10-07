@@ -76,7 +76,7 @@ class TestScreenIdentity:
     @pytest.mark.parametrize(
         "index, message",
         [
-            ([1, 1, 0, 0], "positive integers"),
+            ([1, 1, 0, 0], "must count from 1"),
             ([1, 1, 1.5, 1.5], "whole numbers"),
         ],
     )
@@ -85,11 +85,11 @@ class TestScreenIdentity:
             normalize_screen_identity(_frame(screen_index=index))
 
     def test_one_id_may_not_carry_two_indexes(self):
-        with pytest.raises(ValueError, match="more than one screen_index"):
+        with pytest.raises(ValueError, match="two `screen_index` values"):
             normalize_screen_identity(_frame(screen_index=[1, 2, 3, 3]))
 
     def test_one_index_may_not_carry_two_ids(self):
-        with pytest.raises(ValueError, match="more than one screen_id"):
+        with pytest.raises(ValueError, match="two Screen IDs share"):
             normalize_screen_identity(
                 _frame(screen_id=["a", "a", "b", "b"], screen_index=[1, 1, 1, 1])
             )
@@ -100,7 +100,7 @@ class TestScreenIdentity:
 
     def test_a_canvas_that_changes_inside_one_screen_is_refused(self):
         """Never resolved by taking the first row — a screen has one canvas."""
-        with pytest.raises(ValueError, match="conflicts within one screen"):
+        with pytest.raises(ValueError, match="changes within one screen"):
             normalize_screen_identity(_frame(canvas_height=[10, 20, 30, 30]))
 
 
@@ -123,7 +123,7 @@ class TestTheCatalogue:
 
 class TestMatchingParts:
     def test_identity_in_only_one_report_is_refused(self):
-        with pytest.raises(ValueError, match="only one report"):
+        with pytest.raises(ValueError, match="only one table"):
             validate_matching_parts(
                 _frame(),
                 pd.DataFrame({"participant_id": ["p1"], "trial_id": ["t1"]}),
@@ -132,7 +132,7 @@ class TestMatchingParts:
     def test_an_orphan_screen_is_named(self):
         words = normalize_screen_identity(_frame())
         fixations = normalize_screen_identity(_frame(screen_id=["a", "a", "c", "c"]))
-        with pytest.raises(ValueError, match="orphan screens"):
+        with pytest.raises(ValueError, match="one table only"):
             validate_matching_parts(words, fixations)
 
     def test_matching_reports_pass(self):

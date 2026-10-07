@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
+from .annotations import current_dataset as annotations_dataset
 from .annotations import get_entry, store_for_prefix
 from .column_names import COMPUTED_SUFFIX, active_all
 from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
@@ -303,8 +304,8 @@ TRIAL_SORT_DATA_ORDER = "Data order"
 # are listed after the dataset's own columns.
 _TRIAL_SORT_STATS = {
     "Fixation count (computed)": ("fixations", "size"),
-    "Reading time, s (computed)": ("fixations", "duration_sum_s"),
-    "Mean fixation, ms (computed)": ("fixations", "duration_mean"),
+    "Total fixation time, s (computed)": ("fixations", "duration_sum_s"),
+    "Mean fixation duration, ms (computed)": ("fixations", "duration_mean"),
     "Word count (computed)": ("words", "size"),
     "First timestamp (computed)": ("fixations", "timestamp_min"),
 }
@@ -996,7 +997,7 @@ def _render_trial_sort_popover(
             "Sort trials by",
             options=options,
             key=state_key,
-            help="Reorder the trial list by a computed statistic or by a reader, "
+            help="Reorder the trial list by a computed statistic or by a participant, "
             "text or condition property.",
         )
         descending = labeled(
@@ -1116,6 +1117,11 @@ def step_linked_compare(delta: int) -> None:
     }
 
 
+#: #374 F34 — ``{"<key prefix>|<dataset>": trial id}``: the trial each
+#: dataset's picker was last on.
+_TRIAL_BY_DATASET_KEY = "_trial_by_dataset"
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
@@ -1142,7 +1148,9 @@ def _select_trial_none_mode(
     available_trials = combos.drop_duplicates(subset=[trial_field])
     trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
     if not trial_options:
-        st.warning("No trials available after filtering.")
+        st.warning(
+            "No trials match the filters. Clear one, or use ✕ Clear all filters."
+        )
         st.stop()
 
     # Trial id → participant, so the annotation markers (UX-6) can be looked up per
@@ -1175,7 +1183,9 @@ def _select_trial_none_mode(
     def _option_label(value: str) -> str:
         marks = annotation_markers(trial_to_pid.get(value), value, store=store)
         base = id_display.get(value) or _trial_display_label(value)
-        label = f"{marks} {base}" if marks else base
+        # #374 F27: the badges follow the trial, so a narrow picker cuts the
+        # badges rather than the trial.
+        label = f"{base} {marks}" if marks else base
         shown = sort_values.get(value)
         return f"{label}  ·  {shown}" if shown else label
 
@@ -1188,7 +1198,7 @@ def _select_trial_none_mode(
         return _option_label(value) if label is None else label
 
     n_trials = len(trial_options)
-    picker_label = "**Select Trial**"
+    picker_label = "Select trial"
     trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
     slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
 
@@ -1196,6 +1206,29 @@ def _select_trial_none_mode(
     # Save-&-restore code seeds it (`_restore_selection`). The slider mirrors it
     # and ◀ ▶ step it; all stay in sync via the trial id.
     current_label = st.session_state.get(trial_id_key) if trial_id_key else None
+    # #374 F34: the trial each dataset was last on, so switching away and back
+    # returns to it rather than to the first trial.
+    dataset = annotations_dataset(st.session_state)
+    remembered = st.session_state.setdefault(_TRIAL_BY_DATASET_KEY, {})
+    last_dataset_key = f"{_TRIAL_BY_DATASET_KEY}_{key_prefix}"
+    previous = st.session_state.get(last_dataset_key, dataset)
+    st.session_state[last_dataset_key] = dataset
+    # A trial carried over from the dataset left behind is not a choice; one a
+    # link or a restored settings file put there with the switch is.
+    chosen = st.session_state.pop(f"_{key_prefix}_trial_chosen", None)
+    carried = (
+        previous != dataset
+        and current_label != chosen
+        and current_label == remembered.get(f"{key_prefix}|{previous}")
+    )
+    back_to = remembered.get(f"{key_prefix}|{dataset}")
+    if (
+        trial_id_key
+        and back_to in trial_options
+        and (carried or current_label not in trial_options)
+    ):
+        current_label = back_to
+        st.session_state[trial_id_key] = current_label
     # Seeded rather than chosen: re-seeded to the *sorted* list's first trial
     # once the ⇅ order is known (UX-171 — data order's first, not the id's).
     seeded = current_label not in trial_options
@@ -1288,7 +1321,7 @@ def _select_trial_none_mode(
                 )
             if sort_choice != TRIAL_SORT_DATA_ORDER or sort_desc:
                 picker_label = (
-                    f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+                    f"Select trial  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
                 )
             if seeded:
                 current_label = trial_options[0]
@@ -1315,6 +1348,14 @@ def _select_trial_none_mode(
     # picker's linked ◀ ▶ can step this picker without rebuilding its ordering.
     if trial_id_key:
         st.session_state[trial_options_snapshot_key(key_prefix)] = list(trial_options)
+        # #374 F10: the browser identifies the picked option by its *label*, and
+        # a label carries the trial's ★ 🏷️ 📝 marks. Written only when it moved,
+        # the browser kept the label from that run; a tag added later renamed the
+        # option, the old label matched nothing, and the view fell back to trial
+        # 1. Written every run (as the slider is), the browser always holds the
+        # label it was last shown, which the next run can still read back.
+        st.session_state[trial_id_key] = current_label
+        remembered[f"{key_prefix}|{dataset}"] = current_label
 
     option_labels.update({opt: _option_label(opt) for opt in trial_options})
 
@@ -1450,7 +1491,9 @@ def select_trial(
         builder, which still supports the other modes when called directly).
     """
     if combos.empty:
-        st.warning("No trials available after filtering.")
+        st.warning(
+            "No trials match the filters. Clear one, or use ✕ Clear all filters."
+        )
         st.stop()
 
     trial_field = (

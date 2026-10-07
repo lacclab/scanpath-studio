@@ -110,9 +110,9 @@ class TestSameDataset:
 
     @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
     @pytest.mark.parametrize("show_legend", [True, False])
-    def test_split_panel_titles_follow_the_legend_toggle(self, layout, show_legend):
-        """BUG-90: with the legend off the top margin is 0, which clipped the
-        upper panel's title while the lower one still showed. Both or neither."""
+    def test_split_panels_are_always_titled_a_and_b(self, layout, show_legend):
+        """#374 F26: each panel says which scanpath it is, legend or not — and
+        the top band is reserved for it (BUG-90 clipped the upper title)."""
         words, fixations = _pair()
         fig = api.compare_scanpaths(
             words,
@@ -124,7 +124,8 @@ class TestSameDataset:
             canvas_size=(1920, 1080),
         )
         titles = [a for a in fig.layout.annotations if a.name != "duration_size_key"]
-        assert len(titles) == (2 if show_legend else 0)
+        assert [t.text.split(" · ")[0] for t in titles] == ["A", "B"]
+        assert fig.layout.margin.t > 0
 
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""
@@ -253,7 +254,7 @@ class TestCrossDataset:
                 canvas_size=(1920, 1080),
             )
         message = str(excinfo.value)
-        assert "400x300" in message
+        assert "400×300" in message
         assert "B's screen was read off its data" in message
         assert "setup_b=" in message
 
@@ -504,7 +505,7 @@ class TestCoAnimationAcrossTwoDatasets:
         it (400x300 for these frames), never assumed to be A's."""
         from scanpath_studio.experimental_setup import IncomparableScreensError
 
-        with pytest.raises(IncomparableScreensError, match="400x300") as excinfo:
+        with pytest.raises(IncomparableScreensError, match="400×300") as excinfo:
             self._animate(dataset_b="PoTeC", canvas_size=(1920, 1080))
         # …and the refusal says the screen was inferred, and how to state it.
         message = str(excinfo.value)

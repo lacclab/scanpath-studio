@@ -342,7 +342,7 @@ def test_numbers_are_clamped_to_their_widgets():
 )
 def test_a_value_the_widget_refuses_is_ignored_with_a_warning(param, value):
     at = _open_link(**{param: value})
-    assert any(f"?{param}=" in w.value for w in at.warning), [
+    assert any(f"invalid {param}=" in w.value for w in at.warning), [
         w.value for w in at.warning
     ]
 
@@ -540,7 +540,7 @@ def _upload_link_app():
 
 
 def test_a_link_that_cannot_name_its_source_carries_no_recording_setup():
-    """An uploaded dataset's setup travels in its ⬇️ Save setup JSON, which the
+    """An uploaded dataset's setup travels in its ⬇️ Download setup file JSON, which the
     link's caveat points at; on the link it would land on another source."""
     at = AppTest.from_function(_upload_link_app)
     at.run(timeout=30)

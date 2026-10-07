@@ -452,6 +452,21 @@ def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monke
     assert save_local_state(session, "http://localhost:8501")
 
 
+def test_clear_saved_work_starts_over(tmp_path, monkeypatch):
+    """#374 F33: the Data page's clear empties the session too, so the next
+    run's save cannot write the old work back."""
+    import scanpath_studio.persistence as module
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(module, "state_directory", lambda *a, **k: tmp_path)
+    session = {"_datasets": {"Corpus": _dataset()}}
+    save_local_state(session, "http://localhost:8501")
+
+    assert module.clear_saved_work(session)
+    assert not (tmp_path / "manifest.json").exists()
+    assert session == {}, "the session starts over"
+
+
 def test_clear_local_state_survives_an_undeletable_cache(tmp_path, monkeypatch):
     """A locked cache file must not wedge Clear recovery / Reset everything.
 
@@ -1567,7 +1582,10 @@ class TestEachCachedDatasetRestoresOnItsOwn:
         manifest_path.write_text("{ not json", encoding="utf-8")
         session = {}
         assert not restore_local_state(session, self.URL)
-        assert persistence.cache_failure(session) == "its manifest is not valid JSON"
+        assert (
+            persistence.cache_failure(session)
+            == "its index file (manifest.json) is damaged"
+        )
         assert persistence_paused(session)
         session["global_show_heatmap"] = False
         assert not save_local_state(session, self.URL)
@@ -1645,7 +1663,7 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     warnings = " ".join(str(w.value) for w in at.warning)
     assert "couldn't be restored" in warnings
     labels = [b.label for b in at.button]
-    assert "Retry" in labels and "Remove from cache" in labels
+    assert "Retry" in labels and "Remove saved copy" in labels
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["datasets"]) == {"good", "damaged"}
 

@@ -4,18 +4,18 @@
 360-participant English eye-tracking-while-reading corpus (Berzak, Malmaud,
 Shubi, Meiri, Lion, Levy, *Scientific Data* 2025,
 [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)).
-The app's bundled demo is a small subset of it (2 readers, 12 paragraphs
+The app's bundled demo is a small subset of it (2 participants, 12 paragraphs
 each); this page covers loading
 the **full public corpus** from [OSF](https://osf.io/2prdq/) as a public dataset.
 
-The corpus is 360 L1-English readers reading 30 Guardian articles (162
+The corpus is 360 L1-English participants reading 30 Guardian articles (162
 paragraphs, each in an Advanced and an Elementary version).
 
 !!! info "A text is one paragraph at one difficulty level"
 
     The public reports carry no unique paragraph id, so the loader composes one
     — `{article_batch}_{article_id}_{paragraph_id}_{difficulty_level}`, the same
-    id the bundled demo ships, with the reader and the reading folded under it
+    id the bundled demo ships, with the participant and the reading folded under it
     for the trial id. Advanced and Elementary are therefore **two texts**, not
     two renderings of one, and the app counts **330** of them across the four
     regimes.
@@ -114,10 +114,8 @@ words, fixations = sps.load_onestop(
     parts=["Paragraph"],  # any subset of the parts above, or QA
     download=True,
 )
-# The app's dataset for a regime is every screen of it (every part but QA):
-from scanpath_studio.datasets import onestop_regime_parts
-
-parts = onestop_regime_parts("ordinary")
+# The app loads every part of a regime but QA: pass
+# parts=scanpath_studio.datasets.onestop_regime_parts("ordinary") for that.
 pid, tid = sps.list_trials(words, fixations).iloc[0]  # or any row you want
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```

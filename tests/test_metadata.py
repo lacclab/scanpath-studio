@@ -866,7 +866,7 @@ class TestCorpusGroupingByTrialAndTextAttributes:
         tabs._warn_word_only_group_fields(
             host, self.FIX.drop(columns="trial_id"), pairs
         )
-        assert host.warned and "participant_id × trial_id" in host.warned[0]
+        assert host.warned and "Participant × Trial" in host.warned[0]
 
 
 class TestTheExportOptOut:
@@ -1071,7 +1071,7 @@ class TestGroupingEndToEnd:
         mark = "📋" if grain == "trial" else "📄"
         assert f"{mark} {md.field_label(field)}" in offered, sorted(offered)
         captions = [c.value for c in at.caption if "fixations in scope" in c.value]
-        assert captions and f"{expected} fixations in scope" in captions[0], captions
+        assert captions and f"{expected:,} fixations in scope" in captions[0], captions
 
 
 class TestTheWizardStep:

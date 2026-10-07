@@ -62,7 +62,7 @@ class TestCompositeTrialPicker:
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert any(label.startswith("**Select Trial**") for label in labels), labels
+        assert any(label.startswith("Select trial") for label in labels), labels
         assert "Participant" not in labels, labels
         assert "Text" not in labels, labels
         assert not any(label.startswith("Reading") for label in labels), labels
@@ -95,7 +95,7 @@ class TestCompositeTrialPicker:
         # under the cascade. In one flat picker it is simply one more option.
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
-        picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        picker = next(s for s in at.selectbox if s.label.startswith("Select trial"))
         assert list(picker.options) == [
             "A · p1 · False",
             "B · p1 · False",
@@ -189,7 +189,7 @@ class TestCompositeTrialPicker:
         at = AppTest.from_function(_onestop_app)
         at.run(timeout=15)
         assert not at.exception
-        picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        picker = next(s for s in at.selectbox if s.label.startswith("Select trial"))
         assert "Participant" not in [s.label for s in at.selectbox]
         # UX-187: shown part by part, from the composite's own columns.
         assert list(picker.options) == [
@@ -237,7 +237,7 @@ class TestCompositeTrialPicker:
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert any(label.startswith("**Select Trial**") for label in labels), labels
+        assert any(label.startswith("Select trial") for label in labels), labels
 
 
 @pytest.mark.timeout(60)

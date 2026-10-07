@@ -106,7 +106,7 @@ class TestPlot:
         trace = _raw_gaze_trace(fig)
         assert list(trace.marker.color) == [1, 2, 3, 1, 2]
         assert trace.legendgrouptitle.text == "Sample order"
-        assert "sample %{customdata}" in trace.hovertemplate
+        assert "Sample #: %{customdata}" in trace.hovertemplate
         assert "ms" not in trace.hovertemplate
         assert list(trace.customdata) == [1, 2, 3, 1, 2]
 
@@ -124,7 +124,7 @@ class TestPlot:
             base_font_size=16,
         )
         trace = _raw_gaze_trace(fig)
-        assert "t: %{customdata} ms" in trace.hovertemplate
+        assert "Timestamp: %{customdata} ms" in trace.hovertemplate
         assert trace.legendgrouptitle.text is None
 
     def test_the_comparison_trace_says_sample_too(self, clockless):
@@ -133,5 +133,5 @@ class TestPlot:
             canvas_width=800, canvas_height=600, base_font_size=16
         )
         plots._add_comparison_raw_gaze_trace(fig, clockless, "A", "#123456", settings)
-        assert "sample %{customdata}" in fig.data[0].hovertemplate
+        assert "Sample #: %{customdata}" in fig.data[0].hovertemplate
         assert " ms" not in fig.data[0].hovertemplate

@@ -78,7 +78,7 @@ def test_garbage_colours_are_dropped_with_a_warning():
     assert not at.exception, [e.message for e in at.exception]
     warned = " ".join(w.value for w in at.warning)
     for param in _SHARE_COLOR_PARAMS:
-        assert f"?{param}='zzz'" in warned, param
+        assert f"invalid {param}=zzz" in warned, param
         state_key = _URL_PRESETS[param][0]
         if state_key in at.session_state:
             assert at.session_state[state_key] != "zzz", param

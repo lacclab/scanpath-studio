@@ -34,6 +34,7 @@ from .constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEMO_CHOICE,
     FIXATION_SYMBOLS,
     HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
@@ -65,6 +66,7 @@ from .constants import (
     drift_correction_enabled,
     icon_html,
     icons_to_html,
+    palette_label,
     palette_settings,
     spoken,
     upload_limit_mb,
@@ -92,6 +94,7 @@ from .fields import (
     labeled,
     plain,
     row_label,
+    tooltip,
 )
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
@@ -843,7 +846,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "single_fix_range_all_trials": False,
     # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
     # default — the per-scanpath colours already tell the readings apart.
-    "global_show_compare_legend": False,
+    "global_show_compare_legend": True,  # #374 F26: names A and B
     # VIZ-13: reading measure shown in the word hover tooltip. "Off" (None) hides
     # the measure line; any canonical measure column name shows it.
     "global_word_hover_measure": "total_fixation_duration_ms",
@@ -870,13 +873,13 @@ _VIZ_WIDGET_DEFAULTS = {
 # Out-of-text fixation marker options: Plotly symbol → emoji-prefixed label (the
 # emoji makes each choice stand out in the dropdown).
 _OUT_OF_TEXT_MARKERS = {
-    "x": "✖️ Cross",
-    "circle-open": "⭕ Circle",
-    "diamond-open": "🔷 Diamond",
-    "square-open": "🟦 Square",
-    "star": "⭐ Star",
-    "triangle-up-open": "🔺 Triangle",
-    "triangle-down-open": "🔻 Triangle (down)",
+    "x": "✕ Cross",
+    "circle-open": "○ Circle",
+    "diamond-open": "◇ Diamond",
+    "square-open": "□ Square",
+    "star": "★ Star",
+    "triangle-up-open": "△ Triangle",
+    "triangle-down-open": "▽ Triangle (down)",
 }
 
 # Fixation-classification modes (PRE-2): a category can be left alone, marked with
@@ -889,8 +892,13 @@ _FIXCLASS_MODES = ("Off", "Highlight", "Discard")
 _FIXCLASS_CATEGORIES = (
     ("short", "Short", "Fixations shorter than the ms threshold.", True),
     ("long", "Long", "Fixations longer than the ms threshold.", True),
-    ("oob", "Out of bounds", "Fixations that land outside the text area.", False),
-    ("blink", "Blink", "Blink and blink-adjacent fixations.", False),
+    (
+        "oob",
+        "Out of bounds",
+        "Fixations in no word box (gaps between lines count).",
+        False,
+    ),
+    ("blink", "Blink", "Fixations at or next to a blink; needs a blink column.", False),
 )
 
 
@@ -929,8 +937,8 @@ def _render_fixation_cleaning(
         else [label_w, rest * 0.5, rest * 0.5]
     )
     mode_help = _gated_help(
-        "**Highlight** marks these fixations with an overlay marker; **Discard** "
-        "hides them from the plot only (reading measures and exported tables are "
+        "**Highlight** marks these fixations; **Discard** hides their markers "
+        "(saccades and the heatmap still use them; measures and exports are "
         "unchanged).",
         reason,
     )
@@ -1034,14 +1042,14 @@ def _fixation_filter_badge(prefix: str = "global") -> str:
     n_discard = sum(mode == "Discard" for mode in active)
     if not n_active:
         return ""
-    detail = f"{n_active} active"
+    detail = f"{n_active} on"
     if n_discard:
-        detail += f", {n_discard} hidden"
+        detail += f", {n_discard} discarding"
     return f" · {detail}"
 
 
 def _plot_filter_badge() -> str:
-    """UX-72: one badge for the whole 🧹 Filter section.
+    """UX-72: one badge for the whole 🧹 Flag fixations section.
 
     The section folds the fixation and saccade filters together, so its header
     has to answer "is anything being hidden?" for both — the reason each of them
@@ -1077,7 +1085,7 @@ def _saccade_filter_badge(key: str = "global_saccade_classes") -> str:
         # "regression only" when that is the whole point of the figure.
         kept = next(c for c in SACCADE_CLASS_ORDER if c not in set(hidden))
         return f" · {SACCADE_CLASS_LABELS[kept].lower()} only"
-    return f" · {len(hidden)} hidden"
+    return f" · {len(hidden)} types hidden"
 
 
 # Quick-view presets: one click starts from the app's visualization defaults and
@@ -1280,8 +1288,7 @@ def designs_from_json(text: str, *, report: list[str] | None = None) -> dict[str
     notes = report if report is not None else []
     if schema > DESIGNS_FILE_SCHEMA:
         notes.append(
-            f"the file is from a newer version (schema {schema}); settings this "
-            "version doesn't know were skipped"
+            "From a newer version; settings this one doesn't know were skipped"
         )
     designs: dict[str, dict] = {}
     for name, values in raw.items():
@@ -1301,7 +1308,10 @@ def designs_from_json(text: str, *, report: list[str] | None = None) -> dict[str
         design, skipped = sanitize_design(rename_legacy_keys(design))
         designs[clean] = design
         if skipped:
-            notes.append(f"{clean}: skipped invalid {', '.join(sorted(skipped))}")
+            notes.append(
+                f"{clean}: skipped {len(skipped)} invalid setting"
+                + ("" if len(skipped) == 1 else "s")
+            )
     return designs
 
 
@@ -1317,8 +1327,10 @@ def _import_designs() -> None:
     report: list[str] = []
     try:
         incoming = designs_from_json(uploaded.getvalue().decode("utf-8"), report=report)
-    except (ValueError, UnicodeDecodeError) as exc:
-        st.session_state[_DESIGN_IMPORT_NOTE_KEY] = f"error:Couldn't import it: {exc}."
+    except (ValueError, UnicodeDecodeError):
+        st.session_state[_DESIGN_IMPORT_NOTE_KEY] = (
+            "error:Couldn't import it: it isn't a designs file."
+        )
         return
     st.session_state[DESIGN_PRESETS_KEY] = {**design_presets(), **incoming}
     count = len(incoming)
@@ -1390,6 +1402,9 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_order": False,
         "global_show_words": False,
         "global_show_raw_gaze": False,
+        # #374 F16: the word colours are the whole figure; a highlighted span
+        # would read as part of the map.
+        "global_critical_span_style": "None",
     },
     "illustration": {
         "global_show_fix": True,
@@ -1479,6 +1494,50 @@ def _apply_view_preset(name: str) -> None:
         raise ValueError(f"Unknown design preset: {name}")
 
     ss = st.session_state
+    before = {
+        key: deepcopy(ss[key])
+        for key in list(ss)
+        if _is_design_key(key) or _is_restorable_global(key)
+    }
+    try:
+        _apply_view_preset_state(ss, name, saved)
+    finally:
+        _hold_view_writes(ss, before)
+
+
+def _hold_view_writes(ss, before: dict) -> None:
+    """#374 F9 for the design presets: hold every value a preset changed.
+
+    A popover widget the user has opened keeps echoing the value it last
+    showed, so a preset's write to it (Saccades ▾ → Arc, Fixations ▾ → Snap,
+    the defaults a preset resets to) would hold for one run and snap back. So
+    each changed value goes through `write_through`. The dataset-seeded keys
+    are left alone: the rerun seeds them from the data, and holding the
+    static default would overwrite that.
+    """
+    for key, old in before.items():
+        if key in _SEEDED_VIEW_KEYS or key not in ss:
+            continue
+        if _write_match_key(ss[key]) != _write_match_key(old):
+            write_through(key, ss[key])
+
+
+#: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
+#: preset clears their guards — see `_hold_view_writes`.
+_SEEDED_VIEW_KEYS = frozenset(
+    {
+        "global_canvas_width",
+        "global_canvas_height",
+        "global_base_font_size",
+        "global_font_family",
+        "global_scale_text_to_boxes",
+        "global_show_raw_gaze",
+    }
+)
+
+
+def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
+    """The body of `_apply_view_preset`: write the chosen design's state."""
     ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:
@@ -1630,7 +1689,7 @@ def _render_saved_designs(host) -> None:
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
         if not saved:
             st.caption(
-                "No saved designs yet. Set the layers, colours and figure up "
+                "No saved designs yet. Set the layers, colors and figure up "
                 f"the way you like them, then hit {ICONS['save']} — it lands here, one click "
                 "from every trial you look at afterwards."
             )
@@ -1673,7 +1732,7 @@ def _render_saved_designs(host) -> None:
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Forget this design.",
+                help="Delete this design.",
                 on_click=_ask_delete_design,
                 args=(name,),
             )
@@ -1716,7 +1775,7 @@ def _close_design_delete_dialog() -> None:
 def _design_delete_dialog(name: str) -> None:
     """Confirm forgetting one saved design — VIZ-39."""
     st.caption(
-        f"**{name}** is forgotten. The plot on screen does not change: these "
+        f"**{name}** will be deleted. The plot on screen does not change: these "
         "settings stay applied until you pick another design."
     )
     yes, no = st.columns(2, gap="small")
@@ -1794,7 +1853,7 @@ def _design_save_dialog() -> None:
                 # `save_design_preset` still refuses a blank one server-side.
                 required=True,
                 help="Stores every plot setting on screen now — layers, "
-                "colours, filter, figure and canvas.",
+                "colors, filter, figure and canvas.",
             )
         row = st.columns(2, gap="small")
         save = row[0].form_submit_button(
@@ -1921,6 +1980,15 @@ _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
+#: #374 F25 — Compare and Animate are ways of *viewing* a design, not part of
+#: it: switching one on leaves the design's highlight where it is. (A design
+#: still records whether Compare was on, so applying it restores that.)
+_VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
+#: The dataset the applied design's baseline was taken on; see
+#: `_sync_quick_view_state`.
+_QUICK_VIEW_DATASET = "_quick_view_dataset"
+
+
 def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 
@@ -1936,7 +2004,7 @@ def _design_drifted(applied: dict, current: dict) -> bool:
     with no default (an explicit colour range, VIZ-46) appearing *has*.
     """
     for key in applied.keys() | current.keys():
-        if _is_drift_mirror(key):
+        if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
             continue
         default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
         if applied.get(key, default) != current.get(key, default):
@@ -1957,9 +2025,9 @@ def _drift_to_custom(selected: str, applied: dict) -> str:
 def _returned_to_design() -> str | None:
     """The design a drift left, once the settings are back on its baseline.
 
-    Switching Compare (a design setting) on reads Custom; switching it off
-    again restores every setting the design had, so the highlight goes back to
-    it rather than staying Custom. Only the design that was left is checked —
+    Changing a setting reads Custom; changing it back restores every setting
+    the design had, so the highlight goes back to it rather than staying
+    Custom. Only the design that was left is checked —
     an explicit pick (`_apply_view_preset`, a save, Reset) forgets it.
     """
     ss = st.session_state
@@ -1982,6 +2050,31 @@ def _returned_to_design() -> str | None:
     return name
 
 
+def _link_departs_from(name: str) -> bool:
+    """Whether the open deep link sets a design value design ``name`` would not.
+
+    #374 F25: on a link's first run the highlight is inferred from the settings
+    the link restored. Matching a design's own few keys is not enough — a link
+    from a view with a hand-changed colour matched Scanpath — so every design
+    value the link carries is held against what the design would set (its own
+    value, else the widget default). Values with no default (the canvas size,
+    seeded per dataset) say nothing either way.
+    """
+    from .url_state import linked_state_keys
+
+    ss = st.session_state
+    preset = _VIEW_PRESETS[name]
+    for key in linked_state_keys():
+        if not _is_design_key(key) or key in _VIEW_MODE_KEYS or key not in ss:
+            continue
+        expected = preset.get(key, _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT))
+        if expected is _ABSENT:
+            continue
+        if _write_match_key(ss.get(key)) != _write_match_key(expected):
+            return True
+    return False
+
+
 def _sync_quick_view_state() -> str:
     """Keep the design-preset highlight in step with manual plot-control edits.
 
@@ -1991,6 +2084,16 @@ def _sync_quick_view_state() -> str:
     """
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    # #374 F25: another dataset re-seeds its own canvas size, highlight column
+    # and hover fields. That is the design meeting new data, not a departure
+    # from it, so a design that was in force stays highlighted: its baseline is
+    # retaken on the new dataset (the seeds have run by now).
+    dataset = (ss.get("data_source_choice"), ss.get("public_dataset_choice"))
+    if ss.get(_QUICK_VIEW_DATASET, dataset) != dataset and isinstance(
+        ss.get(_QUICK_VIEW_APPLIED_STATE), dict
+    ):
+        ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+    ss[_QUICK_VIEW_DATASET] = dataset
     # VIZ-39: a `design:<name>` selection is valid while that design still
     # exists, and from here on is treated exactly like a built-in — including
     # the drift check below, so editing any control drops the highlight.
@@ -2010,6 +2113,7 @@ def _sync_quick_view_state() -> str:
                 if all(
                     ss.get(key) == value for key, value in _VIEW_PRESETS[name].items()
                 )
+                and not _link_departs_from(name)
             ),
             _CUSTOM_VIEW,
         )
@@ -2088,7 +2192,80 @@ def apply_palette(name: str) -> None:
     if name == CUSTOM_PALETTE:
         return
     for key, value in palette_state(name).items():
-        st.session_state[key] = value
+        write_through(key, value)
+
+
+#: #374 F9 — programmatic widget writes the browser may not have taken yet:
+#: ``{key: [value, stale_echo]}``. See `write_through`.
+_PENDING_WRITES_KEY = "_pending_widget_writes"
+_WRITE_FRESH = "\x00fresh"  # written this run: the browser has not answered yet
+_WRITE_UNSEEN = "\x00unseen"  # one run on: the next echo is the browser's
+
+
+def _write_match_key(value):
+    """Normalize a widget value for comparison: pickers hand back lowercase hex,
+    sliders tuples where the stored value is a list."""
+    if isinstance(value, tuple):
+        return [_write_match_key(v) for v in value]
+    if isinstance(value, list):
+        return [_write_match_key(v) for v in value]
+    return _palette_match_key(value)
+
+
+def write_through(key: str, value) -> None:
+    """Write ``value`` to a widget's key so that a closed popover cannot undo it.
+
+    #374 F9. A widget inside an ``st.popover`` is mounted in the browser only
+    while the popover is open. Once it has been open, the browser remembers the
+    value it showed and sends that value back on every rerun; a programmatic
+    write made while the popover is closed reaches no mounted widget, so it
+    holds for one run and the next rerun puts the remembered value back (the
+    palette that "stopped sticking" after Fixations ▾ had been opened).
+
+    So the write is also recorded here, and `reassert_pending_writes` repeats
+    it at the top of each run while the browser keeps echoing the old value.
+    It lets go as soon as the browser sends anything else: the written value
+    (the widget remounted and took it) or a new pick of the user's own.
+    Call it from a callback, like any write to a widget key.
+    """
+    ss = st.session_state
+    ss[key] = value
+    pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
+    pending[key] = [deepcopy(value), _WRITE_FRESH]
+    ss[_PENDING_WRITES_KEY] = pending
+
+
+def reassert_pending_writes() -> None:
+    """Re-apply `write_through` writes the browser has not taken yet.
+
+    Runs at the top of every script run, before any widget is built. The first
+    run after a write learns what the browser echoes for the key; while it
+    keeps echoing that, the write is repeated; any other value ends it.
+    """
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY)
+    if not pending:
+        return
+    kept = {}
+    for key, (value, stale) in pending.items():
+        if stale == _WRITE_FRESH:
+            # The run the callback wrote in: the write itself is what reads
+            # back, so there is nothing to learn yet.
+            kept[key] = [value, _WRITE_UNSEEN]
+            continue
+        current = _write_match_key(ss.get(key))
+        if current == _write_match_key(value):
+            continue  # the browser has it
+        if stale == _WRITE_UNSEEN:
+            stale = current
+        elif current != stale:
+            continue  # the user picked something else
+        ss[key] = deepcopy(value)
+        kept[key] = [value, stale]
+    if kept:
+        ss[_PENDING_WRITES_KEY] = kept
+    else:
+        ss.pop(_PENDING_WRITES_KEY, None)
 
 
 def _palette_match_key(value):
@@ -2152,10 +2329,9 @@ def _popover_selectbox(label: str, options: list, state_key: str, host=None, **k
 
 # Help text for the (multi-capable) Trial ID mapping, shared by all tables.
 _TRIAL_MAPPING_HELP = (
-    "Pick the column holding your unique trial ID — or pick SEVERAL columns "
-    "to build one on the fly (values joined with `_`; a `_` inside a value becomes `\\_`, so two ids never clash), e.g. participant + "
-    "paragraph + repeated-reading when no single column identifies a trial. "
-    "Use the same columns for every uploaded table so trials line up."
+    "The column that identifies each trial. If none does alone, pick several "
+    "(e.g. participant + text + repeated reading); their values are joined "
+    "into one ID. Pick the same columns in every table so trials line up."
 )
 
 # Word-box geometry is one rectangle in two interchangeable encodings. The
@@ -2241,8 +2417,8 @@ WORD_FIELD_SPECS: list[dict] = [
         "key": "participant",
         "label": "Participant ID",
         "required": False,
-        "help": "Which reader produced this row. Splits scanpaths per "
-        "participant; omit for stimulus-level word boxes shared across all readers.",
+        "help": "Which participant produced this row. Omit for word boxes "
+        "shared by all participants.",
     },
     {
         "key": "trial",
@@ -2255,14 +2431,14 @@ WORD_FIELD_SPECS: list[dict] = [
         "key": "screen_id",
         "label": "Screen ID",
         "required": False,
-        "help": "Child screen inside a logical trial. Leave empty for ordinary "
-        "single-screen trials.",
+        "help": "Which screen of a multi-screen trial this word is on. Leave "
+        "empty for one-screen trials.",
     },
     {
         "key": "word_id",
         "label": "Word/IA ID",
         "required": True,
-        "help": "Identifier of each word / interest-area — the key fixations "
+        "help": "Identifier of each word (interest area) — the key fixations "
         "attach to, and the order of words within a trial.",
     },
     {
@@ -2275,16 +2451,15 @@ WORD_FIELD_SPECS: list[dict] = [
         "key": "text_id",
         "label": "Text ID",
         "required": False,
-        "help": "Groups words by the text/passage they belong to, for filtering "
-        "and selection; falls back to the trial id (a repeated reading's without "
-        "its _r2 suffix).",
+        "help": "Groups words by the text they belong to, for filtering and "
+        "selection. Empty: the trial ID is used (a repeat shares the first's).",
     },
     {
         "key": "line",
         "label": "Line index",
         "required": False,
         "help": "Line number of the word on screen, kept as source metadata. "
-        "The plot's line colouring and hover infer lines from the word boxes' Y "
+        "The plot's line coloring and hover infer lines from the word boxes' Y "
         "instead, since many exports carry one constant here.",
     },
     # UX-113: only meaningful alongside "Aggregate character AOIs into word
@@ -2318,7 +2493,7 @@ WORD_FIELD_SPECS: list[dict] = [
         "kind": "box",
         "label": "Word box",
         "required": True,
-        "help": "Bounding box per word/AOI. Edges = left/right/top/bottom (EyeLink IA_*); origin+size = x/y/width/height.",
+        "help": "Bounding box per word/AOI. Edges = left/right/top/bottom (EyeLink IA_*); Origin + size = x/y/width/height.",
     },
     # AN-32: the reading measures a dataset brings, one optional field each —
     # the Corpus Analysis page shows these and computes none. Short labels, as
@@ -2339,7 +2514,7 @@ FIX_FIELD_SPECS: list[dict] = [
         "key": "participant",
         "label": "Participant ID",
         "required": True,
-        "help": "Which reader produced this fixation. Splits scanpaths per participant.",
+        "help": "Which participant produced this fixation.",
     },
     {
         "key": "trial",
@@ -2352,7 +2527,8 @@ FIX_FIELD_SPECS: list[dict] = [
         "key": "screen_id",
         "label": "Screen ID",
         "required": False,
-        "help": "Child screen inside a logical trial. Map this in both reports.",
+        "help": "Which screen of a multi-screen trial this fixation is on. Map "
+        "it in the Words table too.",
     },
     {
         "key": "x",
@@ -2371,15 +2547,15 @@ FIX_FIELD_SPECS: list[dict] = [
         "key": "duration",
         "label": "Duration (ms)",
         "required": True,
-        "help": "Fixation length in milliseconds; drives marker size and "
-        "dwell-time / reading measures.",
+        "help": "Fixation length in milliseconds; sets marker size and the "
+        "dwell-time heatmap.",
     },
     {
         "key": "timestamp",
         "label": "Timestamp (ms)",
         "required": False,
-        "help": "Parent-trial fixation onset (ms); orders the full trial and drives "
-        "animation. Defaults to row order.",
+        "help": "When each fixation starts (ms), on one clock for the whole "
+        "trial; orders fixations and times the replay. Defaults to row order.",
     },
     # UX-53 removed *Screen-local timestamp (ms)* from the mapping: it was a
     # second clock for the same fixations, and the parent-trial timestamp above
@@ -2439,7 +2615,7 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "key": "participant",
         "label": "Participant ID",
         "required": True,
-        "help": "Which reader produced this gaze sample.",
+        "help": "Which participant produced this gaze sample.",
     },
     {
         "key": "trial",
@@ -2452,7 +2628,7 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "key": "screen_id",
         "label": "Screen ID",
         "required": False,
-        "help": "Child screen inside a logical trial.",
+        "help": "Which screen of a multi-screen trial this sample is on.",
     },
     # UX-113: text_id/word_id round out the row to the same six identity
     # fields Fixations/AOI map (Trial · Screen · Participant · Text · Word/IA
@@ -3058,8 +3234,7 @@ def column_mapping_ui(
             st.markdown(f"**Column mapping — {table_label}**")
         if header:
             st.caption(
-                "Auto-detected from your CSV. Override any row if your column "
-                "names differ."
+                "Detected from your file's column names. Change any row that is wrong."
             )
         if problems:
             st.warning(
@@ -3099,13 +3274,12 @@ def column_mapping_ui(
 
             in_use = any(_mapped(key) for key in _ADVANCED_MAPPING_KEYS)
             hosts["advanced"] = advanced_slot.expander(
-                f"{ICONS['settings']} Multipart screens & canvas — advanced",
+                f"{ICONS['settings']} Screens & AOI blocks — advanced",
                 expanded=bool(in_use),
             )
             hosts["advanced"].caption(
-                "Only for a dataset where one logical trial spans several "
-                "screens, or that records its canvas size per screen. Leave "
-                "empty otherwise."
+                "Only for trials that span several screens, or word boxes "
+                "numbered in blocks. Leave empty otherwise."
             )
 
         def _render_box_format(spec: dict) -> str:
@@ -3144,9 +3318,7 @@ def column_mapping_ui(
                 box_grid["cells"] = list(cells[1:])
                 box_grid["used"] = 0
             if spec.get("help"):
-                tip = html.escape(
-                    f"{_plain(spec['label'])} — {_plain(spec['help'])}", quote=True
-                )
+                tip = tooltip(spec["label"], spec["help"])
                 head.markdown(
                     f'<div class="sps-box-title"><span class="sps-fhelp" '
                     f'data-tip="{tip}" aria-label="{tip}">{title}</span></div>',
@@ -3204,6 +3376,7 @@ def column_mapping_ui(
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",
+                select_all=False,  # an id is a few columns, never all (#374)
                 persist_state="session",
                 on_change=_mark_field_touched,
                 args=(state_key,),
@@ -3326,11 +3499,11 @@ def _render_field_flag(
     if hover:
         spans.append(
             f'<span class="sps-map-flag sps-fhelp" '
-            f'data-tip="{html.escape(hover, quote=True)}">'
+            f'data-tip="{tooltip(hover)}">'
             f"{icon_html('auto_detected')}</span>"
         )
     if preview:
-        tip = html.escape(preview, quote=True)
+        tip = tooltip(preview)
         spans.append(
             f'<span class="sps-map-flag sps-map-preview sps-fhelp" tabindex="0" '
             f'data-tip="{tip}" aria-label="{tip}">{icon_html("preview")}</span>'
@@ -3840,7 +4013,7 @@ def _render_color_range(
 
     auto_text = (
         "Auto (default): each trial is scaled to its own values; in Compare, A and "
-        "B share one scale. Off: the range applies to every trial. Dragging the "
+        "B share one range. Off: the range applies to every trial. Dragging the "
         "range turns Auto off."
     )
     auto_disabled, _ = _layer_gate(disabled, None)
@@ -3967,7 +4140,7 @@ _DURATION_BOUNDS_HELP = (
     "the relative scale."
 )
 _SIZE_KEY_HELP = (
-    "Reference circles labelled in ms. Drawn on a fixed scale only, and in Compare "
+    "Reference circles labeled in ms. Drawn on a fixed scale only, and in Compare "
     "only when both scanpaths use the same size range."
 )
 
@@ -4007,6 +4180,8 @@ def _render_duration_scale_rows() -> None:
         max_value=MARKER_DURATION_BOUNDS[1],
         step=10,
         disabled=relative,
+        slider_format="%d ms",
+        number_format="%d",
         help=_DURATION_BOUNDS_HELP,
         field_host=_sub_row("Durations", caption_help=bounds_help),
     )
@@ -4028,7 +4203,7 @@ def _sub_caption(host, text: str, help: str | None = None) -> None:
             unsafe_allow_html=True,
         )
         return
-    tip = html.escape(f"{text} — {_plain(help)}", quote=True)
+    tip = tooltip(text, help)
     host.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
         f'<span class="sps-flabel sps-flabel-help sps-fsub">{html.escape(text)}'
@@ -4352,7 +4527,7 @@ def _render_compare_fix_styles(*, uniform: bool = True) -> None:
 
 
 _COMPARE_OUTLINE_HELP = (
-    "The colour-by column fills the markers, so this colour outlines them."
+    "The color-by column fills the markers, so this color outlines them."
 )
 
 
@@ -4485,8 +4660,8 @@ def _render_heatmap_blur_row(
     from scanpath_studio.plots import _compute_axis_ranges, interpolated_sigma_px
 
     help_text = _gated_help(
-        "The Gaussian blur's σ, in px. Auto: 2% of the larger span of the "
-        "fixations and word boxes, at least 8 px.",
+        "Interpolated only: the Gaussian blur's σ, in px. Auto: 2% of the "
+        "larger span of fixations and word boxes, ≥ 8 px.",
         reason,
     )
     auto, rest = _check_row(
@@ -4682,15 +4857,13 @@ def _render_compare_box_groups(fill_help: str) -> None:
         st.session_state.get("global_word_box_fill_color") or WORD_BOX_FILL_COLOR
     )
     for idx, name in _COMPARE_SCANPATHS:
-        line_help = (
-            f"{name}'s word-box outline colour. Defaults to its fixation colour."
-        )
+        line_help = f"{name}'s word-box outline color. Defaults to its fixation color."
         line_col, line_opacity_col = _sub_row(
             "Line",
             section=name,
             section_help=_COMPARE_SCANPATH_HELP[idx]
             + (
-                " Line and fill colours are its own; the opacities are shared."
+                " Line and fill colors are its own; the opacities are shared."
                 if idx == 0
                 else ""
             ),
@@ -4705,7 +4878,7 @@ def _render_compare_box_groups(fill_help: str) -> None:
             help=line_help,
             what="word box line",
         )
-        this_fill_help = f"{name}'s word-box fill colour. {fill_help}"
+        this_fill_help = f"{name}'s word-box fill color. {fill_help}"
         fill_col, fill_opacity_col = _sub_row(
             "Fill", caption_help=_layer_gate(False, this_fill_help)[1]
         ).columns(_COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center")
@@ -4755,7 +4928,7 @@ def _compare_heatmap_colorscale_row(
     disabled, tip = _layer_gate(
         disabled,
         _gated_help(
-            f"{name}'s heatmap colour scale, on the range both share. Defaults to "
+            f"{name}'s heatmap color scale, on the range both share. Defaults to "
             "the figure's.",
             reason,
         ),
@@ -4764,7 +4937,7 @@ def _compare_heatmap_colorscale_row(
         "Colors",
         section=name,
         section_help=_COMPARE_SCANPATH_HELP[idx]
-        + (" Its colour scale is its own; the rest is shared." if idx == 0 else ""),
+        + (" Its color scale is its own; the rest is shared." if idx == 0 else ""),
         caption_help=tip,
         section_share=_COMPARE_SECTION_SHARE,
     ).selectbox(
@@ -4786,13 +4959,13 @@ def _compare_raw_gaze_color_row(idx: int, *, disabled: bool) -> None:
     until one is picked. Scanpath A's group goes on with the shared *Size* and
     *Opacity* rows."""
     name = _COMPARE_SCANPATHS[idx][1]
-    help_text = f"{name}'s raw-gaze sample colour. Defaults to its fixation colour."
+    help_text = f"{name}'s raw-gaze sample color. Defaults to its fixation color."
     _compare_follow_color_picker(
         _sub_row(
             "Color",
             section=name,
             section_help=_COMPARE_SCANPATH_HELP[idx]
-            + (" Colour is its own; size and opacity are shared." if idx == 0 else ""),
+            + (" Color is its own; size and opacity are shared." if idx == 0 else ""),
             caption_help=_layer_gate(disabled, help_text)[1],
             section_share=_COMPARE_SECTION_SHARE,
         ),
@@ -4874,7 +5047,7 @@ def compare_b_filters() -> dict:
 
 
 def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None:
-    """Scanpath B's half of the 🧹 Filter section (CMP-24).
+    """Scanpath B's half of the 🧹 Flag fixations section (CMP-24).
 
     Rendered into the slot ``render_plot_controls`` reserved under A's filters —
     after the rail, because B is picked (and its fixations loaded) below it. The
@@ -5164,16 +5337,15 @@ def _seed_viz_state(
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
     # A column the app seeded is re-derived for each dataset; only the user's own
-    # pick survives a switch. Otherwise OneStop (no `is_in_aspan`) seeds IA_SKIP,
-    # which the demo also has, and the demo keeps it after switching back.
+    # pick survives a switch. #374 F6: only the bundled demo is seeded (its
+    # answer span); any other dataset opens with nothing highlighted, rather
+    # than with whichever yes/no column came first (IA_SKIP on EyeLink data).
     ss = st.session_state
-    seeded = None
-    if highlight_options:
-        seeded = (
-            "is_in_aspan"
-            if "is_in_aspan" in highlight_options
-            else highlight_options[0]
-        )
+    seeded = (
+        "is_in_aspan"
+        if "is_in_aspan" in highlight_options and current_dataset_name() == DEMO_CHOICE
+        else None
+    )
     current = ss.get("global_highlight_column")
     if current not in (None, seeded) and current == ss.get(_HIGHLIGHT_SEEDED_KEY):
         ss.pop("global_highlight_column", None)
@@ -5544,23 +5716,24 @@ def corpus_style_controls(
             key="global_palette",
             persist_state="session",
             on_change=_on_palette_change,
-            help="Shared with the Scanpath view and every saved/shareable figure setting.",
+            format_func=palette_label,
+            help="Same palette as the Scanpath view; designs and Share links keep it.",
         )
         columns = st.columns(2)
         columns[0].color_picker(
             "Primary series",
             key="global_fixation_color",
             persist_state="session",
-            help="First group or profile.",
+            help="First group or profile; also the Scanpath fixation color.",
         )
         columns[1].color_picker(
             "Secondary series",
             key="global_saccade_color",
             persist_state="session",
-            help="Second group.",
+            help="Second group; also the Scanpath saccade color.",
         )
         st.selectbox(
-            "Heatmap colorscale",
+            "Heatmap color scale",
             options=COLORSCALES,
             key="global_heatmap_colorscale",
             persist_state="session",
@@ -5591,7 +5764,7 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
     returns its value; the name is the switch's label, so clicking it flips the
     switch (UX-153). Omitting them leaves the section's **name** on its own,
     for the sections that have no layer to switch: 📐 Figure & canvas holds
-    none, and 🧹 Filter is not a layer at all — there, clicking the name opens
+    none, and 🧹 Flag fixations is not a layer at all — there, clicking the name opens
     the popover. (📄 Stimulus has a master switch over its three layers since
     UX-128.) ``note=`` is a line written into the top of the popover — used for
     the ⚠️ that says why a switch is greyed.
@@ -5653,7 +5826,9 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
     # ellipsis it would have drawn comes from `styles.py` instead (the
     # `split_mode_` label rule), which draws it without a tooltip.
     if toggle:
-        value = row.toggle(label, wrap=True, **toggle)
+        # #374 F19: no `**` in the label, which is the switch's accessible
+        # name verbatim; `styles.py` draws the row names bold instead.
+        value = row.toggle(label.replace("**", ""), wrap=True, **toggle)
     else:
         # A name-only section: `styles.py` stretches the ▾ trigger's click
         # target over the whole row, so the name opens the popover (UX-153).
@@ -5680,13 +5855,13 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
 
 
 def _rail_subsection(host, label: str, *, note: str = ""):
-    """A named block inside the rail's 🧹 Filter section (UX-72).
+    """A named block inside the rail's 🧹 Flag fixations section (UX-72).
 
     **Scope, after UX-74 was reverted.** That item flattened *every* section's
     `⚙️ …` popovers into blocks like this one; the rail read worse for it — a
     section became a long unbroken run — so the popovers are back everywhere
     they were. What is left using this is the one section that never had them:
-    #UX-72's 🧹 Filter, whose two halves (👁️ Fixations · ↗️ Saccades) are
+    #UX-72's 🧹 Flag fixations, whose two halves (👁️ Fixations · ↗️ Saccades) are
     genuinely one thing each and would spend a click for nothing.
 
     ``note`` renders under the label — a block has no trigger, so the sentence a
@@ -5723,8 +5898,8 @@ def _reset_viz_confirmation_dialog() -> None:
     ``on_click`` on the *un-confirmed* button next door).
     """
     st.caption(
-        "Reset every plot setting to its default. Annotations, filters, data and "
-        "the selected trial are kept."
+        "Reset every plot setting, Flag fixations included. Annotations, trial "
+        "filters, data and the selected trial are kept."
     )
     yes, no = st.columns(2)
     if yes.button(
@@ -5761,8 +5936,8 @@ def render_viz_reset(host) -> None:
         f"{ICONS['reset']} Reset visualization",
         key="reset_viz_settings_btn",
         width="stretch",
-        help="Reset every plot setting to its default. Annotations, filters, data "
-        "and the selected trial are kept.",
+        help="Reset every plot setting, Flag fixations included. Annotations, "
+        "trial filters, data and the selected trial are kept.",
     ):
         st.session_state[_RESET_VIZ_PENDING_KEY] = True
     if st.session_state.get(_RESET_VIZ_PENDING_KEY):
@@ -5799,7 +5974,7 @@ def render_plot_controls(
          single "Scanpath" group. UX-74 tried replacing those popovers with
          inline blocks and was reverted: a section then read as one long
          undifferentiated run.
-      3b. Filtering left the sections entirely (UX-72): one 🧹 **Filter**
+      3b. Filtering left the sections entirely (UX-72): one 🧹 **Flag fixations**
          section after them holds both the fixation and the saccade filters.
       4. **📐 Figure & canvas** follows the same shape with no layer to toggle
          (UX-48): the framing toggle inline, then four popovers — 🖥️ Screen &
@@ -5833,7 +6008,10 @@ def render_plot_controls(
         trial_fixations, base_font_size, words
     )
     if not numeric_fields:
-        st.error("No numeric fields found in fixations to map axes.")
+        st.error(
+            "The fixations have no numeric columns to plot. Check the fixation "
+            "mapping on the Data Management page."
+        )
         st.stop()
 
     # The keyed container is the spotlight-tour target
@@ -5872,7 +6050,8 @@ def render_plot_controls(
         key="viz_view_heatmap",
         type="primary" if _active == "heatmap" else "secondary",
         width="stretch",
-        help="Fixation-density heatmap over the text, nothing else.",
+        help="Each word box colored by the total time spent on it (ms), with "
+        "nothing else drawn.",
         on_click=_apply_view_preset,
         args=("heatmap",),
     )
@@ -5882,8 +6061,8 @@ def render_plot_controls(
         key="viz_view_illustration",
         type="primary" if _active == "illustration" else "secondary",
         width="stretch",
-        help="A clean schematic: snapped fixations, arced connectors, and a "
-        "uniform visual style.",
+        help="A clean schematic: fixations snapped above words, arced "
+        "saccades, one saccade color, opaque markers.",
         on_click=_apply_view_preset,
         args=("illustration",),
     )
@@ -5892,8 +6071,8 @@ def render_plot_controls(
         key="viz_view_custom",
         type="primary" if _active == _CUSTOM_VIEW else "secondary",
         width="stretch",
-        help="Your most recent custom plot settings. Save it under a name in "
-        f"{ICONS['designs']} My designs to keep it.",
+        help="Your most recent custom plot settings. Save them under a name in "
+        f"{ICONS['designs']} My designs to keep them.",
         on_click=_apply_view_preset,
         args=(_CUSTOM_VIEW,),
     )
@@ -5927,6 +6106,7 @@ def render_plot_controls(
         key="global_palette",
         persist_state="session",
         on_change=_on_palette_change,
+        format_func=palette_label,
     )
 
     # Keep the palette controls visually separate from the bordered layer cards.
@@ -6002,8 +6182,12 @@ def render_plot_controls(
     no_fixations_note = (
         ""
         if has_fixations
-        else f"{ICONS['warning']} This trial has no fixations. Its gaze samples "
-        f"are under {ICONS['raw_gaze']} **Raw gaze**."
+        else f"{ICONS['warning']} This trial has no fixations."
+        + (
+            f" Its gaze samples are under {ICONS['raw_gaze']} **Raw gaze**."
+            if has_raw_gaze
+            else ""
+        )
     )
     show_fix, fix_grp = _rail_section(
         viz,
@@ -6072,8 +6256,12 @@ def render_plot_controls(
     # measures, so only a trial with neither has nothing for it.
     heat_nothing = not has_fixations and not has_words
     heat_nothing_note = (
-        f"{ICONS['warning']} This trial has no fixations and no word boxes. Its "
-        f"gaze samples are under {ICONS['raw_gaze']} **Raw gaze**."
+        f"{ICONS['warning']} This trial has no fixations and no word boxes."
+        + (
+            f" Its gaze samples are under {ICONS['raw_gaze']} **Raw gaze**."
+            if has_raw_gaze
+            else ""
+        )
     )
     show_heatmap, heatmap_grp = _rail_section(
         viz,
@@ -6098,7 +6286,8 @@ def render_plot_controls(
         persist_state="session",
         disabled=not has_raw_gaze or raw_disabled,
         note=_gated_help(
-            "" if has_raw_gaze else "(No raw gaze data loaded)", raw_reason
+            "" if has_raw_gaze else f"{ICONS['warning']} No raw gaze samples to show.",
+            raw_reason,
         ),
     )
     # UX-72 — ONE filter section for the whole figure, a peer of the layer
@@ -6116,9 +6305,9 @@ def render_plot_controls(
     # its controls open over the page instead of being cropped by the rail.
     _filter_none, filter_grp = _rail_section(
         viz,
-        f"{ICONS['plot_filter']} **Filter**{_plot_filter_badge()}",
+        f"{ICONS['plot_filter']} **Flag fixations**{_plot_filter_badge()}",
         slug="filter",
-        name="Filter",
+        name="Flag fixations",
         note=no_fixations_note,
     )
     # Sub-slots up front so each block below renders into the right half of the
@@ -6179,9 +6368,9 @@ def render_plot_controls(
         # colour is inert in Compare, where each scanpath wears its own colour
         # (see "Per-scanpath (comparison)" below).
         by_help = _gated_help(
-            f"The column that colours the markers. **{UNIFORM_COLOR_FIELD}**: one "
-            "colour, in the box beside it. A numeric column: the colour scale "
-            "beside it. 'line' or a categorical column: a discrete palette. In "
+            "The column that colors the markers. **One color**: the "
+            "color in the box beside it. A numeric column: the color scale "
+            "beside it. **Line** or a categorical column: a discrete palette. In "
             "Compare, both scanpaths share the mapping.",
             metric_reason,
         )
@@ -6194,7 +6383,7 @@ def render_plot_controls(
             "Color",
             section=_COMPARE_SCANPATHS[0][1] if comparing else "Marker",
             section_help=(
-                _COMPARE_SCANPATH_HELP[0] + " Colour, size and opacity are its "
+                _COMPARE_SCANPATH_HELP[0] + " Color, size and opacity are its "
                 "own; shape and duration scale are "
                 "shared."
                 if comparing
@@ -6211,9 +6400,10 @@ def render_plot_controls(
         color_labels = rail_names.option_labels(
             color_fields,
             {
-                UNIFORM_COLOR_FIELD: UNIFORM_COLOR_FIELD,
+                UNIFORM_COLOR_FIELD: "One color",
                 "line": "Line" + cn.COMPUTED_SUFFIX,
             },
+            roles=True,
         )
         color_by = by_col.selectbox(
             "Color fixations by",
@@ -6241,7 +6431,7 @@ def render_plot_controls(
             _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
             _dis, _tip = _layer_gate(
                 _dis,
-                _gated_help("The single colour every fixation marker wears.", _reason),
+                _gated_help("The single color every fixation marker wears.", _reason),
             )
             style_col.color_picker(
                 "Fixation color",
@@ -6261,7 +6451,7 @@ def render_plot_controls(
             _dis, _tip = _layer_gate(
                 metric_disabled or discrete,
                 _gated_help(
-                    "The colour scale for a numeric column. Not used for 'line' or "
+                    "The color scale for a numeric column. Not used for **Line** or "
                     "a categorical column.",
                     metric_reason,
                 ),
@@ -6311,11 +6501,11 @@ def render_plot_controls(
                 cmax_eff,
                 field_host=_sub_row(
                     "Range",
-                    caption_help="The values at the two ends of the colour scale.",
+                    caption_help="The values at the two ends of the color scale.",
                 ),
                 disabled=metric_disabled,
                 reason=metric_reason,
-                help="The values at the two ends of the colour scale.",
+                help="The values at the two ends of the color scale.",
             )
         # VIZ-15: shape survives greyscale printing where hue doesn't, and
         # VIZ-23 made it a true global — the one marker property Compare does
@@ -6458,7 +6648,7 @@ def render_plot_controls(
         _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
         _dis, _tip = _layer_gate(
             _dis or not show_order,
-            _gated_help("Fixation-index label colour.", _reason),
+            _gated_help("Fixation-index label color.", _reason),
         )
         color_col.color_picker(
             "Index label color",
@@ -6537,7 +6727,7 @@ def render_plot_controls(
             f"{ICONS['fixations']} Fixations",
             off=not (show_fix or fix_off_disabled) or not has_fixations,
             reason=no_fixations_note or None,
-            # The 🧹 Filter section's own note already said it.
+            # The 🧹 Flag fixations section's own note already said it.
             caption=has_fixations,
         ),
         _popover_rows("filter_fix"),
@@ -6574,7 +6764,7 @@ def render_plot_controls(
         mode_disabled, mode_help = _layer_gate(
             class_disabled,
             _gated_help(
-                "Uniform: one colour. Forward / regression: two colours. By type: "
+                "Uniform: one color. Forward / regression: two colors. By type: "
                 "forward, skip, refixation, return sweep and regression.",
                 class_reason,
             ),
@@ -6586,7 +6776,7 @@ def render_plot_controls(
             "Color",
             section=_COMPARE_SCANPATHS[0][1] if comparing else "Line",
             section_help=(
-                _COMPARE_SCANPATH_HELP[0] + " Colour, style and width are its "
+                _COMPARE_SCANPATH_HELP[0] + " Color, style and width are its "
                 "own; shape and direction arrows are shared."
                 if comparing
                 else "How saccades are drawn."
@@ -6614,7 +6804,7 @@ def render_plot_controls(
             swatch_disabled, swatch_help = _layer_gate(
                 _dis,
                 _gated_help(
-                    "Colour of the saccade lines and direction arrows.", _reason
+                    "Color of the saccade lines and direction arrows.", _reason
                 ),
             )
             swatch_col.color_picker(
@@ -6637,12 +6827,13 @@ def render_plot_controls(
                 "Saccades classed by where they land relative to the fixation they "
                 "leave."
                 if color_mode == "By type"
-                else "Every non-backward saccade counts as forward."
+                else "Skips, refixations and return sweeps count as forward; "
+                "saccades out of bounds are Other."
             )
             swatch_disabled, _ = _layer_gate(False, None)
             for start in range(0, len(classes), 3):
                 row = _sub_row(
-                    "Classes" if start == 0 else None, caption_help=classes_help
+                    "Types" if start == 0 else None, caption_help=classes_help
                 )
                 for col, cls_name in zip(
                     row.columns(3, gap=_LABEL_GAP), classes[start : start + 3]
@@ -6658,7 +6849,7 @@ def render_plot_controls(
                     )
             _, legend_help = _layer_gate(
                 False,
-                "The saccade-type colour key on the plot.",
+                "The saccade-type color key on the plot.",
             )
             _sub_row("Legend", caption_help=legend_help).checkbox(
                 "Show",
@@ -6772,7 +6963,8 @@ def render_plot_controls(
             persist_state="session",
             disabled=_cls_dis,
             help=_gated_help(
-                "Draw only saccades of these classes. An empty list draws all.",
+                "Draw only saccades of these types (Other: starts or lands off "
+                "the text). Empty draws all.",
                 _cls_reason,
             ),
         )
@@ -6848,8 +7040,8 @@ def render_plot_controls(
             key="global_highlight_span_on",
             persist_state="session",
             on_change=_on_span_toggle,
-            help="Mark the words where the chosen column is true (by default, "
-            "OneStop's answer span).",
+            help="Mark the words where the chosen true/false column is true "
+            "(OneStop: its answer span).",
         )
         span_off_disabled, _ = _layer_gate(not span_on, None)
         if highlight_options:
@@ -6864,10 +7056,18 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
+                placeholder="Choose a column",
+                # #374 F6: nothing is seeded outside the demo, and an unseeded
+                # selectbox would otherwise pick its first option itself.
+                **(
+                    {}
+                    if "global_highlight_column" in st.session_state
+                    else {"index": None}
+                ),
             )
         style_help = (
-            "**Mark text**: colour the span's words (needs **Text** on). "
-            "**Mark border**: outline the span. The box beside it is the colour."
+            "**Mark text**: color the span's words (needs **Text** on). "
+            "**Mark border**: outline the span. The box beside it is the color."
             + (
                 f"\n\n{ICONS['warning']} **Mark border** is drawn on the static "
                 "figure only."
@@ -6898,7 +7098,7 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=span_off_disabled or border_disabled,
                 help=_gated_help(
-                    "Colour of the span outline (used with 'Mark border').",
+                    "Color of the span outline (used with 'Mark border').",
                     border_reason,
                 ),
                 label_visibility="collapsed",
@@ -6999,7 +7199,7 @@ def render_plot_controls(
                 label_visibility="collapsed",
             )
             scale_help = (
-                "Scale the image so its text matches the word boxes (1 = its own size)."
+                "Scale the image so its text matches the word boxes (1 = as placed)."
             )
             _numeric_slider(
                 st,
@@ -7040,7 +7240,7 @@ def render_plot_controls(
         style_disabled, style_help = _layer_gate(
             heat_disabled or comparing,
             _gated_help(
-                "Word boxes: colour each word box by its fixations. Interpolated: "
+                "Word boxes: color each word box by its fixations. Interpolated: "
                 "the fixations blurred with a Gaussian (Blur, below), scaled to "
                 "the figure's own peak. Compare always uses word boxes.",
                 "Comparison heatmaps use split word boxes."
@@ -7072,14 +7272,14 @@ def render_plot_controls(
         metric_disabled_h, metric_help = _layer_gate(
             heat_disabled,
             _gated_help(
-                "What the heatmap shows, and its colour scale.",
+                "What the heatmap shows, and its color scale.",
                 heat_reason,
             ),
         )
         field = _sub_row(
             "By",
             section="Color",
-            section_help="What the heatmap colours by and how.",
+            section_help="What the heatmap colors by and how.",
             caption_help=metric_help,
         )
         # In Compare each scanpath picks its own colour scale (its group,
@@ -7090,7 +7290,7 @@ def render_plot_controls(
             else field.columns([0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center")
         )
         metric_labels = _rail_names().option_labels(
-            ["duration_ms", "counts"], {"counts": "Fixation count"}
+            ["duration_ms", "counts"], {"counts": "Fixation count"}, roles=True
         )
         heatmap_metric = metric_col.selectbox(
             "Metric",
@@ -7121,7 +7321,7 @@ def render_plot_controls(
         norm_disabled, norm_help = _layer_gate(
             heat_disabled,
             _gated_help(
-                "Linear: colour follows the value. Log: colour follows log(1 + "
+                "Linear: color follows the value. Log: color follows log(1 + "
                 "value), so a few high values don't wash out the rest.",
                 heat_reason,
             ),
@@ -7157,7 +7357,7 @@ def render_plot_controls(
             range_text = (
                 "Fixations per word" if counts else "Word dwell time (ms)"
             ) + (
-                " at the two ends of the colour scale; auto runs from 0 to the "
+                " at the two ends of the color scale; auto runs from 0 to the "
                 "trial's highest. You can type values beyond the slider."
             )
             # Finding 12: the smoothed styles scale their density to their own
@@ -7209,15 +7409,14 @@ def render_plot_controls(
             color_disabled, color_help = _layer_gate(
                 raw_disabled,
                 _gated_help(
-                    "Sample colour. Ignored when the samples have timestamps, "
-                    "which are coloured by time.",
+                    "Not used outside Compare: samples are colored by time (or order).",
                     raw_reason,
                 ),
             )
             _sub_row(
                 "Color",
                 section="Marker",
-                section_help="How each raw-gaze sample is drawn: colour, size and "
+                section_help="How each raw-gaze sample is drawn: color, size and "
                 "opacity.",
                 caption_help=color_help,
             ).color_picker(
@@ -7228,7 +7427,7 @@ def render_plot_controls(
                 help=color_help,
                 label_visibility="collapsed",
             )
-        size_help = "Diameter of each raw-gaze sample dot."
+        size_help = "Diameter of each raw-gaze sample dot, in px."
         _numeric_slider(
             st,
             "Marker size",
@@ -7286,11 +7485,11 @@ def render_plot_controls(
         )
         if comparing and not animating:
             _render_compare_box_groups(
-                "Defaults to the figure's fill colour. " + fill_text
+                "Defaults to the figure's fill color. " + fill_text
             )
         else:
             line_disabled, line_help = _layer_gate(
-                False, "Colour of each word box's outline."
+                False, "Color of each word box's outline."
             )
             color_col, opacity_col = _sub_row(
                 "Line",
@@ -7315,7 +7514,7 @@ def render_plot_controls(
             )
             fill_disabled, fill_help = _layer_gate(
                 False,
-                "Colour the inside of each box is filled with, at the opacity "
+                "Color the inside of each box is filled with, at the opacity "
                 "beside it. " + fill_text,
             )
             color_col, opacity_col = _sub_row("Fill", caption_help=fill_help).columns(
@@ -7436,8 +7635,8 @@ def render_plot_controls(
             axis_disabled,
             _gated_help(
                 "The fixation columns on the X and Y axes. Only x / y (screen "
-                "position) is fully supported: with any other field the plot "
-                "shows fixation markers only: no word boxes, text, saccades, "
+                "position) is fully supported; with any other field the plot "
+                "shows fixation markers only — no word boxes, text, saccades, "
                 "heatmap or coordinate grid.",
                 axis_reason,
             ),
@@ -7451,7 +7650,7 @@ def render_plot_controls(
         )
         _row_label(axes_cols[0], "Axes", axis_help)
         _sub_caption(axes_cols[1], "X")
-        axis_labels = _rail_names().option_labels(numeric_fields)
+        axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
         axes_cols[2].selectbox(
             "X axis field",
             options=numeric_fields,
@@ -7501,7 +7700,7 @@ def render_plot_controls(
             "Show: always label it. Hide: never."
         )
         label_mode = _sub_row(
-            "Show",
+            "Label",
             section="Illustration",
             section_help="A note in the figure's corner saying it is not drawn "
             "exactly as recorded.",
@@ -7600,7 +7799,7 @@ def render_plot_controls(
     with hover, _popover_rows("fig_hover"):
         word_names = cn.active(st.session_state, "words")
         word_hover = word_names.sort_options(hover_field_options(words, words=True))
-        word_hover_labels = word_names.option_labels(word_hover)
+        word_hover_labels = word_names.option_labels(word_hover, roles=True)
         _labeled(
             st,
             "multiselect",
@@ -7614,7 +7813,7 @@ def render_plot_controls(
         )
         fix_names = _rail_names()
         fix_hover = fix_names.sort_options(hover_field_options(trial_fixations))
-        fix_hover_labels = fix_names.option_labels(fix_hover)
+        fix_hover_labels = fix_names.option_labels(fix_hover, roles=True)
         _labeled(
             st,
             "multiselect",
@@ -7745,6 +7944,7 @@ def _bool_metadata_filter(
     key: str,
     host,
     on_change=None,
+    help: str | None = None,
 ) -> None:
     """Render a friendly multiselect for a boolean metadata column.
 
@@ -7759,7 +7959,15 @@ def _bool_metadata_filter(
     if len(options) < 2:
         return
     _seed_filter_widget(key, options, options)
-    _labeled(host, "multiselect", label, options=options, key=key, on_change=on_change)
+    _labeled(
+        host,
+        "multiselect",
+        label,
+        options=options,
+        key=key,
+        on_change=on_change,
+        help=help or None,
+    )
 
 
 def _bool_filter_narrowing(
@@ -8135,7 +8343,7 @@ def active_filter_items(
         col = bare.removeprefix("filter_")
         if col.endswith("_range") and col.removesuffix("_range") in labels:
             col = col.removesuffix("_range")
-        return labels.get(col) or names.label(col)
+        return labels.get(col) or names.field_label(col)
 
     return describe_filter_keys(keys, values, label_for, prefix)
 
@@ -8149,7 +8357,7 @@ def format_filter_item(item: dict, *, max_values: int = 3) -> str:
     excluded = item.get("unknown") == "excluded"
     if "range" in item:
         lo, hi = item["range"]
-        text = f"{item['field']}: {lo:g}–{hi:g}"
+        text = f"{item['field']}: {lo:,.10g}–{hi:,.10g}"
         return f"{text} (unknown values excluded)" if excluded else text
     if excluded and not item.get("values"):
         return f"{item['field']}: unknown values excluded"
@@ -8187,7 +8395,11 @@ _CHIP_DEFAULT_CONDITIONS = [
 # Virtual chip fields → label. These are computed per trial (not data columns),
 # always trial-level, and folded in from the former Trial Info tab's summary.
 SUMMARY_CHIP_FIELDS = {
-    "@reading_time_s": "Total reading time (s)",
+    # #374 F8: the sum of the fixation durations (or the recorded dwell time),
+    # not the time spent on the trial — that is the next chip. The key keeps
+    # its old name: saved chip lists carry it.
+    "@reading_time_s": "Total fixation time (s)",
+    "@trial_duration_s": "Trial duration (s)",
     "@word_count": "Number of words",
     "@fixation_count": "Number of fixations",
     "@in_text_fixations": "Fixations in word boxes",
@@ -8195,6 +8407,13 @@ SUMMARY_CHIP_FIELDS = {
     # that has samples (`tabs._summary_rows`), so a dataset without raw gaze
     # never shows it.
     "@gaze_sample_count": "Number of gaze samples",
+}
+#: What each summary chip counts, as its tooltip (#374 F8).
+SUMMARY_CHIP_HELP = {
+    "@reading_time_s": "The sum of the trial's fixation durations "
+    "(the recorded trial dwell time when the data has one).",
+    "@trial_duration_s": "From the first fixation's onset to the last fixation's "
+    "end, saccades included.",
 }
 #: …and the ones shown by default. The other two are offered in *Available*
 #: like any other field. All four used to be default chips behind a **Summary
@@ -8209,7 +8428,12 @@ SUMMARY_CHIP_FIELDS = {
 #: the trial has, so a trial with fixations and no samples still shows the same
 #: two chips, and a raw-gaze-only trial — whose reading time and fixation count
 #: were never measured and are left out — shows the one count it has.
-_CHIP_DEFAULT_SUMMARY = ("@reading_time_s", "@fixation_count", "@gaze_sample_count")
+_CHIP_DEFAULT_SUMMARY = (
+    "@reading_time_s",
+    "@trial_duration_s",
+    "@fixation_count",
+    "@gaze_sample_count",
+)
 
 
 def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
@@ -8256,6 +8480,11 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     cols: list[str] = []
 
     def add(c: str) -> None:
+        # #374 F5: one chip per role — `unique_trial_id` beside `trial_id` would
+        # be a second "Trial", told apart only by an internal name.
+        role = cn.ROLE_LABELS.get(c)
+        if role is not None and any(cn.ROLE_LABELS.get(x) == role for x in cols):
+            return
         if c and c not in cols:
             cols.append(c)
 
@@ -8312,7 +8541,25 @@ def chip_field_label(col: str, names: cn.ColumnNames | None = None) -> str:
     """
     if col in SUMMARY_CHIP_FIELDS:
         return SUMMARY_CHIP_FIELDS[col]
-    return (names if names is not None else _rail_names()).label(col)
+    return (names if names is not None else _rail_names()).field_label(col)
+
+
+def field_help(col: str, names: cn.ColumnNames | None = None) -> str:
+    """The tooltip beside a field's name (#374 F5): the bundled demo's
+    description of its own column, and a role's source column
+    ("from RECORDING_SESSION_LABEL"). ``""`` when there is neither."""
+    if col in SUMMARY_CHIP_FIELDS:
+        return SUMMARY_CHIP_HELP.get(col, "")
+    names = names if names is not None else _rail_names()
+    note = (
+        cn.DEMO_COLUMN_NOTES.get(col, "")
+        if current_dataset_name() == DEMO_CHOICE
+        else ""
+    )
+    source = names.source_tooltip(col)
+    if source:
+        source = source[:1].upper() + source[1:] + "."
+    return " ".join(part for part in (note, source) if part)
 
 
 def _default_chip_fields(available: list[str]) -> list[str]:
@@ -8384,7 +8631,7 @@ def render_trial_chip_picker(
 
     host.caption(
         "Drag fields between **Shown** and **Available**, and reorder within "
-        "**Shown** — these chips appear above the scanpath. Their colours are "
+        "**Shown** — these chips appear above the scanpath. Their colors are "
         "set below the list."
     )
     buckets = [
@@ -8426,7 +8673,7 @@ def render_trial_chip_picker(
     _neutral = "#EEF2F7"
     shown_now = st.session_state["trial_chip_fields"]
     if shown_now:
-        host.caption("Chip colours — optional highlight per shown field.")
+        host.caption("Chip colors — optional highlight per shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
         for key in shown_now:
             label_col, swatch_col = host.columns([3, 1], vertical_alignment="center")
@@ -8436,7 +8683,7 @@ def render_trial_chip_picker(
                 value=colors.get(key) or _neutral,
                 key=f"trial_chip_color_{key}",
                 label_visibility="collapsed",
-                help="Pick back to the default grey to remove the highlight.",
+                help="Pick back to the default gray to remove the highlight.",
             )
             if picked.lower() == _neutral.lower():
                 colors.pop(key, None)
@@ -8598,14 +8845,14 @@ def _render_keep_unknown(
         "Keep unknown values",
         key=key,
         on_change=on_change,
-        help=f"On: {noun}s with no value stay in the pool whatever the range. "
+        help=f"On: {noun}s with no value are kept whatever the range. "
         f"Off: only {noun}s with a value in the range are kept.",
     )
     plural = f"{unknown:,} {noun}{'s' if unknown != 1 else ''}"
     one = unknown == 1
     verb = "has" if one else "have"
     if st.session_state[key]:
-        fate = "and stays in the pool" if one else "and stay in the pool"
+        fate = "and is kept" if one else "and are kept"
     else:
         fate = "and is left out" if one else "and are left out"
     host.caption(f"{plural} {verb} no value {fate}.")
@@ -8617,7 +8864,7 @@ def _render_fixed_value(host, label: str, value: float, noun: str) -> None:
     Streamlit refuses a slider whose ends are equal, and there is no range to
     pick anyway.
     """
-    host.caption(f"**{label}**: {value:g} for every {noun} that has a value.")
+    host.caption(f"**{label}**: {value:,.10g} for every {noun} that has a value.")
 
 
 def _numeric_filter_fields(
@@ -8797,7 +9044,7 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
     attached = md.attached_for("participant", prefix)
     if attached is None or not attached.fields:
         return
-    host.markdown("**By reader**")
+    host.markdown("**By participant**")
     for field in attached.fields:
         key = metadata_filter_key(field.name, prefix)
         if field.is_numeric:
@@ -8806,7 +9053,7 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
                 attached,
                 field,
                 key,
-                noun="reader",
+                noun="participant",
                 table="participant",
                 unknown=_metadata_numeric_summary(attached)[field.name][1],
                 prefix=prefix,
@@ -9386,7 +9633,7 @@ def trial_filter_labels(
         *numeric_fields,
         *(c for c in _filter_fields_for(words, fixations) if c not in numeric_fields),
     ]
-    return unique_field_labels(columns, names.label)
+    return unique_field_labels(columns, names.field_label)
 
 
 def render_trial_filters(
@@ -9435,7 +9682,15 @@ def render_trial_filters(
             max_value=hi,
             key=_range_filter_key(col, prefix),
             on_change=_apply,
-            help="Keep only trials whose value falls in this range.",
+            help=" ".join(
+                filter(
+                    None,
+                    (
+                        field_help(col, names),
+                        "Keep only trials whose value falls in this range.",
+                    ),
+                )
+            ),
         )
         # Say how many trials have no value and what happens to them, or the
         # kept-anyway trials look like the range isn't working.
@@ -9467,6 +9722,7 @@ def render_trial_filters(
                 f"{prefix}filter_{col}",
                 host,
                 on_change=_apply,
+                help=field_help(col, names),
             )
         else:
             values = _column_unique_strs(
@@ -9483,6 +9739,7 @@ def render_trial_filters(
                     options=values,
                     key=f"{prefix}filter_{col}",
                     on_change=_apply,
+                    help=field_help(col, names) or None,
                 )
 
     _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)
@@ -9554,7 +9811,7 @@ def render_trial_filters(
         on_click=clear_trial_filters,
         args=(prefix,),
         width="stretch",
-        help="Reset every Narrow-by, condition and annotation filter.",
+        help="Reset every filter in this panel.",
     )
 
     # Mirror the rendered widget values so _seed_filter_widget can restore them on

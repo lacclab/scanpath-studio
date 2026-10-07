@@ -21,13 +21,13 @@ from tests.conftest import APP_SCRIPT, pin_view
 
 class TestPoolCountText:
     def test_a_narrowed_pool_reads_against_the_dataset(self):
-        assert pool_count_text(12, 24, 1, 2) == "12 of 24 trials · 1 of 2 readers"
+        assert pool_count_text(12, 24, 1, 2) == "12 of 24 trials · 1 of 2 participants"
 
     def test_a_whole_pool_is_just_its_counts(self):
-        assert pool_count_text(24, 24, 2, 2) == "24 trials · 2 readers"
+        assert pool_count_text(24, 24, 2, 2) == "24 trials · 2 participants"
 
     def test_both_halves_say_of_once_either_narrows(self):
-        assert pool_count_text(12, 24, 2, 2) == "12 of 24 trials · 2 of 2 readers"
+        assert pool_count_text(12, 24, 2, 2) == "12 of 24 trials · 2 of 2 participants"
 
     def test_no_reader_column_leaves_readers_out(self):
         assert pool_count_text(1, 1, 0, 0) == "1 trial"
@@ -148,7 +148,7 @@ def test_corpus_analysis_names_the_filtered_pool_and_clears_it():
     at.run(timeout=90)
     assert not at.exception, at.exception
     line = _pool_line(at)
-    assert line.startswith("**12 of 24 trials · 1 of 2 readers**")
+    assert line.startswith("**12 of 24 trials · 1 of 2 participants**")
     assert "Participant: l7\\_1090" in line
     # The Scanpath funnel's own panel, under the same keys.
     assert at.multiselect(key="filter_participants").value == [reader]
@@ -159,7 +159,7 @@ def test_corpus_analysis_names_the_filtered_pool_and_clears_it():
     pin_view(at, "Corpus Analysis")
     at.run(timeout=90)
     assert not at.exception, at.exception
-    assert _pool_line(at) == "**24 trials · 2 readers** · no filters"
+    assert _pool_line(at) == "**24 trials · 2 participants** · no filters"
     assert at.button(key="corpus_pool_clear").disabled
     assert at.session_state["_trial_filters"]["participants"] is None
 
@@ -180,4 +180,4 @@ def test_a_cleared_filter_stays_cleared_across_views():
         pin_view(at, view)
         at.run(timeout=90)
         assert not at.exception, at.exception
-    assert _pool_line(at) == "**24 trials · 2 readers** · no filters"
+    assert _pool_line(at) == "**24 trials · 2 participants** · no filters"

@@ -1388,6 +1388,11 @@ class TestMakeScanpathAnimation:
         # "elapsed / total s" label on every step (meaningful for any reader count).
         assert all(" / " in s.label and s.label.endswith("s") for s in slider.steps)
         assert slider.currentvalue.visible
+        # #374 F23: the readout names its clock, and the transport is drawn in
+        # the app's font rather than the figure's stimulus font.
+        assert slider.currentvalue.prefix == "Trial time "
+        assert slider.currentvalue.font.family == "sans-serif"
+        assert fig.layout.updatemenus[0].font.family == "sans-serif"
         # Tick ruler hidden, and per-step labels drawn transparent.
         assert slider.ticklen == 0
         assert slider.minorticklen == 0
@@ -2293,7 +2298,7 @@ class TestPlotEnhancements:
         fig = self._figure(
             synthetic_words_df, synthetic_fixations_df, color_by_line=True
         )
-        line_traces = [t for t in fig.data if str(t.name).startswith("line:")]
+        line_traces = [t for t in fig.data if str(t.name).startswith("Line ")]
         assert len(line_traces) == 2
 
     def test_hollow_fixations(self, synthetic_words_df, synthetic_fixations_df):
@@ -2826,6 +2831,6 @@ class TestNonFiniteValues:
 def test_humanized_column_writes_id_in_capitals():
     from scanpath_studio.plots import _humanize_column
 
-    assert _humanize_column("participant_id") == "Participant ID"
-    assert _humanize_column("unique_text_id") == "Unique Text ID"
-    assert _humanize_column("idle_time_ms") == "Idle Time (ms)"
+    assert _humanize_column("participant_id") == "Participant"
+    assert _humanize_column("unique_text_id") == "Unique text ID"
+    assert _humanize_column("idle_time_ms") == "Idle time (ms)"

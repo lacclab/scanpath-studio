@@ -47,15 +47,15 @@ The app opens on a small bundled sample of the
 [OneStop](onestop.md) corpus.
 
 1. Pick a trial with the picker above the plot.
-2. Switch layers on and off in the controls beside the plot: fixations,
-   saccades, text, word boxes, heatmap.
-3. Turn on **Animate** to replay the reading.
+2. Switch layers on and off in **Plot controls**: Fixations, Saccades,
+   Stimulus (the text), Word boxes, Heatmap.
+3. Turn on **Animate** to replay the trial.
 4. Open **Export → Current figure** to download it.
 
 ## 3. Load your own data
 
-Click **+** beside **Select Dataset** and choose **Import files**. Upload a
-fixation table and a words (interest-area) table, check the column mapping the
+Click **+** beside **Select dataset** and choose **Import files**. Upload a
+fixation table and a Words (interest areas) table, check the column mapping the
 app proposes, describe the **Recording setup**, then click **:material/check: Add dataset**.
 
 [Loading data](guides/loading-data.md) lists the accepted formats and what each

@@ -267,3 +267,37 @@ def test_the_grid_keeps_by_line_colouring_off_when_the_rail_says_line(
         ),
     )
     assert not [t.name for t in fig.data if str(t.name).startswith("line: ")]
+
+
+def test_match_offers_same_text_first_then_conditions_once():
+    """#374 F18: the two readings-of-interest lead, ids are not conditions, and
+    no field is offered twice."""
+    from scanpath_studio.column_names import ColumnNames
+    from scanpath_studio.tabs import (
+        _MATCH_SAME_PARTICIPANT,
+        _MATCH_SAME_TEXT,
+        _match_options,
+    )
+
+    fix = _gen_fixations()
+    fix["TRIAL_INDEX"] = [1, 1, 2, 2, 3, 4]
+    opts = _match_options(fix, ColumnNames({}))
+    assert opts[:2] == [_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT]
+    assert "model" in opts
+    for not_a_condition in ("participant_id", "trial_id", "text_id", "TRIAL_INDEX"):
+        assert not_a_condition not in opts
+    assert len(opts) == len(set(opts))
+
+
+def test_same_text_shows_other_participants_only():
+    from scanpath_studio.tabs import _MATCH_SAME_TEXT, _resolve_match
+
+    fix = _gen_fixations()
+    # p1 rereads text A: a second trial of the same participant.
+    reread = fix[fix["trial_id"] == "t1"].assign(trial_id="t1b")
+    fix = pd.concat([fix, reread], ignore_index=True)
+    column, differ = _resolve_match(_MATCH_SAME_TEXT, fix)
+    gens, _ = _collect_generations(
+        fix, fix[fix["trial_id"] == "t1"], column, "p1", "t1", differ
+    )
+    assert set(gens) == {"p2 · t2", "p3 · t3"}

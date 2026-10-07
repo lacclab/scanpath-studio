@@ -2,7 +2,7 @@
 
 This page is written for a coding agent — or any script — that has to **use**
 Scanpath Studio without a browser: load an eye-tracking-while-reading dataset,
-render a figure, pull per-word reading measures. (`AGENTS.md` in the repository
+render a figure, read the per-word reading measures your data brings. (`AGENTS.md` in the repository
 root is the opposite document: how to *develop* this codebase.) A plain-text map
 of the whole site is at [`/llms.txt`](https://lacclab.github.io/scanpath-studio/llms.txt).
 
@@ -48,12 +48,12 @@ The tables below are what `load_scanpath_data(..., names="canonical")` returns.
 A frame merged or concatenated with another table loses `attrs`: pass the result
 through `load_scanpath_data` again, or work on the canonical frames.
 
-**Words / IA** — canonical fields:
+**Words (interest areas)** — canonical fields:
 
 | Column | Meaning |
 |--------|---------|
-| `participant_id` | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast onto every reading in the fixations, matched by trial id or else by `text_id`; `load_scanpath_data` raises a `ValueError` when neither matches. |
-| `trial_id` | Trial id; with `participant_id` it names one reading. **Required.** |
+| `participant_id` | Participant id (string). Optional in the source: a stimulus-level word table with no participant column is broadcast onto every trial in the fixations, matched by trial id or else by `text_id`; `load_scanpath_data` raises a `ValueError` when neither matches. |
+| `trial_id` | Trial id; with `participant_id` it names one trial. **Required.** |
 | `screen_id`, `screen_index` | Optional child screen and 1-based order inside a multipart logical trial. Map in both reports. |
 | `text_id` | Which text/passage the row belongs to (plus `unique_text_id` when the source has a corpus-wide id). |
 | `word_id` | Word index within the trial. **Required** — it is the join key to fixations. |
@@ -69,13 +69,13 @@ are carried through when present.
 
 | Column | Meaning |
 |--------|---------|
-| `participant_id` | Reader id. Optional in the source (a dataset without one becomes a single anonymous reader). |
+| `participant_id` | Participant id. Optional in the source (a dataset without one becomes a single anonymous participant). |
 | `trial_id` | Must match the words table. **Required.** |
 | `screen_id`, `screen_index` | Optional child screen and 1-based order; scientific operations never join across it. |
 | `text_id` | Text/passage id, when present. |
 | `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers. |
 | `duration_ms` | Fixation duration. **Required.** |
-| `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the summaries' `reading_time_ms` / `wpm` then sum fixation durations, with `reading_time_source` saying it is an estimate. |
+| `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the replay lays the fixations end to end by their durations. |
 | `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
 | `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. The loader only shifts ids numbered from 1 onto 0-based word boxes; when the export has none, the assignment (box containment, else no word) happens inside the plots that need it. |
 | `order_in_trial` | 1-based fixation index, added during normalization. |
@@ -122,7 +122,7 @@ sps.save_figure(fig, "minimal.html")
 With one trial in the frames, `participant` / `trial` can be omitted — more than
 one and an underspecified call raises rather than guessing (see
 [Errors](#errors-and-what-they-mean)). Neither table had a participant column
-here, so both frames come back under one synthetic reader: `list_trials` returns
+here, so both frames come back under one synthetic participant: `list_trials` returns
 `participant_id="(all)"`, `trial_id="t1"`.
 
 ## Loading real data
@@ -142,7 +142,7 @@ A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
 auto-detected; `raw_gaze_schema=` overrides), or `load_sample_raw_gaze()` for
 the demo's. Passing it as `plot_scanpath(raw_gaze=…)` filters it to the trial
 and switches the layer on; `compare_scanpaths(raw_gaze=…)` draws each
-reading's samples in its scanpath's colour (`raw_gaze_b=` for a B from another
+trial's samples in its scanpath's color (`raw_gaze_b=` for a B from another
 dataset). It can be the only table: pass `None` for the words
 and fixations (`sps.list_trials(raw_gaze=gaze)`,
 `sps.plot_scanpath(raw_gaze=gaze, trial="t3")`) and the samples are drawn as
@@ -202,16 +202,16 @@ neither reference spells out.
 
 `color_by` is a *fixation column name* (`"duration_ms"`, `"pass_index"`, a
 pupil size you kept with `load_scanpath_data(keep_columns=[…])`, …),
-the sentinel `"(uniform)"` for one flat colour, or `"line"` to colour each
+the sentinel `"(uniform)"` for one flat color, or `"line"` to color each
 fixation by the text line it lands on (the lines are inferred from word-box
 geometry); a name the frame doesn't have raises a `ValueError` naming the
 closest columns (see [Errors](#errors-and-what-they-mean)). `color_by_line=True`
 is the same as `color_by="line"`, and on a single-trial figure it overrides any
 other `color_by`. A comparison figure, and a co-animation (`fixations_b=`),
-colours as the app's Compare mode does: each scanpath keeps its own colour on
+colors as the app's Compare mode does: each scanpath keeps its own color on
 its marker outlines, while a numeric `color_by` fills both readings' markers on
 one shared scale and a categorical one (or `"line"`) on one shared
-category→colour mapping, with a legend entry per category.
+category→color mapping, with a legend entry per category.
 
 `fixation_flags` marks or drops suspicious fixations (display only — reading
 measures and exports are untouched). One entry per category, each with a mode of
@@ -240,10 +240,10 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
 or `"By type"` (forward / skip / refixation / return sweep / regression, each a
 legended sub-trace, classified at render time);
 `saccade_class_colors={"regression": "#000", …}` overrides individual class
-colours. `saccade_classes` is the same split used as a **filter** rather than as
+colors. `saccade_classes` is the same split used as a **filter** rather than as
 hue — `saccade_classes=["regression"]` draws a regressions-only figure (the
 hidden classes lose their direction arrows too), and it composes with any
-colour mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
+color mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
 the linear-reading schematic.
 
 `heatmap_style` is `"Word boxes"` or `"Interpolated"`;
@@ -268,15 +268,15 @@ default); the default is skipped when absent, a column you name must exist.
 positive number pins the major interval in pixels. `background_image` places a
 stimulus screenshot under the scanpath at data coordinates.
 
-`palette=` is a shorthand that sets a whole group of colours at once —
-`"Default (colourblind-safe)"`, `"Print / greyscale"` or `"High contrast"`
-(`constants.PALETTES`). Anything you pass explicitly still wins over it, and an
+`palette=` is a shorthand that sets a whole group of colors at once —
+`"default"` (colorblind-safe), `"print"` (grayscale) or `"high-contrast"`; the
+app's own palette names work too (`constants.PALETTES`). Anything you pass explicitly still wins over it, and an
 unknown name raises rather than silently falling back.
 
-!!! note "Headless defaults vs. the app's first screen"
-    `plot_scanpath` draws word boxes, the heatmap and fixation indices by
-    default, while the app opens on the core scanpath only. Every other default
-    (marker opacity, index-label size, monitor framing, colours) is the app's.
+!!! note "Headless defaults"
+    `plot_scanpath` draws the app's default *Scanpath* design: fixations,
+    saccades and the text. Turn on `show_words`, `show_heatmap` or `show_order`
+    for word boxes, the heatmap or fixation numbers.
 
 ## The same thing from the shell
 
@@ -300,7 +300,7 @@ raising. Every flag is in the [CLI reference](cli.md).
 | `fix_index_range=(a, b) selects no fixations` | The window is outside the trial. | The message gives the trial's fixation count and index range. |
 | `words must be the normalized pandas DataFrame` | A path/string was passed where a frame belongs. | Run it through `load_scanpath_data` first. |
 | `words frame is not normalized:` | A raw table (or a renamed frame) reached a plotting function. | Same — the frames the loader returns are the only accepted input. |
-| `Ambiguous selection: N trials match` | `participant` / `trial` left out with several combos loaded. | Pass both; `list_trials` shows what exists. |
+| `Ambiguous selection: N trials match` | `participant` / `trial` left out with several trials loaded. | Pass both; `list_trials` shows what exists. |
 | `No trial matches participant=…` | Unknown id. | The message lists available ids and the closest spellings. |
 | `plot_scanpath() got an unexpected keyword argument` | Misspelled or unsupported option. | The message suggests the nearest names; `api.figure_options()` is the full list. |
 | `color_by='…' (--color-by on the CLI) names no column` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have. | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'` and `'line'`. |
@@ -331,6 +331,6 @@ Path("replay.mp4").write_bytes(clip)
 - **Errors name the alternatives.** An unknown trial, an ambiguous selection or
   a misspelled option raises with the valid values listed; read the message
   rather than guessing again.
-- **AOIs come from the data.** Word boxes are never computed — only the
+- **Word boxes come from the data.** They are never computed — only the
   fixation → word assignment is, and only when the data maps no word/IA id
   (box containment, else unassigned).

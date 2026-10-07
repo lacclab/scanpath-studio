@@ -307,6 +307,8 @@ def test_deep_link_seeds_frozen_state_keys():
         # CMP-24 — B's flag modes, the same closed vocabulary.
         validated[f"cmp_b_fixclass_{category}_mode"] = "Discard"
     validated["cmp_b_saccade_classes"] = "forward,regression"
+    # #374 F28: the print width's unit.
+    validated["export_width_unit"] = "in"
     # EXP-19: a per-scanpath line style is the selectbox's own label.
     validated.update(
         {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}
@@ -515,6 +517,8 @@ def _restore_config_app():
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
+        # #374 F28 — Export → Current figure's print size.
+        "export": {"width": 180.0, "unit": "mm", "dpi": 600},
         "canvas_px": {"width": 1000, "height": 800},
         "axes": {
             "x_field": numeric[0],
@@ -616,7 +620,7 @@ def test_saved_config_restore_writes_frozen_state_keys():
     written = set(at.session_state["_written"])
     mapping_keys = {k for k in written if k.startswith(sk.COLUMN_MAPPING_PREFIX)}
     # UX-179: a settings file no longer re-maps the dataset — the mapping is
-    # ✏️ Edit dataset → Save setup's file — even when an old one carries it.
+    # ✏️ Edit dataset → Download setup file's file — even when an old one carries it.
     assert mapping_keys == set(), sorted(mapping_keys)
 
     expected = (
@@ -781,4 +785,69 @@ def test_url_bound_widget_keys_frozen():
     from scanpath_studio import tabs
 
     assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
-    assert tabs.CORPUS_SUBTABS == ("Per text", "Per sentence", "Per reader", "Groups")
+    assert tabs.CORPUS_SUBTABS == (
+        "Per text",
+        "Per sentence",
+        "Per participant",
+        "Groups",
+    )
+    # #374 renamed "Per reader"; its old links still open the subtab.
+    assert tabs.CORPUS_SUBTAB_ALIASES == {"Per reader": "Per participant"}
+
+
+def _old_corpus_subtab_app():
+    """The Corpus Analysis tab bar as `tabs` draws it, behind the alias shim."""
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    tabs._accept_old_corpus_subtab()
+    st.tabs(list(tabs.CORPUS_SUBTABS), key="corpus_subtab", bind="query-params")
+
+
+def test_an_old_per_reader_link_opens_per_participant():
+    """#374: a bookmarked `?corpus_subtab=Per+reader` opens Per participant
+    (Streamlit itself would drop the unknown label and open Per text)."""
+    at = AppTest.from_function(_old_corpus_subtab_app)
+    at.query_params["corpus_subtab"] = "Per reader"
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert at.session_state["corpus_subtab"] == "Per participant"
+
+
+def _groups_definition_app():
+    """The Groups subtab's toggle + group definition, drawn only while
+    `_groups_open` — the way PERF-9 draws only the open Corpus subtab."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    if not st.session_state.get("_groups_open", True):
+        st.write("Per text")
+        return
+    frame = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2", "p3", "p4"],
+            "difficulty_level": ["Adv", "Ele", "Adv", "Ele"],
+        }
+    )
+    if tabs._groups_compare_toggle():
+        tabs._render_group_definition(frame, frame, key="cmp", two_groups=True)
+
+
+def test_the_groups_setup_survives_another_subtab():
+    """#374 F34: leaving Groups for another Corpus subtab and back kept neither
+    the Compare toggle nor the group definitions."""
+    at = AppTest.from_function(_groups_definition_app)
+    at.run(timeout=30)
+    at.toggle(key="groups_compare").set_value(True).run(timeout=30)
+    at.multiselect(key="cmp_b").set_value(["Adv", "Ele"]).run(timeout=30)
+    assert not at.exception, at.exception
+    at.session_state["_groups_open"] = False
+    at.run(timeout=30)
+    at.session_state["_groups_open"] = True
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert at.toggle(key="groups_compare").value is True
+    assert at.multiselect(key="cmp_b").value == ["Adv", "Ele"]

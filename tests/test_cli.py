@@ -384,7 +384,7 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
             "render",
             "--sample",
             "--animate",
-            "--no-heatmap",
+            "--heatmap",
             "--saccade-arcs",
             # EXP-17: a real column — the demo's fixations carry no
             # `pass_index`, which this test used to colour by, silently flat.
@@ -397,8 +397,8 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
     assert out_file.is_file()
     err = capsys.readouterr().err
     assert "ignoring" in err
-    assert "show_heatmap" in err and "saccade_render_mode" in err
-    assert "color_by" not in err
+    assert "--heatmap" in err and "--saccade-arcs" in err
+    assert "color" not in err.split("ignoring them:")[1]
 
 
 def test_render_animate_forwards_every_option_the_replay_takes(tmp_path, monkeypatch):
@@ -860,8 +860,9 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
 
     cli.main(["cache"])
     out = capsys.readouterr().out
-    assert "1 dataset(s): Corpus" in out
+    assert "1 dataset: Corpus" in out
     assert "2 rows" in out
+    assert "(s)" not in out  # #374 F38: real plurals
 
     cli.main(["cache", "--clear"])
     assert "Cleared" in capsys.readouterr().out
@@ -869,6 +870,18 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
 
     cli.main(["cache", "--clear"])
     assert "Nothing stored" in capsys.readouterr().out
+
+
+def test_cache_help_names_the_folder_variable(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["cache", "--help"])
+    assert "SCANPATH_STUDIO_STATE_DIR" in capsys.readouterr().out
+
+
+def test_counts_are_plural_words():
+    assert cli._count(0, "dataset") == "no datasets"
+    assert cli._count(1, "annotated trial") == "1 annotated trial"
+    assert cli._count(205, "setting") == "205 settings"
 
 
 def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):
@@ -1260,7 +1273,7 @@ def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
             str(out),
         ]
     )
-    assert "line: Line 1" in out.read_text(encoding="utf-8")
+    assert "Line 1" in out.read_text(encoding="utf-8")
 
 
 def test_render_compare_with_rejects_all_screens(tmp_path):
@@ -1396,7 +1409,7 @@ def test_render_animate_compare_reads_an_unstated_screen_off_the_data(tmp_path):
             ]
         )
     message = str(excinfo.value)
-    assert "different screens — 1680x1050 and " in message
+    assert "different screens — 1680×1050 and " in message
     assert "--compare-layout side-by-side" in message
     # B's screen was only inferred, so the refusal names the flag that states it.
     assert "read off its data" in message and "--compare-canvas" in message
@@ -1933,12 +1946,12 @@ def test_streamlit_flags_and_script_paths_still_launch_the_app(monkeypatch):
 
 
 def test_the_sample_help_names_the_readers_it_ships(capsys):
-    """DATA-43: the demo is two readers, every one with fixations."""
+    """DATA-43: the demo is two participants, every one with fixations."""
     with pytest.raises(SystemExit):
         cli.main(["render", "--help"])
     out = " ".join(capsys.readouterr().out.split())
     assert "3-participant" not in out and "3 readers" not in out
-    assert "2 readers, 12 paragraphs each" in out
+    assert "2 participants, 12 trials each" in out
 
 
 # ---------------------------------------------------------------------------
@@ -2071,9 +2084,9 @@ def test_check_reports_what_the_data_page_reports(tmp_path, capsys):
     words, fixations = _health_tables(tmp_path)
     cli.main(["check", "--words", words, "--fixations", fixations])
     out = capsys.readouterr().out
-    assert "Data checks: 1 finding(s)" in out
+    assert "Data checks: 1 finding (" in out
     assert "Fixations lasting 0 ms or less" in out
-    assert "2 of 3 rows in 1 trial(s)" in out
+    assert "2 of 3 rows in 1 trial" in out
     assert "1 zero" in out and "1 negative" in out
     assert "in the app:" in out
 

@@ -901,9 +901,9 @@ class TestReaderViews:
 
     def test_reader_vs_cohort_values(self):
         groups = reader_vs_cohort_values(_tidy_fixations(), "p1", MEASURES["fix_dur"])
-        assert set(groups) == {"This reader", "Cohort"}
+        assert set(groups) == {"This participant", "Cohort"}
         np.testing.assert_array_equal(
-            groups["This reader"], np.array([100.0, 150.0, 130.0])
+            groups["This participant"], np.array([100.0, 150.0, 130.0])
         )
         np.testing.assert_array_equal(groups["Cohort"], np.array([200.0, 180.0]))
 
@@ -1279,24 +1279,21 @@ class TestGroupComparison:
         )
         assert out.empty and list(out.columns) == ["group", "word_id", "value"]
 
-    def test_paired_group_summary_values_and_error_bars(self):
+    def test_paired_group_summary_values_without_error_bars(self):
         out = paired_group_summary(
             _tidy_fixations(),
             [MEASURES["fix_dur"]],
             {"difficulty_level": ["Adv"]},
             {"difficulty_level": ["Ele"]},
-            spread="SEM",
             label_a="Adv",
             label_b="Ele",
         )
+        # #374 F2: no spread columns — a pooled-word SEM overstated precision.
+        assert list(out.columns) == ["measure", "group", "value", "n_observations"]
         assert list(out["measure"]) == ["Fixation duration", "Fixation duration"]
         assert list(out["group"]) == ["Adv", "Ele"]
         assert list(out["value"]) == pytest.approx([380 / 3, 190.0])
-        assert list(out["n"]) == [3, 2]
-        sem_adv = float(np.std([100.0, 150.0, 130.0], ddof=1)) / np.sqrt(3)
-        assert out.loc[0, "err_lo"] == pytest.approx(sem_adv)
-        assert out.loc[0, "err_hi"] == pytest.approx(sem_adv)
-        assert out.loc[1, "err_hi"] == pytest.approx(10.0)  # sd(200,180)/sqrt(2)
+        assert list(out["n_observations"]) == [3, 2]
 
     def test_paired_group_summary_routes_each_measure_to_its_frame(self):
         out = paired_group_summary(
@@ -1310,7 +1307,7 @@ class TestGroupComparison:
         tfd = out[out.measure == "Total fixation duration — TFD"]
         # Adv words = p1 (100, 300) + p3 (900) → mean 433.33; Ele = p2's three.
         assert list(tfd["value"]) == pytest.approx([1300 / 3, 850 / 3])
-        assert list(tfd["n"]) == [3, 3]
+        assert list(tfd["n_observations"]) == [3, 3]
         fix = out[out.measure == "Fixation duration"]
         assert list(fix["value"]) == pytest.approx([380 / 3, 190.0])
 
@@ -1328,25 +1325,6 @@ class TestGroupComparison:
         # silently read off the words frame.
         assert list(out["measure"]) == ["Total fixation duration — TFD"] * 2
         assert list(out["value"]) == pytest.approx([1300 / 3, 850 / 3])
-
-    def test_paired_group_summary_error_bars_never_negative(self):
-        # mean + IQR on right-skewed data can put the mean outside [Q1, Q3];
-        # a negative Plotly error length would render in the wrong direction.
-        frame = pd.DataFrame(
-            {
-                "participant_id": ["p"] * 10,
-                "difficulty_level": ["Adv"] * 10,
-                "duration_ms": [0.0] * 9 + [1000.0],
-            }
-        )
-        out = paired_group_summary(
-            frame,
-            [MEASURES["fix_dur"]],
-            {"difficulty_level": ["Adv"]},
-            {"difficulty_level": ["Adv"]},
-            spread="IQR",
-        )
-        assert (out["err_lo"] >= 0).all() and (out["err_hi"] >= 0).all()
 
     def test_group_mean_difference(self):
         a = np.array([1.0, 2, 3, 4, 5])
@@ -1579,7 +1557,10 @@ def test_aoi_only_cohorts_count_their_readers():
     at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
     assert not at.exception, at.exception
     assert any(
-        c.value.startswith("**Adv**: 2 readers · **Ele**: 2 readers · **2 in both**")
+        c.value.startswith(
+            "**difficulty_level = Adv**: 2 participants · "
+            "**difficulty_level = Ele**: 2 participants · **2 in both**"
+        )
         for c in at.caption
     )
 

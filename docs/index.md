@@ -11,7 +11,7 @@ hide:
 # Scanpath Studio
 
 <p class="sps-tagline">
-Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
+Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 </p>
 
 <div class="sps-buttons" markdown>
@@ -25,7 +25,7 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
 
 <video class="sps-shot" controls muted loop playsinline preload="metadata"
        poster="assets/app_demo_poster.webp" data-autoplay
-       aria-label="Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-reader comparison and Corpus Analysis">
+       aria-label="Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-participant comparison and Corpus Analysis">
   <source src="assets/app_demo.mp4" type="video/mp4">
 </video>
 
@@ -45,9 +45,9 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
 
     Produce one publication figure or export a consistent batch.
 
-- :material-chart-box:{ .lg .middle } **[Analyse a corpus](tutorials/corpus-analysis.md)**
+- :material-chart-box:{ .lg .middle } **[Analyze a corpus](tutorials/corpus-analysis.md)**
 
-    Compare texts, readers, conditions, or groups and download the result.
+    Compare texts, participants, conditions, or groups and download the result.
 
 </div>
 
@@ -57,7 +57,7 @@ Inspect, compare, analyse, and export eye-tracking-while-reading scanpaths.
   heatmaps, replay, and comparison — including two trials from different
   datasets.
 - **Flexible loading:** your own word, fixation, and raw-gaze tables.
-- **Corpus analysis:** per-text, per-reader, and group summaries
+- **Corpus analysis:** per-text, per-participant, and group summaries
   of the reading measures in your data.
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.

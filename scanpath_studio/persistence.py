@@ -585,8 +585,8 @@ def _restore_manifest(
         schema = int(manifest.get("schema", 0))
         if schema != SCHEMA_VERSION:
             raise ValueError(
-                f"it is in cache format {schema}, and this version reads "
-                f"format {SCHEMA_VERSION}"
+                f"it was saved by another version (format {schema}; this one "
+                f"reads {SCHEMA_VERSION})"
             )
         stored_datasets = _as_mapping(manifest.get("datasets", {}))
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
@@ -689,11 +689,13 @@ def _failure_reason(exc: BaseException) -> str:
     if isinstance(exc, PermissionError):
         return "a stored file can't be opened (permission denied)"
     if isinstance(exc, json.JSONDecodeError):
-        return "its manifest is not valid JSON"
+        return "its index file (manifest.json) is damaged"
     message = str(exc).strip()
     if isinstance(exc, ValueError) and message.startswith("it "):
         return message
-    return f"it can't be read ({type(exc).__name__}: {message[:120]})"
+    # The class and message are for a bug report, not for the warning.
+    _LOGGER.warning("Saved data unreadable: %s: %s", type(exc).__name__, message)
+    return "it can't be read (damaged, or written by another version)"
 
 
 def _frame_path(root: Path, relative: Any) -> Path:
@@ -1232,6 +1234,14 @@ def restored_summary(session) -> dict:
     return dict(summary) if isinstance(summary, dict) else {}
 
 
+def session_was_restored(session) -> bool:
+    """Whether this session applied a saved manifest at all (#374 F32).
+
+    Wider than :func:`restored_from_cache`: settings alone count, since they
+    still say the app was used here before. The welcome tour reads it."""
+    return isinstance(session.get(_RESTORED_PAYLOAD_KEY), dict)
+
+
 def restored_from_cache(session) -> bool:
     """Whether this session got back something the user would recognise.
 
@@ -1289,6 +1299,21 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             _PAUSED_KEY,
         ):
             session.pop(key, None)
+    return removed
+
+
+def clear_saved_work(session) -> bool:
+    """Delete what is saved on this computer and start over.
+
+    The Data page's *Clear what is saved…* (#374 F33). Deleting the files alone
+    would be undone within a click, because every run ends in
+    ``save_local_state`` and this tab still holds the datasets, annotations and
+    settings. So the session is emptied too: the next run is a first visit (the
+    default dataset and settings), and saving carries on from there as usual.
+    Returns whether the files were removed.
+    """
+    removed = clear_local_state(session)
+    session.clear()
     return removed
 
 

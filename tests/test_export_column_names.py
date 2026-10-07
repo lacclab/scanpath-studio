@@ -273,7 +273,7 @@ def test_a_dataset_with_no_map_exports_as_before(frames):
     with _export(frames, column_names={"fixations": cn.EMPTY, "words": cn.EMPTY}) as zf:
         assert "columns.json" not in zf.namelist()
         readme = zf.read("README.md").decode("utf-8")
-    assert "Canonical column names from the visualization tool" in readme
+    assert "Column names (Scanpath Studio's standard names)" in readme
 
 
 def test_an_alias_whose_values_differ_is_kept():

@@ -121,7 +121,7 @@ class AnimationBudgetError(AnimationExportError):
 # `chromium_browser_path` finds an installed Chrome, Chromium or Edge there too.
 CHROME_INSTALL_HINT = (
     "Image export needs Chrome, Chromium or Edge, and none was found. Install one "
-    "of them and try again — a pip install can instead run `plotly_get_chrome -y`. "
+    "of them and try again — or, with a pip install, run `plotly_get_chrome -y`. "
     "The **HTML** export needs no browser."
 )
 
@@ -130,7 +130,7 @@ def chromium_browser_path() -> str | None:
     """Return the browser path Kaleido would use, without launching it.
 
     ``Chromium.find_browser`` is Choreographer's complete discovery path: it
-    honours ``BROWSER_PATH``, searches ``PATH``, checks platform-specific
+    honors ``BROWSER_PATH``, searches ``PATH``, checks platform-specific
     locations for Chrome, Chromium, Edge, Brave, and Vivaldi, and can fall back
     to Choreographer's managed Chrome download. We prefer a system browser: a
     stale managed download must not shadow a working installed Edge/Chrome.
@@ -187,7 +187,7 @@ def _static_base(fig: go.Figure) -> go.Figure:
     truncate the existing entries), so we assign the attributes directly. The
     reserved control band is then reclaimed so the clip isn't topped by an empty
     strip; a slim margin remains for the "Elapsed" annotation. Only the control
-    band is reclaimed: the other margins hold a title, a caption, a colour bar or
+    band is reclaimed: the other margins hold a title, a caption, a color bar or
     the coordinate-grid ticks, and are kept as they are. The replay's clock
     on ``layout.meta`` (BUG-93) goes too — only the live player reads it, and it
     would otherwise ride into every frame Kaleido renders.
@@ -286,14 +286,14 @@ def check_gif_budget(
     if total <= budget:
         return
     fits = int(budget) // per_frame
-    shorter = f"cap it at {fits} frames or fewer, " if fits >= 1 else ""
+    shorter = f"cap it at {fits} frames or fewer, or " if fits >= 1 else ""
     raise AnimationBudgetError(
         f"a {n_frames}-frame GIF at {width}×{height} px and {scale:g}× comes to "
         f"{total / 1e6:,.0f} megapixels of frames, over the "
         f"{budget / 1e6:,.0f}-megapixel limit for one GIF"
         f"{' on this shared server' if shared else ''}. Export **MP4** instead — "
         f"its frames stream straight to the encoder and the file stays small — or "
-        f"{shorter}or lower the resolution."
+        f"{shorter}lower the resolution."
     )
 
 
@@ -406,7 +406,8 @@ def render_png_frames(
                     raise AnimationExportError(
                         CHROME_INSTALL_HINT
                         if not chrome_available()
-                        else f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
+                        else f"Frame {k + 1} of {len(frames)} couldn't be drawn "
+                        f"({exc}). Try again, or export the HTML replay."
                     ) from exc
                 pngs.append(bytes(png))
                 if progress_callback is not None:
@@ -432,7 +433,7 @@ def encode_gif(
 ) -> bytes:
     """Encode PNG frames into an animated GIF with a uniform per-frame delay.
 
-    **Streams** (SEC1 / BUG-74): each PNG is decoded, quantized to a 256-colour
+    **Streams** (SEC1 / BUG-74): each PNG is decoded, quantized to a 256-color
     palette and written before the next is read, so memory holds one decoded frame
     and one palette frame, not the whole clip. Pillow's ``save(save_all=True)``
     cannot do that — it keeps every normalized frame until the end to diff them —
@@ -556,8 +557,7 @@ def encode_mp4(pngs: list[bytes], frame_duration_ms: float) -> bytes:
         raise
     except Exception as exc:
         raise AnimationExportError(
-            f"MP4 encoding failed: {exc}. Try the GIF format, or check that "
-            "imageio-ffmpeg is installed."
+            f"The MP4 couldn't be made ({exc}). Try GIF, or the HTML replay."
         ) from exc
     finally:
         try:
@@ -580,12 +580,12 @@ def export_animation(
     """Render a scanpath-animation figure to GIF or MP4 bytes.
 
     Args:
-        fig: the figure from :func:`make_scanpath_animation` (must have ``.frames``).
+        fig: a replay from ``scanpath_studio.animate_scanpath`` (it must have frames).
         fmt: ``"gif"`` or ``"mp4"``.
         frame_duration_ms: uniform per-frame duration. By default the replay's
             own (:func:`plots.animation_clip_frame_ms`), so the clip lasts what
             the on-screen replay does — ``reading span / playback speed``.
-            Required for a figure :func:`make_scanpath_animation` didn't build.
+            Required for a figure ``animate_scanpath`` didn't build.
         scale: Kaleido render scale (1.0 = on-screen px; <1 is faster/smaller,
             >1 is crisper/larger).
         show_elapsed: draw the "Elapsed: X.Xs" readout in the top margin.
@@ -679,7 +679,7 @@ def export_animation(
         emit_status(
             status_callback,
             ExportStage.FINALIZING,
-            "Finalizing animation bytes…",
+            "Finishing the animation…",
             started_at=started,
         )
         result = bytes(result)

@@ -83,6 +83,33 @@ def test_a_row_tooltip_never_spells_out_a_shortcode():
     assert f">{ICONS['favorite']} Favorite</span>" in body
 
 
+def test_a_greyed_rows_caption_tooltip_never_spells_out_a_shortcode():
+    # #374 F36: a switched-off layer's popover rows printed
+    # "Color — :material_warning: :material_arrow_outward: Saccades is off …".
+    host = _Host()
+    controls._sub_caption(
+        host,
+        "Color",
+        f"{ICONS['warning']} {ICONS['saccades']} **Saccades** is off — turn the "
+        "layer on to change this.",
+    )
+    (body,) = host.written
+    tip = re.search(r'data-tip="([^"]*)"', body).group(1)
+    assert ":material" not in tip
+    assert tip.startswith("Color — Saccades is off")
+
+
+def test_every_data_tip_goes_through_the_tooltip_helper():
+    """A raw ``data-tip=`` built elsewhere would skip the shortcode strip."""
+    for path in PACKAGE.glob("*.py"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if 'data-tip="{' in line:
+                assert "tooltip(" in line or 'data-tip="{tip}"' in line, (
+                    path.name,
+                    line,
+                )
+
+
 def test_subtab_labels_are_built_from_the_registry():
     assert constants.SUBTAB_EXPORT == f"{ICONS['export']} Export"
     assert constants.SUBTAB_ANNOTATIONS.startswith(ICONS["annotations"])

@@ -116,7 +116,8 @@ class TestSummaryRows:
             row["Field"] for row in tabs._summary_rows(trial(words), trial(fixations))
         ]
         assert fields == [
-            "Total reading time (s)",
+            "Total fixation time (s)",
+            "Trial duration (s)",
             "Number of words",
             "Number of fixations",
             "Fixations in word boxes",
@@ -139,7 +140,7 @@ class TestSummaryRows:
         table = " ".join(written)
         assert ">Number of gaze samples</th>" in table
         assert f">{len(raw_gaze):,}</td>" in table
-        assert "Total reading time" not in table
+        assert "Total fixation time" not in table
         assert "Number of fixations" not in table
 
 
@@ -717,7 +718,7 @@ class TestScanpathView:
         at.run()
         assert not at.exception, at.exception
         text = " ".join(i.value for i in at.info)
-        assert "this dataset has no AOI table" in text
+        assert "this dataset has no Words table" in text
         assert "Raw gaze samples carry no reading measures" in text
 
     def test_the_heatmap_greys_only_with_neither_fixations_nor_words(self, raw_gaze):
@@ -837,7 +838,7 @@ def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
         ]
     )
     err = capsys.readouterr().err
-    assert "for 1 reader(s)" in err, err
+    assert "for 1 participant." in err, err
 
 
 # -----------------------------------------------------------------------------

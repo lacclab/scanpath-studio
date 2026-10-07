@@ -167,7 +167,7 @@ def test_compare_label_keeps_markers_and_participant_suffix():
     from scanpath_studio.tabs import _compare_label_display
 
     shown = {"p_1_r0": "p · 1 · r0"}
-    assert _compare_label_display("📄 p_1_r0", "p_1_r0", "📄", shown) == "📄 p · 1 · r0"
+    assert _compare_label_display("📄 p_1_r0", "p_1_r0", "📄", shown) == "p · 1 · r0 📄"
     assert (
         _compare_label_display("p_1_r0 [p2]", "p_1_r0", "", shown) == "p · 1 · r0 [p2]"
     )
@@ -206,7 +206,7 @@ def test_the_scanpath_pickers_show_ids_by_part_and_explain_them():
     assert not any(o.endswith(" · r0") for o in picker.options), picker.options
 
     compare = at.selectbox(key="single_compare_trial")
-    assert compare.label == "**Compare to**"
+    assert compare.label == "Scanpath B"
     assert "📄" in compare.help and "👤" in compare.help
     assert "participant · text" in compare.help
     assert all(" · " in option for option in compare.options), compare.options

@@ -111,16 +111,20 @@ _API = "API"
 _CLI = "CLI"
 _EXPORT = "Export"
 _CORPUS = "Corpus Analysis"
-_INSPECT = "Data Inspection"
+_INSPECT = "Data Management"
 # Surfaces held back from the app this release behind `SCANPATH_EXPERIMENTAL=1`,
 # named as such so the register does not advertise a panel a user cannot open.
-_UI_PREPROCESSING = (
-    "UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1 — PRE-22)"
+_UI_PREPROCESSING = "UI (Preprocessing panel — not in this release, PRE-22)"
+_INSPECT_DERIVED = "Data Management (derived tables — not in this release, UX-126)"
+_API_EXPERIMENTAL = "API (not in this release, PRE-21)"
+# FFD / FPRT / RPD / single-fixation duration, on both paths: computed
+# (`measures.compute_per_word_measures`) and imported
+# (`data._blank_unfixated_measures`, #374).
+_UNFIXATED_MISSING = (
+    "Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. "
+    "An imported 0 is blanked too, wherever the word's fixation count is 0 — "
+    "or, with no count mapped, its total fixation duration is 0 (BUG-63)."
 )
-_INSPECT_DERIVED = (
-    "Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1 — UX-126)"
-)
-_API_EXPERIMENTAL = "API (raises unless SCANPATH_EXPERIMENTAL=1 — PRE-21)"
 
 
 REGISTER: tuple[Computation, ...] = (
@@ -231,7 +235,7 @@ REGISTER: tuple[Computation, ...] = (
         id="norm.stimulus_broadcast",
         name="Stimulus-level word broadcast",
         category=CATEGORY_NORMALIZATION,
-        summary="Share one stimulus' word boxes across every reader of it.",
+        summary="Share one stimulus' word boxes across every participant who read it.",
         formula=(
             "Words with no participant column are copied once per reading "
             "(participant × trial [× screen]) in the fixations, stamped with "
@@ -284,7 +288,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         code="scanpath_studio/metadata.py:build_participant_metadata",
         output="One column per registered field, at participant grain",
-        missing="A reader with no row reads as missing everywhere, never as a default.",
+        missing="A participant with no row reads as missing everywhere, never as a default.",
         precedence="A real recorded column of the same name always wins.",
         tiers="A, C, D",
         status=STATUS_VERIFIED,
@@ -321,8 +325,7 @@ REGISTER: tuple[Computation, ...] = (
             "used exactly as given, blanks included — nothing is computed and "
             "no blank is filled — unless `overwrite=True`. #BUG-83: geometry "
             "agrees with that column on all 3,208 of the demo's EyeLink-assigned "
-            "fixations (an earlier half-space shift: 92.6%; closed containment "
-            "on the shared edges: 99.1%)."
+            "fixations."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -359,7 +362,7 @@ REGISTER: tuple[Computation, ...] = (
             "height. Exists because `line_idx` is a constant in many IA exports."
         ),
         code="scanpath_studio/measures.py:cluster_word_lines",
-        output="line index per word",
+        output="Line index per word",
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _CORPUS),
@@ -424,8 +427,11 @@ REGISTER: tuple[Computation, ...] = (
             "`other` when either fixation has no assigned word."
         ),
         code="scanpath_studio/measures.py:classify_saccades",
-        output="saccade_type",
-        precedence="An imported `saccade_type` / `NEXT_SAC_DIRECTION` is kept.",
+        output="(not stored — computed for each figure)",
+        precedence=(
+            "Always computed; an imported `saccade_type` / `NEXT_SAC_DIRECTION` "
+            "(a direction) is not used."
+        ),
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _EXPORT),
@@ -450,10 +456,7 @@ REGISTER: tuple[Computation, ...] = (
         output="first_fixation_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing=(
-            "Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no "
-            "fixations is blanked too (BUG-63)."
-        ),
+        missing=_UNFIXATED_MISSING,
         precedence="A precomputed `IA_FIRST_FIXATION_DURATION` wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -465,7 +468,7 @@ REGISTER: tuple[Computation, ...] = (
         id="measure.fprt",
         name="First-pass gaze duration (FPRT)",
         category=CATEGORY_MEASURE,
-        summary="Sum of first-pass fixations on a word.",
+        summary="Sum of the fixations in the word's first visit.",
         formula=(
             "Sum of every fixation in the word's **first** run, i.e. before the "
             "gaze leaves the word for the first time — whenever that run starts "
@@ -477,7 +480,7 @@ REGISTER: tuple[Computation, ...] = (
         output="first_pass_gaze_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
+        missing=_UNFIXATED_MISSING,
         precedence="A precomputed IA gaze duration wins.",
         tiers="A, D",
         status=STATUS_PARTIAL,
@@ -502,7 +505,7 @@ REGISTER: tuple[Computation, ...] = (
         output="regression_path_duration_ms",
         unit="ms",
         grouping="(participant, trial, word)",
-        missing="Never fixated ⇒ NaN (an imported 0 is blanked, BUG-63).",
+        missing=_UNFIXATED_MISSING,
         tiers="A",
         status=STATUS_PARTIAL,
         reference=(
@@ -589,7 +592,7 @@ REGISTER: tuple[Computation, ...] = (
             "`offset = first_fix_x − word.x` (LTR) or "
             "`word.x + n·advance − first_fix_x` (RTL, BUG-27); "
             "`landing_position = offset / char_width + 1` — so the first letter "
-            "starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus "
+            "starts at 1 and its center is 1.5. Unclipped: on a tiling corpus "
             "the box's last cell is the space after the word, which belongs to "
             "it (#BUG-83), so a first fixation there reads `n + 1` to `n + 2`."
         ),
@@ -601,10 +604,9 @@ REGISTER: tuple[Computation, ...] = (
             "word's first fixation, first pass or not (as `measure.ffd`)."
         ),
         precedence=(
-            "VAL-5: the scale is `geom.word_char_advance`, not the local "
-            "`width / len(text)` this used before — on a tiling corpus that "
-            "divided a box of `n + 1` advances by `n` characters, reporting "
-            "every landing ~`(n+1)/n` too far into the word."
+            "VAL-5: the scale is `geom.word_char_advance`, not "
+            "`width / len(text)`, which on a tiling corpus puts every landing "
+            "~`(n+1)/n` too far into the word."
         ),
         tiers="A",
         status=STATUS_PARTIAL,
@@ -619,16 +621,16 @@ REGISTER: tuple[Computation, ...] = (
         id="measure.landing_distance",
         name="Centred landing distance",
         category=CATEGORY_MEASURE,
-        summary="Landing position relative to the word's centre.",
+        summary="Landing position relative to the word's center.",
         formula=(
             "`landing_position − (1 + len(text) / 2)` — the glyphs span "
-            "`[1, n + 1)`, so that is the word's centre (BUG-65). The centre of "
+            "`[1, n + 1)`, so that is the word's center (BUG-65). The center of "
             "the *letters*, not of the box: a tiling box's trailing space "
             "(#BUG-83) would move it half a letter right."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_distance",
-        unit="letters (0 = word centre, negative = left of centre)",
+        unit="letters (0 = word center, negative = left of center)",
         missing="As `measure.landing_position`.",
         tiers="A",
         status=STATUS_PARTIAL,
@@ -645,9 +647,9 @@ REGISTER: tuple[Computation, ...] = (
         output="second_pass_duration_ms",
         unit="ms",
         missing=(
-            "Fewer than two runs ⇒ 0 — an imported blank "
-            "`IA_SECOND_RUN_DWELL_TIME` is filled with 0 too, so the mean means "
-            "the same whichever source the value came from."
+            "Fewer than two runs ⇒ 0. An imported blank "
+            "`IA_SECOND_RUN_DWELL_TIME` becomes 0 too, where the fixation count "
+            "is known."
         ),
         tiers="A",
         status=STATUS_PARTIAL,
@@ -663,7 +665,7 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="single_fixation_duration_ms",
         unit="ms",
-        missing="A first run of more than one fixation, or never fixated ⇒ NaN.",
+        missing=("A first run of more than one fixation ⇒ NaN. " + _UNFIXATED_MISSING),
         tiers="A",
         status=STATUS_PARTIAL,
         reference="Rayner (1998).",
@@ -708,11 +710,8 @@ REGISTER: tuple[Computation, ...] = (
         ),
         tiers="A, C",
         status=STATUS_VERIFIED,
-        reference=(
-            "#BUG-25: before the fix, one column meant px or deg depending on "
-            "which columns the export carried (~78x apart on the bundled demo) "
-            "under a hard-coded 'px' label."
-        ),
+        # The history (one column once meant px or deg) is in the changelog.
+        reference="(BUG-25)",
         consumers=(_UI, _API, _EXPORT, _CORPUS),
         tests=("tests/test_measures.py",),
     ),
@@ -746,7 +745,7 @@ REGISTER: tuple[Computation, ...] = (
             "`timestamp_ms` where present, else by accumulating durations."
         ),
         code="scanpath_studio/measures.py:rebased_fixation_onsets",
-        output="onset array",
+        output="Onset array",
         unit="ms",
         missing="A backwards clock restarts the accumulation (see VAL-7).",
         tiers="A, C",
@@ -770,11 +769,8 @@ REGISTER: tuple[Computation, ...] = (
             "survivor."
         ),
         precedence=(
-            "#BUG-27: the conversion reads the shared letter scale. It used to "
-            'divide by `len(text)`, so on a tiling corpus "within 1 character" '
-            "meant 1.25 characters for a four-letter word and 1.07 for a "
-            "fifteen-letter one — a threshold whose meaning varied with the word "
-            "it was applied to."
+            "#BUG-27: the conversion reads the shared letter scale, so "
+            '"within 1 character" means the same on every word.'
         ),
         code="scanpath_studio/preprocessing.py:merge_short_fixations",
         output="A reduced fixation frame",
@@ -929,8 +925,8 @@ REGISTER: tuple[Computation, ...] = (
             "The ten Carr et al. algorithms — `attach`, `chain`, `cluster`, "
             "`compare`, `merge`, `regress`, `segment`, `split`, `stretch`, "
             "`warp` — plus `slice` and a `consensus` vote over them. Each "
-            "reassigns fixation *y* to a text line. Hidden unless "
-            "`SCANPATH_EXPERIMENTAL=1` (#PRE-21)."
+            "reassigns fixation *y* to a text line. Not in this release "
+            "(#PRE-21)."
         ),
         code="scanpath_studio/alignment.py:correct",
         output="Corrected fixation y (display only; exported tables stay raw)",
@@ -991,7 +987,7 @@ REGISTER: tuple[Computation, ...] = (
             "individual observations does not bracket a total."
         ),
         code="scanpath_studio/aggregation.py:spread_bounds",
-        missing="Empty input or NaN centre ⇒ a zero-width band.",
+        missing="Empty input or NaN center ⇒ a zero-width band.",
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_CORPUS, _API),
@@ -1022,15 +1018,15 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_AGGREGATION,
         summary="Two groups' means, their difference and Cohen's d (AN-21).",
         formula=(
-            "Each value is one reader's mean of the measure (pooled "
-            "observations when the data names no readers). "
+            "Each value is one participant's mean of the measure (pooled "
+            "observations when the data names no participants). "
             "`mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD "
             "`sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and "
-            "is shown only when the groups share no reader."
+            "is shown only when the groups share no participant."
         ),
         code="scanpath_studio/aggregation.py:group_mean_difference",
         output="mean_a, mean_b, mean_diff, cohen_d, n_a, n_b",
-        grouping="one value per reader in each group",
+        grouping="One value per participant in each group",
         missing=(
             "n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives "
             "**NaN**, not 0.0, so it cannot read as 'no effect' beside a "
@@ -1039,7 +1035,7 @@ REGISTER: tuple[Computation, ...] = (
         tiers="A, C",
         status=STATUS_PARTIAL,
         reference=(
-            "**Descriptive only** — no significance test. A reader in both "
+            "**Descriptive only** — no significance test. A participant in both "
             "groups contributes to both means, so the groups are not "
             "independent samples."
         ),
@@ -1056,8 +1052,8 @@ REGISTER: tuple[Computation, ...] = (
             "membership tests. Two modes: split one field, or two independent "
             "filter sets. A key may be a tuple of columns matched as one "
             "composite key: a trial-metadata field resolves to the "
-            "(participant, trial) readings its rows describe, a reader field to "
-            "reader ids and a text field to text ids — the tables are never "
+            "(participant, trial) readings its rows describe, a participant field to "
+            "participant ids and a text field to text ids — the tables are never "
             "joined onto the frames."
         ),
         code="scanpath_studio/aggregation.py:group_mask",
@@ -1075,10 +1071,10 @@ REGISTER: tuple[Computation, ...] = (
         id="agg.word_profile",
         name="Per-word cohort profile",
         category=CATEGORY_AGGREGATION,
-        summary="A measure per word position, aggregated across readers.",
+        summary="A measure per word position, aggregated across participants.",
         formula="Group the word measures by word id and apply `agg.aggregate_value`.",
         code="scanpath_studio/aggregation.py:cohort_word_profile",
-        missing="A minimum-readers threshold drops thinly-sampled words.",
+        missing="A minimum-participants threshold drops thinly-sampled words.",
         tiers="C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS, _API),
@@ -1090,16 +1086,16 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_AGGREGATION,
         summary="Rate measures per word.",
         formula=(
-            "Mean of the 0/1 flag over the readers who reported it — a "
-            "proportion in [0, 1]. Each rate has its own reader count "
-            "(`n_skip`, `n_regression_in`) and its own minimum-readers verdict."
+            "Mean of the 0/1 flag over the participants who reported it — a "
+            "proportion in [0, 1]. Each rate has its own participant count "
+            "(`n_skip`, `n_regression_in`) and its own minimum-participants verdict."
         ),
         code="scanpath_studio/aggregation.py:word_rate_profile",
         unit="proportion",
         missing=(
             "A missing flag is no observation: it is left out of that rate and "
-            "its reader count, never read as 0. A rate below the minimum "
-            "readers is hidden; the word stays while its other rate stands."
+            "its participant count, never read as 0. A rate below the minimum "
+            "participants is hidden; the word stays while its other rate stands."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -1108,11 +1104,11 @@ REGISTER: tuple[Computation, ...] = (
     ),
     Computation(
         id="agg.reader_summary",
-        name="Per-reader summary",
+        name="Per-participant summary",
         category=CATEGORY_AGGREGATION,
-        summary="One row per reader: totals, means and rates.",
+        summary="One row per participant: totals, means and rates.",
         formula=(
-            "Counts and NaN-skipping means over that reader's rows. "
+            "Counts and NaN-skipping means over that participant's rows. "
             "`mean_saccade_px` is the mean of `fix.saccade_amplitude` and is "
             "in pixels."
         ),
@@ -1138,7 +1134,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         missing=(
             "No onset column ⇒ reading time and wpm are duration-based "
-            "estimates, labelled as such — never the 0, 1, 2, … order numbers."
+            "estimates, labeled as such — never the 0, 1, 2, … order numbers."
         ),
         code="scanpath_studio/aggregation.py:trial_summary_table",
         output="Trials table",
@@ -1152,14 +1148,14 @@ REGISTER: tuple[Computation, ...] = (
         id="agg.normalize",
         name="Normalized measure column",
         category=CATEGORY_AGGREGATION,
-        summary="Rescale a measure for cross-reader comparison.",
+        summary="Rescale a measure for cross-participant comparison.",
         formula=(
-            "Per-reader z-score, `(value − reader mean) / reader SD`, when the "
-            "Normalize toggle is on."
+            "Per-participant z-score, `(value − participant mean) / participant SD`, "
+            "when **Z-score per participant** is on."
         ),
         code="scanpath_studio/aggregation.py:add_normalized_column",
         missing=(
-            "A reader with zero variance (or one value) ⇒ 0, the reader's own "
+            "A participant with zero variance (or one value) ⇒ 0, the participant's own "
             "mean; a missing value stays NaN."
         ),
         tiers="A, C",
@@ -1189,9 +1185,8 @@ REGISTER: tuple[Computation, ...] = (
             "#BUG-83: on a glyph-tight corpus the box is the glyph run, so 0 is "
             "the first letter's edge and 1 the last's. On a tiling corpus the "
             "box's last cell is the space after the word, so the glyphs fill "
-            "`[0, n / (n + 1))` and a landing on that space reads just below 1 "
-            "— it used to be clipped onto exactly 1.0, where 15% of the demo's "
-            "landings piled up. A first fixation assigned from outside the box "
+            "`[0, n / (n + 1))` and a landing on that space reads just below 1, "
+            "not clipped onto 1.0. A first fixation assigned from outside the box "
             "(by an imported `word_id`) reads below 0 or above 1 rather than "
             "being clipped onto an edge. The origin is the word's `x` and the "
             "scale is `geom.word_char_advance`."
@@ -1228,7 +1223,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         code="scanpath_studio/similarity.py:normalized_levenshtein",
         unit="dimensionless (0–1)",
-        missing="Hidden unless `SCANPATH_EXPERIMENTAL=1`.",
+        missing="Not in this release.",
         tiers="A, C",
         status=STATUS_VERIFIED,
         reference="Standard edit-distance scanpath comparison.",
@@ -1281,8 +1276,8 @@ REGISTER: tuple[Computation, ...] = (
         missing="Any missing geometry ⇒ no conversion is offered at all.",
         precedence=(
             "**Provenance matters more than the number.** Every built-in corpus "
-            "carries `ASSUMED` geometry, so a degree-valued result inherits that "
-            "assumption — see the *Recording setup* panel."
+            "assumes its monitor size and viewing distance, so a degree-valued "
+            "result inherits that — see the *Recording setup* panel."
         ),
         tiers="A, C",
         status=STATUS_VERIFIED,
@@ -1320,10 +1315,7 @@ REGISTER: tuple[Computation, ...] = (
             "`assign.in_text`, the drawn outlines, the word heatmaps, the "
             "critical-span frame, drift correction and the model scanpaths. A "
             "position *inside* a word goes through `geom.word_char_advance` "
-            "instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centred in the box (#BUG-97). "
-            "An earlier version pulled every tiling boundary back half a space "
-            "to mid-whitespace, and so disagreed with EyeLink's own "
-            "interest-area assignment on 7.4% of the demo's fixations."
+            "instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centered in the box (#BUG-97)."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -1393,12 +1385,11 @@ REGISTER: tuple[Computation, ...] = (
         unit="px",
         precedence=(
             "Not an interest area: `agg.landing_curve` measures a landing "
-            "across it and mirrors an RTL one. The drawn word label and the "
-            "linear-reading snap used to sit on it (BUG-30). Measured against "
+            "across it and mirrors an RTL one. Measured against "
             "OneStop's own Experiment Builder screens: each tiling box is "
-            "centred on its word, half a space either side, so the run's "
+            "centered on its word, half a space either side, so the run's "
             "`x` start is half an advance early there; the label and snap "
-            "moved to the box centre, the landing measures have not."
+            "use the box center, the landing measures do not."
         ),
         tiers="A",
         status=STATUS_PARTIAL,
@@ -1470,10 +1461,8 @@ REGISTER: tuple[Computation, ...] = (
             "drawn at its exact pixel size and scaled as one block."
         ),
         code="scanpath_studio/tabs.py:_render_true_scale_chart",
-        precedence=(
-            "The spatial plot must stay on this path — `st.plotly_chart` loses "
-            "the scale guarantee."
-        ),
+        # The spatial plot must stay on this path: `st.plotly_chart` loses the
+        # scale guarantee (a developer rule, so not published).
         tiers="D",
         status=STATUS_CONVENTION,
         consumers=(_UI,),
@@ -1511,9 +1500,9 @@ REGISTER: tuple[Computation, ...] = (
         category=CATEGORY_DISPLAY,
         summary="When a figure stops being a faithful record.",
         formula=(
-            "Geometry-changing or synthetic views (drift correction applied, "
-            "authored scanpaths, model-generated paths) are detected and labelled "
-            "so a display transform is never read as recorded data."
+            "Views that no longer show the data as recorded — snapped "
+            "fixations, arced saccades, hidden or windowed fixations, a replay "
+            "not at real time, an authored scanpath — are labeled *Illustration*."
         ),
         code="scanpath_studio/illustration.py:illustration_reasons",
         tiers="C, D",
@@ -1578,10 +1567,13 @@ _TRACKER_PATTERNS = (
 def _public(text: str) -> str:
     """The register's text as the published page shows it: tracker ids are
     for the code and its history, not for a reader of the docs."""
-    for pattern in _TRACKER_PATTERNS:
+    *inline, opening = _TRACKER_PATTERNS
+    for pattern in inline:
         text = pattern.sub("", text)
-    # A sentence whose opening id was dropped starts with a capital again.
-    return re.sub(r"(^|\. )([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+    # Only a sentence whose opening id was dropped gets a capital again —
+    # column names (`trial_id`) and formulas (`x .. x + width`) keep their case.
+    text = opening.sub("\0", text)
+    return re.sub("\0([a-z]?)", lambda m: m.group(1).upper(), text)
 
 
 def _experimental_note(entry: Computation) -> list[str]:
@@ -1589,13 +1581,12 @@ def _experimental_note(entry: Computation) -> list[str]:
         return []
     if entry.category == CATEGORY_MEASURE:
         body = (
-            "Scanpath Studio does not compute this in this release; set "
-            "`SCANPATH_EXPERIMENTAL=1` to use the computation. A value your "
-            "dataset brings is shown as given, and this entry defines what it "
-            "means."
+            "Scanpath Studio does not compute this in this release. A value "
+            "your dataset brings is shown as given, defined by the software "
+            "that exported it."
         )
     else:
-        body = "Not in this release: available only with `SCANPATH_EXPERIMENTAL=1`."
+        body = "Not in this release."
     return ['!!! warning "Experimental"', "", f"    {body}", ""]
 
 
@@ -1664,9 +1655,8 @@ def to_markdown() -> str:
         "Scientific measures therefore read *Partially verified* even where "
         "their hand oracle is exact.",
         "",
-        "Entries marked *experimental* are not computed by the default build: "
-        "they need `SCANPATH_EXPERIMENTAL=1`. They are listed so that their "
-        "definitions are on record.",
+        "Entries marked *experimental* are not in this release. They are "
+        "listed so that their definitions are on record.",
         "",
         "## Summary",
         "",

@@ -56,6 +56,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
+    DEMO_CHOICE,
     ICONS,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
@@ -90,6 +91,75 @@ from .preprocessing import (
 )
 from .progress import report as report_progress
 from .utils import extract_trial
+
+
+def _local_stamp() -> str:
+    """Now in this computer's local time, with its UTC offset said (#374, F28):
+    ``2026-10-06 21:21:01 (UTC+03:00)``."""
+    now = datetime.now().astimezone()
+    offset = now.strftime("%z")
+    return f"{now:%Y-%m-%d %H:%M:%S} (UTC{offset[:3]}:{offset[3:]})"
+
+
+# --- #374 F28 · a raster figure's print size ---------------------------------
+#: The units a print width is given in → millimetres per unit.
+PRINT_UNITS = {"mm": 1.0, "in": 25.4}
+#: The resolution a print width is drawn at when none is named.
+DEFAULT_PRINT_DPI = 300
+#: #374 F28 — the print width and dpi every surface accepts: Export → Current
+#: figure's boxes, a link or settings file (clamped), `render` and `save_figure`
+#: (refused outside them).
+PRINT_WIDTH_BOUNDS = (1.0, 2000.0)
+PRINT_DPI_BOUNDS = (50, 2400)
+#: What the app's Export → Current figure PNG is drawn at without a print width
+#: (`tabs._PNG_EXPORT_SCALE`): three pixels per figure pixel.
+SCREEN_PNG_SCALE = 3
+
+
+def print_width_px(width: float, unit: str = "mm", dpi: int = DEFAULT_PRINT_DPI) -> int:
+    """The pixel width of a raster figure ``width`` ``unit`` wide at ``dpi``:
+    180 mm at 600 dpi is 4,252 px."""
+    if unit not in PRINT_UNITS:
+        raise ValueError(f"Unknown width unit {unit!r}; use 'mm' or 'in'.")
+    if not width or width <= 0 or not dpi or dpi <= 0:
+        raise ValueError("A print width and its dpi must both be positive.")
+    low, high = PRINT_WIDTH_BOUNDS
+    if not low <= float(width) <= high:
+        raise ValueError(f"A print width must be {low:g}–{high:g} {unit}.")
+    low, high = PRINT_DPI_BOUNDS
+    if not low <= float(dpi) <= high:
+        raise ValueError(f"A print dpi must be {low}–{high}.")
+    return max(1, round(float(width) * PRINT_UNITS[unit] / 25.4 * float(dpi)))
+
+
+def print_scale(
+    figure_width: int, width: float, unit: str = "mm", dpi: int = DEFAULT_PRINT_DPI
+) -> float:
+    """The ``scale`` that draws a ``figure_width``-px figure ``width`` ``unit``
+    wide at ``dpi`` (the height follows the figure's own aspect)."""
+    return print_width_px(width, unit, dpi) / float(figure_width)
+
+
+def png_save_kwargs(
+    width: float | None, unit: str = "mm", dpi: int | None = None
+) -> dict:
+    """The `api.save_figure` keywords that write the PNG Export → *Current
+    figure* writes: the print width at its dpi, else the screen size at
+    `SCREEN_PNG_SCALE` — so Share → Code writes the same pixel size."""
+    if not width:
+        return {"scale": SCREEN_PNG_SCALE}
+    return {f"width_{unit}": float(width), "dpi": int(dpi or DEFAULT_PRINT_DPI)}
+
+
+def set_png_dpi(path, dpi: int) -> None:
+    """Stamp ``dpi`` into a PNG's header (``pHYs``), so a layout program
+    places it at its print size. The pixels are untouched."""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        image.load()
+        image.save(path, format="PNG", dpi=(dpi, dpi))
+
 
 # --- EXP-1 · customizable export paths ---------------------------------------
 # A zip of 200 trials landed with names the tool chose, which is rarely how a
@@ -287,10 +357,10 @@ def missing_browser_note(static_formats: bool) -> str:
     if chrome_available():
         return ""
     return (
-        "PNG, SVG and PDF bundle figures are drawn on this server with Chrome, "
-        "Chromium or Edge, and none was found, so they will fail. Pick **HTML**, "
-        "which needs no browser — or install one. The current figure's PNG and "
-        "SVG downloads are saved by your own browser and need none."
+        "PNG, SVG and PDF bundle figures need Chrome, Chromium or Edge on the "
+        "computer running Scanpath Studio, and none was found, so they will fail. "
+        "Pick **HTML**, which needs no browser — or install one. The current "
+        "figure's PNG and SVG downloads are made by your own browser."
     )
 
 
@@ -361,7 +431,7 @@ def _settings_summary(settings: dict) -> str:
     parts = [f"layers: {', '.join(layers) or 'none'}"]
     color_by = settings.get("color_by")
     if color_by and color_by != UNIFORM_COLOR_FIELD:
-        parts.append(f"colour by {color_by}")
+        parts.append(f"color by {color_by}")
     palette = settings.get("palette", DEFAULT_PALETTE)
     if palette and palette != DEFAULT_PALETTE:
         parts.append(f"{palette} palette")
@@ -381,7 +451,7 @@ TABLE_PATTERN_LABELS = {
     "trials": "Trials table",
     "texts": "Texts table",
     "fixations": "Fixations table",
-    "words": "AOI table",
+    "words": "Words table",
 }
 
 #: Columns a data table always carries or the app derives — the trial's own
@@ -563,7 +633,11 @@ def pattern_error(pattern: str, fields: dict) -> str | None:
     return (
         f"Unknown field{'s' if len(unknown) > 1 else ''}: "
         f"{', '.join('{' + u + '}' for u in unknown)}. "
-        f"Available: {', '.join('{' + k + '}' for k in sorted(known))}."
+        + (
+            f"Available: {', '.join('{' + k + '}' for k in sorted(known))}."
+            if len(known) <= 25
+            else f"{len(known)} fields are available; the app's Fields list shows them."
+        )
     )
 
 
@@ -906,7 +980,7 @@ def render_static_figure_bytes(
         emit_status(
             status_callback,
             ExportStage.FINALIZING,
-            "Finalizing output bytes…",
+            "Finishing the file…",
             started_at=started,
         )
         result = bytes(data)
@@ -1109,6 +1183,8 @@ def _render_scope_picker(
         options=list(options_map),
         index=default_index,
         key=f"{key_prefix}_scope",
+        # The stored value stays "All"; only what the radio shows says more.
+        format_func=lambda label: "All, ignoring filters" if label == "All" else label,
         horizontal=True,
         help="Choose a subset. All ignores active filters.",
         label_visibility="collapsed",
@@ -1166,7 +1242,7 @@ def _render_scope_picker(
         )
     elif scope == "text" and not active.empty:
         if text_col is None:
-            st.info("No text id is available in this dataset.")
+            st.info("This dataset has no text ids, so it can't be exported by text.")
         else:
             texts = sorted(active[text_col].dropna().astype(str).unique())
             scope_text = panel_field(
@@ -1260,7 +1336,7 @@ def _render_metadata_field_picker(key_prefix: str):
         format_func=lambda name: labels.get(name, name),
         key=state_key,
         persist_state="session",
-        help="Participant fields to include. Reader ID is always kept.",
+        help="The participant id is always kept.",
     )
     ordered = tuple(name for name in names if name in set(chosen))
     return None if len(ordered) == len(names) else ordered
@@ -1293,7 +1369,7 @@ def _render_trial_metadata_field_picker(key_prefix: str):
         format_func=lambda name: labels.get(name, name),
         key=state_key,
         persist_state="session",
-        help="Trial fields to include. The trial key is always kept.",
+        help="The trial id is always kept.",
     )
     ordered = tuple(name for name in names if name in set(chosen))
     return None if len(ordered) == len(names) else ordered
@@ -1326,7 +1402,7 @@ def _render_text_metadata_field_picker(key_prefix: str):
         format_func=lambda name: labels.get(name, name),
         key=state_key,
         persist_state="session",
-        help="Text fields to include. The text key is always kept.",
+        help="The text id is always kept.",
     )
     ordered = tuple(name for name in names if name in set(chosen))
     return None if len(ordered) == len(names) else ordered
@@ -1404,7 +1480,7 @@ def render_export_options(
     st = st_module
     # No expander — the options are always displayed.
     with st.container():
-        st.markdown("### Trials to Include")
+        st.markdown("### Trials to include")
         # The whole-dataset choice lives inside the scope radio.
         (
             scope,
@@ -1423,7 +1499,7 @@ def render_export_options(
 
         # Figures are the headline artifact, so they lead with a single
         # multi-select of formats (pills) rather than a column of checkboxes.
-        st.markdown("### Figure Formats")
+        st.markdown("### Figure formats")
         fig_formats = (
             panel_field(
                 st,
@@ -1434,8 +1510,8 @@ def render_export_options(
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
                 help="PDF/SVG are vector, PNG is raster, and HTML is interactive. "
-                "The bundle draws PDF, SVG and PNG on the server with Chrome, "
-                "Chromium or Edge; HTML needs no browser.",
+                "The bundle draws PDF, SVG and PNG with Chrome, Chromium or "
+                "Edge; HTML needs no browser.",
             )
             or []
         )
@@ -1489,10 +1565,10 @@ def render_export_options(
         include_plot_config = panel_field(
             st,
             "toggle",
-            "Plot config (JSON)",
+            "Settings file (JSON)",
             value=True,
             key=f"{key_prefix}_cfg",
-            help="Include plot settings as JSON.",
+            help="Include the figure's settings file.",
         )
         include_annotations = panel_field(
             st,
@@ -1536,6 +1612,11 @@ def render_export_options(
                     "segmented_control",
                     "Table format",
                     options=["csv", "parquet", "both"],
+                    format_func=lambda value: {
+                        "csv": "CSV",
+                        "parquet": "Parquet",
+                        "both": "Both",
+                    }[value],
                     default="csv",
                     key=f"{key_prefix}_fmt",
                 )
@@ -1544,7 +1625,7 @@ def render_export_options(
             combine_trials = panel_field(
                 st,
                 "toggle",
-                "Combine all trials into one file",
+                "Combine all trials into one file per table",
                 value=False,
                 key=f"{key_prefix}_combine",
                 help="Write each table once, with every exported trial stacked "
@@ -2142,10 +2223,14 @@ def _package_version() -> str:
     return __version__
 
 
+def _plural(n: int, word: str) -> str:
+    return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+
 def _scope_lines(
     options: ExportOptions, combos: pd.DataFrame, units: pd.DataFrame
 ) -> list[str]:
-    """The README's *Scope* section: which readings the bundle was built from."""
+    """The README's *Scope* section: which trials the bundle was built from."""
     if options.scope == "trial":
         chosen = (
             f"one trial (participant {options.scope_participant}, "
@@ -2163,8 +2248,9 @@ def _scope_lines(
     if options.dataset_name:
         lines.append(f"- Dataset: {options.dataset_name}")
     lines += [
-        f"- Readings: {chosen}",
-        f"- {len(combos):,} trial(s), {len(units):,} screen export unit(s)",
+        f"- Trials: {chosen}",
+        f"- {_plural(len(combos), 'trial')}"
+        + (f" ({_plural(len(units), 'screen')})" if len(units) != len(combos) else ""),
     ]
     return lines
 
@@ -2319,10 +2405,10 @@ def bulk_export(
 
     readme_lines = [
         "# Bulk export",
-        f"Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
+        f"Generated: {_local_stamp()}",
         "",
-        f"Authors: {CITATION['authors']}",
-        f"Tool: {CITATION['title']}",
+        f"Made with: {CITATION['title']}",
+        f"Tool authors: {CITATION['authors']}",
         f"Version: {_package_version()}",
         f"DOI: https://doi.org/{CITATION['doi']}",
         "",
@@ -2334,8 +2420,10 @@ def bulk_export(
         "its participant, trial and screen — and every requested file that "
         "failed (`status` = `failed`) or reading skipped (`skipped`). A file "
         "type that was not requested is not listed.",
-        "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
-        "- Multipart parents add `screens/screen-001-<id>/` below that trial.",
+        "- `per_trial/<participant>__<trial>/` holds each trial's files, "
+        "unless the File naming pattern moved them (`index.csv` has every path).",
+        "- A trial shown on several screens adds `screens/screen-001-<id>/` "
+        "inside its folder.",
         *(
             [
                 "- `aggregate/` holds each table once, every trial in this run "
@@ -2376,7 +2464,7 @@ def bulk_export(
             ]
             if any(written.values())
             else [
-                "Canonical column names from the visualization tool:",
+                "Column names (Scanpath Studio's standard names):",
                 "- participant_id, trial_id, text_id, word_id",
                 "- screen_id, screen_index (multipart trials only)",
                 "- x, y, width, height (word bounding boxes in screen px)",
@@ -2398,13 +2486,17 @@ def bulk_export(
             [
                 "",
                 "This dataset brought none, so the bundle has no word-measure "
-                f"table. Map them on {ICONS['view_data']} Data Management → {ICONS['edit']} Edit dataset → Reading measures.",
+                "table. Map them in the app on Data Management → Edit dataset → "
+                "Reading measures.",
             ]
             if measures_wanted and not brought
             else []
         ),
-        "",
-        f"Demo corpus note: {CITATION['corpus_note']}",
+        *(
+            ["", f"Demo data note: {CITATION['corpus_note']}"]
+            if options.dataset_name == DEMO_CHOICE
+            else []
+        ),
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
     _inventory("README.md", "readme", "written")
@@ -2584,7 +2676,7 @@ def bulk_export(
                 emit_status(
                     status_callback,
                     ExportStage.RASTERIZING,
-                    f"Rendering trial {progress.finished_trials + 1}/{progress.total_trials}…",
+                    f"Rendering {progress.finished_trials + 1} of {progress.total_trials}…",
                     started_at=started,
                     completed=progress.finished_trials,
                     total=progress.total_trials,
@@ -2830,7 +2922,7 @@ def bulk_export(
             emit_status(
                 status_callback,
                 ExportStage.ENCODING_WRITING,
-                f"Wrote trial {progress.finished_trials}/{progress.total_trials}…",
+                f"Wrote {progress.finished_trials} of {progress.total_trials}…",
                 started_at=started,
                 completed=progress.finished_trials,
                 total=progress.total_trials,

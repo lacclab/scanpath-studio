@@ -17,7 +17,7 @@ cross-corpus comparison practical: the same columns, the same trial model and th
 same reading measures across German textbook passages, Chinese newspaper
 sentences, Persian narratives and English benchmark suites.
 
-**Each prepared corpus is its own top-level data source.** There is no
+**Each prepared corpus is its own top-level dataset.** There is no
 "EyeGenBench" source to pick first and no corpus sub-picker inside one — a
 prepared corpus sits in the flat picker tagged 🌐, searchable beside the bundled
 demo and this app's own public corpora. EyeGenBench is *provenance and tooling*:
@@ -31,7 +31,7 @@ recovery below possible: it reads the raw files the pipeline downloaded.
 
 ## Using a corpus
 
-1. Open 🗂️ **Data Management** and pick a corpus as the data source. Each prepared corpus is one
+1. Open 🗂️ **Data Management** and pick a corpus as the dataset. Each prepared corpus is one
    🌐 entry under its own name (*Provo (WIP)*, *ZuCo1 (WIP)*, …). The **(WIP)**
    marker is there because this feature ships to main unfinished; it is display
    only, and nothing about the corpus depends on it.
@@ -267,7 +267,7 @@ with its reason printed rather than taking the sweep down.
 
 **Comparisons.** A prepared corpus can also be the *second* scanpath in a
 cross-dataset comparison, chosen in the Comparisons subtab's own dataset picker
-rather than the main data-source one. It reads the same bundle from the same
+rather than the main one. It reads the same bundle from the same
 directory, so a corpus you can open as your main dataset is a corpus you can
 compare against. Note the share link carries only the corpus you opened as the
 main dataset — the comparison's second corpus does not travel on it.
@@ -282,7 +282,7 @@ OneStops apart. If two entries would ever claim one slug, the link scheme
 **refuses** it on both sides rather than guessing which corpus you meant.
 
 A recipient without that corpus prepared is the common case, not an edge case:
-the link says which corpus it names and leaves their data source exactly where
+the link says which corpus it names and leaves their dataset exactly where
 it was. The bundle *directory* never
 travels on the link — it is a local path, and it is the sender's.
 

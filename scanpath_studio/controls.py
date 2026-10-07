@@ -5231,15 +5231,19 @@ def _render_fix_range_slider(
             st.session_state[user_key] = False
     stored = st.session_state.get(key)
     user_set = st.session_state.get(user_key)
-    if stored is None:
+
+    def _reset_to_full() -> None:
         st.session_state[key] = (min_fix, max_fix)
+
+    if stored is None:
+        _reset_to_full()
         st.session_state[user_key] = False
     elif user_set is False:
         # BUG-16: an untouched auto-default follows the selected trial and always
         # expands to its full range — which is the frame's OWN range, floor
         # included, so that an untouched window equals the full range on a later
         # multipart screen too and no Illustration disclosure fires (BUG-47).
-        st.session_state[key] = (min_fix, max_fix)
+        _reset_to_full()
     elif isinstance(stored, (tuple, list)) and len(stored) == 2:
         # A value supplied before this widget first renders (test seam, restored
         # session, or future deep link) is explicit and should be preserved.
@@ -5248,10 +5252,32 @@ def _render_fix_range_slider(
         hi = max(lo, min(int(stored[1]), max_fix))
         st.session_state[key] = (lo, hi)
     else:
-        st.session_state[key] = (min_fix, max_fix)
+        _reset_to_full()
         st.session_state[user_key] = False
 
+    # The slider sits in the 🧹 Filter popover. Once that has been open, the
+    # browser sends the window it last showed back on every rerun (#374 F9), so
+    # a window this run changed by itself — a new trial's full range, a clamp, a
+    # reset, a link — was undone on the next rerun, clamped to the new trial and
+    # silently hid most of its fixations. So `key` holds the window and the
+    # widgets draw it under a key of their own, which moves to a new generation
+    # whenever the window changed without them: a fresh widget has nothing old
+    # to send back.
+    gen_key = f"_{key}_widget_gen"
+    generation = int(st.session_state.get(gen_key) or 0)
+    widget_key = f"_{key}__w{generation}"
+    window = tuple(st.session_state[key])
+    shown = st.session_state.get(widget_key)
+    if shown is None or tuple(shown) != window:
+        for stale in (widget_key, f"{widget_key}__num_lo", f"{widget_key}__num_hi"):
+            st.session_state.pop(stale, None)
+        generation += 1
+        st.session_state[gen_key] = generation
+        widget_key = f"_{key}__w{generation}"
+        st.session_state[widget_key] = window
+
     def _mark_fix_range_user_set() -> None:
+        st.session_state[key] = tuple(st.session_state[widget_key])
         st.session_state[user_key] = True
 
     all_trials_disabled, _ = _layer_gate(False, None)
@@ -5274,7 +5300,7 @@ def _render_fix_range_slider(
         else "B fixation index range",
         display="Index range",
         label_left=True,
-        key=key,
+        key=widget_key,
         persist_state="session",
         min_value=min_fix,
         max_value=max_fix,

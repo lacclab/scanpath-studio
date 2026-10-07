@@ -63,7 +63,13 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-from scanpath_studio import dataset_table, loading, progress, wizard_shell
+from scanpath_studio import (
+    dataset_table,
+    desktop_update,
+    loading,
+    progress,
+    wizard_shell,
+)
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
@@ -1469,13 +1475,35 @@ def _latest_release_cached() -> update_check.Release:
     return update_check.latest_release()
 
 
-def _render_build_and_updates() -> None:
-    """#139: which build this is, and — on a local run — *Check for updates*."""
+def _build_info():
+    """This process's build (a seam the About tests pin)."""
     from scanpath_studio.build_info import build_info
 
-    info = build_info()
+    return build_info()
+
+
+def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None:
+    """#385: the outcome the update helper left behind, across the restart."""
+    if last.status == "updated":
+        if last.version == current:
+            st.caption(f"Updated from v{last.previous}.")
+        return
+    st.warning(
+        f"The update to v{last.version} didn't go through: {last.reason}. "
+        f"v{last.previous} is still installed.",
+        icon=ICONS["warning"],
+    )
+
+
+def _render_build_and_updates() -> None:
+    """#139: which build this is, and — on a local run — *Check for updates*."""
+    info = _build_info()
     if info.version != info.release:
         st.caption(info.describe())
+    # #385: how the desktop app's last update ended — None anywhere else.
+    last = desktop_update.last_result()
+    if last is not None:
+        _render_last_update(last, info.version)
     if not _update_check_offered():
         return
     if st.button(
@@ -1508,17 +1536,76 @@ def _render_update_result(result: update_check.UpdateCheck) -> None:
         st.warning(result.message, icon=ICONS["warning"])
         return
     st.info(result.message, icon=ICONS["update"])
-    if result.download is not None:
-        st.link_button(
-            f"Download {result.download.name} ({human_size(result.download.size)})",
-            result.download.url,
-            icon=ICONS["download"],
-        )
+    if result.install_kind == "desktop":
+        _render_desktop_update(result)
     elif result.command:
         st.code(result.command, language="bash")
         st.caption("Then restart the app.")
     if result.latest is not None:
         st.markdown(f"[What's new in v{result.latest.version}]({result.latest.url}) ↗")
+
+
+def _render_desktop_update(result: update_check.UpdateCheck) -> None:
+    """#385: **Update & restart** when this app can update itself, and the
+    download either way — beside the button, or instead of it with the reason."""
+    install = desktop_update.current_install()
+    reason = desktop_update.refusal(result, install)
+    clicked = False
+    if reason is None:
+        clicked = st.button(
+            "Update & restart",
+            type="primary",
+            icon=ICONS["update"],
+            key="about_update_restart",
+            help="Downloads the new version, checks and tests it, then restarts "
+            "into it. Your datasets and settings come back with it.",
+        )
+    else:
+        st.caption(reason)
+    if result.download is not None:
+        label = (
+            "Download instead"
+            if reason is None
+            else f"Download {result.download.name} ({human_size(result.download.size)})"
+        )
+        st.link_button(label, result.download.url, icon=ICONS["download"])
+    if clicked:
+        _run_desktop_update(result, install)
+
+
+def _stop_desktop_update(task_key: tuple) -> None:
+    """#385: Cancel on the update card — the download stops at its next chunk."""
+    progress.cancel(task_key)
+
+
+def _run_desktop_update(
+    result: update_check.UpdateCheck, install: desktop_update.Install
+) -> None:
+    """Download, check and test under a card, then hand over to the helper and quit."""
+    task_key = ("desktop_update", loading.session_id())
+    try:
+        with loading.card(
+            st.empty(),
+            key="desktop_update",
+            title=f"Updating to v{result.latest.version}",
+            steps=desktop_update.STEPS,
+            step_list=True,
+            task_key=task_key,
+            cancel=loading.Cancel(
+                "Cancel update", _stop_desktop_update, args=(task_key,)
+            ),
+        ):
+            plan = desktop_update.prepare(result, install)
+        desktop_update.start_swap(plan)
+    except desktop_update.UpdateFailed as error:
+        st.error(f"{error} Nothing was changed.", icon=ICONS["error"])
+        return
+    st.success(
+        f"Restarting into v{plan.version}. A new window opens when it's ready "
+        "(on Windows that can take a minute or two); you can close this one.",
+        icon=ICONS["update"],
+    )
+    desktop_update.exit_soon()
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------

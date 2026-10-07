@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from scanpath_studio import updates
+from scanpath_studio import desktop_update, updates
 from scanpath_studio.build_info import BuildInfo, from_describe
 
 RELEASE = BuildInfo("0.35.0", "0.35.0")
@@ -326,3 +326,128 @@ def test_about_has_no_update_check_on_a_hosted_server(monkeypatch):
     at = AppTest.from_function(_about_script).run()
     assert not at.exception, at.exception
     assert not [button for button in at.button if button.key == "about_check_updates"]
+
+
+def _desktop_update_check(version="99.0.0"):
+    release = updates._release_from(
+        _payload(
+            f"v{version}",
+            [
+                "ScanpathStudio-macos-arm64.dmg",
+                "ScanpathStudio-windows-x86_64.zip",
+                "ScanpathStudio-windows-x86_64-setup.exe",
+                "ScanpathStudio-linux-x86_64.tar.gz",
+            ],
+        )
+    )
+    return updates.UpdateCheck(
+        "update_available",
+        "0.36.0",
+        f"v{version} is out; this is v0.36.0.",
+        latest=release,
+        install_kind="desktop",
+        download=release.assets[0],
+    )
+
+
+def _desktop_about(monkeypatch, *, refusal=None):
+    _local_run(monkeypatch)
+    monkeypatch.setattr(
+        updates, "check_for_updates", lambda **kw: _desktop_update_check()
+    )
+    monkeypatch.setattr(desktop_update, "current_install", lambda: "INSTALL")
+    monkeypatch.setattr(desktop_update, "refusal", lambda check, install: refusal)
+    monkeypatch.setattr(desktop_update, "last_result", lambda: None)
+
+
+def test_the_desktop_app_offers_update_and_restart(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    assert not at.exception, at.exception
+    assert at.button(key="about_update_restart").label == "Update & restart"
+
+
+def test_a_refused_update_says_why_and_still_offers_the_download(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch, refusal="This account can't change /Applications.")
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    assert not at.exception, at.exception
+    assert not [b for b in at.button if b.key == "about_update_restart"]
+    assert any("can't change" in caption.value for caption in at.caption)
+
+
+def test_update_and_restart_swaps_then_quits(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        desktop_update,
+        "prepare",
+        lambda check, install: (
+            calls.append("prepare")
+            or desktop_update.SwapPlan(
+                1, None, Path("/s"), Path("/st"), "99.0.0", "0.36.0", ("x",)
+            )
+        ),
+    )
+    monkeypatch.setattr(desktop_update, "start_swap", lambda plan: calls.append("swap"))
+    monkeypatch.setattr(desktop_update, "exit_soon", lambda: calls.append("exit"))
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    at.button(key="about_update_restart").click().run()
+    assert not at.exception, at.exception
+    assert calls == ["prepare", "swap", "exit"]
+    assert any("Restarting into v99.0.0" in ok.value for ok in at.success)
+
+
+def test_a_failed_update_changes_nothing_and_says_so(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+
+    def fail(check, install):
+        raise desktop_update.UpdateFailed("The download stopped before it finished.")
+
+    monkeypatch.setattr(desktop_update, "prepare", fail)
+    monkeypatch.setattr(desktop_update, "exit_soon", lambda: pytest.fail("quit"))
+    at = AppTest.from_function(_about_script).run()
+    at.button(key="about_check_updates").click().run()
+    at.button(key="about_update_restart").click().run()
+    assert not at.exception, at.exception
+    assert any("stopped before it finished" in e.value for e in at.error)
+    assert any("Nothing was changed" in e.value for e in at.error)
+
+
+@pytest.mark.parametrize(
+    ("result", "where", "says"),
+    [
+        (
+            ("rolled_back", "the new version did not start within 180 seconds"),
+            "warning",
+            "didn't go through",
+        ),
+        (("updated", ""), "caption", "Updated from v0.35.0"),
+    ],
+)
+def test_about_reports_how_the_last_update_ended(monkeypatch, result, where, says):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+
+    _local_run(monkeypatch)
+    status, reason = result
+    monkeypatch.setattr(
+        desktop_update,
+        "last_result",
+        lambda: desktop_update.UpdateResult(status, "0.36.0", "0.35.0", reason),
+    )
+    monkeypatch.setattr(app, "_build_info", lambda: BuildInfo("0.36.0", "0.36.0"))
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception, at.exception
+    assert any(says in element.value for element in getattr(at, where))

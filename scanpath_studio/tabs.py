@@ -248,7 +248,6 @@ from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
     DEFAULT_PRINT_DPI,
     HTML_SELF_CONTAINED_KEY,
-    ComparisonSide,
     ExportOptions,
     annotate_figure,
     apply_export_scope,
@@ -256,7 +255,6 @@ from scanpath_studio.export import (
     count_export_units,
     describe_plan,
     html_plotlyjs,
-    pair_export,
     pattern_fields,
     plan_from_counts,
     print_width_px,
@@ -1420,6 +1418,8 @@ def _render_save_plot_button(
     # surface as Streamlit's generic "Failed to generate file for download" —
     # nothing it raises reaches the page — so the one failure we can predict is
     # said up front, with the fix and the browser-free HTML fallback.
+    if fmt == "HTML":
+        _render_html_files_choice()
     no_browser = fmt == "PDF" and not chrome_available()
     if no_browser:
         st.warning(
@@ -1450,16 +1450,17 @@ def _render_save_plot_button(
 
 
 def _html_self_contained() -> bool:
-    """The Export subtab's *Self-contained HTML* choice
+    """The current figure's *Self-contained HTML* choice
     (`_render_html_files_choice`)."""
     return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
 
 
 def _render_html_files_choice() -> None:
-    """One choice for every HTML file the Export subtab writes — the figure,
-    the replay and the bundles: embed the Plotly library, or load it from
-    cdn.plot.ly when the file is opened. The scripted surfaces (`save_figure`,
-    `render -o figure.html`) always embed it."""
+    """The current figure's (or replay's) HTML: embed the Plotly library, or
+    load it from cdn.plot.ly when the file is opened. Drawn only while HTML is
+    the chosen format; the export bundle asks its own (`render_export_options`).
+    The scripted surfaces (`save_figure`, `render -o figure.html`) always embed
+    it."""
     panel_field(
         st,
         "checkbox",
@@ -1468,10 +1469,9 @@ def _render_html_files_choice() -> None:
         value=False,
         key=HTML_SELF_CONTAINED_KEY,
         persist_state="session",
-        help="Tick to make every HTML file you download here open without an "
-        "internet connection: it carries the Plotly library, about 4.8 MB "
-        "more. Unticked, it loads the library from cdn.plot.ly when opened. "
-        "Other formats are unaffected.",
+        help="Tick to make the HTML file open without an internet connection: "
+        "it carries the Plotly library, about 4.8 MB more. Unticked, it loads "
+        "the library from cdn.plot.ly when opened.",
     )
 
 
@@ -1570,6 +1570,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
     )
 
     if fmt == "HTML":
+        _render_html_files_choice()
         # UX-150: built on click, not per rerun — a long replay's HTML runs to
         # megabytes and about a second to serialize.
         st.download_button(
@@ -1583,7 +1584,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
             on_click="ignore",
             # ENG-64: a saved file has no app server to load plotly.js from,
             # so it embeds it or loads it from the CDN — the *Self-contained HTML*
-            # choice above (see docs/privacy.md).
+            # choice just above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
             "interactivity. *Self-contained HTML* above decides whether it opens "
             "offline or loads the Plotly library from cdn.plot.ly.",
@@ -5513,97 +5514,6 @@ def _dataset_table_names() -> dict[str, ColumnNames]:
     }
 
 
-def _render_pair_export(
-    fig,
-    sides: tuple,
-    *,
-    canvas_width: int,
-    canvas_height: int,
-    viz_settings: dict,
-    line_spacing: float,
-    scale_text_to_boxes: bool,
-) -> None:
-    """The **CMP-8 §6** pair bundle, beside the plain figure download.
-
-    The figure alone is unreproducible — it names two readers and no way to find
-    either again. This writes the pair as one trial folder: the figure, both
-    scanpaths' tables with a ``dataset`` column, and a ``plot_config.json``
-    whose ``datasets`` block records both sources and both recording setups.
-    """
-    side_a, side_b = sides
-    with st.expander(
-        f"{ICONS['compare']} Download this comparison as a bundle", expanded=False
-    ):
-        st.caption(
-            "The figure plus both scanpaths' data and a manifest naming each "
-            "side's dataset, trial and recording setup — so the comparison can "
-            "be reproduced, which the image alone can't be."
-        )
-        fmt = panel_field(
-            st,
-            "selectbox",
-            "Figure format",
-            options=["png", "svg", "pdf", "html"],
-            format_func=str.upper,
-            key="cmp_pair_export_format",
-            help="PNG, SVG and PDF are drawn with Chrome, Chromium or Edge; HTML "
-            "doesn't need it.",
-        )
-        table_fmt = panel_field(
-            st,
-            "selectbox",
-            "Table format",
-            options=["csv", "parquet"],
-            key="cmp_pair_export_table_format",
-        )
-        options = ExportOptions(
-            include_png=fmt == "png",
-            include_svg=fmt == "svg",
-            include_pdf=fmt == "pdf",
-            include_html=fmt == "html",
-            include_fixations=True,
-            include_measures=True,
-            table_format=table_fmt,
-            html_self_contained=_html_self_contained(),
-        )
-        settings = _build_figure_settings(viz_settings, False)
-        settings["line_spacing"] = line_spacing
-        settings["scale_text_to_boxes"] = scale_text_to_boxes
-        settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
-        # UX-150: one click, as for the figure above — the bundle is built when
-        # the button is pressed, and the missing browser is said up front
-        # because a failure on that worker thread can't reach the page.
-        no_browser = fmt != "html" and not chrome_available()
-        if no_browser:
-            st.warning(
-                f"{fmt.upper()} export can't run here. {CHROME_INSTALL_HINT}",
-                icon=ICONS["warning"],
-            )
-        st.download_button(
-            "⬇ Download bundle (zip)",
-            data=partial(
-                pair_export,
-                fig,
-                side_a,
-                side_b,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                x_field=viz_settings.get("x_field", "x"),
-                y_field=viz_settings.get("y_field", "y"),
-                settings=settings,
-                options=options,
-                column_names=_dataset_table_names(),
-            ),
-            file_name=f"comparison_{side_a.slug}__vs__{side_b.slug}.zip",
-            mime="application/zip",
-            key="cmp_pair_export_download",
-            on_click="ignore",
-            disabled=no_browser,
-            help="Builds the bundle when you click; a PNG/SVG/PDF figure takes a "
-            "few seconds. If it fails, choose **html** — it needs no browser.",
-        )
-
-
 def _render_export_panel(
     displayed_fig,
     *,
@@ -5627,7 +5537,6 @@ def _render_export_panel(
     scale_text_to_boxes: bool,
     selected_participant: str,
     selected_trial: str,
-    compare_export: tuple | None = None,
     plot_key: str = "single",
     replay: _ReplayView | None = None,
 ) -> None:
@@ -5640,7 +5549,6 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
-    _render_html_files_choice()
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
     elif animate or displayed_fig is None:
@@ -5654,16 +5562,6 @@ def _render_export_panel(
             key_prefix="single",
             plot_key=plot_key,
         )
-        if compare_export is not None:
-            _render_pair_export(
-                displayed_fig,
-                compare_export,
-                canvas_width=int(canvas_width),
-                canvas_height=int(canvas_height),
-                viz_settings=viz_settings,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
-            )
 
     st.divider()
     st.markdown("## Export bundle")
@@ -7443,47 +7341,6 @@ def render_single_trial_tab(
                     trial_raw_gaze=trial_raw_gaze,
                 )
 
-    # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*
-    # frames and real ids — the `dataset · pid` namespace is a figure-internal
-    # device and must never reach an exported table. `None` unless comparing.
-    compare_export_sides = None
-    if comparing and compare_meta is not None:
-        # Lazy: `app` imports `tabs`, so a module-level import closes the cycle.
-        from scanpath_studio.app import active_setup_snapshot
-
-        compare_export_sides = (
-            ComparisonSide(
-                participant=str(selected_participant),
-                trial=str(selected_trial),
-                words=trial_words,
-                fixations=trial_fixations,
-                dataset=None,
-                setup=(
-                    snapshot.to_dict()
-                    if (snapshot := active_setup_snapshot()) is not None
-                    else None
-                ),
-            ),
-            ComparisonSide(
-                participant=str(compare_meta["raw_participant"]),
-                trial=str(compare_meta["trial"]),
-                # Strip the namespacing back off: `_qualify_for_compare` rewrote
-                # `participant_id` for the figure's benefit only.
-                words=_unqualify_for_export(
-                    compare_meta["words"], compare_meta["raw_participant"]
-                ),
-                fixations=_unqualify_for_export(
-                    compare_meta["fixations"], compare_meta["raw_participant"]
-                ),
-                dataset=compare_meta.get("dataset"),
-                setup=(
-                    compare_meta["setup"].to_dict()
-                    if compare_meta.get("setup") is not None
-                    else None
-                ),
-            ),
-        )
-
     displayed_fig = None
     # UX-152: which `_render_true_scale_chart` drew it — the Export subtab's PNG
     # and SVG are saved from that plot in the browser.
@@ -7982,7 +7839,6 @@ def render_single_trial_tab(
                     scale_text_to_boxes=scale_text_to_boxes,
                     selected_participant=selected_participant,
                     selected_trial=selected_trial,
-                    compare_export=compare_export_sides,
                     plot_key=displayed_plot_key,
                 )
 
@@ -8082,8 +7938,6 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
-    # The subtab's *Self-contained HTML* choice, in `options` so it is in the cache key.
-    options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
     if options.export_unfiltered:

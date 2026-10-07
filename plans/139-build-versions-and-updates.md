@@ -199,7 +199,10 @@ download link.
    aside and the new one into place, and relaunches (`open -n` on macOS).
    - macOS swaps the `.app`'s `Contents` rather than the bundle, because the
      user owns the `.app` they dragged in even on a standard account.
-   - Windows/Linux swap the `ScanpathStudio` folder.
+   - Windows/Linux swap the executable and `_internal` inside the
+     `ScanpathStudio` folder, not the folder itself, so the Windows
+     installer's `unins000.*` beside them survive (amended while planning —
+     see below).
 6. **Roll back** — the relaunched launcher writes a "booted" marker once its
    server answers the health check. If none appears within 180 s (Windows'
    first-launch Defender scan needs that long), the helper restores the old
@@ -239,6 +242,31 @@ own install.
   steps both ran), which is what makes the Team-ID check possible.
 - Windows builds are unsigned (#121): the digest is the only trust anchor, and
   the updater inherits #121's field-test problem rather than fixing it.
+
+### Amendments made while planning (2026-10-07)
+
+The implementation plan, [`385-desktop-updater.md`](385-desktop-updater.md),
+settles what this section left open or what changed after it was written
+(#388's Windows installer):
+
+- **Payload entries, not folders.** Every OS swaps entries inside the install
+  root: `Contents`, or the executable plus `_internal`. The Inno Setup
+  uninstaller stays, and its uninstall entry's `DisplayVersion` is updated.
+- **Windows updates from the `.zip`.** *Download* still offers the
+  `-setup.exe`.
+- **One state folder** on the install's volume holds the download, the staged
+  copy, the old payload, the markers and `result.json`. It is the per-user
+  cache when that shares the volume, else `.ScanpathStudio-update` beside the
+  install; otherwise the update is refused.
+- **The relaunch reports in by install root, not version** (`pending.json` →
+  `started` → `booted`). That lets CI offer the same build as `v99.0.0`
+  through `SCANPATH_UPDATE_FEED`, which only `--update` honours.
+- **Child processes start fresh** (`PYINSTALLER_RESET_ENVIRONMENT=1`, the
+  user's `LD_LIBRARY_PATH`).
+- **An ad-hoc-signed macOS build is refused**, since the Team ID is the trust
+  anchor.
+- **The outcome survives the restart:** About shows a rolled-back or failed
+  update as a warning, and a successful one as "Updated from v…".
 
 ## Out of scope
 

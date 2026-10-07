@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launcher import _free_port
 
-from scanpath_studio import desktop_update
+from scanpath_studio import desktop_update, updates
 
 #: --update itself: copy the archive, unpack it, run the staged --selfcheck.
 UPDATE_TIMEOUT_S = 900.0
@@ -50,6 +50,52 @@ def _helper_log(state: Path) -> str:
         return (state / "helper.log").read_text(encoding="utf-8", errors="replace")
     except OSError:
         return "(no helper.log)"
+
+
+def _describe_state(state: Path) -> str:
+    """What the update left in ``state``: names and sizes, and the markers' contents."""
+    lines = [f"state folder: {state}"]
+    try:
+        entries = sorted(state.iterdir(), key=lambda path: path.name)
+    except OSError as error:
+        return f"state folder: {state} ({error})"
+    for entry in entries:
+        try:
+            if entry.is_dir():
+                lines.append(f"  {entry.name}/  (folder)")
+            else:
+                lines.append(f"  {entry.name}  {entry.stat().st_size} bytes")
+        except OSError as error:
+            lines.append(f"  {entry.name}  ({error})")
+    for name in ("old", "staged"):
+        lines.append(f"{name} present: {(state / name).exists()}")
+    for name in (
+        desktop_update.STARTED,
+        desktop_update.BOOTED,
+        desktop_update.HELPER_STARTED,
+        desktop_update.PENDING,
+        desktop_update.RESULT,
+    ):
+        path = state / name
+        if not path.exists():
+            lines.append(f"{name}: missing")
+            continue
+        try:
+            size = path.stat().st_size
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as error:
+            lines.append(f"{name}: exists ({error})")
+            continue
+        lines.append(
+            f"{name}: exists, {size} bytes"
+            + (f": {text.strip()}" if 0 < size <= 400 else "")
+        )
+    return "\n".join(lines)
+
+
+def _diagnostics(state: Path) -> str:
+    """Everything worth reading when an update fails."""
+    return "helper log:\n" + _helper_log(state) + "\n" + _describe_state(state)
 
 
 def _started_pid(state: Path) -> int | None:
@@ -88,6 +134,7 @@ def main() -> None:
             f"({desktop_update.update_archive()})"
         )
     state = desktop_update.state_dir(install)
+    digest = _sha256(archive)
     feed = archive.parent / "update-feed.json"
     feed.write_text(
         json.dumps(
@@ -97,11 +144,16 @@ def main() -> None:
                 "published_at": "2026-01-01T00:00:00Z",
                 "assets": [
                     {
-                        "name": archive.name,
+                        "name": name,
                         "browser_download_url": archive.as_uri(),
                         "size": archive.stat().st_size,
-                        "digest": f"sha256:{_sha256(archive)}",
+                        "digest": f"sha256:{digest}",
                     }
+                    # The Download name (e.g. Windows' -setup.exe) is listed too,
+                    # so the check doesn't say it isn't on the release page yet.
+                    for name in dict.fromkeys(
+                        [archive.name, updates.desktop_archive() or archive.name]
+                    )
                 ],
             }
         ),
@@ -131,28 +183,31 @@ def main() -> None:
     except subprocess.TimeoutExpired:
         raise SystemExit(
             f"[update-e2e] --update did not finish within {UPDATE_TIMEOUT_S:.0f}s; "
-            "helper log:\n" + _helper_log(state)
+            + _diagnostics(state)
         ) from None
     if ran.returncode != 0:
-        raise SystemExit(f"[update-e2e] --update exited {ran.returncode}")
+        raise SystemExit(
+            f"[update-e2e] --update exited {ran.returncode}; " + _diagnostics(state)
+        )
 
     deadline = time.monotonic() + RESULT_TIMEOUT_S
     while (result := desktop_update.last_result(state=state)) is None:
         if time.monotonic() > deadline:
             raise SystemExit(
-                f"[update-e2e] no result after {RESULT_TIMEOUT_S:.0f}s; helper log:\n"
-                + _helper_log(state)
+                f"[update-e2e] no result after {RESULT_TIMEOUT_S:.0f}s; "
+                + _diagnostics(state)
             )
         time.sleep(2)
     print(f"[update-e2e] result: {result}")
+    print("[update-e2e] helper log:\n" + _helper_log(state))
     try:
         if result.status != "updated":
             # Best effort: the helper relaunched the old version, which the
             # smoke test after this must not find holding the port or files.
             _stop(_started_pid(state))
             raise SystemExit(
-                "[update-e2e] update did not succeed; helper log:\n"
-                + _helper_log(state)
+                "[update-e2e] update did not succeed (helper log above); "
+                + _describe_state(state)
             )
         for _ in range(60):  # the helper cleans up just after writing the result
             if not (state / "old").exists():

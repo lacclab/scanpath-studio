@@ -667,10 +667,17 @@ PREVIOUS=@@PREVIOUS@@
 TRACK_LAUNCH=@@TRACK_LAUNCH@@
 LAUNCHED_PID=""
 
+# One timestamped line per stage, on stdout (helper.log), to tell where it stopped.
+log() {
+  echo "$(date '+%H:%M:%S') $*"
+}
+
 # First, before anything can fail: the app waits for this before it quits.
 : > "$STATE/helper-started"
+log "helper started (waiting for pid $APP_PID to quit)"
 
 result() {
+  log "result: $1 $2"
   printf '{"status": "%s", "version": "%s", "previous": "%s", "reason": "%s", "pid": %s}\n' \
     "$1" "$VERSION" "$PREVIOUS" "$2" "${3:-null}" > "$STATE/result.json.tmp" &&
     mv -f "$STATE/result.json.tmp" "$STATE/result.json"
@@ -684,11 +691,13 @@ relaunch() {
   if [ "$TRACK_LAUNCH" = 1 ]; then
     LAUNCHED_PID=$!
   fi
+  log "relaunched (pid ${LAUNCHED_PID:-unknown})"
 }
 
 # The old version is (or is not) in place and the attempt is over: say so,
 # forget the attempt so the app does not report in for nobody, start it again.
 give_up() {
+  log "giving up: $1"
   result failed "$1"
   rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-started"
   relaunch
@@ -714,13 +723,16 @@ while kill -0 "$APP_PID" 2>/dev/null; do
   if [ "$ticks" -ge "$QUIT_TICKS" ]; then
     # The old version is still running, so nothing is relaunched; forget the
     # attempt so a retry isn't refused as one already under way.
+    log "app did not quit within the timeout"
     result failed "the app did not quit"
     rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-started"
+    log "done (gave up)"
     exit 1
   fi
   sleep 0.5
   ticks=$((ticks + 1))
 done
+log "app quit"
 
 rm -rf "$STATE/old" "$STATE/failed"
 rm -f "$STATE/started" "$STATE/booted"
@@ -730,22 +742,27 @@ fi
 if ! move_all "$ROOT" "$STATE/old"; then
   give_up "the old version could not be moved aside"
 fi
+log "moved old aside"
 if ! move_all "$NEW" "$ROOT"; then
   if move_all "$STATE/old" "$ROOT"; then
     give_up "the new version could not be moved into place"
   fi
   give_up "the new version could not be moved into place, and the old one could not be put back"
 fi
+log "moved new in"
 touch "$ROOT"
 relaunch
 
+log "waiting for the new version to boot (up to $BOOT_TIMEOUT seconds)"
 ticks=0
 while [ ! -e "$STATE/booted" ]; do
   if [ "$ticks" -ge "$BOOT_TICKS" ]; then
+    log "boot timeout, rolling back"
     new_pid=$(cat "$STATE/started" 2>/dev/null)
     # A version that hung before writing `started` is still the process we launched.
     [ -n "$new_pid" ] || new_pid=$LAUNCHED_PID
     if [ -n "$new_pid" ]; then
+      log "stopping the new version (pid $new_pid)"
       kill "$new_pid" 2>/dev/null
       sleep 2
       kill -9 "$new_pid" 2>/dev/null
@@ -770,6 +787,7 @@ while [ ! -e "$STATE/booted" ]; do
     if [ "$cleanup" = 1 ]; then
       rm -rf "$STATE/old" "$STATE/failed" "$STATE/staged" "$STATE/download"
     fi
+    log "done (rollback finished, cleanup=$cleanup)"
     exit 1
   fi
   sleep 0.5
@@ -777,9 +795,11 @@ while [ ! -e "$STATE/booted" ]; do
 done
 
 new_pid=$(cat "$STATE/started" 2>/dev/null)
+log "booted (pid ${new_pid:-unknown})"
 result updated "" "${new_pid:-null}"
 rm -rf "$STATE/old" "$STATE/failed" "$STATE/staged" "$STATE/download"
 rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-started"
+log "done"
 """
 
 _PS_HELPER = r"""# Scanpath Studio's update helper (#385), written by desktop_update.helper_script.
@@ -800,10 +820,18 @@ $UninstallKey = @@UNINSTALL_KEY@@
 $Pending = @@PENDING@@
 $script:Launched = $null
 
+# One timestamped line per stage, on the host (helper.log), to tell where it
+# stopped. Write-Host never reaches a function's pipeline or return value.
+function Write-Log($Message) {
+  Write-Host ((Get-Date -Format 'HH:mm:ss') + ' ' + $Message)
+}
+
 # First, before anything can fail: the app waits for this before it quits.
 [IO.File]::WriteAllText((Join-Path $State 'helper-started'), '')
+Write-Log "helper started (waiting for pid $AppPid to quit)"
 
 function Write-Result($Status, $Reason, $NewPid) {
+  Write-Log "result: $Status $Reason"
   $record = [ordered]@{ status = $Status; version = $Version; previous = $Previous; reason = $Reason; pid = $NewPid }
   $tmp = Join-Path $State 'result.json.tmp'
   [IO.File]::WriteAllText($tmp, ($record | ConvertTo-Json -Compress))
@@ -819,11 +847,15 @@ function Start-App {
   } else {
     $script:Launched = Start-Process -FilePath $Relaunch[0] -WorkingDirectory $Root -PassThru
   }
+  $launchedId = 'unknown'
+  if ($script:Launched) { $launchedId = $script:Launched.Id }
+  Write-Log "relaunched (pid $launchedId)"
 }
 
 # The old version is (or is not) in place and the attempt is over: say so,
 # forget the attempt so the app does not report in for nobody, start it again.
 function Stop-Update($Reason) {
+  Write-Log "giving up: $Reason"
   Write-Result 'failed' $Reason $null
   foreach ($name in $Pending, 'started', 'booted', 'helper-started') {
     Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
@@ -871,12 +903,15 @@ $app = Get-Process -Id $AppPid -ErrorAction SilentlyContinue
 if ($app -and -not $app.WaitForExit($QuitTimeoutMs)) {
   # The old version is still running, so nothing is relaunched; forget the
   # attempt so a retry isn't refused as one already under way.
+  Write-Log 'app did not quit within the timeout'
   Write-Result 'failed' 'the app did not quit' $null
   foreach ($name in $Pending, 'started', 'booted', 'helper-started') {
     Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
   }
+  Write-Log 'done (gave up)'
   exit 1
 }
+Write-Log 'app quit'
 
 foreach ($name in 'old', 'failed') {
   $path = Join-Path $State $name
@@ -893,21 +928,26 @@ foreach ($name in 'started', 'booted') {
 if (-not (Move-All $Root (Join-Path $State 'old'))) {
   Stop-Update 'the old version could not be moved aside'
 }
+Write-Log 'moved old aside'
 if (-not (Move-All $New $Root)) {
   if (Move-All (Join-Path $State 'old') $Root) {
     Stop-Update 'the new version could not be moved into place'
   }
   Stop-Update 'the new version could not be moved into place, and the old one could not be put back'
 }
+Write-Log 'moved new in'
 Start-App
 
+Write-Log "waiting for the new version to boot (up to $BootTimeout seconds)"
 $ticks = 0
 while (-not (Test-Path -LiteralPath (Join-Path $State 'booted'))) {
   if ($ticks -ge $BootTicks) {
+    Write-Log 'boot timeout, rolling back'
     $newPid = Read-NewPid
     # A version that hung before writing `started` is still the process we launched.
     if (-not $newPid -and $script:Launched) { $newPid = $script:Launched.Id }
     if ($newPid) {
+      Write-Log "stopping the new version (pid $newPid)"
       Stop-Process -Id $newPid -Force -ErrorAction SilentlyContinue
       Start-Sleep -Seconds 2
     }
@@ -934,12 +974,14 @@ while (-not (Test-Path -LiteralPath (Join-Path $State 'booted'))) {
         Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
       }
     }
+    Write-Log "done (rollback finished, cleanup=$cleanup)"
     exit 1
   }
   Start-Sleep -Milliseconds 500
   $ticks++
 }
 
+Write-Log ('booted (pid ' + (Read-NewPid) + ')')
 Write-Result 'updated' '' (Read-NewPid)
 if ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath $UninstallKey)) {
   try {
@@ -952,6 +994,7 @@ if ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath $UninstallKey)) {
 foreach ($name in 'old', 'failed', 'staged', 'download', $Pending, 'started', 'booted', 'helper-started') {
   Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
 }
+Write-Log 'done'
 """
 
 _PLAIN_VERSION = re.compile(r"[0-9A-Za-z.+!_-]+")

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -574,6 +575,74 @@ def test_the_sh_helper_swaps_relaunches_and_cleans_up(tmp_path):
             du.HELPER_STARTED,
         ):
             assert not (plan.state / leftover).exists(), leftover
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_logs_each_stage_with_a_timestamp(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    try:
+        script = plan.state / "helper.sh"
+        script.write_text(du.helper_script(plan), encoding="utf-8")
+        done = subprocess.run(
+            ["/bin/sh", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 0
+        lines = done.stdout.splitlines()
+        for stage in (
+            "helper started",
+            "app quit",
+            "moved old aside",
+            "moved new in",
+            "relaunched",
+            "waiting for the new version to boot",
+            "booted",
+            "result: updated",
+            "done",
+        ):
+            assert any(stage in line for line in lines), (stage, done.stdout)
+        assert all(re.match(r"\d\d:\d\d:\d\d \S", line) for line in lines), lines
+        assert done.stdout.isascii()
+        # in order: the swap happens between quitting and booting
+        order = [
+            next(i for i, line in enumerate(lines) if stage in line)
+            for stage in ("app quit", "moved old aside", "moved new in", "booted")
+        ]
+        assert order == sorted(order)
+    finally:
+        _kill_launched(plan.state)
+
+
+def test_both_helpers_are_plain_ascii_and_log_through_write_host():
+    # helper.log is read back on a runner whose console may not be UTF-8
+    for template, call in ((du._SH_HELPER, "log "), (du._PS_HELPER, "Write-Log")):
+        logged = [line for line in template.splitlines() if call in line]
+        assert logged and all(line.isascii() for line in logged)
+    assert "Write-Host" in du._PS_HELPER
+    assert "Write-Output" not in du._PS_HELPER
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_logs_why_it_rolled_back(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "hang", boot_timeout_s=2.0)
+    try:
+        script = plan.state / "helper.sh"
+        script.write_text(du.helper_script(plan), encoding="utf-8")
+        done = subprocess.run(
+            ["/bin/sh", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 1
+        assert "boot timeout, rolling back" in done.stdout
+        assert "result: rolled_back" in done.stdout
     finally:
         _kill_launched(plan.state)
 

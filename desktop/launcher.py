@@ -466,7 +466,7 @@ def update() -> int:
             desktop_update.current_install(),
             # Only the test feed may hand over a local file.
             allow_file=bool(feed),
-            on_step=lambda step: print(f"update: {step}…"),
+            on_step=lambda step: print(f"update: {step}..."),
         )
         desktop_update.start_swap(plan)
     except desktop_update.UpdateFailed as error:

@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Outputs and sharing - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/guides/outputs-sharing.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Outputs and sharing - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/guides/outputs-sharing.png" />
 </head>
   
@@ -630,7 +630,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -886,7 +886,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1753,8 +1753,8 @@
 <h2 id="export">Export<a class="headerlink" href="#export" title="Permanent link">&para;</a></h2>
 <p>Open the <strong>Export</strong> subtab in the Scanpath view.</p>
 <ul>
-<li><strong>Current figure</strong> downloads what is on screen: PNG, SVG, PDF or HTML, or the
-  replay as HTML, GIF or MP4.</li>
+<li><strong>Current figure</strong> downloads what is on screen: PNG (at a print width and
+  <abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr>, if you give one), SVG, PDF or HTML, or the replay as HTML, GIF or MP4.</li>
 <li><strong>Export bundle</strong> writes figures and tables for this trial, the filtered
   trials, or the whole dataset, plus a <code>plot_config.json</code> recording the main
   settings they were drawn with (the full set is <strong>Share → File</strong>).
@@ -1791,11 +1791,14 @@ still downloads.</p>
 <p>The <strong>Share</strong> subtab passes a view on in three ways:</p>
 <ul>
 <li><strong>Link</strong> — a URL with the dataset choice, trial and every figure setting.
-  It never contains your uploaded data: the recipient must load the same
-  dataset. (A scanpath created by hand is the exception; its link carries it.)</li>
+  It never contains your uploaded data: the link names a dataset you added,
+  and the recipient adds the same files (send them with its setup file, from
+  <strong>Edit dataset → Download setup file</strong>). A recipient without that dataset is told
+  which one the link needs, and the view is not applied to another. (A
+  scanpath created by hand is the exception; its link carries it.)</li>
 <li><strong>Code</strong> — Python or a CLI command that reproduces the figure.</li>
 <li><strong>File</strong> — the figure's settings as a file, to restore later: its mode
-  (static, animated or a comparison) and, for a comparison, which reading it
+  (static, animated or a comparison) and, for a comparison, which trial it
   was compared with and on which screen.</li>
 </ul>
 <figure class="sps-screenshot">
@@ -1816,11 +1819,11 @@ still downloads.</p>
 </tr>
 <tr>
 <td>favorites, tags and notes</td>
-<td><strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data → Annotations → Export</strong></td>
+<td><strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management → Annotations → Export</strong></td>
 </tr>
 <tr>
 <td>column mapping and recording setup</td>
-<td><strong><span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset → Save setup</strong></td>
+<td><strong><span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset → Download setup file</strong></td>
 </tr>
 <tr>
 <td>saved figure designs</td>
@@ -1836,8 +1839,8 @@ still downloads.</p>
 one. The authoring file is the exception: it is the whole authored scanpath, and
 <strong>Restore authoring file</strong> on the same screen loads it back, as do
 <code>load_authored_scanpath</code> and <code>scanpath-studio render --authoring</code>. Notes may contain participant information, so check them before sharing.</p>
-<p>On a local or desktop install, the app also keeps a recovery copy of your
-datasets and work, restored after a refresh or restart.</p>
+<p>On a local or desktop install, the app also keeps your datasets and work
+<strong>Saved on this computer</strong>, restored after a refresh or restart.</p>
 <p>For scripted output, see <a href="../../automation/">Automation</a>.</p>
 
 
@@ -1859,7 +1862,7 @@ datasets and work, restored after a refresh or restart.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 08:21:05 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     
@@ -1897,7 +1900,7 @@ datasets and work, restored after a refresh or restart.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../corpus-workspace/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Corpus workspace">
+          <a href="../corpus-workspace/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Corpus Analysis">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1907,7 +1910,7 @@ datasets and work, restored after a refresh or restart.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Corpus workspace
+                Corpus Analysis
               </div>
             </div>
           </a>

@@ -22,17 +22,21 @@ Run, pass : Consecutive fixations on one word form a run; a word's first run is 
 
 Word box : The rectangle a word occupied on screen — its area of interest (AOI), or interest area (IA) in EyeLink's terms. It is taken from the data exactly as given, never recomputed ([`geom.word_box_bounds`](https://lacclab.github.io/scanpath-studio/computations/#geom-word-box-bounds)). A fixation counts for the word its data names when the data has a word/IA id (a blank there means no word); without one, for the word whose box contains it, else for no word ([`assign.fixation_to_word`](https://lacclab.github.io/scanpath-studio/computations/#assign-fixation-to-word)).
 
+Words (interest areas) : The table of words and their word boxes, such as EyeLink's Interest Area Report.
+
 Canvas : The recorded screen in pixels, such as 2560 × 1440 — the coordinate system every figure is drawn in.
 
 True to scale : Text and fixations drawn at their recorded on-screen positions, with each word label sized from the word boxes ([`disp.true_scale`](https://lacclab.github.io/scanpath-studio/computations/#disp-true-scale)).
 
-Recording setup : The monitor's physical size and the viewing distance. Together with the canvas they give pixels per degree of visual angle ([`geom.pixels_per_degree`](https://lacclab.github.io/scanpath-studio/computations/#geom-pixels-per-degree)).
+Recording setup : How the text was shown: the screen resolution (the canvas), the monitor's size and viewing distance, and the text size, each marked measured, estimated or assumed. Size and distance give pixels per degree of visual angle ([`geom.pixels_per_degree`](https://lacclab.github.io/scanpath-studio/computations/#geom-pixels-per-degree)).
 
 Screen : One of several displays a single trial was read over — the pages of a long text, or its comprehension-question screens. Each screen keeps its own coordinate space and is never merged with another ([Data format](https://lacclab.github.io/scanpath-studio/data-format/index.md)).
 
 Critical span : A marked stretch of the text — in OneStop, the words that answer the trial's question (`is_in_aspan`) — highlighted in the figure.
 
 ## Reading measures
+
+Scanpath Studio shows these as your interest-area report provides them. The definitions below are how it would compute them (experimental); the values you load mean what your eye-tracking software defines.
 
 First fixation duration (FFD) : How long the first fixation on a word lasted, whenever it came ([`measure.ffd`](https://lacclab.github.io/scanpath-studio/computations/#measure-ffd)).
 
@@ -58,6 +62,6 @@ Text : The stimulus (`text_id`) — what two trials of the same text share.
 
 Dataset : One loaded corpus: the bundled demo, a public corpus, or tables you uploaded, each listed under **Data Management**.
 
-Participant metadata : An optional table with one row per reader, whose columns become trial filters without being copied onto the words or fixations.
+Participant metadata : An optional table with one row per participant, whose columns become trial filters without being copied onto the words or fixations.
 
 Illustration : A label the app puts on any figure that no longer shows the data exactly as recorded — snapped fixations, arced saccades, a subset of the fixations, a replay not at real time ([`disp.illustration`](https://lacclab.github.io/scanpath-studio/computations/#disp-illustration)).

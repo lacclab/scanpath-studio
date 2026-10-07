@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Data format - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/data-format.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/data-format/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Data format - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/data-format.png" />
 </head>
   
@@ -622,7 +622,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -873,7 +873,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1812,12 +1812,12 @@
 
 
 <h1 id="data-format">Data format<a class="headerlink" href="#data-format" title="Permanent link">&para;</a></h1>
-<p>Scanpath Studio reads up to three tables — <strong>words / areas-of-interest</strong>,
+<p>Scanpath Studio reads up to three tables — <strong>words (interest areas)</strong>,
 <strong>fixations</strong>, and (optionally) <strong>raw gaze</strong> — as <strong>CSV, TSV, TXT, Parquet,
 Feather, or Excel</strong>, or a <code>.zip</code> of any of them. Columns are auto-detected from
 common EyeLink, Gazepoint, Tobii, SMI, Pupil Labs, and snake-case conventions;
-the app's <strong>Column
-mapping</strong> panel (and the
+<strong>Edit dataset</strong>'s
+<strong>Data tables &amp; column mapping</strong> (and the
 <code>word_schema</code> / <code>fix_schema</code> arguments of
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>) override
 any guess.</p>
@@ -1832,13 +1832,13 @@ any guess.</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>Words / <abbr title="Interest area: EyeLink's name for an AOI">IA</abbr></strong></td>
-<td>one row per word / interest area, with its on-screen box</td>
+<td><strong>Words (interest areas)</strong></td>
+<td>one row per word / interest area, with its on-screen box (EyeLink's Interest Area Report)</td>
 <td>trial id, word id, and the box as <strong>edges</strong> (<code>IA_LEFT/RIGHT/TOP/BOTTOM</code>) <strong>or</strong> origin+size (<code>x/y/width/height</code>); optionally participant id and word text</td>
 </tr>
 <tr>
 <td><strong>Fixations</strong></td>
-<td>one row per fixation</td>
+<td>one row per fixation (EyeLink's Fixation Report)</td>
 <td>trial id, duration (ms), and x/y or a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id; optionally participant id, timestamp, fixation id</td>
 </tr>
 <tr>
@@ -1848,7 +1848,7 @@ any guess.</p>
 </tr>
 <tr>
 <td><strong>Participant metadata</strong> <em>(optional)</em></td>
-<td>one row per reader</td>
+<td>one row per participant</td>
 <td>participant id, plus anything you know about them</td>
 </tr>
 <tr>
@@ -1864,13 +1864,11 @@ any guess.</p>
 </tbody>
 </table>
 <p><strong>Without timestamps.</strong> A fixations table with no timestamp column still
-loads: its rows are taken to be in reading order. Reading time and reading
-speed are then an estimate — the fixations laid end to end by their durations,
-leaving out the time between them — and the summaries label them so
-(<code>reading_time_source</code>). The replay uses the same clock.</p>
+loads: its rows are taken to be in reading order. The replay then lays the
+fixations end to end by their durations, leaving out the time between them.</p>
 <p>A raw gaze table with no timestamp column keeps its samples in file order and
 gives them no time: each sample is numbered 1, 2, … within its trial
-(<code>sample_index</code>), the plot colours the samples by that order under a
+(<code>sample_index</code>), the plot colors the samples by that order under a
 <em>Sample order</em> legend title and the hover reads <code>sample n</code>, and the exported
 table carries the sample number. Nothing assumes a sampling rate.</p>
 <p><strong>Units.</strong> Durations and timestamps are read in milliseconds. A column whose
@@ -1890,14 +1888,14 @@ words-only table still draws a heatmap from its pre-aggregated reading measures.
 a dataset with no fixations the <span class="sps-icon" data-icon="grain" aria-hidden="true"></span> <strong>Raw gaze</strong> layer is on by default. Nothing
 is derived from the samples: no fixations are detected from them, so the
 fixation and saccade layers, the animated replay and Compare need a fixations
-table, and Corpus Analysis needs an <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> report that carries reading measures.</p>
+table, and Corpus Analysis needs a Words table that carries reading measures.</p>
 <h2 id="participant-metadata">Participant metadata<a class="headerlink" href="#participant-metadata" title="Permanent link">&para;</a></h2>
-<p>Attach a table of <strong>one row per reader</strong> — native language, age, a
+<p>Attach a table of <strong>one row per participant</strong> — native language, age, a
 comprehension score, a group label. When you upload your own data it is one of
 the <strong>Metadata</strong> uploaders in part 2 of the setup wizard; for the demo, a public
 corpus, or a dataset you added earlier, the same uploader is on <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management → <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset</strong>
 under <strong>Metadata → Participants</strong>. Its columns then behave like fields in the
-data: they filter trials (the filter funnel's <em>By reader</em> section), show up as
+data: they filter trials (the filter funnel's <em>By participant</em> section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
 sessions.</p>
@@ -1909,16 +1907,16 @@ sessions.</p>
 <ul>
 <li><strong>The table is never copied onto your fixations.</strong> It stays its own table and
   is exported separately (<code>metadata/participants.csv</code>).</li>
-<li><strong>Nothing is guessed.</strong> The join is reported before anything uses it: readers
-  in your data with no row, rows describing readers you did not load, and
+<li><strong>Nothing is guessed.</strong> The join is reported before anything uses it: participants
+  in your data with no row, rows describing participants you did not load, and
   duplicate rows. Duplicates that <em>disagree</em> are dropped and named rather than
   resolved by taking the first one, so the field reads as missing. Duplicates
   that do not disagree are combined: each field keeps the one value the rows
   hold, so one row's age and another's language both survive.</li>
-<li><strong>A missing reader is missing, not excluded.</strong> Attaching a table that forgets
-  someone never removes them from the pool. A numeric range keeps the readers
+<li><strong>A missing participant is missing, not excluded.</strong> Attaching a table that forgets
+  someone never removes them from the pool. A numeric range keeps the participants
   with no value too, unless you untick <strong>Keep unknown values</strong> under it; the
-  line under the box says how many readers that concerns. An infinite value
+  line under the box says how many participants that concerns. An infinite value
   counts as no value. The same choice sits under every numeric trial filter,
   for the trial and text tables as well.</li>
 </ul>
@@ -1927,7 +1925,7 @@ and <a href="../api/"><code>load_participant_metadata()</code></a> in the Python
 <h2 id="trial-metadata">Trial metadata<a class="headerlink" href="#trial-metadata" title="Permanent link">&para;</a></h2>
 <p>The same idea one grain down: a table of <strong>one row per trial</strong> — a list
 name, a presentation order, a per-trial comprehension score, whatever your
-design recorded about the trial rather than about the reader. It attaches
+design recorded about the trial rather than about the participant. It attaches
 beside the participant table — under <strong>Metadata</strong> in part 2 of the add-dataset
 wizard, and on <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management → <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset</strong> under <strong>Metadata → Trials</strong> for a
 dataset that is already loaded — and its columns behave like fields in the data in the same
@@ -1939,11 +1937,11 @@ with exports (<code>metadata/trials.csv</code>) and saved sessions.</p>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>t02,A,2,0
 </code></pre></div>
 <p><strong>The key decides what a row means.</strong> Keyed by trial id alone, a row describes
-a <em>text</em>, and every reader's reading of it inherits that row — right for a design
+a <em>text</em>, and every participant's reading of it inherits that row — right for a design
 where the trial id names the material. The app always keys the table this way:
 its <strong>Trial ID column</strong> picker takes one column, or several to build the id the
-way the data's own Trial ID mapping does. Keyed by reader <strong>and</strong> trial, a row
-describes <strong>one reading</strong>, which is what you need as soon as the same reader
+way the data's own Trial ID mapping does. Keyed by participant <strong>and</strong> trial, a row
+describes <strong>one reading</strong>, which is what you need as soon as the same participant
 reads the same text twice — and that table attaches headlessly only, with
 <code>--trial-metadata-reader-column</code> on the CLI or <code>participant_column=</code> in the
 Python API.</p>
@@ -1954,8 +1952,8 @@ Python API.</p>
 <p>The third grain: a table of <strong>one row per text</strong> — a genre, a difficulty rating,
 a stimulus-level comprehension score. It attaches beside the other two (under
 <strong>Metadata → Texts</strong> in the wizard and on <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong>), keyed by text id
-alone — never by reader, since a text is a stimulus rather than something one
-reader owns — and, like the trial table, the id may be built from several
+alone — never by participant, since a text is a stimulus rather than something one
+participant owns — and, like the trial table, the id may be built from several
 columns. Its columns behave like fields in the data in the same way, travel with
 exports (<code>metadata/texts.csv</code>) and saved sessions, and follow the same join
 rules.</p>
@@ -1970,7 +1968,7 @@ rules.</p>
   its text's boxes. Each reading finds them by its own trial ID, then (for a
   repeated reading, whose trial ID ends in <code>_r2</code>) by the trial ID it had before
   that suffix, then by its <strong>Text ID</strong>, for example when the trial ID includes
-  the reader. A Text ID that the words table gives to more than one of its
+  the participant. A Text ID that the words table gives to more than one of its
   trials is not used. The Text ID route needs a Text ID mapped for the
   fixations (auto-detected or picked, even when its values equal the trial
   IDs); without one, their Text ID is only a copy of the trial ID and is never
@@ -1980,13 +1978,13 @@ rules.</p>
   finds any boxes, the add-dataset screen
   stops with a message (the Python API and CLI raise the same error) rather
   than adding a dataset with no word boxes; a multi-screen dataset stops the
-  same way when any screen a reader looked at has no boxes. When some readings
+  same way when any screen a participant looked at has no boxes. When some readings
   find none, the screen, the API and the CLI warn with the counts. When it
   works, the screen says how the words attached.</li>
 <li><strong>Text ID falls back to the trial ID</strong> when it isn't mapped. A repeated
   reading takes its first reading's trial ID (without the <code>_r2</code>), so per-text
   grouping counts a re-reading as the same text.</li>
-<li><strong>AoI-only fixations</strong> — fixations with a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id but no x/y are placed at
+<li><strong><abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-only fixations</strong> — fixations with a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id but no x/y are placed at
   the matching word-box centers.</li>
 <li><strong>Composite trial ids</strong> — when no single column identifies a trial, map <em>Trial
   ID</em> to several columns (e.g. participant + paragraph + repeated-reading) and a
@@ -2066,14 +2064,18 @@ and must cover every row in the declared parent:</p>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="p">}</span>
 </code></pre></div>
 <h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
-<p>The per-<abbr title="Area of interest: here, a word's bounding box">AOI</abbr> reading measures — <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr>, <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>, first-pass time (<abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>), regression
+<p>The per-word reading measures — <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr>, <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>, first-pass time (<abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>), regression
 path (<abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr>), second-pass and single-fixation duration, fixation count, skip,
 regressions in / out and their count, landing position and distance — are
-fields of the <strong><abbr title="Area of interest: here, a word's bounding box">AOI</abbr> table</strong>. Map them under <strong>Reading measures</strong> (two lines
+fields of the <strong>Words (interest areas)</strong> table. Map them under <strong>Reading measures</strong> (two lines
 under the word box) when you add a dataset, or later on <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset. An
 EyeLink interest-area report maps them automatically from its <code>IA_*</code> names
 (<code>IA_DWELL_TIME</code>, <code>IA_FIRST_FIXATION_DURATION</code>, <code>IA_FIRST_RUN_DWELL_TIME</code>,
 <code>IA_REGRESSION_PATH_DURATION</code>, …); every one is optional.</p>
+<p>A word nobody fixated has no <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>, <abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>, <abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr> or single-fixation duration. An
+EyeLink report writes <code>0</code> there; Scanpath Studio leaves those cells empty
+(fixation count 0, or with no count mapped, a <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr> of 0), so a skipped word is
+left out of their means. Its <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr> stays 0.</p>
 <p>The <strong>Corpus Analysis</strong> page shows only the measures you mapped — it computes
 none of its own, and without any it says so. Exports and the word hover carry
 the measures you mapped, too. Definitions are in
@@ -2098,7 +2100,7 @@ the measures you mapped, too. Definitions are in
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 08:07:33 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

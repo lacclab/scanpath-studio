@@ -16,7 +16,11 @@ The app guesses columns from their names. Pick the right one under **Data Manage
 
 ### Can I load only one table?
 
-Yes. A words table alone shows the text and any reading measures it carries; a fixations table alone shows gaze positions without text. Most features need both.
+Yes. A Words table alone shows the text and any reading measures it carries; a fixations table alone shows gaze positions without text. Most features need both.
+
+### Can I open PoTeC or OneStop in the online demo?
+
+No. The online demo has only the bundled demo data, and it doesn't download corpora. In the desktop app or a pip install, each public corpus downloads once, with one click, and stays on your computer.
 
 ### My zip file is refused as too large
 
@@ -26,9 +30,9 @@ The app limits how far a `.zip` may decompress (32 GB per file, 64 GB in total).
 
 ### Does the app compute reading measures?
 
-No. Corpus Analysis and Export show the measures your interest-area report provides, as they are; [Computations](https://lacclab.github.io/scanpath-studio/computations/index.md) defines each one.
+No. Corpus Analysis and Export show the measures your interest-area report provides, as your eye-tracking software defines them; [Computations](https://lacclab.github.io/scanpath-studio/computations/index.md) gives how Scanpath Studio would compute each.
 
-### Does Filter change my data?
+### Does Flag fixations change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as they are.
 
@@ -50,13 +54,23 @@ When you run it locally or as the desktop app, nowhere: it stays on your compute
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app keeps a recovery copy of your datasets and settings (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
+Not on a local or desktop install: the app saves your datasets and settings on this computer (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
 
-If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove from cache**. Saved metadata tables that can't be read are kept the same way. If the whole recovery copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
+If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
-### How do I turn the recovery copy off, or delete it?
+### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved, close the app and run `scanpath-studio cache --clear`. See [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#recovery-cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. See [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#recovery-cache).
+
+## Help and versions
+
+### Where do I ask a question or report a bug?
+
+Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help → About** shows the version and links both; on the command line, `scanpath-studio --version`.
+
+### Will my links, settings and scripts work after an update?
+
+Scanpath Studio is in beta, so they may not. Until 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [Changelog](https://lacclab.github.io/scanpath-studio/changelog/index.md) lists every change. To reproduce a result exactly, note the version you used and install that one: `pip install scanpath-studio==<version>`.
 
 ## Citing
 

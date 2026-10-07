@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Python API - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/api.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/api/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Python API - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/api.png" />
 </head>
   
@@ -622,7 +622,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -873,7 +873,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -2479,7 +2479,7 @@
 
 <h1 id="python-api">Python API<a class="headerlink" href="#python-api" title="Permanent link">&para;</a></h1>
 <p>The public API follows one pipeline:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>load data → list trials → plot or measure → save
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>load data → list trials → plot → save
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
@@ -2495,20 +2495,22 @@ function and option takes those names. A column Scanpath Studio made keeps its
 internal name. <code>load_scanpath_data(..., names="canonical")</code> gives the internal
 names, which are the same for every dataset. On the bundled demo, the first
 steps print this (run when the docs are built):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"IA_ID"</span><span class="p">,</span> <span class="s2">"IA_LABEL"</span><span class="p">,</span> <span class="s2">"IA_FIRST_FIXATION_DURATION"</span><span class="p">,</span> <span class="s2">"IA_DWELL_TIME"</span><span class="p">]</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">words</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"IA_ID"</span><span class="p">,</span> <span class="s2">"IA_LABEL"</span><span class="p">,</span> <span class="s2">"IA_FIRST_FIXATION_DURATION"</span><span class="p">,</span> <span class="s2">"IA_DWELL_TIME"</span><span class="p">]</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">words</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>  participant_id        unique_trial_id
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>0       l37_1129  l37_1129_2_1_1_Ele_r0
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>1       l37_1129  l37_1129_2_1_2_Ele_r0
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>2       l37_1129  l37_1129_2_1_3_Adv_r0
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>0      0    Robert                          32            387
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>1      1  Myslajek                         170            785
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>2      2     stops                         290           1330
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>0      0    Robert                        32.0            387
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>1      1  Myslajek                       170.0            785
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>2      2     stops                       290.0           1330
 </code></pre></div>
 <h2 id="load">Load<a class="headerlink" href="#load" title="Permanent link">&para;</a></h2>
 
@@ -2526,7 +2528,7 @@ steps print this (run when the docs are built):</p>
 
     <div class="doc doc-contents first">
 
-        <p>Load and normalize a words/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> table and/or a fixations table.</p>
+        <p>Load and normalize a words table and/or a fixations table.</p>
 <p>The columns keep the names your files give them:
 <code>CURRENT_FIX_DURATION</code>, not <code>duration_ms</code>. A column Scanpath Studio
 built, converted, computed or changed keeps its internal name, and
@@ -2550,27 +2552,27 @@ columns; explicit <code>screen_id</code> / <code>screen_index</code> columns can
 mapped directly in each schema. Either table may be omitted for datasets
 that ship only one report: the
 missing side comes back as an empty canonical frame and the plots simply
-skip that layer. Words without a participant column (stimulus-level AoIs)
-are copied onto every reading in the fixations — each reading matched by
+skip that layer. Words without a participant column (stimulus-level <abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr>)
+are copied onto every trial in the fixations — each trial matched by
 its trial id, else the trial id it had before a repeat's <code>_r2</code> suffix,
-else its <code>text_id</code> (trial ids that embed the reader), with a
-<code>data.StimulusJoinWarning</code> (a <code>UserWarning</code>) when some readings match
-none — and fixations without x/y but with a word/AoI ID are placed at
+else its <code>text_id</code> (trial ids that embed the participant), with a
+<code>data.StimulusJoinWarning</code> (a <code>UserWarning</code>) when some trials match
+none — and fixations without x/y but with a word/<abbr title="Area of interest: here, a word's bounding box">AOI</abbr> ID are placed at
 word-box centers. Columns named in <code>data.INTERNAL_COLUMNS</code> are the
 pipeline's bookkeeping (<code>data.drop_internal_columns</code> removes them).</p>
-<p>Normalization keeps the mapped fields and the recognised optional ones
+<p>Normalization keeps the mapped fields and the recognized optional ones
 (eye, EyeLink's interest-area measures, linguistic features …) and drops the
 rest. <code>keep_columns</code> names further columns of your own to carry through
 under their own names — a pupil size, a detection confidence — from
-whichever table has them, so a figure can colour, hover or plot by them
-(the app's <em>Keep columns</em>; <code>render --keep-columns</code> on the command line).</p>
+whichever table has them, so a figure can color, hover or plot by them
+(the app's <em>Extra fields to keep</em>; <code>render --keep-columns</code> on the command line).</p>
 <p>Returns the normalized <code>(words, fixations)</code> frames the plotting
 functions expect. Raises <code>ValueError</code> if a required field can't be found —
 the message names the canonical field, the column names auto-detection
 looked for, and the columns the table actually has — and
 <code>data.StimulusJoinError</code> (a <code>ValueError</code>) when a stimulus-level words
-table shares neither a trial id nor a <code>text_id</code> with any reading (or,
-multipart, with every screen a reading has fixations on).</p>
+table shares neither a trial id nor a <code>text_id</code> with any trial (or,
+multipart, with every screen a trial has fixations on).</p>
 
 
     </div>
@@ -2648,9 +2650,12 @@ dataset.</p>
     <div class="doc doc-contents first">
 
         <p>Return the bundled OneStop demo, normalized and ready to plot: two
-readers, twelve paragraphs each, every one of them with fixations. Under
+participants, twelve trials each, every one of them with fixations. Under
 the demo's own column names; <code>names="canonical"</code> for the internal ones
 (see <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>).</p>
+<p>The frames carry the demo's recorded screen (OneStop's 2560×1440), so
+<code>plot_scanpath</code> draws them on it without a <code>canvas_size</code>, as
+<code>scanpath-studio render --sample</code> does.</p>
 
 
     </div>
@@ -2727,19 +2732,19 @@ the demo's real trials and covers that trial alone.</p>
 
         <p>Load a participant-level metadata table.</p>
 <p><code>table</code> is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
-<strong>one row per reader</strong>: an id column plus anything known about them
+<strong>one row per participant</strong>: an id column plus anything known about them
 (<code>native_language</code>, <code>age</code>, a comprehension score). <code>id_column</code>
-defaults to the first recognised spelling (<code>participant_id</code>, <code>subject</code>,
+defaults to the first recognized spelling (<code>participant_id</code>, <code>subject</code>,
 <code>RECORDING_SESSION_LABEL</code>, …).</p>
 <p>Pass <code>participants</code> — a normalized frame or a list of ids — to have the
 join validated against the data you actually loaded; the returned object's
-<code>.report</code> then names the readers missing from either side.</p>
+<code>.report</code> then names the participants missing from either side.</p>
 <p>Returns a
 <code>ParticipantMetadata</code>: the cleaned frame,
 a field registry (name, label, grain, dtype, missingness), and the join
 report. Nothing is broadcast onto the words/fixations frames — use
 <code>scanpath_studio.metadata.project</code> to attach chosen columns to a
-per-trial frame, or <code>.values_for(pid)</code> for one reader.</p>
+per-trial frame, or <code>.values_for(pid)</code> for one participant.</p>
 <blockquote>
 <blockquote>
 <blockquote>
@@ -2774,15 +2779,15 @@ meta.names  # doctest: +SKIP
         <p>Load a trial-level metadata table.</p>
 <p>The sibling of
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_participant_metadata&lt;/span&gt;" href="#scanpath_studio.api.load_participant_metadata"><code>load_participant_metadata</code></a>, one
-grain down: <code>table</code> has <strong>one row per reading</strong> — a trial-id column plus anything
-known about that reading (a list name, a condition, a per-trial comprehension
+grain down: <code>table</code> has <strong>one row per trial</strong> — a trial-id column plus anything
+known about that trial (a list name, a condition, a per-trial comprehension
 score).</p>
 <p><strong>The key is yours to state, and it changes what the table means.</strong> Keyed by
-trial id alone, a row describes a <em>text</em>, and every reader's reading of it
-inherits that row; pass <code>participant_column</code> to key by reader <strong>and</strong>
-trial, so a row describes one <em>reading</em>. Nothing in a file says which world
+trial id alone, a row describes a <em>text</em>, and every trial of it
+inherits that row; pass <code>participant_column</code> to key by participant <strong>and</strong>
+trial, so a row describes one <em>trial</em>. Nothing in a file says which world
 a corpus is in, so this is never inferred — unlike <code>id_column</code>, which
-defaults to the first recognised spelling (<code>trial_id</code>, <code>item_id</code>,
+defaults to the first recognized spelling (<code>trial_id</code>, <code>item_id</code>,
 <code>TRIAL_INDEX</code>, …).</p>
 <p>Pass <code>trials</code> — a normalized fixations/words frame, or any frame with
 <code>participant_id</code> + <code>trial_id</code> — to have the join validated against the
@@ -2826,8 +2831,8 @@ meta.names  # doctest: +SKIP
 <p><code>table</code> has <strong>one row per text</strong> — a text-id column plus anything known about that
 text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_participant_metadata&lt;/span&gt;" href="#scanpath_studio.api.load_participant_metadata"><code>load_participant_metadata</code></a>: never
-keyed by reader, since a text is a stimulus rather than something one reader owns.
-<code>id_column</code> defaults to the first recognised spelling (<code>text_id</code>,
+keyed by participant, since a text is a stimulus rather than something one participant owns.
+<code>id_column</code> defaults to the first recognized spelling (<code>text_id</code>,
 <code>paragraph_id</code>, <code>stimulus_id</code>, …) and may be several columns to build a
 composite id, the same way the uploaded data's own Text ID mapping does.</p>
 <p>Pass <code>texts</code> — a normalized fixations/words frame, or any iterable of
@@ -2923,7 +2928,8 @@ words, fixations = api.load_scanpath_data("ia.csv", "fix.csv",
 
     <div class="doc doc-contents first">
 
-        <p>Load a scanpath-author JSON file (or its text) as normalized word/fixation frames.</p>
+        <p>Load an authoring file — the JSON the app's <strong>Download authoring file</strong>
+saves — or its text, as normalized word/fixation frames.</p>
 
 
     </div>
@@ -2948,7 +2954,7 @@ words, fixations = api.load_scanpath_data("ia.csv", "fix.csv",
 ones (see <code>api.load_scanpath_data</code>).</p>
 <p><code>root</code> is a clone of the PoTeC repo (with the eye-tracking data
 downloaded) or any folder; with <code>download=True</code> the needed files are
-fetched into it on first use (~45 MB). Narrow the load with <code>readers</code>
+fetched into it on first use (~10 MB). Narrow the load with <code>readers</code>
 (e.g. <code>[0, 1]</code>) and/or <code>texts</code> (e.g. <code>["b0", "p3"]</code>) — the full
 corpus is 75 readers × 12 texts = 900 trials.</p>
 <p>Participants are PoTeC reader ids (as strings); a trial is one reader's
@@ -3001,9 +3007,8 @@ words, fixations = sps.load_onestop(
 pid, tid = sps.list_trials(words, fixations).iloc[0]  # one reading
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 </code></pre></div>
-<p>OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation lives in
-<code>scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS</code>'s <code>"onestop"</code> entry (Berzak
-et al. 2025, Methods → Apparatus); pass that as <code>canvas_size</code> to
+<p>OneStop's presentation monitor was 2560×1440 px (Dell U2715H; Berzak et al.
+2025, Methods → Apparatus); pass that as <code>canvas_size</code> to
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> for true-to-scale rendering.
 The reports already match the bundled demo's schema, so this reuses the generic
 auto-detect → normalize path (no OneStop-specific column mapping).</p>
@@ -3027,9 +3032,9 @@ auto-detect → normalize path (no OneStop-specific column mapping).</p>
 
     <div class="doc doc-contents first">
 
-        <p>Plottable <code>(participant_id, trial_id)</code> combos.</p>
-<p>Combos present in both frames when both are loaded; for single-report
-datasets (words-only or fixations-only), combos from whichever frame has
+        <p>One row per plottable trial: its participant id and trial id.</p>
+<p>Trials present in both frames when both are loaded; for single-report
+datasets (words-only or fixations-only), trials from whichever frame has
 data. <code>raw_gaze</code> (a frame from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>) adds the trials that
 only its samples cover — every trial, for a dataset recorded as raw gaze
@@ -3078,7 +3083,7 @@ trials have fixations.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Values that loaded as numbers but cannot be right — the Data page's <em>Data checks</em>.</p>
+        <p>Values that loaded as numbers but cannot be right — the Data Management page's <em>Data checks</em>.</p>
 <p>Checks the normalized tables (from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a> /
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>) for fixations lasting
@@ -3116,10 +3121,10 @@ print(sps.check_data_health(words, fixations))
 
     <div class="doc doc-contents first">
 
-        <p>Build the canonical scanpath figure for one trial.</p>
+        <p>Build one trial's scanpath figure (by default the app's Scanpath design).</p>
 <p><code>words</code> / <code>fixations</code> are normalized frames from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>. <code>participant</code> /
-<code>trial</code> may be omitted when the frames contain exactly one combo. <code>canvas_size</code>
+<code>trial</code> may be omitted when the frames hold exactly one trial. <code>canvas_size</code>
 is the monitor size in px; by default it is estimated from the data extents — pass
 the real monitor resolution (e.g. <code>(2560, 1440)</code> for OneStop) to keep coordinates
 true to scale. For a multipart trial, <code>screen</code> selects one child screen; omitting
@@ -3138,15 +3143,23 @@ detected, so the fixation, saccade and heatmap layers stay empty.</p>
 through <code>end</code> (1-based, both inclusive) of the trial — the headless form of
 the app's fixation-index window.</p>
 <p><code>title</code> / <code>caption</code> stamp a title/caption band onto the figure
-without shrinking the plot area, exactly like the rail's <em>Title</em> / <em>Caption</em>
-rows — literal text here, not the rail's <code>{trial_id}</code>-style
-pattern, since the caller already knows which trial this is.</p>
+without shrinking the plot area, like the app's <em>Title &amp; labels</em> — literal
+text here, not the app's <code>{trial_id}</code>-style pattern, since the caller
+already knows which trial this is.</p>
+<p><code>illustration=True</code> applies the Illustration preset (snapped fixations,
+arced saccades, uniform colors, no heatmap or word boxes); keywords you pass
+still win. <code>illustration_label</code> is <code>"auto"</code> (label the figure when it no
+longer shows the data as recorded), <code>"show"</code> or <code>"hide"</code>. <code>palette=</code>
+(<code>"default"</code>, <code>"print"</code> or <code>"high-contrast"</code>, or the app's names) sets
+a group of colors at once; a color you pass explicitly wins.</p>
 <p>Remaining keywords override the app's defaults and are forwarded to
-<code>plots.make_scanpath_figure</code> (e.g. <code>show_heatmap=False</code>,
+<code>plots.make_scanpath_figure</code> (e.g. <code>show_heatmap=True</code>,
 <code>color_by="pass_index"</code>, <code>x_field="order_in_trial"</code>); an unknown keyword raises
 a <code>TypeError</code> naming the closest valid options, and
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.figure_options&lt;/span&gt;" href="#scanpath_studio.api.figure_options"><code>figure_options</code></a> lists them all with their
-defaults. A <code>color_by</code> / <code>highlight_column</code> naming a column the trial's table
+defaults (<code>choices=True</code> adds the values each enumerated option takes; a
+value is matched ignoring case, spaces, <code>-</code> and <code>_</code>, and any other value
+raises a <code>ValueError</code>). A <code>color_by</code> / <code>highlight_column</code> naming a column the trial's table
 doesn't have raises a <code>ValueError</code> naming the closest ones, rather than drawing
 without it.</p>
 <p>Frames under the dataset's own column names (what <code>load_scanpath_data</code>
@@ -3202,10 +3215,10 @@ names some).</p>
 style <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compare_scanpaths&lt;/span&gt;" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>' — the
 same keys (<code>fix_color</code>, <code>marker_size_range</code>, <code>opacity</code>, <code>hollow</code>,
 <code>saccade_color</code>, <code>saccade_style</code>, <code>saccade_width</code>), resolved the same
-way, so the replay and the static comparison draw each reading alike. The
+way, so the replay and the static comparison draw each trial alike. The
 replay has no saccade-class filter, so a style naming <code>saccade_classes</code>
 raises <code>ValueError</code>. A lone replay ignores both.</p>
-<p><code>trial_b=(participant, trial)</code> co-animates a second reading on the same
+<p><code>trial_b=(participant, trial)</code> co-animates a second trial on the same
 clock, like the app's Animate + Compare. It is looked up in <code>words_b</code> /
 <code>fixations_b</code> when given, else in <code>words</code> / <code>fixations</code> — the way
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compare_scanpaths&lt;/span&gt;" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a> takes it.
@@ -3214,7 +3227,7 @@ frames holding several raise <code>ValueError</code> rather than drawing them al
 multipart B is drawn at <code>screen_b</code> — looked up in B's own trial — or at
 its first recorded screen without it, as A is with <code>screen</code>.</p>
 <p><strong>Two datasets.</strong> Both readings are drawn in A's coordinates, so a
-co-animation is an overlay, and a reading from another dataset has to share
+co-animation is an overlay, and a trial from another dataset has to share
 A's screen. Name that dataset with <code>dataset_b</code> (or give its <code>setup_b</code>)
 and the pair is checked the way <code>compare_scanpaths</code> checks an overlay: two
 different canvases raise <code>IncomparableScreensError</code>, a <code>ValueError</code>,
@@ -3224,7 +3237,7 @@ its data — the extent of that one trial, which rarely spans the whole
 screen, so state both when you know them — and <code>canvas_size</code> covers A
 when you only have a resolution. <code>dataset_b</code> also prefixes B's
 participant ids with the dataset's name, as <code>compare_scanpaths</code> does, so a
-hover says whose reader it is. <code>words_b</code> / <code>fixations_b</code> passed without
+hover says whose participant it is. <code>words_b</code> / <code>fixations_b</code> passed without
 either are taken to be from A's dataset, as <code>render</code> passes them for
 <code>--compare-with</code> alone, and are not checked: two readings of one corpus
 can span different extents, and inferring a canvas from each would refuse
@@ -3235,7 +3248,7 @@ and second-scanpath overlays) — see <code>figure_options("animation")</code>; 
 key raises a <code>ValueError</code> naming the valid ones. The shared options default to the same values as
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> (<code>CANONICAL_FIGURE_DEFAULTS</code>),
 so the replay matches the static figure. <code>palette=</code> works here too; the
-colours it implies that the animation doesn't support are dropped rather than
+colors it implies that the animation doesn't support are dropped rather than
 raising, since the caller named a look, not those individual keys.</p>
 <p><code>title</code> / <code>caption</code> — same as
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
@@ -3277,10 +3290,10 @@ trial's first recorded screen, as in
 <code>list_parts()</code> lists them. A screen named for a single-screen trial, or
 one the trial does not have, raises <code>ValueError</code>.</p>
 <p><strong>Two datasets.</strong> Pass <code>words_b</code> / <code>fixations_b</code> to draw B from a
-<em>different</em> corpus. Two corpora can hold the same <code>(participant_id,
+<em>different</em> dataset. Two datasets can hold the same <code>(participant_id,
 trial_id)</code> and the builder slices by exactly that pair, so B's participant
 ids are namespaced with <code>dataset_b</code> inside the throwaway merged frames —
-without it one reading would silently render as two. The frames you pass in
+without it one trial would silently render as two. The frames you pass in
 are never modified, and nothing in the returned figure's data depends on the
 namespace beyond the trace labels.</p>
 <p><strong>The overlay gate.</strong> Across datasets an overlay needs both canvases to be
@@ -3310,19 +3323,21 @@ the outline of that reading's word boxes, its <code>fix_color</code> when left o
 <code>raw_gaze_color</code>, that reading's raw-gaze samples, its <code>fix_color</code> when
 left out. These three are this figure's only: the co-animation draws one set
 of boxes, in <code>word_box_color</code> / <code>word_box_fill_color</code>, and no raw gaze,
-and ignores them.</p>
+and ignores them. <code>heatmap_colorscale</code> gives that reading's word-box
+heatmap its own color scale (<code>heatmap_colorscale</code> when left out) on the
+range both share; when A's and B's differ, each gets its own color bar.</p>
 <p><strong>Filters, per scanpath.</strong> <code>fixation_flags</code> and
 <code>saccade_classes</code> filter both scanpaths, as they filter
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>'s one; the same two keys
 in <code>style_a</code> / <code>style_b</code> give that scanpath its own, overriding them —
 e.g. <code>style_b={"fixation_flags": {"short": {"mode": "Discard",
 "threshold_ms": 80}}, "saccade_classes": ["regression"]}</code>. The app's
-Compare mode draws A under the rail's filters and B under B's own.
+Compare mode draws A under the plot controls' filters and B under its own.
 <code>fix_index_range</code> windows both scanpaths; <code>fix_index_range_b</code> gives B a
 window of its own (the app's B slider).</p>
 <p><strong>Raw gaze.</strong> <code>raw_gaze</code> is a frame from
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a>; each reading's samples
-are drawn under its scanpath, in that scanpath's colour (<code>raw_gaze_marker_size</code>
+are drawn under its scanpath, in that scanpath's color (<code>raw_gaze_marker_size</code>
 / <code>raw_gaze_opacity</code> style them). It serves both readings of a
 same-dataset comparison; across datasets it is A's, and <code>raw_gaze_b</code> is
 B's. Passing either turns the layer on; <code>show_raw_gaze=False</code> keeps it off.</p>
@@ -3380,7 +3395,7 @@ drawn across the boundary.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Headless corpus profile/distribution/difference plot with shared colours.</p>
+        <p>Headless corpus profile/distribution/difference plot with shared colors.</p>
 <p><code>profile</code> expects <code>word_id</code> plus <code>value_col</code> (and optional <code>lo</code> /
 <code>hi</code>); <code>distribution</code> expects <code>value_col</code>; <code>difference</code> expects
 <code>word_id</code> and <code>diff</code>. When <code>series_col</code> is present, it defines the
@@ -3400,7 +3415,7 @@ already have.</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">figure_code</span><span class="p">(</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_1090"</span><span class="p">,</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">trial</span><span class="o">=</span><span class="s2">"l7_1090_2_1_1_Ele_r0"</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">color_by</span><span class="o">=</span><span class="s2">"duration_ms"</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="p">)</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
@@ -3416,7 +3431,7 @@ already have.</p>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">trial</span><span class="o">=</span><span class="s1">'l7_1090_2_1_1_Ele_r0'</span><span class="p">,</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">),</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">color_by</span><span class="o">=</span><span class="s1">'duration_ms'</span><span class="p">,</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">)</span>
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="s1">'scanpath.png'</span><span class="p">)</span>
@@ -3444,10 +3459,10 @@ it the same arguments you would give
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compare_scanpaths&lt;/span&gt;" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a> (<code>"comparison"</code>) and
 it returns the snippet that rebuilds that figure, rather than the figure::</p>
 <div class="highlight"><pre><span></span><code>print(sps.figure_code(participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0",
-                      show_heatmap=False, flavor="cli"))
+                      show_heatmap=True, flavor="cli"))
 </code></pre></div>
 <p><code>source</code> names how the data is loaded — <code>"demo"</code>, <code>"synthetic"</code>, <code>"files"</code>,
-<code>"potec"</code>, <code>"onestop"</code>, <code>"multipleye"</code>, <code>"benchmark"</code>, <code>"author"</code>, or
+<code>"potec"</code>, <code>"onestop"</code>, <code>"author"</code>, or
 <code>"unknown"</code> for data a snippet can't name — with <code>source_options</code> carrying that
 loader's arguments (<code>{"root": …}</code>, <code>{"words": [...], "fixations": [...]}</code>, and
 so on). With <code>show_raw_gaze=True</code> the raw-gaze table is read too: the demo's own,
@@ -3458,8 +3473,8 @@ recorded as raw gaze alone: the samples at <code>source_options["raw_gaze"]</cod
 data, and <code>plot_scanpath</code> is handed <code>None</code> for the words and fixations.</p>
 <p><code>screen</code> / <code>compare_screen</code> are A's and B's screens of a multipart trial
 (<code>screen=</code> / <code>screen_b=</code>, <code>--screen</code> / <code>--compare-screen</code>).</p>
-<p><code>compare_dataset</code> names the corpus scanpath B was loaded from when it is a
-<em>second</em> one. B's participant id belongs to that corpus rather than
+<p><code>compare_dataset</code> names the dataset scanpath B was loaded from when it is a
+<em>second</em> one. B's participant id belongs to that dataset rather than
 the one the snippet loads, so both forms then load B's own tables and name
 B in them — <code>words_b=</code> / <code>fixations_b=</code> / <code>dataset_b=</code>, and
 <code>--compare-words</code> / <code>--compare-fixations</code> beside <code>--compare-with</code> —
@@ -3475,7 +3490,7 @@ CLI one.</p>
 <p>With <code>participant</code> / <code>trial</code> left empty the snippet renders the first
 available trial, as <code>render</code> does. <code>canvas_size</code> defaults to the screen
 <code>render</code> assumes for the source (the demo's 2560×1440, PoTeC's 1680×1050,
-…), so both flavours draw the same figure; <code>output</code> defaults to
+…), so both flavors draw the same figure; <code>output</code> defaults to
 <code>scanpath.html</code> for an animation — <code>render --animate</code> writes only HTML —
 and to a PNG otherwise.</p>
 <p>Only the options that differ from
@@ -3501,18 +3516,23 @@ structured form.</p>
 
 
 <a href="#scanpath_studio.api.figure_options" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">figure_options</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="s1">'static'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">figure_options</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">=</span> <span class="s1">'static'</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">choices</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
         <p>Every figure keyword a builder accepts → the default it renders with.</p>
+<p>With <code>choices=True</code> each name maps to <code>{"default": …, "choices": …}</code>,
+where <code>choices</code> is the tuple of values an enumerated option takes
+(<code>heatmap_norm</code>: <code>("Linear", "Log")</code>) and <code>None</code> for a free one. An
+enumerated option takes any spelling of a choice — case, spaces, <code>-</code> and
+<code>_</code> are ignored, so the CLI's <code>"log"</code> and <code>"mark-border"</code> work — and
+raises <code>ValueError</code> listing them for anything else.</p>
 <p><code>kind="static"</code> covers <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>,
 <code>kind="animation"</code> <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.animate_scanpath&lt;/span&gt;" href="#scanpath_studio.api.animate_scanpath"><code>animate_scanpath</code></a>
 (whose builder supports a subset), and <code>kind="comparison"</code>
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;scanpath_studio.api.compare_scanpaths&lt;/span&gt;" href="#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>. The values are the
-<em>effective</em> defaults — <code>CANONICAL_FIGURE_DEFAULTS</code> where it sets one, the builder's
-default otherwise — so a scripted caller can diff its intended
+defaults a call actually renders with (the app's Scanpath design) — so a scripted caller can diff its intended
 settings against what it would get::</p>
 <div class="highlight"><pre><span></span><code>{k: v for k, v in sps.figure_options().items() if k.startswith("show_")}
 </code></pre></div>
@@ -3522,7 +3542,10 @@ settings against what it would get::</p>
 
 </div><h2 id="figure-options">Figure options<a class="headerlink" href="#figure-options" title="Permanent link">&para;</a></h2>
 <p>Every keyword the figure builders take, with the default it renders with, the
-<code>render</code> flag that sets it on the command line, and which builders accept it:
+values it takes when there is a fixed set (any case, and <code>-</code> or <code>_</code> for a
+space, so the CLI's <code>"log"</code> and <code>"mark-border"</code> work; anything else raises a
+<code>ValueError</code>), the <code>render</code> flag that sets it on the command line, and which
+builders accept it:
 <code>plot</code> is <code>plot_scanpath</code>, <code>animate</code> is <code>animate_scanpath</code>, <code>compare</code> is
 <code>compare_scanpaths</code>.</p>
 <div class="sps-reference-table">
@@ -3531,6 +3554,7 @@ settings against what it would get::</p>
 <tr>
 <th>Option</th>
 <th>Default</th>
+<th>Values</th>
 <th><code>render</code> flag</th>
 <th>Accepted by</th>
 </tr>
@@ -3539,78 +3563,91 @@ settings against what it would get::</p>
 <tr>
 <td><code>anim_grid_step_ms</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--anim-grid-step-ms</code></td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>anim_max_frames</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--anim-max-frames</code></td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>background_color</code></td>
 <td><code>'#ffffff'</code></td>
+<td>—</td>
 <td><code>--background-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>background_image</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--stimulus-image</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>background_image_b</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--stimulus-image-b</code></td>
 <td>compare</td>
 </tr>
 <tr>
 <td><code>background_image_opacity</code></td>
 <td><code>1.0</code></td>
+<td>—</td>
 <td><code>--stimulus-image-opacity</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>background_image_origin</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--stimulus-image-origin</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>background_image_origin_b</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--stimulus-image-origin-b</code></td>
 <td>compare</td>
 </tr>
 <tr>
 <td><code>background_image_size</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--stimulus-image-size</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>background_image_size_b</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--stimulus-image-size-b</code></td>
 <td>compare</td>
 </tr>
 <tr>
 <td><code>color_by</code></td>
 <td><code>'(uniform)'</code></td>
+<td>—</td>
 <td><code>--color-by</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>color_by_line</code></td>
 <td><code>False</code></td>
+<td>—</td>
 <td><code>--color-by-line</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>compare_stimulus</code></td>
 <td><code>'both'</code></td>
+<td><code>'both'</code>, <code>'a'</code>, <code>'b'</code></td>
 <td><code>--compare-stimulus</code></td>
 <td>animate</td>
 </tr>
@@ -3618,101 +3655,118 @@ settings against what it would get::</p>
 <td><code>connector_y</code></td>
 <td><code>None</code></td>
 <td>—</td>
+<td>—</td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>coordinate_grid_spacing</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--coordinate-grid-spacing</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>critical_span_style</code></td>
 <td><code>'Mark text'</code></td>
+<td><code>'Mark text'</code>, <code>'Mark border'</code>, <code>'None'</code></td>
 <td><code>--critical-span-style</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>duration_size_legend</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-duration-size-legend</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fit_to_monitor</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-full-monitor</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_color</code></td>
 <td><code>'#0072B2'</code></td>
+<td>—</td>
 <td><code>--fixation-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_color_range</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--fixation-color-range</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_colorbar_orientation</code></td>
 <td><code>'Vertical'</code></td>
+<td><code>'Vertical'</code>, <code>'Horizontal'</code></td>
 <td><code>--fixation-colorbar-orientation</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_colorbar_tickangle</code></td>
 <td><code>0</code></td>
+<td>—</td>
 <td><code>--fixation-colorbar-tickangle</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_colorbar_tickfont_size</code></td>
 <td><code>12</code></td>
+<td>—</td>
 <td><code>--fixation-colorbar-tickfont-size</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_colorscale</code></td>
 <td><code>'Blues'</code></td>
+<td>—</td>
 <td><code>--fixation-colorscale</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_flags</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--fixation-flag</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_flags_b</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--compare-fixation-flag</code></td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>fixation_hover_fields</code></td>
 <td><code>['order_in_trial', 'duration_ms', 'word_id']</code></td>
+<td>—</td>
 <td><code>--fixation-hover-fields</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_opacity</code></td>
 <td><code>0.7</code></td>
+<td>—</td>
 <td><code>--fixation-opacity</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>fixation_snap_to_word</code></td>
 <td><code>False</code></td>
+<td>—</td>
 <td><code>--snap-fixations</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>fixation_symbol</code></td>
 <td><code>'circle'</code></td>
+<td><code>'circle'</code>, <code>'square'</code>, <code>'diamond'</code>, <code>'triangle-up'</code>, <code>'cross'</code>, <code>'x'</code>, <code>'star'</code>, <code>'hexagon'</code>, <code>'heart'</code></td>
 <td><code>--fixation-symbol</code></td>
 <td>all three</td>
 </tr>
@@ -3720,77 +3774,90 @@ settings against what it would get::</p>
 <td><code>fixations_b</code></td>
 <td><code>None</code></td>
 <td>—</td>
+<td>—</td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_orientation</code></td>
 <td><code>'Vertical'</code></td>
+<td><code>'Vertical'</code>, <code>'Horizontal'</code></td>
 <td><code>--heatmap-colorbar-orientation</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_tickangle</code></td>
 <td><code>0</code></td>
+<td>—</td>
 <td><code>--heatmap-colorbar-tickangle</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_tickfont_size</code></td>
 <td><code>12</code></td>
+<td>—</td>
 <td><code>--heatmap-colorbar-tickfont-size</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>heatmap_colorscale</code></td>
 <td><code>'Blues'</code></td>
+<td>—</td>
 <td><code>--heatmap-colorscale</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>heatmap_metric</code></td>
 <td><code>'duration_ms'</code></td>
+<td>—</td>
 <td><code>--heatmap-metric</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>heatmap_norm</code></td>
 <td><code>'Linear'</code></td>
+<td><code>'Linear'</code>, <code>'Log'</code></td>
 <td><code>--heatmap-norm</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>heatmap_range</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--heatmap-range</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>heatmap_sigma_px</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--heatmap-sigma</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>heatmap_style</code></td>
 <td><code>'Word boxes'</code></td>
+<td><code>'Word boxes'</code>, <code>'Interpolated'</code></td>
 <td><code>--heatmap-style</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>highlight_column</code></td>
 <td><code>'is_in_aspan'</code></td>
+<td>—</td>
 <td><code>--highlight-column</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>highlight_text_color</code></td>
 <td><code>'#D55E00'</code></td>
+<td>—</td>
 <td><code>--highlight-text-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>hollow_fixations</code></td>
 <td><code>False</code></td>
+<td>—</td>
 <td><code>--hollow-fixations</code></td>
 <td>all three</td>
 </tr>
@@ -3798,131 +3865,153 @@ settings against what it would get::</p>
 <td><code>illustration_reasons</code></td>
 <td><code>None</code></td>
 <td>—</td>
+<td>—</td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>illustration_text</code></td>
 <td><code>''</code></td>
+<td>—</td>
 <td><code>--illustration-text</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>label_a</code></td>
 <td><code>'Scanpath A'</code></td>
+<td>—</td>
 <td><code>--label-a</code></td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>label_b</code></td>
 <td><code>'Scanpath B'</code></td>
+<td>—</td>
 <td><code>--label-b</code></td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>line_spacing</code></td>
 <td><code>3.0</code></td>
+<td>—</td>
 <td><code>--line-spacing</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>marker_duration_range</code></td>
 <td><code>(50, 600)</code></td>
+<td>—</td>
 <td><code>--marker-duration-range</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>marker_size_range</code></td>
 <td><code>(8, 24)</code></td>
+<td>—</td>
 <td><code>--marker-size-range</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>marker_size_scale</code></td>
 <td><code>'sqrt'</code></td>
+<td><code>'sqrt'</code>, <code>'linear'</code>, <code>'log'</code>, <code>'relative'</code></td>
 <td><code>--marker-size-scale</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>order_font_color</code></td>
 <td><code>'#111111'</code></td>
+<td>—</td>
 <td><code>--order-font-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>order_font_size</code></td>
 <td><code>10</code></td>
+<td>—</td>
 <td><code>--order-font-size</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>raw_gaze_color</code></td>
 <td><code>'#888888'</code></td>
+<td>—</td>
 <td><code>--raw-gaze-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>raw_gaze_marker_size</code></td>
 <td><code>4.0</code></td>
+<td>—</td>
 <td><code>--raw-gaze-marker-size</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>raw_gaze_opacity</code></td>
 <td><code>0.6</code></td>
+<td>—</td>
 <td><code>--raw-gaze-opacity</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>saccade_class_colors</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--saccade-type-color</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>saccade_classes</code></td>
 <td><code>list</code> (see <code>figure_options()</code>)</td>
+<td>—</td>
 <td><code>--saccade-classes</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>saccade_color</code></td>
 <td><code>'#CC79A7'</code></td>
+<td>—</td>
 <td><code>--saccade-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>saccade_color_mode</code></td>
 <td><code>'Uniform'</code></td>
+<td><code>'Uniform'</code>, <code>'Forward / regression'</code>, <code>'By type'</code></td>
 <td><code>--saccade-color-by-type</code>, <code>--saccade-color-by-direction</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>saccade_render_mode</code></td>
 <td><code>'Straight'</code></td>
+<td><code>'Straight'</code>, <code>'Arc'</code></td>
 <td><code>--saccade-arcs</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>saccade_style</code></td>
 <td><code>'solid'</code></td>
+<td><code>'solid'</code>, <code>'dash'</code>, <code>'dot'</code>, <code>'dashdot'</code></td>
 <td><code>--saccade-style</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>saccade_type_legend</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-saccade-type-legend</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>saccade_width</code></td>
 <td><code>2.0</code></td>
+<td>—</td>
 <td><code>--saccade-width</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>scale_text_to_boxes</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-scale-text-to-boxes</code></td>
 <td>all three</td>
 </tr>
@@ -3930,149 +4019,174 @@ settings against what it would get::</p>
 <td><code>show_connectors</code></td>
 <td><code>False</code></td>
 <td>—</td>
+<td>—</td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>show_coordinate_grid</code></td>
 <td><code>False</code></td>
+<td>—</td>
 <td><code>--coordinate-grid</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_fixation_colorbar</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-fixation-colorbar</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_fixations</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-fixations</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>show_heatmap</code></td>
-<td><code>True</code></td>
-<td><code>--no-heatmap</code></td>
+<td><code>False</code></td>
+<td>—</td>
+<td><code>--no-heatmap</code>, <code>--heatmap</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>show_heatmap_colorbar</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-heatmap-colorbar</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_legend</code></td>
-<td><code>False</code></td>
-<td><code>--compare-legend</code></td>
+<td><code>True</code></td>
+<td>—</td>
+<td><code>--no-compare-legend</code></td>
 <td>animate, compare</td>
 </tr>
 <tr>
 <td><code>show_order</code></td>
-<td><code>True</code></td>
-<td><code>--no-order</code></td>
+<td><code>False</code></td>
+<td>—</td>
+<td><code>--no-fixation-index</code>, <code>--fixation-index</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_raw_gaze</code></td>
 <td><code>False</code></td>
 <td>—</td>
+<td><code>--raw-gaze</code>, <code>--no-raw-gaze</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>show_saccade_arrows</code></td>
 <td><code>False</code></td>
+<td>—</td>
 <td><code>--saccade-arrows</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_saccades</code></td>
 <td><code>True</code></td>
+<td>—</td>
 <td><code>--no-saccades</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_word_labels</code></td>
 <td><code>True</code></td>
-<td><code>--no-labels</code></td>
+<td>—</td>
+<td><code>--no-text</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>show_words</code></td>
-<td><code>True</code></td>
-<td><code>--no-words</code></td>
+<td><code>False</code></td>
+<td>—</td>
+<td><code>--no-word-boxes</code>, <code>--word-boxes</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>span_border_color</code></td>
 <td><code>'#000000'</code></td>
+<td>—</td>
 <td><code>--span-border-color</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>style_a</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--style-a</code></td>
 <td>animate, compare</td>
 </tr>
 <tr>
 <td><code>style_b</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--style-b</code></td>
 <td>animate, compare</td>
 </tr>
 <tr>
 <td><code>text_color</code></td>
 <td><code>'#000000'</code></td>
+<td>—</td>
 <td><code>--text-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>word_box_color</code></td>
 <td><code>'#6c757d'</code></td>
+<td>—</td>
 <td><code>--word-box-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>word_box_fill_color</code></td>
 <td><code>'#646464'</code></td>
+<td>—</td>
 <td><code>--word-box-fill-color</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>word_box_fill_opacity</code></td>
 <td><code>0.05</code></td>
+<td>—</td>
 <td><code>--word-box-fill-opacity</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>word_box_line_opacity</code></td>
 <td><code>1.0</code></td>
+<td>—</td>
 <td><code>--word-box-line-opacity</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>word_heatmap_col</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--word-heatmap-col</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>word_heatmap_title</code></td>
 <td><code>None</code></td>
+<td>—</td>
 <td><code>--word-heatmap-title</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>word_hover_fields</code></td>
 <td><code>list</code> (see <code>figure_options()</code>)</td>
+<td>—</td>
 <td><code>--word-hover-fields</code></td>
 <td>all three</td>
 </tr>
 <tr>
 <td><code>word_hover_measure</code></td>
 <td><code>'total_fixation_duration_ms'</code></td>
+<td>—</td>
 <td><code>--word-hover-measure</code></td>
 <td>all three</td>
 </tr>
@@ -4080,17 +4194,20 @@ settings against what it would get::</p>
 <td><code>words_b</code></td>
 <td><code>None</code></td>
 <td>—</td>
+<td>—</td>
 <td>animate</td>
 </tr>
 <tr>
 <td><code>x_field</code></td>
 <td><code>'x'</code></td>
+<td>—</td>
 <td><code>--x-field</code></td>
 <td>plot, compare</td>
 </tr>
 <tr>
 <td><code>y_field</code></td>
 <td><code>'y'</code></td>
+<td>—</td>
 <td><code>--y-field</code></td>
 <td>plot, compare</td>
 </tr>
@@ -4108,16 +4225,20 @@ settings against what it would get::</p>
 
 
 <a href="#scanpath_studio.api.save_figure" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;plotly.graph_objects.Figure&lt;/code&gt;" href="https://plotly.com/python-api-reference/generated/plotly.graph_objects.html#plotly.graph_objects.Figure">Figure</a></span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scale</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">height</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;plotly.graph_objects.Figure&lt;/code&gt;" href="https://plotly.com/python-api-reference/generated/plotly.graph_objects.html#plotly.graph_objects.Figure">Figure</a></span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></span> <span class="o">|</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scale</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">height</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">width_mm</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">width_in</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dpi</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
-        <p>Save a figure by extension: <code>.html</code> (interactive, browser-free) or
-<code>.png</code>/<code>.svg</code>/<code>.pdf</code> (static via Kaleido — needs a Chrome/Chromium;
-run <code>plotly_get_chrome -y</code> once if missing). <code>width</code> / <code>height</code> set the
-raster output size in px (overriding the figure's intrinsic layout size);
+        <p>Save a figure by extension: <code>.html</code> (interactive, needs no browser) or
+<code>.png</code>/<code>.svg</code>/<code>.pdf</code> (static via Kaleido — needs Chrome, Chromium or
+Edge; run <code>plotly_get_chrome -y</code> once if none is installed). <code>width</code> /
+<code>height</code> set the image size in px (overriding the figure's own size);
 both ignored for <code>.html</code>. Returns the written path.</p>
+<p><code>width_mm</code> or <code>width_in</code> with <code>dpi</code> (default 300) sizes a PNG for
+print, as the app's Export → <em>Current figure</em> does: 180 mm at 600 dpi is
+a 4,252 px wide PNG, its height following the figure's aspect, with the
+dpi written into the file. They replace <code>scale</code>.</p>
 
 
     </div>
@@ -4168,12 +4289,12 @@ work). <code>scale</code> / <code>width</code> / <code>height</code> are forward
     <div class="doc doc-contents first">
 
         <p>Describe the on-device recovery cache a local app run keeps.</p>
-<p>The app stores completed uploaded datasets, column mappings, view settings and
-annotations under the user's cache directory so a refresh or restart resumes
+<p>The app stores completed uploaded datasets, column mappings, view settings,
+saved designs, metadata tables and annotations under the user's cache directory so a refresh or restart resumes
 where it left off — on localhost/desktop only, never on a hosted deployment. This
 reports that store without launching the app: <code>enabled</code>, <code>directory</code>,
 <code>datasets</code> (name + per-frame row counts), <code>rows</code>, <code>annotations</code>,
-<code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> / <code>readable</code> for a
+<code>designs</code>, <code>metadata</code>, <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> / <code>readable</code> for a
 missing or unreadable manifest, <code>damaged</code> (name + reason) for a stored
 dataset whose entry or files are broken — the app restores the others and
 keeps that one in the cache rather than dropping it — and
@@ -4214,7 +4335,7 @@ stop that.</p>
 </div><p>For a batch loop, see <a href="../automation/#batch-pattern">Automation</a>. GIF and MP4
 export uses
 <code>scanpath_studio.animation_export.export_animation</code> and requires Kaleido plus
-Chrome/Chromium.</p>
+Chrome, Chromium or Edge.</p>
 
 
 
@@ -4235,7 +4356,7 @@ Chrome/Chromium.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 08:03:27 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

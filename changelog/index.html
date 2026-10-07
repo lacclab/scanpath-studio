@@ -622,7 +622,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -873,7 +873,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1518,6 +1518,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#0350-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.35.0 — 2026-10-07
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#0340-2026-10-06" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1713,6 +1724,17 @@
     <span class="md-ellipsis">
       
         Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0350-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.35.0 — 2026-10-07
       
     </span>
   </a>
@@ -1927,11 +1949,16 @@ behind each line, and the releases before 0.28.0, are in
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>.
 <em>Unreleased</em> is what is on <code>main</code> and not yet on PyPI.</p>
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="0350-2026-10-07">0.35.0 — 2026-10-07<a class="headerlink" href="#0350-2026-10-07" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>
 <ul>
-<li>The dataset setup guide now ends on a step about saving: Add dataset, and Save setup to reuse the mapping next time. (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
+<li>The dataset setup guide now ends on a step about saving: Add dataset, and Download setup file to reuse the mapping next time. (<a href="https://github.com/lacclab/scanpath-studio/issues/365">#365</a>)</li>
 <li>The Corpus Analysis address names the open section (<code>?corpus_subtab=Per+reader</code>), so a bookmark or a copied link reopens it. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
 <li>Screen readers announce the scanpath figure, the animated replay, the Corpus Analysis charts and the Share link box by name. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>Help → About links to Discussions → Q&amp;A for questions and to the bug-report form, and the FAQ says where to ask, how to report a bug, and that a 0.x release may change links, settings, the API and the CLI. (<a href="https://github.com/lacclab/scanpath-studio/issues/371">#371</a>)</li>
+<li>An unexpected error now says it is most likely a bug in the app and links to the bug-report form and Q&amp;A, above the error details to paste into the report. (<a href="https://github.com/lacclab/scanpath-studio/issues/376">#376</a>)</li>
+<li>Export → Current figure, save_figure and render take a print width (mm or in) and <abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr>, written into the PNG; Share → Code writes the same pixels as the download. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Data Management → Saved on this computer names everything it restores, and Clear what is saved… deletes it after a confirmation and starts the app over. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
 </ul>
 <p><strong>Changed</strong></p>
 <ul>
@@ -1943,11 +1970,31 @@ behind each line, and the releases before 0.28.0, are in
 <li><strong>Edit dataset</strong> now sits under the open dataset's description and checks, just above its subtabs, instead of on the heading's line. (<a href="https://github.com/lacclab/scanpath-studio/issues/366">#366</a>)</li>
 <li>The Data page's Participants, Trials and Texts tabs list the ids in your data, with counts, when no separate table is attached — and the Participants and Trials tabs add every column that holds one value per reader or trial. (<a href="https://github.com/lacclab/scanpath-studio/issues/367">#367</a>)</li>
 <li>In Compare, the Raw gaze popover now has a Scanpath A and a Scanpath B group, each with its own sample colour (the new raw_gaze_color style key, also on the Share link, CLI --style-a/--style-b and the API). (<a href="https://github.com/lacclab/scanpath-studio/issues/368">#368</a>)</li>
-<li>❓ Help → Debug opens as a resizable drawer on the right, beside the view it describes. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>Debug opens from ❓ Help → About as a resizable drawer on the right, beside the view it describes. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
 <li>Typing a dataset's description or a built-in dataset's new name, or flipping the editor's character-box toggle, no longer reruns the page; the value is applied when you save. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
 <li>Name fields (a new dataset, an edited one, a saved or renamed design) no longer accept an empty name; clearing one keeps the last name. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
 <li>Requires Streamlit 1.65. (<a href="https://github.com/lacclab/scanpath-studio/issues/369">#369</a>)</li>
+<li>In Compare, the Heatmap popover now has a Scanpath A and a Scanpath B group, each with its own colour scale on the shared range, and a colour bar each when they differ (the new heatmap_colorscale style key, also on the Share link, CLI --style-a/--style-b and the API). (<a href="https://github.com/lacclab/scanpath-studio/issues/370">#370</a>)</li>
+<li>The README, Getting started and the hosted demo's tips now put the desktop app first for working with your own data. (<a href="https://github.com/lacclab/scanpath-studio/issues/371">#371</a>)</li>
+<li>The documentation site is now published with each release, so it describes the version pip installs, and each GitHub release page opens with what the tool is and how to get it. (<a href="https://github.com/lacclab/scanpath-studio/issues/371">#371</a>)</li>
+<li>On the hosted demo, clicking a public corpus the server doesn't hold (PoTeC, OneStop) now says in a dialog that it opens in the desktop app or a pip install, instead of opening the demo in its place. (<a href="https://github.com/lacclab/scanpath-studio/issues/371">#371</a>)</li>
 <li>The README's replay and two-reader animations, the app demo, and the docs screenshots were re-captured from the current app. (<a href="https://github.com/lacclab/scanpath-studio/issues/372">#372</a>)</li>
+<li>A misspelt CLI flag gives a short error with a suggestion, options put before the command say where they belong, render takes --word-boxes, --heatmap, --no-text and US/UK spellings, and cache prints real plurals. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Compare names its pickers Scanpath B from and Scanpath B, titles side-by-side panels A and B, and shows its legend by default; Comparisons matches on the same text or the same participant. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Hovering a fixation names the word it landed on: Fixation 41 · 336 ms · on “Droppings!” (word 27). (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>The API and CLI draw the app's Scanpath design by default (no heatmap, word boxes or fixation numbers unless asked, A/B legend on), and the bundled demo uses its recorded screen; reproduction code written before this may need those layers turned on. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Debug moved from the Help menu into About; the welcome tour no longer starts over a restored session; the FAQ says where data goes for where the app runs. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Only the bundled demo highlights its answer span by default, and a highlighted figure carries a key saying what is marked. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Corpus Analysis says participant, not reader: the Per participant subtab (old links to Per reader still open it), its labels and counts. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Mapped fields are named by their role (Participant, Text, Trial) with the source column in a tooltip, and a trial is written the same way in the picker, Comparisons, Annotations and Corpus Analysis. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>The trial chip Total reading time is now Total fixation time, beside a new Trial duration chip; the replay's clock is labelled Trial time. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Labels, help and messages across the app, CLI and docs use one term per concept (participant, dataset, settings file, Flag fixations) and US spelling. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>The add and edit screens call the word table Words (interest areas), say which EyeLink report goes in each row, detect an item column as Text ID and keep condition columns. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+</ul>
+<p><strong>Removed</strong></p>
+<ul>
+<li>Groups → Paired summary bars no longer draws error bars, which pooled words across participants; its title follows the Aggregate. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>The tutorials' Don't auto-show checkbox, which no setting read, is gone. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
@@ -1963,6 +2010,16 @@ behind each line, and the releases before 0.28.0, are in
 <li>A stimulus image whose origin is (0, 0) in the words table now sits at (0, 0) instead of taking the fixation table's origin. (<a href="https://github.com/lacclab/scanpath-studio/issues/360">#360</a>)</li>
 <li>Files that share a name in different folders of a ZIP, or of a multi-file upload, now keep distinct source_file labels (reader-a/fixations, reader-b/fixations), so mapping that label as participant or trial no longer merges two readers into one. (<a href="https://github.com/lacclab/scanpath-studio/issues/360">#360</a>)</li>
 <li>The Synthetic sample's row in Available datasets shows its counts on a server with no recovery cache, such as Streamlit Community Cloud, instead of Not loaded. (<a href="https://github.com/lacclab/scanpath-studio/issues/364">#364</a>)</li>
+<li>The package summary on PyPI no longer says the app computes reading measures. (<a href="https://github.com/lacclab/scanpath-studio/issues/371">#371</a>)</li>
+<li>Screen readers hear plain control names (no markdown or icon words), and the figure can be reached with Tab. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Corpus Analysis captions name only the views offered, Groups keeps its comparison across subtabs, the trend line breaks at filtered-out trials and Per text opens on the trial viewed in Scanpath. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>A ZIP holding both fixation and interest-area reports is split by kind: each table row reads only its own reports and says which files it left out. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>At 1024–1280 px the plot rail keeps its labels and design names, and wide tables show that they scroll. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>The Python API accepts any spelling of a figure option's value (case, dashes, the CLI's names) and raises on an unknown one instead of drawing the default. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>A Share link to a dataset you added names it, and a recipient who doesn't have it is told which dataset is missing and how to get it, instead of the view being applied to another dataset. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Share → Code writes only options that change the figure, None as None, and a palette only when the colors match it. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>Corpus Analysis and word exports leave a skipped word out of <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>, <abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>, <abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr> and single-fixation duration instead of counting an imported 0 (<abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr> keeps its 0); a blank imported second-pass duration is 0 where the fixation count is known. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
+<li>A palette or design preset no longer reverts after a rail popover has been opened, an annotation no longer jumps the view to trial 1, and each dataset reopens on the trial it was left on. (<a href="https://github.com/lacclab/scanpath-studio/issues/377">#377</a>)</li>
 </ul>
 <h2 id="0340-2026-10-06">0.34.0 — 2026-10-06<a class="headerlink" href="#0340-2026-10-06" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

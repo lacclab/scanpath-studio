@@ -2,7 +2,7 @@
 
 Each tutorial walks one research task from start to finish. New here? Start with [Getting started](https://lacclab.github.io/scanpath-studio/getting-started/index.md).
 
-- **[Data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)**
+- **[Check data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)**
 
   Check a pilot or completed session and record issues.
 
@@ -16,6 +16,6 @@ Each tutorial walks one research task from start to finish. New here? Start with
 
 - **[Corpus analysis](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)**
 
-  Summarize texts, readers, or groups and download the table.
+  Summarize texts, participants, or groups and download the table.
 
 The app also has short interactive tutorials under **Help → Tutorials**. They highlight each control as you go, and never change your data or settings.

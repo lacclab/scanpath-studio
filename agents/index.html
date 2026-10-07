@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="For coding agents - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/agents.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/agents/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="For coding agents - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/agents.png" />
 </head>
   
@@ -622,7 +622,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -873,7 +873,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1914,7 +1914,7 @@
 <h1 id="agent-guide-headless-use">Agent guide (headless use)<a class="headerlink" href="#agent-guide-headless-use" title="Permanent link">&para;</a></h1>
 <p>This page is written for a coding agent — or any script — that has to <strong>use</strong>
 Scanpath Studio without a browser: load an eye-tracking-while-reading dataset,
-render a figure, pull per-word reading measures. (<code>AGENTS.md</code> in the repository
+render a figure, read the per-word reading measures your data brings. (<code>AGENTS.md</code> in the repository
 root is the opposite document: how to <em>develop</em> this codebase.) A plain-text map
 of the whole site is at <a href="https://lacclab.github.io/scanpath-studio/llms.txt"><code>/llms.txt</code></a>.</p>
 <p>Everything the app draws is reachable from two places:</p>
@@ -1967,7 +1967,7 @@ ids shifted to start at 0) or made (<code>order_in_trial</code>) keeps its canon
 The tables below are what <code>load_scanpath_data(..., names="canonical")</code> returns.
 A frame merged or concatenated with another table loses <code>attrs</code>: pass the result
 through <code>load_scanpath_data</code> again, or work on the canonical frames.</p>
-<p><strong>Words / <abbr title="Interest area: EyeLink's name for an AOI">IA</abbr></strong> — canonical fields:</p>
+<p><strong>Words (interest areas)</strong> — canonical fields:</p>
 <table>
 <thead>
 <tr>
@@ -1978,11 +1978,11 @@ through <code>load_scanpath_data</code> again, or work on the canonical frames.<
 <tbody>
 <tr>
 <td><code>participant_id</code></td>
-<td>Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast onto every reading in the fixations, matched by trial id or else by <code>text_id</code>; <code>load_scanpath_data</code> raises a <code>ValueError</code> when neither matches.</td>
+<td>Participant id (string). Optional in the source: a stimulus-level word table with no participant column is broadcast onto every trial in the fixations, matched by trial id or else by <code>text_id</code>; <code>load_scanpath_data</code> raises a <code>ValueError</code> when neither matches.</td>
 </tr>
 <tr>
 <td><code>trial_id</code></td>
-<td>Trial id; with <code>participant_id</code> it names one reading. <strong>Required.</strong></td>
+<td>Trial id; with <code>participant_id</code> it names one trial. <strong>Required.</strong></td>
 </tr>
 <tr>
 <td><code>screen_id</code>, <code>screen_index</code></td>
@@ -2024,7 +2024,7 @@ are carried through when present.</p>
 <tbody>
 <tr>
 <td><code>participant_id</code></td>
-<td>Reader id. Optional in the source (a dataset without one becomes a single anonymous reader).</td>
+<td>Participant id. Optional in the source (a dataset without one becomes a single anonymous participant).</td>
 </tr>
 <tr>
 <td><code>trial_id</code></td>
@@ -2048,7 +2048,7 @@ are carried through when present.</p>
 </tr>
 <tr>
 <td><code>timestamp_ms</code></td>
-<td>Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal <code>_timestamp_synthesized</code> column marks them, and the summaries' <code>reading_time_ms</code> / <code>wpm</code> then sum fixation durations, with <code>reading_time_source</code> saying it is an estimate.</td>
+<td>Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal <code>_timestamp_synthesized</code> column marks them, and the replay lays the fixations end to end by their durations.</td>
 </tr>
 <tr>
 <td><code>screen_timestamp_ms</code>, <code>screen_fixation_id</code></td>
@@ -2107,7 +2107,7 @@ measures:</p>
 <p>With one trial in the frames, <code>participant</code> / <code>trial</code> can be omitted — more than
 one and an underspecified call raises rather than guessing (see
 <a href="#errors-and-what-they-mean">Errors</a>). Neither table had a participant column
-here, so both frames come back under one synthetic reader: <code>list_trials</code> returns
+here, so both frames come back under one synthetic participant: <code>list_trials</code> returns
 <code>participant_id="(all)"</code>, <code>trial_id="t1"</code>.</p>
 <h2 id="loading-real-data">Loading real data<a class="headerlink" href="#loading-real-data" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_scanpath_data</span><span class="p">(</span><span class="s2">"ia.csv"</span><span class="p">,</span> <span class="s2">"fixations.csv"</span><span class="p">)</span>
@@ -2122,7 +2122,7 @@ here, so both frames come back under one synthetic reader: <code>list_trials</co
 auto-detected; <code>raw_gaze_schema=</code> overrides), or <code>load_sample_raw_gaze()</code> for
 the demo's. Passing it as <code>plot_scanpath(raw_gaze=…)</code> filters it to the trial
 and switches the layer on; <code>compare_scanpaths(raw_gaze=…)</code> draws each
-reading's samples in its scanpath's colour (<code>raw_gaze_b=</code> for a B from another
+trial's samples in its scanpath's color (<code>raw_gaze_b=</code> for a B from another
 dataset). It can be the only table: pass <code>None</code> for the words
 and fixations (<code>sps.list_trials(raw_gaze=gaze)</code>,
 <code>sps.plot_scanpath(raw_gaze=gaze, trial="t3")</code>) and the samples are drawn as
@@ -2169,16 +2169,16 @@ accept it: the <a href="../api/#figure-options">figure options table</a>, or
 neither reference spells out.</p>
 <p><code>color_by</code> is a <em>fixation column name</em> (<code>"duration_ms"</code>, <code>"pass_index"</code>, a
 pupil size you kept with <code>load_scanpath_data(keep_columns=[…])</code>, …),
-the sentinel <code>"(uniform)"</code> for one flat colour, or <code>"line"</code> to colour each
+the sentinel <code>"(uniform)"</code> for one flat color, or <code>"line"</code> to color each
 fixation by the text line it lands on (the lines are inferred from word-box
 geometry); a name the frame doesn't have raises a <code>ValueError</code> naming the
 closest columns (see <a href="#errors-and-what-they-mean">Errors</a>). <code>color_by_line=True</code>
 is the same as <code>color_by="line"</code>, and on a single-trial figure it overrides any
 other <code>color_by</code>. A comparison figure, and a co-animation (<code>fixations_b=</code>),
-colours as the app's Compare mode does: each scanpath keeps its own colour on
+colors as the app's Compare mode does: each scanpath keeps its own color on
 its marker outlines, while a numeric <code>color_by</code> fills both readings' markers on
 one shared scale and a categorical one (or <code>"line"</code>) on one shared
-category→colour mapping, with a legend entry per category.</p>
+category→color mapping, with a legend entry per category.</p>
 <p><code>fixation_flags</code> marks or drops suspicious fixations (display only — reading
 measures and exports are untouched). One entry per category, each with a mode of
 <code>"Off"</code> / <code>"Highlight"</code> / <code>"Discard"</code>:</p>
@@ -2203,10 +2203,10 @@ measures and exports are untouched). One entry per category, each with a mode of
 or <code>"By type"</code> (forward / skip / refixation / return sweep / regression, each a
 legended sub-trace, classified at render time);
 <code>saccade_class_colors={"regression": "#000", …}</code> overrides individual class
-colours. <code>saccade_classes</code> is the same split used as a <strong>filter</strong> rather than as
+colors. <code>saccade_classes</code> is the same split used as a <strong>filter</strong> rather than as
 hue — <code>saccade_classes=["regression"]</code> draws a regressions-only figure (the
 hidden classes lose their direction arrows too), and it composes with any
-colour mode; naming every class is a no-op. <code>saccade_render_mode="Arc"</code> draws
+color mode; naming every class is a no-op. <code>saccade_render_mode="Arc"</code> draws
 the linear-reading schematic.</p>
 <p><code>heatmap_style</code> is <code>"Word boxes"</code> or <code>"Interpolated"</code>;
 <code>heatmap_metric="counts"</code> weights by fixation count instead of dwell time;
@@ -2226,15 +2226,15 @@ default); the default is skipped when absent, a column you name must exist.</p>
 <code>coordinate_grid_spacing=None</code> selects a readable 1/2/5×10ⁿ interval, while a
 positive number pins the major interval in pixels. <code>background_image</code> places a
 stimulus screenshot under the scanpath at data coordinates.</p>
-<p><code>palette=</code> is a shorthand that sets a whole group of colours at once —
-<code>"Default (colourblind-safe)"</code>, <code>"Print / greyscale"</code> or <code>"High contrast"</code>
-(<code>constants.PALETTES</code>). Anything you pass explicitly still wins over it, and an
+<p><code>palette=</code> is a shorthand that sets a whole group of colors at once —
+<code>"default"</code> (colorblind-safe), <code>"print"</code> (grayscale) or <code>"high-contrast"</code>; the
+app's own palette names work too (<code>constants.PALETTES</code>). Anything you pass explicitly still wins over it, and an
 unknown name raises rather than silently falling back.</p>
 <div class="admonition note">
-<p class="admonition-title">Headless defaults vs. the app's first screen</p>
-<p><code>plot_scanpath</code> draws word boxes, the heatmap and fixation indices by
-default, while the app opens on the core scanpath only. Every other default
-(marker opacity, index-label size, monitor framing, colours) is the app's.</p>
+<p class="admonition-title">Headless defaults</p>
+<p><code>plot_scanpath</code> draws the app's default <em>Scanpath</em> design: fixations,
+saccades and the text. Turn on <code>show_words</code>, <code>show_heatmap</code> or <code>show_order</code>
+for word boxes, the heatmap or fixation numbers.</p>
 </div>
 <h2 id="the-same-thing-from-the-shell">The same thing from the shell<a class="headerlink" href="#the-same-thing-from-the-shell" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
@@ -2282,7 +2282,7 @@ raising. Every flag is in the <a href="../cli/">CLI reference</a>.</p>
 </tr>
 <tr>
 <td><code>Ambiguous selection: N trials match</code></td>
-<td><code>participant</code> / <code>trial</code> left out with several combos loaded.</td>
+<td><code>participant</code> / <code>trial</code> left out with several trials loaded.</td>
 <td>Pass both; <code>list_trials</code> shows what exists.</td>
 </tr>
 <tr>
@@ -2336,7 +2336,7 @@ what the replay does — the reading time over <code>playback_speed</code> — u
 <li><strong>Errors name the alternatives.</strong> An unknown trial, an ambiguous selection or
   a misspelled option raises with the valid values listed; read the message
   rather than guessing again.</li>
-<li><strong><abbr title="Areas of interest: here, the words' bounding boxes">AOIs</abbr> come from the data.</strong> Word boxes are never computed — only the
+<li><strong>Word boxes come from the data.</strong> They are never computed — only the
   fixation → word assignment is, and only when the data maps no word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id
   (box containment, else unassigned).</li>
 </ul>
@@ -2360,7 +2360,7 @@ what the replay does — the reading time over <code>playback_speed</code> — u
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 14:49:15 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

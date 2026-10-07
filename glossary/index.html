@@ -622,7 +622,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -873,7 +873,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1789,6 +1789,9 @@ fixation counts for the word its data names when the data has a word/<abbr title
 id (a blank there means no word); without one, for the word whose box
 contains it, else for no word
 (<a href="../computations/#assign-fixation-to-word"><code>assign.fixation_to_word</code></a>).</dd>
+<dt>Words (interest areas)</dt>
+<dd>The table of words and their word boxes, such as EyeLink's Interest Area
+Report.</dd>
 <dt>Canvas</dt>
 <dd>The recorded screen in pixels, such as 2560 × 1440 — the coordinate
 system every figure is drawn in.</dd>
@@ -1797,8 +1800,9 @@ system every figure is drawn in.</dd>
 word label sized from the word boxes
 (<a href="../computations/#disp-true-scale"><code>disp.true_scale</code></a>).</dd>
 <dt>Recording setup</dt>
-<dd>The monitor's physical size and the viewing distance. Together with the
-canvas they give pixels per degree of visual angle
+<dd>How the text was shown: the screen resolution (the canvas), the monitor's
+size and viewing distance, and the text size, each marked measured,
+estimated or assumed. Size and distance give pixels per degree of visual angle
 (<a href="../computations/#geom-pixels-per-degree"><code>geom.pixels_per_degree</code></a>).</dd>
 <dt>Screen</dt>
 <dd>One of several displays a single trial was read over — the pages of a
@@ -1810,6 +1814,9 @@ own coordinate space and is never merged with another
 trial's question (<code>is_in_aspan</code>) — highlighted in the figure.</dd>
 </dl>
 <h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
+<p>Scanpath Studio shows these as your interest-area report provides them. The
+definitions below are how it would compute them (experimental); the values you
+load mean what your eye-tracking software defines.</p>
 <dl>
 <dt>First fixation duration (<abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>)</dt>
 <dd>How long the first fixation on a word lasted, whenever it came
@@ -1850,7 +1857,7 @@ two people is two trials.</dd>
 <dd>One loaded corpus: the bundled demo, a public corpus, or tables you
 uploaded, each listed under <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong>.</dd>
 <dt>Participant metadata</dt>
-<dd>An optional table with one row per reader, whose columns become trial
+<dd>An optional table with one row per participant, whose columns become trial
 filters without being copied onto the words or fixations.</dd>
 <dt>Illustration</dt>
 <dd>A label the app puts on any figure that no longer shows the data exactly
@@ -1878,7 +1885,7 @@ a replay not at real time
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 14:49:15 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

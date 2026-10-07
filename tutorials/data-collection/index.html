@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -27,7 +27,7 @@
     
     
       
-        <title>Data collection - Scanpath Studio</title>
+        <title>Check data collection - Scanpath Studio</title>
       
     
     
@@ -67,16 +67,16 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Data collection - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:title" content="Check data collection - Scanpath Studio" />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/data-collection.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/tutorials/data-collection/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="Data collection - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:title" content="Check data collection - Scanpath Studio" />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/data-collection.png" />
 </head>
   
@@ -132,7 +132,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Data collection
+              Check data collection
             
           </span>
         </div>
@@ -641,7 +641,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -659,7 +659,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -988,7 +988,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1797,10 +1797,10 @@
 <p>Use this workflow during piloting, experimenter training, or session review. The
 result is a short record of which trials need attention and why.</p>
 <h2 id="1-load-a-pilot-session">1. Load a pilot session<a class="headerlink" href="#1-load-a-pilot-session" title="Permanent link">&para;</a></h2>
-<p>On the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> page select <strong><span class="sps-icon" data-icon="add" aria-hidden="true"></span> Add dataset</strong>, upload the word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> and
-fixation tables, then check the proposed columns and the <strong>Recording setup</strong>
+<p>On the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> page select <strong><span class="sps-icon" data-icon="add" aria-hidden="true"></span> Add dataset → Import files</strong>, upload the
+Words (interest areas) and Fixations tables, then check the proposed columns and the <strong>Recording setup</strong>
 (the actual monitor resolution) before selecting <strong><span class="sps-icon" data-icon="check" aria-hidden="true"></span> Add dataset</strong>. If the
-dataset is already loaded, open it from <span class="sps-icon" data-icon="folder_open" aria-hidden="true"></span> <strong>Available datasets</strong>.</p>
+dataset is already loaded, click its row in the list of datasets.</p>
 <h2 id="2-check-the-setup-on-one-trial">2. Check the setup on one trial<a class="headerlink" href="#2-check-the-setup-on-one-trial" title="Permanent link">&para;</a></h2>
 <p>Keep the default visualization first. Confirm that:</p>
 <ul>
@@ -1811,9 +1811,9 @@ dataset is already loaded, open it from <span class="sps-icon" data-icon="folder
 <p>If every trial is shifted in the same way, check the monitor size and coordinate
 system before judging participants.</p>
 <h2 id="3-replay-the-recording">3. Replay the recording<a class="headerlink" href="#3-replay-the-recording" title="Permanent link">&para;</a></h2>
-<p>Turn on <strong>Animate</strong>. Look for long missing periods, repeated off-text points,
+<p>Turn on <strong>Animate</strong>. Look for long missing periods, repeated points out of bounds,
 frequent interruptions, or a vertical shift that grows during the trial.</p>
-<p>Use <strong><span class="sps-icon" data-icon="cleaning_services" aria-hidden="true"></span> Filter → <span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations</strong> in the plot rail to <strong>Highlight</strong> short, long,
+<p>Use <strong><span class="sps-icon" data-icon="cleaning_services" aria-hidden="true"></span> Flag fixations → <span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations</strong> in the plot rail to <strong>Highlight</strong> short, long,
 or out-of-bounds fixations. Highlighting keeps the full trial visible; <strong>Discard</strong>
 is better reserved for a later, documented filtering decision.</p>
 <h2 id="4-record-the-decision">4. Record the decision<a class="headerlink" href="#4-record-the-decision" title="Permanent link">&para;</a></h2>
@@ -1852,7 +1852,7 @@ saved the review. For a formal retained/excluded pool, continue with
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 3, 2026 09:07:55 UTC">October 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

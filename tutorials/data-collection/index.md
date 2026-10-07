@@ -4,7 +4,7 @@ Use this workflow during piloting, experimenter training, or session review. The
 
 ## 1. Load a pilot session
 
-On the **Data Management** page select **Add dataset**, upload the word/IA and fixation tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **Add dataset**. If the dataset is already loaded, open it from **Available datasets**.
+On the **Data Management** page select **Add dataset → Import files**, upload the Words (interest areas) and Fixations tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **Add dataset**. If the dataset is already loaded, click its row in the list of datasets.
 
 ## 2. Check the setup on one trial
 
@@ -18,9 +18,9 @@ If every trial is shifted in the same way, check the monitor size and coordinate
 
 ## 3. Replay the recording
 
-Turn on **Animate**. Look for long missing periods, repeated off-text points, frequent interruptions, or a vertical shift that grows during the trial.
+Turn on **Animate**. Look for long missing periods, repeated points out of bounds, frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **Filter → Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
+Use **Flag fixations → Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
 
 ## 4. Record the decision
 

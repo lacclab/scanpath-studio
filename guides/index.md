@@ -10,9 +10,9 @@ For end-to-end workflows, see the [tutorials](https://lacclab.github.io/scanpath
 
   Sources, upload, column mapping, and the recording setup.
 
-- **[Corpus workspace](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/index.md)**
+- **[Corpus Analysis](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/index.md)**
 
-  Raw-data inspection, reading measures, and the four analysis views.
+  Per text, Per participant and Groups, from the measures your data brings.
 
 - **[Outputs and sharing](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/index.md)**
 

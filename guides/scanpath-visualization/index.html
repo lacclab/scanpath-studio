@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Scanpath visualization - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/guides/scanpath-visualization.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Scanpath visualization - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/guides/scanpath-visualization.png" />
 </head>
   
@@ -630,7 +630,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -905,10 +905,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#filter-what-is-drawn" class="md-nav__link">
+  <a href="#flag-fixations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Filter what is drawn
+        Flag fixations
       
     </span>
   </a>
@@ -977,7 +977,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1651,10 +1651,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#filter-what-is-drawn" class="md-nav__link">
+  <a href="#flag-fixations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Filter what is drawn
+        Flag fixations
       
     </span>
   </a>
@@ -1782,7 +1782,7 @@
 <li>The trial's summary.</li>
 <li>The figure.</li>
 <li>Plot controls.</li>
-<li>Annotations, Stimulus &amp; Context, Comparisons, Export and Share.</li>
+<li>Annotations, Stimulus &amp; context, Comparisons, Export and Share.</li>
 </ol>
 <h2 id="choose-a-trial">Choose a trial<a class="headerlink" href="#choose-a-trial" title="Permanent link">&para;</a></h2>
 <p>Pick a trial above the plot. The <strong>filter funnel</strong> beside it narrows the list
@@ -1802,11 +1802,11 @@ and a <strong>▾</strong> with its settings.</p>
 <tbody>
 <tr>
 <td><span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations</td>
-<td>markers: size, colour, order</td>
+<td>markers: size, color, order</td>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="arrow_outward" aria-hidden="true"></span> Saccades</td>
-<td>lines and arrows, coloured by direction or reading type</td>
+<td>lines and arrows, colored by direction or reading type</td>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="article" aria-hidden="true"></span> Stimulus</td>
@@ -1814,7 +1814,7 @@ and a <strong>▾</strong> with its settings.</p>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="crop_square" aria-hidden="true"></span> Word boxes</td>
-<td>each word's interest area: outline colour and opacity; fill colour and opacity</td>
+<td>each word's interest area: outline color and opacity; fill color and opacity</td>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="local_fire_department" aria-hidden="true"></span> Heatmap</td>
@@ -1825,7 +1825,7 @@ and a <strong>▾</strong> with its settings.</p>
 <td>the gaze samples as recorded</td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="cleaning_services" aria-hidden="true"></span> Filter</td>
+<td><span class="sps-icon" data-icon="cleaning_services" aria-hidden="true"></span> Flag fixations</td>
 <td>which fixations and saccades are drawn</td>
 </tr>
 <tr>
@@ -1834,15 +1834,15 @@ and a <strong>▾</strong> with its settings.</p>
 </tr>
 </tbody>
 </table>
-<p>Colour ranges start on <strong>Auto</strong>, scaled to each trial. Pin a range to keep it
+<p>Color ranges start on <strong>Auto</strong>, scaled to each trial. Pin a range to keep it
 fixed as you step through trials and filters, so they stay comparable; its
 number boxes take any endpoint, beyond the data shown too. The word-box
 heatmap's range is in dwell time per word (ms), the summed duration of the
 fixations in each box, or in fixations per word; on Auto it runs from 0 to the
 trial's highest. <strong>Interpolated</strong> blurs the fixations with a Gaussian (its
 <strong>Blur</strong> row: Auto, or a σ in px) and scales to each figure's own peak, so its
-range is greyed; it is kept for Word boxes and Compare, which always draws word
-boxes.</p>
+range is grayed. The range still applies to Word boxes, and in Compare, which
+always draws word boxes.</p>
 <p>Marker size shows fixation duration on a <strong>fixed scale</strong>: 50–600 ms span the
 smallest to the largest marker in every trial, both sides of a comparison, the
 replay and every export, so one duration is always one size. Shorter fixations
@@ -1850,15 +1850,15 @@ take the smallest marker and longer ones the largest. Under
 <strong><span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations ▾</strong>, <strong>Scale</strong> picks the curve: <strong>√ duration</strong> (the
 default) grows marker area with duration, <strong>Linear</strong> grows the diameter with it,
 <strong>Log</strong> compresses long fixations. <strong>Durations</strong> sets the two bounds, and
-<strong>Size key</strong> draws reference circles labelled in ms in the figure's corner
+<strong>Size key</strong> draws reference circles labeled in ms in the figure's corner
 (in Compare, only while both scanpaths use the same marker size range).
 <strong>Relative to this figure</strong> stretches each figure from its own shortest to
 longest fixation instead, so its sizes compare only within that figure. Share
 links, settings files, saved designs and restored sessions from before the fixed
 scale reopen on the relative one, as they were drawn.</p>
-<h2 id="filter-what-is-drawn">Filter what is drawn<a class="headerlink" href="#filter-what-is-drawn" title="Permanent link">&para;</a></h2>
-<p><strong><span class="sps-icon" data-icon="cleaning_services" aria-hidden="true"></span> Filter</strong> thins the reading on screen (the funnel above the plot chooses
-<em>which</em> readings you can pick). For fixations, <strong>Highlight</strong> or <strong>Discard</strong>
+<h2 id="flag-fixations">Flag fixations<a class="headerlink" href="#flag-fixations" title="Permanent link">&para;</a></h2>
+<p><strong><span class="sps-icon" data-icon="cleaning_services" aria-hidden="true"></span> Flag fixations</strong> thins the trial on screen (the funnel above the plot chooses
+<em>which</em> trials you can pick). For fixations, <strong>Highlight</strong> or <strong>Discard</strong>
 short, long, out-of-bounds or blink fixations, or show only an index range.
 <em>Out of bounds</em> means outside every word box, not off the screen; <em>blink</em> needs
 a blink column in your fixations (<code>is_blink</code>, <code>blink</code>, <code>blink_before</code>,
@@ -1871,15 +1871,14 @@ regressions, for example. Filtering changes only the figure, never your data.</p
 <li><strong>Compare</strong> adds a second reading, overlaid or side by side. <strong>Compare
   with</strong> can take it from another dataset.</li>
 <li><strong>Comparisons</strong> lists other trials that match this one on a field you
-  choose: other readings of the same text, or the same reader's other trials.</li>
+  choose: other readings of the same text, or the same participant's other trials.</li>
 </ul>
 <p>Side by side, each panel shows its own reading's stimulus image, or none when
 that reading has no image. An uploaded image stands for the first reading's
 page, so the second shows it only when it reads the same text on the same
 screen.</p>
 <p>Two readings can be overlaid only when they were shown on the same screen size,
-including two screens of one dataset whose sizes differ; otherwise they are
-drawn side by side, each on its own screen. Nothing is rescaled to force an
+within one dataset too; otherwise they are drawn side by side, each on its own screen. Nothing is rescaled to force an
 overlay.</p>
 <p>Compare is also available from Python
 (<a href="../../api/#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>) and the
@@ -1904,7 +1903,7 @@ overlay.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 07:46:32 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

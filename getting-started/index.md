@@ -2,7 +2,13 @@
 
 ## 1. Install
 
-Open the [live demo](https://scanpath-studio.streamlit.app). Nothing to install.
+The easiest way to work with your own data: no Python needed, your data stays on your computer, and the public corpora download in one click. Download the build for your system, then:
+
+- **macOS** (14 or later, Apple silicon): [`ScanpathStudio-macos-arm64.dmg`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg). Open it, drag **Scanpath Studio** to **Applications**, and launch it from there. If macOS refuses to open it, go to **System Settings → Privacy & Security** and click **Open Anyway**.
+- **Windows**: [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip). Extract it and run `ScanpathStudio.exe`. The build is not code-signed, so SmartScreen warns the first time: click **More info → Run anyway**.
+- **Linux**: [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz). Extract it and run `./ScanpathStudio/ScanpathStudio`.
+
+The app opens in its own window. To quit, close that window on macOS, or the console window on Windows and Linux. On an Intel Mac or an older macOS, use pip instead.
 
 ```
 pip install scanpath-studio
@@ -11,26 +17,20 @@ scanpath-studio
 
 Needs Python 3.11–3.14. The app opens at <http://localhost:8501>.
 
-No Python needed. Download the build for your system, then:
-
-- **macOS** (14 or later, Apple silicon): [`ScanpathStudio-macos-arm64.dmg`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg). Open it, drag **Scanpath Studio** to **Applications**, and launch it from there. If macOS refuses to open it, go to **System Settings → Privacy & Security** and click **Open Anyway**.
-- **Windows**: [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip). Extract it and run `ScanpathStudio.exe`. The build is not code-signed, so SmartScreen warns the first time: click **More info → Run anyway**.
-- **Linux**: [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz). Extract it and run `./ScanpathStudio/ScanpathStudio`.
-
-The app opens in its own window. To quit, close that window on macOS, or the console window on Windows and Linux. On an Intel Mac or an older macOS, use pip instead.
+Open the [live demo](https://scanpath-studio.streamlit.app) to try the app on its bundled data. Nothing to install. The demo has limited memory and can't download the public corpora, so for your own data use the desktop app or pip.
 
 ## 2. Explore the demo
 
 The app opens on a small bundled sample of the [OneStop](https://lacclab.github.io/scanpath-studio/onestop/index.md) corpus.
 
 1. Pick a trial with the picker above the plot.
-1. Switch layers on and off in the controls beside the plot: fixations, saccades, text, word boxes, heatmap.
-1. Turn on **Animate** to replay the reading.
+1. Switch layers on and off in **Plot controls**: Fixations, Saccades, Stimulus (the text), Word boxes, Heatmap.
+1. Turn on **Animate** to replay the trial.
 1. Open **Export → Current figure** to download it.
 
 ## 3. Load your own data
 
-Click **+** beside **Select Dataset** and choose **Import files**. Upload a fixation table and a words (interest-area) table, check the column mapping the app proposes, describe the **Recording setup**, then click **Add dataset**.
+Click **+** beside **Select dataset** and choose **Import files**. Upload a fixation table and a Words (interest areas) table, check the column mapping the app proposes, describe the **Recording setup**, then click **Add dataset**.
 
 [Loading data](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md) lists the accepted formats and what each table needs.
 

@@ -38,7 +38,7 @@ Tune the figure in the app, open **Share → Code**, and copy the snippet (Pytho
 
 ```
 # translate a render invocation you already have into Python
-scanpath-studio render --sample --no-heatmap --print-code python -o out.png
+scanpath-studio render --sample --heatmap --print-code python -o out.png
 ```
 
 From Python, `sps.figure_code(...)` returns the same snippet — see [Reproduce a figure in code](https://lacclab.github.io/scanpath-studio/api/#reproduce-a-figure-in-code).

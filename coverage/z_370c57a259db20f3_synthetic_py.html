@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_tabs_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-06 17:32 +0000
+            created at 2026-10-07 09:21 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -229,9 +229,9 @@
     <p class="pln"><span class="n"><a id="t147" href="#t147">147</a></span><span class="t"><span class="com">#: The AOI table&#x27;s columns, in file order, with what each one holds.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t148" href="#t148">148</a></span><span class="t"><span class="nam">EXAMPLE_AOI_COLUMNS</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">str</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">    <span class="str">&quot;participant_id&quot;</span><span class="op">:</span> <span class="str">&quot;who read the text.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">    <span class="str">&quot;trial_id&quot;</span><span class="op">:</span> <span class="str">&quot;one reading of a text; participant_id + trial_id together &quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">    <span class="str">&quot;trial_id&quot;</span><span class="op">:</span> <span class="str">&quot;one trial (one reading of a text); participant_id + trial_id together &quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">    <span class="str">&quot;identify it, in both tables.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">    <span class="str">&quot;text_id&quot;</span><span class="op">:</span> <span class="str">&quot;which text was shown. Readers who read the same text share it.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">    <span class="str">&quot;text_id&quot;</span><span class="op">:</span> <span class="str">&quot;which text was shown; shared by everyone who read it.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">    <span class="str">&quot;word_id&quot;</span><span class="op">:</span> <span class="str">&quot;the word&#x27;s number within its text, from 0.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">    <span class="str">&quot;text&quot;</span><span class="op">:</span> <span class="str">&quot;the word as displayed.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t155" href="#t155">155</a></span><span class="t">    <span class="str">&quot;x&quot;</span><span class="op">:</span> <span class="str">&quot;left edge of the word&#x27;s box, in screen pixels.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -245,9 +245,9 @@
     <p class="pln"><span class="n"><a id="t163" href="#t163">163</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t164" href="#t164">164</a></span><span class="t"><span class="com">#: The fixation table&#x27;s columns, in file order, with what each one holds.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t165" href="#t165">165</a></span><span class="t"><span class="nam">EXAMPLE_FIXATION_COLUMNS</span><span class="op">:</span> <span class="nam">dict</span><span class="op">[</span><span class="nam">str</span><span class="op">,</span> <span class="nam">str</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t166" href="#t166">166</a></span><span class="t">    <span class="str">&quot;participant_id&quot;</span><span class="op">:</span> <span class="str">&quot;who read the text; matches the AOI table.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t167" href="#t167">167</a></span><span class="t">    <span class="str">&quot;trial_id&quot;</span><span class="op">:</span> <span class="str">&quot;which reading; matches the AOI table.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t168" href="#t168">168</a></span><span class="t">    <span class="str">&quot;text_id&quot;</span><span class="op">:</span> <span class="str">&quot;which text was shown; matches the AOI table.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t166" href="#t166">166</a></span><span class="t">    <span class="str">&quot;participant_id&quot;</span><span class="op">:</span> <span class="str">&quot;who read the text; matches the Words table.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t167" href="#t167">167</a></span><span class="t">    <span class="str">&quot;trial_id&quot;</span><span class="op">:</span> <span class="str">&quot;which trial; matches the Words table.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t168" href="#t168">168</a></span><span class="t">    <span class="str">&quot;text_id&quot;</span><span class="op">:</span> <span class="str">&quot;which text was shown; matches the Words table.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t169" href="#t169">169</a></span><span class="t">    <span class="str">&quot;timestamp_ms&quot;</span><span class="op">:</span> <span class="str">&quot;fixation onset, in ms from the start of the trial.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t170" href="#t170">170</a></span><span class="t">    <span class="str">&quot;duration_ms&quot;</span><span class="op">:</span> <span class="str">&quot;fixation duration, in ms.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t171" href="#t171">171</a></span><span class="t">    <span class="str">&quot;x&quot;</span><span class="op">:</span> <span class="str">&quot;horizontal gaze position, in screen pixels.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -286,8 +286,8 @@
     <p class="run"><span class="n"><a id="t204" href="#t204">204</a></span><span class="t">    <span class="nam">words</span><span class="op">,</span> <span class="nam">fixations</span> <span class="op">=</span> <span class="nam">example_import_tables</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t205" href="#t205">205</a></span><span class="t">    <span class="key">return</span> <span class="fst">f&quot;&quot;&quot;</span><span class="fst"># Scanpath Studio example tables</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t206" href="#t206">206</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t207" href="#t207">207</a></span><span class="t"><span class="fst">One reader reading a six-word text on two lines (&quot;The cat sat / on the mat&quot;)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t208" href="#t208">208</a></span><span class="t"><span class="fst">once. On **Add dataset**, upload `</span><span class="op">{</span><span class="nam">EXAMPLE_AOI_FILE</span><span class="op">}</span><span class="fst">` as **AOIs** and</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t207" href="#t207">207</a></span><span class="t"><span class="fst">One participant reading a six-word text on two lines (&quot;The cat sat / on the mat&quot;)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t208" href="#t208">208</a></span><span class="t"><span class="fst">once. On **Add dataset**, upload `</span><span class="op">{</span><span class="nam">EXAMPLE_AOI_FILE</span><span class="op">}</span><span class="fst">` as **Words** and</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t209" href="#t209">209</a></span><span class="t"><span class="fst">`</span><span class="op">{</span><span class="nam">EXAMPLE_FIXATION_FILE</span><span class="op">}</span><span class="fst">` as **Fixations**; every column maps automatically.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t210" href="#t210">210</a></span><span class="t"><span class="fst">Unzip first: a zip dropped on one upload box is read as one table.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t211" href="#t211">211</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -402,7 +402,7 @@
             <a class="nav" href="z_370c57a259db20f3_tabs_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-06 17:32 +0000
+            created at 2026-10-07 09:21 +0000
         </p>
     </div>
 </footer>

@@ -1,6 +1,6 @@
-# Corpus workspace
+# Corpus Analysis
 
-**Corpus Analysis** summarises many readings at once. It uses the same dataset and trial filters as the Scanpath view. The line beside the dataset picker counts what those filters keep (for example *12 of 24 trials · 1 of 2 readers*) and names each active filter. **Edit filters** opens the Scanpath view's filter panel, and **Clear** resets every filter.
+**Corpus Analysis** summarizes many trials at once. It uses the same dataset and trial filters as the Scanpath view. The line beside the dataset picker counts what those filters keep (for example *12 of 24 trials · 1 of 2 participants*) and names each active filter. **Edit filters** opens the Scanpath view's filter panel, and **Clear** resets every filter.
 
 ## Reading measures come from your data
 
@@ -8,17 +8,17 @@ Corpus Analysis shows the reading measures your interest-area report provides (f
 
 ## Three views
 
-| View           | Answers                                               |
-| -------------- | ----------------------------------------------------- |
-| **Per text**   | How was this text read, word by word, across readers? |
-| **Per reader** | How does this reader behave across trials?            |
-| **Groups**     | How do conditions or populations differ?              |
+| View                | Answers                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| **Per text**        | How was this text read, word by word, across participants? |
+| **Per participant** | How does this participant behave across trials?            |
+| **Groups**          | How do conditions or populations differ?                   |
 
-The address bar names the open view (`?corpus_subtab=Per+reader`), so a bookmark or a copied link reopens it.
+The address bar names the open view (`?corpus_subtab=Per+participant`), so a bookmark or a copied link reopens it.
 
-Choose a measure, how to aggregate it, and the spread to show. A line under the measure says what it is, its unit, and what each plotted value is (one word, one reader's mean, …), with a link to its definition; a line under the spread says whether it shows how values vary (SD, IQR) or how precisely the centre is known (SEM, bootstrap CI). Set a **minimum number of readers** per word so sparse words don't look like stable estimates.
+Choose a measure, how to aggregate it, and the spread to show. A line under the measure says what it is, its unit, and what each plotted value is (one word, one participant's mean, …), with a link to its definition; a line under the spread says whether it shows how values vary (SD, IQR) or how precisely the center is known (SEM, bootstrap CI). Set a minimum number of participants per word so sparse words don't look like stable estimates.
 
-**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare** for a second cohort, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too.
+**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare a second group**, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too.
 
 ## From summary to evidence
 

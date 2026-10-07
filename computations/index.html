@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Computations & methodology - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/computations.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/computations/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Computations & methodology - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/computations.png" />
 </head>
   
@@ -622,7 +622,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -873,7 +873,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1950,7 +1950,7 @@
   <a href="#agg-reader-summary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        agg.reader_summary — Per-reader summary
+        agg.reader_summary — Per-participant summary
       
     </span>
   </a>
@@ -3083,7 +3083,7 @@
   <a href="#agg-reader-summary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        agg.reader_summary — Per-reader summary
+        agg.reader_summary — Per-participant summary
       
     </span>
   </a>
@@ -3462,7 +3462,7 @@
 <p class="admonition-title">Tier B is largely absent, on purpose</p>
 <p>Comparing against an independent implementation <a href="https://github.com/lacclab/scanpath-studio/issues/130">is planned</a>. Scientific measures therefore read <em>Partially verified</em> even where their hand oracle is exact.</p>
 </div>
-<p>Entries marked <em>experimental</em> are not computed by the default build: they need <code>SCANPATH_EXPERIMENTAL=1</code>. They are listed so that their definitions are on record.</p>
+<p>Entries marked <em>experimental</em> are not in this release. They are listed so that their definitions are on record.</p>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3633,7 +3633,7 @@
 <td><a href="#measure-landing-distance"><code>measure.landing_distance</code></a></td>
 <td>Centred landing distance</td>
 <td>Scientific measure</td>
-<td>letters (0 = word centre, negative = left of centre)</td>
+<td>letters (0 = word center, negative = left of center)</td>
 <td>Partially verified · experimental</td>
 </tr>
 <tr>
@@ -3806,7 +3806,7 @@
 </tr>
 <tr>
 <td><a href="#agg-reader-summary"><code>agg.reader_summary</code></a></td>
-<td>Per-reader summary</td>
+<td>Per-participant summary</td>
 <td>Statistical aggregation</td>
 <td>ms, px, counts, proportions</td>
 <td>Partially verified · experimental</td>
@@ -3953,7 +3953,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Participant_id, trial_id, text_id, word_id, text, x, y, width, height</td>
+<td>participant_id, trial_id, text_id, word_id, text, x, y, width, height</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
@@ -3994,7 +3994,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Participant_id, trial_id, x, y, duration_ms, timestamp_ms, …</td>
+<td>participant_id, trial_id, x, y, duration_ms, timestamp_ms, …</td>
 </tr>
 <tr>
 <td><strong>Grouping / ordering</strong></td>
@@ -4024,7 +4024,7 @@
 </table>
 <h3 id="norm-box-edges"><code>norm.box_edges</code> — Word box from edges<a class="headerlink" href="#norm-box-edges" title="Permanent link">&para;</a></h3>
 <p>Convert EyeLink <abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> edges to origin+size.</p>
-<p><strong>Formula.</strong> X = IA_LEFT · y = IA_TOP · width = IA_RIGHT − IA_LEFT · height = IA_BOTTOM − IA_TOP.</p>
+<p><strong>Formula.</strong> x = IA_LEFT · y = IA_TOP · width = IA_RIGHT − IA_LEFT · height = IA_BOTTOM − IA_TOP.</p>
 <table>
 <thead>
 <tr>
@@ -4035,7 +4035,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>X, y, width, height</td>
+<td>x, y, width, height</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -4072,7 +4072,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Trial_id</td>
+<td>trial_id</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
@@ -4109,7 +4109,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Bool</td>
+<td>bool</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
@@ -4138,7 +4138,7 @@
 </tbody>
 </table>
 <h3 id="norm-stimulus-broadcast"><code>norm.stimulus_broadcast</code> — Stimulus-level word broadcast<a class="headerlink" href="#norm-stimulus-broadcast" title="Permanent link">&para;</a></h3>
-<p>Share one stimulus' word boxes across every reader of it.</p>
+<p>Share one stimulus' word boxes across every participant who read it.</p>
 <p><strong>Formula.</strong> Words with no participant column are copied once per reading (participant × trial [× screen]) in the fixations, stamped with that reading's ids. Per reading, the boxes are those of the first words trial found by its trial ID, then its trial ID before a repeat's _r2 suffix, then its Text ID (only a Text ID the fixations map, and never one the words give to more than one trial). A trial-ID match always stands; mapped Text IDs that disagree with it are warned about.</p>
 <table>
 <thead>
@@ -4172,7 +4172,7 @@
 </table>
 <h3 id="norm-aoi-center-placement"><code>norm.aoi_center_placement</code> — AoI-only fixation placement<a class="headerlink" href="#norm-aoi-center-placement" title="Permanent link">&para;</a></h3>
 <p>Place a fixation with no x/y at its word box's center.</p>
-<p><strong>Formula.</strong> X = word.x + width/2 · y = word.y + height/2.</p>
+<p><strong>Formula.</strong> x = word.x + width/2 · y = word.y + height/2.</p>
 <table>
 <thead>
 <tr>
@@ -4228,7 +4228,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>A reader with no row reads as missing everywhere, never as a default.</td>
+<td>A participant with no row reads as missing everywhere, never as a default.</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -4240,7 +4240,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>UI, API, CLI, Export, Data Inspection</td>
+<td>UI, API, CLI, Export, Data Management</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4266,7 +4266,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Word_id</td>
+<td>word_id</td>
 </tr>
 <tr>
 <td><strong>Grouping / ordering</strong></td>
@@ -4278,7 +4278,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>Runs only when the fixations carry no word id. A mapped <code>word_id</code> (on the bundled demo, EyeLink's <code>CURRENT_FIX_INTEREST_AREA_ID</code>) is used exactly as given, blanks included — nothing is computed and no blank is filled — unless <code>overwrite=True</code>. Geometry agrees with that column on all 3,208 of the demo's EyeLink-assigned fixations (an earlier half-space shift: 92.6%; closed containment on the shared edges: 99.1%).</td>
+<td>Runs only when the fixations carry no word id. A mapped <code>word_id</code> (on the bundled demo, EyeLink's <code>CURRENT_FIX_INTEREST_AREA_ID</code>) is used exactly as given, blanks included — nothing is computed and no blank is filled — unless <code>overwrite=True</code>. Geometry agrees with that column on all 3,208 of the demo's EyeLink-assigned fixations.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -4311,7 +4311,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Bool mask</td>
+<td>bool mask</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -4377,7 +4377,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Run, linerun, word_runid, word_run (the visit's pass number), word_run_fix, nrun, reread (word_run &gt; 1)</td>
+<td>run, linerun, word_runid, word_run (the visit's pass number), word_run_fix, nrun, reread (word_run &gt; 1)</td>
 </tr>
 <tr>
 <td><strong>Grouping / ordering</strong></td>
@@ -4407,7 +4407,7 @@
 </table>
 <h3 id="assign-progression"><code>assign.progression</code> — Progression and regression flags<a class="headerlink" href="#assign-progression" title="Permanent link">&para;</a></h3>
 <p>Whether the <em>outgoing</em> saccade moves forward in the text.</p>
-<p><strong>Formula.</strong> <code>progression = sign(next word_id − word_id)</code>. <code>is_regression = word_id &lt; running max word_id in the trial</code> — i.e. Relative to the furthest word reached, not to the previous fixation.</p>
+<p><strong>Formula.</strong> <code>progression = sign(next word_id − word_id)</code>. <code>is_regression = word_id &lt; running max word_id in the trial</code> — i.e. relative to the furthest word reached, not to the previous fixation.</p>
 <table>
 <thead>
 <tr>
@@ -4418,7 +4418,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Progression ∈ {−1, 0, 1}, is_regression</td>
+<td>progression ∈ {−1, 0, 1}, is_regression</td>
 </tr>
 <tr>
 <td><strong>Grouping / ordering</strong></td>
@@ -4459,11 +4459,11 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Saccade_type</td>
+<td>(not stored — computed for each figure)</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>An imported <code>saccade_type</code> / <code>NEXT_SAC_DIRECTION</code> is kept.</td>
+<td>Always computed; an imported <code>saccade_type</code> / <code>NEXT_SAC_DIRECTION</code> (a direction) is not used.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -4487,7 +4487,7 @@
 <h3 id="pre-merge-short"><code>pre.merge_short</code> — Short-fixation merging<a class="headerlink" href="#pre-merge-short" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Fold a short fixation into a neighbour within a character distance.</p>
 <p><strong>Formula.</strong> A fixation below the short threshold is merged into the nearer adjacent fixation when that neighbour is within the merge distance, expressed in characters and converted to px via <code>geom.word_char_advance</code>. Durations add; position follows the survivor.</p>
@@ -4513,7 +4513,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>The conversion reads the shared letter scale. It used to divide by <code>len(text)</code>, so on a tiling corpus "within 1 character" meant 1.25 characters for a four-letter word and 1.07 for a fifteen-letter one — a threshold whose meaning varied with the word it was applied to.</td>
+<td>The conversion reads the shared letter scale, so "within 1 character" means the same on every word.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -4525,7 +4525,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export</td>
+<td>UI (Preprocessing panel — not in this release), API, CLI, Export</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4540,7 +4540,7 @@
 <h3 id="pre-exclude-short"><code>pre.exclude_short</code> — Short/long fixation exclusion<a class="headerlink" href="#pre-exclude-short" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Soft-exclude fixations outside a duration window.</p>
 <p><strong>Formula.</strong> Drop fixations shorter than / longer than the chosen bounds.</p>
@@ -4566,7 +4566,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export</td>
+<td>UI (Preprocessing panel — not in this release), API, CLI, Export</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4581,7 +4581,7 @@
 <h3 id="pre-blink-adjacent"><code>pre.blink_adjacent</code> — Blink-adjacent exclusion<a class="headerlink" href="#pre-blink-adjacent" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Drop fixations immediately before/after a blink.</p>
 <p><strong>Formula.</strong> Exclude the fixations neighbouring any row flagged <code>is_blink</code>.</p>
@@ -4603,7 +4603,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export</td>
+<td>UI (Preprocessing panel — not in this release), API, CLI, Export</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4618,7 +4618,7 @@
 <h3 id="pre-cleaning-report"><code>pre.cleaning_report</code> — Cleaning QA report<a class="headerlink" href="#pre-cleaning-report" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>What the preprocessing pass would remove, and why.</p>
 <p><strong>Formula.</strong> Counts per exclusion reason over the unfiltered frame.</p>
@@ -4640,7 +4640,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>UI (Preprocessing panel, only with SCANPATH_EXPERIMENTAL=1), API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1)</td>
+<td>UI (Preprocessing panel — not in this release), API, CLI, Export, Data Management (derived tables — not in this release)</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4655,7 +4655,7 @@
 <h3 id="pre-sentence-measures"><code>pre.sentence_measures</code> — Sentence-level measures<a class="headerlink" href="#pre-sentence-measures" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Per-sentence reading time and counts.</p>
 <p><strong>Formula.</strong> Words are grouped into sentences by <code>infer_sentence_ids</code> (terminal punctuation). Each sentence's durations, fixation and run counts, go-past times and skip flag are then derived from the fixations on its words; the supplied word measures are not used, so a sentence with no fixations reads as skipped (which is why Corpus Analysis → Per sentence is held back).</p>
@@ -4685,7 +4685,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>Corpus Analysis, API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1)</td>
+<td>Corpus Analysis, API, CLI, Export, Data Management (derived tables — not in this release)</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4700,7 +4700,7 @@
 <h3 id="pre-saccade-table"><code>pre.saccade_table</code> — Saccade table<a class="headerlink" href="#pre-saccade-table" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>One row per saccade, with amplitude, angle and class.</p>
 <p><strong>Formula.</strong> Consecutive fixation pairs within a trial; amplitude in px, and in degrees only when <code>pixels_per_degree</code> is supplied.</p>
@@ -4730,7 +4730,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1)</td>
+<td>API, CLI, Export, Data Management (derived tables — not in this release)</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4745,7 +4745,7 @@
 <h3 id="pre-character-grid"><code>pre.character_grid</code> — Character grid<a class="headerlink" href="#pre-character-grid" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Per-character boxes derived from word boxes.</p>
 <p><strong>Formula.</strong> Character <code>k</code> of a word spans <code>x + (k−1) × advance</code> to <code>x + k × advance</code>, where the advance is <code>geom.word_char_advance</code>.</p>
@@ -4775,7 +4775,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>API, CLI, Export, Data Inspection (derived tables, only with SCANPATH_EXPERIMENTAL=1)</td>
+<td>API, CLI, Export, Data Management (derived tables — not in this release)</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4800,7 +4800,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Right_to_left</td>
+<td>right_to_left</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -4823,7 +4823,7 @@
 <h3 id="pre-sensitivity"><code>pre.sensitivity</code> — Measure sensitivity<a class="headerlink" href="#pre-sensitivity" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>How much the word measures move under different line assignments.</p>
 <p><strong>Formula.</strong> Each trial's fixations are line-assigned by every method in <code>methods</code> (default <code>attach</code>, <code>slice</code>, <code>consensus</code>), <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr> / <abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr> / <abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr> / <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr> are recomputed per method, and each word's spread (max − min across methods) is reported beside a per-trial correction report.</p>
@@ -4841,7 +4841,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>API (raises unless SCANPATH_EXPERIMENTAL=1)</td>
+<td>API (not in this release)</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -4856,10 +4856,10 @@
 <h3 id="align-algorithms"><code>align.algorithms</code> — Vertical drift correction<a class="headerlink" href="#align-algorithms" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Line-assignment algorithms, ported natively.</p>
-<p><strong>Formula.</strong> The ten Carr et al. Algorithms — <code>attach</code>, <code>chain</code>, <code>cluster</code>, <code>compare</code>, <code>merge</code>, <code>regress</code>, <code>segment</code>, <code>split</code>, <code>stretch</code>, <code>warp</code> — plus <code>slice</code> and a <code>consensus</code> vote over them. Each reassigns fixation <em>y</em> to a text line. Hidden unless <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p><strong>Formula.</strong> The ten Carr et al. algorithms — <code>attach</code>, <code>chain</code>, <code>cluster</code>, <code>compare</code>, <code>merge</code>, <code>regress</code>, <code>segment</code>, <code>split</code>, <code>stretch</code>, <code>warp</code> — plus <code>slice</code> and a <code>consensus</code> vote over them. Each reassigns fixation <em>y</em> to a text line. Not in this release.</p>
 <table>
 <thead>
 <tr>
@@ -4902,7 +4902,7 @@
 <h3 id="measure-ffd"><code>measure.ffd</code> — First fixation duration (<abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr>)<a class="headerlink" href="#measure-ffd" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>Duration of the first fixation on a word.</p>
 <p><strong>Formula.</strong> Duration of the word's first fixation, whenever it comes — as EyeLink's <code>IA_FIRST_FIXATION_DURATION</code>, so a computed and an imported value mean the same. Not conditioned on first pass: a word first reached by a regression has an <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr> and <code>skip_flag = True</code>; filter on <code>skip_flag</code> for first-pass-only analyses.</p>
@@ -4916,7 +4916,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>First_fixation_ms</td>
+<td>first_fixation_ms</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -4928,7 +4928,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Never fixated ⇒ NaN, not 0 — an imported 0 on a word with no fixations is blanked too.</td>
+<td>Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0.</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -4959,10 +4959,10 @@
 <h3 id="measure-fprt"><code>measure.fprt</code> — First-pass gaze duration (<abbr title="First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it">FPRT</abbr>)<a class="headerlink" href="#measure-fprt" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
-<p>Sum of first-pass fixations on a word.</p>
-<p><strong>Formula.</strong> Sum of every fixation in the word's <strong>first</strong> run, i.e. Before the gaze leaves the word for the first time — whenever that run starts (EyeLink's <code>IA_FIRST_RUN_DWELL_TIME</code>; not conditioned on first pass, as <code>measure.ffd</code>). A fixation outside every word ends the run, as it does for <code>measure.second_pass</code>.</p>
+<p>Sum of the fixations in the word's first visit.</p>
+<p><strong>Formula.</strong> Sum of every fixation in the word's <strong>first</strong> run, i.e. before the gaze leaves the word for the first time — whenever that run starts (EyeLink's <code>IA_FIRST_RUN_DWELL_TIME</code>; not conditioned on first pass, as <code>measure.ffd</code>). A fixation outside every word ends the run, as it does for <code>measure.second_pass</code>.</p>
 <table>
 <thead>
 <tr>
@@ -4973,7 +4973,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>First_pass_gaze_duration_ms</td>
+<td>first_pass_gaze_duration_ms</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -4985,7 +4985,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Never fixated ⇒ NaN (an imported 0 is blanked).</td>
+<td>Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0.</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -5016,7 +5016,7 @@
 <h3 id="measure-rpd"><code>measure.rpd</code> — Regression-path duration (<abbr title="Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word">RPD</abbr> / go-past)<a class="headerlink" href="#measure-rpd" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>First entry to the word until the gaze passes it to the right.</p>
 <p><strong>Formula.</strong> Total time from the word's first fixation until the first fixation on a <strong>later</strong> word — every fixation in between, including a first visit to an earlier, skipped word during the regression. Matches EyeLink's <code>IA_REGRESSION_PATH_DURATION</code> on 1779 of the bundled demo's 1780 fixated words. Fixations outside every word neither extend nor close the window.</p>
@@ -5030,7 +5030,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Regression_path_duration_ms</td>
+<td>regression_path_duration_ms</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5042,7 +5042,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Never fixated ⇒ NaN (an imported 0 is blanked).</td>
+<td>Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -5069,7 +5069,7 @@
 <h3 id="measure-tfd"><code>measure.tfd</code> — Total fixation duration (<abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr>)<a class="headerlink" href="#measure-tfd" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>All time spent on a word across the whole trial.</p>
 <p><strong>Formula.</strong> Sum of every fixation assigned to the word, any pass.</p>
@@ -5083,7 +5083,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Total_fixation_duration_ms</td>
+<td>total_fixation_duration_ms</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5118,7 +5118,7 @@
 <h3 id="measure-nfix"><code>measure.nfix</code> — Fixations per word<a class="headerlink" href="#measure-nfix" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>Count of fixations assigned to a word.</p>
 <p><strong>Formula.</strong> Row count of the word's assigned fixations.</p>
@@ -5132,7 +5132,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>N_fixations</td>
+<td>n_fixations</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
@@ -5159,7 +5159,7 @@
 <h3 id="measure-skip"><code>measure.skip</code> — Skip flag / skip rate<a class="headerlink" href="#measure-skip" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>Whether a word received no first-pass fixation.</p>
 <p><strong>Formula.</strong> <code>skip_flag = no fixation in the word's first pass</code>.</p>
@@ -5173,7 +5173,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Skip_flag</td>
+<td>skip_flag</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5204,7 +5204,7 @@
 <h3 id="measure-regressions"><code>measure.regressions</code> — Regression in/out flags<a class="headerlink" href="#measure-regressions" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>Whether a word was returned to, or left backwards.</p>
 <p><strong>Formula.</strong> <code>regression_in_flag</code> — some later fixation lands on this word after the gaze had moved past it. <code>regression_out_flag</code> — a regression to an earlier word is made from this word during first pass, before the eyes first leave it forwards (EyeLink's <code>IA_REGRESSION_OUT</code>); a regression from it later in the trial does not count.</p>
@@ -5218,7 +5218,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Regression_in_flag, regression_out_flag</td>
+<td>regression_in_flag, regression_out_flag</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5249,10 +5249,10 @@
 <h3 id="measure-landing-position"><code>measure.landing_position</code> — Initial landing position<a class="headerlink" href="#measure-landing-position" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>Where in the word the first fixation landed, in letters.</p>
-<p><strong>Formula.</strong> <code>char_width = geom.word_char_advance</code>; <code>offset = first_fix_x − word.x</code> (LTR) or <code>word.x + n·advance − first_fix_x</code> (<abbr title="Right-to-left script">RTL</abbr>); <code>landing_position = offset / char_width + 1</code> — so the first letter starts at 1 and its centre is 1.5. Unclipped: on a tiling corpus the box's last cell is the space after the word, which belongs to it, so a first fixation there reads <code>n + 1</code> to <code>n + 2</code>.</p>
+<p><strong>Formula.</strong> <code>char_width = geom.word_char_advance</code>; <code>offset = first_fix_x − word.x</code> (LTR) or <code>word.x + n·advance − first_fix_x</code> (<abbr title="Right-to-left script">RTL</abbr>); <code>landing_position = offset / char_width + 1</code> — so the first letter starts at 1 and its center is 1.5. Unclipped: on a tiling corpus the box's last cell is the space after the word, which belongs to it, so a first fixation there reads <code>n + 1</code> to <code>n + 2</code>.</p>
 <table>
 <thead>
 <tr>
@@ -5263,7 +5263,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Initial_landing_position</td>
+<td>initial_landing_position</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5275,7 +5275,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>The scale is <code>geom.word_char_advance</code>, not the local <code>width / len(text)</code> this used before — on a tiling corpus that divided a box of <code>n + 1</code> advances by <code>n</code> characters, reporting every landing ~<code>(n+1)/n</code> too far into the word.</td>
+<td>The scale is <code>geom.word_char_advance</code>, not <code>width / len(text)</code>, which on a tiling corpus puts every landing ~<code>(n+1)/n</code> too far into the word.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -5302,10 +5302,10 @@
 <h3 id="measure-landing-distance"><code>measure.landing_distance</code> — Centred landing distance<a class="headerlink" href="#measure-landing-distance" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
-<p>Landing position relative to the word's centre.</p>
-<p><strong>Formula.</strong> <code>landing_position − (1 + len(text) / 2)</code> — the glyphs span <code>[1, n + 1)</code>, so that is the word's centre. The centre of the <em>letters</em>, not of the box: a tiling box's trailing space would move it half a letter right.</p>
+<p>Landing position relative to the word's center.</p>
+<p><strong>Formula.</strong> <code>landing_position − (1 + len(text) / 2)</code> — the glyphs span <code>[1, n + 1)</code>, so that is the word's center. The center of the <em>letters</em>, not of the box: a tiling box's trailing space would move it half a letter right.</p>
 <table>
 <thead>
 <tr>
@@ -5316,11 +5316,11 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Initial_landing_distance</td>
+<td>initial_landing_distance</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
-<td>letters (0 = word centre, negative = left of centre)</td>
+<td>letters (0 = word center, negative = left of center)</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
@@ -5347,7 +5347,7 @@
 <h3 id="measure-second-pass"><code>measure.second_pass</code> — Second-pass duration<a class="headerlink" href="#measure-second-pass" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>Time spent on the word during its second visit.</p>
 <p><strong>Formula.</strong> Sum of the fixations in the word's second run.</p>
@@ -5361,7 +5361,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Second_pass_duration_ms</td>
+<td>second_pass_duration_ms</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5369,7 +5369,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Fewer than two runs ⇒ 0 — an imported blank <code>IA_SECOND_RUN_DWELL_TIME</code> is filled with 0 too, so the mean means the same whichever source the value came from.</td>
+<td>Fewer than two runs ⇒ 0. An imported blank <code>IA_SECOND_RUN_DWELL_TIME</code> becomes 0 too, where the fixation count is known.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5392,7 +5392,7 @@
 <h3 id="measure-single-fix"><code>measure.single_fix</code> — Single-fixation duration<a class="headerlink" href="#measure-single-fix" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>First-pass duration when the first pass was exactly one fixation.</p>
 <p><strong>Formula.</strong> <abbr title="First fixation duration: how long the first fixation on a word lasted">FFD</abbr> when the word's first run has length 1, else NaN.</p>
@@ -5406,7 +5406,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Single_fixation_duration_ms</td>
+<td>single_fixation_duration_ms</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5414,7 +5414,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>A first run of more than one fixation, or never fixated ⇒ NaN.</td>
+<td>A first run of more than one fixation ⇒ NaN. Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. An imported 0 is blanked too, wherever the word's fixation count is 0 — or, with no count mapped, its total fixation duration is 0.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -5441,7 +5441,7 @@
 <h3 id="measure-reg-in-count"><code>measure.reg_in_count</code> — Regressions into word<a class="headerlink" href="#measure-reg-in-count" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Scanpath Studio does not compute this in this release; set <code>SCANPATH_EXPERIMENTAL=1</code> to use the computation. A value your dataset brings is shown as given, and this entry defines what it means.</p>
+<p>Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.</p>
 </div>
 <p>How many times the gaze came back to this word.</p>
 <p><strong>Formula.</strong> Number of regressions into the word — entries from a later word (EyeLink's <code>IA_REGRESSION_IN_COUNT</code>). A re-entry from an <em>earlier</em> word is a new run but not a regression in.</p>
@@ -5455,7 +5455,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Number_of_regressions_in</td>
+<td>number_of_regressions_in</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
@@ -5492,7 +5492,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Saccade_amplitude</td>
+<td>saccade_amplitude</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5509,10 +5509,6 @@
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
 <td>A source column literally named <code>saccade_amplitude</code> is assumed to be pixels and kept. EyeLink's <strong>degree</strong>-valued <code>NEXT_SAC_AMPLITUDE</code> / <code>PREVIOUS_SAC_AMPLITUDE</code> normalize to <code>next_/prev_saccade_amplitude_deg</code> and never reach this column — they are different quantities <em>and</em> different saccades.</td>
-</tr>
-<tr>
-<td><strong>Reference</strong></td>
-<td>Before the fix, one column meant px or deg depending on which columns the export carried (~78x apart on the bundled demo) under a hard-coded 'px' label.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5545,7 +5541,7 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Angle_incoming, angle_outgoing</td>
+<td>angle_incoming, angle_outgoing</td>
 </tr>
 <tr>
 <td><strong>Unit</strong></td>
@@ -5694,7 +5690,7 @@
 <tbody>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Empty input or NaN centre ⇒ a zero-width band.</td>
+<td>Empty input or NaN center ⇒ a zero-width band.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5731,7 +5727,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>N &lt; 2 ⇒ a degenerate interval at the point estimate.</td>
+<td>n &lt; 2 ⇒ a degenerate interval at the point estimate.</td>
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
@@ -5761,7 +5757,7 @@
 </table>
 <h3 id="agg-effect-size"><code>agg.effect_size</code> — Group means and difference<a class="headerlink" href="#agg-effect-size" title="Permanent link">&para;</a></h3>
 <p>Two groups' means, their difference and Cohen's d.</p>
-<p><strong>Formula.</strong> Each value is one reader's mean of the measure (pooled observations when the data names no readers). <code>mean_diff = mean(A) − mean(B)</code>. Cohen's <em>d</em> uses the pooled SD <code>sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))</code> with ddof=1, and is shown only when the groups share no reader.</p>
+<p><strong>Formula.</strong> Each value is one participant's mean of the measure (pooled observations when the data names no participants). <code>mean_diff = mean(A) − mean(B)</code>. Cohen's <em>d</em> uses the pooled SD <code>sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))</code> with ddof=1, and is shown only when the groups share no participant.</p>
 <table>
 <thead>
 <tr>
@@ -5772,19 +5768,19 @@
 <tbody>
 <tr>
 <td><strong>Output</strong></td>
-<td>Mean_a, mean_b, mean_diff, cohen_d, n_a, n_b</td>
+<td>mean_a, mean_b, mean_diff, cohen_d, n_a, n_b</td>
 </tr>
 <tr>
 <td><strong>Grouping / ordering</strong></td>
-<td>One value per reader in each group</td>
+<td>One value per participant in each group</td>
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>N &lt; 2 in either group ⇒ NaN <em>d</em>. A zero pooled SD gives <strong>NaN</strong>, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference.</td>
+<td>n &lt; 2 in either group ⇒ NaN <em>d</em>. A zero pooled SD gives <strong>NaN</strong>, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
-<td><strong>Descriptive only</strong> — no significance test. A reader in both groups contributes to both means, so the groups are not independent samples.</td>
+<td><strong>Descriptive only</strong> — no significance test. A participant in both groups contributes to both means, so the groups are not independent samples.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5806,7 +5802,7 @@
 </table>
 <h3 id="agg-group-mask"><code>agg.group_mask</code> — Group definition<a class="headerlink" href="#agg-group-mask" title="Permanent link">&para;</a></h3>
 <p>Which rows belong to a cohort.</p>
-<p><strong>Formula.</strong> A spec maps column → allowed values; the mask is the conjunction of membership tests. Two modes: split one field, or two independent filter sets. A key may be a tuple of columns matched as one composite key: a trial-metadata field resolves to the (participant, trial) readings its rows describe, a reader field to reader ids and a text field to text ids — the tables are never joined onto the frames.</p>
+<p><strong>Formula.</strong> A spec maps column → allowed values; the mask is the conjunction of membership tests. Two modes: split one field, or two independent filter sets. A key may be a tuple of columns matched as one composite key: a trial-metadata field resolves to the (participant, trial) readings its rows describe, a participant field to participant ids and a text field to text ids — the tables are never joined onto the frames.</p>
 <table>
 <thead>
 <tr>
@@ -5838,7 +5834,7 @@
 </tbody>
 </table>
 <h3 id="agg-word-profile"><code>agg.word_profile</code> — Per-word cohort profile<a class="headerlink" href="#agg-word-profile" title="Permanent link">&para;</a></h3>
-<p>A measure per word position, aggregated across readers.</p>
+<p>A measure per word position, aggregated across participants.</p>
 <p><strong>Formula.</strong> Group the word measures by word id and apply <code>agg.aggregate_value</code>.</p>
 <table>
 <thead>
@@ -5850,7 +5846,7 @@
 <tbody>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>A minimum-readers threshold drops thinly-sampled words.</td>
+<td>A minimum-participants threshold drops thinly-sampled words.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5872,7 +5868,7 @@
 </table>
 <h3 id="agg-word-rates"><code>agg.word_rates</code> — Skip / regression rate profile<a class="headerlink" href="#agg-word-rates" title="Permanent link">&para;</a></h3>
 <p>Rate measures per word.</p>
-<p><strong>Formula.</strong> Mean of the 0/1 flag over the readers who reported it — a proportion in [0, 1]. Each rate has its own reader count (<code>n_skip</code>, <code>n_regression_in</code>) and its own minimum-readers verdict.</p>
+<p><strong>Formula.</strong> Mean of the 0/1 flag over the participants who reported it — a proportion in [0, 1]. Each rate has its own participant count (<code>n_skip</code>, <code>n_regression_in</code>) and its own minimum-participants verdict.</p>
 <table>
 <thead>
 <tr>
@@ -5887,7 +5883,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>A missing flag is no observation: it is left out of that rate and its reader count, never read as 0. A rate below the minimum readers is hidden; the word stays while its other rate stands.</td>
+<td>A missing flag is no observation: it is left out of that rate and its participant count, never read as 0. A rate below the minimum participants is hidden; the word stays while its other rate stands.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5907,13 +5903,13 @@
 </tr>
 </tbody>
 </table>
-<h3 id="agg-reader-summary"><code>agg.reader_summary</code> — Per-reader summary<a class="headerlink" href="#agg-reader-summary" title="Permanent link">&para;</a></h3>
+<h3 id="agg-reader-summary"><code>agg.reader_summary</code> — Per-participant summary<a class="headerlink" href="#agg-reader-summary" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
-<p>One row per reader: totals, means and rates.</p>
-<p><strong>Formula.</strong> Counts and NaN-skipping means over that reader's rows. <code>mean_saccade_px</code> is the mean of <code>fix.saccade_amplitude</code> and is in pixels.</p>
+<p>One row per participant: totals, means and rates.</p>
+<p><strong>Formula.</strong> Counts and NaN-skipping means over that participant's rows. <code>mean_saccade_px</code> is the mean of <code>fix.saccade_amplitude</code> and is in pixels.</p>
 <table>
 <thead>
 <tr>
@@ -5936,7 +5932,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>Corpus Analysis, Export, Data Inspection, API</td>
+<td>Corpus Analysis, Export, Data Management, API</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -5951,7 +5947,7 @@
 <h3 id="agg-trial-summary"><code>agg.trial_summary</code> — Per-trial summary<a class="headerlink" href="#agg-trial-summary" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>One row per trial: reading time, counts, rates.</p>
 <p><strong>Formula.</strong> Counts and sums over the trial's fixations and word measures. <code>reading_time_ms</code> is last fixation end − first fixation start; without recorded fixation onsets it is the summed fixation durations, and <code>reading_time_source</code> says it is an estimate. <code>wpm</code> = words ÷ reading time.</p>
@@ -5973,7 +5969,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>No onset column ⇒ reading time and wpm are duration-based estimates, labelled as such — never the 0, 1, 2, … order numbers.</td>
+<td>No onset column ⇒ reading time and wpm are duration-based estimates, labeled as such — never the 0, 1, 2, … order numbers.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -5981,7 +5977,7 @@
 </tr>
 <tr>
 <td><strong>Consumers</strong></td>
-<td>Corpus Analysis, Export, Data Inspection, API</td>
+<td>Corpus Analysis, Export, Data Management, API</td>
 </tr>
 <tr>
 <td><strong>Tests</strong></td>
@@ -5994,8 +5990,8 @@
 </tbody>
 </table>
 <h3 id="agg-normalize"><code>agg.normalize</code> — Normalized measure column<a class="headerlink" href="#agg-normalize" title="Permanent link">&para;</a></h3>
-<p>Rescale a measure for cross-reader comparison.</p>
-<p><strong>Formula.</strong> Per-reader z-score, <code>(value − reader mean) / reader SD</code>, when the Normalize toggle is on.</p>
+<p>Rescale a measure for cross-participant comparison.</p>
+<p><strong>Formula.</strong> Per-participant z-score, <code>(value − participant mean) / participant SD</code>, when <strong>Z-score per participant</strong> is on.</p>
 <table>
 <thead>
 <tr>
@@ -6006,7 +6002,7 @@
 <tbody>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>A reader with zero variance (or one value) ⇒ 0, the reader's own mean; a missing value stays NaN.</td>
+<td>A participant with zero variance (or one value) ⇒ 0, the participant's own mean; a missing value stays NaN.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6029,7 +6025,7 @@
 <h3 id="agg-landing-curve"><code>agg.landing_curve</code> — Landing-position curve<a class="headerlink" href="#agg-landing-curve" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Distribution of initial landing positions by word length.</p>
 <p><strong>Formula.</strong> Histogram of the landing position as a <em>fraction of the word's interest area</em> — <code>(first_fix_x − word.x) / width</code> over the experiment's own box, i.e. <code>(measure.landing_position − 1)</code> over the box's <code>width / geom.word_char_advance</code> character cells (<abbr title="Right-to-left script">RTL</abbr> counted from where the glyphs end, as the letter position is). Unclipped — binned per word length.</p>
@@ -6047,7 +6043,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>On a glyph-tight corpus the box is the glyph run, so 0 is the first letter's edge and 1 the last's. On a tiling corpus the box's last cell is the space after the word, so the glyphs fill <code>[0, n / (n + 1))</code> and a landing on that space reads just below 1 — it used to be clipped onto exactly 1.0, where 15% of the demo's landings piled up. A first fixation assigned from outside the box (by an imported <code>word_id</code>) reads below 0 or above 1 rather than being clipped onto an edge. The origin is the word's <code>x</code> and the scale is <code>geom.word_char_advance</code>.</td>
+<td>On a glyph-tight corpus the box is the glyph run, so 0 is the first letter's edge and 1 the last's. On a tiling corpus the box's last cell is the space after the word, so the glyphs fill <code>[0, n / (n + 1))</code> and a landing on that space reads just below 1, not clipped onto 1.0. A first fixation assigned from outside the box (by an imported <code>word_id</code>) reads below 0 or above 1 rather than being clipped onto an edge. The origin is the word's <code>x</code> and the scale is <code>geom.word_char_advance</code>.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6104,7 +6100,7 @@
 <h3 id="sim-nld"><code>sim.nld</code> — Normalized Levenshtein distance<a class="headerlink" href="#sim-nld" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Scanpath similarity over AoI sequences.</p>
 <p><strong>Formula.</strong> <code>levenshtein(a, b) / max(len(a), len(b))</code> ∈ [0, 1]; 0 is identical. Two empty sequences give 0.</p>
@@ -6122,7 +6118,7 @@
 </tr>
 <tr>
 <td><strong>Missing &amp; edge cases</strong></td>
-<td>Hidden unless <code>SCANPATH_EXPERIMENTAL=1</code>.</td>
+<td>Not in this release.</td>
 </tr>
 <tr>
 <td><strong>Reference</strong></td>
@@ -6149,7 +6145,7 @@
 <h3 id="sim-aoi-sequence"><code>sim.aoi_sequence</code> — AoI sequence<a class="headerlink" href="#sim-aoi-sequence" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>The symbol string an <abbr title="Normalized Levenshtein distance between two readings' word sequences">NLD</abbr> comparison runs on.</p>
 <p><strong>Formula.</strong> Assigned <code>word_id</code>s in fixation order, with unassigned fixations dropped and (optionally) immediate repeats collapsed.</p>
@@ -6186,7 +6182,7 @@
 <h3 id="sim-windowed"><code>sim.windowed</code> — <abbr title="Normalized Levenshtein distance between two readings' word sequences">NLD</abbr> by fixation index / time<a class="headerlink" href="#sim-windowed" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Experimental</p>
-<p>Not in this release: available only with <code>SCANPATH_EXPERIMENTAL=1</code>.</p>
+<p>Not in this release.</p>
 </div>
 <p>Similarity restricted to a window of the scanpath.</p>
 <p><strong>Formula.</strong> <code>sim.nld</code> over the sub-sequence inside the index or time window.</p>
@@ -6238,7 +6234,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td><strong>Provenance matters more than the number.</strong> Every built-in corpus carries <code>ASSUMED</code> geometry, so a degree-valued result inherits that assumption — see the <em>Recording setup</em> panel.</td>
+<td><strong>Provenance matters more than the number.</strong> Every built-in corpus assumes its monitor size and viewing distance, so a degree-valued result inherits that — see the <em>Recording setup</em> panel.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6293,7 +6289,7 @@
 </table>
 <h3 id="geom-word-box-bounds"><code>geom.word_box_bounds</code> — Word interest-area edges<a class="headerlink" href="#geom-word-box-bounds" title="Permanent link">&para;</a></h3>
 <p>Where one word's interest area ends and the next begins.</p>
-<p><strong>Formula.</strong> <code>x .. X + width</code> by <code>y .. Y + height</code> — the experiment's own rectangles, unmodified. On a tiling corpus each box includes the space after its word.</p>
+<p><strong>Formula.</strong> <code>x .. x + width</code> by <code>y .. y + height</code> — the experiment's own rectangles, unmodified. On a tiling corpus each box includes the space after its word.</p>
 <table>
 <thead>
 <tr>
@@ -6308,7 +6304,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>The boundary <em>between</em> words, for everything that tests a point against a box or draws one: <code>assign.fixation_to_word</code>, <code>assign.in_text</code>, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position <em>inside</em> a word goes through <code>geom.word_char_advance</code> instead, and where its letters are through <code>geom.word_glyph_span</code>; the drawn word label is centred in the box. An earlier version pulled every tiling boundary back half a space to mid-whitespace, and so disagreed with EyeLink's own interest-area assignment on 7.4% of the demo's fixations.</td>
+<td>The boundary <em>between</em> words, for everything that tests a point against a box or draws one: <code>assign.fixation_to_word</code>, <code>assign.in_text</code>, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position <em>inside</em> a word goes through <code>geom.word_char_advance</code> instead, and where its letters are through <code>geom.word_glyph_span</code>; the drawn word label is centered in the box.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6427,7 +6423,7 @@
 </tr>
 <tr>
 <td><strong>Precedence &amp; caveats</strong></td>
-<td>Not an interest area: <code>agg.landing_curve</code> measures a landing across it and mirrors an <abbr title="Right-to-left script">RTL</abbr> one. The drawn word label and the linear-reading snap used to sit on it. Measured against OneStop's own Experiment Builder screens: each tiling box is centred on its word, half a space either side, so the run's <code>x</code> start is half an advance early there; the label and snap moved to the box centre, the landing measures have not.</td>
+<td>Not an interest area: <code>agg.landing_curve</code> measures a landing across it and mirrors an <abbr title="Right-to-left script">RTL</abbr> one. Measured against OneStop's own Experiment Builder screens: each tiling box is centered on its word, half a space either side, so the run's <code>x</code> start is half an advance early there; the label and snap use the box center, the landing measures do not.</td>
 </tr>
 <tr>
 <td><strong>Code</strong></td>
@@ -6534,10 +6530,6 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>Precedence &amp; caveats</strong></td>
-<td>The spatial plot must stay on this path — <code>st.plotly_chart</code> loses the scale guarantee.</td>
-</tr>
-<tr>
 <td><strong>Code</strong></td>
 <td><code>scanpath_studio/tabs.py:_render_true_scale_chart</code></td>
 </tr>
@@ -6594,7 +6586,7 @@
 </table>
 <h3 id="disp-illustration"><code>disp.illustration</code> — Illustration disclosure<a class="headerlink" href="#disp-illustration" title="Permanent link">&para;</a></h3>
 <p>When a figure stops being a faithful record.</p>
-<p><strong>Formula.</strong> Geometry-changing or synthetic views (drift correction applied, authored scanpaths, model-generated paths) are detected and labelled so a display transform is never read as recorded data.</p>
+<p><strong>Formula.</strong> Views that no longer show the data as recorded — snapped fixations, arced saccades, hidden or windowed fixations, a replay not at real time, an authored scanpath — are labeled <em>Illustration</em>.</p>
 <table>
 <thead>
 <tr>
@@ -6641,7 +6633,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 14:49:15 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

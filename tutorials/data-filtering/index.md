@@ -10,7 +10,7 @@ If the pool becomes empty, the app names the filter that emptied it and offers t
 
 ## 2. Review candidate trials
 
-For each candidate, inspect the default scanpath and turn on **Animate** only when timing helps. Open **Filter → Fixations** in the plot rail and set **Highlight** for:
+For each candidate, inspect the default scanpath and turn on **Animate** only when timing helps. Open **Flag fixations → Fixations** in the plot rail and set **Highlight** for:
 
 - out-of-bounds points;
 - fixations below or above your duration thresholds.
@@ -21,13 +21,13 @@ Use **Fixation index range** in the same place to show only part of the trial.
 
 In **Annotations**, apply a consistent tag vocabulary—for example `exclude`, `review`, `poor-calibration`, or `skimming`—and add a brief reason. Star trials that are useful examples or approved for a figure.
 
-Return to the trial filters and, under **By trial annotation**, put `exclude` in **Excluding tags** — not in **With any of these tags**, which would keep only the rejected trials. This turns the review decisions into the active pool without deleting the source data. Before you narrow the pool, save the full record with **Data → Annotations → Export**: it lists every trial you tagged, including the ones the filter now hides.
+Return to the trial filters and, under **By trial annotation**, put `exclude` in **Excluding tags** — not in **With any of these tags**, which would keep only the rejected trials. This turns the review decisions into the active pool without deleting the source data. Before you narrow the pool, save the full record with **Data Management → Annotations → Export**: it lists every trial you tagged, including the ones the filter now hides.
 
-These filters read the trial's own star and tags. On a dataset with several screens per trial, a star or tag on a single screen does not keep or hide its trial, and its tags are not offered in the pickers; find those on **Data → Annotations**.
+These filters read the trial's own star and tags. On a dataset with several screens per trial, a star or tag on a single screen does not keep or hide its trial, and its tags are not offered in the pickers; find those on **Data Management → Annotations**.
 
 ## 4. Verify the retained pool
 
-Check at least one trial from each participant or condition. Then open the **Data Management** page and confirm that the participant, text, trial, fixation, and word counts under **What's in the … dataset → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
+Check at least one trial from each participant or condition. Then open the **Data Management** page and confirm that the participant, text, trial, fixation, and word counts under **What's in … → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
 
 ## 5. Export the record
 

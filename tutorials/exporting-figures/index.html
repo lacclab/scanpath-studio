@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
       
       
       
@@ -68,7 +68,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Exporting figures - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/exporting-figures.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -76,7 +76,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Exporting figures - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data." />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/exporting-figures.png" />
 </head>
   
@@ -632,7 +632,7 @@
   <span class="md-ellipsis">
     
   
-    Data collection
+    Check data collection
   
 
     
@@ -977,7 +977,7 @@
   <span class="md-ellipsis">
     
   
-    Corpus workspace
+    Corpus Analysis
   
 
     
@@ -1779,11 +1779,11 @@ consistent image set for downstream processing.</p>
 <ul>
 <li><strong>Fixations + saccades + text</strong> for a conventional scanpath;</li>
 <li><strong>Heatmap + text</strong> for spatial concentration;</li>
-<li><strong>Compare</strong> for two readings of the same text;</li>
+<li><strong>Compare</strong> for two trials of the same text;</li>
 <li><strong>Animate</strong> for a talk or supplement.</li>
 </ul>
-<p>Set the experimental monitor size correctly before adjusting marker sizes or
-fonts; it defines the figure's coordinate system.</p>
+<p>Set the monitor size first, under <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management → Edit
+dataset → Recording setup</strong>; it defines the figure's coordinate system.</p>
 <h2 id="2-make-one-clean-figure">2. Make one clean figure<a class="headerlink" href="#2-make-one-clean-figure" title="Permanent link">&para;</a></h2>
 <p>Check the whole canvas for clipped marks, unreadable text, and an unnecessary
 legend. When several figures must share identical grid marks, set a manual
@@ -1818,8 +1818,10 @@ interval under <strong><span class="sps-icon" data-icon="aspect_ratio" aria-hidd
 <p>PNG and SVG are saved by your browser from the figure on screen, and HTML
 needs nothing either (it loads Plotly from the internet when opened, or tick
 <strong>Self-contained HTML</strong> for a larger file that opens offline); PDF, GIF
-and MP4 need Chrome, Chromium or Edge. For a
-still figure, the plot's own camera button saves the same PNG.</p>
+and MP4 need Chrome, Chromium or Edge. For print, give the PNG a <strong>Width</strong>
+(mm or in) and a <strong><abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr></strong>: 180 mm at 600 dpi is 4,252 px wide, and
+<strong>Share → Code</strong> writes the same size. Without a width, the plot's own camera
+button saves the same PNG.</p>
 <h2 id="3-export-a-batch-when-needed">3. Export a batch when needed<a class="headerlink" href="#3-export-a-batch-when-needed" title="Permanent link">&para;</a></h2>
 <p>In <strong>Export → Export bundle</strong>:</p>
 <ol>
@@ -1833,7 +1835,7 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.</p>
 <h2 id="4-keep-provenance">4. Keep provenance<a class="headerlink" href="#4-keep-provenance" title="Permanent link">&para;</a></h2>
 <p>Keep <code>plot_config.json</code> with the batch (or a <strong><span class="sps-icon" data-icon="share" aria-hidden="true"></span> Share → File</strong> settings file
 for a single figure). The bundle's <code>README.md</code> records the package version and
-which readings it was built from, and <code>index.csv</code> lists every file with its
+which trials it was built from, and <code>index.csv</code> lists every file with its
 participant, trial and screen, and any that failed. Record the dataset version and
 the trial filters you used in the caption or analysis log — the export does not
 store them.</p>
@@ -1859,7 +1861,7 @@ For scripted runs, see <a href="../../automation/">Automation</a>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 6, 2026 08:21:05 UTC">October 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
   </span>
 
     

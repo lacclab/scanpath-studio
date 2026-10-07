@@ -7887,15 +7887,27 @@ def render_plot_controls(
     # is placed. Auto everywhere draws the figure as it always was.
     with legends, _popover_rows("fig_legends"):
         for kind in LEGEND_KINDS:
+            # A row whose legend the current figure cannot draw greys out, its
+            # values kept (no `index=`/`value=`), like every gated rail control.
+            gated_off = {
+                "compare": None
+                if comparing
+                else "Only in Compare: the A/B legend names the two scanpaths.",
+                "saccades": "Only on the static figure: the replay and Compare "
+                "draw no saccade-type legend."
+                if animating or comparing
+                else None,
+            }.get(kind)
             field = _sub_row(
                 LEGEND_KIND_LABELS[kind],
-                caption_help=_LEGEND_ROW_HELP[kind],
+                caption_help=gated_off or _LEGEND_ROW_HELP[kind],
             )
             pos_col, arr_col, size_col = field.columns(
                 [0.44, 0.34, 0.22], gap=_LABEL_GAP, vertical_alignment="center"
             )
             pos_col.selectbox(
                 f"{LEGEND_KIND_LABELS[kind]} legend position",
+                disabled=bool(gated_off),
                 options=list(LEGEND_POSITION_LABELS),
                 format_func=LEGEND_POSITION_LABELS.__getitem__,
                 key=f"global_legend_{kind}_position",
@@ -7907,6 +7919,7 @@ def render_plot_controls(
             )
             arr_col.selectbox(
                 f"{LEGEND_KIND_LABELS[kind]} legend arrangement",
+                disabled=bool(gated_off),
                 options=list(LEGEND_ARRANGEMENT_LABELS),
                 format_func=LEGEND_ARRANGEMENT_LABELS.__getitem__,
                 key=f"global_legend_{kind}_arrangement",
@@ -7917,6 +7930,7 @@ def render_plot_controls(
             )
             size_col.number_input(
                 f"{LEGEND_KIND_LABELS[kind]} legend text size",
+                disabled=bool(gated_off),
                 min_value=6,
                 max_value=72,
                 step=1,

@@ -280,3 +280,78 @@ class TestTheLink:
             "global_legend_saccades_size",
         ):
             assert at.session_state[key] == given[key]
+
+
+class TestStoredValues:
+    """Designs and the recovery cache go through `sanitize_session_value`."""
+
+    def test_the_two_lists_of_kinds_agree(self):
+        from scanpath_studio import session_keys
+        from scanpath_studio.constants import LEGEND_KINDS
+
+        assert session_keys.LEGEND_KIND_NAMES == LEGEND_KINDS
+
+    @pytest.mark.parametrize(
+        ("key", "value", "expected"),
+        [
+            ("global_legend_saccades_size", 999, 72),
+            ("global_legend_saccades_size", 2, 6),
+            ("global_legend_saccades_size", None, None),
+            ("global_legend_compare_position", "left", "left"),
+            ("global_legend_size_key_arrangement", "stacked", "stacked"),
+        ],
+    )
+    def test_a_stored_value_is_clamped_or_kept(self, key, value, expected):
+        from scanpath_studio.url_state import sanitize_session_value
+
+        assert sanitize_session_value(key, value) == expected
+
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("global_legend_compare_position", "bogus"),
+            ("global_legend_colors_arrangement", "diagonal"),
+            ("global_legend_colors_size", True),
+        ],
+    )
+    def test_a_stored_value_outside_the_vocabulary_is_refused(self, key, value):
+        from scanpath_studio.url_state import sanitize_session_value
+
+        with pytest.raises((ValueError, TypeError)):
+            sanitize_session_value(key, value)
+
+    def test_the_export_record_lists_every_legend(self):
+        from scanpath_studio import export
+
+        record = export._plot_config_dict(
+            "p1",
+            "t1",
+            800,
+            600,
+            "x",
+            "y",
+            {"legend_layout": {"saccades": {"position": "right"}}},
+        )
+        assert set(record["legends"]) == set(plots.LEGEND_KINDS)
+        assert record["legends"]["saccades"]["position"] == "right"
+        assert record["legends"]["compare"]["position"] == "auto"
+
+
+def _linked_keys_app():
+    import streamlit as st
+
+    from scanpath_studio.url_state import linked_state_keys
+
+    st.query_params["legend_saccades"] = "right"
+    st.session_state["_linked"] = sorted(linked_state_keys())
+
+
+def test_a_linked_legend_counts_as_a_departure_from_the_design():
+    at = AppTest.from_function(_linked_keys_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    assert {
+        "global_legend_saccades_position",
+        "global_legend_saccades_arrangement",
+        "global_legend_saccades_size",
+    } <= set(at.session_state["_linked"])

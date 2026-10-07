@@ -53,6 +53,8 @@ from .constants import (
     HEATMAP_SIGMA_BOUNDS,
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
+    LEGEND_ARRANGEMENTS,
+    LEGEND_POSITIONS,
     MANUAL_SAMPLE_CHOICE,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
@@ -1031,7 +1033,7 @@ def _apply_url_legends(qp) -> None:
             st.warning(f"Ignored the link's invalid {param}={qp[param]}.")
             continue
         if spec.get("size") is not None:
-            spec["size"] = max(6, min(72, int(spec["size"])))
+            spec["size"] = _legend_size(spec["size"])
         for key, value in _legend_state(kind, spec).items():
             st.session_state.setdefault(key, value)
 
@@ -1350,6 +1352,11 @@ def linked_state_keys() -> frozenset[str]:
         target
         for url_key, (target, _coerce) in _URL_PRESETS.items()
         if url_key in params
+    ) | frozenset(
+        key
+        for param, kind in LEGEND_PARAMS.items()
+        if param in params
+        for key in _legend_state(kind, {})
     )
 
 
@@ -1538,10 +1545,32 @@ def _closed_choice(options) -> Callable[[object], object]:
     return parse
 
 
+def _legend_size(value) -> int:
+    """A legend's text size, clamped to its box's 6–72 px (``None`` = Auto
+    passes before this is called)."""
+    if isinstance(value, bool):
+        raise TypeError(f"not a text size: {value!r}")
+    return max(6, min(72, int(value)))
+
+
+#: Each legend's three keys (Figure & canvas → Legends), checked the same way
+#: whether they come from a link, a settings file, a design or the cache.
+_LEGEND_STATE_PARSERS = {
+    key: parse
+    for kind in LEGEND_PARAMS.values()
+    for key, parse in (
+        (f"global_legend_{kind}_position", _closed_choice(LEGEND_POSITIONS)),
+        (f"global_legend_{kind}_arrangement", _closed_choice(LEGEND_ARRANGEMENTS)),
+        (f"global_legend_{kind}_size", _legend_size),
+    )
+}
+
+
 #: Closed vocabularies — the same sets `_restore_plot_config` checks with
 #: `put_valid`, and the links' own validating parsers where there is one. `None`
 #: passes (a deselected segmented control stores it, and the rail coerces it).
 _CHOICE_STATE_PARSERS = {
+    **_LEGEND_STATE_PARSERS,
     "global_align_algorithm": _parse_align_algorithm,
     **{
         key: lambda v: _parse_saccade_classes(
@@ -2575,7 +2604,7 @@ def _restore_plot_config(
                 skipped.append(f"{kind.replace('_', ' ')} legend")
                 continue
             if spec["size"] is not None:
-                spec["size"] = max(6, min(72, int(spec["size"])))
+                spec["size"] = _legend_size(spec["size"])
             for key, value in _legend_state(kind, spec).items():
                 put(key, value)
     if "order_font_size" in sizing:

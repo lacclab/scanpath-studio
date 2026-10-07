@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+import truststore
 from packaging.version import InvalidVersion, Version
 
 from .build_info import BuildInfo, build_info, install_kind
@@ -112,16 +113,16 @@ class UpdateCheckError(Exception):
 
 
 def _ssl_context() -> ssl.SSLContext:
-    """TLS trust for the request: certifi's bundle when present, else the system's.
+    """TLS trust for the request: what the operating system trusts (#391).
 
-    A frozen desktop build's Python may not find a system CA store; certifi
-    (a dependency of requests, via streamlit) ships its own.
+    Python's own defaults read OpenSSL's CA list, which a python.org install
+    on macOS ships empty and a frozen desktop build may not find at all, and
+    which never holds the root a TLS-inspecting campus or company proxy
+    re-signs with. `truststore` verifies against the macOS Keychain, the
+    Windows certificate store or the system bundle instead, as the browser
+    does — the same trust ``datasets._open_url`` uses for downloads.
     """
-    try:
-        import certifi
-    except ImportError:
-        return ssl.create_default_context()
-    return ssl.create_default_context(cafile=certifi.where())
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
 def _urlopen(request: urllib.request.Request, timeout: float):

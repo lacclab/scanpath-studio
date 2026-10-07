@@ -1483,16 +1483,30 @@ def _build_info():
 
 
 def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None:
-    """#385: the outcome the update helper left behind, across the restart."""
+    """#385: the outcome the update helper left behind, across the restart.
+
+    Said only of the build that is running: a record that names neither
+    ``current`` version — a later install by hand — says nothing.
+    """
+    because = f": {last.reason}" if last.reason else ""
     if last.status == "updated":
         if last.version == current:
             st.caption(f"Updated from v{last.previous}.")
-        return
-    st.warning(
-        f"The update to v{last.version} didn't go through: {last.reason}. "
-        f"v{last.previous} is still installed.",
-        icon=ICONS["warning"],
-    )
+    elif last.previous == current:
+        # This build is the one that stayed.
+        st.warning(
+            f"The update to v{last.version} didn't go through{because}. "
+            f"This is still v{last.previous}.",
+            icon=ICONS["warning"],
+        )
+    elif last.version == current:
+        # A double failure kept the new version's files in place.
+        st.warning(
+            f"The update to v{last.version} didn't finish cleanly{because}. If "
+            f"something misbehaves, download v{last.version} again from the "
+            "release page.",
+            icon=ICONS["warning"],
+        )
 
 
 def _render_build_and_updates() -> None:
@@ -1598,7 +1612,10 @@ def _run_desktop_update(
             plan = desktop_update.prepare(result, install)
         desktop_update.start_swap(plan)
     except desktop_update.UpdateFailed as error:
-        st.error(f"{error} Nothing was changed.", icon=ICONS["error"])
+        message = str(error)
+        if "nothing was changed" not in message.lower():
+            message += " Nothing was changed."
+        st.error(message, icon=ICONS["error"])
         return
     st.success(
         f"Restarting into v{plan.version}. A new window opens when it's ready "

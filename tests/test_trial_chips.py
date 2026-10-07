@@ -158,3 +158,26 @@ def test_the_chip_editor_offers_each_role_once():
     assert options.count("trial_id") + options.count("unique_trial_id") == 1
     assert options.count("text_id") + options.count("unique_text_id") == 1
     assert "cond" in options
+
+
+def test_hiding_the_chips_keeps_their_fields():
+    """#373: the ✏️ menu's switch hides the chip table and keeps the field
+    selection, so showing it again brings back the same row."""
+    from pathlib import Path
+
+    app = Path(__file__).resolve().parents[1] / "streamlit_app.py"
+    at = AppTest.from_file(str(app), default_timeout=60)
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.run()
+    assert not at.exception, at.exception
+
+    def table_drawn() -> bool:
+        return any('class="sps-chip-table-wrap"' in m.value for m in at.markdown)
+
+    assert table_drawn()
+    fields = list(at.session_state["trial_chip_fields"])
+    at.toggle(key="single_show_chips").set_value(False).run()
+    assert not table_drawn()
+    assert list(at.session_state["trial_chip_fields"]) == fields
+    at.toggle(key="single_show_chips").set_value(True).run()
+    assert table_drawn()

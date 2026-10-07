@@ -531,10 +531,10 @@ def test_true_scale_html_offers_fullscreen() -> None:
         zoomable=True,
     )
     assert 'id="fsbtn-single"' in html
-    # Fullscreen fits *both* dimensions and may magnify past 1x, where the
-    # in-column rule fits width and never scales up.
+    # Fullscreen fits *both* dimensions to the screen; in the column the
+    # figure fits the width, growing past 1x only while it fits the window.
     assert "Math.min(avail / W, availH / H)" in html
-    assert "Math.min(1, avail / W)" in html
+    assert "Math.min(avail / W, growCap())" in html
     # Two ways up, because `st.iframe` exposes no `allowfullscreen` and a
     # permissions policy may refuse — silently, hence the timeout fallback.
     assert "requestFullscreen" in html and "overlayOn" in html

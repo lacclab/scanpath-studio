@@ -5,6 +5,7 @@ from __future__ import annotations
 from scanpath_studio.constants import (
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
+    SELECTOR_SCREEN_FLOOR_REM,
 )
 
 
@@ -778,13 +779,9 @@ def get_app_css() -> str:
         line-height: 1.25;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
-    /* A long text value (Compare's "l37_1129 · 2_2_1_Adv" trial ids) may wrap
-       at its spaces, but only when the table would otherwise overflow its
-       column: an auto-width table wraps no more than it has to. Numbers and
-       tinted pills still never wrap. */
-    .sps-chip-table-wrap table.sps-chip-table tbody td:not(.sps-ct-num) {
-        white-space: normal;
-    }
+    /* Values never wrap: each reading is one line (2026-10-07), so a long
+       trial id ("l37_1129 · 2_2_1_Adv") no longer doubles its row's height.
+       A table too wide for its column scrolls sideways instead. */
     .sps-ct-tint {
         white-space: nowrap;
         display: inline-block;
@@ -1105,15 +1102,6 @@ def get_app_css() -> str:
         width: auto !important;
     }
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
-    /* The chip strip's ✏️ (edit chips) control is additionally nudged down onto
-       the first chip row's baseline:
-       the strip wraps, so the columns are TOP-aligned (a centerd control would
-       drift to the middle of a tall strip), and this offset is the strip's own
-       top margin. (UX-11 also fixed the ✏️ sitting visibly high, when it was
-       centerd against a one-line strip. Its sideways `margin-left: -0.6rem` is
-       gone as of UX-27 — it was the reason the pencil landed 9.6px short of the
-       other two rows' right edges.) */
-    .st-key-railbtn_chip_trail { margin-top: 0.1rem; }
     /* UX-181: the floors under the `SELECTOR_ROW_GRID` tracks
        (`SELECTOR_ROW_FLOORS_REM`). A row of this grid is a column row whose
        last column holds a `railbtn_*` cluster directly (◀ ▶ ⇅ 🔎 on the trial
@@ -1162,6 +1150,36 @@ def get_app_css() -> str:
             > [data-testid="stLayoutWrapper"] > [class*="st-key-railbtn_"]) {
             min-width: __SELECTOR_FLOOR_3__;
         }
+        /* The screen cell at a trial row's right end (`SELECTOR_SCREEN_TRACK`):
+           a narrow dropdown + ◀ ▶, held at its floor. */
+        [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > [class*="tour_grp_"][class*="screen_picker"]) {
+            min-width: __SELECTOR_SCREEN_FLOOR__;
+        }
+    }
+    /* The screen dropdown is narrow, and its menu opens wider than it, so a
+       screen's whole name is read there. The menu is portalled to <body>, out
+       of reach of an ancestor selector (see `mapping_menu_css`), so the rule
+       keys on the open combobox instead: only one menu is open at a time, and
+       it is this one while a screen picker's input is expanded. */
+    body:has([class*="_screen_cell"] [aria-expanded="true"])
+        div:has(> [role="listbox"]) {
+        width: max(var(--trigger-width, 7rem), 16rem) !important;
+        max-width: 92vw !important;
+    }
+    body:has([class*="_screen_cell"] [aria-expanded="true"])
+        div:has(> [role="listbox"]) [role="option"] {
+        white-space: nowrap;
+    }
+    /* Its own control keeps the label and value on one line; the value
+       ellipsises rather than wrapping the cell taller. */
+    [class*="_screen_cell"] {
+        flex-wrap: nowrap !important;
+    }
+    [class*="_screen_cell"] > [data-testid="stElementContainer"] {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        min-width: 0 !important;
     }
     /* UX-181: a slider's end labels stay on one line. The trial scrubber's
        labels are `1/24 · <trial id>`, and a long id used to wrap onto a second
@@ -2335,6 +2353,7 @@ def get_app_css() -> str:
     """
     for i in (0, 1, 3):
         css = css.replace(f"__SELECTOR_FLOOR_{i}__", selector_track_floor(i))
+    css = css.replace("__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem")
     return css
 
 

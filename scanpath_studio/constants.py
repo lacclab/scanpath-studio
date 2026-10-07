@@ -993,13 +993,14 @@ FOCUS_MAPPING_KEY = "_focus_column_mapping"
 SELECTOR_ROW_GRID = [2.6, 2.3, 5.1, 1.0]
 
 #: UX-181: the minimum width of each `SELECTOR_ROW_GRID` track, in rem. `None`
-#: is no floor (the scrubber). The actions floor fits ◀ ▶ ⇅ 🔎: four pills at
-#: their 2.3rem minimum plus 3px gaps. The dataset floor fits the dataset
+#: is no floor (the scrubber). The actions floor fits A's ◀ ▶ ⇅ 🔎 ✏️ — five
+#: pills, measured at ~15rem with their gaps (2026-10-07; ✏️ moved here from
+#: the chip row). The dataset floor fits the dataset
 #: dropdown beside its + menu, and the trial floor fits a OneStop trial id.
 #: `styles.py` caps the two picker floors at a share of the row
 #: (`SELECTOR_ROW_FLOOR_CAPS`), so a narrow window still has room for the
 #: scrubber.
-SELECTOR_ROW_FLOORS_REM = (15.75, 12.5, None, 11.6)
+SELECTOR_ROW_FLOORS_REM = (15.75, 12.5, None, 15.0)
 
 #: UX-181: the share of the row that caps each picker floor, as a percentage.
 SELECTOR_ROW_FLOOR_CAPS = (25, 20, None, None)
@@ -1014,6 +1015,17 @@ SELECTOR_ROW_TRIO = [
     SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
     SELECTOR_ROW_GRID[3],
 ]
+
+#: The multipart screen navigator's track, appended at the right end of a trial
+#: row (after ◀ ▶ ⇅ 🔎) when the dataset has screens: a narrow dropdown + ◀ ▶,
+#: so the screens no longer take a row of their own under each trial row. Its
+#: width is mostly its floor (`SELECTOR_SCREEN_FLOOR_REM`); the weight is
+#: nominal, like the actions track's.
+SELECTOR_SCREEN_TRACK = 1.0
+
+#: The screen track's minimum width, in rem: a ~7rem dropdown beside the
+#: ~5rem ◀ ▶ pair.
+SELECTOR_SCREEN_FLOOR_REM = 12.5
 
 #: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
 #: is a single wide element rather than dataset + pick + scrub. Kept for

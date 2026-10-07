@@ -13,7 +13,12 @@ from . import progress
 from .annotations import current_dataset as annotations_dataset
 from .annotations import get_entry, store_for_prefix
 from .column_names import COMPUTED_SUFFIX, active_all
-from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
+from .constants import (
+    SELECTOR_ROW_GRID,
+    SELECTOR_ROW_TRIO,
+    SELECTOR_SCREEN_TRACK,
+    spoken,
+)
 from .data import frame_fingerprint, stable_id
 from .fields import labeled
 
@@ -1133,6 +1138,7 @@ def _select_trial_none_mode(
     fixations: pd.DataFrame | None = None,
     leading_renderer=None,
     filter_renderer=None,
+    trailing_renderer=None,
 ) -> tuple[str | None, str | None, str | None]:
     """The trial picker: **dataset + selectbox + scrubbing slider + ◀ ▶ steps + ⇅
     sort + 🔎 filters**, all on one row (UX-64). The slider thumb shows ``index/TOTAL · id``
@@ -1143,7 +1149,12 @@ def _select_trial_none_mode(
     Scanpath/Corpus body), not nested inside another column. ``picker_host``
     (when given) is the container to render into; defaults to the current one.
     ``words`` / ``fixations`` (optional) unlock the computed sort keys (UX-10);
-    without them only column-based orderings are offered."""
+    without them only column-based orderings are offered.
+
+    ``trailing_renderer`` (optional) is handed one more column at the row's
+    right end, after ◀ ▶ ⇅ 🔎 — the multipart screen navigator, which the
+    caller can only draw once the trial is resolved, so it keeps the column
+    and fills it later."""
     host = picker_host if picker_host is not None else st
     available_trials = combos.drop_duplicates(subset=[trial_field])
     trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
@@ -1274,11 +1285,14 @@ def _select_trial_none_mode(
         # (UX-27), which styles.py packs right at a uniform 3px spacing. A column
         # each put a full gutter between them, so a prev/next *pair* didn't read
         # as a pair.
-        lead_col, sel_col, slider_col, trail_col = host.columns(
-            SELECTOR_ROW_GRID, vertical_alignment="bottom"
+        lead_col, sel_col, slider_col, trail_col, *extra = host.columns(
+            SELECTOR_ROW_GRID + ([SELECTOR_SCREEN_TRACK] if trailing_renderer else []),
+            vertical_alignment="bottom",
         )
         if leading_renderer is not None:
             leading_renderer(lead_col)
+        if trailing_renderer is not None:
+            trailing_renderer(extra[0])
         trail = trail_col.container(key=f"railbtn_{key_prefix}_trail")
         # Created in display order (◀ ▶ then ⇅) but filled out of order: the sort
         # popover has to render first, because the order it returns is what the
@@ -1334,11 +1348,14 @@ def _select_trial_none_mode(
         # option — BUG-23) and nothing to step through, but it still needs the
         # dataset picker and the filters: a pool of one is *usually the result of
         # a filter*, so this is exactly when the user reaches for them. UX-64.
-        lead_col, sel_col, trail_col = host.columns(
-            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
+        lead_col, sel_col, trail_col, *extra = host.columns(
+            SELECTOR_ROW_TRIO + ([SELECTOR_SCREEN_TRACK] if trailing_renderer else []),
+            vertical_alignment="bottom",
         )
         if leading_renderer is not None:
             leading_renderer(lead_col)
+        if trailing_renderer is not None:
+            trailing_renderer(extra[0])
         if filter_renderer is not None:
             filter_renderer(
                 trail_col.container(key=f"railbtn_{key_prefix}_filter_solo")
@@ -1461,6 +1478,7 @@ def select_trial(
     fixations: pd.DataFrame | None = None,
     leading_renderer=None,
     filter_renderer=None,
+    trailing_renderer=None,
 ) -> tuple[str | None, str | None, str, str | None]:
     """Pick a specific trial from the (already-narrowed) pool.
 
@@ -1511,6 +1529,7 @@ def select_trial(
         # popover are filled by the caller, which owns those widgets.
         leading_renderer=leading_renderer,
         filter_renderer=filter_renderer,
+        trailing_renderer=trailing_renderer,
         words=words,
         fixations=fixations,
     )

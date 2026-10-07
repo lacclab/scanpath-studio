@@ -1690,19 +1690,44 @@ OWNER_KEY = "_metadata_owner"
 STORE_REVISION_KEY = "_metadata_store_revision"
 #: The add-dataset wizard's dataset, before it has a name. Never cached.
 PENDING_DATASET = "\x00pending"
+#: Bumped by :func:`reset_uploads`; part of every metadata uploader's key.
+UPLOAD_GENERATION_KEY = "_metadata_upload_generation"
+
+
+def upload_key(grain: str, session=None) -> str:
+    """``grain``'s uploader widget key, in the current upload generation.
+
+    Popping an uploader's key from session state does not empty it: the browser
+    still holds the file and sends it back on the next rerun, where it reads as
+    a new upload — so a table attached to one dataset re-attached itself to the
+    next one opened. Only a new key gives the browser a fresh, empty uploader,
+    so a dataset switch moves every uploader to a new generation.
+    """
+    if session is None:
+        import streamlit as st
+
+        session = st.session_state
+    generation = int(session.get(UPLOAD_GENERATION_KEY) or 0)
+    base = f"{grain}_metadata_upload"
+    return base if generation == 0 else f"{base}_{generation}"
+
+
+def reset_uploads(session) -> None:
+    """Empty every metadata uploader, in the browser too (:func:`upload_key`)."""
+    for grain, *_ in _GRAINS:
+        session.pop(upload_key(grain, session), None)
+    session[UPLOAD_GENERATION_KEY] = int(session.get(UPLOAD_GENERATION_KEY) or 0) + 1
 
 
 def _widget_keys(grain: str) -> tuple[str, ...]:
     """The UI state of ``grain``'s section that describes one dataset's table.
 
-    The uploader above all: a swap that left it holding the last dataset's file
-    would read that file as a new upload and attach it to the dataset just
-    opened. The display name, the id-column and keep-fields picks go with it,
-    so the next dataset's table starts from its own auto-detect.
+    The display name, the id-column and keep-fields picks, so the next
+    dataset's table starts from its own auto-detect. The uploader is emptied
+    separately, by :func:`reset_uploads`.
     """
     return (
         f"_{grain}_metadata_name",
-        f"{grain}_metadata_upload",
         f"{grain}_metadata_id_column",
         f"{grain}_metadata_keep_fields",
     )
@@ -1713,6 +1738,7 @@ def clear_active(session) -> None:
     for grain, key, raw, file, *_ in _GRAINS:
         for name in (key, raw, file, *_widget_keys(grain)):
             session.pop(name, None)
+    reset_uploads(session)
 
 
 def _store(session) -> dict:

@@ -48,6 +48,13 @@ from . import progress, updates
 from .updates import Asset, Release, UpdateCheck, UpdateCheckError
 
 APP_NAME = "ScanpathStudio"
+#: The macOS tools the updater trusts, by absolute path so nothing earlier on
+#: ``PATH`` can stand in for them.
+CODESIGN = "/usr/bin/codesign"
+SPCTL = "/usr/sbin/spctl"
+HDIUTIL = "/usr/bin/hdiutil"
+DITTO = "/usr/bin/ditto"
+OPEN = "/usr/bin/open"
 #: Where every update must come from; the test-only feed may use ``file:``.
 REPO_DOWNLOADS = f"https://github.com/{updates.REPO}/releases/download/"
 #: A local JSON file in GitHub's release shape that ``--update`` reads instead
@@ -58,7 +65,22 @@ FEED_ENV = "SCANPATH_UPDATE_FEED"
 DISK_FACTOR = 3
 #: An attempt this old with no helper behind it is abandoned.
 STALE_AFTER_S = 3600
+
+# The marker files below, the keys of ``pending.json`` and ``result.json``,
+# ``state_dir``'s paths and ``_ours``' root matching are a wire format between
+# releases: the helper an *old* version starts waits on what the *new*
+# version's launcher writes. Never change one without a migration
+# (``tests/test_desktop_update.py::test_the_update_marker_contract_is_pinned``).
+#: The attempt under way: ``root``, ``version``, ``previous``, ``at``.
 PENDING = "pending.json"
+#: The relaunched launcher's pid, written at launch (:func:`note_start`).
+STARTED = "started"
+#: Written once the relaunched server answers (:func:`note_boot`).
+BOOTED = "booted"
+#: How the attempt ended: ``status``, ``version``, ``previous``, ``reason``, ``pid``.
+RESULT = "result.json"
+#: The helper's first act, which :func:`start_swap` waits for before the app quits.
+HELPER_STARTED = "helper-started"
 
 #: The archive the updater installs per (platform, machine) — the names
 #: ``.github/workflows/desktop.yml`` gives them. Windows takes the ``.zip``,
@@ -222,6 +244,7 @@ def _run(
             argv,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=timeout,
             check=False,
             env=env,
@@ -237,9 +260,10 @@ def team_id(app: Path, *, run: Callable = subprocess.run) -> str | None:
     """The Developer ID team that signed ``app`` — ``None`` if ad-hoc or unsigned."""
     try:
         result = run(
-            ["codesign", "-dv", "--verbose=2", str(app)],
+            [CODESIGN, "-dv", "--verbose=2", str(app)],
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=60,
             check=False,
         )
@@ -250,8 +274,10 @@ def team_id(app: Path, *, run: Callable = subprocess.run) -> str | None:
         (result.stdout or "") + (result.stderr or ""),
         re.MULTILINE,
     )
-    if result.returncode != 0 or found is None or found.group(1) == "not":
-        return None  # "TeamIdentifier=not set": ad-hoc
+    # Ad-hoc and unsigned code says "TeamIdentifier=not set", which the
+    # pattern (one token, then the end of the line) never matches.
+    if result.returncode != 0 or found is None:
+        return None
     return found.group(1)
 
 
@@ -264,7 +290,8 @@ def _pending(state: Path) -> dict | None:
         started = float(pending.get("at") or 0)
     except (TypeError, ValueError):
         return None
-    if time.time() - started > STALE_AFTER_S:
+    # A start in the future is a clock that moved, not an attempt to wait on.
+    if abs(time.time() - started) > STALE_AFTER_S:
         return None
     return pending
 
@@ -449,7 +476,7 @@ def _stage_dmg(dmg: Path, target: Path, *, run: Callable) -> Path:
     _run(
         run,
         [
-            "hdiutil",
+            HDIUTIL,
             "attach",
             "-nobrowse",
             "-readonly",
@@ -467,15 +494,16 @@ def _stage_dmg(dmg: Path, target: Path, *, run: Callable) -> Path:
             )
         _run(
             run,
-            ["ditto", str(mount / f"{APP_NAME}.app"), str(app)],
+            [DITTO, str(mount / f"{APP_NAME}.app"), str(app)],
             "The new version couldn't be copied out of the disk image.",
         )
     finally:
         try:
             run(
-                ["hdiutil", "detach", str(mount), "-force"],
+                [HDIUTIL, "detach", str(mount), "-force"],
                 capture_output=True,
                 text=True,
+                errors="replace",
                 timeout=120,
                 check=False,
             )
@@ -490,7 +518,7 @@ def verify_signature(
     """The staged ``.app`` must be intact, from this app's team, and pass Gatekeeper."""
     _run(
         run,
-        ["codesign", "--verify", "--deep", "--strict", str(staged_app)],
+        [CODESIGN, "--verify", "--deep", "--strict", str(staged_app)],
         "The new version's signature is broken, so it was not installed.",
     )
     expected = team_id(running_app, run=run)
@@ -501,7 +529,7 @@ def verify_signature(
         )
     _run(
         run,
-        ["spctl", "--assess", "--type", "exec", str(staged_app)],
+        [SPCTL, "--assess", "--type", "exec", str(staged_app)],
         "macOS's Gatekeeper rejected the new version, so it was not installed.",
     )
 
@@ -550,8 +578,12 @@ def self_test(
 
 
 #: How long the relaunched version has to answer before the old one is put
-#: back — Windows' first-launch scan of a new bundle can take that long.
-BOOT_TIMEOUT_S = 180
+#: back. The relaunched launcher itself waits up to its ``HEALTH_TIMEOUT_S``
+#: (180 s — Windows' first-launch scan of a new bundle) for its server before
+#: it reports in, so this must leave room beyond that.
+BOOT_TIMEOUT_S = 240
+#: How long :func:`start_swap` waits for the helper's first sign of life.
+HANDSHAKE_TIMEOUT_S = 15
 #: How long the helper waits for this process to exit before giving up.
 QUIT_TIMEOUT_S = 60
 #: Between "Restarting into vX" and the exit, so the message reaches the browser.
@@ -573,7 +605,7 @@ UNINSTALL_KEY = (
 )
 #: What one attempt leaves in the state folder; ``helper.log`` stays for a bug report.
 _ATTEMPT_FOLDERS = ("download", "staged", "old", "failed")
-_ATTEMPT_FILES = (PENDING, "started", "booted", "result.json")
+_ATTEMPT_FILES = (PENDING, STARTED, BOOTED, RESULT, HELPER_STARTED)
 
 
 @dataclass(frozen=True)
@@ -615,7 +647,7 @@ def relaunch_command(
         if name in env
         for item in ("--env", f"{name}={env[name]}")
     ]
-    return ("open", "-n", *forwarded, str(install.root))
+    return (OPEN, "-n", *forwarded, str(install.root))
 
 
 _SH_HELPER = r"""#!/bin/sh
@@ -632,7 +664,11 @@ BOOT_TICKS=@@BOOT_TICKS@@
 BOOT_TIMEOUT=@@BOOT_TIMEOUT@@
 VERSION=@@VERSION@@
 PREVIOUS=@@PREVIOUS@@
+TRACK_LAUNCH=@@TRACK_LAUNCH@@
 LAUNCHED_PID=""
+
+# First, before anything can fail: the app waits for this before it quits.
+: > "$STATE/helper-started"
 
 result() {
   printf '{"status": "%s", "version": "%s", "previous": "%s", "reason": "%s", "pid": %s}\n' \
@@ -640,17 +676,21 @@ result() {
     mv -f "$STATE/result.json.tmp" "$STATE/result.json"
 }
 
-# On macOS $! is the short-lived `open`, which is harmless to kill later.
+# The launched process, for the rollback of a version that never wrote
+# `started` — except through macOS's `open`, whose $! exits at once: a pid to
+# kill later could by then be some other process's.
 relaunch() {
   nohup @@RELAUNCH@@ >/dev/null 2>&1 &
-  LAUNCHED_PID=$!
+  if [ "$TRACK_LAUNCH" = 1 ]; then
+    LAUNCHED_PID=$!
+  fi
 }
 
 # The old version is (or is not) in place and the attempt is over: say so,
 # forget the attempt so the app does not report in for nobody, start it again.
 give_up() {
   result failed "$1"
-  rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted"
+  rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-started"
   relaunch
   exit 1
 }
@@ -672,7 +712,10 @@ move_all() {
 ticks=0
 while kill -0 "$APP_PID" 2>/dev/null; do
   if [ "$ticks" -ge "$QUIT_TICKS" ]; then
+    # The old version is still running, so nothing is relaunched; forget the
+    # attempt so a retry isn't refused as one already under way.
     result failed "the app did not quit"
+    rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-started"
     exit 1
   fi
   sleep 0.5
@@ -707,7 +750,7 @@ while [ ! -e "$STATE/booted" ]; do
       sleep 2
       kill -9 "$new_pid" 2>/dev/null
     fi
-    rm -f "$STATE/@@PENDING@@" "$STATE/started"
+    rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/helper-started"
     cleanup=1
     if move_all "$ROOT" "$STATE/failed"; then
       if move_all "$STATE/old" "$ROOT"; then
@@ -736,7 +779,7 @@ done
 new_pid=$(cat "$STATE/started" 2>/dev/null)
 result updated "" "${new_pid:-null}"
 rm -rf "$STATE/old" "$STATE/failed" "$STATE/staged" "$STATE/download"
-rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted"
+rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-started"
 """
 
 _PS_HELPER = r"""# Scanpath Studio's update helper (#385), written by desktop_update.helper_script.
@@ -756,6 +799,9 @@ $Relaunch = @(@@RELAUNCH@@)
 $UninstallKey = @@UNINSTALL_KEY@@
 $Pending = @@PENDING@@
 $script:Launched = $null
+
+# First, before anything can fail: the app waits for this before it quits.
+[IO.File]::WriteAllText((Join-Path $State 'helper-started'), '')
 
 function Write-Result($Status, $Reason, $NewPid) {
   $record = [ordered]@{ status = $Status; version = $Version; previous = $Previous; reason = $Reason; pid = $NewPid }
@@ -779,7 +825,7 @@ function Start-App {
 # forget the attempt so the app does not report in for nobody, start it again.
 function Stop-Update($Reason) {
   Write-Result 'failed' $Reason $null
-  foreach ($name in $Pending, 'started', 'booted') {
+  foreach ($name in $Pending, 'started', 'booted', 'helper-started') {
     Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
   }
   Start-App
@@ -787,17 +833,21 @@ function Stop-Update($Reason) {
 }
 
 # Move every entry from $From to $To, retrying while antivirus holds a file;
-# on a failure put back what moved.
+# on a failure put back what moved. An entry that already exists at the
+# destination is a failure, never nested into.
 function Move-All($From, $To) {
   $moved = @()
   foreach ($entry in $Entries) {
     $done = $false
-    for ($try = 0; $try -lt 60 -and -not $done; $try++) {
-      try {
-        Move-Item -LiteralPath (Join-Path $From $entry) -Destination (Join-Path $To $entry) -ErrorAction Stop
-        $done = $true
-      } catch {
-        Start-Sleep -Milliseconds 500
+    $target = Join-Path $To $entry
+    if (-not (Test-Path -LiteralPath $target)) {
+      for ($try = 0; $try -lt 60 -and -not $done; $try++) {
+        try {
+          Move-Item -LiteralPath (Join-Path $From $entry) -Destination $target -ErrorAction Stop
+          $done = $true
+        } catch {
+          Start-Sleep -Milliseconds 500
+        }
       }
     }
     if (-not $done) {
@@ -819,7 +869,12 @@ function Read-NewPid {
 
 $app = Get-Process -Id $AppPid -ErrorAction SilentlyContinue
 if ($app -and -not $app.WaitForExit($QuitTimeoutMs)) {
+  # The old version is still running, so nothing is relaunched; forget the
+  # attempt so a retry isn't refused as one already under way.
   Write-Result 'failed' 'the app did not quit' $null
+  foreach ($name in $Pending, 'started', 'booted', 'helper-started') {
+    Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
+  }
   exit 1
 }
 
@@ -856,7 +911,9 @@ while (-not (Test-Path -LiteralPath (Join-Path $State 'booted'))) {
       Stop-Process -Id $newPid -Force -ErrorAction SilentlyContinue
       Start-Sleep -Seconds 2
     }
-    Remove-Item -LiteralPath (Join-Path $State $Pending), (Join-Path $State 'started') -Force -ErrorAction SilentlyContinue
+    foreach ($name in $Pending, 'started', 'helper-started') {
+      Remove-Item -LiteralPath (Join-Path $State $name) -Force -ErrorAction SilentlyContinue
+    }
     $cleanup = $true
     if (Move-All $Root (Join-Path $State 'failed')) {
       if (Move-All (Join-Path $State 'old') $Root) {
@@ -892,7 +949,7 @@ if ($env:OS -eq 'Windows_NT' -and (Test-Path -LiteralPath $UninstallKey)) {
     }
   } catch { }
 }
-foreach ($name in 'old', 'failed', 'staged', 'download', $Pending, 'started', 'booted') {
+foreach ($name in 'old', 'failed', 'staged', 'download', $Pending, 'started', 'booted', 'helper-started') {
   Remove-Item -LiteralPath (Join-Path $State $name) -Recurse -Force -ErrorAction SilentlyContinue
 }
 """
@@ -900,8 +957,14 @@ foreach ($name in 'old', 'failed', 'staged', 'download', $Pending, 'started', 'b
 _PLAIN_VERSION = re.compile(r"[0-9A-Za-z.+!_-]+")
 
 
+#: What PowerShell reads as a single quote: the ASCII one and four typographic
+#: ones. Inside a single-quoted string each is escaped by doubling it.
+_PS_SINGLE_QUOTES = re.compile("['\u2018\u2019\u201a\u201b]")
+_PLACEHOLDER = re.compile(r"@@([A-Z_]+)@@")
+
+
 def _ps_quote(text: str) -> str:
-    return "'" + str(text).replace("'", "''") + "'"
+    return "'" + _PS_SINGLE_QUOTES.sub(lambda m: m.group(0) * 2, str(text)) + "'"
 
 
 def helper_script(plan: SwapPlan) -> str:
@@ -945,12 +1008,29 @@ def helper_script(plan: SwapPlan) -> str:
             "VERSION": shlex.quote(plan.version),
             "PREVIOUS": shlex.quote(plan.previous),
             "RELAUNCH": " ".join(shlex.quote(arg) for arg in plan.relaunch),
+            # `open` exits at once, so its pid may be reused before a rollback.
+            "TRACK_LAUNCH": "0" if _is_open(plan.relaunch) else "1",
             "PENDING": PENDING,
         }
         template = _SH_HELPER
-    for name, value in values.items():
-        template = template.replace(f"@@{name}@@", value)
-    return template
+    # One pass, so a value that itself reads `@@NAME@@` stays as it is.
+    return _PLACEHOLDER.sub(lambda m: values[m.group(1)], template)
+
+
+def _is_open(relaunch: tuple[str, ...]) -> bool:
+    """Whether ``relaunch`` goes through macOS's ``open``."""
+    return bool(relaunch) and os.path.basename(relaunch[0]) == "open"
+
+
+def _powershell() -> str:
+    """Windows PowerShell 5.1, by absolute path rather than whatever ``PATH`` finds."""
+    return os.path.join(
+        os.environ.get("SystemRoot", r"C:\Windows"),
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe",
+    )
 
 
 def helper_command(script: Path, system: str) -> list[str]:
@@ -967,7 +1047,7 @@ def helper_command(script: Path, system: str) -> list[str]:
         text = script.read_text(encoding="utf-8-sig")
         encoded = base64.b64encode(text.encode("utf-16-le")).decode("ascii")
         return [
-            "powershell.exe",
+            _powershell(),
             "-NoProfile",
             "-NonInteractive",
             "-WindowStyle",
@@ -978,15 +1058,25 @@ def helper_command(script: Path, system: str) -> list[str]:
     return ["/bin/sh", str(script)]
 
 
-def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
+def start_swap(
+    plan: SwapPlan,
+    *,
+    popen: Callable = subprocess.Popen,
+    handshake_timeout_s: float = HANDSHAKE_TIMEOUT_S,
+) -> None:
     """Record the attempt and start the helper, detached; the caller then exits.
 
     The helper's output goes to ``helper.log`` in the state folder, which
     stays after the attempt for a bug report. The script is written first and
     the attempt recorded after it, so nothing that can fail is left behind
-    as an attempt "already under way".
+    as an attempt "already under way". Returns only once the helper has
+    written ``HELPER_STARTED``, its first act: a helper that antivirus
+    stopped or that didn't parse would otherwise leave the app gone, nothing
+    relaunched and the attempt blocking a retry. Then the helper is killed
+    (if it is running at all) and the attempt forgotten, and the app stays.
     """
     pending = plan.state / PENDING
+    marker = plan.state / HELPER_STARTED
     windows = plan.install.system == "win32"
     script = plan.state / ("helper.ps1" if windows else "helper.sh")
     if windows:
@@ -997,6 +1087,7 @@ def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
     else:
         detach = {"start_new_session": True}
     try:
+        marker.unlink(missing_ok=True)
         # With a BOM: a human running helper.ps1 to diagnose it gets the same
         # reading in Windows PowerShell 5.1, which assumes the ANSI code page.
         script.write_text(
@@ -1012,7 +1103,7 @@ def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
             },
         )
         with open(plan.state / "helper.log", "w", encoding="utf-8") as log:
-            popen(
+            helper = popen(
                 helper_command(script, plan.install.system),
                 stdin=subprocess.DEVNULL,
                 stdout=log,
@@ -1025,6 +1116,28 @@ def start_swap(plan: SwapPlan, *, popen: Callable = subprocess.Popen) -> None:
         raise UpdateFailed(
             "The helper that swaps the versions couldn't be started."
         ) from error
+    if not _helper_started(marker, helper, handshake_timeout_s):
+        try:
+            helper.kill()
+        except Exception:
+            pass
+        pending.unlink(missing_ok=True)
+        raise UpdateFailed(
+            "The helper that swaps the versions didn't start, so nothing was changed."
+        )
+
+
+def _helper_started(marker: Path, helper: object, timeout_s: float) -> bool:
+    """Wait up to ``timeout_s`` for the helper's marker; stop early if it exited."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        if marker.exists():
+            return True
+        poll = getattr(helper, "poll", None)
+        exited = poll is not None and poll() is not None
+        if exited or time.monotonic() >= deadline:
+            return marker.exists()  # it may have written it on its way out
+        time.sleep(0.05)
 
 
 def clear_attempt(state: Path) -> None:
@@ -1035,9 +1148,24 @@ def clear_attempt(state: Path) -> None:
         (state / name).unlink(missing_ok=True)
 
 
+def _same_root(recorded: object, root: Path) -> bool:
+    """Whether ``pending.json``'s root names ``root`` — through a symlink or
+    a firmlink too, so a relaunch by another spelling still reports in."""
+    if not isinstance(recorded, str) or not recorded:
+        return False
+    try:
+        if os.path.exists(recorded) and os.path.exists(root):
+            return os.path.samefile(recorded, root)
+    except OSError:
+        pass
+    return os.path.normcase(os.path.realpath(recorded)) == os.path.normcase(
+        os.path.realpath(root)
+    )
+
+
 def _ours(state: Path, install: Install) -> bool:
     pending = _pending(state)
-    return pending is not None and pending.get("root") == str(install.root)
+    return pending is not None and _same_root(pending.get("root"), install.root)
 
 
 def note_start(
@@ -1056,7 +1184,7 @@ def note_start(
             return
         state = state_dir(install) if state is None else state
         if _ours(state, install):
-            (state / "started").write_text(
+            (state / STARTED).write_text(
                 str(os.getpid() if pid is None else pid), encoding="utf-8"
             )
     except Exception:
@@ -1076,10 +1204,10 @@ def note_boot(install: Install | None = None, *, state: Path | None = None) -> N
             return
         state = state_dir(install) if state is None else state
         if _ours(state, install):
-            (state / "booted").write_text("", encoding="utf-8")
+            (state / BOOTED).write_text("", encoding="utf-8")
             return
         cutoff = time.time() - STALE_AFTER_S
-        for name in (*_ATTEMPT_FOLDERS, PENDING, "started", "booted"):
+        for name in (*_ATTEMPT_FOLDERS, PENDING, STARTED, BOOTED, HELPER_STARTED):
             path = state / name
             if path.exists() and path.stat().st_mtime < cutoff:
                 if path.is_dir():
@@ -1100,7 +1228,7 @@ def last_result(
             if install is None:
                 return None
             state = state_dir(install)
-        data = _read_json(state / "result.json")
+        data = _read_json(state / RESULT)
         if data is None:
             return None
         pid = data.get("pid")
@@ -1127,13 +1255,26 @@ def exit_soon(delay: float = RESTART_DELAY_S) -> None:
     timer.start()
 
 
+def _short_reason(error: BaseException, limit: int = 160) -> str:
+    """One sentence for people: the OS's own words (and the file) for an
+    ``OSError``, else ``str(error)``, on one line and ending in a stop."""
+    reason = getattr(error, "strerror", None)
+    filename = getattr(error, "filename", None)
+    if reason and filename:
+        reason = f"{reason} ({os.path.basename(str(filename)) or filename})"
+    reason = " ".join(str(reason or error or type(error).__name__).split())
+    if len(reason) > limit:
+        reason = reason[: limit - 1] + "…"
+    return reason if reason.endswith((".", "…", "!", "?")) else reason + "."
+
+
 #: The steps the About card and ``--update`` name, in order.
 STEPS = ("Downloading", "Checking it", "Testing the new version", "Restarting")
 
 
 def prepare(
     check: UpdateCheck,
-    install: Install,
+    install: Install | None,
     *,
     allow_file: bool = False,
     run: Callable = subprocess.run,
@@ -1144,26 +1285,35 @@ def prepare(
     """Steps 1-4: refuse, download, stage and self-test — the swap is the caller's.
 
     Raises :class:`UpdateFailed` (the install untouched) or, from inside a
-    progress task that was cancelled, ``progress.Cancelled``.
+    progress task that was cancelled, ``progress.Cancelled``. Anything else
+    that goes wrong on the way — a folder that can't be written, a file that
+    can't be read — is an :class:`UpdateFailed` too, never a raw exception.
     """
     reason = refusal(check, install, run=run, machine=machine)
     if reason is not None:
         raise UpdateFailed(reason)
-    state = state_dir(install)
-    asset = asset_for(check, install, machine=machine)
-    clear_attempt(state)
 
     def step(index: int) -> None:
         progress.step_to(index)
         if on_step is not None:
             on_step(STEPS[index])
 
-    step(0)
-    archive = download(asset, state / "download", allow_file=allow_file, opener=opener)
-    step(1)
-    staged = stage(archive, state, install, run=run)
-    step(2)
-    self_test(staged, install.system, run=run)
+    try:
+        state = state_dir(install)
+        asset = asset_for(check, install, machine=machine)
+        clear_attempt(state)
+        step(0)
+        archive = download(
+            asset, state / "download", allow_file=allow_file, opener=opener
+        )
+        step(1)
+        staged = stage(archive, state, install, run=run)
+        step(2)
+        self_test(staged, install.system, run=run)
+    except (OSError, ValueError) as error:  # UnicodeDecodeError is a ValueError
+        raise UpdateFailed(
+            f"Preparing the update failed: {_short_reason(error)}"
+        ) from error
     step(3)
     return SwapPlan(
         pid=os.getpid(),

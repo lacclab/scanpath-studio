@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -192,11 +193,16 @@ def test_an_update_already_under_way_is_refused(tmp_path, cache_home):
     assert "already" in du.refusal(_check(), install, machine="x86_64")
 
 
+def _tool(argv):
+    """``argv`` with its program by name: the updater runs tools by absolute path."""
+    return [os.path.basename(argv[0]), *argv[1:]]
+
+
 def _codesign(team):
     """A fake `subprocess.run` answering `codesign -dv` with `team`."""
 
     def run(argv, **kwargs):
-        if argv[:2] == ["codesign", "-dv"]:
+        if _tool(argv)[:2] == ["codesign", "-dv"]:
             line = f"TeamIdentifier={team}" if team else "TeamIdentifier=not set"
             return subprocess.CompletedProcess(argv, 0, "", f"Identifier=x\n{line}\n")
         return subprocess.CompletedProcess(argv, 0, "", "")
@@ -387,15 +393,16 @@ class _FakeMac:
 
     def __call__(self, argv, **kwargs):
         self.calls.append(argv)
-        tool = argv[0]
-        if argv[:2] == ["hdiutil", "attach"]:
+        named = _tool(argv)
+        tool = named[0]
+        if named[:2] == ["hdiutil", "attach"]:
             mount = Path(argv[argv.index("-mountpoint") + 1])
             exe = mount / "ScanpathStudio.app" / "Contents" / "MacOS" / "ScanpathStudio"
             exe.parent.mkdir(parents=True)
             exe.write_text("v2")
         elif tool == "ditto":
             shutil.copytree(argv[1], argv[2])
-        elif argv[:2] == ["codesign", "-dv"]:
+        elif named[:2] == ["codesign", "-dv"]:
             which = "staged" if "staged" in argv[-1] else "running"
             team = self.teams[which]
             line = f"TeamIdentifier={team}" if team else "TeamIdentifier=not set"
@@ -405,7 +412,7 @@ class _FakeMac:
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     def ran(self, *prefix):
-        return any(call[: len(prefix)] == list(prefix) for call in self.calls)
+        return any(_tool(call)[: len(prefix)] == list(prefix) for call in self.calls)
 
 
 def test_stage_copies_the_app_out_of_the_dmg_and_checks_it(tmp_path):
@@ -417,6 +424,8 @@ def test_stage_copies_the_app_out_of_the_dmg_and_checks_it(tmp_path):
     assert fake.ran("codesign", "--verify", "--deep", "--strict")
     assert fake.ran("spctl", "--assess", "--type", "exec")
     assert fake.ran("hdiutil", "detach")
+    # by absolute path, so nothing earlier on PATH stands in for a tool
+    assert all(os.path.isabs(call[0]) for call in fake.calls), fake.calls
 
 
 @pytest.mark.parametrize(
@@ -555,7 +564,15 @@ def test_the_sh_helper_swaps_relaunches_and_cleans_up(tmp_path):
         result = du.last_result(state=plan.state)
         assert result.status == "updated" and result.version == "99.0.0"
         assert result.pid is not None
-        for leftover in ("old", "failed", "staged", du.PENDING, "started", "booted"):
+        for leftover in (
+            "old",
+            "failed",
+            "staged",
+            du.PENDING,
+            du.STARTED,
+            du.BOOTED,
+            du.HELPER_STARTED,
+        ):
             assert not (plan.state / leftover).exists(), leftover
     finally:
         _kill_launched(plan.state)
@@ -738,7 +755,9 @@ def test_windows_runs_the_helper_as_an_encoded_command(tmp_path):
     text = "Write-Output 'caf\u00e9'\n"
     script.write_text(text, encoding="utf-8-sig")
     argv = du.helper_command(script, "win32")
-    assert argv[0] == "powershell.exe"
+    # Windows PowerShell by absolute path, never whatever PATH finds first
+    assert argv[0].endswith("powershell.exe")
+    assert "System32" in argv[0] and "WindowsPowerShell" in argv[0]
     assert "-File" not in argv and "-ExecutionPolicy" not in argv
     assert argv[-2] == "-EncodedCommand"
     decoded = base64.b64decode(argv[-1]).decode("utf-16-le")
@@ -758,7 +777,7 @@ def test_relaunch_command_per_os(tmp_path):
     )
     env = {"SCANPATH_DESKTOP_NO_BROWSER": "1", "UNRELATED": "x"}
     assert du.relaunch_command(mac, env) == (
-        "open",
+        "/usr/bin/open",
         "-n",
         "--env",
         "SCANPATH_DESKTOP_NO_BROWSER=1",
@@ -775,6 +794,8 @@ def test_start_swap_records_the_attempt_and_detaches(tmp_path):
 
     def popen(argv, **kwargs):
         seen["argv"], seen["kwargs"] = argv, kwargs
+        (plan.state / du.HELPER_STARTED).write_text("")  # the helper's first act
+        return _FakeHelper()
 
     du.start_swap(plan, popen=popen)
     assert du._read_json(plan.state / du.PENDING)["root"] == str(plan.install.root)
@@ -851,7 +872,7 @@ def test_clear_attempt_keeps_only_the_log(tmp_path):
     state = tmp_path / "state"
     for folder in ("download", "staged", "old", "failed"):
         (state / folder).mkdir(parents=True)
-    for name in (du.PENDING, "started", "booted", "result.json", "helper.log"):
+    for name in (du.PENDING, *du._ATTEMPT_FILES, "helper.log"):
         (state / name).write_text("x")
     du.clear_attempt(state)
     assert sorted(path.name for path in state.iterdir()) == ["helper.log"]
@@ -902,3 +923,283 @@ def test_the_e2e_driver_is_stdlib_plus_the_package():
     source = (ROOT / "desktop/update_e2e.py").read_text(encoding="utf-8")
     assert "from scanpath_studio import desktop_update" in source
     assert "import streamlit" not in source
+
+
+# --- final review fixes ------------------------------------------------------
+
+
+class _FakeHelper:
+    """What `popen` returns for the helper: still running unless ``exits``."""
+
+    def __init__(self, *, exits=False):
+        self.exits = exits
+        self.killed = False
+
+    def poll(self):
+        return 1 if self.exits else None
+
+    def kill(self):
+        self.killed = True
+
+
+def test_a_helper_that_never_reports_in_leaves_no_attempt(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    (plan.state / du.PENDING).unlink()
+    # a marker left by an earlier attempt must not pass for this helper's
+    (plan.state / du.HELPER_STARTED).write_text("")
+    helper = _FakeHelper()
+    with pytest.raises(du.UpdateFailed, match="didn't start, so nothing was changed"):
+        du.start_swap(plan, popen=lambda *a, **k: helper, handshake_timeout_s=0.3)
+    assert helper.killed
+    assert not (plan.state / du.PENDING).exists()
+
+
+def test_a_helper_that_exits_at_once_is_not_waited_for(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    helper = _FakeHelper(exits=True)
+    began = time.monotonic()
+    with pytest.raises(du.UpdateFailed, match="didn't start"):
+        du.start_swap(plan, popen=lambda *a, **k: helper, handshake_timeout_s=30)
+    assert time.monotonic() - began < 5
+    assert not (plan.state / du.PENDING).exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_start_swap_returns_once_the_real_helper_has_started(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    (plan.state / du.PENDING).unlink()
+    try:
+        du.start_swap(plan)  # the real Popen and the real template
+        assert (plan.state / du.HELPER_STARTED).exists() or (
+            plan.state / du.RESULT
+        ).exists()
+        _wait_for(plan.state / du.RESULT)
+        assert du.last_result(state=plan.state).status == "updated"
+    finally:
+        _wait_for(plan.state / "launches")
+        _kill_launched(plan.state)
+
+
+def test_the_update_marker_contract_is_pinned(tmp_path, cache_home):
+    # An old version's helper waits on what the new version's launcher
+    # writes: none of these may change without a migration.
+    assert du.PENDING == "pending.json"
+    assert (du.STARTED, du.BOOTED, du.RESULT, du.HELPER_STARTED) == (
+        "started",
+        "booted",
+        "result.json",
+        "helper-started",
+    )
+    for name in (du.STARTED, du.BOOTED, du.RESULT, du.HELPER_STARTED):
+        assert f'"$STATE/{name}' in du._SH_HELPER, name
+        assert f"'{name}'" in du._PS_HELPER, name
+    for template in (du._SH_HELPER, du._PS_HELPER):
+        assert "@@PENDING@@" in template
+    # pending.json's keys
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+
+    def popen(argv, **kwargs):
+        (plan.state / du.HELPER_STARTED).write_text("")
+        return _FakeHelper()
+
+    du.start_swap(plan, popen=popen)
+    pending = du._read_json(plan.state / du.PENDING)
+    assert set(pending) == {"root", "version", "previous", "at"}
+    assert pending["root"] == str(plan.install.root)
+    # result.json's keys, as both helpers write them
+    for key in ("status", "version", "previous", "reason", "pid"):
+        assert f'"{key}": ' in du._SH_HELPER, key
+        assert f"{key} = $" in du._PS_HELPER, key
+    # the per-user state folders, and the fallback beside the install
+    env = {
+        "HOME": "/h",
+        "LOCALAPPDATA": "C:/L",
+        "XDG_CACHE_HOME": "/x",
+    }
+    assert du._user_state_dir("darwin", env) == Path(
+        "/h/Library/Caches/Scanpath Studio/update"
+    )
+    assert du._user_state_dir("win32", env) == Path("C:/L/Scanpath Studio/update")
+    assert du._user_state_dir("linux", env) == Path("/x/scanpath-studio/update")
+    install = _install(tmp_path / "other")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(du, "_device", lambda path: 1 if "cache" in str(path) else 2)
+        assert du.state_dir(install) == install.root.parent / ".ScanpathStudio-update"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        PermissionError(13, "Permission denied", "/state/staged"),
+        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"),
+    ],
+)
+def test_prepare_turns_any_os_or_value_error_into_an_update_failure(
+    tmp_path, cache_home, monkeypatch, error
+):
+    install = _install(tmp_path, "linux")
+    data = b"archive"
+    check = _check(digest="sha256:" + hashlib.sha256(data).hexdigest(), size=len(data))
+
+    def stage(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(du, "stage", stage)
+    with pytest.raises(du.UpdateFailed, match="^Preparing the update failed: .+\\.$"):
+        du.prepare(check, install, opener=_serving(data), machine="x86_64")
+    assert (install.root / "ScanpathStudio").read_text() == "v1"
+
+
+def test_a_cancelled_prepare_is_still_a_cancel(tmp_path, cache_home):
+    install = _install(tmp_path, "linux")
+    data = b"archive"
+    check = _check(digest="sha256:" + hashlib.sha256(data).hexdigest(), size=len(data))
+    with progress.task(("test", "prepare"), title="Updating") as task:
+        task.cancel()
+        with pytest.raises(progress.Cancelled):
+            du.prepare(check, install, opener=_serving(data), machine="x86_64")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+def test_the_sh_helper_forgets_the_attempt_when_the_app_does_not_quit(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    app = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        stuck = du.SwapPlan(**{**plan.__dict__, "pid": app.pid, "quit_timeout_s": 1.0})
+        done = _run_helper(stuck, ["/bin/sh"])
+        assert done.returncode == 1
+        result = du.last_result(state=plan.state)
+        assert result.status == "failed" and result.reason == "the app did not quit"
+        assert not (plan.state / du.PENDING).exists()
+        # the old version is still running: nothing was relaunched or swapped
+        assert not (plan.state / "launches").exists()
+        assert (plan.install.root / "ScanpathStudio").read_text() == "v1"
+    finally:
+        app.kill()
+        app.wait()
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+def test_the_powershell_helper_forgets_the_attempt_when_the_app_does_not_quit(
+    tmp_path,
+):
+    plan = _swap_fixture(tmp_path, "win32", "boot")
+    app = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        stuck = du.SwapPlan(**{**plan.__dict__, "pid": app.pid, "quit_timeout_s": 1.0})
+        done = _run_helper(stuck, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        assert done.returncode == 1
+        assert du.last_result(state=plan.state).reason == "the app did not quit"
+        assert not (plan.state / du.PENDING).exists()
+        assert not (plan.state / "launches").exists()
+    finally:
+        app.kill()
+        app.wait()
+
+
+def test_an_attempt_dated_in_the_future_is_stale(tmp_path, cache_home):
+    install = _install(tmp_path)
+    state = du.state_dir(install)
+    state.mkdir(parents=True)
+    du._write_json(
+        state / du.PENDING,
+        {"root": str(install.root), "at": time.time() + du.STALE_AFTER_S + 60},
+    )
+    assert du.refusal(_check(), install, machine="x86_64") is None
+
+
+@pytest.mark.parametrize("system", ["linux", "win32"])
+def test_a_value_that_looks_like_a_placeholder_is_left_alone(tmp_path, system):
+    plan = _swap_fixture(tmp_path / "x@@STATE@@y", system, "boot")
+    text = du.helper_script(plan)
+    quote = du._ps_quote if system == "win32" else (lambda v: shlex.quote(str(v)))
+    paths = (plan.install.root, plan.state, plan.staged, *plan.relaunch)
+    values = [quote(value) for value in paths]
+    for value in sorted(set(values), key=len, reverse=True):  # staged under state
+        assert value in text
+        text = text.replace(value, "")
+    assert "@@" not in text
+
+
+def test_the_powershell_helper_doubles_every_kind_of_single_quote(tmp_path):
+    quotes = "'\u2018\u2019\u201a\u201b"
+    assert du._ps_quote("a" + quotes + "b") == (
+        "'a" + "".join(quote * 2 for quote in quotes) + "b'"
+    )
+    plan = _swap_fixture(tmp_path / "it\u2019s a dir", "win32", "boot")
+    text = du.helper_script(plan)
+    assert "it\u2019\u2019s a dir" in text
+    assert "it\u2019s a dir" not in text
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+def test_the_powershell_helper_runs_under_a_typographic_quote(tmp_path):
+    plan = _swap_fixture(tmp_path / "it\u2019s a dir", "win32", "boot")
+    try:
+        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        assert done.returncode == 0
+        assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v2"
+        assert du.last_result(state=plan.state).status == "updated"
+    finally:
+        _kill_launched(plan.state)
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+def test_the_powershell_helper_never_nests_into_an_existing_entry(tmp_path):
+    source = du._PS_HELPER
+    start = source.index("function Move-All(")
+    function = source[start : source.index("\n}\n", start) + 3]
+    script = tmp_path / "move_all.ps1"
+    script.write_text(
+        "param($From, $To)\n$Entries = @('_internal')\n"
+        + function
+        + "if (Move-All $From $To) { exit 0 } else { exit 1 }\n",
+        encoding="utf-8-sig",
+    )
+    source_dir, target = tmp_path / "from", tmp_path / "to"
+    (source_dir / "_internal").mkdir(parents=True)
+    (source_dir / "_internal" / "new.txt").write_text("x")
+    (target / "_internal").mkdir(parents=True)  # already there
+    done = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-File", str(script)]
+        + [str(source_dir), str(target)],
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 1
+    assert not (target / "_internal" / "_internal").exists()
+    assert (source_dir / "_internal" / "new.txt").exists()
+
+
+def test_the_sh_helper_never_kills_the_pid_of_macos_open(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    mac = du.SwapPlan(
+        **{**plan.__dict__, "relaunch": ("/usr/bin/open", "-n", "/A.app")}
+    )
+    assert "\nTRACK_LAUNCH=0\n" in du.helper_script(mac)
+    assert "\nTRACK_LAUNCH=1\n" in du.helper_script(plan)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_a_relaunch_through_a_symlinked_root_still_reports_in(tmp_path):
+    real = _install(tmp_path / "real")
+    link = tmp_path / "link"
+    link.symlink_to(real.root, target_is_directory=True)
+    via_link = du.install_at(link / "ScanpathStudio", "linux")
+    assert via_link.root != real.root
+    state = tmp_path / "state"
+    state.mkdir()
+    # recorded by the real path, relaunched through the link — and the reverse
+    for recorded, running in ((real, via_link), (via_link, real)):
+        du.clear_attempt(state)
+        du._write_json(
+            state / du.PENDING, {"root": str(recorded.root), "at": time.time()}
+        )
+        du.note_start(running, state=state, pid=7)
+        assert (state / du.STARTED).read_text() == "7"
+
+
+def test_the_boot_timeout_outlasts_the_relaunched_launchers_own_wait():
+    from desktop import launcher
+
+    assert du.BOOT_TIMEOUT_S > launcher.HEALTH_TIMEOUT_S

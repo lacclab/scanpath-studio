@@ -488,3 +488,92 @@ def test_the_launcher_stays_stdlib_only_at_import():
     source = Path(launcher.__file__).read_text(encoding="utf-8")
     header = source.split("\ndef ", 1)[0]
     assert "scanpath_studio" not in header.split('"""', 2)[-1]
+
+
+# --- #394: the launcher's update hooks --------------------------------------
+
+
+@pytest.fixture
+def launch_calls(monkeypatch):
+    """`launcher.main` with everything it starts replaced by a record of it."""
+    from scanpath_studio import cli
+
+    calls = []
+
+    class Thread:
+        def __init__(self, target, args=(), daemon=None):
+            self.target = target
+
+        def start(self):
+            calls.append(self.target.__name__)
+
+    monkeypatch.setattr(launcher, "_redirect_output_to_log", lambda: None)
+    monkeypatch.setattr(launcher, "_resolve_port", lambda: 8765)
+    monkeypatch.setattr(launcher, "_idle_exit_grace", lambda: 0.0)
+    monkeypatch.setattr(launcher, "threading", SimpleNamespace(Thread=Thread))
+    monkeypatch.setattr(
+        launcher, "_note_update_start", lambda: calls.append("note_start")
+    )
+    monkeypatch.setattr(launcher, "update", lambda: calls.append("update") or 0)
+    monkeypatch.setattr(launcher, "selfcheck", lambda: calls.append("selfcheck") or 0)
+    monkeypatch.setattr(cli, "launch_app", lambda argv: calls.append("launch_app"))
+    monkeypatch.setenv("SCANPATH_DESKTOP_NO_BROWSER", "1")
+    return calls
+
+
+def test_a_launch_reports_in_before_the_server_starts(monkeypatch, launch_calls):
+    # The helper waits on `started`, then on `booted` once the server answers.
+    monkeypatch.setattr(launcher.sys, "argv", ["ScanpathStudio"])
+    launcher.main()
+    assert launch_calls == ["note_start", "_confirm_boot_when_ready", "launch_app"]
+
+
+@pytest.mark.parametrize("flag", ["--update", "--selfcheck"])
+def test_update_and_selfcheck_runs_never_report_in(monkeypatch, launch_calls, flag):
+    # Neither is the relaunched app a helper waits for: a staged copy's
+    # --selfcheck must not confirm an update of the install beside it.
+    monkeypatch.setattr(launcher.sys, "argv", ["ScanpathStudio", flag])
+    with pytest.raises(SystemExit) as exited:
+        launcher.main()
+    assert exited.value.code == 0
+    assert launch_calls == [flag.lstrip("-")]
+
+
+@pytest.mark.parametrize("feed", [True, False])
+def test_only_the_test_feed_lets_update_fetch_a_local_file(monkeypatch, tmp_path, feed):
+    from scanpath_studio import desktop_update, updates
+
+    if feed:
+        monkeypatch.setenv(desktop_update.FEED_ENV, str(tmp_path / "feed.json"))
+    else:
+        monkeypatch.delenv(desktop_update.FEED_ENV, raising=False)
+    monkeypatch.setattr(
+        updates,
+        "check_for_updates",
+        lambda latest=None: updates.UpdateCheck(
+            "update_available", "0.36.0", "v99.0.0 is out.", install_kind="desktop"
+        ),
+    )
+    monkeypatch.setattr(desktop_update, "current_install", lambda: "INSTALL")
+    seen = {}
+
+    def prepare(check, install, *, allow_file, on_step):
+        seen["allow_file"] = allow_file
+        raise desktop_update.UpdateFailed("stop here")
+
+    monkeypatch.setattr(desktop_update, "prepare", prepare)
+    assert launcher.update() == 1
+    assert seen["allow_file"] is feed
+
+
+def test_selfcheck_builds_the_os_trust_store_context(monkeypatch, capsys):
+    # Importing truststore proves little in a frozen bundle; building its
+    # context reaches the OS's certificate APIs.
+    from scanpath_studio import updates
+
+    def broken():
+        raise RuntimeError("no certificate store")
+
+    monkeypatch.setattr(updates, "_ssl_context", broken)
+    assert launcher.selfcheck() == 1
+    assert "trust store" in capsys.readouterr().out

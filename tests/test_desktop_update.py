@@ -10,10 +10,13 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
+import urllib.error
 import zipfile
 from pathlib import Path
 
@@ -318,7 +321,7 @@ def test_a_dropped_download_is_an_update_failure(tmp_path):
     def opener(request, timeout):
         raise OSError("connection reset")
 
-    with pytest.raises(du.UpdateFailed, match="stopped"):
+    with pytest.raises(du.UpdateFailed, match="are you offline"):
         du.download(_asset(b"x"), tmp_path, opener=opener)
     assert not list(tmp_path.glob("*.part"))
 
@@ -479,6 +482,12 @@ if mode != "silent":
 if mode == "boot":
     (state / "booted").write_text("")
 else:
+    # Never boots; two modes also break the rollback that follows.
+    if mode == "lose-old":  # the old version can't be put back
+        for entry in (state / "old").glob("ScanpathStudio*"):
+            entry.unlink()
+    if mode == "block-failed":  # the new version can't be moved aside
+        (state / "failed" / "_internal").mkdir(parents=True, exist_ok=True)
     time.sleep(30)
 """
 
@@ -551,6 +560,51 @@ def _run_helper(plan, argv):
         encoding="utf-8-sig" if plan.install.system == "win32" else "utf-8",
     )
     return subprocess.run([*argv, str(script)], timeout=120, check=False)
+
+
+def _powershells():
+    """PowerShell 7 wherever it is installed, and on Windows the Windows
+    PowerShell 5.1 the helper really runs under (#394: CI's ordinary test run
+    has only PowerShell 7, on Linux; desktop.yml runs these on Windows)."""
+    shells = ["pwsh"] if shutil.which("pwsh") else []
+    if sys.platform == "win32" and Path(du._powershell()).exists():
+        shells.append("powershell")
+    return shells
+
+
+#: Runs a test once per PowerShell there is, or skips it.
+POWERSHELLS = pytest.mark.parametrize(
+    "shell",
+    _powershells()
+    or [pytest.param("pwsh", marks=pytest.mark.skip(reason="needs PowerShell"))],
+)
+
+
+def _ps_file(shell):
+    """How ``shell`` runs a script file that takes parameters."""
+    if shell == "pwsh":
+        return ["pwsh", "-NoProfile", "-NonInteractive", "-File"]
+    return [
+        du._powershell(),
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+    ]
+
+
+def _run_ps(plan, shell, **kwargs):
+    """The PowerShell helper for ``plan`` — under 5.1 exactly as `start_swap`
+    runs it, as an encoded command."""
+    script = plan.state / "helper.ps1"
+    script.write_text(du.helper_script(plan), encoding="utf-8-sig")
+    argv = (
+        [*_ps_file(shell), str(script)]
+        if shell == "pwsh"
+        else du.helper_command(script, "win32")
+    )
+    return subprocess.run(argv, timeout=120, check=False, **kwargs)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
@@ -755,11 +809,13 @@ def _move_all_source():
     return text[start : text.index("\n}\n", start) + 3]
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
-def test_the_powershell_helper_puts_the_old_version_back_when_the_swap_fails(tmp_path):
+@POWERSHELLS
+def test_the_powershell_helper_puts_the_old_version_back_when_the_swap_fails(
+    tmp_path, shell
+):
     plan = _swap_fixture(tmp_path, "win32", "boot", skip_staged="_internal")
     try:
-        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        done = _run_ps(plan, shell)
         assert done.returncode == 1
         assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v1"
         assert du.last_result(state=plan.state).status == "failed"
@@ -768,11 +824,11 @@ def test_the_powershell_helper_puts_the_old_version_back_when_the_swap_fails(tmp
         _kill_launched(plan.state)
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
-def test_the_powershell_helper_swaps_relaunches_and_cleans_up(tmp_path):
+@POWERSHELLS
+def test_the_powershell_helper_swaps_relaunches_and_cleans_up(tmp_path, shell):
     plan = _swap_fixture(tmp_path, "win32", "boot")
     try:
-        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        done = _run_ps(plan, shell)
         assert done.returncode == 0
         assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v2"
         assert du.last_result(state=plan.state).status == "updated"
@@ -781,11 +837,11 @@ def test_the_powershell_helper_swaps_relaunches_and_cleans_up(tmp_path):
         _kill_launched(plan.state)
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
-def test_the_powershell_helper_rolls_back(tmp_path):
+@POWERSHELLS
+def test_the_powershell_helper_rolls_back(tmp_path, shell):
     plan = _swap_fixture(tmp_path, "win32", "hang", boot_timeout_s=2.0)
     try:
-        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        done = _run_ps(plan, shell)
         assert done.returncode == 1
         assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v1"
         assert du.last_result(state=plan.state).status == "rolled_back"
@@ -887,7 +943,8 @@ def test_start_swap_on_windows_gives_powershell_a_hidden_console(tmp_path):
 
     du.start_swap(plan, popen=popen)
     flags = seen["kwargs"]["creationflags"]
-    assert flags == 0x08000000 | 0x200  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB
+    assert flags == 0x08000000 | 0x200 | 0x01000000
     assert not flags & 0x8  # DETACHED_PROCESS
 
 
@@ -1166,15 +1223,15 @@ def test_the_sh_helper_forgets_the_attempt_when_the_app_does_not_quit(tmp_path):
         app.wait()
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
+@POWERSHELLS
 def test_the_powershell_helper_forgets_the_attempt_when_the_app_does_not_quit(
-    tmp_path,
+    tmp_path, shell
 ):
     plan = _swap_fixture(tmp_path, "win32", "boot")
     app = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
         stuck = du.SwapPlan(**{**plan.__dict__, "pid": app.pid, "quit_timeout_s": 1.0})
-        done = _run_helper(stuck, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        done = _run_ps(stuck, shell)
         assert done.returncode == 1
         assert du.last_result(state=plan.state).reason == "the app did not quit"
         assert not (plan.state / du.PENDING).exists()
@@ -1219,11 +1276,11 @@ def test_the_powershell_helper_doubles_every_kind_of_single_quote(tmp_path):
     assert "it\u2019s a dir" not in text
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
-def test_the_powershell_helper_runs_under_a_typographic_quote(tmp_path):
+@POWERSHELLS
+def test_the_powershell_helper_runs_under_a_typographic_quote(tmp_path, shell):
     plan = _swap_fixture(tmp_path / "it\u2019s a dir", "win32", "boot")
     try:
-        done = _run_helper(plan, ["pwsh", "-NoProfile", "-NonInteractive", "-File"])
+        done = _run_ps(plan, shell)
         assert done.returncode == 0
         assert (plan.install.root / "ScanpathStudio.exe").read_text() == "v2"
         assert du.last_result(state=plan.state).status == "updated"
@@ -1231,8 +1288,8 @@ def test_the_powershell_helper_runs_under_a_typographic_quote(tmp_path):
         _kill_launched(plan.state)
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell")
-def test_the_powershell_helper_never_nests_into_an_existing_entry(tmp_path):
+@POWERSHELLS
+def test_the_powershell_helper_never_nests_into_an_existing_entry(tmp_path, shell):
     source = du._PS_HELPER
     start = source.index("function Move-All(")
     function = source[start : source.index("\n}\n", start) + 3]
@@ -1248,8 +1305,7 @@ def test_the_powershell_helper_never_nests_into_an_existing_entry(tmp_path):
     (source_dir / "_internal" / "new.txt").write_text("x")
     (target / "_internal").mkdir(parents=True)  # already there
     done = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-File", str(script)]
-        + [str(source_dir), str(target)],
+        [*_ps_file(shell), str(script), str(source_dir), str(target)],
         timeout=60,
         check=False,
     )
@@ -1290,3 +1346,281 @@ def test_the_boot_timeout_outlasts_the_relaunched_launchers_own_wait():
     from desktop import launcher
 
     assert du.BOOT_TIMEOUT_S > launcher.HEALTH_TIMEOUT_S
+
+
+# --- #394: hardening ------------------------------------------------------
+
+
+def test_refusal_creates_nothing(tmp_path, cache_home):
+    install = _install(tmp_path)
+    assert du.refusal(_check(), install, machine="x86_64") is None
+    assert not du.state_dir(install).exists()
+
+
+def test_a_windows_install_its_acl_keeps_this_account_out_of_is_refused(
+    tmp_path, cache_home, monkeypatch
+):
+    install = _install(tmp_path, "win32")
+    real = tempfile.mkstemp
+
+    def mkstemp(**kwargs):
+        if Path(kwargs["dir"]) == install.root:
+            raise PermissionError(13, "Access is denied")
+        return real(**kwargs)
+
+    monkeypatch.setattr(du.tempfile, "mkstemp", mkstemp)
+    # os.access, which reads no ACL, says yes
+    assert os.access(install.root, os.W_OK)
+    assert "can't change" in du.refusal(_check(), install, machine="amd64")
+
+
+def test_the_windows_write_probe_leaves_nothing_behind(tmp_path, cache_home):
+    install = _install(tmp_path, "win32")
+    before = sorted(install.root.iterdir())
+    assert du.refusal(_check(), install, machine="amd64") is None
+    assert sorted(install.root.iterdir()) == before
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid"), reason="POSIX ownership")
+def test_a_state_folder_another_account_owns_is_refused(
+    tmp_path, cache_home, monkeypatch
+):
+    install = _install(tmp_path)
+    state = du.state_dir(install)
+    state.mkdir(parents=True)
+    monkeypatch.setattr(du.os, "geteuid", lambda: state.stat().st_uid + 1)
+    assert "own" in du.refusal(_check(), install, machine="x86_64")
+    with pytest.raises(du.UpdateFailed, match="own"):
+        du._make_state(state)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_a_state_folder_that_is_a_link_is_refused(tmp_path, cache_home):
+    install = _install(tmp_path)
+    state = du.state_dir(install)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    state.parent.mkdir(parents=True)
+    state.symlink_to(elsewhere)
+    assert "own" in du.refusal(_check(), install, machine="x86_64")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX modes")
+def test_the_state_folder_is_private_to_this_account(tmp_path):
+    fresh = tmp_path / "beside" / ".ScanpathStudio-update"
+    du._make_state(fresh)
+    assert stat.S_IMODE(fresh.stat().st_mode) == 0o700
+    # one an earlier version made with the umask's mode is tightened
+    older = tmp_path / "older"
+    older.mkdir()
+    older.chmod(0o775)
+    du._make_state(older)
+    assert stat.S_IMODE(older.stat().st_mode) == 0o700
+
+
+def _prepared(tmp_path):
+    """An install, a check whose archive is served, and prepare's other arguments."""
+    install = _install(tmp_path, "linux")
+    archive = _tar(
+        tmp_path / "a.tar.gz",
+        {"ScanpathStudio/ScanpathStudio": b"v2", "ScanpathStudio/_internal/x": b""},
+    )
+    data = archive.read_bytes()
+    check = _check(digest="sha256:" + hashlib.sha256(data).hexdigest(), size=len(data))
+
+    def run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, "selfcheck ok", "")
+
+    return install, check, {"run": run, "opener": _serving(data), "machine": "x86_64"}
+
+
+def test_a_second_attempt_leaves_the_first_ones_files_alone(tmp_path, cache_home):
+    install, check, kwargs = _prepared(tmp_path)
+    state = du.state_dir(install)
+    du._make_state(state)
+    held = du._lock(state)  # the first attempt, downloading
+    (state / "download").mkdir()
+    (state / "download" / "archive.part").write_text("half")
+    try:
+        with pytest.raises(du.UpdateFailed, match="already under way"):
+            du.prepare(check, install, **kwargs)
+        assert (state / "download" / "archive.part").exists()
+    finally:
+        held.release()
+
+
+def test_the_plan_holds_the_lock_until_the_attempt_is_recorded(tmp_path, cache_home):
+    install, check, kwargs = _prepared(tmp_path)
+    plan = du.prepare(check, install, **kwargs)
+    with pytest.raises(du.UpdateFailed, match="already under way"):
+        du._lock(plan.state)
+
+    def popen(argv, **kwargs):
+        (plan.state / du.HELPER_STARTED).write_text("")
+        return _FakeHelper()
+
+    du.start_swap(plan, popen=popen)
+    du._lock(plan.state).release()  # free, and pending.json guards from here
+    assert "already" in du.refusal(check, install, machine="x86_64")
+
+
+def test_a_failed_or_dropped_attempt_lets_go_of_the_lock(tmp_path, cache_home):
+    install, check, kwargs = _prepared(tmp_path)
+
+    def failing(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, "", "selfcheck FAILED")
+
+    with pytest.raises(du.UpdateFailed, match="self-test"):
+        du.prepare(check, install, **{**kwargs, "run": failing})
+    du._lock(du.state_dir(install)).release()
+    plan = du.prepare(check, install, **kwargs)
+    state = plan.state
+    del plan  # never handed to start_swap
+    du._lock(state).release()
+
+
+def test_an_attach_that_times_out_is_still_detached(tmp_path):
+    ran = []
+
+    def run(argv, **kwargs):
+        ran.append(_tool(argv)[:2])
+        if ran[-1] == ["hdiutil", "attach"]:
+            raise subprocess.TimeoutExpired(argv, 600)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    target = tmp_path / "staged"
+    target.mkdir()
+    with pytest.raises(du.UpdateFailed, match="couldn't be opened"):
+        du._stage_dmg(tmp_path / "update.dmg", target, run=run)
+    assert ran == [["hdiutil", "attach"], ["hdiutil", "detach"]]
+
+
+def test_an_http_error_is_named_not_blamed_on_the_network(tmp_path):
+    def opener(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+    with pytest.raises(du.UpdateFailed, match="HTTP 404") as raised:
+        du.download(_asset(b"x"), tmp_path, opener=opener)
+    assert "offline" not in str(raised.value)
+    assert not list(tmp_path.iterdir())
+
+
+def test_a_download_that_cannot_be_saved_says_so(tmp_path):
+    asset = _asset(b"x")
+    (tmp_path / (asset.name + ".part")).mkdir()  # nothing can be written there
+    with pytest.raises(du.UpdateFailed, match="couldn't be saved") as raised:
+        du.download(asset, tmp_path, opener=_serving(b"x"))
+    assert "offline" not in str(raised.value)
+
+
+def test_a_download_larger_than_the_release_lists_is_cut_off(tmp_path):
+    data = b"x" * (3 * du.CHUNK)
+    listed = updates.Asset(
+        "ScanpathStudio-linux-x86_64.tar.gz",
+        f"{du.REPO_DOWNLOADS}v99.0.0/ScanpathStudio-linux-x86_64.tar.gz",
+        du.CHUNK,
+        "sha256:" + hashlib.sha256(data).hexdigest(),
+    )
+    reads = []
+
+    class Stream(io.BytesIO):
+        def read(self, size=-1):
+            reads.append(size)
+            return super().read(size)
+
+    with pytest.raises(du.UpdateFailed, match="larger"):
+        du.download(listed, tmp_path, opener=lambda request, timeout: Stream(data))
+    assert len(reads) == 2  # it stopped reading, not merely rejected it after
+    assert not list(tmp_path.iterdir())
+
+
+def test_a_cancel_during_the_handshake_stops_the_helper(tmp_path):
+    plan = _swap_fixture(tmp_path, "linux", "boot")
+    (plan.state / du.PENDING).unlink()
+    helper = _FakeHelper()
+    with progress.task(("test", "handshake"), title="Updating") as task:
+        task.cancel()
+        with pytest.raises(progress.Cancelled):
+            du.start_swap(plan, popen=lambda *a, **k: helper, handshake_timeout_s=30)
+    assert helper.killed
+    assert not (plan.state / du.PENDING).exists()
+
+
+def test_windows_stays_in_a_job_that_forbids_breaking_away(tmp_path):
+    plan = _swap_fixture(tmp_path, "win32", "boot")
+    (plan.state / du.PENDING).unlink()
+    flags = []
+
+    def popen(argv, **kwargs):
+        flags.append(kwargs["creationflags"])
+        if len(flags) == 1:
+            raise PermissionError(5, "Access is denied")  # the job refuses
+        (plan.state / du.HELPER_STARTED).write_text("")
+        return _FakeHelper()
+
+    du.start_swap(plan, popen=popen)
+    breakaway = 0x01000000
+    assert flags[0] & breakaway and not flags[1] & breakaway
+    assert (plan.state / du.PENDING).exists()
+
+
+def test_the_last_result_says_when_it_was_written(tmp_path):
+    du._write_json(
+        tmp_path / du.RESULT,
+        {"status": "updated", "version": "1", "previous": "0", "reason": ""},
+    )
+    assert abs(du.last_result(state=tmp_path).at - time.time()) < 60
+
+
+# --- #394: the rollback that fails too ------------------------------------
+
+_DOUBLE_FAILURES = pytest.mark.parametrize(
+    ("mode", "reason"),
+    [
+        (
+            "lose-old",
+            "the new version did not start, and the old one could not be put back",
+        ),
+        ("block-failed", "the new version did not start, and could not be removed"),
+    ],
+)
+
+
+def _assert_kept_the_new_version(plan, reason, executable):
+    result = du.last_result(state=plan.state)
+    assert (result.status, result.reason) == ("failed", reason)
+    # never an empty install: the new version's files are where they were
+    root = plan.install.root
+    assert (root / executable).read_text() == "v2"
+    assert (root / "_internal" / "new.txt").exists()
+    # and what is left of the old one is kept, not cleaned away
+    assert (plan.state / "old" / "_internal" / "old.txt").exists()
+    assert not (plan.state / du.PENDING).exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX sh helper")
+@_DOUBLE_FAILURES
+def test_the_sh_helper_keeps_the_new_version_when_the_rollback_fails(
+    tmp_path, mode, reason
+):
+    plan = _swap_fixture(tmp_path, "linux", mode, boot_timeout_s=5.0)
+    try:
+        done = _run_helper(plan, ["/bin/sh"])
+        assert done.returncode == 1
+        _assert_kept_the_new_version(plan, reason, "ScanpathStudio")
+    finally:
+        _kill_launched(plan.state)
+
+
+@POWERSHELLS
+@_DOUBLE_FAILURES
+def test_the_powershell_helper_keeps_the_new_version_when_the_rollback_fails(
+    tmp_path, shell, mode, reason
+):
+    plan = _swap_fixture(tmp_path, "win32", mode, boot_timeout_s=5.0)
+    try:
+        done = _run_ps(plan, shell)
+        assert done.returncode == 1
+        _assert_kept_the_new_version(plan, reason, "ScanpathStudio.exe")
+    finally:
+        _kill_launched(plan.state)

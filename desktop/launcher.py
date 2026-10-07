@@ -424,6 +424,17 @@ def selfcheck() -> int:
         print(f"selfcheck FAILED: {plotlyjs} is missing from the bundle")
         return 1
 
+    # #394: the update check and download (and dataset downloads, #391)
+    # verify GitHub against the OS's own certificate store. Build that context
+    # here, where the frozen truststore meets the real OS, not just imports it.
+    from scanpath_studio.updates import _ssl_context
+
+    try:
+        _ssl_context()
+    except Exception as error:
+        print(f"selfcheck FAILED: no TLS context from the OS trust store: {error}")
+        return 1
+
     words, fixations = api.load_sample_data()
     combos = api.list_trials(words, fixations)
     if combos.empty:

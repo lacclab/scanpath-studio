@@ -6,6 +6,7 @@ import http.client
 import io
 import json
 import ssl
+import time
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -13,7 +14,7 @@ from pathlib import Path
 import pytest
 import truststore
 
-from scanpath_studio import desktop_update, updates
+from scanpath_studio import desktop_update, progress, updates
 from scanpath_studio.build_info import BuildInfo, from_describe
 
 RELEASE = BuildInfo("0.35.0", "0.35.0")
@@ -503,7 +504,7 @@ def test_about_says_nothing_of_an_update_that_is_not_this_build(
     assert not any("Updated from" in caption.value for caption in at.caption)
 
 
-def _about_with_last_update(monkeypatch, result, build):
+def _about_with_last_update(monkeypatch, result, build, at=None):
     """About, with the helper's record of an update from v0.35.0 to v0.36.0."""
     from streamlit.testing.v1 import AppTest
 
@@ -514,9 +515,54 @@ def _about_with_last_update(monkeypatch, result, build):
     monkeypatch.setattr(
         desktop_update,
         "last_result",
-        lambda: desktop_update.UpdateResult(status, "0.36.0", "0.35.0", reason),
+        lambda: desktop_update.UpdateResult(status, "0.36.0", "0.35.0", reason, at=at),
     )
     monkeypatch.setattr(app, "_build_info", lambda: BuildInfo(build, build))
     at = AppTest.from_function(_about_script).run()
     assert not at.exception, at.exception
     return at
+
+
+@pytest.mark.parametrize(("days_ago", "shown"), [(1, True), (8, False)])
+def test_about_lets_the_last_update_go_after_a_week(monkeypatch, days_ago, shown):
+    # #394: "Updated from v…" used to stay until the next update.
+    at = _about_with_last_update(
+        monkeypatch, ("updated", ""), "0.36.0", at=time.time() - days_ago * 86400
+    )
+    assert any("Updated from" in c.value for c in at.caption) is shown
+
+
+def _about_script_in_a_run():
+    from scanpath_studio import app, loading
+
+    # The app runs each script inside run_scope, which ends a cancelled run.
+    with loading.run_scope():
+        app._about_dialog()
+
+
+def test_cancelling_an_update_changes_nothing_and_does_not_quit(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _desktop_about(monkeypatch)
+
+    def cancelled(check, install):
+        raise progress.Cancelled
+
+    monkeypatch.setattr(desktop_update, "prepare", cancelled)
+    monkeypatch.setattr(desktop_update, "start_swap", lambda plan: pytest.fail("swap"))
+    monkeypatch.setattr(desktop_update, "exit_soon", lambda: pytest.fail("quit"))
+    at = AppTest.from_function(_about_script_in_a_run).run()
+    at.button(key="about_check_updates").click().run()
+    at.button(key="about_update_restart").click().run()
+    assert not at.exception, at.exception
+    assert not at.error and not at.success
+
+
+def test_the_update_cards_cancel_stops_the_update_task():
+    from scanpath_studio import app
+
+    key = ("desktop_update", "a session")
+    with progress.task(key, title="Updating to v99.0.0"):
+        app._stop_desktop_update(key)
+        with pytest.raises(progress.Cancelled):
+            progress.report()  # the download's next chunk

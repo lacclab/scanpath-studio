@@ -31,15 +31,18 @@ import platform
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from packaging.version import InvalidVersion, Version
@@ -81,6 +84,13 @@ BOOTED = "booted"
 RESULT = "result.json"
 #: The helper's first act, which :func:`start_swap` waits for before the app quits.
 HELPER_STARTED = "helper-started"
+
+#: Locked from :func:`prepare` until :func:`start_swap` has recorded the
+#: attempt, so a second attempt (another About tab, or ``--update``) can't
+#: clear the first one's files from under it. An OS lock on the file, so a
+#: process that dies lets go of it. Only one version ever reads it, so it is
+#: not part of the contract above.
+LOCK = "update.lock"
 
 #: The archive the updater installs per (platform, machine) — the names
 #: ``.github/workflows/desktop.yml`` gives them. Windows takes the ``.zip``,
@@ -296,6 +306,55 @@ def _pending(state: Path) -> dict | None:
     return pending
 
 
+def _nearest_existing(path: Path) -> Path:
+    """``path``, or the closest folder above it that exists."""
+    for candidate in (path, *path.parents):
+        if candidate.exists():
+            return candidate
+    return path
+
+
+def _can_write(folder: Path, system: str) -> bool:
+    """Whether this account can create (and so move) entries in ``folder``.
+
+    On Windows ``os.access`` reads only the read-only attribute and ignores
+    the folder's ACL, so a real file is created there and removed again.
+    Elsewhere the permission bits ``os.access`` reads decide it.
+    """
+    if system != "win32":
+        return os.access(folder, os.W_OK)
+    try:
+        handle, probe = tempfile.mkstemp(prefix=".scanpath-write-test-", dir=folder)
+    except OSError:
+        return False
+    os.close(handle)
+    try:
+        os.unlink(probe)
+    except OSError:
+        pass
+    return True
+
+
+def _not_ours(state: Path) -> bool:
+    """Whether ``state`` exists but isn't safe to stage in: a link, not a
+    folder, or (on POSIX) a folder another account owns — beside a shared
+    install, someone else could have made it to swap in their own files."""
+    try:
+        info = state.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        return True
+    geteuid = getattr(os, "geteuid", None)
+    return geteuid is not None and info.st_uid != geteuid()
+
+
+def _not_ours_reason(state: Path) -> str:
+    return f"{state} isn't a folder of this account's own, so the update won't use it."
+
+
 def refusal(
     check: UpdateCheck,
     install: Install | None,
@@ -307,7 +366,8 @@ def refusal(
     """Why this app can't update itself to ``check.latest`` — ``None`` if it can.
 
     Cheap enough for every render of About: no download, and on macOS one
-    ``codesign`` call.
+    ``codesign`` call. It creates nothing: the state folder is made by
+    :func:`prepare`.
     """
     if install is None:
         return "Only the desktop app can update itself."
@@ -337,24 +397,23 @@ def refusal(
             "macOS is running Scanpath Studio from a temporary copy. Move it to "
             "Applications, open it from there, and try again."
         )
-    if not os.access(install.root, os.W_OK):
+    if not _can_write(install.root, install.system):
         return (
             f"This account can't change {install.root}; whoever installed "
             "Scanpath Studio has to update it."
         )
     state = state_dir(install) if state is None else state
-    nowhere = (
-        f"There's nowhere on this disk beside {install.root} to prepare the update."
-    )
-    try:
-        state.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return nowhere
-    if not os.access(state, os.W_OK) or _device(state) != _device(install.root):
-        return nowhere
+    if _not_ours(state):
+        return _not_ours_reason(state)
+    # The folder itself, or where prepare() will make it.
+    there = _nearest_existing(state)
+    if not _can_write(there, install.system) or _device(there) != _device(install.root):
+        return (
+            f"There's nowhere on this disk beside {install.root} to prepare the update."
+        )
     if _pending(state) is not None:
         return "An update is already under way."
-    free = shutil.disk_usage(state).free
+    free = shutil.disk_usage(there).free
     if asset.size and free < DISK_FACTOR * asset.size:
         return (
             f"Updating needs about {DISK_FACTOR * asset.size / 1e6:,.0f} MB free; "
@@ -418,7 +477,8 @@ def download(
     """Fetch ``asset`` into ``folder`` and check it against its sha256 digest.
 
     Reports bytes to the active progress task, whose cancel checkpoint this
-    loop therefore is. A partial or mismatched file is deleted, never kept.
+    loop therefore is. A partial or mismatched file is deleted, never kept,
+    and so is one that grows past the size the release lists.
     """
     if not _allowed(asset.url, allow_file=allow_file):
         raise UpdateFailed(
@@ -440,22 +500,57 @@ def download(
     request = urllib.request.Request(
         asset.url, headers={"User-Agent": f"scanpath-studio/{build_info().version}"}
     )
+
+    def unsaved(error: OSError) -> UpdateFailed:
+        return UpdateFailed(f"The download couldn't be saved: {_short_reason(error)}")
+
+    def stopped() -> UpdateFailed:
+        return UpdateFailed("The download stopped before it finished; are you offline?")
+
     digest = hashlib.sha256()
     done = 0
     finished = False
     try:
-        progress.report(0, asset.size or None, unit="bytes")
-        with opener(request, timeout=timeout) as response, open(partial, "wb") as out:
-            while chunk := response.read(CHUNK):
-                out.write(chunk)
-                digest.update(chunk)
-                done += len(chunk)
-                progress.report(done, asset.size or None, unit="bytes")
+        out = open(partial, "wb")
+    except OSError as error:
+        raise unsaved(error) from error
+    try:
+        with out:
+            progress.report(0, asset.size or None, unit="bytes")
+            try:
+                response = opener(request, timeout=timeout)
+            except urllib.error.HTTPError as error:
+                raise UpdateFailed(
+                    f"GitHub answered HTTP {error.code} for the download, so it "
+                    "was not fetched."
+                ) from error
+            except (OSError, http.client.HTTPException) as error:
+                raise UpdateFailed(
+                    "The download couldn't start; are you offline?"
+                ) from error
+            with response:
+                while True:
+                    try:
+                        chunk = response.read(CHUNK)
+                    except (OSError, http.client.HTTPException) as error:
+                        raise stopped() from error
+                    if not chunk:
+                        break
+                    done += len(chunk)
+                    if asset.size and done > asset.size:
+                        raise UpdateFailed(
+                            "The download is larger than the release says it "
+                            "is, so it was thrown away."
+                        )
+                    try:
+                        out.write(chunk)
+                    except OSError as error:
+                        raise unsaved(error) from error
+                    digest.update(chunk)
+                    progress.report(done, asset.size or None, unit="bytes")
         finished = True
-    except (OSError, http.client.HTTPException) as error:
-        raise UpdateFailed(
-            "The download stopped before it finished; are you offline?"
-        ) from error
+    except OSError as error:  # closing the file: the disk filled up
+        raise unsaved(error) from error
     finally:
         if not finished:
             partial.unlink(missing_ok=True)
@@ -473,21 +568,23 @@ def _stage_dmg(dmg: Path, target: Path, *, run: Callable) -> Path:
     """Copy the ``.app`` out of the disk image, read-only and unseen by Finder."""
     mount = target / "mount"
     mount.mkdir()
-    _run(
-        run,
-        [
-            HDIUTIL,
-            "attach",
-            "-nobrowse",
-            "-readonly",
-            "-mountpoint",
-            str(mount),
-            str(dmg),
-        ],
-        "The downloaded disk image couldn't be opened.",
-    )
     app = target / f"{APP_NAME}.app"
+    # The attach is inside the `try`: one that mounted the image and then
+    # timed out still gets the detach, rather than leaving the image mounted.
     try:
+        _run(
+            run,
+            [
+                HDIUTIL,
+                "attach",
+                "-nobrowse",
+                "-readonly",
+                "-mountpoint",
+                str(mount),
+                str(dmg),
+            ],
+            "The downloaded disk image couldn't be opened.",
+        )
         if not (mount / f"{APP_NAME}.app").is_dir():
             raise UpdateFailed(
                 "The download doesn't contain Scanpath Studio where it should."
@@ -621,6 +718,9 @@ class SwapPlan:
     relaunch: tuple[str, ...]
     boot_timeout_s: float = BOOT_TIMEOUT_S
     quit_timeout_s: float = QUIT_TIMEOUT_S
+    #: The attempt's :data:`LOCK`, which :func:`start_swap` lets go of once it
+    #: has recorded the attempt. Dropping the plan lets go of it too.
+    lock: _Lock | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -632,6 +732,78 @@ class UpdateResult:
     previous: str
     reason: str = ""
     pid: int | None = None
+    #: When the helper wrote it (the file's time), so About can let it go.
+    at: float | None = None
+
+
+class _Lock:
+    """An attempt's hold on :data:`LOCK`; :meth:`release` is idempotent."""
+
+    def __init__(self, handle) -> None:
+        self._handle = handle
+
+    def release(self) -> None:
+        handle, self._handle = self._handle, None
+        if handle is None:
+            return
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        finally:
+            handle.close()
+
+    def __del__(self) -> None:
+        self.release()
+
+
+def _lock(state: Path) -> _Lock:
+    """Take :data:`LOCK` in ``state``, or refuse: another attempt holds it.
+
+    ``flock`` and ``msvcrt.locking`` both conflict between two opens of the
+    file in one process too, so two About tabs exclude each other.
+    """
+    handle = open(state / LOCK, "a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        raise UpdateFailed("An update is already under way.") from None
+    except OSError:
+        handle.close()
+        if os.name == "nt":  # locking() says only that the byte is taken
+            raise UpdateFailed("An update is already under way.") from None
+        # A file system without locks: go ahead unguarded, as before the lock.
+        return _Lock(None)
+    return _Lock(handle)
+
+
+def _make_state(state: Path) -> None:
+    """Create the state folder, private to this account (0o700 on POSIX).
+
+    Refuses one that is a link or another account's, checked again after
+    making it, since a folder beside a shared install could appear between
+    the check and the ``mkdir``.
+    """
+    if _not_ours(state):
+        raise UpdateFailed(_not_ours_reason(state))
+    state.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if _not_ours(state):
+        raise UpdateFailed(_not_ours_reason(state))
+    if os.name == "posix":
+        os.chmod(state, 0o700)
 
 
 def relaunch_command(
@@ -878,10 +1050,13 @@ function Move-All($From, $To) {
   foreach ($entry in $Entries) {
     $done = $false
     $target = Join-Path $To $entry
-    if (-not (Test-Path -LiteralPath $target)) {
+    $source = Join-Path $From $entry
+    # Retry only what antivirus can hold up: a missing source or a taken
+    # destination is a failure at once.
+    if ((Test-Path -LiteralPath $source) -and -not (Test-Path -LiteralPath $target)) {
       for ($try = 0; $try -lt 60 -and -not $done; $try++) {
         try {
-          Move-Item -LiteralPath (Join-Path $From $entry) -Destination $target -ErrorAction Stop
+          Move-Item -LiteralPath $source -Destination $target -ErrorAction Stop
           $done = $true
         } catch {
           Start-Sleep -Milliseconds 500
@@ -1123,7 +1298,19 @@ def start_swap(
     stopped or that didn't parse would otherwise leave the app gone, nothing
     relaunched and the attempt blocking a retry. Then the helper is killed
     (if it is running at all) and the attempt forgotten, and the app stays.
+    The wait is a cancel checkpoint too, ending the same way.
+
+    Lets go of the plan's :data:`LOCK` either way: ``pending.json`` guards
+    the attempt from here on.
     """
+    try:
+        _start_swap(plan, popen=popen, handshake_timeout_s=handshake_timeout_s)
+    finally:
+        if plan.lock is not None:
+            plan.lock.release()
+
+
+def _start_swap(plan: SwapPlan, *, popen: Callable, handshake_timeout_s: float) -> None:
     pending = plan.state / PENDING
     marker = plan.state / HELPER_STARTED
     windows = plan.install.system == "win32"
@@ -1136,9 +1323,14 @@ def start_swap(
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | getattr(
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200
         )
-        detach = {"creationflags": flags}
+        # Out of any job the app runs in, which may end its processes when the
+        # app quits. A job that forbids that refuses the flag outright; then
+        # the helper starts inside it, and if the job does end it, it ends
+        # before the swap begins (it waits for the app to quit first).
+        breakaway = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+        attempts = [{"creationflags": flags | breakaway}, {"creationflags": flags}]
     else:
-        detach = {"start_new_session": True}
+        attempts = [{"start_new_session": True}]
     try:
         marker.unlink(missing_ok=True)
         # With a BOM: a human running helper.ps1 to diagnose it gets the same
@@ -1155,33 +1347,54 @@ def start_swap(
                 "at": time.time(),
             },
         )
+        command = helper_command(script, plan.install.system)
         with open(plan.state / "helper.log", "w", encoding="utf-8") as log:
-            helper = popen(
-                helper_command(script, plan.install.system),
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                env=child_env(),
-                **detach,
-            )
+            for attempt, detach in enumerate(attempts, start=1):
+                try:
+                    helper = popen(
+                        command,
+                        stdin=subprocess.DEVNULL,
+                        stdout=log,
+                        stderr=subprocess.STDOUT,
+                        env=child_env(),
+                        **detach,
+                    )
+                    break
+                except OSError:
+                    if attempt == len(attempts):
+                        raise
     except (OSError, ValueError) as error:
         pending.unlink(missing_ok=True)
         raise UpdateFailed(
             "The helper that swaps the versions couldn't be started."
         ) from error
-    if not _helper_started(marker, helper, handshake_timeout_s):
-        try:
-            helper.kill()
-        except Exception:
-            pass
-        pending.unlink(missing_ok=True)
+    try:
+        started = _helper_started(marker, helper, handshake_timeout_s)
+    except progress.Cancelled:
+        _abandon(helper, pending)
+        raise
+    if not started:
+        _abandon(helper, pending)
         raise UpdateFailed(
             "The helper that swaps the versions didn't start, so nothing was changed."
         )
 
 
+def _abandon(helper: object, pending: Path) -> None:
+    """Stop a helper that never took over (it is still waiting for this
+    process to quit), and forget the attempt so a retry isn't refused."""
+    try:
+        helper.kill()
+    except Exception:
+        pass
+    pending.unlink(missing_ok=True)
+
+
 def _helper_started(marker: Path, helper: object, timeout_s: float) -> bool:
-    """Wait up to ``timeout_s`` for the helper's marker; stop early if it exited."""
+    """Wait up to ``timeout_s`` for the helper's marker; stop early if it exited.
+
+    Each wait is a cancel checkpoint for the progress task, if one is active.
+    """
     deadline = time.monotonic() + timeout_s
     while True:
         if marker.exists():
@@ -1190,6 +1403,7 @@ def _helper_started(marker: Path, helper: object, timeout_s: float) -> bool:
         exited = poll is not None and poll() is not None
         if exited or time.monotonic() >= deadline:
             return marker.exists()  # it may have written it on its way out
+        progress.report()
         time.sleep(0.05)
 
 
@@ -1291,6 +1505,7 @@ def last_result(
             previous=str(data["previous"]),
             reason=str(data.get("reason") or ""),
             pid=int(pid) if pid not in (None, "") else None,
+            at=(state / RESULT).stat().st_mtime,
         )
     except Exception:
         return None
@@ -1341,6 +1556,9 @@ def prepare(
     progress task that was cancelled, ``progress.Cancelled``. Anything else
     that goes wrong on the way — a folder that can't be written, a file that
     can't be read — is an :class:`UpdateFailed` too, never a raw exception.
+
+    Makes the state folder and takes its :data:`LOCK` before touching
+    anything in it; the returned plan holds the lock for :func:`start_swap`.
     """
     reason = refusal(check, install, run=run, machine=machine)
     if reason is not None:
@@ -1351,29 +1569,43 @@ def prepare(
         if on_step is not None:
             on_step(STEPS[index])
 
+    lock = None
     try:
-        state = state_dir(install)
-        asset = asset_for(check, install, machine=machine)
-        clear_attempt(state)
-        step(0)
-        archive = download(
-            asset, state / "download", allow_file=allow_file, opener=opener
+        try:
+            state = state_dir(install)
+            _make_state(state)
+            lock = _lock(state)
+            # Another attempt may have recorded itself and let go of the lock
+            # between refusal() and here.
+            if _pending(state) is not None:
+                raise UpdateFailed("An update is already under way.")
+            asset = asset_for(check, install, machine=machine)
+            clear_attempt(state)
+            step(0)
+            archive = download(
+                asset, state / "download", allow_file=allow_file, opener=opener
+            )
+            step(1)
+            staged = stage(archive, state, install, run=run)
+            step(2)
+            self_test(staged, install.system, run=run)
+        except (OSError, ValueError) as error:  # UnicodeDecodeError is a ValueError
+            raise UpdateFailed(
+                f"Preparing the update failed: {_short_reason(error)}"
+            ) from error
+        step(3)
+        plan = SwapPlan(
+            pid=os.getpid(),
+            install=install,
+            staged=staged,
+            state=state,
+            version=check.latest.version,
+            previous=check.current,
+            relaunch=relaunch_command(install),
+            lock=lock,
         )
-        step(1)
-        staged = stage(archive, state, install, run=run)
-        step(2)
-        self_test(staged, install.system, run=run)
-    except (OSError, ValueError) as error:  # UnicodeDecodeError is a ValueError
-        raise UpdateFailed(
-            f"Preparing the update failed: {_short_reason(error)}"
-        ) from error
-    step(3)
-    return SwapPlan(
-        pid=os.getpid(),
-        install=install,
-        staged=staged,
-        state=state,
-        version=check.latest.version,
-        previous=check.current,
-        relaunch=relaunch_command(install),
-    )
+    except BaseException:
+        if lock is not None:
+            lock.release()
+        raise
+    return plan

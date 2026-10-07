@@ -1,1 +1,0 @@
-The API and CLI draw the app's Scanpath design by default (no heatmap, word boxes or fixation numbers unless asked, A/B legend on), and the bundled demo uses its recorded screen; reproduction code written before this may need those layers turned on.

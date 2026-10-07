@@ -1,1 +1,0 @@
-In Compare, the Heatmap popover now has a Scanpath A and a Scanpath B group, each with its own colour scale on the shared range, and a colour bar each when they differ (the new heatmap_colorscale style key, also on the Share link, CLI --style-a/--style-b and the API).

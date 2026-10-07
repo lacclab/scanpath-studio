@@ -1,1 +1,0 @@
-A misspelt CLI flag gives a short error with a suggestion, options put before the command say where they belong, render takes --word-boxes, --heatmap, --no-text and US/UK spellings, and cache prints real plurals.

@@ -1049,6 +1049,120 @@ def _width_fit_font(words: pd.DataFrame) -> float | None:
     return tight * _WIDTH_FIT_MARGIN if tight > 0 else None
 
 
+# A monospace word box is its glyphs plus the same padding on every word — half
+# the gap to each neighbour (a space, plus any extra word spacing). Line-start
+# words carry only the right half, and a fixation cross's box none, so a box
+# agrees when it carries the full padding, half of it or none, and most of a
+# trial's boxes must agree before the font is read off them.
+_PADDED_MIN_AGREEMENT = 0.8
+_PADDED_MIN_WORDS = 5
+_PADDED_TOL = 0.02  # of one cell, or 1.5 data px, whichever is larger
+
+
+def _padded_monospace_font(words: pd.DataFrame) -> float | None:
+    """The font (data px) of a monospace layout whose boxes are padded alike:
+    the character cell (:func:`_padded_monospace_layout`) over the font's
+    advance. ``None`` when the layout is not one."""
+    layout = _padded_monospace_layout(words)
+    return None if layout is None else layout[0] / _latin_advance(words)
+
+
+def _padded_monospace_layout(words: pd.DataFrame) -> tuple[float, float] | None:
+    """``(cell, padding)`` in data px of a monospace layout padded alike.
+
+    Each box is ``n_chars`` cells plus a padding shared by every word, so the
+    cell is the slope of box width against word length and the font is that
+    cell over the font's advance — exact, with no margin to guess: the padding
+    *is* the margin. The slope is read from the *regular* boxes only, leaving
+    out each line's first box (it carries only the right half of the padding)
+    and any box starting where another does (a fixation cross over the first
+    word), since on a short screen those few would tip a median. ``None`` when
+    the boxes do not agree (proportional fonts, too few words or lengths,
+    full-width text), so the caller falls back to :func:`_width_fit_font`.
+    """
+    if not {"x", "width", "text"} <= set(words.columns):
+        return None
+    frame = words.dropna(subset=["text"])
+    text = frame["text"].astype(str)
+    if any(_is_fullwidth(ch) for ch in "".join(text.tolist())):
+        return None
+    chars = text.str.len().to_numpy(dtype=float)
+    x = pd.to_numeric(frame["x"], errors="coerce").to_numpy(dtype=float)
+    width = pd.to_numeric(frame["width"], errors="coerce").to_numpy(dtype=float)
+    ok = (chars > 0) & np.isfinite(width) & (width > 0) & np.isfinite(x)
+    if ok.sum() < _PADDED_MIN_WORDS:
+        return None
+    regular = ok.copy()
+    if {"y", "height"} <= set(frame.columns):
+        from .measures import cluster_word_lines
+
+        lines = np.asarray(cluster_word_lines(frame))
+        for line in pd.unique(lines[ok]):
+            on_line = np.flatnonzero(ok & (lines == line))
+            regular[on_line[x[on_line] <= x[on_line].min()]] = False
+    shared_start = pd.Series(x).duplicated(keep=False).to_numpy()
+    regular &= ~shared_start
+    lengths = np.unique(chars[regular])
+    if regular.sum() < _PADDED_MIN_WORDS - 1 or len(lengths) < 2:
+        return None
+    typical = np.array([np.median(width[regular & (chars == n)]) for n in lengths])
+    i, j = np.triu_indices(len(lengths), k=1)
+    cell = float(np.median((typical[j] - typical[i]) / (lengths[j] - lengths[i])))
+    if not np.isfinite(cell) or cell <= 0:
+        return None
+    pad = float(np.median(width[regular] - chars[regular] * cell))
+    if pad < -0.5 * cell:
+        return None
+    tol = max(1.5, _PADDED_TOL * cell)
+    glyphs = chars[ok] * cell
+    agree = (
+        (np.abs(width[ok] - glyphs - pad) <= tol)
+        | (np.abs(width[ok] - glyphs - pad / 2) <= tol)
+        | (np.abs(width[ok] - glyphs) <= tol)
+    )
+    if agree.mean() < _PADDED_MIN_AGREEMENT:
+        return None
+    return cell, pad
+
+
+def _word_label_x(words: pd.DataFrame) -> np.ndarray:
+    """Where each word label is centred: its box's middle (BUG-97) — except a
+    line's first word in a padded monospace layout.
+
+    There the box carries only the right half of the padding (the line starts
+    at the text), so the word sat flush with the box's left edge in the
+    experiment; centring it in the box shifted it right by a quarter of the gap.
+    Such a word is centred on its own letters instead, starting at ``x``.
+    Right-to-left words and every other layout keep the box's middle.
+    """
+    from .measures import cluster_word_lines, word_box_bounds
+
+    x0, _, x1, _ = word_box_bounds(words)
+    label_x = (x0 + x1) / 2.0
+    layout = _padded_monospace_layout(words) if len(words) else None
+    if layout is None or not {"y", "height"} <= set(words.columns):
+        return label_x
+    cell, pad = layout
+    chars = words["text"].astype(str).str.len().to_numpy(dtype=float)
+    width = x1 - x0
+    half_padded = np.abs(width - chars * cell - pad / 2) <= max(1.5, _PADDED_TOL * cell)
+    rtl = words.get("right_to_left")
+    ltr = (
+        np.ones(len(words), dtype=bool)
+        if rtl is None
+        else ~rtl.fillna(False).astype(bool).to_numpy()
+    )
+    lines = np.asarray(cluster_word_lines(words))
+    first = np.zeros(len(words), dtype=bool)
+    for line in pd.unique(lines):
+        on_line = np.flatnonzero(lines == line)
+        first[on_line[x0[on_line] <= np.nanmin(x0[on_line])]] = True
+    flush = first & half_padded & ltr & (chars > 0)
+    label_x = label_x.copy()
+    label_x[flush] = x0[flush] + chars[flush] * cell / 2.0
+    return label_x
+
+
 def _display_scale(x_range: list, y_range: list, fitted_w: int, fitted_h: int) -> float:
     """Screen px per data unit for a fixed-size, equal-aspect spatial plot.
 
@@ -1088,11 +1202,19 @@ def _word_label_font_px(
       size is *also* capped so the longest words still fit their box width (see
       :func:`_width_fit_font`), which keeps the font from colliding; the smaller of
       the two wins.
+      **Except** when the boxes hold their word plus the same padding, half the
+      gap to each neighbour (:func:`_padded_monospace_font`): then the font is
+      read off the boxes exactly,
+      and neither the line-spacing guess nor the fit's safety margin applies —
+      each shrank such text by its own few percent.
     - otherwise / no usable boxes: ``manual_font_px`` is treated as the real
       monitor font size and scaled the same way.
     """
     font_data_px = float(manual_font_px)
-    if scale_text_to_boxes and not words.empty and "height" in words.columns:
+    exact = _padded_monospace_font(words) if scale_text_to_boxes else None
+    if exact:
+        font_data_px = exact
+    elif scale_text_to_boxes and not words.empty and "height" in words.columns:
         pitch = _line_pitch(words)
         height_fit = pitch / line_spacing if (pitch and line_spacing > 0) else None
         width_fit = _width_fit_font(words)
@@ -2801,12 +2923,12 @@ def _add_word_label_trace(
             _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
-    # BUG-97 — the label is centred in its word's box, as the data defines it.
-    # BUG-30 centred it on the glyph run instead, which on a tiling corpus (the
-    # box carries the following space) drew every word flush left in its box.
+    # BUG-97 — the label is centred in its word's box, as the data defines it
+    # (`_word_label_x`: a padded layout's line-start word sits flush left, as it
+    # was shown). BUG-30 centred it on the glyph run instead, which on a tiling
+    # corpus (the box carries the following space) drew every word flush left.
     # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
     # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
-    from .measures import word_box_bounds
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -2814,8 +2936,7 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    box_x0, _, box_x1, _ = word_box_bounds(words)
-    label_x = (box_x0 + box_x1) / 2.0
+    label_x = _word_label_x(words)
     # The word drawn as its own characters (finding 6 — not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`
     # reads this same string, so it shows the word literally too.

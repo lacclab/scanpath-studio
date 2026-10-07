@@ -6,6 +6,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
     SELECTOR_SCREEN_FLOOR_REM,
+    SELECTOR_SCREEN_PICKER_REM,
     SELECTOR_STEPS_FLOOR_REM,
 )
 
@@ -751,8 +752,12 @@ def get_app_css() -> str:
             radial-gradient(farthest-side at 0 50%, rgba(128, 128, 128, 0.35), transparent) left / 0.7rem 100% no-repeat scroll,
             radial-gradient(farthest-side at 100% 50%, rgba(128, 128, 128, 0.35), transparent) right / 0.7rem 100% no-repeat scroll;
     }
+    /* The table spans its column, like the trial rows above it, rather than
+       ending a third of the way across a wide window; the browser shares the
+       extra width out between the columns. Its text is the selectors' size,
+       and its headers their labels' (2026-10-07). */
     .sps-chip-table-wrap table.sps-chip-table {
-        width: auto;
+        width: 100%;
         margin: 0;
         border: none;
         border-collapse: collapse;
@@ -762,7 +767,7 @@ def get_app_css() -> str:
     }
     .sps-chip-table-wrap table.sps-chip-table th,
     .sps-chip-table-wrap table.sps-chip-table td {
-        padding: 0.2rem 0.55rem;
+        padding: 0.28rem 0.55rem;
         border: none;
         border-bottom: 1px solid var(--sps-border);
         background: transparent;
@@ -775,7 +780,7 @@ def get_app_css() -> str:
         padding-top: 0;
         vertical-align: bottom;
         white-space: normal;
-        font-size: 0.75rem;
+        font-size: 0.8125rem;
         font-weight: 600;
         line-height: 1.25;
         color: color-mix(in srgb, currentColor 62%, transparent);
@@ -1169,8 +1174,11 @@ def get_app_css() -> str:
     [class*="_row_tail"] {
         flex-wrap: nowrap !important;
     }
+    /* One width on both rows (`SELECTOR_SCREEN_PICKER_REM`), so B's screen
+       picker lines up under A's and its ⇅ 🔎 under A's; it only gives way
+       when the track is narrower than that. */
     [class*="_row_tail"] > [data-testid="stLayoutWrapper"]:has([class*="screen_picker"]) {
-        flex: 1 1 0 !important;
+        flex: 0 1 __SELECTOR_SCREEN_PICKER__ !important;
         min-width: 0 !important;
     }
     /* Its own control keeps the label and value on one line; the value
@@ -2362,9 +2370,11 @@ def get_app_css() -> str:
     """
     for i in (0, 1, 3):
         css = css.replace(f"__SELECTOR_FLOOR_{i}__", selector_track_floor(i))
-    css = css.replace(
-        "__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem"
-    ).replace("__SELECTOR_STEPS_FLOOR__", f"{SELECTOR_STEPS_FLOOR_REM}rem")
+    css = (
+        css.replace("__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem")
+        .replace("__SELECTOR_STEPS_FLOOR__", f"{SELECTOR_STEPS_FLOOR_REM}rem")
+        .replace("__SELECTOR_SCREEN_PICKER__", f"{SELECTOR_SCREEN_PICKER_REM}rem")
+    )
     return css
 
 

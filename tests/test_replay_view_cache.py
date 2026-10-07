@@ -124,7 +124,12 @@ class TestARerunShowsTheCachedView:
         _render()
         # What PERF-13's path embedded for that same finished figure.
         tabs._render_true_scale_chart(
-            finished[0], key="single_anim", download_name="animation_p1__t1_frame"
+            finished[0],
+            key="single_anim",
+            download_name="animation_p1__t1_frame",
+            # The Scanpath view's replay is fitted to the window, like its
+            # static and comparison figures.
+            fit_window=True,
         )
         assert page["embeds"][1] == page["embeds"][2]
 

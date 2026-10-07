@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.36.0] - 2026-10-07
+
+### Added
+- The chips above the plot can be hidden from the ✏️ menu at the end of the trial row, which keeps their fields for when you show them again; a share link carries the choice. ([#373](https://github.com/lacclab/scanpath-studio/issues/373))
+- A Windows installer (ScanpathStudio-windows-x86_64-setup.exe): one download that installs the desktop app for your account, adds it to the Start menu and uninstalls from Settings → Apps, with no unzipping. The .zip is still there for running without installing. ([#387](https://github.com/lacclab/scanpath-studio/issues/387))
+
+### Changed
+- The dataset and trial dropdowns (and Compare's) open as wide as their longest option, so long names are read in full. ([#381](https://github.com/lacclab/scanpath-studio/issues/381))
+- The scanpath plot is centred in its column and grows to fill the column when the window has room, rather than stopping at its true size; the chip table keeps each trial on one line. ([#381](https://github.com/lacclab/scanpath-studio/issues/381))
+- The screen picker sits at the right end of the trial row as a compact dropdown with ◀ ▶, instead of a row of its own under each trial row, with the sort, filter and chips menus after it at the row's end. ([#381](https://github.com/lacclab/scanpath-studio/issues/381))
+- The Export subtab asks *Self-contained HTML* only once HTML is the chosen format, under that format — the bundle asks its own. ([#382](https://github.com/lacclab/scanpath-studio/issues/382))
+
+### Removed
+- The Export subtab's *Download this comparison as a bundle* expander. ([#382](https://github.com/lacclab/scanpath-studio/issues/382))
+
+### Fixed
+- A metadata table uploaded to one dataset no longer attaches itself to the next dataset you open; switching datasets now empties the metadata uploaders. ([#380](https://github.com/lacclab/scanpath-studio/issues/380))
+- A UTF-16 table, such as an EyeLink Data Viewer report, now reads its column names instead of showing every column as "Unnamed". ([#383](https://github.com/lacclab/scanpath-studio/issues/383))
+
 ## [0.35.0] - 2026-10-07
 
 ### Added

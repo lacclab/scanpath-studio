@@ -40,7 +40,7 @@ __all__ = [
 # against. `__version__` is the exact build, worked out from it lazily
 # (build_info.py, #139) — "0.35.0" at the release itself,
 # "0.35.0.post3+g8f18219" three commits after it.
-__release__ = "0.35.0"
+__release__ = "0.36.0"
 
 # Public headless API (see api.py / datasets.py / eyegenbench.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/

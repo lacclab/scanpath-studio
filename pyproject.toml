@@ -35,6 +35,8 @@ classifiers = [
 ]
 dependencies = [
     "streamlit>=1.65.0",
+    # Build versions sort and compare as PEP 440 (`build_info.py`, `updates.py`, #139).
+    "packaging>=26.3",
     "pandas>=3.0",
     "plotly>=7.1",
     "numpy>=2.4",

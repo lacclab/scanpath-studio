@@ -819,11 +819,17 @@ $Relaunch = @(@@RELAUNCH@@)
 $UninstallKey = @@UNINSTALL_KEY@@
 $Pending = @@PENDING@@
 $script:Launched = $null
+# Under -EncodedCommand with redirected output, progress records are
+# serialized into the log as CLIXML.
+$ProgressPreference = 'SilentlyContinue'
 
-# One timestamped line per stage, on the host (helper.log), to tell where it
-# stopped. Write-Host never reaches a function's pipeline or return value.
+# One timestamped line per stage, on stdout (helper.log), to tell where it
+# stopped. Raw stdout skips the host's CLIXML wrapping of -EncodedCommand
+# output (which the information stream gets) and never reaches a function's
+# pipeline or return value.
 function Write-Log($Message) {
-  Write-Host ((Get-Date -Format 'HH:mm:ss') + ' ' + $Message)
+  [Console]::Out.WriteLine((Get-Date -Format 'HH:mm:ss') + ' ' + $Message)
+  [Console]::Out.Flush()
 }
 
 # First, before anything can fail: the app waits for this before it quits.
@@ -1123,7 +1129,11 @@ def start_swap(
     windows = plan.install.system == "win32"
     script = plan.state / ("helper.ps1" if windows else "helper.sh")
     if windows:
-        flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(
+        # Not DETACHED_PROCESS: Windows PowerShell 5.1 exits without running
+        # its command when it starts with no console at all. CREATE_NO_WINDOW
+        # gives it a hidden console of its own, which also keeps it alive
+        # after the app quits.
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | getattr(
             subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200
         )
         detach = {"creationflags": flags}

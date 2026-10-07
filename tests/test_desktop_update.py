@@ -618,12 +618,13 @@ def test_the_sh_helper_logs_each_stage_with_a_timestamp(tmp_path):
         _kill_launched(plan.state)
 
 
-def test_both_helpers_are_plain_ascii_and_log_through_write_host():
+def test_both_helpers_are_plain_ascii_and_log_through_raw_stdout():
     # helper.log is read back on a runner whose console may not be UTF-8
     for template, call in ((du._SH_HELPER, "log "), (du._PS_HELPER, "Write-Log")):
         logged = [line for line in template.splitlines() if call in line]
         assert logged and all(line.isascii() for line in logged)
-    assert "Write-Host" in du._PS_HELPER
+    assert "[Console]::Out.WriteLine" in du._PS_HELPER
+    assert "Write-Host" not in du._PS_HELPER
     assert "Write-Output" not in du._PS_HELPER
 
 
@@ -871,6 +872,23 @@ def test_start_swap_records_the_attempt_and_detaches(tmp_path):
     assert seen["argv"] == ["/bin/sh", str(plan.state / "helper.sh")]
     assert seen["kwargs"]["start_new_session"] is True
     assert seen["kwargs"]["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+
+
+def test_start_swap_on_windows_gives_powershell_a_hidden_console(tmp_path):
+    # DETACHED_PROCESS (no console at all) makes Windows PowerShell 5.1 exit
+    # without running its command
+    plan = _swap_fixture(tmp_path, "win32", "boot")
+    seen = {}
+
+    def popen(argv, **kwargs):
+        seen["kwargs"] = kwargs
+        (plan.state / du.HELPER_STARTED).write_text("")
+        return _FakeHelper()
+
+    du.start_swap(plan, popen=popen)
+    flags = seen["kwargs"]["creationflags"]
+    assert flags == 0x08000000 | 0x200  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    assert not flags & 0x8  # DETACHED_PROCESS
 
 
 def test_a_helper_that_cannot_start_leaves_no_attempt(tmp_path):

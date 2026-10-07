@@ -13,9 +13,15 @@ from . import progress
 from .annotations import current_dataset as annotations_dataset
 from .annotations import get_entry, store_for_prefix
 from .column_names import COMPUTED_SUFFIX, active_all
-from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO, spoken
+from .constants import (
+    SELECTOR_ROW_GRID,
+    SELECTOR_ROW_TRIO,
+    SELECTOR_SCREEN_TRACK,
+    spoken,
+)
 from .data import frame_fingerprint, stable_id
 from .fields import labeled
+from .styles import widen_menu
 
 # Annotation markers shown beside a trial in the pickers (UX-6). Independent of
 # the same-text/same-participant markers (UX-4) and of each other — a trial can
@@ -1122,6 +1128,24 @@ def step_linked_compare(delta: int) -> None:
 _TRIAL_BY_DATASET_KEY = "_trial_by_dataset"
 
 
+def row_tail(column, key_prefix: str, reserve_screen_cell):
+    """Lay out a selector row's last cell: the screen navigator, then the menus.
+
+    ``reserve_screen_cell`` is handed the cell's container to keep a slot for
+    the screen navigator (filled once the trial is resolved). Returns the
+    ``railbtn_*`` cluster after it, where the row's ⇅ 🔎 ✏️ go — at the row's
+    right end, while ◀ ▶ stay beside the slider they step.
+    """
+    tail = column.container(
+        key=f"{key_prefix}_row_tail",
+        horizontal=True,
+        vertical_alignment="bottom",
+        gap="small",
+    )
+    reserve_screen_cell(tail)
+    return tail.container(key=f"railbtn_{key_prefix}_menus", width="content")
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
@@ -1133,6 +1157,7 @@ def _select_trial_none_mode(
     fixations: pd.DataFrame | None = None,
     leading_renderer=None,
     filter_renderer=None,
+    trailing_renderer=None,
 ) -> tuple[str | None, str | None, str | None]:
     """The trial picker: **dataset + selectbox + scrubbing slider + ◀ ▶ steps + ⇅
     sort + 🔎 filters**, all on one row (UX-64). The slider thumb shows ``index/TOTAL · id``
@@ -1143,7 +1168,12 @@ def _select_trial_none_mode(
     Scanpath/Corpus body), not nested inside another column. ``picker_host``
     (when given) is the container to render into; defaults to the current one.
     ``words`` / ``fixations`` (optional) unlock the computed sort keys (UX-10);
-    without them only column-based orderings are offered."""
+    without them only column-based orderings are offered.
+
+    ``trailing_renderer`` (optional) is handed a slot in one more column at
+    the row's right end — the multipart screen navigator, which the caller can
+    only draw once the trial is resolved, so it keeps the slot and fills it
+    later. The row's ⇅ 🔎 ✏️ then move after it (``row_tail``)."""
     host = picker_host if picker_host is not None else st
     available_trials = combos.drop_duplicates(subset=[trial_field])
     trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
@@ -1274,18 +1304,28 @@ def _select_trial_none_mode(
         # (UX-27), which styles.py packs right at a uniform 3px spacing. A column
         # each put a full gutter between them, so a prev/next *pair* didn't read
         # as a pair.
-        lead_col, sel_col, slider_col, trail_col = host.columns(
-            SELECTOR_ROW_GRID, vertical_alignment="bottom"
+        lead_col, sel_col, slider_col, trail_col, *extra = host.columns(
+            SELECTOR_ROW_GRID + ([SELECTOR_SCREEN_TRACK] if trailing_renderer else []),
+            vertical_alignment="bottom",
         )
         if leading_renderer is not None:
             leading_renderer(lead_col)
-        trail = trail_col.container(key=f"railbtn_{key_prefix}_trail")
+        menus = (
+            row_tail(extra[0], key_prefix, trailing_renderer)
+            if trailing_renderer is not None
+            else None
+        )
+        trail = trail_col.container(
+            key=f"railbtn_{key_prefix}_trail{'_steps' if menus else ''}"
+        )
         # Created in display order (◀ ▶ then ⇅) but filled out of order: the sort
         # popover has to render first, because the order it returns is what the
-        # selectbox, the slider and the ◀ ▶ steps all walk.
+        # selectbox, the slider and the ◀ ▶ steps all walk. With a screen cell,
+        # ⇅ 🔎 ✏️ close the row after it, and ◀ ▶ stay by the slider.
         step_col = trail.container(key=f"railbtn_{key_prefix}_step")
-        sort_col = trail.container(key=f"railbtn_{key_prefix}_sort")
-        filter_col = trail.container(key=f"railbtn_{key_prefix}_filter")
+        cluster = trail if menus is None else menus
+        sort_col = cluster.container(key=f"railbtn_{key_prefix}_sort")
+        filter_col = cluster.container(key=f"railbtn_{key_prefix}_filter")
         # Filled by the caller, which owns the filter widgets — but created here,
         # in display order, so 🔎 lands after ⇅ in the cluster (UX-64).
         if filter_renderer is not None:
@@ -1334,14 +1374,22 @@ def _select_trial_none_mode(
         # option — BUG-23) and nothing to step through, but it still needs the
         # dataset picker and the filters: a pool of one is *usually the result of
         # a filter*, so this is exactly when the user reaches for them. UX-64.
-        lead_col, sel_col, trail_col = host.columns(
-            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
+        lead_col, sel_col, trail_col, *extra = host.columns(
+            SELECTOR_ROW_TRIO + ([SELECTOR_SCREEN_TRACK] if trailing_renderer else []),
+            vertical_alignment="bottom",
         )
         if leading_renderer is not None:
             leading_renderer(lead_col)
+        menus = (
+            row_tail(extra[0], key_prefix, trailing_renderer)
+            if trailing_renderer is not None
+            else None
+        )
         if filter_renderer is not None:
             filter_renderer(
-                trail_col.container(key=f"railbtn_{key_prefix}_filter_solo")
+                (trail_col if menus is None else menus).container(
+                    key=f"railbtn_{key_prefix}_filter_solo"
+                )
             )
 
     # CMP-13: publish the list as rendered (post-sort), so the *Compare To*
@@ -1384,6 +1432,9 @@ def _select_trial_none_mode(
             )
         ),
     )
+    if trial_id_key:
+        # The menu opens as wide as its longest trial id (+ marks / sort value).
+        widen_menu(trial_id_key, option_labels.values())
 
     if n_trials > 1:
         slider_labels = {opt: _slider_label(opt) for opt in trial_options}
@@ -1461,6 +1512,7 @@ def select_trial(
     fixations: pd.DataFrame | None = None,
     leading_renderer=None,
     filter_renderer=None,
+    trailing_renderer=None,
 ) -> tuple[str | None, str | None, str, str | None]:
     """Pick a specific trial from the (already-narrowed) pool.
 
@@ -1511,6 +1563,7 @@ def select_trial(
         # popover are filled by the caller, which owns those widgets.
         leading_renderer=leading_renderer,
         filter_renderer=filter_renderer,
+        trailing_renderer=trailing_renderer,
         words=words,
         fixations=fixations,
     )

@@ -133,6 +133,12 @@ print(figure_options_table())
 
 ::: scanpath_studio.api.clear_cache
 
+## Version and updates
+
+::: scanpath_studio.api.version_info
+
+::: scanpath_studio.api.check_for_updates
+
 For a batch loop, see [Automation](automation.md#batch-pattern). GIF and MP4
 export uses
 `scanpath_studio.animation_export.export_animation` and requires Kaleido plus

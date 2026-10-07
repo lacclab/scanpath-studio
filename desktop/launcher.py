@@ -22,6 +22,13 @@ Environment overrides (used by the smoke test, handy for debugging):
 the plotly.min.js the app serves, load the bundled sample, build a figure,
 render HTML) and exits — it catches missing hidden imports or data files
 without needing a browser.
+
+``--update`` is About's *Update & restart*, headless (#385): check GitHub
+(or ``SCANPATH_UPDATE_FEED``, a local JSON release CI uses), download,
+verify, stage and self-test the new version, then hand the swap to a
+detached helper and exit. The helper relaunches the app; the relaunched
+launcher reports in (``started`` at launch, ``booted`` once its server
+answers), and the helper puts the old version back if it never does.
 """
 
 from __future__ import annotations
@@ -435,8 +442,64 @@ def selfcheck() -> int:
     if "plotly" not in html.lower():
         print("selfcheck FAILED: figure HTML looks wrong")
         return 1
-    print(f"selfcheck ok: {len(combos)} trials, figure HTML {len(html)} bytes")
+    from scanpath_studio import __version__
+
+    print(
+        f"selfcheck ok: v{__version__}, {len(combos)} trials, figure HTML {len(html)} bytes"
+    )
     return 0
+
+
+def update() -> int:
+    """``--update``: About's *Update & restart*, headless (#385); an exit code."""
+    from scanpath_studio import desktop_update, updates
+
+    feed = os.environ.get(desktop_update.FEED_ENV, "").strip()
+    latest = (lambda: desktop_update.feed_release(Path(feed))) if feed else None
+    check = updates.check_for_updates(latest=latest)
+    print(check.message)
+    if check.status != "update_available":
+        return 1 if check.status == "error" else 0
+    try:
+        plan = desktop_update.prepare(
+            check,
+            desktop_update.current_install(),
+            # Only the test feed may hand over a local file.
+            allow_file=bool(feed),
+            on_step=lambda step: print(f"update: {step}..."),
+        )
+        desktop_update.start_swap(plan)
+    except desktop_update.UpdateFailed as error:
+        print(f"update FAILED: {error}")
+        return 1
+    print(
+        f"update ok: swapping in v{plan.version}; the helper restarts the app "
+        f"(log: {plan.state / 'helper.log'})"
+    )
+    return 0
+
+
+def _note_update_start() -> None:
+    """Tell a waiting update helper that this launch is the new version (#385)."""
+    try:
+        from scanpath_studio import desktop_update
+
+        desktop_update.note_start()
+    except Exception:
+        pass  # an update's bookkeeping must never stop a launch
+
+
+def _confirm_boot_when_ready(port: int) -> None:
+    """Once the server answers, confirm a pending update (#385) — even with no
+    browser to open, so a headless relaunch confirms too."""
+    if not _wait_for_server(f"http://127.0.0.1:{port}/_stcore/health"):
+        return
+    try:
+        from scanpath_studio import desktop_update
+
+        desktop_update.note_boot()
+    except Exception:
+        pass
 
 
 def main() -> None:
@@ -448,7 +511,13 @@ def main() -> None:
     if "--selfcheck" in sys.argv[1:]:
         sys.exit(selfcheck())
 
+    if "--update" in sys.argv[1:]:
+        sys.exit(update())
+
+    _note_update_start()
+
     port = _resolve_port()
+    threading.Thread(target=_confirm_boot_when_ready, args=(port,), daemon=True).start()
 
     if not _env_flag("SCANPATH_DESKTOP_NO_BROWSER"):
         threading.Thread(

@@ -383,27 +383,21 @@ def _single_screen_navigator_app():
     _render_screen_navigator(part_catalog(words, fixations).head(1))
 
 
-def test_ux47_screen_slider_and_selectbox_stay_in_sync_both_ways():
-    """UX-47: the screen row gained the trial picker's scrubbing slider.
-
-    The slider is a second view of ``single_screen_id``, never a second source of
-    truth — stepping or picking must move the thumb, and scrubbing must move the
-    canonical selection back.
-    """
+def test_the_screen_navigator_steps_with_no_slider():
+    """The screen navigator is a compact cell at the end of the trial row
+    (2026-10-07): a dropdown + ◀ ▶, with no scrubbing slider — a trial has few
+    screens. ◀ ▶ move ``single_screen_id``, and each end disables its step."""
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_function(_multipart_navigator_app).run()
     assert not at.exception, at.exception
-    assert at.select_slider(key="single_screen_pos").value == "intro"
-
-    # ◀ ▶ write the selectbox; the slider must follow on the next run.
-    at.button(key="single_screen_next").click().run()
-    assert at.select_slider(key="single_screen_pos").value == "question"
-
-    # ...and a drag writes back, via the _on_screen_slider callback.
-    at.select_slider(key="single_screen_pos").set_value("intro").run()
+    assert len(at.select_slider) == 0
     assert at.selectbox(key="single_screen_id").value == "intro"
     assert at.button(key="single_screen_previous").disabled
+
+    at.button(key="single_screen_next").click().run()
+    assert at.selectbox(key="single_screen_id").value == "question"
+    assert not at.button(key="single_screen_previous").disabled
 
 
 def test_ux47_single_screen_trial_renders_no_slider():
@@ -437,7 +431,7 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
     # own "single_compare") rather than the literal "single_screen_trail" —
     # still a `railbtn_*` name, which is the part the shared CSS rule below
     # actually matches on.
-    assert 'container(key=f"railbtn_{key_prefix}_screen_trail")' in source
+    assert 'key=f"railbtn_{key_prefix}_screen_trail"' in source
     # The steps must be children of that container, not of the columns.
     assert 'trail.button(\n        f"◀ {spoken(' in source
     assert 'trail.button(\n        f"▶ {spoken(' in source

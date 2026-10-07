@@ -431,6 +431,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     # (no widget since VIZ-6, but a saved config still sets them).
     "use_stimulus_font_pt": "global_use_stimulus_font_pt",
     **_cmp_style_params("hollow"),
+    # #373: the chips above the plot, shown or hidden. Not part of the figure,
+    # so the settings file leaves it out (UX-179) — only the link carries it.
+    "show_chips": "single_show_chips",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     # #374 F28: Export → Current figure's print size (only while a width is set).
@@ -1114,7 +1117,9 @@ def _apply_url_preset() -> str | None:
     # in with the scale. A hand-written `?trial_id=` link carries no toggle and
     # gets the new default.
     if "marker_size_scale" not in qp and any(
-        k in qp for k in _SHARE_TOGGLE_PARAMS if k != "duration_size_legend"
+        k in qp
+        for k in _SHARE_TOGGLE_PARAMS
+        if k not in ("duration_size_legend", "show_chips")
     ):
         st.session_state.setdefault(
             "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE

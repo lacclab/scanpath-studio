@@ -967,7 +967,7 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
         def __exit__(self, *a):
             return False
 
-    def fake_urlopen(url, timeout=None):
+    def fake_urlopen(url, timeout=None, context=None):
         calls.append(url)
         return _FakeResp(_zip_bytes("x.csv", b"a\n1\n"))
 

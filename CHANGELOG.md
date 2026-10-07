@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.37.0] - 2026-10-07
+
+### Added
+- Help → About can check for updates: it shows whether a newer release is out and the command that updates your install, or the download for the desktop app; also scanpath-studio version --check and api.check_for_updates(), and only ever when asked. ([#139](https://github.com/lacclab/scanpath-studio/issues/139))
+- The desktop app updates itself: Help → About → Check for updates → Update & restart downloads, checks and tests the new version, then restarts into it, and puts the old one back if it doesn't start. ([#385](https://github.com/lacclab/scanpath-studio/issues/385))
+
+### Changed
+- Every build now reports its own version: between releases it is a development build such as 0.35.0.post3+g8f18219 (three commits after 0.35.0), shown in About, scanpath-studio --version, crash reports and exports, and as scanpath_studio.__version__; the hand-set release number is scanpath_studio.__release__. ([#139](https://github.com/lacclab/scanpath-studio/issues/139))
+
+### Fixed
+- Dataset downloads now trust the certificates your operating system trusts, so they no longer fail with CERTIFICATE_VERIFY_FAILED on a python.org Python on macOS or behind a network that inspects HTTPS. ([#391](https://github.com/lacclab/scanpath-studio/issues/391))
+
 ## [0.36.0] - 2026-10-07
 
 ### Added

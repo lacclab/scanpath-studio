@@ -42,6 +42,9 @@ scanpath_studio/
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
 ├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
 ├─ crash_report.py  what an uncaught error shows: `run_app` runs the app (its import included) inside `guarded`, which draws a "this is a bug — report it" note with the bug-report / Q&A links above the traceback. Every entry script calls it: `streamlit_app.py` (Cloud, tests) and `streamlit_entry.py` (what `scanpath-studio run` and the desktop app launch — not `app.py`, whose own imports a guard inside it could not cover). Every `@st.dialog` / `@st.fragment` also carries `@guarded()`, since Streamlit calls one directly when it reruns on its own (a test enforces it); widget callbacks run before the script and are not covered
+├─ build_info.py     #139: which build this is — `__version__` is the hand-set `__release__` at a release, else a PEP 440 build (`0.35.0.post3+g8f18219`) from `git describe` in a checkout of this repo, a desktop bundle's `_build.json` stamp, or a `pip install git+…`'s `direct_url.json`; plus `install_kind` (desktop / checkout / vcs / uv-tool / pipx / uv / pip). Never raises, no network
+├─ updates.py        #139: *Check for updates* — GitHub's latest release (`latest_release`) compared with the build (`check_for_updates` → `UpdateCheck`: up_to_date / update_available / ahead / error), with the update command per install kind (`update_command`) or the desktop archive (`desktop_archive`). Asked only on a click (About), `version --check` or `api.check_for_updates`; stdlib + packaging, never raises
+├─ desktop_update.py #385: the desktop app's own *Update & restart* — `refusal` (frozen only; newer, not a pre-release; sha256 digest; not translocated; install writable; same-volume state folder; disk; macOS Developer ID team), `download` (repo release URLs only, sha256-checked), `stage` (dmg → codesign/Team ID/spctl; zip; tar `filter="data"`), `self_test` (`--selfcheck`), `start_swap` (detached sh/PowerShell helper swapping the payload entries — `Contents`, or the executable + `_internal` so `unins000.*` survive — relaunch, roll back after `BOOT_TIMEOUT_S`), and the launcher's `note_start`/`note_boot`; stdlib + packaging, no Streamlit
 ├─ easter_egg.py     UX-39: triple-click the title, googly eyes. Browser-only on purpose — no session key, no rerun, nothing to expose on the other three surfaces
 ├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
 ├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
@@ -70,10 +73,10 @@ scanpath_studio/
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
-├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache)
-├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache
+├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache, version_info/check_for_updates (#139))
+├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache, `version [--check]` prints the build and checks for a newer release (#139)
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
-├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
+├─ __init__.py       exposes __release__ (the hand-set release), __version__ (the exact build, lazily — build_info.py), main(), and lazy re-exports of the api.py surface
 ├─ onestop_shard.py  one-shot prep: shard the ~15 GB OneStop lacclab CSVs into per-pid Parquet
 ├─ update_sample_data.py regenerate the bundled demo subset (+ synthesized raw-gaze overlay) from the full OneStop CSVs
 └─ sample_data/      bundled demo corpus (CSV + Parquet)
@@ -377,13 +380,15 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
 1. `python scripts/changelog_fragments.py release <version>` writes the
    `changelog.d/` fragments into a `CHANGELOG.md` section and deletes them
    (ENG-86).
-2. Bump `__version__` in `scanpath_studio/__init__.py` — the single source of
-   truth; `pyproject.toml` reads it dynamically (`[tool.setuptools.dynamic]`).
+2. Bump `__release__` in `scanpath_studio/__init__.py` — the single source of
+   truth for the release number; `pyproject.toml` reads it dynamically
+   (`[tool.setuptools.dynamic]`). `__version__` is worked out from it at
+   runtime (#139).
 3. Bump `version` + `date-released` in `CITATION.cff` to match
    (`tests/test_citation.py` enforces version parity).
 4. Commit on a branch and land it through a PR — `main` is protected. Once it
    has merged, tag the merge commit on `main` with `v<version>` and push the
-   tag (`publish.yml` refuses a tag that does not match `__version__`, ENG-62).
+   tag (`publish.yml` refuses a tag that does not match `__release__`, ENG-62).
 5. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
    publishes via PyPI Trusted Publishing (requires `pypi` environment set up
    on GitHub with the project name `scanpath-studio`).

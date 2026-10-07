@@ -63,8 +63,15 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-from scanpath_studio import dataset_table, loading, progress, wizard_shell
+from scanpath_studio import (
+    dataset_table,
+    desktop_update,
+    loading,
+    progress,
+    wizard_shell,
+)
 from scanpath_studio import metadata as metadata_mod
+from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
     filter_keys,
 )
@@ -278,7 +285,7 @@ from scanpath_studio.session_keys import (
     PARAM_CORPUS,
     PARAM_DATASET,
 )
-from scanpath_studio.styles import get_app_css
+from scanpath_studio.styles import get_app_css, widen_menu
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
     _REMAP_DIRTY_KEY,
@@ -1337,6 +1344,12 @@ def _arm_about() -> None:
     st.session_state["_about_dialog_requested"] = True
 
 
+#: #139 — the last *Check for updates* answer, shown under the button until the
+#: dialog is opened again. A plain session key, not in the recovery cache's
+#: allowlist, so it is never written to disk.
+_UPDATE_CHECK_KEY = "_about_update_check"
+
+
 def maybe_show_about() -> None:
     """Open the About dialog if the ❓ Help menu button armed it.
 
@@ -1346,6 +1359,7 @@ def maybe_show_about() -> None:
     rerun (including the ~10 s plot embeds).
     """
     if st.session_state.pop("_about_dialog_requested", False):
+        st.session_state.pop(_UPDATE_CHECK_KEY, None)
         _about_dialog()
 
 
@@ -1353,7 +1367,7 @@ def maybe_show_about() -> None:
 @guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
-    from scanpath_studio import __version__
+    from scanpath_studio import __release__, __version__
 
     # The button that opened this sits inside the ❓ Help popover, whose open
     # state is client-side — without this it floats on top of the modal.
@@ -1370,15 +1384,17 @@ def _about_dialog() -> None:
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
         f"url = {{{CITATION['url']}}},\n"
-        f"version = {{{__version__}}},\n"
+        f"version = {{{__release__}}},\n"
         "year = {2026}\n"
         "}"
     )
     st.markdown(
+        f"**Scanpath Studio** v{__version__} — interactive visualization of eye "
+        "movements in reading."
+    )
+    _render_build_and_updates()
+    st.markdown(
         f"""
-**Scanpath Studio** v{__version__} — interactive visualization of eye
-movements in reading.
-
 Developed by [Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-harram-32b547292/),
@@ -1442,6 +1458,171 @@ and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 
         _arm_debug()
         st.rerun()
+
+
+def _update_check_offered() -> bool:
+    """#139: *Check for updates* only where updating means something — a local
+    run or the desktop app, i.e. a server on loopback alone. The hosted demo
+    runs the `stable` branch, and its visitors have nothing to update."""
+    return server_bound_to_loopback()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _latest_release_cached() -> update_check.Release:
+    """GitHub's latest release, kept ten minutes: a second click, or a second
+    session on this machine, doesn't spend another of the 60 anonymous requests
+    an hour. A failure raises, and `st.cache_data` keeps no failed result."""
+    return update_check.latest_release()
+
+
+def _build_info():
+    """This process's build (a seam the About tests pin)."""
+    from scanpath_studio.build_info import build_info
+
+    return build_info()
+
+
+def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None:
+    """#385: the outcome the update helper left behind, across the restart.
+
+    Said only of the build that is running: a record that names neither
+    ``current`` version — a later install by hand — says nothing.
+    """
+    because = f": {last.reason}" if last.reason else ""
+    if last.status == "updated":
+        if last.version == current:
+            st.caption(f"Updated from v{last.previous}.")
+    elif last.previous == current:
+        # This build is the one that stayed.
+        st.warning(
+            f"The update to v{last.version} didn't go through{because}. "
+            f"This is still v{last.previous}.",
+            icon=ICONS["warning"],
+        )
+    elif last.version == current:
+        # A double failure kept the new version's files in place.
+        st.warning(
+            f"The update to v{last.version} didn't finish cleanly{because}. If "
+            f"something misbehaves, download v{last.version} again from the "
+            "release page.",
+            icon=ICONS["warning"],
+        )
+
+
+def _render_build_and_updates() -> None:
+    """#139: which build this is, and — on a local run — *Check for updates*."""
+    info = _build_info()
+    if info.version != info.release:
+        st.caption(info.describe())
+    # #385: how the desktop app's last update ended — None anywhere else.
+    last = desktop_update.last_result()
+    if last is not None:
+        _render_last_update(last, info.version)
+    if not _update_check_offered():
+        return
+    if st.button(
+        "Check for updates",
+        icon=ICONS["update"],
+        key="about_check_updates",
+        help="Asks GitHub for the latest release — the only time the app goes "
+        "online for this.",
+    ):
+        # One opaque request of at most 5 s inside a dialog: a spinner, not a
+        # UX-165 loading card.
+        with st.spinner("Asking GitHub…"):
+            st.session_state[_UPDATE_CHECK_KEY] = update_check.check_for_updates(
+                latest=_latest_release_cached
+            )
+    result = st.session_state.get(_UPDATE_CHECK_KEY)
+    if result is not None:
+        _render_update_result(result)
+
+
+def _render_update_result(result: update_check.UpdateCheck) -> None:
+    """One *Check for updates* answer: the sentence, then what to do about it."""
+    if result.status == "up_to_date":
+        st.success(result.message, icon=ICONS["success"])
+        return
+    if result.status == "ahead":
+        st.info(result.message, icon=ICONS["info"])
+        return
+    if result.status == "error":
+        st.warning(result.message, icon=ICONS["warning"])
+        return
+    st.info(result.message, icon=ICONS["update"])
+    if result.install_kind == "desktop":
+        _render_desktop_update(result)
+    elif result.command:
+        st.code(result.command, language="bash")
+        st.caption("Then restart the app.")
+    if result.latest is not None:
+        st.markdown(f"[What's new in v{result.latest.version}]({result.latest.url}) ↗")
+
+
+def _render_desktop_update(result: update_check.UpdateCheck) -> None:
+    """#385: **Update & restart** when this app can update itself, and the
+    download either way — beside the button, or instead of it with the reason."""
+    install = desktop_update.current_install()
+    reason = desktop_update.refusal(result, install)
+    clicked = False
+    if reason is None:
+        clicked = st.button(
+            "Update & restart",
+            type="primary",
+            icon=ICONS["update"],
+            key="about_update_restart",
+            help="Downloads the new version, checks and tests it, then restarts "
+            "into it. Your datasets and settings come back with it.",
+        )
+    else:
+        st.caption(reason)
+    if result.download is not None:
+        label = (
+            "Download instead"
+            if reason is None
+            else f"Download {result.download.name} ({human_size(result.download.size)})"
+        )
+        st.link_button(label, result.download.url, icon=ICONS["download"])
+    if clicked:
+        _run_desktop_update(result, install)
+
+
+def _stop_desktop_update(task_key: tuple) -> None:
+    """#385: Cancel on the update card — the download stops at its next chunk."""
+    progress.cancel(task_key)
+
+
+def _run_desktop_update(
+    result: update_check.UpdateCheck, install: desktop_update.Install
+) -> None:
+    """Download, check and test under a card, then hand over to the helper and quit."""
+    task_key = ("desktop_update", loading.session_id())
+    try:
+        with loading.card(
+            st.empty(),
+            key="desktop_update",
+            title=f"Updating to v{result.latest.version}",
+            steps=desktop_update.STEPS,
+            step_list=True,
+            task_key=task_key,
+            cancel=loading.Cancel(
+                "Cancel update", _stop_desktop_update, args=(task_key,)
+            ),
+        ):
+            plan = desktop_update.prepare(result, install)
+        desktop_update.start_swap(plan)
+    except desktop_update.UpdateFailed as error:
+        message = str(error)
+        if "nothing was changed" not in message.lower():
+            message += " Nothing was changed."
+        st.error(message, icon=ICONS["error"])
+        return
+    st.success(
+        f"Restarting into v{plan.version}. A new window opens when it's ready "
+        "(on Windows that can take a minute or two); you can close this one.",
+        icon=ICONS["update"],
+    )
+    desktop_update.exit_soon()
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------
@@ -5240,6 +5421,8 @@ def render_data_source_picker(host=None) -> None:
         key="data_source_picker",
         on_change=_on_data_source_pick,
     )
+    # The menu opens as wide as the longest dataset name.
+    widen_menu("data_source_picker", [_entry_label(entry) for entry in entries])
     # The help icon sits in the label row, right-aligned over +, not beside the
     # label: the bottom-aligned row keeps + level with the picker, so the icon
     # lands on the label's line.
@@ -6214,11 +6397,14 @@ def apply_editor_restore() -> None:
         return
     if snapshot.get("owner") != st.session_state.get(metadata_mod.OWNER_KEY):
         return
-    for grain in _metadata_grains_changed(snapshot):
+    changed = _metadata_grains_changed(snapshot)
+    if changed:
+        # The uploader still holds the cancelled edit's file in the browser.
+        metadata_mod.reset_uploads(st.session_state)
+    for grain in changed:
         before = snapshot["grains"][grain]
         key, raw, file = metadata_mod.grain_keys(grain)
         for name in (
-            f"{grain}_metadata_upload",
             f"{grain}_metadata_id_column",
             f"{grain}_metadata_keep_fields",
         ):

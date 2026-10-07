@@ -203,6 +203,9 @@ SINGLE_TRIAL_CHOSEN = "_single_trial_chosen"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
+#: #373: show the chips above the plot (default on). Hiding keeps the field
+#: selection (`trial_chip_fields`), so showing them again restores the row.
+SINGLE_SHOW_CHIPS = "single_show_chips"
 #: The ⚙ Playback replay speed (EXP-18 put it on the link). Mode-local, like
 #: `single_animate`, which is why it is `single_*` rather than `global_*`.
 SINGLE_PLAYBACK_SPEED = "single_playback_speed"
@@ -480,6 +483,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         # EXP-19.
         "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
         **_compare_style_params("hollow"),
+        # #373.
+        "show_chips": SINGLE_SHOW_CHIPS,
     }
 )
 

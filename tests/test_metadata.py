@@ -1224,6 +1224,17 @@ class TestTablesBelongToADataset:
         ):
             assert key not in session
 
+    def test_a_swap_gives_every_uploader_a_new_key(self):
+        """Popping the key does not empty the uploader in the browser, which
+        sends its file again on the next rerun — only a new key does."""
+        session = {md.OWNER_KEY: "A", md.SESSION_KEY: self._readers("a.csv")}
+        before = {g: md.upload_key(g, session) for g in ("participant", "trial")}
+        md.activate_dataset(session, "B")
+        after = {g: md.upload_key(g, session) for g in ("participant", "trial")}
+        assert all(before[g] != after[g] for g in before)
+        md.activate_dataset(session, "A")
+        assert md.upload_key("participant", session) not in before.values()
+
     def test_the_first_run_adopts_what_is_attached(self):
         """A session whose tables have no owner yet (its first run) keeps them."""
         session = {md.SESSION_KEY: self._readers("a.csv")}

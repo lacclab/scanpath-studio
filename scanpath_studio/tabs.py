@@ -135,7 +135,7 @@ from scanpath_studio.constants import (
     SACCADE_DASH_OPTIONS,
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
-    SELECTOR_ROW_WIDE_GRID,
+    SELECTOR_SCREEN_TRACK,
     SUBTAB_ANNOTATIONS,
     SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
@@ -248,7 +248,6 @@ from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
     DEFAULT_PRINT_DPI,
     HTML_SELF_CONTAINED_KEY,
-    ComparisonSide,
     ExportOptions,
     annotate_figure,
     apply_export_scope,
@@ -256,7 +255,6 @@ from scanpath_studio.export import (
     count_export_units,
     describe_plan,
     html_plotlyjs,
-    pair_export,
     pattern_fields,
     plan_from_counts,
     print_width_px,
@@ -335,6 +333,7 @@ from scanpath_studio.session_keys import (
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
+    SINGLE_SHOW_CHIPS,
     SINGLE_TRIAL_ID,
 )
 from scanpath_studio.similarity import (
@@ -343,7 +342,7 @@ from scanpath_studio.similarity import (
     nld_by_fixation_index,
     nld_by_time,
 )
-from scanpath_studio.styles import mapping_menu_css
+from scanpath_studio.styles import mapping_menu_css, widen_menu
 from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
     COMPARE_OPTIONS_SNAPSHOT_KEY,
@@ -362,6 +361,7 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     qualified_participant,
     qualify_for_compare,
+    row_tail,
     safe_summary,
     select_trial,
     self_compare_participant,
@@ -431,97 +431,57 @@ def _step_screen(key_prefix: str, options: tuple[str, ...], delta: int) -> None:
     st.session_state[id_key] = options[max(0, min(len(options) - 1, position + delta))]
 
 
-def _on_screen_slider(key_prefix: str) -> None:
-    """Mirror a scrub of the screen slider onto the canonical selectbox.
-
-    ``{key_prefix}_screen_id`` stays the one selection every other reader
-    consults (``_step_screen``, ``extract_part``); the slider is a second view
-    of it, the same arrangement ``utils._select_trial_none_mode`` uses for the
-    trial picker.
-    """
-    st.session_state[f"{key_prefix}_screen_id"] = st.session_state[
-        f"{key_prefix}_screen_pos"
-    ]
-
-
 def _render_screen_navigator(
-    catalog: pd.DataFrame, *, key_prefix: str = "single"
+    catalog: pd.DataFrame, *, key_prefix: str = "single", host=None
 ) -> str | None:
-    """Select/scrub/step navigator for one logical multipart trial.
+    """Pick/step navigator for one logical multipart trial.
 
-    **UX-47**: this row carries the same grammar as the trial picker directly
-    above it (``utils._select_trial_none_mode``) — a ``[3, 5, 1.9]`` split with
-    the selectbox, a scrubbing slider, then ◀ ▶ in a right-packed ``railbtn_*``
-    cluster. It used to be ``[0.7, 5, 0.7]`` with the two steps *straddling* the
-    selectbox as ``width="stretch"`` buttons outside the railbtn system, so the
-    screen dropdown started ~11% in (against the trial dropdown's 0) at 78% wide
-    (against 30%), and its steps rendered as wide rectangles beside the pill
-    clusters on every neighbouring row.
+    **UX-47** gave this row the trial picker's grammar (dropdown, scrubbing
+    slider, ◀ ▶), and **UX-111** put it on the trial row's grid, a row of its
+    own under each trial row. Since the plot-layout pass (2026-10-07) it is a
+    compact cell at the trial row's right end instead — ``host`` is that cell,
+    reserved by ``utils.select_trial``'s ``trailing_renderer`` — so the screens
+    no longer cost the plot a row per scanpath. A trial has few screens, with
+    short names, so the slider went: a narrow dropdown + ◀ ▶ is enough, and
+    the dropdown's menu opens wider than the control (`styles.py`), so the
+    names are still read in full.
 
-    **UX-111**: the selectbox and slider now sit under the trial row's own
-    *pick* and *scrub* tracks — ``SELECTOR_ROW_GRID`` in full, with the leading
-    *dataset* track left blank — instead of ``SELECTOR_ROW_TRIO`` (which merges
-    those two tracks into one, so this row's dropdown started under **Select
-    Dataset** and its slider ran on past **Select trial**'s own, wider than it
-    and not aligned to it). The trail (◀ ▶) keeps the *actions* track either
-    way, so it does not move.
-
-    **UX-112**: ``key_prefix`` (default ``"single"``, A's own — every existing
-    call/key/test keeps working unchanged) lets scanpath B in Compare mode get
-    its own independent navigator (``key_prefix="single_compare"``) over its
-    own multipart trial, rather than being forced onto whichever screen A
-    happens to have selected.
+    **UX-112**: ``key_prefix`` (default ``"single"``, A's own) gives scanpath B
+    in Compare mode its own independent navigator (``"single_compare"``) over
+    its own multipart trial.
     """
+    host = st if host is None else host
     id_key = f"{key_prefix}_screen_id"
-    pos_key = f"{key_prefix}_screen_pos"
     if catalog.empty:
         st.session_state.pop(id_key, None)
-        st.session_state.pop(pos_key, None)
         return None
     options = tuple(catalog[SCREEN_ID].astype(str))
     current = st.session_state.get(id_key)
     if current not in options:
         st.session_state[id_key] = options[0]
     labels = {
-        str(
-            row.screen_id
-        ): f"{int(row.screen_index)} of {len(catalog)} · {row.screen_id}"
+        str(row.screen_id): f"{int(row.screen_index)}/{len(catalog)} · {row.screen_id}"
         for row in catalog.itertuples()
     }
-    _blank_col, sel_col, slider_col, trail_col = st.columns(
-        SELECTOR_ROW_GRID, vertical_alignment="bottom"
-    )
     position = options.index(str(st.session_state[id_key]))
-    selected = sel_col.selectbox(
+    cell = host.container(
+        key=f"{key_prefix}_screen_cell",
+        horizontal=True,
+        vertical_alignment="bottom",
+        gap="small",
+    )
+    selected = cell.selectbox(
         "**Screen**",
         options,
         key=id_key,
         format_func=labels.get,
         help="Each screen is drawn on its own; the trial stays selected.",
     )
-    if len(options) > 1:
-        # Mirror the canonical selection onto the slider BEFORE it renders, so
-        # picking a screen in the dropdown (or stepping with ◀ ▶) moves the thumb
-        # too; the drag callback writes back the other way, reconciling next run.
-        st.session_state[pos_key] = str(st.session_state[id_key])
-        with slider_col:
-            st.select_slider(
-                "Screen position",
-                options=options,
-                key=pos_key,
-                on_change=_on_screen_slider,
-                args=(key_prefix,),
-                format_func=labels.get,
-                help=f"Scrub through this trial's {len(options)} screens; the "
-                "dropdown jumps straight to one.",
-                label_visibility="collapsed",
-            )
-    # Both steps in ONE keyed container: styles.py lays every `railbtn_*` out as a
-    # right-packed flex ROW, which is what puts them on the same edge, at the same
-    # 3px spacing and in the same pill shape as the trial row's ◀ ▶ ⇅ above and
-    # the chip strip below. `width="stretch"` is deliberately gone — it fought the
-    # `width: auto` that makes the cluster content-sized.
-    trail = trail_col.container(key=f"railbtn_{key_prefix}_screen_trail")
+    # Narrow, but its menu opens as wide as the longest screen name.
+    widen_menu(id_key, labels.values())
+    # Both steps in ONE keyed `railbtn_*` container, so they take the pill
+    # shape and 3px spacing of the ◀ ▶ ⇅ cluster beside them (UX-27).
+    trail = cell.container(key=f"railbtn_{key_prefix}_screen_trail", width="content")
     # UX-200: `spoken` names the glyph buttons for screen readers.
     trail.button(
         f"◀ {spoken('Previous screen')}",
@@ -644,6 +604,7 @@ _TRUE_SCALE_TEMPLATE = """
 <script>
 (function() {
   var W = __W__, H = __H__, ZMAX = __ZMAX__, ZOOMABLE = __ZOOMABLE__;
+  var GROW = __GROW__;
   var outer = document.getElementById("fit-__KEY__");
   var size = document.getElementById("size-__KEY__");
   var box = document.getElementById("box-__KEY__");
@@ -667,6 +628,32 @@ _TRUE_SCALE_TEMPLATE = """
     }
     return __SCALE_JS__;
   }
+  // How tall the figure may grow above true size: most of the browser
+  // window's height, so a figure scaled up to its column still fits on
+  // screen. Never below 1 — the height only ever limits growing.
+  function growCap() {
+    var vh = 0;
+    try { vh = window.parent.innerHeight; } catch (e) { vh = 0; }
+    return Math.max(1, ((vh || H) * 0.85) / H);
+  }
+  // The frame follows the figure's fitted height, so a figure scaled down
+  // leaves no band below it and one scaled up is not cut off. Not in
+  // fullscreen, which owns the frame's box.
+  function fitFrame() {
+    if (!GROW || fsOn) { return; }
+    var fr = null;
+    try { fr = window.frameElement; } catch (e) { fr = null; }
+    if (!fr) { return; }
+    var want = Math.round(H * base) + 12 + "px";
+    if (fr.style.height !== want) { fr.style.height = want; }
+    // Streamlit sizes the frame's element container from the height it was
+    // embedded at; it has to follow, or the frame spills over what is below.
+    var holder = fr.parentElement;
+    if (holder && holder.getAttribute("data-testid") === "stElementContainer" &&
+        holder.style.height !== want) {
+      holder.style.height = want;
+    }
+  }
   // One uniform transform for fit x zoom: boxes, fixations, labels and stroke
   // widths all magnify together, so the figure stays true to scale.
   function render() {
@@ -675,7 +662,16 @@ _TRUE_SCALE_TEMPLATE = """
     box.style.transform = "scale(" + s + ")";
     size.style.width = Math.round(W * s) + "px";
     size.style.height = Math.round(H * s) + "px";
+    // Centred in its column; a zoomed figure wider than the column starts
+    // at its left edge, so the scroll reaches all of it.
+    var left = Math.max(0, Math.round((outer.clientWidth - W * s) / 2));
+    size.style.marginLeft = left + "px";
+    var zb = wrap && wrap.querySelector("[data-toolbar]");
+    if (zb) {
+      zb.style.left = Math.max(0, Math.round((outer.clientWidth - W * base) / 2)) + 4 + "px";
+    }
     outer.style.height = Math.round(H * base) + "px";
+    fitFrame();
     outer.style.overflow = zoom > 1.001 ? "auto" : "hidden";
     outer.style.cursor = zoom > 1.001 ? "grab" : "";
     if (label) { label.textContent = Math.round(zoom * 100) + "%"; }
@@ -695,6 +691,18 @@ _TRUE_SCALE_TEMPLATE = """
   }
   render();
   window.addEventListener("resize", render);
+  // The column's width is the frame's own, but the height cap is the browser
+  // window's, which can change without this frame resizing.
+  // Removed when this document goes: the parent page outlives every figure a
+  // rerun swaps into the frame, and would otherwise keep each one alive.
+  if (GROW) {
+    try {
+      window.parent.addEventListener("resize", render);
+      window.addEventListener("pagehide", function() {
+        try { window.parent.removeEventListener("resize", render); } catch (e) {}
+      });
+    } catch (e) {}
+  }
   setTimeout(render, 150);
 
   (function dropSkeleton() {
@@ -882,7 +890,7 @@ _TRUE_SCALE_TEMPLATE = """
 """
 
 _ZOOM_TOOLBAR = """
-  <div id="zoombar-__KEY__" style="position:absolute;top:4px;left:4px;z-index:5;
+  <div id="zoombar-__KEY__" data-toolbar style="position:absolute;top:4px;left:4px;z-index:5;
        display:flex;gap:2px;align-items:center;padding:2px 4px;
        font:11px/1.6 system-ui,sans-serif;color:#444;
        background:rgba(255,255,255,0.88);border:1px solid #ddd;border-radius:4px;">
@@ -918,7 +926,9 @@ def _true_scale_html(
         scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
         iframe_height = int(max_height) + 12
     else:
-        scale_js = "Math.min(1, avail / W)"
+        # Fills the column's width — above true size too, while it still fits
+        # the window's height (`growCap`); the script sizes the frame to match.
+        scale_js = "Math.min(avail / W, growCap())"
         iframe_height = height + 12
     toolbar = (
         _ZOOM_TOOLBAR.replace("__BTN__", _ZOOM_BUTTON_CSS).replace("__KEY__", key)
@@ -932,6 +942,7 @@ def _true_scale_html(
         _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", toolbar)
         .replace("__SCALE_JS__", scale_js)
         .replace("__ZOOMABLE__", "true" if zoomable else "false")
+        .replace("__GROW__", "true" if max_height is None else "false")
         .replace("__ZMAX__", str(_ZOOM_MAX))
         .replace("__W__", str(int(width)))
         .replace("__H__", str(int(height)))
@@ -970,8 +981,11 @@ def _render_true_scale_chart(
     width. A uniform transform keeps boxes, fixations and text locked at one true
     scale (unlike a Plotly re-layout, which leaves the font fixed), so the plot
     stays faithful to the experiment at any column width — and never needs
-    horizontal scrolling. It is only scaled down to fit, so on a wide monitor it
-    sits at true size with margin rather than being stretched.
+    horizontal scrolling. It is centred in the column, and grows above true
+    size to fill the column's width while it still fits the browser window's
+    height (2026-10-07; it used to stop at true size, left-aligned, which left
+    a wide monitor's extra room empty). Uniform scaling keeps every proportion,
+    so a larger figure is still faithful to the experiment's layout.
 
     **Zoom** rides on the same transform (MVP): the fit scale is multiplied by a
     zoom factor (1×–8×) driven by the small toolbar, Ctrl/Cmd + wheel and
@@ -1420,6 +1434,8 @@ def _render_save_plot_button(
     # surface as Streamlit's generic "Failed to generate file for download" —
     # nothing it raises reaches the page — so the one failure we can predict is
     # said up front, with the fix and the browser-free HTML fallback.
+    if fmt == "HTML":
+        _render_html_files_choice()
     no_browser = fmt == "PDF" and not chrome_available()
     if no_browser:
         st.warning(
@@ -1450,16 +1466,17 @@ def _render_save_plot_button(
 
 
 def _html_self_contained() -> bool:
-    """The Export subtab's *Self-contained HTML* choice
+    """The current figure's *Self-contained HTML* choice
     (`_render_html_files_choice`)."""
     return bool(st.session_state.get(HTML_SELF_CONTAINED_KEY, False))
 
 
 def _render_html_files_choice() -> None:
-    """One choice for every HTML file the Export subtab writes — the figure,
-    the replay and the bundles: embed the Plotly library, or load it from
-    cdn.plot.ly when the file is opened. The scripted surfaces (`save_figure`,
-    `render -o figure.html`) always embed it."""
+    """The current figure's (or replay's) HTML: embed the Plotly library, or
+    load it from cdn.plot.ly when the file is opened. Drawn only while HTML is
+    the chosen format; the export bundle asks its own (`render_export_options`).
+    The scripted surfaces (`save_figure`, `render -o figure.html`) always embed
+    it."""
     panel_field(
         st,
         "checkbox",
@@ -1468,10 +1485,9 @@ def _render_html_files_choice() -> None:
         value=False,
         key=HTML_SELF_CONTAINED_KEY,
         persist_state="session",
-        help="Tick to make every HTML file you download here open without an "
-        "internet connection: it carries the Plotly library, about 4.8 MB "
-        "more. Unticked, it loads the library from cdn.plot.ly when opened. "
-        "Other formats are unaffected.",
+        help="Tick to make the HTML file open without an internet connection: "
+        "it carries the Plotly library, about 4.8 MB more. Unticked, it loads "
+        "the library from cdn.plot.ly when opened.",
     )
 
 
@@ -1570,6 +1586,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
     )
 
     if fmt == "HTML":
+        _render_html_files_choice()
         # UX-150: built on click, not per rerun — a long replay's HTML runs to
         # megabytes and about a second to serialize.
         st.download_button(
@@ -1583,7 +1600,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
             on_click="ignore",
             # ENG-64: a saved file has no app server to load plotly.js from,
             # so it embeds it or loads it from the CDN — the *Self-contained HTML*
-            # choice above (see docs/privacy.md).
+            # choice just above (see docs/privacy.md).
             help="HTML you can open in any browser; keeps play/slider "
             "interactivity. *Self-contained HTML* above decides whether it opens "
             "offline or loads the Plotly library from cdn.plot.ly.",
@@ -2558,6 +2575,15 @@ def _render_compare_dataset_cell(
         help="The dataset scanpath B comes from. Other datasets keep their own "
         "screen geometry.",
     )
+    widen_menu(
+        COMPARE_SOURCE_KEY,
+        [
+            _dataset_label(name)
+            if ready_by_name.get(name, True)
+            else f"{_dataset_label(name)} (needs setup)"
+            for name in names
+        ],
+    )
 
 
 def _compare_label_display(
@@ -2682,6 +2708,8 @@ def _render_compare_selector(
     words_all: pd.DataFrame | None = None,
     fixations_all: pd.DataFrame | None = None,
     loading_slot=None,
+    screen_cells: dict | None = None,
+    screen_track: bool = False,
 ) -> tuple[
     str | None,
     str | None,
@@ -2714,6 +2742,10 @@ def _render_compare_selector(
 
     **UX-168:** ``loading_slot`` is threaded straight through to
     ``_resolve_compare_source`` so B's own load gets a card + Cancel there.
+
+    The row ends in a screen cell — stored as ``screen_cells["b"]`` for B's
+    screen navigator — when B's pool has screens or ``screen_track`` asks for
+    one (A's row has one, so the two rows keep the same tracks).
     """
     names, ready_by_name, reason_by_name = _compare_source_choices()
     source, source_notice = _resolve_compare_source(
@@ -2801,16 +2833,33 @@ def _render_compare_selector(
     # the filters that emptied the pool are still on screen to undo it.
     n = len(options)
     slider_col = None
+    screen_track = screen_track or any(
+        frame is not None and SCREEN_ID in frame.columns
+        for frame in (words_filtered, fixations_filtered)
+    )
+    extra_track = [SELECTOR_SCREEN_TRACK] if screen_track else []
     if n > 1:
-        lead_col, sel_col, slider_col, trail_col = st.columns(
-            SELECTOR_ROW_GRID, vertical_alignment="bottom"
+        lead_col, sel_col, slider_col, trail_col, *extra = st.columns(
+            SELECTOR_ROW_GRID + extra_track, vertical_alignment="bottom"
         )
     else:
-        lead_col, sel_col, trail_col = st.columns(
-            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
+        lead_col, sel_col, trail_col, *extra = st.columns(
+            SELECTOR_ROW_TRIO + extra_track, vertical_alignment="bottom"
         )
+    menus = None
+    if extra:
+
+        def _reserve(host) -> None:
+            if screen_cells is not None:
+                screen_cells["b"] = host.container(key="tour_grp_compare_screen_picker")
+
+        menus = row_tail(extra[0], "single_compare", _reserve)
     _render_compare_dataset_cell(lead_col, names, ready_by_name)
-    trail = trail_col.container(key="railbtn_single_compare_trail")
+    trail = trail_col.container(
+        key=f"railbtn_single_compare_trail{'_steps' if menus else ''}"
+    )
+    # ⇅ and the filter close the row after B's screen cell when there is one.
+    cluster = trail if menus is None else menus
     # CMP-6: candidate sorting is visually LAST in the row, after the step
     # buttons. It still executes before the selectbox/slider below, so a change
     # applies to their list on the same run. CMP-10 mirrors the main trial
@@ -2825,12 +2874,12 @@ def _render_compare_selector(
         # popover has to run first because its result is the list the selectbox,
         # the slider and the ◀ ▶ steps all walk.
         step_col = trail.container(key="railbtn_single_compare_step")
-        sort_col = trail.container(key="railbtn_single_compare_sort")
+        sort_col = cluster.container(key="railbtn_single_compare_sort")
     # B always has its own filter set. For "This dataset" it starts from the
     # unfiltered active frames, so narrowing B never changes scanpath A.
     if filter_source is not None:
         _render_compare_filters(
-            trail.container(key="railbtn_single_compare_filter"), filter_source
+            cluster.container(key="railbtn_single_compare_filter"), filter_source
         )
     if source_notice:
         st.caption(source_notice)
@@ -3070,6 +3119,7 @@ def _render_compare_selector(
             )
         ),
     )
+    widen_menu(sel_key, [label_display.get(v, v) for v in labels])
     if n > 1:
         with slider_col:
             st.select_slider(
@@ -5540,97 +5590,6 @@ def _dataset_table_names() -> dict[str, ColumnNames]:
     }
 
 
-def _render_pair_export(
-    fig,
-    sides: tuple,
-    *,
-    canvas_width: int,
-    canvas_height: int,
-    viz_settings: dict,
-    line_spacing: float,
-    scale_text_to_boxes: bool,
-) -> None:
-    """The **CMP-8 §6** pair bundle, beside the plain figure download.
-
-    The figure alone is unreproducible — it names two readers and no way to find
-    either again. This writes the pair as one trial folder: the figure, both
-    scanpaths' tables with a ``dataset`` column, and a ``plot_config.json``
-    whose ``datasets`` block records both sources and both recording setups.
-    """
-    side_a, side_b = sides
-    with st.expander(
-        f"{ICONS['compare']} Download this comparison as a bundle", expanded=False
-    ):
-        st.caption(
-            "The figure plus both scanpaths' data and a manifest naming each "
-            "side's dataset, trial and recording setup — so the comparison can "
-            "be reproduced, which the image alone can't be."
-        )
-        fmt = panel_field(
-            st,
-            "selectbox",
-            "Figure format",
-            options=["png", "svg", "pdf", "html"],
-            format_func=str.upper,
-            key="cmp_pair_export_format",
-            help="PNG, SVG and PDF are drawn with Chrome, Chromium or Edge; HTML "
-            "doesn't need it.",
-        )
-        table_fmt = panel_field(
-            st,
-            "selectbox",
-            "Table format",
-            options=["csv", "parquet"],
-            key="cmp_pair_export_table_format",
-        )
-        options = ExportOptions(
-            include_png=fmt == "png",
-            include_svg=fmt == "svg",
-            include_pdf=fmt == "pdf",
-            include_html=fmt == "html",
-            include_fixations=True,
-            include_measures=True,
-            table_format=table_fmt,
-            html_self_contained=_html_self_contained(),
-        )
-        settings = _build_figure_settings(viz_settings, False)
-        settings["line_spacing"] = line_spacing
-        settings["scale_text_to_boxes"] = scale_text_to_boxes
-        settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
-        # UX-150: one click, as for the figure above — the bundle is built when
-        # the button is pressed, and the missing browser is said up front
-        # because a failure on that worker thread can't reach the page.
-        no_browser = fmt != "html" and not chrome_available()
-        if no_browser:
-            st.warning(
-                f"{fmt.upper()} export can't run here. {CHROME_INSTALL_HINT}",
-                icon=ICONS["warning"],
-            )
-        st.download_button(
-            "⬇ Download bundle (zip)",
-            data=partial(
-                pair_export,
-                fig,
-                side_a,
-                side_b,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                x_field=viz_settings.get("x_field", "x"),
-                y_field=viz_settings.get("y_field", "y"),
-                settings=settings,
-                options=options,
-                column_names=_dataset_table_names(),
-            ),
-            file_name=f"comparison_{side_a.slug}__vs__{side_b.slug}.zip",
-            mime="application/zip",
-            key="cmp_pair_export_download",
-            on_click="ignore",
-            disabled=no_browser,
-            help="Builds the bundle when you click; a PNG/SVG/PDF figure takes a "
-            "few seconds. If it fails, choose **html** — it needs no browser.",
-        )
-
-
 def _render_export_panel(
     displayed_fig,
     *,
@@ -5654,7 +5613,6 @@ def _render_export_panel(
     scale_text_to_boxes: bool,
     selected_participant: str,
     selected_trial: str,
-    compare_export: tuple | None = None,
     plot_key: str = "single",
     replay: _ReplayView | None = None,
 ) -> None:
@@ -5667,7 +5625,6 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
-    _render_html_files_choice()
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
     elif animate or displayed_fig is None:
@@ -5681,16 +5638,6 @@ def _render_export_panel(
             key_prefix="single",
             plot_key=plot_key,
         )
-        if compare_export is not None:
-            _render_pair_export(
-                displayed_fig,
-                compare_export,
-                canvas_width=int(canvas_width),
-                canvas_height=int(canvas_height),
-                viz_settings=viz_settings,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
-            )
 
     st.divider()
     st.markdown("## Export bundle")
@@ -6224,6 +6171,35 @@ def _render_trial_condition_chips(
         )
 
 
+def _render_chip_menu(host, words: pd.DataFrame, fixations: pd.DataFrame) -> None:
+    """The ✏️ chips menu at the end of A's trial row: show or hide the chips
+    above the plot (#373), and pick and order their fields (UX-1).
+
+    Hiding keeps ``trial_chip_fields``, so showing them again restores the same
+    row; it applies to Compare's A/B table too."""
+    st.session_state.setdefault(SINGLE_SHOW_CHIPS, True)
+    # UX-200: named for screen readers; `styles.py` clips the name, so the
+    # pencil is still all that is drawn.
+    with host.popover(
+        "Chips above the plot",
+        icon=ICONS["edit"],
+        help="Show or hide the chips above the plot, and choose and reorder "
+        "their fields.",
+        width="content",
+        wrap=True,
+        key="iconpop_chip_fields",
+    ):
+        st.toggle(
+            "Show chips above the plot",
+            key=SINGLE_SHOW_CHIPS,
+            # ENG-36: rendered on the Scanpath view only, and seeded by a link
+            # (`?show_chips=`), so it must survive a trip to another view.
+            persist_state="session",
+            help="Hide them to give the plot the room; the fields below are kept.",
+        )
+        render_trial_chip_picker(words, fixations, host=st.container())
+
+
 def render_single_trial_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -6319,6 +6295,23 @@ def render_single_trial_tab(
             )
             box = pop.container(key="tour_grp_narrow_by")
             _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
+            # The chips' menu closes A's cluster (◀ ▶ ⇅ 🔎 ✏️), so the chip
+            # table below has the plot's whole width, and hiding it (#373)
+            # leaves no row behind. Drawn here, before the table reads
+            # `trial_chip_fields`, so an edit applies the same run.
+            _render_chip_menu(host, words_all, fixations_all)
+
+        # A dataset with screens gets the screen navigator at the trial row's
+        # right end; the cell is reserved now and filled once the trial (and so
+        # its screens) is resolved below.
+        has_screens = any(
+            frame is not None and SCREEN_ID in frame.columns
+            for frame in (words_filtered, fixations_filtered, raw_gaze)
+        )
+        screen_cells: dict = {}
+
+        def _reserve_screen_cell(host) -> None:
+            screen_cells["a"] = host.container(key="tour_grp_screen_picker")
 
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         with st.container(key="tour_grp_trial_picker"):
@@ -6328,6 +6321,7 @@ def render_single_trial_tab(
                     key_prefix="single",
                     leading_renderer=_render_dataset_cell,
                     filter_renderer=_render_filters,
+                    trailing_renderer=_reserve_screen_cell if has_screens else None,
                     # UX-10: the frames `combos` was built from, so the ⇅ sort
                     # popover can offer computed keys (fixation count, reading
                     # time) alongside the reader / text / condition columns.
@@ -6335,7 +6329,7 @@ def render_single_trial_tab(
                     fixations=fixations_filtered,
                 )
             )
-        screen_slot = st.container(key="tour_grp_screen_picker")
+        screen_slot = screen_cells.get("a")
         # Slots filled once the selection is resolved (chips need the trial).
         # Keyed containers double as welcome-tour spotlight targets.
         #
@@ -6349,10 +6343,6 @@ def render_single_trial_tab(
         # named in each scanpath's colour, so there is no second strip to place.
         # Keyed containers double as welcome-tour spotlight targets.
         compare_slot = st.container(key="tour_grp_compare_picker")
-        # UX-112: B's own screen navigator, directly under B's trial row, the
-        # same relationship `screen_slot` has with A's row above it — reserved
-        # here (before the chips) so creation order keeps it in place.
-        compare_screen_slot = st.container(key="tour_grp_compare_screen_picker")
         chips_slot = st.container(key="tour_grp_chips")
         # UX-167: notes about the figure that come *before* it sit above the
         # stage, so the figure is always the stage's second child and a figure
@@ -6390,8 +6380,7 @@ def render_single_trial_tab(
         if parent_words.empty and parent_fixations.empty
         else _part_catalog_for_display(parent_words, parent_fixations)
     )
-    with screen_slot:
-        selected_screen = _render_screen_navigator(screens)
+    selected_screen = _render_screen_navigator(screens, host=screen_slot)
     if selected_screen is not None:
         trial_words = extract_part(
             parent_words, selected_participant, selected_trial, selected_screen
@@ -6409,7 +6398,7 @@ def render_single_trial_tab(
         else:
             trial_raw_gaze = pd.DataFrame()
             if not parent_raw_gaze.empty:
-                screen_slot.warning(
+                plot_notes_slot.warning(
                     "Raw-gaze samples are hidden: this trial has several screens, "
                     "and the samples don't say which one each belongs to."
                 )
@@ -6999,9 +6988,11 @@ def render_single_trial_tab(
                     words_all=words_all,
                     fixations_all=fixations_all,
                     loading_slot=plot_loading_slot,
+                    screen_cells=screen_cells,
+                    screen_track=has_screens,
                 )
             )
-        # UX-112: B's own screen navigator, directly under B's own row —
+        # UX-112: B's own screen navigator, at the end of B's own row —
         # built from B's own trial (not A's), so B can pick any of its own
         # screens independently instead of being forced onto whichever one A
         # has selected. `compare_words_pool`/`compare_fixations_pool` (also
@@ -7028,10 +7019,9 @@ def render_single_trial_tab(
             )
         else:
             compare_screens = pd.DataFrame()
-        with compare_screen_slot:
-            selected_compare_screen = _render_screen_navigator(
-                compare_screens, key_prefix="single_compare"
-            )
+        selected_compare_screen = _render_screen_navigator(
+            compare_screens, key_prefix="single_compare", host=screen_cells.get("b")
+        )
     else:
         # UX-168: Compare off loads no second dataset — stop the one an
         # earlier run left loading for B.
@@ -7368,39 +7358,11 @@ def render_single_trial_tab(
     # The line takes `SELECTOR_ROW_WIDE_GRID` — the control-line grid with the
     # first three tracks merged — so ✏️ sits under ◀ ▶ ⇅.
     with chips_slot:
-        # Inline "Edit chips" popover at the right end of the row (UX-1) —
-        # replaces the former sidebar 🏷️ Trial chips picker. Rendered before the
-        # strip reads `trial_chip_fields` so an edit/reorder applies the same run.
-        # Top-aligned, not centre-aligned: the strip wraps to several lines
-        # (UX-11), and a centred control would drift to the middle of a tall
-        # strip instead of sitting on the first chip's line.
-        # UX-27: the row's trailing controls share ONE `railbtn_*` cluster —
-        # styles.py lays every such container out as a right-packed flex row, so
-        # this row ends flush with the ◀ ▶ ⇅ cluster above. Only ✏️ is left in it
-        # now that the computed stats are chips of their own (see
-        # `_render_trial_condition_chips`).
-        # The Participant chip already identifies the reading. Do not repeat
-        # the same id in a title cell; use that width for the chip table (one
-        # row, or Compare's A and B).
-        strip_col, trail_col = st.columns(
-            SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
-        )
-        trail = trail_col.container(key="railbtn_chip_trail")
-        edit_box = trail.container(key="railbtn_chip_edit")
-        # UX-200: named for screen readers; `styles.py` clips the name, so
-        # the pencil is still all that is drawn.
-        with edit_box.popover(
-            "Choose the chip fields",
-            icon=ICONS["edit"],
-            help="Edit which fields show as chips above the plot, and drag to "
-            "reorder them.",
-            width="content",
-            wrap=True,
-            key="iconpop_chip_fields",
-        ):
-            render_trial_chip_picker(words_all, fixations_all, host=st.container())
+        # The ✏️ menu that picks the fields — and hides the row (#373) — is
+        # at the end of A's trial row (`_render_chip_menu`), so the table has
+        # the plot's whole width.
         chip_fields = st.session_state.get("trial_chip_fields") or []
-        with strip_col:
+        if st.session_state.get(SINGLE_SHOW_CHIPS, True):
             if comparing and compare_meta:
                 # B's gaze-sample count, only while that chip is shown. A
                 # cross-dataset B counts its own dataset's samples (VIZ-48 loads
@@ -7469,47 +7431,6 @@ def render_single_trial_tab(
                     chip_fields,
                     trial_raw_gaze=trial_raw_gaze,
                 )
-
-    # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*
-    # frames and real ids — the `dataset · pid` namespace is a figure-internal
-    # device and must never reach an exported table. `None` unless comparing.
-    compare_export_sides = None
-    if comparing and compare_meta is not None:
-        # Lazy: `app` imports `tabs`, so a module-level import closes the cycle.
-        from scanpath_studio.app import active_setup_snapshot
-
-        compare_export_sides = (
-            ComparisonSide(
-                participant=str(selected_participant),
-                trial=str(selected_trial),
-                words=trial_words,
-                fixations=trial_fixations,
-                dataset=None,
-                setup=(
-                    snapshot.to_dict()
-                    if (snapshot := active_setup_snapshot()) is not None
-                    else None
-                ),
-            ),
-            ComparisonSide(
-                participant=str(compare_meta["raw_participant"]),
-                trial=str(compare_meta["trial"]),
-                # Strip the namespacing back off: `_qualify_for_compare` rewrote
-                # `participant_id` for the figure's benefit only.
-                words=_unqualify_for_export(
-                    compare_meta["words"], compare_meta["raw_participant"]
-                ),
-                fixations=_unqualify_for_export(
-                    compare_meta["fixations"], compare_meta["raw_participant"]
-                ),
-                dataset=compare_meta.get("dataset"),
-                setup=(
-                    compare_meta["setup"].to_dict()
-                    if compare_meta.get("setup") is not None
-                    else None
-                ),
-            ),
-        )
 
     displayed_fig = None
     # UX-152: which `_render_true_scale_chart` drew it — the Export subtab's PNG
@@ -8017,7 +7938,6 @@ def render_single_trial_tab(
                     scale_text_to_boxes=scale_text_to_boxes,
                     selected_participant=selected_participant,
                     selected_trial=selected_trial,
-                    compare_export=compare_export_sides,
                     plot_key=displayed_plot_key,
                 )
 
@@ -8117,8 +8037,6 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
-    # The subtab's *Self-contained HTML* choice, in `options` so it is in the cache key.
-    options.html_self_contained = _html_self_contained()
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
     if options.export_unfiltered:
@@ -13328,7 +13246,7 @@ def _clear_participant_metadata() -> None:
     # And the uploader's own key: without it the widget still holds the file on
     # the next run, the (now absent) signature check reads as "new file", and
     # the table re-attaches itself immediately.
-    st.session_state.pop("participant_metadata_upload", None)
+    st.session_state.pop(md.upload_key("participant"), None)
 
 
 def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
@@ -13439,7 +13357,7 @@ def _participant_metadata_body(
     upload = stats_host.file_uploader(
         "Participant metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
-        key="participant_metadata_upload",
+        key=md.upload_key("participant"),
         # No `persist_state` — `st.file_uploader` does not take it. It does
         # not need it either: the parsed frame is kept in session state under
         # `md.RAW_SESSION_KEY`, so the attached table survives even if the
@@ -13607,7 +13525,7 @@ def _clear_trial_metadata() -> None:
     # the (now absent) signature check reads as "new file", and the table
     # re-attaches itself immediately. Detaching a trial table therefore looked
     # like it had done nothing, and the table came back on the next visit.
-    st.session_state.pop("trial_metadata_upload", None)
+    st.session_state.pop(md.upload_key("trial"), None)
 
 
 def render_trial_metadata_section(
@@ -13664,7 +13582,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     upload = stats_host.file_uploader(
         "Trial metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
-        key="trial_metadata_upload",
+        key=md.upload_key("trial"),
         help=_tm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
@@ -13838,7 +13756,7 @@ def _clear_text_metadata() -> None:
         "text_metadata_id_column",
     ):
         st.session_state.pop(key, None)
-    st.session_state.pop("text_metadata_upload", None)
+    st.session_state.pop(md.upload_key("text"), None)
 
 
 def render_text_metadata_section(
@@ -13888,7 +13806,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
     upload = stats_host.file_uploader(
         "Text metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
-        key="text_metadata_upload",
+        key=md.upload_key("text"),
         help=_txm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),

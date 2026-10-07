@@ -155,7 +155,7 @@ made. Look an old ID up there; nothing new goes into it.
 
 ## On release
 
-See *Releasing* in `@AGENTS.md`: bump `__version__` in
+See *Releasing* in `@AGENTS.md`: bump `__release__` in
 `scanpath_studio/__init__.py` **and** `version` + `date-released` in
 `CITATION.cff` (a test enforces version parity).
 

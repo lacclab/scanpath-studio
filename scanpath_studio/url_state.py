@@ -90,8 +90,8 @@ from .controls import (
     palette_state,
 )
 from .data import composite_respelling_map, respell_reading
-from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .experimental_setup import format_provenance_param, parse_provenance_param
+from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
     COMPARE_FIX_RANGE_PARAM,
     COMPARE_LAYOUT_PARAM,

@@ -88,7 +88,6 @@ from .data import (
     validate_raw_gaze_schema,
     validate_word_schema,
 )
-from .menu import view_label
 from .experimental_setup import (
     SETUP_GROUP_LABELS,
     SETUP_GROUPS,
@@ -96,6 +95,7 @@ from .experimental_setup import (
     SetupSnapshot,
     font_pt_to_px,
 )
+from .menu import view_label
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css

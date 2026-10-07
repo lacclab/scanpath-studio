@@ -3935,6 +3935,13 @@ def _version_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Ask GitHub for the latest release and say how to update this install.",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        metavar="SECONDS",
+        help="How long to wait for GitHub (default 5).",
+    )
     return parser
 
 
@@ -3955,7 +3962,7 @@ def version(argv: list[str]) -> None:
         return
     from .updates import check_for_updates
 
-    result = check_for_updates()
+    result = check_for_updates(args.timeout)
     if result.status == "error":
         print(result.message, file=sys.stderr)
         raise SystemExit(1)

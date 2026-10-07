@@ -21,6 +21,7 @@ The result is a PEP 440 version, so builds sort between releases:
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -116,9 +117,23 @@ def _is_this_project(root: Path) -> bool:
     try:
         with (root / "pyproject.toml").open("rb") as handle:
             project = tomllib.load(handle).get("project")
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, ValueError):  # unreadable, not UTF-8, or not TOML
         return False
     return isinstance(project, dict) and project.get("name") == DIST_NAME
+
+
+def is_checkout(root: Path = _PACKAGE_DIR.parent) -> bool:
+    """Whether ``root`` is this repository's own root (a ``.git`` and our pyproject)."""
+    return (root / ".git").exists() and _is_this_project(root)
+
+
+def _git_env() -> dict[str, str]:
+    """``os.environ`` without ``GIT_*`` (a hook's ``GIT_DIR`` would redirect git
+    to another repository), and with optional locks off so reading the version
+    never takes ``.git/index.lock``."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    return env
 
 
 def read_checkout(
@@ -130,8 +145,16 @@ def read_checkout(
     ``pyproject.toml`` naming ``scanpath-studio`` — so an install in a venv that
     happens to sit inside some other repository is never described by it.
     """
-    if not (root / ".git").exists() or not _is_this_project(root):
+    if not is_checkout(root):
         return None
+    env = _git_env()
+    options = {
+        "capture_output": True,
+        "text": True,
+        "timeout": GIT_TIMEOUT_S,
+        "check": False,
+        "env": env,
+    }
     try:
         done = run(
             [
@@ -141,18 +164,28 @@ def read_checkout(
                 "describe",
                 "--tags",
                 "--long",
-                "--dirty",
                 "--match",
                 "v[0-9]*",
             ],
-            capture_output=True,
-            text=True,
-            timeout=GIT_TIMEOUT_S,
-            check=False,
+            **options,
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    return from_describe(done.stdout) if done.returncode == 0 else None
+    if done.returncode != 0:
+        return None
+    # `describe --dirty` would refresh and rewrite .git/index, which can make
+    # another session's `git commit` fail; `status` with optional locks off
+    # does not.
+    try:
+        status = run(
+            ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+            **options,
+        )
+        dirty = status.returncode == 0 and bool(status.stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        dirty = False
+    line = done.stdout.strip()
+    return from_describe(line + "-dirty" if dirty else line)
 
 
 def write_stamp(info: BuildInfo, path: Path) -> None:
@@ -193,8 +226,13 @@ def read_vcs_install(
     if not isinstance(vcs, dict) or vcs.get("vcs") != "git" or not vcs.get("commit_id"):
         return None
     commit = str(vcs["commit_id"])[:7]
+    version = f"{release}+g{commit}"
+    try:
+        Version(version)
+    except InvalidVersion:
+        return None
     return BuildInfo(
-        f"{release}+g{commit}",
+        version,
         release,
         None,
         commit,
@@ -235,19 +273,23 @@ def install_kind(
     frozen: bool | None = None,
     prefix: str | None = None,
     installer: str | None = None,
+    checkout: bool | None = None,
 ) -> str:
     """How this copy was installed — a key of :data:`INSTALL_KINDS`.
 
     It decides the update instruction (``updates.update_command``). The desktop
-    bundle is frozen; a checkout or a ``pip install git+…`` says so through
-    ``info``; ``uv tool`` and pipx are recognised by where their environments
-    live; uv by the ``INSTALLER`` file it records; anything else is pip.
+    bundle is frozen; a ``pip install git+…`` says so through ``info``; a
+    checkout, even one without tags, is :func:`is_checkout`; ``uv tool`` and
+    pipx are recognised by where their environments live; uv by the
+    ``INSTALLER`` file it records; anything else is pip.
     """
     if getattr(sys, "frozen", False) if frozen is None else frozen:
         return "desktop"
     info = build_info() if info is None else info
-    if info.source in ("checkout", "vcs"):
-        return info.source
+    if info.source == "vcs":
+        return "vcs"
+    if info.source == "checkout" or (is_checkout() if checkout is None else checkout):
+        return "checkout"
     where = Path(sys.prefix if prefix is None else prefix).as_posix().lower()
     if "/uv/tools/" in where:
         return "uv-tool"

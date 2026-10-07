@@ -40,12 +40,14 @@ UPDATE_COMMANDS = {
     "pip": "pip install -U scanpath-studio",
 }
 
-#: Each release's desktop archive per (platform, machine) — the names
+#: Each release's desktop download per (platform, machine) — the names
 #: ``.github/workflows/desktop.yml`` gives them. There is no Intel Mac build.
+#: Windows people get the per-user installer; the ``.zip`` stays on releases as
+#: the folder #385's updater swaps.
 DESKTOP_ARCHIVES = {
     ("darwin", "arm64"): "ScanpathStudio-macos-arm64.dmg",
-    ("win32", "amd64"): "ScanpathStudio-windows-x86_64.zip",
-    ("win32", "x86_64"): "ScanpathStudio-windows-x86_64.zip",
+    ("win32", "amd64"): "ScanpathStudio-windows-x86_64-setup.exe",
+    ("win32", "x86_64"): "ScanpathStudio-windows-x86_64-setup.exe",
     ("linux", "x86_64"): "ScanpathStudio-linux-x86_64.tar.gz",
 }
 

@@ -1361,7 +1361,7 @@ def maybe_show_about() -> None:
 @guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
-    from scanpath_studio import __version__
+    from scanpath_studio import __release__, __version__
 
     # The button that opened this sits inside the ❓ Help popover, whose open
     # state is client-side — without this it floats on top of the modal.
@@ -1378,7 +1378,7 @@ def _about_dialog() -> None:
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
         f"url = {{{CITATION['url']}}},\n"
-        f"version = {{{__version__}}},\n"
+        f"version = {{{__release__}}},\n"
         "year = {2026}\n"
         "}"
     )
@@ -1485,6 +1485,8 @@ def _render_build_and_updates() -> None:
         help="Asks GitHub for the latest release — the only time the app goes "
         "online for this.",
     ):
+        # One opaque request of at most 5 s inside a dialog: a spinner, not a
+        # UX-165 loading card.
         with st.spinner("Asking GitHub…"):
             st.session_state[_UPDATE_CHECK_KEY] = update_check.check_for_updates(
                 latest=_latest_release_cached

@@ -2154,6 +2154,21 @@ def test_version_check_prints_the_answer(capsys, monkeypatch):
     )
 
 
+def test_version_check_waits_as_long_as_it_is_told(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    waited = []
+
+    def latest(timeout=5.0):
+        waited.append(timeout)
+        return updates.Release("99.0.0", "v99.0.0", "2026-10-09T10:00:00Z", "u")
+
+    monkeypatch.setattr(updates, "latest_release", latest)
+    cli.main(["version", "--check", "--timeout", "2"])
+    cli.main(["version", "--check"])
+    assert waited == [2.0, 5.0]
+
+
 def test_a_failed_version_check_exits_1(capsys, monkeypatch):
     from scanpath_studio import updates
 

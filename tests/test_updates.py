@@ -227,7 +227,7 @@ def test_a_computer_with_no_desktop_build_is_told_so(monkeypatch):
     [
         ("darwin", "arm64", "ScanpathStudio-macos-arm64.dmg"),
         ("darwin", "x86_64", None),
-        ("win32", "AMD64", "ScanpathStudio-windows-x86_64.zip"),
+        ("win32", "AMD64", "ScanpathStudio-windows-x86_64-setup.exe"),
         ("linux", "x86_64", "ScanpathStudio-linux-x86_64.tar.gz"),
         ("linux", "aarch64", None),
     ],
@@ -241,7 +241,7 @@ def test_the_archive_names_are_the_ones_desktop_yml_builds():
         encoding="utf-8"
     )
     for name in set(updates.DESKTOP_ARCHIVES.values()):
-        assert f"archive: {name}" in workflow
+        assert f"archive: {name}" in workflow or f"installer: {name}" in workflow
 
 
 def test_a_failed_check_is_a_result_not_an_exception():

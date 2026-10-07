@@ -1052,7 +1052,15 @@ _PADDED_TOL = 0.02  # of one cell, or 1.5 data px, whichever is larger
 
 
 def _padded_monospace_font(words: pd.DataFrame) -> float | None:
-    """The font (data px) of a monospace layout whose boxes are padded alike.
+    """The font (data px) of a monospace layout whose boxes are padded alike:
+    the character cell (:func:`_padded_monospace_layout`) over the font's
+    advance. ``None`` when the layout is not one."""
+    layout = _padded_monospace_layout(words)
+    return None if layout is None else layout[0] / _latin_advance(words)
+
+
+def _padded_monospace_layout(words: pd.DataFrame) -> tuple[float, float] | None:
+    """``(cell, padding)`` in data px of a monospace layout padded alike.
 
     Each box is ``n_chars`` cells plus a padding shared by every word, so the
     cell is the slope of box width against word length and the font is that
@@ -1106,7 +1114,45 @@ def _padded_monospace_font(words: pd.DataFrame) -> float | None:
     )
     if agree.mean() < _PADDED_MIN_AGREEMENT:
         return None
-    return cell / _latin_advance(words)
+    return cell, pad
+
+
+def _word_label_x(words: pd.DataFrame) -> np.ndarray:
+    """Where each word label is centred: its box's middle (BUG-97) — except a
+    line's first word in a padded monospace layout.
+
+    There the box carries only the right half of the padding (the line starts
+    at the text), so the word sat flush with the box's left edge in the
+    experiment; centring it in the box shifted it right by a quarter of the gap.
+    Such a word is centred on its own letters instead, starting at ``x``.
+    Right-to-left words and every other layout keep the box's middle.
+    """
+    from .measures import cluster_word_lines, word_box_bounds
+
+    x0, _, x1, _ = word_box_bounds(words)
+    label_x = (x0 + x1) / 2.0
+    layout = _padded_monospace_layout(words) if len(words) else None
+    if layout is None or not {"y", "height"} <= set(words.columns):
+        return label_x
+    cell, pad = layout
+    chars = words["text"].astype(str).str.len().to_numpy(dtype=float)
+    width = x1 - x0
+    half_padded = np.abs(width - chars * cell - pad / 2) <= max(1.5, _PADDED_TOL * cell)
+    rtl = words.get("right_to_left")
+    ltr = (
+        np.ones(len(words), dtype=bool)
+        if rtl is None
+        else ~rtl.fillna(False).astype(bool).to_numpy()
+    )
+    lines = np.asarray(cluster_word_lines(words))
+    first = np.zeros(len(words), dtype=bool)
+    for line in pd.unique(lines):
+        on_line = np.flatnonzero(lines == line)
+        first[on_line[x0[on_line] <= np.nanmin(x0[on_line])]] = True
+    flush = first & half_padded & ltr & (chars > 0)
+    label_x = label_x.copy()
+    label_x[flush] = x0[flush] + chars[flush] * cell / 2.0
+    return label_x
 
 
 def _display_scale(x_range: list, y_range: list, fitted_w: int, fitted_h: int) -> float:
@@ -2523,12 +2569,12 @@ def _add_word_label_trace(
             _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
-    # BUG-97 — the label is centred in its word's box, as the data defines it.
-    # BUG-30 centred it on the glyph run instead, which on a tiling corpus (the
-    # box carries the following space) drew every word flush left in its box.
+    # BUG-97 — the label is centred in its word's box, as the data defines it
+    # (`_word_label_x`: a padded layout's line-start word sits flush left, as it
+    # was shown). BUG-30 centred it on the glyph run instead, which on a tiling
+    # corpus (the box carries the following space) drew every word flush left.
     # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
     # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
-    from .measures import word_box_bounds
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -2536,8 +2582,7 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    box_x0, _, box_x1, _ = word_box_bounds(words)
-    label_x = (box_x0 + box_x1) / 2.0
+    label_x = _word_label_x(words)
     # The word drawn as its own characters (finding 6 — not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`
     # reads this same string, so it shows the word literally too.

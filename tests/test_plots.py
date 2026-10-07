@@ -2612,6 +2612,29 @@ class TestPaddedMonospaceFont:
     def test_one_word_length_is_not_enough(self, normalized_words_df):
         assert _padded_monospace_font(normalized_words_df) is None
 
+    def test_a_line_start_word_sits_flush_left_as_it_was_shown(self):
+        from scanpath_studio.plots import _word_label_x
+
+        words = self._layout(self.LINES)
+        label_x = _word_label_x(words)
+        x, width = words["x"].to_numpy(), words["width"].to_numpy()
+        chars = words["text"].str.len().to_numpy()
+        starts = x == 20.0
+        # The line's first word: centred on its own letters, from the box's edge.
+        assert label_x[starts] == pytest.approx(
+            x[starts] + chars[starts] * self.CELL / 2
+        )
+        # Every other word: centred in its box, half a gap either side.
+        assert label_x[~starts] == pytest.approx(x[~starts] + width[~starts] / 2)
+
+    def test_other_layouts_keep_the_box_middle(self, normalized_words_df):
+        from scanpath_studio.plots import _word_label_x
+
+        words = normalized_words_df
+        assert _word_label_x(words) == pytest.approx(
+            (words["x"] + words["width"] / 2).to_numpy()
+        )
+
 
 class TestLinePitchAndScript:
     """Line-pitch budget + script-aware width cap for true-to-scale text.

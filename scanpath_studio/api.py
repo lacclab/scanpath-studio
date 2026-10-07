@@ -210,6 +210,7 @@ _CANONICAL_OPTION_NAMES = {
     "saccade_color_mode",
     "saccade_class_colors",
     "saccade_type_legend",
+    "show_color_legend",
     "saccade_classes",
     "saccade_render_mode",
     "fixation_snap_to_word",

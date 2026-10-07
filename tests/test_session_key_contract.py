@@ -485,6 +485,7 @@ def _restore_config_app():
             "saccade_render_mode": "Arc",
             "saccade_color_mode": "Uniform",
             "saccade_type_legend": True,
+            "show_color_legend": True,
             "saccade_class_colors": {c: "#445566" for c in SACCADE_CLASS_EDITABLE},
             # VIZ-31 reading-class filter — a real subset, since the reader
             # validates the names against the classes this build knows.

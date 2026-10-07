@@ -54,6 +54,7 @@ GLOBAL_SHOW_ORDER = "global_show_order"
 GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
+GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
 GLOBAL_FIXATION_SNAP_TO_WORD = "global_fixation_snap_to_word"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
@@ -469,6 +470,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_saccades": GLOBAL_SHOW_SACCADES,
         "show_saccade_arrows": GLOBAL_SHOW_SACCADE_ARROWS,
         "saccade_type_legend": GLOBAL_SACCADE_TYPE_LEGEND,
+        "show_color_legend": GLOBAL_SHOW_COLOR_LEGEND,
         "duration_size_legend": GLOBAL_DURATION_SIZE_LEGEND,
         "snap_fixations": GLOBAL_FIXATION_SNAP_TO_WORD,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
@@ -986,6 +988,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_RENDER_MODE,
         GLOBAL_SACCADE_COLOR_MODE,
         GLOBAL_SACCADE_TYPE_LEGEND,
+        GLOBAL_SHOW_COLOR_LEGEND,
         GLOBAL_SACCADE_CLASS_COLOR_FORWARD,
         GLOBAL_SACCADE_CLASS_COLOR_SKIP,
         GLOBAL_SACCADE_CLASS_COLOR_REFIXATION,

@@ -162,6 +162,9 @@ class FigureSettings:
     saccade_color_mode: str = "Uniform"
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
+    #: The legend of a categorical ``color_by`` (and the Highlight entries,
+    #: raw gaze) — Figure & canvas → Legends → Fixation colours → Show.
+    show_color_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
     fixation_snap_to_word: bool = False
@@ -1771,7 +1774,11 @@ def _grow(fig: go.Figure, side: str, px: float) -> None:
 
 
 def apply_legend_layout(
-    fig: go.Figure, layout: Mapping | None, *, comparing: bool = False
+    fig: go.Figure,
+    layout: Mapping | None,
+    *,
+    comparing: bool = False,
+    show_colors: bool = True,
 ) -> go.Figure:
     """Move each legend kind the user placed into a Plotly legend of its own.
 
@@ -1780,6 +1787,12 @@ def apply_legend_layout(
     side are laid out one after another along it, and an outside side reserves
     room for the widest (or tallest) of them.
     """
+    if not show_colors:
+        # Fixation colours → Show off: the entries stay on the figure's traces
+        # (their markers still draw), only their legend lines go.
+        for trace in fig.data:
+            if _trace_legend_kind(trace, comparing) == "colors":
+                trace.showlegend = False
     specs = normalize_legend_layout(layout)
     moved = {
         kind
@@ -9099,7 +9112,9 @@ def make_scanpath_figure(
             raw_gaze=raw_gaze,
         )
     _arrange_colorbars(fig)
-    apply_legend_layout(fig, resolved.legend_layout)
+    apply_legend_layout(
+        fig, resolved.legend_layout, show_colors=resolved.show_color_legend
+    )
     if resolved.show_fixations:
         _maybe_add_duration_key(fig, resolved, resolved.marker_size_range, fixations)
     return fig
@@ -9167,6 +9182,7 @@ def build_scanpath_replay(
         fig,
         resolved.legend_layout,
         comparing=fixations_b is not None and not fixations_b.empty,
+        show_colors=resolved.show_color_legend,
     )
     size_range = replay_size_key_range(resolved, fixations, fixations_b)
     if size_range is not None:
@@ -9276,7 +9292,12 @@ def make_comparison_figure(
             raw_gaze=raw_gaze,
         )
     _arrange_colorbars(fig)
-    apply_legend_layout(fig, resolved.legend_layout, comparing=True)
+    apply_legend_layout(
+        fig,
+        resolved.legend_layout,
+        comparing=True,
+        show_colors=resolved.show_color_legend,
+    )
     # One key serves both scanpaths only while they share a size range; with
     # per-scanpath ranges (Compare's own Size) one duration is two sizes.
     ranges = {

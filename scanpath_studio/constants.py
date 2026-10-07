@@ -1101,7 +1101,7 @@ ICONS: dict[str, str] = {
     "word_boxes": ":material/crop_square:",
     "heatmap": ":material/local_fire_department:",
     "raw_gaze": ":material/grain:",
-    "plot_filter": ":material/cleaning_services:",
+    "plot_filter": ":material/filter_list:",
     "figure": ":material/aspect_ratio:",
     "screen": ":material/desktop_windows:",
     "axes": ":material/grid_on:",

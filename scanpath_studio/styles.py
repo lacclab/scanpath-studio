@@ -872,7 +872,7 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* UX-153 — a rail row with no switch (🧹 Flag fixations, 📐 Figure & canvas) is
+    /* UX-153 — a rail row with no switch (Filters & highlights, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
        is stretched over the whole row by an `::after` overlay, which keeps the
        row's look, and the popover still anchors on the ▾ itself. The row is
@@ -955,7 +955,7 @@ def get_app_css() -> str:
        carries `margin-bottom: 1rem` that Streamlit cancels with a matching
        negative margin on `stMarkdownContainer` — which fixes the layout but not
        `scrollHeight`, and the margin still counts there. So exactly the three
-       name-only sections (📄 Stimulus · 🧹 Flag fixations · 📐 Figure & canvas, the ones
+       name-only sections (📄 Stimulus · Filters & highlights · 📐 Figure & canvas, the ones
        drawn with a name instead of a switch) scrolled 8px and lost 11px of
        width to the scrollbar's gutter, while the five with a toggle did not.
        Zeroing both margins is the fix rather than `overflow: visible`, because
@@ -1802,7 +1802,7 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-72 — the two halves of the rail's 🧹 Flag fixations section. A rule and a
+    /* UX-72 — the two halves of the rail's Filters & highlights section. A rule and a
        small label: enough to group, cheap in height. (UX-74 briefly used this
        for every section's contents and was reverted — the sections read better
        with their `⚙️ …` popovers.) */

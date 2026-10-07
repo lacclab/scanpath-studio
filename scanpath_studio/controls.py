@@ -1064,7 +1064,7 @@ def _fixation_filter_badge(prefix: str = "global") -> str:
 
 
 def _plot_filter_badge() -> str:
-    """UX-72: one badge for the whole 🧹 Flag fixations section.
+    """UX-72: one badge for the whole Filters & highlights section.
 
     The section folds the fixation and saccade filters together, so its header
     has to answer "is anything being hidden?" for both — the reason each of them
@@ -5062,7 +5062,7 @@ def compare_b_filters() -> dict:
 
 
 def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None:
-    """Scanpath B's half of the 🧹 Flag fixations section (CMP-24).
+    """Scanpath B's half of the Filters & highlights section (CMP-24).
 
     Rendered into the slot ``render_plot_controls`` reserved under A's filters —
     after the rail, because B is picked (and its fixations loaded) below it. The
@@ -5819,7 +5819,7 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
     returns its value; the name is the switch's label, so clicking it flips the
     switch (UX-153). Omitting them leaves the section's **name** on its own,
     for the sections that have no layer to switch: 📐 Figure & canvas holds
-    none, and 🧹 Flag fixations is not a layer at all — there, clicking the name opens
+    none, and Filters & highlights is not a layer at all — there, clicking the name opens
     the popover. (📄 Stimulus has a master switch over its three layers since
     UX-128.) ``note=`` is a line written into the top of the popover — used for
     the ⚠️ that says why a switch is greyed.
@@ -5910,13 +5910,13 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
 
 
 def _rail_subsection(host, label: str, *, note: str = ""):
-    """A named block inside the rail's 🧹 Flag fixations section (UX-72).
+    """A named block inside the rail's Filters & highlights section (UX-72).
 
     **Scope, after UX-74 was reverted.** That item flattened *every* section's
     `⚙️ …` popovers into blocks like this one; the rail read worse for it — a
     section became a long unbroken run — so the popovers are back everywhere
     they were. What is left using this is the one section that never had them:
-    #UX-72's 🧹 Flag fixations, whose two halves (👁️ Fixations · ↗️ Saccades) are
+    #UX-72's Filters & highlights, whose two halves (👁️ Fixations · ↗️ Saccades) are
     genuinely one thing each and would spend a click for nothing.
 
     ``note`` renders under the label — a block has no trigger, so the sentence a
@@ -5953,7 +5953,7 @@ def _reset_viz_confirmation_dialog() -> None:
     ``on_click`` on the *un-confirmed* button next door).
     """
     st.caption(
-        "Reset every plot setting, Flag fixations included. Annotations, trial "
+        "Reset every plot setting, Filters & highlights included. Annotations, trial "
         "filters, data and the selected trial are kept."
     )
     yes, no = st.columns(2)
@@ -5991,7 +5991,7 @@ def render_viz_reset(host) -> None:
         f"{ICONS['reset']} Reset visualization",
         key="reset_viz_settings_btn",
         width="stretch",
-        help="Reset every plot setting, Flag fixations included. Annotations, "
+        help="Reset every plot setting, Filters & highlights included. Annotations, "
         "trial filters, data and the selected trial are kept.",
     ):
         st.session_state[_RESET_VIZ_PENDING_KEY] = True
@@ -6029,7 +6029,7 @@ def render_plot_controls(
          single "Scanpath" group. UX-74 tried replacing those popovers with
          inline blocks and was reverted: a section then read as one long
          undifferentiated run.
-      3b. Filtering left the sections entirely (UX-72): one 🧹 **Flag fixations**
+      3b. Filtering left the sections entirely (UX-72): one **Filters & highlights**
          section after them holds both the fixation and the saccade filters.
       4. **📐 Figure & canvas** follows the same shape with no layer to toggle
          (UX-48): the framing toggle inline, then four popovers — 🖥️ Screen &
@@ -6360,9 +6360,9 @@ def render_plot_controls(
     # its controls open over the page instead of being cropped by the rail.
     _filter_none, filter_grp = _rail_section(
         viz,
-        f"{ICONS['plot_filter']} **Flag fixations**{_plot_filter_badge()}",
+        f"{ICONS['plot_filter']} **Filters & highlights**{_plot_filter_badge()}",
         slug="filter",
-        name="Flag fixations",
+        name="Filters & highlights",
         note=no_fixations_note,
     )
     # Sub-slots up front so each block below renders into the right half of the
@@ -6782,7 +6782,7 @@ def render_plot_controls(
             f"{ICONS['fixations']} Fixations",
             off=not (show_fix or fix_off_disabled) or not has_fixations,
             reason=no_fixations_note or None,
-            # The 🧹 Flag fixations section's own note already said it.
+            # The Filters & highlights section's own note already said it.
             caption=has_fixations,
         ),
         _popover_rows("filter_fix"),

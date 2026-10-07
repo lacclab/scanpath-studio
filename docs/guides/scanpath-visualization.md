@@ -33,7 +33,7 @@ and a **▾** with its settings.
 | :material/crop_square: Word boxes | each word's interest area: outline color and opacity; fill color and opacity |
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |
-| :material/cleaning_services: Flag fixations | which fixations and saccades are drawn |
+| :material/filter_list: Filters & highlights | which fixations and saccades are drawn |
 | :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields, legends |
 
 Color ranges start on **Auto**, scaled to each trial. Pin a range to keep it
@@ -60,9 +60,9 @@ longest fixation instead, so its sizes compare only within that figure. Share
 links, settings files, saved designs and restored sessions from before the fixed
 scale reopen on the relative one, as they were drawn.
 
-## Flag fixations
+## Filters & highlights
 
-**:material/cleaning_services: Flag fixations** thins the trial on screen (the funnel above the plot chooses
+**:material/filter_list: Filters & highlights** thins the trial on screen (the funnel above the plot chooses
 *which* trials you can pick). For fixations, **Highlight** or **Discard**
 short, long, out-of-bounds or blink fixations, or show only an index range.
 *Out of bounds* means outside every word box, not off the screen; *blink* needs

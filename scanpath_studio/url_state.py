@@ -103,6 +103,7 @@ from .session_keys import (
     COMPARE_STYLE_PARAMS,
     EXPORT_PARAMS,
     FIX_RANGE_PARAM,
+    LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
@@ -1003,6 +1004,61 @@ def _selected_corpus(data_choice: str) -> tuple[str, dict]:
     return "", {}
 
 
+def _legend_state(kind: str, spec: dict) -> dict:
+    """One legend's three session keys, from a parsed spec."""
+    return {
+        f"global_legend_{kind}_position": spec.get("position", "auto"),
+        f"global_legend_{kind}_arrangement": spec.get("arrangement", "auto"),
+        f"global_legend_{kind}_size": spec.get("size"),
+    }
+
+
+def _apply_url_legends(qp) -> None:
+    """Seed each ``legend_<kind>=SPEC`` param's three Legends keys.
+
+    One param per legend rather than three generic ones, written only for a
+    legend moved off Auto (`_build_share_query`), so an ordinary link carries
+    none. A malformed one is reported and ignored, like every other param.
+    """
+    from .plots import parse_legend_spec
+
+    for param, kind in LEGEND_PARAMS.items():
+        if param not in qp:
+            continue
+        try:
+            spec = parse_legend_spec(qp[param])
+        except ValueError:
+            st.warning(f"Ignored the link's invalid {param}={qp[param]}.")
+            continue
+        if spec.get("size") is not None:
+            spec["size"] = max(6, min(72, int(spec["size"])))
+        for key, value in _legend_state(kind, spec).items():
+            st.session_state.setdefault(key, value)
+
+
+def _legend_query(params: dict) -> None:
+    """Write ``legend_<kind>`` for each legend moved off Auto (the inverse)."""
+    from .plots import _legend_is_moved, legend_spec_text, normalize_legend_layout
+
+    layout = {
+        kind: {
+            "position": st.session_state.get(f"global_legend_{kind}_position")
+            or "auto",
+            "arrangement": st.session_state.get(f"global_legend_{kind}_arrangement")
+            or "auto",
+            "size": st.session_state.get(f"global_legend_{kind}_size"),
+        }
+        for kind in LEGEND_PARAMS.values()
+    }
+    try:
+        layout = normalize_legend_layout(layout)
+    except (ValueError, TypeError):
+        return
+    for param, kind in LEGEND_PARAMS.items():
+        if _legend_is_moved(layout[kind]):
+            params[param] = legend_spec_text(layout[kind])
+
+
 def _apply_url_palette(qp) -> None:
     """Expand a ``?palette=<name>`` deep link into its colour session keys (VIZ-18).
 
@@ -1086,6 +1142,7 @@ def _apply_url_preset() -> str | None:
                     st.warning(f"Ignored the link's invalid trial={qp['trial']}.")
 
     _apply_url_palette(qp)
+    _apply_url_legends(qp)
 
     snapped_from_link: set[str] = set()
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
@@ -2505,6 +2562,22 @@ def _restore_plot_config(
             )
     if "duration_size_legend" in sizing:
         put("global_duration_size_legend", bool(sizing["duration_size_legend"]))
+    legends = config.get("legends")
+    if isinstance(legends, dict):
+        from .plots import normalize_legend_layout
+
+        for kind in LEGEND_PARAMS.values():
+            if kind not in legends:
+                continue
+            try:
+                spec = normalize_legend_layout({kind: legends[kind]})[kind]
+            except (ValueError, TypeError, AttributeError):
+                skipped.append(f"{kind.replace('_', ' ')} legend")
+                continue
+            if spec["size"] is not None:
+                spec["size"] = max(6, min(72, int(spec["size"])))
+            for key, value in _legend_state(kind, spec).items():
+                put(key, value)
     if "order_font_size" in sizing:
         put_int(
             sizing["order_font_size"],
@@ -3324,6 +3397,7 @@ def _build_share_query(
         )
         if orphaned or restated:
             params.pop(url_key)
+    _legend_query(params)
     # #374 F28 — the print size travels only while a width is set; without
     # one the PNG is drawn at the screen size, which needs nothing said.
     if not st.session_state.get(EXPORT_PARAMS["export_width"]):

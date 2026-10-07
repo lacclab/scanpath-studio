@@ -74,6 +74,10 @@ NON_DEFAULT = {
     "marker_size_scale": "log",
     "marker_duration_range": (80.0, 900.0),
     "duration_size_legend": False,
+    "legend_layout": {
+        "saccades": {"position": "right", "arrangement": "stacked", "size": 14},
+        "size_key": {"position": "top-left"},
+    },
     "fixation_snap_to_word": True,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
     # CMP-24 — the co-animation's B flags (`--compare-fixation-flag`).
@@ -264,6 +268,14 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             (80.0, 900.0),
         ),
         (["--no-duration-size-legend"], "duration_size_legend", False),
+        (
+            ["--legend", "saccades=right,14,stacked", "--legend", "size-key=below"],
+            "legend_layout",
+            {
+                "saccades": {"position": "right", "arrangement": "stacked", "size": 14},
+                "size_key": {"position": "below"},
+            },
+        ),
         (["--hollow-fixations"], "hollow_fixations", True),
         (["--color-by-line"], "color_by_line", True),
         (["--fixation-color-range", "100", "400"], "fixation_color_range", (100, 400)),

@@ -1120,6 +1120,8 @@ def _plot_config_dict(
             "duration_size_legend": bool(settings.get("duration_size_legend", True)),
             "order_font_size": settings.get("order_font_size"),
         },
+        # Where each legend was placed (Figure & canvas → Legends); absent = Auto.
+        "legends": settings.get("legend_layout") or {},
         # True-to-scale reading text: records how the word labels were sized so
         # the figure can be reproduced exactly (see plots._word_label_font_px).
         "text": {

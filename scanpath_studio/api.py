@@ -185,6 +185,7 @@ _CANONICAL_OPTION_NAMES = {
     "marker_size_scale",
     "marker_duration_range",
     "duration_size_legend",
+    "legend_layout",
     "order_font_size",
     "order_font_color",
     "show_fixation_colorbar",

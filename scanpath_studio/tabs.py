@@ -317,6 +317,7 @@ from scanpath_studio.plots import (
     make_word_matrix_heatmap,
     make_word_profile_figure,
     make_word_rate_figure,
+    normalize_legend_layout,
     replay_page,
     replay_size_key_range,
     set_replay_clock,
@@ -1884,6 +1885,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
         ),
         duration_size_legend=viz_settings.get("duration_size_legend", True),
+        legend_layout=viz_settings.get("legend_layout"),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
         **{
@@ -4399,6 +4401,10 @@ def _build_studio_config(
             "order_font_color": figure_settings["order_font_color"],
             "base_font_size": int(base_font_size),
         },
+        # Figure & canvas → Legends: every legend, Auto included, so a file
+        # restores the placement it was saved with rather than leaving a
+        # moved legend where the receiving session had it.
+        "legends": normalize_legend_layout(figure_settings.get("legend_layout")),
         "text": {
             "scale_text_to_boxes": bool(
                 figure_settings.get("scale_text_to_boxes", True)

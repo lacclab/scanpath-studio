@@ -988,6 +988,20 @@ def _fixation_flags(value, flag: str = "--fixation-flag"):
     return argv
 
 
+def _legend_layout(value):
+    """The legend placements → one ``--legend`` per legend that was moved.
+
+    A legend left on *auto* throughout is the default and is not written.
+    """
+    from .plots import _legend_is_moved, legend_spec_text, normalize_legend_layout
+
+    argv: list[str] = []
+    for kind, spec in normalize_legend_layout(value).items():
+        if _legend_is_moved(spec):
+            argv += ["--legend", f"{kind.replace('_', '-')}={legend_spec_text(spec)}"]
+    return argv
+
+
 def _compare_fixation_flags(value):
     """B's flags (CMP-24). An all-*Off* set still has to be said when A's are
     on, or B would inherit them — so it is spelled as one explicit *off*."""
@@ -1252,6 +1266,7 @@ _CLI_EMITTERS: dict[str, Any] = {
         {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
     ),
     "fixation_flags": _fixation_flags,
+    "legend_layout": _legend_layout,
     "heatmap_sigma_px": _valued("--heatmap-sigma"),
     "marker_size_range": _marker_size_range,
     "marker_size_scale": _valued("--marker-size-scale"),

@@ -1107,6 +1107,7 @@ ICONS: dict[str, str] = {
     "axes": ":material/grid_on:",
     "labels": ":material/title:",
     "hover": ":material/ads_click:",
+    "legend": ":material/legend_toggle:",
     "designs": ":material/palette:",
     "plot_controls": ":material/tune:",
     "animate": ":material/movie:",
@@ -1269,3 +1270,49 @@ SUBTAB_COMPARISONS = f"{ICONS['comparisons']} Comparisons"
 SUBTAB_LINE_ASSIGNMENT = f"{ICONS['line_assignment']} Line assignment"
 SUBTAB_EXPORT = f"{ICONS['export']} Export"
 SUBTAB_SHARE = f"{ICONS['share']} Share"
+
+
+# --- Legend layout ------------------------------------------------------------
+# Where each legend sits (📐 Figure & canvas → Legends; `plots.apply_legend_layout`).
+# The values are wire format — share links, saved configs, `render --legend` —
+# so never rename one.
+
+#: The legends a figure can draw, in the order the controls list them.
+LEGEND_KINDS = ("compare", "saccades", "colors", "size_key")
+#: What the controls call each legend.
+LEGEND_KIND_LABELS = {
+    "compare": "Compare (A/B)",
+    "saccades": "Saccade types",
+    "colors": "Fixation colours",
+    "size_key": "Size key",
+}
+#: Where a legend can go: outside the plot on a side, or inside a corner.
+LEGEND_POSITIONS = (
+    "auto",
+    "above",
+    "below",
+    "left",
+    "right",
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+)
+LEGEND_POSITION_LABELS = {
+    "auto": "Auto",
+    "above": "Above",
+    "below": "Below",
+    "left": "Left",
+    "right": "Right",
+    "top-left": "Inside top-left",
+    "top-right": "Inside top-right",
+    "bottom-left": "Inside bottom-left",
+    "bottom-right": "Inside bottom-right",
+}
+#: How a legend's items run: one under the other, or side by side.
+LEGEND_ARRANGEMENTS = ("auto", "stacked", "side-by-side")
+LEGEND_ARRANGEMENT_LABELS = {
+    "auto": "Auto",
+    "stacked": "Stacked",
+    "side-by-side": "Side by side",
+}

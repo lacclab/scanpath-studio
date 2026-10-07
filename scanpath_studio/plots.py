@@ -45,6 +45,9 @@ from .constants import (
     FONT_FAMILY,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
+    LEGEND_ARRANGEMENTS,
+    LEGEND_KINDS,
+    LEGEND_POSITIONS,
     MARKER_SIZE_SCALES,
     OUT_OF_TEXT_COLOR,
     SACCADE_CLASS_COLORS,
@@ -126,6 +129,11 @@ class FigureSettings:
     marker_duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE
     #: A few reference circles labelled in ms, drawn under a fixed scale.
     duration_size_legend: bool = True
+    #: Where each legend sits, as ``{kind: {"position", "arrangement", "size"}}``
+    #: for the kinds in ``LEGEND_KINDS``. A kind left out, or set to "auto"
+    #: throughout, is drawn where it always was; whether it is drawn at all is
+    #: still its own layer's switch. See :func:`normalize_legend_layout`.
+    legend_layout: dict | None = None
     order_font_size: int | None = 10
     order_font_color: str = "#111111"
     #: Each colour scale's bar has its own switch and style: the fixations'
@@ -1041,6 +1049,120 @@ def _width_fit_font(words: pd.DataFrame) -> float | None:
     return tight * _WIDTH_FIT_MARGIN if tight > 0 else None
 
 
+# A monospace word box is its glyphs plus the same padding on every word — half
+# the gap to each neighbour (a space, plus any extra word spacing). Line-start
+# words carry only the right half, and a fixation cross's box none, so a box
+# agrees when it carries the full padding, half of it or none, and most of a
+# trial's boxes must agree before the font is read off them.
+_PADDED_MIN_AGREEMENT = 0.8
+_PADDED_MIN_WORDS = 5
+_PADDED_TOL = 0.02  # of one cell, or 1.5 data px, whichever is larger
+
+
+def _padded_monospace_font(words: pd.DataFrame) -> float | None:
+    """The font (data px) of a monospace layout whose boxes are padded alike:
+    the character cell (:func:`_padded_monospace_layout`) over the font's
+    advance. ``None`` when the layout is not one."""
+    layout = _padded_monospace_layout(words)
+    return None if layout is None else layout[0] / _latin_advance(words)
+
+
+def _padded_monospace_layout(words: pd.DataFrame) -> tuple[float, float] | None:
+    """``(cell, padding)`` in data px of a monospace layout padded alike.
+
+    Each box is ``n_chars`` cells plus a padding shared by every word, so the
+    cell is the slope of box width against word length and the font is that
+    cell over the font's advance — exact, with no margin to guess: the padding
+    *is* the margin. The slope is read from the *regular* boxes only, leaving
+    out each line's first box (it carries only the right half of the padding)
+    and any box starting where another does (a fixation cross over the first
+    word), since on a short screen those few would tip a median. ``None`` when
+    the boxes do not agree (proportional fonts, too few words or lengths,
+    full-width text), so the caller falls back to :func:`_width_fit_font`.
+    """
+    if not {"x", "width", "text"} <= set(words.columns):
+        return None
+    frame = words.dropna(subset=["text"])
+    text = frame["text"].astype(str)
+    if any(_is_fullwidth(ch) for ch in "".join(text.tolist())):
+        return None
+    chars = text.str.len().to_numpy(dtype=float)
+    x = pd.to_numeric(frame["x"], errors="coerce").to_numpy(dtype=float)
+    width = pd.to_numeric(frame["width"], errors="coerce").to_numpy(dtype=float)
+    ok = (chars > 0) & np.isfinite(width) & (width > 0) & np.isfinite(x)
+    if ok.sum() < _PADDED_MIN_WORDS:
+        return None
+    regular = ok.copy()
+    if {"y", "height"} <= set(frame.columns):
+        from .measures import cluster_word_lines
+
+        lines = np.asarray(cluster_word_lines(frame))
+        for line in pd.unique(lines[ok]):
+            on_line = np.flatnonzero(ok & (lines == line))
+            regular[on_line[x[on_line] <= x[on_line].min()]] = False
+    shared_start = pd.Series(x).duplicated(keep=False).to_numpy()
+    regular &= ~shared_start
+    lengths = np.unique(chars[regular])
+    if regular.sum() < _PADDED_MIN_WORDS - 1 or len(lengths) < 2:
+        return None
+    typical = np.array([np.median(width[regular & (chars == n)]) for n in lengths])
+    i, j = np.triu_indices(len(lengths), k=1)
+    cell = float(np.median((typical[j] - typical[i]) / (lengths[j] - lengths[i])))
+    if not np.isfinite(cell) or cell <= 0:
+        return None
+    pad = float(np.median(width[regular] - chars[regular] * cell))
+    if pad < -0.5 * cell:
+        return None
+    tol = max(1.5, _PADDED_TOL * cell)
+    glyphs = chars[ok] * cell
+    agree = (
+        (np.abs(width[ok] - glyphs - pad) <= tol)
+        | (np.abs(width[ok] - glyphs - pad / 2) <= tol)
+        | (np.abs(width[ok] - glyphs) <= tol)
+    )
+    if agree.mean() < _PADDED_MIN_AGREEMENT:
+        return None
+    return cell, pad
+
+
+def _word_label_x(words: pd.DataFrame) -> np.ndarray:
+    """Where each word label is centred: its box's middle (BUG-97) — except a
+    line's first word in a padded monospace layout.
+
+    There the box carries only the right half of the padding (the line starts
+    at the text), so the word sat flush with the box's left edge in the
+    experiment; centring it in the box shifted it right by a quarter of the gap.
+    Such a word is centred on its own letters instead, starting at ``x``.
+    Right-to-left words and every other layout keep the box's middle.
+    """
+    from .measures import cluster_word_lines, word_box_bounds
+
+    x0, _, x1, _ = word_box_bounds(words)
+    label_x = (x0 + x1) / 2.0
+    layout = _padded_monospace_layout(words) if len(words) else None
+    if layout is None or not {"y", "height"} <= set(words.columns):
+        return label_x
+    cell, pad = layout
+    chars = words["text"].astype(str).str.len().to_numpy(dtype=float)
+    width = x1 - x0
+    half_padded = np.abs(width - chars * cell - pad / 2) <= max(1.5, _PADDED_TOL * cell)
+    rtl = words.get("right_to_left")
+    ltr = (
+        np.ones(len(words), dtype=bool)
+        if rtl is None
+        else ~rtl.fillna(False).astype(bool).to_numpy()
+    )
+    lines = np.asarray(cluster_word_lines(words))
+    first = np.zeros(len(words), dtype=bool)
+    for line in pd.unique(lines):
+        on_line = np.flatnonzero(lines == line)
+        first[on_line[x0[on_line] <= np.nanmin(x0[on_line])]] = True
+    flush = first & half_padded & ltr & (chars > 0)
+    label_x = label_x.copy()
+    label_x[flush] = x0[flush] + chars[flush] * cell / 2.0
+    return label_x
+
+
 def _display_scale(x_range: list, y_range: list, fitted_w: int, fitted_h: int) -> float:
     """Screen px per data unit for a fixed-size, equal-aspect spatial plot.
 
@@ -1080,11 +1202,19 @@ def _word_label_font_px(
       size is *also* capped so the longest words still fit their box width (see
       :func:`_width_fit_font`), which keeps the font from colliding; the smaller of
       the two wins.
+      **Except** when the boxes hold their word plus the same padding, half the
+      gap to each neighbour (:func:`_padded_monospace_font`): then the font is
+      read off the boxes exactly,
+      and neither the line-spacing guess nor the fit's safety margin applies —
+      each shrank such text by its own few percent.
     - otherwise / no usable boxes: ``manual_font_px`` is treated as the real
       monitor font size and scaled the same way.
     """
     font_data_px = float(manual_font_px)
-    if scale_text_to_boxes and not words.empty and "height" in words.columns:
+    exact = _padded_monospace_font(words) if scale_text_to_boxes else None
+    if exact:
+        font_data_px = exact
+    elif scale_text_to_boxes and not words.empty and "height" in words.columns:
         pitch = _line_pitch(words)
         height_fit = pitch / line_spacing if (pitch and line_spacing > 0) else None
         width_fit = _width_fit_font(words)
@@ -1221,6 +1351,7 @@ def _add_category_legend(
                 else f"{_column_name(color_label)}: {category}",
                 showlegend=True,
                 hoverinfo="skip",
+                meta=_COLORS_LEGEND_META,
             )
         )
     if len(legend) > limit:
@@ -1233,6 +1364,7 @@ def _add_category_legend(
                 name=f"… +{len(legend) - limit} more",
                 showlegend=True,
                 hoverinfo="skip",
+                meta=_COLORS_LEGEND_META,
             )
         )
 
@@ -1478,13 +1610,297 @@ def _stack_bottom_right(fig: go.Figure) -> None:
     key_top = [
         float(sh.y1)
         for sh in fig.layout.shapes or ()
-        if sh.type == "circle" and sh.yref == "paper" and sh.ysizemode == "pixel"
+        if sh.type == "circle"
+        and sh.yref == "paper"
+        and sh.ysizemode == "pixel"
+        # Only a key inside the bottom-right corner shares the stamp's spot.
+        and sh.xanchor == 1
+        and sh.yanchor == 0
+        and float(sh.x1) <= 0
+        and float(sh.y0) >= 0
     ]
     if not key_top:
         return
     for ann in fig.layout.annotations or ():
         if ann.name == _ILLUSTRATION_LABEL_NAME:
             ann.yshift = max(key_top) + 4.0
+
+
+# --- Legend layout (where each legend sits) ---------------------------------
+#
+# Each legend *kind* can be moved to a spot of its own, sized, and laid out as a
+# stack or a row, on top of its own layer's show/hide switch. A kind left on
+# "auto" throughout is drawn exactly where it always was: every figure built
+# before this setting existed is unchanged. A kind moved anywhere gets its own
+# Plotly legend (``legend2`` …), and a spot outside the plot grows the figure on
+# that side, so the equal-aspect plot region — and the true-to-scale text with
+# it — keeps its size (the same rule as `_decoration_margins`).
+
+#: The size key's own spot when left on "auto": inside, bottom-right.
+_SIZE_KEY_AUTO_POSITION = "bottom-right"
+_COLORS_LEGEND_META = "legend:colors"
+_LEGEND_IDS = {"compare": "legend2", "saccades": "legend3", "colors": "legend4"}
+_LEGEND_GAP_PX = 8
+_OUTSIDE = ("above", "below", "left", "right")
+_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+
+def normalize_legend_layout(layout: Mapping | None) -> dict:
+    """``{kind: {"position", "arrangement", "size"}}`` with every kind present.
+
+    Unknown kinds, positions and arrangements raise rather than being dropped,
+    so a typo in a script or a link can't quietly draw the default. ``size``
+    is the legend's text size in px, or ``None`` for the figure's own.
+    """
+    out = {
+        kind: {"position": "auto", "arrangement": "auto", "size": None}
+        for kind in LEGEND_KINDS
+    }
+    for kind, spec in dict(layout or {}).items():
+        if kind not in out:
+            raise ValueError(
+                f"Unknown legend {kind!r}; expected one of {', '.join(LEGEND_KINDS)}."
+            )
+        spec = dict(spec or {})
+        unknown = set(spec) - {"position", "arrangement", "size"}
+        if unknown:
+            raise ValueError(
+                f"Unknown legend setting(s) {sorted(unknown)} for {kind!r}; "
+                "expected position, arrangement, size."
+            )
+        position = str(spec.get("position") or "auto")
+        if position not in LEGEND_POSITIONS:
+            raise ValueError(
+                f"Legend position {position!r} for {kind!r}; expected one of "
+                f"{', '.join(LEGEND_POSITIONS)}."
+            )
+        arrangement = str(spec.get("arrangement") or "auto")
+        if arrangement not in LEGEND_ARRANGEMENTS:
+            raise ValueError(
+                f"Legend arrangement {arrangement!r} for {kind!r}; expected one "
+                f"of {', '.join(LEGEND_ARRANGEMENTS)}."
+            )
+        size = spec.get("size")
+        if size is not None:
+            size = int(size)
+            if size <= 0:
+                raise ValueError(f"Legend size for {kind!r} must be positive.")
+        out[kind] = {"position": position, "arrangement": arrangement, "size": size}
+    return out
+
+
+def parse_legend_spec(text: str) -> dict:
+    """``"right,stacked,14"`` → ``{"position", "arrangement"?, "size"?}``.
+
+    The spelling shared by ``render --legend KIND=…``, the ``legend_<kind>``
+    link parameters and the code snippet: a spot first, then an arrangement
+    and a text size in either order, each recognised by its value. Raises
+    ``ValueError`` on anything else.
+    """
+    head, *rest = [part.strip().lower() for part in str(text).split(",")]
+    spec: dict = {"position": head or "auto"}
+    for part in (p for p in rest if p):
+        if part in LEGEND_ARRANGEMENTS:
+            spec["arrangement"] = part
+        elif part.isdigit():
+            spec["size"] = int(part)
+        else:
+            raise ValueError(
+                f"{part!r} is neither an arrangement "
+                f"({', '.join(LEGEND_ARRANGEMENTS[1:])}) nor a text size."
+            )
+    normalize_legend_layout({"compare": spec})  # validates the values
+    return spec
+
+
+def legend_spec_text(spec: Mapping) -> str:
+    """The inverse of :func:`parse_legend_spec`, for a normalized entry."""
+    parts = [str(spec["position"])]
+    if spec.get("arrangement", "auto") != "auto":
+        parts.append(str(spec["arrangement"]))
+    if spec.get("size") is not None:
+        parts.append(str(int(spec["size"])))
+    return ",".join(parts)
+
+
+def _legend_is_moved(spec: Mapping) -> bool:
+    return (
+        spec["position"] != "auto"
+        or spec["arrangement"] != "auto"
+        or spec["size"] is not None
+    )
+
+
+def _trace_legend_kind(trace, comparing: bool) -> str:
+    if trace.legendgroup == "saccade_type":
+        return "saccades"
+    if trace.meta == _COLORS_LEGEND_META or not comparing:
+        return "colors"
+    return "compare"
+
+
+def _legend_extent(names: list, font_px: float, horizontal: bool) -> tuple:
+    """A legend's estimated ``(width, height)`` in px, for reserving room."""
+    row = max(font_px * 1.3, 20.0) + 4.0
+    widths = [40.0 + 0.6 * font_px * len(str(n)) for n in names] or [0.0]
+    if horizontal:
+        return sum(widths) + 10.0, row + 10.0
+    return max(widths) + 10.0, row * len(names) + 10.0
+
+
+def _plot_px(fig: go.Figure) -> tuple:
+    """The plot region's ``(width, height)`` in px, and the margins."""
+    m = fig.layout.margin
+    margin = {k: float(getattr(m, k) or 0) for k in ("l", "r", "t", "b")}
+    width = float(fig.layout.width or 0) - margin["l"] - margin["r"]
+    height = float(fig.layout.height or 0) - margin["t"] - margin["b"]
+    return max(width, 1.0), max(height, 1.0), margin
+
+
+def _grow(fig: go.Figure, side: str, px: float) -> None:
+    """Add ``px`` of margin on one side, growing the figure by as much, so the
+    plot region keeps its size."""
+    if not px or not fig.layout.width or not fig.layout.height:
+        return
+    m = fig.layout.margin
+    setattr(m, side, float(getattr(m, side) or 0) + px)
+    if side in ("l", "r"):
+        fig.layout.width = float(fig.layout.width) + px
+    else:
+        fig.layout.height = float(fig.layout.height) + px
+
+
+def apply_legend_layout(
+    fig: go.Figure, layout: Mapping | None, *, comparing: bool = False
+) -> go.Figure:
+    """Move each legend kind the user placed into a Plotly legend of its own.
+
+    Kinds still on "auto" stay in the figure's default ``legend``; the size key
+    is placed by :func:`_add_duration_size_key`, not here. Legends sharing a
+    side are laid out one after another along it, and an outside side reserves
+    room for the widest (or tallest) of them.
+    """
+    specs = normalize_legend_layout(layout)
+    moved = {
+        kind
+        for kind in ("compare", "saccades", "colors")
+        if _legend_is_moved(specs[kind])
+    }
+    if not moved:
+        return fig
+    names: dict = {kind: [] for kind in moved}
+    titled: set = set()
+    for trace in fig.data:
+        kind = _trace_legend_kind(trace, comparing)
+        if kind not in moved:
+            continue
+        trace.legend = _LEGEND_IDS[kind]
+        if trace.showlegend is False:
+            continue
+        title = trace.legendgrouptitle.text if trace.legendgrouptitle else None
+        if title and trace.legendgroup not in titled:
+            titled.add(trace.legendgroup)
+            names[kind].append(title)
+        if trace.name:
+            names[kind].append(trace.name)
+    base_font = float((fig.layout.font and fig.layout.font.size) or 12)
+    plot_w, plot_h, margin = _plot_px(fig)
+    gap = _LEGEND_GAP_PX
+    along = {side: 0.0 for side in (*_OUTSIDE, *_CORNERS)}
+    reserve = {side: 0.0 for side in _OUTSIDE}
+    for kind in ("compare", "saccades", "colors"):
+        if kind not in moved or not names[kind]:
+            continue
+        spec = specs[kind]
+        position = "above" if spec["position"] == "auto" else spec["position"]
+        horizontal = (
+            spec["arrangement"] == "side-by-side"
+            if spec["arrangement"] != "auto"
+            else position in ("above", "below")
+        )
+        font_px = float(spec["size"] or base_font)
+        w, h = _legend_extent(names[kind], font_px, horizontal)
+        cfg: dict = {
+            "orientation": "h" if horizontal else "v",
+            "bgcolor": "rgba(255,255,255,0.75)",
+        }
+        if spec["size"]:
+            cfg["font"] = {"size": font_px}
+        if position == "above":
+            cfg.update(
+                xanchor="right",
+                x=1 - along["above"] / plot_w,
+                yanchor="bottom",
+                y=1 + gap / plot_h,
+            )
+            along["above"] += w + gap
+            reserve["above"] = max(reserve["above"], h + gap)
+        elif position == "below":
+            cfg.update(
+                xanchor="left",
+                x=along["below"] / plot_w,
+                yanchor="top",
+                y=-(margin["b"] + gap) / plot_h,
+            )
+            along["below"] += w + gap
+            reserve["below"] = max(reserve["below"], h + gap)
+        elif position == "left":
+            cfg.update(
+                xanchor="right",
+                x=-(margin["l"] + gap) / plot_w,
+                yanchor="top",
+                y=1 - along["left"] / plot_h,
+            )
+            along["left"] += h + gap
+            reserve["left"] = max(reserve["left"], w + gap)
+        elif position == "right":
+            cfg.update(
+                xanchor="left",
+                x=1 + (margin["r"] + gap) / plot_w,
+                yanchor="top",
+                y=1 - along["right"] / plot_h,
+            )
+            along["right"] += h + gap
+            reserve["right"] = max(reserve["right"], w + gap)
+        else:
+            top = position.startswith("top")
+            left = position.endswith("left")
+            inset = along[position]
+            cfg.update(
+                xanchor="left" if left else "right",
+                x=gap / plot_w if left else 1 - gap / plot_w,
+                yanchor="top" if top else "bottom",
+                y=1 - (gap + inset) / plot_h if top else (gap + inset) / plot_h,
+            )
+            along[position] += h + gap
+        fig.update_layout({_LEGEND_IDS[kind]: cfg})
+    # The default legend's strip above the plot: when every entry has moved out
+    # of it and the strip is exactly that reserve (the single-trial figures —
+    # a comparison's top margin also holds its title), it is handed back.
+    default_left = any(
+        t.legend in (None, "legend") and t.showlegend is not False and t.name
+        for t in fig.data
+    )
+    if not default_left and margin["t"] == _LEGEND_RESERVE_PX and not comparing:
+        _grow(fig, "t", -_LEGEND_RESERVE_PX)
+        margin["t"] = 0.0
+    # Above: the default legend's own reserve may already cover it.
+    _grow(fig, "t", max(0.0, reserve["above"] - margin["t"]))
+    _grow(fig, "b", reserve["below"])
+    _grow(fig, "l", reserve["left"])
+    _grow(fig, "r", reserve["right"])
+    return fig
+
+
+def _size_key_layout(layout: Mapping | None) -> dict:
+    """The size key's resolved spot, arrangement and label size."""
+    spec = normalize_legend_layout(layout)["size_key"]
+    position = spec["position"]
+    return {
+        "position": _SIZE_KEY_AUTO_POSITION if position == "auto" else position,
+        "stacked": spec["arrangement"] == "stacked",
+        "size": spec["size"],
+    }
 
 
 def _add_duration_size_key(
@@ -1494,41 +1910,67 @@ def _add_duration_size_key(
     duration_range,
     *,
     font_family: str | None = None,
+    legend_layout: Mapping | None = None,
 ) -> None:
     """Draw the fixed duration scale's key: reference circles labelled in ms.
 
-    Pixel-sized shapes anchored in the plot's bottom-right corner (paper
-    coordinates), so each circle is exactly the diameter a fixation of that
-    duration gets — at any canvas size and through every export path, since
-    they are layout shapes rather than a trace. Nothing is drawn for the
-    relative scale: its sizes mean something only inside one figure."""
+    Pixel-sized shapes anchored to a corner of the plot (paper coordinates), so
+    each circle is exactly the diameter a fixation of that duration gets — at
+    any canvas size and through every export path, since they are layout
+    shapes rather than a trace. ``legend_layout``'s ``size_key`` entry picks the
+    spot (inside bottom-right by default), a row or a column, and the labels'
+    size; the circles themselves never scale, since their size *is* the key.
+    An outside spot grows the figure so the plot region keeps its size.
+    Nothing is drawn for the relative scale: its sizes mean something only
+    inside one figure."""
     if scale == "relative":
         return
+    placement = _size_key_layout(legend_layout)
     refs = _duration_key_references(duration_range)
-    sizes = _compute_marker_sizes(
-        pd.Series([d for d, _ in refs]), size_range, scale, duration_range
-    )
-    slot = max(float(size_range[1]), 30.0) + 8.0  # px per reference circle
-    label_px = 16.0
+    sizes = [
+        float(v)
+        for v in _compute_marker_sizes(
+            pd.Series([d for d, _ in refs]), size_range, scale, duration_range
+        )
+    ]
+    label_font = float(placement["size"] or 10)
+    label_px = 1.6 * label_font
+    biggest = float(size_range[1])
     pad = 8.0
     n = len(refs)
-    for i, ((_, label), size) in enumerate(zip(refs, sizes)):
-        # Centre of slot i, counted from the right edge, in px.
-        dx = -(pad + (n - i - 0.5) * slot)
-        r = float(size) / 2.0
-        cy = pad + label_px + float(size_range[1]) / 2.0
+    # The key's own box, in px, origin bottom-left and y up: where each circle's
+    # centre and each label sit inside it.
+    if placement["stacked"]:
+        row = max(biggest, label_px) + 6.0
+        label_w = 0.6 * label_font * max(len(label) for _, label in refs)
+        w = pad + biggest + 6.0 + label_w + pad
+        h = 2 * pad + n * row
+        centres = [(pad + biggest / 2, h - pad - (i + 0.5) * row) for i in range(n)]
+        labels = [(pad + biggest + 6.0, cy, "left") for _, cy in centres]
+    else:
+        slot = max(biggest, 3.0 * label_font) + 8.0
+        w = 2 * pad + n * slot
+        h = pad + label_px + biggest + pad
+        cy = pad + label_px + biggest / 2.0
+        centres = [(pad + (i + 0.5) * slot, cy) for i in range(n)]
+        labels = [(cx, pad + label_px / 2.0, "center") for cx, _ in centres]
+    left, bottom, ax, ay = _size_key_anchor(fig, placement["position"], w, h)
+    for (_, label), size, (cx, cy), (lx, ly, align) in zip(
+        refs, sizes, centres, labels
+    ):
+        r = size / 2.0
         fig.add_shape(
             type="circle",
             xref="paper",
             yref="paper",
             xsizemode="pixel",
             ysizemode="pixel",
-            xanchor=1,
-            yanchor=0,
-            x0=dx - r,
-            x1=dx + r,
-            y0=cy - r,
-            y1=cy + r,
+            xanchor=ax,
+            yanchor=ay,
+            x0=left + cx - r,
+            x1=left + cx + r,
+            y0=bottom + cy - r,
+            y1=bottom + cy + r,
             line=dict(color="#555555", width=1),
             fillcolor="rgba(120,120,120,0.35)",
             layer="above",
@@ -1536,20 +1978,54 @@ def _add_duration_size_key(
             name=_shape_layer_tag("fixations"),
         )
         fig.add_annotation(
-            x=1,
-            y=0,
+            x=ax,
+            y=ay,
             xref="paper",
             yref="paper",
-            xshift=dx,
-            yshift=pad + label_px / 2.0,
+            xshift=left + lx,
+            yshift=bottom + ly,
             text=label,
             showarrow=False,
-            xanchor="center",
+            xanchor=align,
             yanchor="middle",
-            font=dict(size=10, color="#444444", family=font_family or FONT_FAMILY),
+            font=dict(
+                size=label_font, color="#444444", family=font_family or FONT_FAMILY
+            ),
             name=_SIZE_KEY_NAME,
         )
     _stack_bottom_right(fig)
+
+
+def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple:
+    """``(left, bottom, anchor_x, anchor_y)``: where the size key's box goes.
+
+    ``left`` / ``bottom`` are px from the paper anchor to the box's bottom-left
+    corner. An outside spot sits beyond whatever already occupies that margin
+    (a colour bar, the transport controls, another legend) and grows it.
+    """
+    gap = _LEGEND_GAP_PX
+    if position in _CORNERS:
+        top = position.startswith("top")
+        right = position.endswith("right")
+        return (
+            (-w if right else 0.0),
+            (-h if top else 0.0),
+            (1 if right else 0),
+            (1 if top else 0),
+        )
+    _plot_w, _plot_h, margin = _plot_px(fig)
+    if position == "right":
+        _grow(fig, "r", w + gap)
+        return margin["r"] + gap, 0.0, 1, 0
+    if position == "left":
+        _grow(fig, "l", w + gap)
+        return -(margin["l"] + gap + w), 0.0, 0, 0
+    if position == "above":
+        _grow(fig, "t", max(0.0, h + gap - margin["t"]))
+        return 0.0, gap, 0, 1
+    # below
+    _grow(fig, "b", h + gap)
+    return -w, -(margin["b"] + gap + h), 1, 0
 
 
 # VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight
@@ -2447,12 +2923,12 @@ def _add_word_label_trace(
             _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
-    # BUG-97 — the label is centred in its word's box, as the data defines it.
-    # BUG-30 centred it on the glyph run instead, which on a tiling corpus (the
-    # box carries the following space) drew every word flush left in its box.
+    # BUG-97 — the label is centred in its word's box, as the data defines it
+    # (`_word_label_x`: a padded layout's line-start word sits flush left, as it
+    # was shown). BUG-30 centred it on the glyph run instead, which on a tiling
+    # corpus (the box carries the following space) drew every word flush left.
     # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
     # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
-    from .measures import word_box_bounds
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -2460,8 +2936,7 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    box_x0, _, box_x1, _ = word_box_bounds(words)
-    label_x = (box_x0 + box_x1) / 2.0
+    label_x = _word_label_x(words)
     # The word drawn as its own characters (finding 6 — not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`
     # reads this same string, so it shows the word literally too.
@@ -8624,6 +9099,7 @@ def make_scanpath_figure(
             raw_gaze=raw_gaze,
         )
     _arrange_colorbars(fig)
+    apply_legend_layout(fig, resolved.legend_layout)
     if resolved.show_fixations:
         _maybe_add_duration_key(fig, resolved, resolved.marker_size_range, fixations)
     return fig
@@ -8687,6 +9163,11 @@ def build_scanpath_replay(
             fixations_b=fixations_b,
             words_b=words_b,
         )
+    apply_legend_layout(
+        fig,
+        resolved.legend_layout,
+        comparing=fixations_b is not None and not fixations_b.empty,
+    )
     size_range = replay_size_key_range(resolved, fixations, fixations_b)
     if size_range is not None:
         _maybe_add_duration_key(fig, resolved, size_range, fixations, fixations_b)
@@ -8795,6 +9276,7 @@ def make_comparison_figure(
             raw_gaze=raw_gaze,
         )
     _arrange_colorbars(fig)
+    apply_legend_layout(fig, resolved.legend_layout, comparing=True)
     # One key serves both scanpaths only while they share a size range; with
     # per-scanpath ranges (Compare's own Size) one duration is two sizes.
     ranges = {
@@ -8828,4 +9310,5 @@ def _maybe_add_duration_key(
         settings.marker_size_scale,
         settings.marker_duration_range,
         font_family=settings.font_family,
+        legend_layout=settings.legend_layout,
     )

@@ -885,13 +885,26 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="fixation_flags",
         action="append",
         metavar="SPEC",
-        help="The app's Flag fixations, repeatable. SPEC is "
+        help="The app's Filters & highlights for fixations, repeatable. SPEC is "
         "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
         "CATEGORY one of short, long, oob (outside every word box), blink and "
         "MODE one of off, highlight, discard — e.g. --fixation-flag "
         "short=discard,threshold_ms=80. discard drops those fixations from the "
         "drawing only; measures and exports are untouched. threshold_ms applies "
         "to short/long only.",
+    )
+    viz.add_argument(
+        "--legend",
+        dest="legend_layout",
+        action="append",
+        metavar="SPEC",
+        help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
+        "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
+        "colour categories), size-key; POSITION one of auto, above, below, "
+        "left, right, top-left, top-right, bottom-left, bottom-right (the last "
+        "four inside the plot); ARRANGEMENT stacked or side-by-side; SIZE the "
+        "text size in px — e.g. --legend saccades=right,stacked,14. Whether a "
+        "legend is drawn at all is still its own switch.",
     )
     viz.add_argument(
         "--saccade-classes",
@@ -1600,7 +1613,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="compare_fixation_flags",
         action="append",
         metavar="SPEC",
-        help="Flag fixations for the SECOND scanpath only, repeatable; "
+        help="Filters & highlights for the SECOND scanpath only, repeatable; "
         "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
         "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
     )
@@ -2073,6 +2086,26 @@ _CRITICAL_SPAN_STYLES = {
 #: PRE-2 category → whether it takes a `threshold_ms`. `oob` and `blink` are
 #: classified from geometry / the recording, not from a duration.
 _FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
+
+
+def _parse_legend_layout(specs: list[str]) -> dict:
+    """``["saccades=right,stacked,14"]`` → the ``legend_layout`` dict.
+
+    One ``KIND=SPEC`` per flag; SPEC is ``plots.parse_legend_spec``'s spelling,
+    the one the ``legend_<kind>`` link parameters use too.
+    """
+    from .plots import normalize_legend_layout, parse_legend_spec
+
+    layout: dict = {}
+    for spec in specs:
+        kind, _, text = spec.partition("=")
+        kind = kind.strip().lower().replace("-", "_")
+        try:
+            layout[kind] = parse_legend_spec(text)
+            normalize_legend_layout(layout)
+        except ValueError as exc:
+            raise SystemExit(f"--legend {spec!r}: {exc}") from None
+    return layout
 
 
 def _parse_fixation_flags(specs: list[str]) -> dict:
@@ -3148,6 +3181,8 @@ def render(argv: list[str]) -> None:
         ]
     if args.fixation_flags:
         overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
+    if args.legend_layout:
+        overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
     # VIZ-31: the reading-class filter. Independent of the colour mode above —
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.

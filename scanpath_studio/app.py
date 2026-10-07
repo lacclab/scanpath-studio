@@ -2499,7 +2499,7 @@ def mark_wip_if_benchmark(choice: str) -> str:
     """``choice`` with the (WIP) marker when it names a harmonised corpus.
 
     The marker has to reach **every** picker that offers these corpora, not just
-    the data-source one: Compare's *Scanpath B from* selectbox can load a corpus
+    the data-source one: Compare's *Dataset B* selectbox can load a corpus
     as scanpath B, and a user who only ever meets it there would publish a
     comparison against an unfinished feature without being told. Display-only in
     both places, and the same predicate decides both.

@@ -1027,6 +1027,12 @@ SELECTOR_SCREEN_TRACK = 1.0
 #: ~5rem ◀ ▶ pair, then the row's ⇅ 🔎 ✏️ (~10rem, measured 160px), which follow it.
 SELECTOR_SCREEN_FLOOR_REM = 24.5
 
+#: The screen navigator's own width inside that track, in rem: the track less
+#: A's ⇅ 🔎 ✏️ and the gap before them (~10.75rem). Fixed rather than "what the
+#: menus leave", because B's row has no ✏️ — its navigator used to take the
+#: difference and come out wider than A's, right under it (2026-10-07).
+SELECTOR_SCREEN_PICKER_REM = SELECTOR_SCREEN_FLOOR_REM - 10.75
+
 #: With a screen track, the actions track keeps only ◀ ▶: its floor, in rem.
 SELECTOR_STEPS_FLOOR_REM = 5.2
 

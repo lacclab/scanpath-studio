@@ -471,7 +471,8 @@ def _render_screen_navigator(
         gap="small",
     )
     selected = cell.selectbox(
-        "**Screen**",
+        # B's says whose screen it is, like the rest of B's row (2026-10-07).
+        "**Screen B**" if key_prefix == "single_compare" else "**Screen**",
         options,
         key=id_key,
         format_func=labels.get,
@@ -604,7 +605,7 @@ _TRUE_SCALE_TEMPLATE = """
 <script>
 (function() {
   var W = __W__, H = __H__, ZMAX = __ZMAX__, ZOOMABLE = __ZOOMABLE__;
-  var GROW = __GROW__;
+  var GROW = __GROW__, FIT = __FIT__, FIT_MIN = __FIT_MIN__;
   var outer = document.getElementById("fit-__KEY__");
   var size = document.getElementById("size-__KEY__");
   var box = document.getElementById("box-__KEY__");
@@ -630,11 +631,37 @@ _TRUE_SCALE_TEMPLATE = """
   }
   // How tall the figure may grow above true size: most of the browser
   // window's height, so a figure scaled up to its column still fits on
-  // screen. Never below 1 — the height only ever limits growing.
+  // screen. Never below 1 — the height only ever limits growing. A figure
+  // that `FIT`s the window takes `fitRoom()` instead.
   function growCap() {
     var vh = 0;
     try { vh = window.parent.innerHeight; } catch (e) { vh = 0; }
+    var room = FIT ? fitRoom(vh) : 0;
+    if (room > 0) { return Math.max(room, Math.min(FIT_MIN, H)) / H; }
     return Math.max(1, ((vh || H) * 0.85) / H);
+  }
+  // The Scanpath view's figure (`fit_window`): the height left between its
+  // top and the window's bottom once the subtab bar under it (Annotations …
+  // Export) and whatever sits between the two are kept in view — so the bar
+  // is on screen without scrolling. Measured from the page's top, not the
+  // viewport's, so scrolling never resizes it. It may go below true size
+  // (as fitting the column's width already does), but not under `FIT_MIN`
+  // px. 0 when there is nothing to measure.
+  function fitRoom(vh) {
+    var fr = null;
+    try { fr = window.frameElement; } catch (e) { fr = null; }
+    if (!fr || !vh) { return 0; }
+    var doc = fr.ownerDocument, box = fr.getBoundingClientRect();
+    var scrolled = 0;
+    for (var p = fr.parentElement; p; p = p.parentElement) {
+      scrolled += p.scrollTop || 0;
+    }
+    var below = 0, bars = doc.querySelectorAll('[role="tablist"]');
+    for (var i = 0; i < bars.length; i++) {
+      var bar = bars[i].getBoundingClientRect();
+      if (bar.top >= box.bottom - 1) { below = bar.bottom - box.bottom; break; }
+    }
+    return vh - (box.top + scrolled) - below - 12 - 16;
   }
   // The frame follows the figure's fitted height, so a figure scaled down
   // leaves no band below it and one scaled up is not cut off. Not in
@@ -698,6 +725,19 @@ _TRUE_SCALE_TEMPLATE = """
   if (GROW) {
     try {
       window.parent.addEventListener("resize", render);
+      // A fitted figure also follows the page above and below it — a notice
+      // appearing, the chips hidden — which moves it without a resize.
+      if (FIT && window.ResizeObserver && window.frameElement) {
+        var queued = false;
+        var watch = new ResizeObserver(function() {
+          if (queued) { return; }
+          queued = true;
+          requestAnimationFrame(function() { queued = false; render(); });
+        });
+        var main = window.frameElement.closest('[data-testid="stMain"]');
+        watch.observe(main || window.frameElement.ownerDocument.body);
+        window.addEventListener("pagehide", function() { watch.disconnect(); });
+      }
       window.addEventListener("pagehide", function() {
         try { window.parent.removeEventListener("resize", render); } catch (e) {}
       });
@@ -916,11 +956,15 @@ def _true_scale_html(
     height: int,
     max_height: int | None,
     zoomable: bool,
+    fit_window: bool = False,
 ) -> tuple[str, int]:
     """Wrap a fixed-size Plotly div in the fit-to-column (+ zoom) transform.
 
     Pure so the embed markup is testable without a Streamlit run. Returns the
     HTML and the iframe height to reserve for it.
+
+    ``fit_window`` (an uncapped figure only) sizes it to the window's height
+    left under its top, keeping the subtab bar below it on screen (`fitRoom`).
     """
     if max_height is not None:
         scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
@@ -943,6 +987,8 @@ def _true_scale_html(
         .replace("__SCALE_JS__", scale_js)
         .replace("__ZOOMABLE__", "true" if zoomable else "false")
         .replace("__GROW__", "true" if max_height is None else "false")
+        .replace("__FIT__", "true" if fit_window and max_height is None else "false")
+        .replace("__FIT_MIN__", str(_FIT_WINDOW_MIN_PX))
         .replace("__ZMAX__", str(_ZOOM_MAX))
         .replace("__W__", str(int(width)))
         .replace("__H__", str(int(height)))
@@ -951,6 +997,10 @@ def _true_scale_html(
     )
     return html, iframe_height
 
+
+#: The shortest a `fit_window` figure is drawn, in px: under this, fitting the
+#: subtab bar on screen would cost the plot more than a scroll does.
+_FIT_WINDOW_MIN_PX = 420
 
 #: The current figure's PNG — the Export subtab's and the plot camera's — is
 #: raster, so it renders at 3× to stay crisp; SVG and PDF are vector and stay at
@@ -970,6 +1020,7 @@ def _render_true_scale_chart(
     max_height: int | None = None,
     download_name: str | None = None,
     alt: str | None = None,
+    fit_window: bool = False,
 ) -> None:
     """Display a spatial figure true-to-scale, fitted to the column width.
 
@@ -986,6 +1037,11 @@ def _render_true_scale_chart(
     height (2026-10-07; it used to stop at true size, left-aligned, which left
     a wide monitor's extra room empty). Uniform scaling keeps every proportion,
     so a larger figure is still faithful to the experiment's layout.
+
+    ``fit_window`` — the Scanpath view's own figure (single, comparison,
+    replay) — sizes it instead to the window's height left under its top once
+    the subtab bar below it is kept on screen, so Export is a click away
+    without scrolling; down to `_FIT_WINDOW_MIN_PX`, below which it scrolls.
 
     **Zoom** rides on the same transform (MVP): the fit scale is multiplied by a
     zoom factor (1×–8×) driven by the small toolbar, Ctrl/Cmd + wheel and
@@ -1021,6 +1077,7 @@ def _render_true_scale_chart(
         max_height=max_height,
         zoomable=zoomable,
         alt=alt or _figure_alt(fig, "Scanpath figure"),
+        fit_window=fit_window,
     )
 
 
@@ -1095,6 +1152,7 @@ def _render_true_scale_plot(
     max_height: int | None = None,
     zoomable: bool = True,
     alt: str | None = None,
+    fit_window: bool = False,
 ) -> None:
     """Embed `_true_scale_plot_html`'s markup in the true-scale iframe."""
     # ENG-64: the installed plotly's own plotly.min.js, served by this app's
@@ -1106,6 +1164,7 @@ def _render_true_scale_plot(
         height=height,
         max_height=max_height,
         zoomable=zoomable,
+        fit_window=fit_window,
     )
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height. A zoomable figure is a Tab stop; the
@@ -2529,7 +2588,7 @@ def _render_compare_dataset_cell(
     # Lazy, like every other `app` reach from this module: app imports tabs, so
     # a module-level import would close the cycle.
     host.selectbox(
-        "Scanpath B from",
+        "Dataset B",
         options=names,
         key=COMPARE_SOURCE_KEY,
         # ENG-36: this widget renders only in Compare mode on the Scanpath view,
@@ -2707,7 +2766,7 @@ def _render_compare_selector(
     B frames from which the selected trial must be extracted.
 
     **UX-64** made that one line rather than three: B's row is now A's row —
-    ``[Scanpath B from] [Scanpath B] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
+    ``[Dataset B] [Trial B] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
     ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
     picker row stacked above the chips. The dataset is therefore resolved from
     session state *before* the row is drawn (``_resolve_compare_source``), since
@@ -2795,7 +2854,7 @@ def _render_compare_selector(
     # candidate, and its own navigator (rendered once it's chosen) is what
     # narrows it to one coordinate space.
     # UX-64 — ONE row for scanpath B, the mirror of A's above it:
-    # `[Scanpath B from] [Scanpath B] [scrub slider] [◀ ▶ ⇅ filter]` on the same
+    # `[Dataset B] [Trial B] [scrub slider] [◀ ▶ ⇅ filter]` on the same
     # `SELECTOR_ROW_GRID`, replacing the dataset row + *Filter B by* row + picker
     # row this used to stack above the chips. The dataset keeps a track of its
     # own and does not shrink — the label is what tells two compared corpora
@@ -3076,7 +3135,7 @@ def _render_compare_selector(
 
     # UX-189: the label is shown, like A's *Select trial*, so its help "?" is there.
     selected_compare_label = sel_col.selectbox(
-        "Scanpath B",
+        "Trial B",
         options=labels,
         key=sel_key,
         format_func=lambda v: label_display.get(v, v),
@@ -5551,6 +5610,7 @@ def _build_and_render_animation(
         width=view.width,
         height=view.height,
         alt=": ".join(filter(None, ("Animated scanpath replay", _plain_title(title)))),
+        fit_window=True,
     )
     return view, save_slug, file_stem
 
@@ -7772,6 +7832,7 @@ def render_single_trial_tab(
                         _trial_text_id(trial_words, plot_fixations) or selected_trial,
                         len(plot_fixations),
                     ),
+                    fit_window=True,
                 )
             note = _full_screen_note(viz_settings, canvas_width, canvas_height)
             if note:
@@ -8485,7 +8546,9 @@ def _render_comparison_figure(
             "text_id": compare_text_id,
         },
     )
-    _render_true_scale_chart(fig_compare, key="compare", download_name=download_name)
+    _render_true_scale_chart(
+        fig_compare, key="compare", download_name=download_name, fit_window=True
+    )
     overlaid = layout == "overlay"
     # Only where the figure is misleading (see the note's docstring): a split
     # layout comparing two texts is a legitimate thing to do (CMP-23).

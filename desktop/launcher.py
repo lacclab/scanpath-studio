@@ -435,7 +435,11 @@ def selfcheck() -> int:
     if "plotly" not in html.lower():
         print("selfcheck FAILED: figure HTML looks wrong")
         return 1
-    print(f"selfcheck ok: {len(combos)} trials, figure HTML {len(html)} bytes")
+    from scanpath_studio import __version__
+
+    print(
+        f"selfcheck ok: v{__version__}, {len(combos)} trials, figure HTML {len(html)} bytes"
+    )
     return 0
 
 

@@ -65,6 +65,7 @@ if __package__ is None or __package__ == "":
 
 from scanpath_studio import dataset_table, loading, progress, wizard_shell
 from scanpath_studio import metadata as metadata_mod
+from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
     filter_keys,
 )
@@ -1337,6 +1338,12 @@ def _arm_about() -> None:
     st.session_state["_about_dialog_requested"] = True
 
 
+#: #139 — the last *Check for updates* answer, shown under the button until the
+#: dialog is opened again. A plain session key, not in the recovery cache's
+#: allowlist, so it is never written to disk.
+_UPDATE_CHECK_KEY = "_about_update_check"
+
+
 def maybe_show_about() -> None:
     """Open the About dialog if the ❓ Help menu button armed it.
 
@@ -1346,6 +1353,7 @@ def maybe_show_about() -> None:
     rerun (including the ~10 s plot embeds).
     """
     if st.session_state.pop("_about_dialog_requested", False):
+        st.session_state.pop(_UPDATE_CHECK_KEY, None)
         _about_dialog()
 
 
@@ -1353,7 +1361,7 @@ def maybe_show_about() -> None:
 @guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
-    from scanpath_studio import __version__
+    from scanpath_studio import __release__, __version__
 
     # The button that opened this sits inside the ❓ Help popover, whose open
     # state is client-side — without this it floats on top of the modal.
@@ -1370,15 +1378,17 @@ def _about_dialog() -> None:
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
         f"url = {{{CITATION['url']}}},\n"
-        f"version = {{{__version__}}},\n"
+        f"version = {{{__release__}}},\n"
         "year = {2026}\n"
         "}"
     )
     st.markdown(
+        f"**Scanpath Studio** v{__version__} — interactive visualization of eye "
+        "movements in reading."
+    )
+    _render_build_and_updates()
+    st.markdown(
         f"""
-**Scanpath Studio** v{__version__} — interactive visualization of eye
-movements in reading.
-
 Developed by [Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-harram-32b547292/),
@@ -1442,6 +1452,73 @@ and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 
         _arm_debug()
         st.rerun()
+
+
+def _update_check_offered() -> bool:
+    """#139: *Check for updates* only where updating means something — a local
+    run or the desktop app, i.e. a server on loopback alone. The hosted demo
+    runs the `stable` branch, and its visitors have nothing to update."""
+    return server_bound_to_loopback()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _latest_release_cached() -> update_check.Release:
+    """GitHub's latest release, kept ten minutes: a second click, or a second
+    session on this machine, doesn't spend another of the 60 anonymous requests
+    an hour. A failure raises, and `st.cache_data` keeps no failed result."""
+    return update_check.latest_release()
+
+
+def _render_build_and_updates() -> None:
+    """#139: which build this is, and — on a local run — *Check for updates*."""
+    from scanpath_studio.build_info import build_info
+
+    info = build_info()
+    if info.version != info.release:
+        st.caption(info.describe())
+    if not _update_check_offered():
+        return
+    if st.button(
+        "Check for updates",
+        icon=ICONS["update"],
+        key="about_check_updates",
+        help="Asks GitHub for the latest release — the only time the app goes "
+        "online for this.",
+    ):
+        # One opaque request of at most 5 s inside a dialog: a spinner, not a
+        # UX-165 loading card.
+        with st.spinner("Asking GitHub…"):
+            st.session_state[_UPDATE_CHECK_KEY] = update_check.check_for_updates(
+                latest=_latest_release_cached
+            )
+    result = st.session_state.get(_UPDATE_CHECK_KEY)
+    if result is not None:
+        _render_update_result(result)
+
+
+def _render_update_result(result: update_check.UpdateCheck) -> None:
+    """One *Check for updates* answer: the sentence, then what to do about it."""
+    if result.status == "up_to_date":
+        st.success(result.message, icon=ICONS["success"])
+        return
+    if result.status == "ahead":
+        st.info(result.message, icon=ICONS["info"])
+        return
+    if result.status == "error":
+        st.warning(result.message, icon=ICONS["warning"])
+        return
+    st.info(result.message, icon=ICONS["update"])
+    if result.download is not None:
+        st.link_button(
+            f"Download {result.download.name} ({human_size(result.download.size)})",
+            result.download.url,
+            icon=ICONS["download"],
+        )
+    elif result.command:
+        st.code(result.command, language="bash")
+        st.caption("Then restart the app.")
+    if result.latest is not None:
+        st.markdown(f"[What's new in v{result.latest.version}]({result.latest.url}) ↗")
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------

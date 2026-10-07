@@ -42,6 +42,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # #139: the spec stamps the bundle from `git describe`, which needs
+          # the tags — a dispatched build of main then reports its own build.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -241,9 +245,10 @@ jobs:
           choco install innosetup --version 6.7.1 --allow-downgrade --no-progress -y
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $version = python -c "import scanpath_studio; print(scanpath_studio.__version__)"
+          $release = python -c "import scanpath_studio; print(scanpath_studio.__release__)"
           # Windows file versions are integers only — the same trim the macOS
-          # spec applies to CFBundleShortVersionString.
-          $numeric = [regex]::Match($version, '^\d+(\.\d+){0,2}').Value
+          # spec applies to __release__ for CFBundleShortVersionString.
+          $numeric = [regex]::Match($release, '^\d+(\.\d+){0,2}').Value
           if (-not $numeric) { $numeric = '0' }
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
           & $iscc /Q "/DAppVersion=$version" "/DNumericVersion=$numeric" `

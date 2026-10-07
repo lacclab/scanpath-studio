@@ -53,6 +53,7 @@ for _name in (
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
 from . import export as _export  # noqa: E402
+from .build_info import BuildInfo  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
@@ -95,6 +96,7 @@ from .plots import (  # noqa: E402
     replay_page,
     split_scanpath_layers,
 )
+from .updates import UpdateCheck  # noqa: E402
 
 
 def build_authored_scanpath(
@@ -3802,3 +3804,41 @@ def clear_cache() -> dict:
 
     clear_local_state()
     return cache_status()
+
+
+def version_info() -> BuildInfo:
+    """Which build of Scanpath Studio this is — no network access.
+
+    ``version`` is what ``scanpath_studio.__version__`` holds: the release itself
+    (``"0.35.0"``), or between releases a PEP 440 version that sorts after it —
+    ``"0.35.0.post3+g8f18219"`` is three commits after v0.35.0, at commit
+    ``8f18219``, and it ends ``.dirty`` with uncommitted changes. ``release`` is
+    the release it descends from (``scanpath_studio.__release__``), ``distance``
+    the commits since (``None`` when unknown), ``commit``, ``dirty``, and
+    ``source`` — how it was worked out: ``"checkout"`` (``git describe``),
+    ``"stamp"`` (a desktop bundle's build stamp), ``"vcs"`` (a
+    ``pip install git+…``) or ``"release"``. ``describe()`` says it in a
+    sentence. The same is in Help → About and ``scanpath-studio version``."""
+    from .build_info import build_info
+
+    return build_info()
+
+
+def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
+    """Ask GitHub whether a newer release than this build is out.
+
+    The one call here that uses the network, and only when made: it reads the
+    latest release from ``api.github.com`` (drafts and pre-releases excluded)
+    and compares it with [`version_info`][scanpath_studio.api.version_info]. It
+    never raises. ``status`` is ``"up_to_date"``, ``"update_available"``,
+    ``"ahead"`` (a development build past the latest release) or ``"error"``
+    (offline, no answer within ``timeout`` seconds, rate-limited, …), and
+    ``message`` says it in a sentence. With an update available, ``command`` is
+    the shell command that updates this install (``pip install -U
+    scanpath-studio``, ``uv tool upgrade scanpath-studio``, ``git pull``, …),
+    ``latest.url`` the release notes, and in the desktop app ``download`` the
+    archive for this computer. The same check is Help → About → *Check for
+    updates* and ``scanpath-studio version --check``."""
+    from .updates import check_for_updates as _check
+
+    return _check(timeout)

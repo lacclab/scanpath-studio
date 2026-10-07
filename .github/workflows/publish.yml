@@ -23,9 +23,9 @@ jobs:
       # that 404s. Refuse up front instead.
       - name: Tag matches the package version
         run: |
-          VERSION="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
+          VERSION="$(sed -n 's/^__release__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
           if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match __version__ ${VERSION} — bump scanpath_studio/__init__.py (and CITATION.cff) before tagging."
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match __release__ ${VERSION} — bump scanpath_studio/__init__.py (and CITATION.cff) before tagging."
             exit 1
           fi
 

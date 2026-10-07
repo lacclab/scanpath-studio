@@ -35,6 +35,8 @@ classifiers = [
 ]
 dependencies = [
     "streamlit>=1.65.0",
+    # Build versions sort and compare as PEP 440 (`build_info.py`, `updates.py`, #139).
+    "packaging>=26.3",
     "pandas>=3.0",
     "plotly>=7.1",
     "numpy>=2.4",
@@ -107,8 +109,9 @@ Issues = "https://github.com/lacclab/scanpath-studio/issues"
 scanpath-studio = "scanpath_studio.cli:main"
 
 [tool.setuptools.dynamic]
-# Single source of truth for the version: scanpath_studio/__version__
-version = { attr = "scanpath_studio.__version__" }
+# Single source of truth for the release number: scanpath_studio.__release__
+# (`__version__` is the exact build, worked out from it at runtime — #139).
+version = { attr = "scanpath_studio.__release__" }
 
 [tool.setuptools]
 include-package-data = true

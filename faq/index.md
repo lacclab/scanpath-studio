@@ -32,7 +32,7 @@ The app limits how far a `.zip` may decompress (32 GB per file, 64 GB in total).
 
 No. Corpus Analysis and Export show the measures your interest-area report provides, as your eye-tracking software defines them; [Computations](https://lacclab.github.io/scanpath-studio/computations/index.md) gives how Scanpath Studio would compute each.
 
-### Does Flag fixations change my data?
+### Does Filters & highlights change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as they are.
 

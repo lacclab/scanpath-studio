@@ -20,7 +20,7 @@ If every trial is shifted in the same way, check the monitor size and coordinate
 
 Turn on **Animate**. Look for long missing periods, repeated points out of bounds, frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **Flag fixations → Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
+Use **Filters & highlights → Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
 
 ## 4. Record the decision
 

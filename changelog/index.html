@@ -1518,6 +1518,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#0371-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.37.1 — 2026-10-07
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#0370-2026-10-07" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1746,6 +1757,17 @@
     <span class="md-ellipsis">
       
         Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0371-2026-10-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.37.1 — 2026-10-07
       
     </span>
   </a>
@@ -1993,6 +2015,27 @@ behind each line, and the releases before 0.28.0, are in
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>.
 <em>Unreleased</em> is what is on <code>main</code> and not yet on PyPI.</p>
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<p><strong>Added</strong></p>
+<ul>
+<li>Export only the screens you pick from trials that span several screens: Screens in the Export bundle, render --screens, and the screens argument of api.render_parent_trial. (<a href="https://github.com/lacclab/scanpath-studio/issues/402">#402</a>)</li>
+</ul>
+<h2 id="0371-2026-10-07">0.37.1 — 2026-10-07<a class="headerlink" href="#0371-2026-10-07" title="Permanent link">&para;</a></h2>
+<p><strong>Added</strong></p>
+<ul>
+<li>Choose where each legend sits: Figure &amp; canvas → Legends places the Compare, saccade-type, colour and size-key legends above, below, beside or inside the plot, stacked or in a row, at any text size. (<a href="https://github.com/lacclab/scanpath-studio/issues/384">#384</a>)</li>
+</ul>
+<p><strong>Changed</strong></p>
+<ul>
+<li>The plot rail's Flag fixations section is now Filters &amp; highlights, with a filter icon. (<a href="https://github.com/lacclab/scanpath-studio/issues/396">#396</a>)</li>
+</ul>
+<p><strong>Fixed</strong></p>
+<ul>
+<li>The desktop app's Update &amp; restart is sturdier: a failed download says why (a missing file, a full disk) instead of asking whether you are offline, Cancel works until the moment it restarts, two updates started at once no longer collide, and About stops mentioning the last update after a week. (<a href="https://github.com/lacclab/scanpath-studio/issues/394">#394</a>)</li>
+<li>Changing trials no longer leaves a scanpath's fixation index range narrowed to a few fixations, and the plot now says so whenever the index range hides some of a trial's fixations. (<a href="https://github.com/lacclab/scanpath-studio/issues/395">#395</a>)</li>
+<li>A line's first word now sits at the left edge of its box, as it was shown in the experiment, instead of being centred in a box that carries only the gap after it. (<a href="https://github.com/lacclab/scanpath-studio/issues/397">#397</a>)</li>
+<li>Stretch text to <abbr title="Area of interest: here, a word's bounding box">AOI</abbr> boxes now reads the exact font from monospace word boxes padded with half a space on each side, instead of drawing the text several percent too small. (<a href="https://github.com/lacclab/scanpath-studio/issues/397">#397</a>)</li>
+<li>The hosted demo follows each release again; it had stayed on v0.35.0. (<a href="https://github.com/lacclab/scanpath-studio/issues/400">#400</a>)</li>
+</ul>
 <h2 id="0370-2026-10-07">0.37.0 — 2026-10-07<a class="headerlink" href="#0370-2026-10-07" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>
 <ul>

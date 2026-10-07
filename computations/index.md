@@ -1198,7 +1198,7 @@ Screen coordinates, drawn the way the screen is.
 
 One line of text fills its share of the recorded line pitch.
 
-**Formula.** A word label's font is `1/line_spacing` of the line pitch (the median line-to-line distance of the word boxes), capped so the words fit their box widths (`plots._width_fit_font`; the smaller wins), in data pixels converted at the figure's display scale. The figure is drawn at its exact pixel size and scaled as one block.
+**Formula.** A word label's font is `1/line_spacing` of the line pitch (the median line-to-line distance of the word boxes), capped so the words fit their box widths (`plots._width_fit_font`; the smaller wins), in data pixels converted at the figure's display scale. When the boxes are monospace words padded alike — half the gap to each neighbour — the font is read off them instead: one character cell is the slope of box width over word length (`plots._padded_monospace_font`), over the font's advance. The figure is drawn at its exact pixel size and scaled as one block.
 
 |                  |                                                    |
 | ---------------- | -------------------------------------------------- |

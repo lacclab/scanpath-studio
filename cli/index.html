@@ -2119,7 +2119,7 @@ scanpath's default.</p>
 </code></pre></div>
 <p><code>--animate --compare-with</code> replays <strong>both</strong> scanpaths on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
-<code>--compare-with</code> cannot be combined with <code>--all-screens</code>: a comparison
+<code>--compare-with</code> cannot be combined with <code>--all-screens</code> or <code>--screens</code>: a comparison
 is a single figure of two trials, each drawn from one screen. Pick A's with
 <code>--screen</code> and B's with <code>--compare-screen</code>; B's is looked up in B's own trial,
 so it can be a later page, or a page of the second dataset.</p>
@@ -2394,7 +2394,9 @@ app does with them. It changes nothing, and it exits 0 whatever it finds;
 <p>The <code>render</code> command renders one trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
 or <strong>Export → Export bundle</strong> for many figures.</p>
 <p><code>--all-screens</code> is the multipart exception: it writes one deterministic
-<code>__screen-001-&lt;id&gt;</code> file per screen of the selected parent trial.</p>
+<code>__screen-001-&lt;id&gt;</code> file per screen of the selected parent trial.
+<code>--screens Title,Paragraph</code> writes only the screens named, each still numbered
+by its place in the trial.</p>
 <h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, saved designs, metadata tables and
@@ -2451,7 +2453,7 @@ in the app, and <code>check_for_updates()</code> in the <a href="../api/#version
 <h2 id="full-reference">Full reference<a class="headerlink" href="#full-reference" title="Permanent link">&para;</a></h2>
 <p>Generated from the parsers the commands themselves use, so every flag is here
 with the default and help <code>--help</code> prints.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.37.0 — visualize eye-tracking-while-reading scanpaths
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.37.1 — visualize eye-tracking-while-reading scanpaths
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>usage:
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  scanpath-studio                  launch the interactive app (Streamlit)
@@ -2528,6 +2530,12 @@ with the default and help <code>--help</code> prints.</p>
 <td>switch</td>
 <td>—</td>
 <td>Render every screen of the selected parent trial. Screen ids are inserted before the output extension.</td>
+</tr>
+<tr>
+<td><code>--screens</code></td>
+<td><code>ID[,ID...]</code></td>
+<td>—</td>
+<td>Like <code>--all-screens</code>, but only these screens of the parent trial (comma-separated screen ids, e.g. Title,Paragraph); see <code>--list-parts</code>.</td>
 </tr>
 <tr>
 <td><code>--screen-transition</code></td>
@@ -2823,7 +2831,13 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--fixation-flag</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>The app's Flag fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, discard — e.g. <code>--fixation-flag</code> short=discard,threshold_ms=80. discard drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
+<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, discard — e.g. <code>--fixation-flag</code> short=discard,threshold_ms=80. discard drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
+</tr>
+<tr>
+<td><code>--legend</code></td>
+<td><code>SPEC</code></td>
+<td>—</td>
+<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key; POSITION one of auto, above, below, left, right, top-left, top-right, bottom-left, bottom-right (the last four inside the plot); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
 </tr>
 <tr>
 <td><code>--saccade-classes</code></td>
@@ -3388,7 +3402,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--compare-fixation-flag</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Flag fixations for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=discard,threshold_ms=80. Replaces <code>--fixation-flag</code> for B.</td>
+<td>Filters &amp; highlights for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=discard,threshold_ms=80. Replaces <code>--fixation-flag</code> for B.</td>
 </tr>
 <tr>
 <td><code>--compare-saccade-classes</code></td>
@@ -3508,7 +3522,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 18:08:19 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 20:31:36 UTC">October 7, 2026</span>
   </span>
 
     

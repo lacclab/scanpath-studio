@@ -10,7 +10,7 @@ If the pool becomes empty, the app names the filter that emptied it and offers t
 
 ## 2. Review candidate trials
 
-For each candidate, inspect the default scanpath and turn on **Animate** only when timing helps. Open **Flag fixations → Fixations** in the plot rail and set **Highlight** for:
+For each candidate, inspect the default scanpath and turn on **Animate** only when timing helps. Open **Filters & highlights → Fixations** in the plot rail and set **Highlight** for:
 
 - out-of-bounds points;
 - fixations below or above your duration thresholds.

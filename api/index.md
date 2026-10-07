@@ -364,10 +364,12 @@ Remaining keywords are forwarded to `plots.make_comparison_figure` (e.g. `show_w
 ### scanpath_studio.api.render_parent_trial
 
 ```
-render_parent_trial(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, animate: bool = False, transition_mode: str = 'instant', **options) -> dict[str, Figure]
+render_parent_trial(words: DataFrame, fixations: DataFrame, participant: str | None = None, trial: str | None = None, *, animate: bool = False, transition_mode: str = 'instant', screens: Sequence[str] | None = None, **options) -> dict[str, Figure]
 ```
 
 Render every screen of one logical trial without stitching coordinates.
+
+`screens` renders only those screen ids (one id may be given as a string), in the trial's own order, as the app's Export → *Screens* does; an id the trial does not have raises `ValueError`. `None` renders them all. `screen_index` in each figure's meta stays the screen's place in the trial.
 
 The ordered mapping is keyed by `screen_id`. Each value is the same figure returned by plot_scanpath or animate_scanpath; callers can save them into deterministic per-screen files. `transition_mode` is `"instant"` or `"recorded"`. For animated output, each figure's `layout.meta['transition_after_ms']` records the delay before the next screen (zero for instant mode, or the observed parent-clock gap). No visual saccade is ever drawn across the boundary.
 
@@ -510,6 +512,7 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `illustration_text`               | `''`                                           | —                                                                                                        | `--illustration-text`                                     | all three        |
 | `label_a`                         | `'Scanpath A'`                                 | —                                                                                                        | `--label-a`                                               | animate          |
 | `label_b`                         | `'Scanpath B'`                                 | —                                                                                                        | `--label-b`                                               | animate          |
+| `legend_layout`                   | `None`                                         | —                                                                                                        | `--legend`                                                | all three        |
 | `line_spacing`                    | `3.0`                                          | —                                                                                                        | `--line-spacing`                                          | all three        |
 | `marker_duration_range`           | `(50, 600)`                                    | —                                                                                                        | `--marker-duration-range`                                 | all three        |
 | `marker_size_range`               | `(8, 24)`                                      | —                                                                                                        | `--marker-size-range`                                     | all three        |

@@ -1125,3 +1125,52 @@ def exit_soon(delay: float = RESTART_DELAY_S) -> None:
     timer = threading.Timer(delay, os._exit, args=(0,))
     timer.daemon = True
     timer.start()
+
+
+#: The steps the About card and ``--update`` name, in order.
+STEPS = ("Downloading", "Checking it", "Testing the new version", "Restarting")
+
+
+def prepare(
+    check: UpdateCheck,
+    install: Install,
+    *,
+    allow_file: bool = False,
+    run: Callable = subprocess.run,
+    opener: Callable | None = None,
+    machine: str | None = None,
+    on_step: Callable[[str], None] | None = None,
+) -> SwapPlan:
+    """Steps 1-4: refuse, download, stage and self-test — the swap is the caller's.
+
+    Raises :class:`UpdateFailed` (the install untouched) or, from inside a
+    progress task that was cancelled, ``progress.Cancelled``.
+    """
+    reason = refusal(check, install, run=run, machine=machine)
+    if reason is not None:
+        raise UpdateFailed(reason)
+    state = state_dir(install)
+    asset = asset_for(check, install, machine=machine)
+    clear_attempt(state)
+
+    def step(index: int) -> None:
+        progress.step_to(index)
+        if on_step is not None:
+            on_step(STEPS[index])
+
+    step(0)
+    archive = download(asset, state / "download", allow_file=allow_file, opener=opener)
+    step(1)
+    staged = stage(archive, state, install, run=run)
+    step(2)
+    self_test(staged, install.system, run=run)
+    step(3)
+    return SwapPlan(
+        pid=os.getpid(),
+        install=install,
+        staged=staged,
+        state=state,
+        version=check.latest.version,
+        previous=check.current,
+        relaunch=relaunch_command(install),
+    )

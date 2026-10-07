@@ -855,3 +855,39 @@ def test_clear_attempt_keeps_only_the_log(tmp_path):
         (state / name).write_text("x")
     du.clear_attempt(state)
     assert sorted(path.name for path in state.iterdir()) == ["helper.log"]
+
+
+def test_prepare_downloads_stages_tests_and_plans_the_swap(tmp_path, cache_home):
+    install = _install(tmp_path, "linux")
+    archive = _tar(
+        tmp_path / "a.tar.gz",
+        {"ScanpathStudio/ScanpathStudio": b"v2", "ScanpathStudio/_internal/x": b""},
+    )
+    data = archive.read_bytes()
+    check = _check(digest="sha256:" + hashlib.sha256(data).hexdigest(), size=len(data))
+    steps = []
+
+    def run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, "selfcheck ok", "")
+
+    plan = du.prepare(
+        check,
+        install,
+        run=run,
+        opener=_serving(data),
+        machine="x86_64",
+        on_step=steps.append,
+    )
+    assert steps == list(du.STEPS)
+    assert plan.staged == du.state_dir(install) / "staged" / "ScanpathStudio"
+    assert plan.version == "99.0.0" and plan.previous == "0.36.0"
+    assert plan.relaunch == (str(install.executable),)
+    assert plan.pid == os.getpid()
+
+
+def test_prepare_refuses_before_downloading(tmp_path, cache_home):
+    install = _install(tmp_path, "linux")
+    opener = _serving(b"")
+    with pytest.raises(du.UpdateFailed, match="checksum"):
+        du.prepare(_check(digest=""), install, opener=opener, machine="x86_64")
+    assert opener.seen == []

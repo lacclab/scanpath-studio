@@ -1,5 +1,5 @@
 ---
-description: Figures Scanpath Studio draws, each built from the bundled demo when the docs are built, with the code that makes it.
+description: Figures Scanpath Studio draws, each built from the bundled demo when the docs are built, with the code that makes it, and short recordings of the app at work.
 hide:
   - navigation
 ---
@@ -10,7 +10,8 @@ Every figure on this page is drawn from the bundled demo while the docs are
 built, by the code shown under it, so what you see is what the current release
 renders. Hover a fixation or a word for its values. The app draws the same
 figures from its plot controls, and its :material/share: **Share** subtab prints the code that
-reproduces whichever one is on screen.
+reproduces whichever one is on screen. The recordings at the end,
+[The app at work](#the-app-at-work), show the app itself, one task each.
 
 All of them start from the demo and one of its trials:
 
@@ -172,3 +173,158 @@ fig = sps.plot_corpus_figure(
 )
 print(embed(fig))  # markdown-exec: hide
 ```
+
+## The app at work
+
+One task each, recorded in the app on the bundled demo. The bar at the top
+counts the clicks as they happen and names each step; the last frame gives
+the total.
+
+### Add your own data
+
+Upload a fixation report and an interest-area report, here the demo's own
+EyeLink exports: the columns are detected for you, three answers describe the
+recording setup, and the scanpaths are ready.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/add-your-data_poster.webp" data-autoplay
+       aria-label="Adding a dataset from EyeLink fixation and interest-area
+reports">
+  <source src="../assets/workflows/add-your-data.mp4" type="video/mp4">
+</video>
+
+### Find trials
+
+Step through the trials, then narrow the list to one condition and one
+participant: from 24 trials to 6.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/trial-filtering_poster.webp" data-autoplay
+       aria-label="Narrowing the trials by condition and participant">
+  <source src="../assets/workflows/trial-filtering.mp4" type="video/mp4">
+</video>
+
+### Star and tag trials
+
+Star a trial and tag it, star another, then show only the starred ones.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/favorites_poster.webp" data-autoplay
+       aria-label="Starring and tagging trials, then showing only the starred
+ones">
+  <source src="../assets/workflows/favorites.mp4" type="video/mp4">
+</video>
+
+### Style the plot
+
+Color regressions apart from forward saccades, add the word boxes and the
+reading order, and switch to the high-contrast palette.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/plot-controls_poster.webp" data-autoplay
+       aria-label="Coloring regressions apart and adding word boxes, the
+reading order and another palette">
+  <source src="../assets/workflows/plot-controls.mp4" type="video/mp4">
+</video>
+
+### Ready-made designs
+
+One click for each design: Heatmap, Illustration and Scanpath, then a heatmap
+added to the scanpath.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/design-presets_poster.webp" data-autoplay
+       aria-label="Switching between the Heatmap, Illustration and Scanpath
+designs">
+  <source src="../assets/workflows/design-presets.mp4" type="video/mp4">
+</video>
+
+### Under the figure
+
+The subtabs below the plot: annotations, the stimulus and its context, other
+trials that match this one, export and share.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/subtabs_poster.webp" data-autoplay
+       aria-label="The subtabs under the figure: annotations, stimulus and
+context, comparisons, export and share">
+  <source src="../assets/workflows/subtabs.mp4" type="video/mp4">
+</video>
+
+### Replay the reading
+
+Animate the trial fixation by fixation, then speed it up to four times real
+time.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/replay_poster.webp" data-autoplay
+       aria-label="Replaying a reading, sped up to four times real time">
+  <source src="../assets/workflows/replay.mp4" type="video/mp4">
+</video>
+
+### Save the replay
+
+Render the replay to a GIF and download it; the wait while it renders is fast-
+forwarded.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/replay-export_poster.webp" data-autoplay
+       aria-label="Rendering the replay to a GIF and downloading it">
+  <source src="../assets/workflows/replay-export.mp4" type="video/mp4">
+</video>
+
+### Compare two readers
+
+Two participants on the same text, overlaid and then side by side, stepping
+through the texts together.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/compare_poster.webp" data-autoplay
+       aria-label="Two readers of one text side by side, stepping through the
+texts together">
+  <source src="../assets/workflows/compare.mp4" type="video/mp4">
+</video>
+
+### Corpus Analysis
+
+One text's total fixation duration on the stimulus and against GPT-2 surprisal,
+then its distribution in two groups, the Adv and Ele texts.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/corpus-analysis_poster.webp" data-autoplay
+       aria-label="Corpus Analysis: a measure on the stimulus, against
+surprisal, and between two groups">
+  <source src="../assets/workflows/corpus-analysis.mp4" type="video/mp4">
+</video>
+
+### Export a figure
+
+Set the width to 180 mm at 300 dpi and download the PNG.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/export-figure_poster.webp" data-autoplay
+       aria-label="Exporting the figure 180 mm wide at 300 dpi">
+  <source src="../assets/workflows/export-figure.mp4" type="video/mp4">
+</video>
+
+### Export every trial
+
+Add PNG to the formats and the fixation and word-measure tables, build a zip of
+all 24 trials (the build is fast-forwarded) and download it.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/export-bundle_poster.webp" data-autoplay
+       aria-label="Exporting every trial's figures and tables as one zip">
+  <source src="../assets/workflows/export-bundle.mp4" type="video/mp4">
+</video>
+
+### Share a link
+
+Look at the code that redraws the figure, then copy a link that reopens the
+same trial with the same design, as the recording then does.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/share-link_poster.webp" data-autoplay
+       aria-label="Copying a link that reopens the same trial and design">
+  <source src="../assets/workflows/share-link.mp4" type="video/mp4">
+</video>

@@ -1,0 +1,1 @@
+The README's *See it in action* and the docs Gallery's *The app at work* show thirteen tasks in the app — adding your own data, finding and starring trials, styling the plot, replaying, comparing, Corpus Analysis, exporting and sharing — each recorded with its clicks counted; `scripts/record_workflow_demos.py` re-records them.

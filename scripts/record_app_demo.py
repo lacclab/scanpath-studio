@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from capture_docs_screenshots import find_chrome, free_port, start_app
@@ -159,17 +160,19 @@ class Screencast:
         self.times.append(max(stamp, self.times[-1]) if self.times else stamp)
 
     def start(self) -> None:
+        size = self.page.viewport_size or VIEWPORT
         self.cdp.send(
             "Page.startScreencast",
-            {
-                "format": "png",
-                "maxWidth": VIEWPORT["width"],
-                "maxHeight": VIEWPORT["height"],
-            },
+            {"format": "png", "maxWidth": size["width"], "maxHeight": size["height"]},
         )
 
-    def stop(self) -> Path:
-        """Stop, and list the frames with their durations for ffmpeg's concat."""
+    def stop(self, warp: Callable[[float], float] = lambda t: t) -> Path:
+        """Stop, and list the frames with their durations for ffmpeg's concat.
+
+        ``warp`` maps a frame's wall-clock stamp to its time in the output, so a
+        recording can play some stretches faster than others
+        (``record_workflow_demos.py`` fast-forwards its long waits that way).
+        """
         end = time.time()
         self.cdp.send("Page.stopScreencast")
         self.page.wait_for_timeout(500)  # frames already on their way
@@ -178,7 +181,7 @@ class Screencast:
         lines = ["ffconcat version 1.0"]
         for i, t in enumerate(self.times):
             until = self.times[i + 1] if i + 1 < len(self.times) else max(end, t + 0.1)
-            lines += [f"file {i:05d}.png", f"duration {until - t:.4f}"]
+            lines += [f"file {i:05d}.png", f"duration {warp(until) - warp(t):.4f}"]
         # The concat demuxer ignores the last entry's duration unless it repeats.
         lines.append(f"file {len(self.times) - 1:05d}.png")
         listing = self.frames / "frames.ffconcat"

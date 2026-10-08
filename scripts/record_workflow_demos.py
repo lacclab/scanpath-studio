@@ -3,16 +3,19 @@
 
 ``record_app_demo.py`` records the README's tour of the whole app. This records
 the workflows one at a time — exporting a figure, adding your own data, styling
-the plot, filtering trials, comparing readers — each as its own GIF, for the
-release notes and anywhere else one task needs showing. A bar in the app's
-header counts the clicks as they happen and names each step, a ripple marks
-every click, and the last frame says how many it took::
+the plot, filtering trials, comparing readers — each as its own clip, for the
+README's *See it in action* and the docs Gallery's *The app at work*. A bar in
+the app's header counts the clicks as they happen and names each step, a ripple
+marks every click, and the last frame says how many it took::
 
     uv run --with playwright python scripts/record_workflow_demos.py           # all
     uv run --with playwright python scripts/record_workflow_demos.py compare   # one
     uv run --with playwright python scripts/record_workflow_demos.py --list
 
-The GIFs land in ``assets/workflows/`` (``DEMO_OUT`` to change it). It starts
+Each workflow is written twice from one recording: a GIF to ``assets/workflows/``
+for the README, and an MP4 with its poster to ``docs/assets/workflows/`` for the
+Gallery, which plays video at a fraction of a GIF's size (``DEMO_OUT`` writes
+both to one folder instead). It starts
 its own app on a free port, so every workflow starts from the bundled demo at
 its defaults; set ``DEMO_APP_URL`` to record an app that is already running
 instead. Each workflow gets a fresh browser context, so nothing one does
@@ -43,11 +46,20 @@ from pathlib import Path
 
 from capture_docs_screenshots import find_chrome, free_port, start_app
 from playwright.sync_api import Frame, Locator, Page, sync_playwright
-from record_app_demo import CHROME, HIDE_CSS, Pointer, Screencast, encode_gif
+from record_app_demo import (
+    CHROME,
+    HIDE_CSS,
+    Pointer,
+    Screencast,
+    encode_gif,
+    encode_mp4,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 URL = os.environ.get("DEMO_APP_URL")
+#: The README's GIFs, and the Gallery's MP4s (beside the docs' other assets).
 OUT = Path(os.environ.get("DEMO_OUT", ROOT / "assets" / "workflows"))
+VIDEO_OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
 SAMPLE = ROOT / "scanpath_studio" / "sample_data"
 
 #: Taller than the app demo's 1440×900: under the figure, a subtab and the trial
@@ -75,6 +87,16 @@ OVERLAY_JS = f"""
   // A rerun that re-focuses a control scrolls it into view, which in the
   // recording is the page jumping away and back for no visible reason.
   Element.prototype.scrollIntoView = function () {{}};
+  // The pointer crosses a figure on its way to a control, and Plotly's hover
+  // label would pop up there and linger; none of these tasks is about one.
+  const noHover = () => {{
+    const style = document.createElement('style');
+    style.textContent = '.hoverlayer {{ display: none !important; }}';
+    (document.head || document.documentElement).appendChild(style);
+  }};
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', noHover);
+  }} else noHover();
   // Init scripts run in every frame, and the figure is an iframe.
   if (window !== window.top) return;
   const FONT = '"Source Sans 3","Source Sans Pro",system-ui,-apple-system,sans-serif';
@@ -943,6 +965,8 @@ def main() -> None:
                         failed.append(flow.name)
                         continue
                     encode_gif(listing, OUT / f"{flow.name}.gif")
+                    VIDEO_OUT.mkdir(parents=True, exist_ok=True)
+                    encode_mp4(listing, VIDEO_OUT / f"{flow.name}.mp4")
             browser.close()
         if failed:
             raise SystemExit(f"not recorded: {', '.join(failed)}")

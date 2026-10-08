@@ -1,0 +1,1 @@
+`scripts/record_workflow_demos.py` records a short GIF of each common workflow — exporting one figure or every trial, adding your own data, styling the plot, filtering and starring trials, Corpus Analysis, replaying, comparing and sharing — with its clicks counted on screen.

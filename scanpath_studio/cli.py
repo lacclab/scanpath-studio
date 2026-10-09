@@ -631,8 +631,10 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
+        nargs="+",
         help="Participant-level metadata table: one row per participant, an "
-        "id column plus anything known about them. The join is validated and "
+        "id column plus anything known about them. Several files (or a glob) "
+        "are stacked into one table. The join is validated and "
         "reported against the loaded participants, and the fields are added to "
         "--list-trials output.",
     )
@@ -640,8 +642,10 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--trial-metadata",
         metavar="FILE",
+        nargs="+",
         help="Trial-level metadata table: one row per trial, a "
-        "trial-id column plus anything known about it. Validated and reported "
+        "trial-id column plus anything known about it. Several files (or a "
+        "glob) are stacked into one table. Validated and reported "
         "the same way, and its fields are added to --list-trials output.",
     )
     src.add_argument(
@@ -658,8 +662,10 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--text-metadata",
         metavar="FILE",
+        nargs="+",
         help="Text-level metadata table: one row per text, a text-id column "
-        "plus anything known about it. Validated and reported the same way, "
+        "plus anything known about it. Several files (or a glob) are stacked "
+        "into one table. Validated and reported the same way, "
         "and its fields are added to --list-trials output. Never keyed by "
         "participant: a text is a stimulus, not something one participant owns.",
     )

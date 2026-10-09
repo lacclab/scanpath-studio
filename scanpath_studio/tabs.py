@@ -227,6 +227,7 @@ from scanpath_studio.data import (
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
+    read_table,
     read_tables,
     remap_normalized_frame,
     repeat_bases,
@@ -13381,6 +13382,53 @@ def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
     )
 
 
+class _MetadataReadError(Exception):
+    """One of a metadata table's files could not be read; names which."""
+
+    def __init__(self, name: str, cause: Exception) -> None:
+        super().__init__(
+            f"Could not read {name} — is it a CSV, TSV, Parquet or Excel table "
+            f"with one header row? ({cause})"
+        )
+
+
+def _metadata_upload_signature(uploads) -> tuple:
+    """What a metadata uploader holds, by each file's `file_id` — not its name
+    and size: a corrected file of the same name and length must be read again
+    (VIZ-4's precedent in `controls._uploaded_image_data_uri`)."""
+    return tuple(
+        getattr(upload, "file_id", None) or (upload.name, getattr(upload, "size", None))
+        for upload in uploads
+    )
+
+
+def _metadata_upload_name(uploads) -> str:
+    """The files a metadata table was read from, for its "from **X**" captions."""
+    first = uploads[0].name
+    if len(uploads) == 1:
+        return first
+    return f"{first} + {plural(len(uploads) - 1, 'more file')}"
+
+
+def _read_metadata_uploads(uploads) -> pd.DataFrame:
+    """Every file uploaded for one metadata table, stacked into one table.
+
+    A table split across files (one per session, one per lab) reads as one:
+    columns line up by name, and a column a file lacks is empty for its rows.
+    The same reader turning up in two files is what the builders already
+    handle — combined when the rows agree, dropped and reported when not.
+    """
+    frames = []
+    for upload in uploads:
+        try:
+            frames.append(read_table(upload))
+        except Exception as exc:  # unreadable file — the caller names it
+            raise _MetadataReadError(upload.name, exc) from exc
+    if len(frames) == 1:
+        return frames[0]
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
 def render_participant_metadata_section(
     participants, *, host=None, live_join: bool = True, upload_host=None
 ) -> None:
@@ -13434,7 +13482,6 @@ def _participant_metadata_body(
     participants, *, live_join: bool = True, upload_host=None
 ) -> None:
     from scanpath_studio import metadata as md
-    from scanpath_studio.data import read_table
 
     # UX-53 r5: the paragraph that used to print here now rides the uploader's
     # own title as a tooltip — descriptive prose on this page is hover-only.
@@ -13444,7 +13491,8 @@ def _participant_metadata_body(
     _pm_help = (
         "One row per participant, with a participant-id column. The columns "
         "then behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel."
+        "inspection and export. CSV / TSV / Parquet / Excel; several files "
+        "are stacked into one table."
     )
     # UX-127/UX-129: with `upload_host` (the wizard's row format), the title +
     # uploader move into that thin left column — mirroring `upload_box`'s
@@ -13462,10 +13510,11 @@ def _participant_metadata_body(
             st, "Participant metadata table (optional)", _pm_help, emphasis=True
         )
         stats_host = st
-    upload = stats_host.file_uploader(
+    uploads = stats_host.file_uploader(
         "Participant metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
         key=md.upload_key("participant"),
+        accept_multiple_files=True,
         # No `persist_state` — `st.file_uploader` does not take it. It does
         # not need it either: the parsed frame is kept in session state under
         # `md.RAW_SESSION_KEY`, so the attached table survives even if the
@@ -13474,7 +13523,7 @@ def _participant_metadata_body(
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
-    if upload is None:
+    if not uploads:
         if active_participant_metadata() is None:
             return
         # UX-115: removing the file from its uploader chip detaches the table
@@ -13506,22 +13555,16 @@ def _participant_metadata_body(
         # `file_id`, not (name, size): re-uploading a corrected file of the
         # same name and byte length must be read again (VIZ-4 precedent in
         # `controls._uploaded_image_data_uri`).
-        signature = getattr(upload, "file_id", None) or (
-            upload.name,
-            getattr(upload, "size", None),
-        )
+        signature = _metadata_upload_signature(uploads)
         if st.session_state.get(md.FILE_SESSION_KEY) != signature:
             try:
-                st.session_state[md.RAW_SESSION_KEY] = read_table(upload)
-                st.session_state[md.FILE_SESSION_KEY] = signature
-                st.session_state[_PM_NAME_KEY] = upload.name
-                st.session_state.pop("participant_metadata_id_column", None)
-            except Exception as exc:  # unreadable file — say so, keep the page
-                st.error(
-                    f"Could not read {upload.name} — is it a CSV, TSV, Parquet "
-                    f"or Excel table with one header row? ({exc})"
-                )
+                st.session_state[md.RAW_SESSION_KEY] = _read_metadata_uploads(uploads)
+            except _MetadataReadError as exc:  # say which file, keep the page
+                st.error(str(exc))
                 return
+            st.session_state[md.FILE_SESSION_KEY] = signature
+            st.session_state[_PM_NAME_KEY] = _metadata_upload_name(uploads)
+            st.session_state.pop("participant_metadata_id_column", None)
 
     raw = st.session_state.get(md.RAW_SESSION_KEY)
     if raw is None or raw.empty:
@@ -13670,13 +13713,13 @@ def render_trial_metadata_section(
 
 def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) -> None:
     from scanpath_studio import metadata as md
-    from scanpath_studio.data import read_table
 
     # UX-113: same dotted-underline title format as the mapping fields.
     _tm_help = (
         "One row per trial, with a trial-id column. The columns then "
         "behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel."
+        "inspection and export. CSV / TSV / Parquet / Excel; several files "
+        "are stacked into one table."
     )
     # UX-127/UX-129 — see the matching branch in `_participant_metadata_body`.
     if upload_host is not None:
@@ -13687,15 +13730,16 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
             st, "Trial metadata table (optional)", _tm_help, emphasis=True
         )
         stats_host = st
-    upload = stats_host.file_uploader(
+    uploads = stats_host.file_uploader(
         "Trial metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
         key=md.upload_key("trial"),
+        accept_multiple_files=True,
         help=_tm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
-    if upload is None:
+    if not uploads:
         if md.active_trials() is None:
             return
         # UX-115/UX-129/DATA-38 — see the matching note in
@@ -13711,23 +13755,19 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         _clear_trial_metadata()
         return
     else:
-        signature = getattr(upload, "file_id", None) or (
-            upload.name,
-            getattr(upload, "size", None),
-        )
+        signature = _metadata_upload_signature(uploads)
         if st.session_state.get(md.TRIAL_FILE_SESSION_KEY) != signature:
             try:
-                st.session_state[md.TRIAL_RAW_SESSION_KEY] = read_table(upload)
-                st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
-                st.session_state[_TM_NAME_KEY] = upload.name
-                st.session_state.pop("trial_metadata_id_column", None)
-                st.session_state.pop("trial_metadata_participant_column", None)
-            except Exception as exc:  # unreadable file — say so, keep the page
-                st.error(
-                    f"Could not read {upload.name} — is it a CSV, TSV, Parquet "
-                    f"or Excel table with one header row? ({exc})"
+                st.session_state[md.TRIAL_RAW_SESSION_KEY] = _read_metadata_uploads(
+                    uploads
                 )
+            except _MetadataReadError as exc:  # say which file, keep the page
+                st.error(str(exc))
                 return
+            st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
+            st.session_state[_TM_NAME_KEY] = _metadata_upload_name(uploads)
+            st.session_state.pop("trial_metadata_id_column", None)
+            st.session_state.pop("trial_metadata_participant_column", None)
 
     raw = st.session_state.get(md.TRIAL_RAW_SESSION_KEY)
     if raw is None or raw.empty:
@@ -13895,12 +13935,12 @@ def render_text_metadata_section(
 
 def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> None:
     from scanpath_studio import metadata as md
-    from scanpath_studio.data import read_table
 
     _txm_help = (
         "One row per text, with a text-id column. The columns then "
         "behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel."
+        "inspection and export. CSV / TSV / Parquet / Excel; several files "
+        "are stacked into one table."
     )
     # UX-127/UX-129 — see the matching branch in `_participant_metadata_body`.
     if upload_host is not None:
@@ -13911,15 +13951,16 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
             st, "Text metadata table (optional)", _txm_help, emphasis=True
         )
         stats_host = st
-    upload = stats_host.file_uploader(
+    uploads = stats_host.file_uploader(
         "Text metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
         key=md.upload_key("text"),
+        accept_multiple_files=True,
         help=_txm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
-    if upload is None:
+    if not uploads:
         if md.active_texts() is None:
             return
         # UX-115/UX-129/DATA-38 — see the matching note in
@@ -13935,22 +13976,18 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         _clear_text_metadata()
         return
     else:
-        signature = getattr(upload, "file_id", None) or (
-            upload.name,
-            getattr(upload, "size", None),
-        )
+        signature = _metadata_upload_signature(uploads)
         if st.session_state.get(md.TEXT_FILE_SESSION_KEY) != signature:
             try:
-                st.session_state[md.TEXT_RAW_SESSION_KEY] = read_table(upload)
-                st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
-                st.session_state[_TXM_NAME_KEY] = upload.name
-                st.session_state.pop("text_metadata_id_column", None)
-            except Exception as exc:  # unreadable file — say so, keep the page
-                st.error(
-                    f"Could not read {upload.name} — is it a CSV, TSV, Parquet "
-                    f"or Excel table with one header row? ({exc})"
+                st.session_state[md.TEXT_RAW_SESSION_KEY] = _read_metadata_uploads(
+                    uploads
                 )
+            except _MetadataReadError as exc:  # say which file, keep the page
+                st.error(str(exc))
                 return
+            st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
+            st.session_state[_TXM_NAME_KEY] = _metadata_upload_name(uploads)
+            st.session_state.pop("text_metadata_id_column", None)
 
     raw = st.session_state.get(md.TEXT_RAW_SESSION_KEY)
     if raw is None or raw.empty:

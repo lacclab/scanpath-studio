@@ -1036,6 +1036,23 @@ SELECTOR_SCREEN_PICKER_REM = SELECTOR_SCREEN_FLOOR_REM - 10.75
 #: With a screen track, the actions track keeps only ◀ ▶: its floor, in rem.
 SELECTOR_STEPS_FLOOR_REM = 5.2
 
+#: The least the trial scrubber is squeezed to before a selector row wraps.
+SELECTOR_SCRUB_MIN_REM = 7.5
+#: How wide a selector row must be to stay on one line: every floor of its
+#: widest shape (dataset · trial · scrubber · ◀ ▶ · screen + ⇅ 🔎 ✏️) plus
+#: the 1rem gaps between its five columns. Wider, the row keeps one line and
+#: compresses (the scrubber gives first); narrower, it wraps, the screen and
+#: action cluster moving to a line of their own rather than running past the
+#: column into the plot-controls rail.
+SELECTOR_ROW_WRAP_REM = (
+    SELECTOR_ROW_FLOORS_REM[0]
+    + SELECTOR_ROW_FLOORS_REM[1]
+    + SELECTOR_SCRUB_MIN_REM
+    + SELECTOR_STEPS_FLOOR_REM
+    + SELECTOR_SCREEN_FLOOR_REM
+    + 4 * 1.0
+)
+
 #: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
 #: is a single wide element rather than dataset + pick + scrub. Kept for
 #: deep-link-stable layouts that still want it; UX-75 moved the chip strip off

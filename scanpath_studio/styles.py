@@ -5,6 +5,7 @@ from __future__ import annotations
 from scanpath_studio.constants import (
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
+    SELECTOR_ROW_WRAP_REM,
     SELECTOR_SCREEN_FLOOR_REM,
     SELECTOR_SCREEN_PICKER_REM,
     SELECTOR_STEPS_FLOOR_REM,
@@ -1122,18 +1123,51 @@ def get_app_css() -> str:
          merged), and the actions track wherever it is. A column holding its
          floor leaves the rest of the shrinking to the columns beside it, so
          the tracks still share their edges.
-       - Streamlit's column row wraps, so a floor wider than the column's share
-         would push it onto a line of its own. The row is kept on one line
-         instead, above the 640px width where Streamlit stacks columns on
-         purpose.
+       - The row stays on one line, compressing (the scrubber gives first,
+         down to `SELECTOR_SCRUB_MIN_REM`), while its own width holds every
+         floor (`SELECTOR_ROW_WRAP_REM`). Narrower than that — the
+         plot-controls rail open beside a small window — it wraps: the tracks
+         that no longer fit (the screen picker with ⇅ 🔎 ✏️, then ◀ ▶) move to
+         a line of their own under the rest. It used to be held on one line at
+         any width, and then ran past its column into the rail, over
+         *Animate*. The test is a container query on the row's own wrapper, not
+         the window: the rail takes a share of the window, and a flex wrap
+         alone would break the line before shrinking the scrubber. A's row and
+         B's have the same floors, so they wrap at the same width.
        On the column rules, `:where()` keeps the row match at zero specificity,
-       so each floor outranks the `min-width: 0`. The `nowrap` rule keeps its
-       specificity, since it has to outrank Streamlit's own `flex-wrap`. */
+       so each floor outranks the `min-width: 0`. The `flex-wrap` rules keep
+       their specificity, since they have to outrank Streamlit's own. */
     @media (min-width: 640px) {
+        [data-testid="stLayoutWrapper"]:has(> [data-testid="stHorizontalBlock"]
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > [class*="st-key-railbtn_"]) {
+            container-type: inline-size;
+        }
         [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
             > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
             > [class*="st-key-railbtn_"]) {
             flex-wrap: nowrap;
+        }
+        @container (max-width: __SELECTOR_ROW_WRAP__) {
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+                > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+                > [class*="st-key-railbtn_"]) {
+                flex-wrap: wrap;
+                row-gap: 0.5rem;
+            }
+            /* On a line of its own, the screen tail is never wider than the
+               row: its floor gives way, and the screen picker and ⇅ 🔎 ✏️
+               inside it wrap too. Doubled class match, so it outranks the
+               tail's own one-line rule below. */
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+                > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+                > [class*="_row_tail"]) {
+                min-width: min(__SELECTOR_SCREEN_FLOOR__, 100%);
+            }
+            [class*="_row_tail"][class*="_row_tail"] {
+                flex-wrap: wrap !important;
+                row-gap: 0.5rem;
+            }
         }
         :where([data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
             > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
@@ -2374,6 +2408,7 @@ def get_app_css() -> str:
         css.replace("__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem")
         .replace("__SELECTOR_STEPS_FLOOR__", f"{SELECTOR_STEPS_FLOOR_REM}rem")
         .replace("__SELECTOR_SCREEN_PICKER__", f"{SELECTOR_SCREEN_PICKER_REM}rem")
+        .replace("__SELECTOR_ROW_WRAP__", f"{SELECTOR_ROW_WRAP_REM:g}rem")
     )
     return css
 

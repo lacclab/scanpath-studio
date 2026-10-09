@@ -709,6 +709,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # VIZ-8: show the saccade-type colour key on the plot (default on). Optional,
     # like the other legends.
     "global_saccade_type_legend": True,
+    "global_show_color_legend": True,
     # The fixed duration scale: one mapping of duration to marker size for every
     # figure (√ by default — area grows with duration). Old configs and links
     # that predate it are migrated to "relative" so they still draw as saved.
@@ -4154,10 +4155,6 @@ _DURATION_BOUNDS_HELP = (
     "The durations (ms) that get the smallest and the largest marker. Unused on "
     "the relative scale."
 )
-_SIZE_KEY_HELP = (
-    "Reference circles labeled in ms. Drawn on a fixed scale only, and in Compare "
-    "only when both scanpaths use the same size range."
-)
 
 
 def _render_duration_scale_rows() -> None:
@@ -4199,13 +4196,6 @@ def _render_duration_scale_rows() -> None:
         number_format="%d",
         help=_DURATION_BOUNDS_HELP,
         field_host=_sub_row("Durations", caption_help=bounds_help),
-    )
-    key_dis, key_help = _layer_gate(relative, _SIZE_KEY_HELP)
-    _sub_row("Size key", caption_help=key_help).checkbox(
-        "Show",
-        key="global_duration_size_legend",
-        persist_state="session",
-        disabled=key_dis,
     )
 
 
@@ -5425,6 +5415,74 @@ def _seed_viz_state(
     return color_fields, numeric_fields, highlight_options
 
 
+#: Each Legends row's *Show* — the legend's own switch, its key unchanged.
+_LEGEND_SHOW_KEYS = {
+    "compare": "global_show_compare_legend",
+    "saccades": "global_saccade_type_legend",
+    "colors": "global_show_color_legend",
+    "size_key": "global_duration_size_legend",
+}
+#: The Legends table's column titles, with their hover text.
+_LEGEND_COLUMNS = (
+    ("Show", "Draw this legend on the figure."),
+    (
+        "Position",
+        "Where it sits. Above, Below, Left and Right are outside the plot (the "
+        "figure grows to make room); the Inside spots sit over it. Auto: where "
+        "it is drawn by default.",
+    ),
+    (
+        "Arrangement",
+        "Stacked: one item under the other. Side by side: in a row. Auto: a row "
+        "above or below the plot, a stack elsewhere.",
+    ),
+    ("Text size", "Its text size in px. Empty: the figure's own."),
+)
+_FIXCLASS_LEGEND_CATEGORIES = ("short", "long", "oob", "blink")
+
+
+def _legends_drawn(
+    *,
+    show_fix: bool,
+    show_saccades: bool,
+    animating: bool,
+    comparing: bool,
+    numeric_fields,
+) -> list[str]:
+    """The legend kinds the current figure can draw, in table order.
+
+    Compare's A/B labels only while comparing; the saccade-type key only on the
+    static figure, with saccades coloured by type; the fixation colours with a
+    categorical *Color by* (or by line), a *Highlight* filter (A's or, in
+    Compare, B's) or raw gaze; the size key with fixations on a fixed scale.
+    """
+    ss = st.session_state
+    color_by = ss.get("global_color_by")
+    categorical = (
+        bool(color_by)
+        and color_by != UNIFORM_COLOR_FIELD
+        and (color_by == "line" or color_by not in set(numeric_fields or ()))
+    )
+    prefixes = ("global", "cmp1") if comparing else ("global",)
+    highlighted = any(
+        ss.get(f"{prefix}_fixclass_{category}_mode") == "Highlight"
+        for prefix in prefixes
+        for category in _FIXCLASS_LEGEND_CATEGORIES
+    )
+    raw_gaze = bool(ss.get("global_show_raw_gaze")) and not animating
+    kinds = {
+        "compare": comparing,
+        "saccades": show_saccades
+        and not (animating or comparing)
+        and ss.get("global_saccade_color_mode") == "By type",
+        "colors": (show_fix and (categorical or highlighted)) or raw_gaze,
+        "size_key": show_fix
+        and (ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE)
+        != "relative",
+    }
+    return [kind for kind in LEGEND_KINDS if kinds[kind]]
+
+
 #: What each Legends row places (📐 Figure & canvas → Legends).
 _LEGEND_ROW_HELP = {
     "compare": "The A/B legend naming the two scanpaths (Compare's *Legend*).",
@@ -5635,6 +5693,7 @@ def _collect_viz_settings(
         # colour-key legend.
         saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
         saccade_type_legend=bool(ss.get("global_saccade_type_legend", True)),
+        show_color_legend=bool(ss.get("global_show_color_legend", True)),
         saccade_class_colors={
             cls_name: ss.get(
                 f"global_saccade_class_color_{cls_name}", SACCADE_CLASS_COLORS[cls_name]
@@ -6928,16 +6987,6 @@ def render_plot_controls(
                         persist_state="session",
                         disabled=swatch_disabled,
                     )
-            _, legend_help = _layer_gate(
-                False,
-                "The saccade-type color key on the plot.",
-            )
-            _sub_row("Legend", caption_help=legend_help).checkbox(
-                "Show",
-                key="global_saccade_type_legend",
-                persist_state="session",
-                disabled=swatch_disabled,
-            )
         if comparing:
             _compare_saccade_line_rows(0)
         else:
@@ -7908,55 +7957,66 @@ def render_plot_controls(
             help="Fields shown when hovering a fixation, in this order.",
         )
 
-    # Where each legend sits. In addition to each layer's own *Show legend*
-    # switch, never instead of it: a legend that is off stays off wherever it
-    # is placed. Auto everywhere draws the figure as it always was.
+    # Where each legend sits — and whether it is drawn at all: each row's *Show*
+    # is that legend's own switch (its key unchanged, so links, settings files
+    # and designs read as before), which used to sit under its layer. A row
+    # appears only while the figure can draw that legend, so the table lists
+    # what is on the plot rather than four rows that may do nothing.
     with legends, _popover_rows("fig_legends"):
-        for kind in LEGEND_KINDS:
-            # A row whose legend the current figure cannot draw greys out, its
-            # values kept (no `index=`/`value=`), like every gated rail control.
-            gated_off = {
-                "compare": None
-                if comparing
-                else "Only in Compare: the A/B legend names the two scanpaths.",
-                "saccades": "Only on the static figure: the replay and Compare "
-                "draw no saccade-type legend."
-                if animating or comparing
-                else None,
-            }.get(kind)
-            field = _sub_row(
-                LEGEND_KIND_LABELS[kind],
-                caption_help=gated_off or _LEGEND_ROW_HELP[kind],
+        drawn = _legends_drawn(
+            show_fix=show_fix,
+            show_saccades=show_saccades,
+            animating=animating,
+            comparing=comparing,
+            numeric_fields=numeric_fields,
+        )
+        if not drawn:
+            st.caption(
+                "This figure draws no legend. Compare's A/B labels, a saccade "
+                "colour by type, a categorical fixation colour, a Highlight "
+                "filter or a fixed marker-size scale each add one."
             )
-            pos_col, arr_col, size_col = field.columns(
-                [0.44, 0.34, 0.22], gap=_LABEL_GAP, vertical_alignment="center"
+        else:
+            weights = [0.14, 0.38, 0.28, 0.2]
+            head = _sub_row(None).columns(
+                weights, gap=_LABEL_GAP, vertical_alignment="bottom"
+            )
+            for col, title, tip in zip(head, *zip(*_LEGEND_COLUMNS)):
+                _sub_caption(col, title, tip)
+        for kind in drawn:
+            field = _sub_row(
+                LEGEND_KIND_LABELS[kind], caption_help=_LEGEND_ROW_HELP[kind]
+            )
+            show_col, pos_col, arr_col, size_col = field.columns(
+                weights, gap=_LABEL_GAP, vertical_alignment="center"
+            )
+            shown = show_col.checkbox(
+                f"Show the {LEGEND_KIND_LABELS[kind]} legend",
+                key=_LEGEND_SHOW_KEYS[kind],
+                persist_state="session",
+                label_visibility="collapsed",
             )
             pos_col.selectbox(
                 f"{LEGEND_KIND_LABELS[kind]} legend position",
-                disabled=bool(gated_off),
+                disabled=not shown,
                 options=list(LEGEND_POSITION_LABELS),
                 format_func=LEGEND_POSITION_LABELS.__getitem__,
                 key=f"global_legend_{kind}_position",
                 persist_state="session",
                 label_visibility="collapsed",
-                help="Where this legend sits. Above, Below, Left and Right are "
-                "outside the plot (the figure grows to make room); the Inside "
-                "spots sit over it. Auto: where it is drawn by default.",
             )
             arr_col.selectbox(
                 f"{LEGEND_KIND_LABELS[kind]} legend arrangement",
-                disabled=bool(gated_off),
+                disabled=not shown,
                 options=list(LEGEND_ARRANGEMENT_LABELS),
                 format_func=LEGEND_ARRANGEMENT_LABELS.__getitem__,
                 key=f"global_legend_{kind}_arrangement",
                 persist_state="session",
                 label_visibility="collapsed",
-                help="Stacked: one item under the other. Side by side: in a "
-                "row. Auto: a row above or below the plot, a stack elsewhere.",
             )
             size_col.number_input(
                 f"{LEGEND_KIND_LABELS[kind]} legend text size",
-                disabled=bool(gated_off),
+                disabled=not shown,
                 min_value=6,
                 max_value=72,
                 step=1,
@@ -7964,7 +8024,6 @@ def render_plot_controls(
                 persist_state="session",
                 placeholder="Auto",
                 label_visibility="collapsed",
-                help="Text size in px. Empty: the figure's own.",
             )
 
     # Build the dict from session_state so it matches viz_settings_from_state

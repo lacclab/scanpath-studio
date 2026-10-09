@@ -401,6 +401,7 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_saccade_arrows": "global_show_saccade_arrows",
     # VIZ-8: saccade-type colour key (default on, so always emitted).
     "saccade_type_legend": "global_saccade_type_legend",
+    "show_color_legend": "global_show_color_legend",
     # The fixed duration scale's size key (default on, so always emitted).
     "duration_size_legend": "global_duration_size_legend",
     "snap_fixations": "global_fixation_snap_to_word",
@@ -2446,6 +2447,8 @@ def _restore_plot_config(
         )
     if "saccade_type_legend" in coloring:
         put("global_saccade_type_legend", bool(coloring["saccade_type_legend"]))
+    if "show_color_legend" in coloring:
+        put("global_show_color_legend", bool(coloring["show_color_legend"]))
     class_colors = coloring.get("saccade_class_colors")
     if isinstance(class_colors, dict):
         for cls_name in SACCADE_CLASS_EDITABLE:

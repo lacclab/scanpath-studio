@@ -853,6 +853,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "split (its forward and regression colors).",
     )
     viz.add_argument(
+        "--no-color-legend",
+        dest="show_color_legend",
+        action="store_false",
+        help="Hide the fixation-colour legend: the categories of a categorical "
+        "--color-by and the highlighted fixations' entries (the markers still "
+        "draw). Shows by default.",
+    )
+    viz.add_argument(
         "--no-saccade-type-legend",
         dest="saccade_type_legend",
         action="store_false",
@@ -3180,6 +3188,8 @@ def render(argv: list[str]) -> None:
         overrides["saccade_color_mode"] = "By type"
     if not args.saccade_type_legend:
         overrides["saccade_type_legend"] = False
+    if not args.show_color_legend:
+        overrides["show_color_legend"] = False
     if args.saccade_type_colors:
         # Over the palette's class colours when one is named: the explicit dict
         # wins over `--palette` wholesale in `api._expand_palette`, so starting

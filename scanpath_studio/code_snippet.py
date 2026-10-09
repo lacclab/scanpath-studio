@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -530,6 +531,48 @@ def _raw_gaze_only_cli(source: SnippetSource) -> list[str]:
     return _raw_gaze_cli(source)
 
 
+def _image_folder(source: SnippetSource) -> tuple[str, str | None] | None:
+    """``(folder, pattern)`` when the data half matched stimulus pages to its
+    rows (``render --image-root``), else ``None``; the pattern is ``None`` when
+    it is the default one, which a snippet leaves out (#420). Raw gaze alone
+    has no rows to match a page to."""
+    from .constants import DEFAULT_STIMULUS_IMAGE_PATTERN
+
+    root = source.options.get("image_root")
+    if not root or source.kind == SOURCE_RAW_GAZE:
+        return None
+    pattern = str(source.options.get("image_pattern") or "")
+    return str(root), (
+        None if pattern in ("", DEFAULT_STIMULUS_IMAGE_PATTERN) else pattern
+    )
+
+
+def _image_folder_python(source: SnippetSource) -> list[str]:
+    folder = _image_folder(source)
+    if folder is None:
+        return []
+    root, pattern = folder
+    args = ["words", "fixations", _py(root)]
+    if pattern is not None:
+        args.append(_py(pattern))
+    return [
+        "words, fixations = sps.attach_stimulus_images(",
+        *(f"    {arg}," for arg in args),
+        ")",
+    ]
+
+
+def _image_folder_cli(source: SnippetSource) -> list[str]:
+    folder = _image_folder(source)
+    if folder is None:
+        return []
+    root, pattern = folder
+    argv = ["--image-root", root]
+    if pattern is not None:
+        argv += ["--image-pattern", pattern]
+    return argv
+
+
 #: kind → (Python loader lines, CLI input flags). A source whose CLI writer is
 #: ``None`` has no ``render`` flags at all, and the CLI snippet says so rather
 #: than inventing one.
@@ -617,10 +660,106 @@ class FigureState:
     playback_speed: float = 1.0
     autoplay: bool = True
     compare: CompareTarget | None = None
+    #: #420 — each reading's own stimulus page as the app resolved it,
+    #: ``(path, (width, height), (x0, y0))`` under the image slot it would fill:
+    #: ``""`` (``background_image``) and ``"_b"`` (a split comparison's B). A
+    #: page drawn exactly there is written as ``show_stimulus_image=True``
+    #: rather than as a path, which the reader's own data finds again.
+    own_pages: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}, got {self.kind!r}.")
+
+
+#: #420 — the three settings that place one stimulus image slot.
+_IMAGE_SLOT = ("background_image", "background_image_size", "background_image_origin")
+
+
+def _same_page(settings: dict, suffix: str, page) -> bool:
+    """Whether ``settings`` draws ``page`` — ``(path, size, origin)`` — in the
+    image slot ``suffix``, unmoved and unscaled."""
+    path, size, origin = (settings.get(f"{key}{suffix}") for key in _IMAGE_SLOT)
+    if not path or page is None or size is None:
+        return False
+    own_path, own_size, own_origin = page
+    return (
+        str(path) == str(own_path)
+        and _floats(size) == _floats(own_size)
+        and _floats(origin or (0.0, 0.0)) == _floats(own_origin)
+    )
+
+
+def _floats(pair) -> tuple[float, ...]:
+    return tuple(float(value) for value in pair)
+
+
+def name_own_pages(
+    settings: dict, own_pages: Mapping, slots: tuple[str, ...] = ("",)
+) -> dict:
+    """``settings`` with every image slot that draws its reading's own page
+    written as ``show_stimulus_image=True`` instead of a path (#420).
+
+    The path is the server's (the bundled demo's lives in the installed
+    package), while the option asks the reader's data for its page, so the
+    snippet runs anywhere the data loads. A slot drawing anything else — an
+    upload, or a page the VIZ-4 offset or scale moved — keeps its path, which
+    the builders let win over the option.
+
+    ``slots`` are the image slots the figure's builder fills under the option
+    (a split comparison's ``"_b"`` beside ``""``). The option fills every one
+    left empty, so nothing is named while one of them draws no page: the app
+    may have drawn none there on purpose (ENG-57's veto), and the snippet must
+    not draw one the app did not."""
+    if any(not settings.get(f"background_image{suffix}") for suffix in slots):
+        return settings
+    named = [
+        suffix
+        for suffix, page in (own_pages or {}).items()
+        if suffix in slots and _same_page(settings, suffix, page)
+    ]
+    if not named:
+        return settings
+    dropped = {f"{slot}{suffix}" for slot in _IMAGE_SLOT for suffix in named}
+    out = {key: value for key, value in settings.items() if key not in dropped}
+    out["show_stimulus_image"] = True
+    return out
+
+
+def _image_slots(state: FigureState) -> tuple[str, ...]:
+    """The image slots ``state``'s builder fills: B's own only in a split
+    comparison (an overlay and a co-animation draw one page)."""
+    split = state.compare is not None and state.compare.layout in (
+        "side_by_side",
+        "stacked",
+    )
+    return ("", "_b") if state.kind == "comparison" and split else ("",)
+
+
+def _with_own_pages(state: FigureState) -> FigureState:
+    settings = name_own_pages(state.settings, state.own_pages, _image_slots(state))
+    return state if settings is state.settings else replace(state, settings=settings)
+
+
+def _writes_image_folder(source: SnippetSource, state: FigureState) -> bool:
+    """Whether the snippet loads the source's image folder (#420): only when a
+    page it names by ``show_stimulus_image`` lies in that folder. A folder the
+    app matched nothing from — missing, empty, or a pattern it refused — is
+    never quoted, since `attach_stimulus_images` would raise on it. ``render
+    --print-code`` records no pages; its own ``--image-root`` already loaded."""
+    import os
+    from pathlib import Path
+
+    folder = _image_folder(source)
+    if folder is None or not state.settings.get("show_stimulus_image"):
+        return False
+    if not state.own_pages:
+        return True
+    root = Path(folder[0]).expanduser().resolve()
+    return any(
+        page is not None and Path(os.path.normpath(str(page[0]))).is_relative_to(root)
+        for page in state.own_pages.values()
+    )
 
 
 def _comparable(value):
@@ -1286,6 +1425,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_size": _pair("--stimulus-image-size", "x"),
     "background_image_origin": _pair("--stimulus-image-origin", ","),
     "background_image_opacity": _valued("--stimulus-image-opacity"),
+    "show_stimulus_image": _flag_when("--show-stimulus-image", True),
     "anim_grid_step_ms": _valued("--anim-grid-step-ms"),
     "anim_max_frames": _int_valued("--anim-max-frames"),
     # EXP-20 — every figure option `render` could not say before. Each flag is
@@ -1665,6 +1805,7 @@ def python_snippet(
     non-default raster geometry (``--width`` / ``--height`` / ``--scale``) so a
     translated invocation writes the same-sized file, not just the same
     picture."""
+    state = _with_own_pages(state)
     loader, _ = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     source = _with_kept_columns(source, state)
     other = second_dataset(state)
@@ -1675,6 +1816,8 @@ def python_snippet(
         )
     lines.append("")
     lines += loader(source)
+    if _writes_image_folder(source, state):
+        lines += _image_folder_python(source)
     # A raw-gaze-only source loaded its samples as its data half already.
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
@@ -1786,6 +1929,7 @@ def cli_snippet(
     figure needs that ``render`` has no flag for — reported, never dropped, so a
     snippet can't quietly promise a figure the CLI won't produce.
     """
+    state = _with_own_pages(state)
     _, source_cli = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     source = _with_kept_columns(source, state)
     other = second_dataset(state)
@@ -1794,6 +1938,8 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
+    if _writes_image_folder(source, state):
+        argv += _image_folder_cli(source)
 
     if state.participant:
         argv += ["-p", str(state.participant)]

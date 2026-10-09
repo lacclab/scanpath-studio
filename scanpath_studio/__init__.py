@@ -6,6 +6,7 @@ __all__ = [
     "ScanpathData",
     "__version__",
     "animate_scanpath",
+    "attach_stimulus_images",
     "build_authored_scanpath",
     "cache_status",
     "check_data_health",

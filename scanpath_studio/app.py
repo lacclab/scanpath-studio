@@ -1834,6 +1834,25 @@ def data_root() -> Path | None:
     return Path(raw).expanduser().resolve() if raw else None
 
 
+def active_stimulus_folder() -> tuple[str, str] | None:
+    """``(folder, pattern)``: the local folder the open dataset's stimulus pages
+    are matched from (#417), or ``None``. The Share subtab's code snippet
+    hands it to `api.attach_stimulus_images`, so a snippet that writes
+    ``show_stimulus_image=True`` finds the same pages (#420). The dataset is
+    the one `_run_app` attaches images for — the demo while it stands in for a
+    missing corpus. A machine-local path, so ``None`` wherever local folders
+    are not the user's own."""
+    if not local_filesystem_enabled():
+        return None
+    owner = (
+        DEMO_CHOICE
+        if st.session_state.get(_PLACEHOLDER_SHOWN_KEY)
+        else st.session_state.get("data_source_choice")
+    )
+    source = dataset_stimulus_images(owner)
+    return (source["folder"], source["pattern"]) if source else None
+
+
 def _resolve_data_dir(root: str) -> str:
     """Resolve a possibly-relative data dir against the project root.
 

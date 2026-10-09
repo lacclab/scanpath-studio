@@ -202,7 +202,8 @@ B's frames directly.
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honored by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
-| resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
+| draw each trial's own stimulus page | `--show-stimulus-image` — the `image_path` the trial's rows carry (`--sample` ships its pages) |
+| match pages from a folder | `--image-root DIR --image-pattern '{text_id}.png'` fills each row's `image_path`; add `--show-stimulus-image` to draw it |
 | use a smoothed (Gaussian) heatmap | `--heatmap-style interpolated --heatmap-sigma 20` (σ in px; omit it for the automatic σ) |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
 | export editable layers | `--separable-layers` |

@@ -123,6 +123,7 @@ NON_DEFAULT = {
     "background_image_size": (1200, 800),
     "background_image_origin": (10.0, 20.0),
     "background_image_opacity": 0.5,
+    "show_stimulus_image": True,
     "raw_gaze_color": "#666666",
     "raw_gaze_marker_size": 3.0,
     "raw_gaze_opacity": 0.4,
@@ -348,6 +349,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             "gpt2_surprisal",
         ),
         (["--word-heatmap-title", "Surprisal"], "word_heatmap_title", "Surprisal"),
+        (["--show-stimulus-image"], "show_stimulus_image", True),
     ],
 )
 def test_each_static_flag_reaches_its_keyword(monkeypatch, flags, kwarg, expected):

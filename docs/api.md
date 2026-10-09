@@ -42,6 +42,8 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.api.load_sample_data
 
+::: scanpath_studio.api.attach_stimulus_images
+
 ::: scanpath_studio.api.load_raw_gaze
 
 ::: scanpath_studio.api.load_sample_raw_gaze

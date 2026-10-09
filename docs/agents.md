@@ -274,6 +274,13 @@ default); the default is skipped when absent, a column you name must exist.
 `coordinate_grid_spacing=None` selects a readable 1/2/5×10ⁿ interval, while a
 positive number pins the major interval in pixels. `background_image` places a
 stimulus screenshot under the scanpath at data coordinates.
+`show_stimulus_image=True` draws each trial's own page instead: the
+`image_path` its rows carry, at its `image_x` / `image_y`. The bundled demo
+ships its pages; for your own data, load with
+`load_scanpath_data(..., image_root="pages/", image_pattern="{text_id}.png")`,
+or match a folder to frames you already have with
+`attach_stimulus_images(words, fixations, "pages/")`. A trial with no readable
+page draws none and raises a `UserWarning`.
 
 `palette=` is a shorthand that sets a whole group of colors at once —
 `"default"` (colorblind-safe), `"print"` (grayscale) or `"high-contrast"`; the

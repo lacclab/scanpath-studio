@@ -13,7 +13,7 @@ import json
 import math
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -3767,6 +3767,26 @@ _SNIPPET_OUTPUT = {
 }
 
 
+def _with_stimulus_folder(source: SnippetSource) -> SnippetSource:
+    """``source`` with the local folder the app matched its stimulus pages from
+    (#420): the snippet then loads them with `attach_stimulus_images`, which it
+    writes when the figure draws a page through ``show_stimulus_image``."""
+    from scanpath_studio.app import active_stimulus_folder
+
+    folder = active_stimulus_folder()
+    if folder is None:
+        return source
+    image_root, image_pattern = folder
+    return replace(
+        source,
+        options={
+            **source.options,
+            "image_root": image_root,
+            "image_pattern": image_pattern,
+        },
+    )
+
+
 def _snippet_source(data_choice: str) -> SnippetSource:
     """Describe the loaded data the way a script would have to load it.
 
@@ -3985,7 +4005,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     )
     output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(
-        _snippet_source(data_choice),
+        _with_stimulus_folder(_snippet_source(data_choice)),
         state,
         explicit=bool(explicit),
         output=output,

@@ -5509,6 +5509,31 @@ def _copy_screen_fields(
     return normalize_screen_identity(df)
 
 
+def _text_id_values(
+    source: pd.DataFrame, schema: dict, unsuffixed: pd.Series
+) -> pd.Series:
+    """The canonical ``text_id`` ``normalize_words`` / ``normalize_fixations``
+    write: the mapped Text ID, else a literal ``unique_paragraph_id``, else the
+    trial id before any repeat suffix.
+
+    The mapped column, always (#412) — BUG-58's rule for the Trial ID, applied
+    to the Text ID. A literal ``unique_paragraph_id`` column used to win over
+    whatever the mapping named, so a Text ID picked by hand was silently
+    replaced on any table that carried one, and a stimulus-level AOI table
+    joined to its fixations on the wrong text. Auto-detection proposes
+    ``unique_paragraph_id`` first, so it is still the text id by default, and
+    it is still the fallback when no Text ID is mapped at all.
+    """
+    if schema.get("text_id"):
+        # str or list (a composite text id, joined like the trial id).
+        return trial_id_series(source, schema["text_id"])
+    if "unique_paragraph_id" in source.columns:
+        return stable_id(source["unique_paragraph_id"])
+    # DATA-49: a repeated reading's text is the id it was suffixed from — the
+    # text a stimulus-level AOI table knows it by.
+    return unsuffixed
+
+
 def _text_id_mapped_flag(
     source: pd.DataFrame, schema: dict, *, renormalizing: bool
 ) -> bool | np.ndarray | None:
@@ -5601,16 +5626,13 @@ def normalize_words(
             # column's own values, which the trial picker would otherwise key
             # on (`utils.build_combo_options` prefers `unique_trial_id`).
             df["unique_trial_id"] = df["trial_id"]
+    text_id = _text_id_values(words, schema, unsuffixed)
     if "unique_paragraph_id" in words.columns:
-        df["unique_text_id"] = stable_id(words["unique_paragraph_id"])
-        df["text_id"] = df["unique_text_id"]
-    elif schema.get("text_id"):
-        # str or list (a composite text id, joined like the trial id).
-        df["text_id"] = trial_id_series(words, schema["text_id"])
-    else:
-        # DATA-49: a repeated reading's text is the id it was suffixed from —
-        # the text a stimulus-level AOI table knows it by.
-        df["text_id"] = unsuffixed
+        # The text id it resolved to, never the raw column's own values when
+        # another Text ID is mapped: `unique_text_id` is read ahead of
+        # `text_id` (`utils.build_combo_options`).
+        df["unique_text_id"] = text_id
+    df["text_id"] = text_id
     mapped = _text_id_mapped_flag(words, schema, renormalizing=_renormalizing)
     if mapped is not None:
         df[TEXT_ID_MAPPED] = mapped
@@ -5698,19 +5720,12 @@ def normalize_fixations(
             # column's own values, which the trial picker would otherwise key
             # on (`utils.build_combo_options` prefers `unique_trial_id`).
             df["unique_trial_id"] = df["trial_id"]
-    if "unique_paragraph_id" in fixations.columns:
-        df["text_id"] = stable_id(fixations["unique_paragraph_id"])
-    elif schema.get("text_id"):
-        # str or list (a composite text id, joined like the trial id).
-        df["text_id"] = trial_id_series(fixations, schema["text_id"])
-    else:
-        # DATA-49: the text a repeated reading is of, without its `_r2`.
-        df["text_id"] = unsuffixed
+    df["text_id"] = _text_id_values(fixations, schema, unsuffixed)  # see words
     mapped = _text_id_mapped_flag(fixations, schema, renormalizing=_renormalizing)
     if mapped is not None:
         df[TEXT_ID_MAPPED] = mapped
     if "unique_paragraph_id" in fixations.columns:
-        df["unique_text_id"] = stable_id(fixations["unique_paragraph_id"])
+        df["unique_text_id"] = df["text_id"]
     df = _copy_screen_fields(df, fixations, schema)
     # X/Y may be unmapped for AOI-sequence datasets (no pixel coordinates) —
     # left NaN here and filled from word-box centers by harmonize_frames().

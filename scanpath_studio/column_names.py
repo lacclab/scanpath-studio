@@ -705,16 +705,19 @@ def from_schema(
     )
     if trial := _id_entry(schema.get("trial")):
         out["trial_id"] = out["unique_trial_id"] = trial
-    if table != "raw_gaze" and "unique_paragraph_id" in present:
-        out["text_id"] = out["unique_text_id"] = SourceName(("unique_paragraph_id",))
-    elif text_id := _id_entry(schema.get("text_id")):
-        # A remap fills `unique_text_id` from the mapped Text ID
-        # (`data.remap_normalized_frame`); a first load has no such column, and
-        # an entry for an absent column names nothing. A `unique_text_id` the
-        # file itself has is the user's own column, under its own name.
+    paragraph = table != "raw_gaze" and "unique_paragraph_id" in present
+    if text_id := _id_entry(schema.get("text_id")):
+        # The mapped Text ID wins over a literal `unique_paragraph_id` (#412),
+        # which `normalize_*` then fill `unique_text_id` from. A remap fills
+        # it from the mapped Text ID too (`data.remap_normalized_frame`); a
+        # first load with neither has no such column, and an entry for an
+        # absent column names nothing. A `unique_text_id` the file itself has
+        # is the user's own column, under its own name.
         out["text_id"] = text_id
-        if "unique_text_id" not in present:
+        if paragraph or "unique_text_id" not in present:
             out["unique_text_id"] = text_id
+    elif paragraph:
+        out["text_id"] = out["unique_text_id"] = SourceName(("unique_paragraph_id",))
     else:
         out["text_id"] = SourceName((), GENERATED, "the trial id")
     for key, canonical in _SCREEN_FIELDS:

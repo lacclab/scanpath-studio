@@ -1293,6 +1293,132 @@ class TestCompositeTrialId:
         assert pairs["composite"].nunique() == pairs["original"].nunique() == len(pairs)
 
 
+class TestMappedTextIdWins:
+    """#412 (review finding 5): a literal `unique_paragraph_id` column used to
+    override whatever Text ID the mapping named, on both tables — BUG-58's
+    trap for the Trial ID, left open for the Text ID."""
+
+    WORD_SCHEMA = {
+        "trial": "legacy_trial",
+        "text_id": "passage_id",
+        "word_id": "word_id",
+        "text": "text",
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    FIX_SCHEMA = {
+        "participant": "participant_id",
+        "trial": "reading_trial",
+        "text_id": "passage_id",
+        "x": "x",
+        "y": "y",
+        "duration": "duration",
+    }
+
+    @staticmethod
+    def _words(**extra):
+        return pd.DataFrame(
+            {
+                "legacy_trial": ["stimulus-1"],
+                "passage_id": ["passage-1"],
+                "unique_paragraph_id": ["legacy-other"],
+                "word_id": [1],
+                "text": ["Hello"],
+                "x": [10],
+                "y": [10],
+                "width": [40],
+                "height": [20],
+                **extra,
+            }
+        )
+
+    @staticmethod
+    def _fixations(**extra):
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "reading_trial": ["p1-read"],
+                "passage_id": ["passage-1"],
+                "x": [20],
+                "y": [20],
+                "duration": [100],
+                **extra,
+            }
+        )
+
+    def test_the_tables_join_on_the_mapped_text_id(self):
+        """The review's probe: the AOI table is stimulus-level and joins its
+        fixations by Text ID only, so the stray column made the load fail."""
+        from scanpath_studio import api
+
+        words, fixations = api.load_scanpath_data(
+            words=self._words(),
+            fixations=self._fixations(),
+            word_schema=self.WORD_SCHEMA,
+            fix_schema=self.FIX_SCHEMA,
+            names="canonical",
+        )
+        assert words["text_id"].tolist() == ["passage-1"]
+        assert words["trial_id"].tolist() == ["p1-read"]
+        assert fixations["text_id"].tolist() == ["passage-1"]
+
+    @pytest.mark.parametrize("table", ["words", "fixations"])
+    def test_both_tables_follow_the_mapping(self, table):
+        if table == "words":
+            frame, schema, normalize = self._words(), self.WORD_SCHEMA, normalize_words
+        else:
+            frame = self._fixations(unique_paragraph_id=["legacy-other"])
+            schema, normalize = self.FIX_SCHEMA, normalize_fixations
+        mapped = normalize(frame, schema)
+        # …and the column the picker reads ahead of `text_id` agrees with it.
+        assert mapped["text_id"].tolist() == ["passage-1"]
+        assert mapped["unique_text_id"].tolist() == ["passage-1"]
+        # Changing the Text ID changes the text id.
+        repicked = normalize(frame, {**schema, "text_id": "unique_paragraph_id"})
+        assert repicked["text_id"].tolist() == ["legacy-other"]
+        # With no Text ID mapped, `unique_paragraph_id` is still the fallback.
+        fallback = normalize(frame, {**schema, "text_id": None})
+        assert fallback["text_id"].tolist() == ["legacy-other"]
+        assert fallback["unique_text_id"].tolist() == ["legacy-other"]
+
+    def test_the_stray_column_is_kept_as_an_extra(self):
+        keep = data_module.compute_keep_columns(self.WORD_SCHEMA)
+        words = normalize_words(self._words(), self.WORD_SCHEMA, keep_columns=keep)
+        assert words["unique_paragraph_id"].tolist() == ["legacy-other"]
+
+    def test_the_column_name_map_names_the_mapped_column(self):
+        from scanpath_studio import column_names
+
+        names = column_names.from_schema(
+            "words", self.WORD_SCHEMA, self._words().columns
+        )
+        assert names.source("text_id").sources == ("passage_id",)
+        assert names.source("unique_text_id").sources == ("passage_id",)
+        unmapped = column_names.from_schema(
+            "words", {**self.WORD_SCHEMA, "text_id": None}, self._words().columns
+        )
+        assert unmapped.source("text_id").sources == ("unique_paragraph_id",)
+
+    def test_an_edit_keeps_the_stored_text_id(self):
+        """✏️ Edit dataset keeps `unique_paragraph_id` when a composite Trial ID
+        names it — and it then overrode the editor's Text ID too."""
+        frame = self._fixations(unique_paragraph_id=["legacy-other"])
+        keep = data_module.compute_keep_columns(self.FIX_SCHEMA)
+        stored = normalize_fixations(frame, self.FIX_SCHEMA, keep_columns=keep)
+        remap = {
+            "participant": "participant_id",
+            "trial": ["participant_id", "unique_paragraph_id"],
+            "text_id": "text_id",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        out = data_module.remap_normalized_frame(stored, remap, kind="fixations")
+        assert out["text_id"].tolist() == ["passage-1"]
+
+
 class TestFilterData:
     """Tests for filter_data function."""
 

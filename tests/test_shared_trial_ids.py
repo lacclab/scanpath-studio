@@ -159,3 +159,27 @@ class TestTheApp:
             "p1",
             "p2",
         }
+
+
+class TestHeadless:
+    """`render -t` and the API name a reading, never guess one (#412)."""
+
+    @staticmethod
+    def _two_readers():
+        words = make_synthetic_words()
+        fixations = make_synthetic_fixations()
+        second = fixations.assign(participant_id="other")
+        return words, pd.concat([fixations, second], ignore_index=True)
+
+    def test_a_shared_trial_id_without_a_participant_is_refused(self):
+        from scanpath_studio import api
+
+        words, fixations = self._two_readers()
+        trial = str(fixations["trial_id"].iloc[0])
+        with pytest.raises(ValueError, match="pass participant= too"):
+            api._resolve_trial(words, fixations, None, trial, default_first=True)
+        # Naming the reader, or naming nothing at all, still resolves.
+        assert api._resolve_trial(
+            words, fixations, "other", trial, default_first=True
+        ) == ("other", trial)
+        assert api._resolve_trial(words, fixations, None, None, default_first=True)

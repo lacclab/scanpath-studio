@@ -1704,7 +1704,9 @@ def _resolve_trial(
     A nonexistent participant/trial always raises — naming which of the two ids
     is unknown, a few valid values and the closest spellings. An underspecified
     selection matching several trials raises too, unless ``default_first`` picks
-    the first match (the CLI's behavior, mirroring the app's default selection).
+    the first match (the CLI's behavior, mirroring the app's default selection)
+    — but never for a trial id that several participants share (#412): the
+    app's picker and its links refuse to guess the reader, so the CLI does too.
     ``raw_gaze`` makes the trials only its samples cover selectable.
     """
     combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
@@ -1743,7 +1745,7 @@ def _resolve_trial(
                 f"trial{'' if len(scoped) == 1 else 's'}, none of them {str(trial)!r}. {_value_hint(scoped, 'trial_id', trial)}"
             )
         scoped = narrowed
-    if len(scoped) > 1 and not default_first:
+    if len(scoped) > 1 and not (default_first and trial is None):
         preview = ", ".join(
             f"({pid!r}, {tid!r})"
             for pid, tid in scoped.head(5).itertuples(index=False, name=None)

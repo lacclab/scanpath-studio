@@ -23,7 +23,7 @@ from scanpath_studio import api, cli
 from scanpath_studio.data import names_readings, trial_pool
 from scanpath_studio.export import ExportOptions, bulk_export
 from scanpath_studio.utils import build_combo_options_for, combo_source
-from tests.conftest import APP_SCRIPT, picker_trial_id
+from tests.conftest import APP_SCRIPT, picked_trial_id, picker_trial_id
 
 WORD_SCHEMA = {
     "participant": "participant_id",
@@ -251,4 +251,4 @@ def test_the_app_offers_and_draws_both_trials(mixed):
         at.selectbox(key="single_trial_id").set_value(by_id[trial]).run()
         assert not at.exception, at.exception
         assert not at.error, [e.value for e in at.error]
-        assert picker_trial_id(at.selectbox(key="single_trial_id").value) == trial
+        assert picked_trial_id(at.selectbox(key="single_trial_id").value) == trial

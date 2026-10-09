@@ -6,7 +6,6 @@ import contextlib
 import hashlib
 import html
 import json
-import os
 import pickle
 import re
 import warnings
@@ -306,7 +305,6 @@ from scanpath_studio.plots import (
     FigureSettings,
     _discard_flagged_fixations,
     _maybe_add_duration_key,
-    _png_pixel_size,
     add_illustration_label,
     animation_clip_frame_ms,
     animation_playback_ms,
@@ -330,6 +328,7 @@ from scanpath_studio.plots import (
     make_word_profile_figure,
     make_word_rate_figure,
     normalize_legend_layout,
+    reading_stimulus_image,
     replay_page,
     replay_size_key_range,
     set_replay_clock,
@@ -3759,34 +3758,13 @@ def _reading_stimulus_image(
 ) -> tuple[str, tuple[int, int], tuple[float, float]] | None:
     """One reading's own stimulus page: ``(path, size, origin)``, or ``None``.
 
-    The per-trial (per-screen) ``image_path`` lives on the reading's rows; the
-    image is offered only when it exists and its pixel size is readable. Its
-    origin (``image_x`` / ``image_y``, where the centred stimulus sat on the
-    monitor) places it to align with the fixations, which carry the same offset.
-    ``source`` names the dataset the rows come from, for `_servable_image_path`
-    (``None``: the active one).
+    `plots.reading_stimulus_image` — the resolver the headless
+    ``show_stimulus_image`` uses too (#420) — vetted by `_servable_image_path`.
+    ``source`` names the dataset the rows come from (``None``: the active one).
     """
-    path = _servable_image_path(
-        _first_str(words, "image_path") or _first_str(fixations, "image_path"),
-        source=source,
+    return reading_stimulus_image(
+        words, fixations, allow=lambda path: _servable_image_path(path, source)
     )
-    size = _png_pixel_size(path) if path and os.path.exists(path) else None
-    if size is None:
-        return None
-    # Round 11: coalesce on presence, not truthiness — 0 is a real origin, and
-    # `or` replaced the words' (0, 0) with the fixations' own value.
-    origin = tuple(
-        next(
-            (
-                v
-                for v in (_first_num(words, c), _first_num(fixations, c))
-                if v is not None
-            ),
-            0.0,
-        )
-        for c in ("image_x", "image_y")
-    )
-    return path, size, origin
 
 
 def _servable_image_path(path: str | None, source: str | None = None) -> str | None:
@@ -3815,15 +3793,6 @@ def _servable_image_path(path: str | None, source: str | None = None) -> str | N
     if source == UPLOAD_CHOICE or source in (st.session_state.get("_datasets") or {}):
         return None
     return path
-
-
-def _first_num(df: pd.DataFrame, col: str) -> float | None:
-    """First non-null value of ``col`` as a float, or None when absent/empty."""
-    if col in df.columns:
-        vals = pd.to_numeric(df[col], errors="coerce").dropna()
-        if not vals.empty:
-            return float(vals.iloc[0])
-    return None
 
 
 def _first_bool(df: pd.DataFrame, col: str) -> bool | None:

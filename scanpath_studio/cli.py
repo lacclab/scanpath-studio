@@ -510,7 +510,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--image-root",
         metavar="DIR",
         help="Local stimulus-image folder. Files are matched per row using "
-        "--image-pattern.",
+        "--image-pattern and fill its image_path; add --show-stimulus-image to "
+        "draw them. Works with every input, --sample and the corpora included.",
     )
     src.add_argument(
         "--image-pattern",
@@ -1160,6 +1161,16 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
         "dim a busy image so the fixations / saccades / word boxes read over it.",
     )
+    # #420 — the trial's own page, which `--image-root` (or a dataset that
+    # ships its pages, like --sample) put on its rows as `image_path`.
+    viz.add_argument(
+        "--show-stimulus-image",
+        action="store_true",
+        help="Draw each trial's own stimulus page under the scanpath: the "
+        "image_path its rows carry (from --image-root, or a dataset that ships "
+        "its pages, like --sample), placed at its image_x / image_y. "
+        "--stimulus-image PATH wins.",
+    )
     # EXP-20 — a flag for every figure option `render` could not say before, so
     # the command the Share subtab prints (`code_snippet._CLI_EMITTERS`) draws
     # the figure rather than naming what it left out. Each is spelled after its
@@ -1772,6 +1783,7 @@ _SWITCH_OPTION_FLAGS = {
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
     "duration_size_legend": False,
+    "show_stimulus_image": True,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.
@@ -2207,7 +2219,24 @@ def _snippet_source_from_args(args) -> SnippetSource:
 
     The inverse of the ``--sample`` / ``--words`` / ``--potec`` / … group, so
     ``--print-code python`` hands back a loader call that reads the same corpus
-    this invocation just read."""
+    this invocation just read — and, with ``--image-root``, matches the same
+    stimulus pages to its rows (#420)."""
+    source = _snippet_data_source(args)
+    image_root = getattr(args, "image_root", None)
+    if image_root:
+        source = replace(
+            source,
+            options={
+                **source.options,
+                "image_root": image_root,
+                "image_pattern": getattr(args, "image_pattern", None),
+            },
+        )
+    return source
+
+
+def _snippet_data_source(args) -> SnippetSource:
+    """`_snippet_source_from_args` before the stimulus-image folder."""
     from . import code_snippet as cs
 
     if args.authoring:
@@ -2391,12 +2420,6 @@ def _print_reproduction_code(
     # named, never dropped — the same rule `cli_unsupported` applies in the other
     # direction. Translating a command into a notebook cell has to be honest
     # about the parts of the command that didn't come along.
-    if args.image_root:
-        caveats.append(
-            "--image-root / --image-pattern resolve one stimulus image per row; "
-            "the snippet names no image. Pass the resolved file as "
-            "`background_image=`."
-        )
     if args.all_screens and args.screen_transition != "instant":
         caveats.append(
             f"--screen-transition {args.screen_transition} only affects the "
@@ -2894,14 +2917,11 @@ def render(argv: list[str]) -> None:
             column_names = dict(data.column_names)
 
     if args.image_root and not (args.words or args.fixations):
-        from .data import resolve_stimulus_image_paths
-
+        # #420: --sample and the corpora take the folder the way a script
+        # does, through `attach_stimulus_images` (frames stay canonical here).
         try:
-            words = resolve_stimulus_image_paths(
-                words, args.image_root, args.image_pattern
-            )
-            fixations = resolve_stimulus_image_paths(
-                fixations, args.image_root, args.image_pattern
+            words, fixations = api.attach_stimulus_images(
+                words, fixations, args.image_root, args.image_pattern
             )
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
@@ -3288,6 +3308,14 @@ def render(argv: list[str]) -> None:
         ) or (0.0, 0.0)
     if args.stimulus_image_opacity is not None:
         overrides["background_image_opacity"] = args.stimulus_image_opacity
+    if args.image_root and not (args.show_stimulus_image or args.stimulus_image):
+        # #420: the folder only fills `image_path`; drawing it is its own flag,
+        # as in the API, so a printed command names both.
+        print(
+            "Note: --image-root matches each trial's stimulus page; add "
+            "--show-stimulus-image to draw it.",
+            file=sys.stderr,
+        )
     # EXP-20: the rest of the figure options. After `--illustration` on purpose,
     # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
     # `illustration=True` applies them in.

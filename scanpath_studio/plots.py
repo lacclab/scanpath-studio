@@ -9,6 +9,7 @@ import itertools
 import math
 import re
 import struct
+import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -188,6 +189,13 @@ class FigureSettings:
     background_image_size: tuple[float, float] | None = None
     background_image_origin: tuple[float, float] | None = None
     background_image_opacity: float = 1.0
+    #: #420 — draw each reading's own stimulus page: the ``image_path`` on its
+    #: rows, at its ``image_x`` / ``image_y`` (`reading_stimulus_image`). Fills
+    #: only an empty ``background_image`` (and a split comparison's
+    #: ``background_image_b``); an image given explicitly wins. The app places
+    #: the page itself, behind ENG-57's rule on what its server may read, and
+    #: never sets this.
+    show_stimulus_image: bool = False
     fit_to_monitor: bool = False
     show_coordinate_grid: bool = False
     coordinate_grid_spacing: float | None = None
@@ -3092,6 +3100,132 @@ def _png_pixel_size(src: str | None) -> tuple[int, int] | None:
         width, height = struct.unpack(">II", head[16:24])
         return int(width), int(height)
     return None
+
+
+def _first_present(frame: pd.DataFrame | None, column: str, *, numeric: bool):
+    """The first non-null value of ``column`` — a ``str``, or a ``float`` when
+    ``numeric`` — or ``None`` when the frame has none."""
+    if frame is None or column not in frame.columns:
+        return None
+    values = frame[column]
+    if numeric:
+        values = pd.to_numeric(values, errors="coerce")
+    values = values.dropna()
+    if values.empty:
+        return None
+    return float(values.iloc[0]) if numeric else str(values.iloc[0])
+
+
+def reading_stimulus_image(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    *,
+    allow: Callable[[str | None], str | None] | None = None,
+) -> tuple[str, tuple[int, int], tuple[float, float]] | None:
+    """One reading's own stimulus page: ``(path, size, origin)``, or ``None``.
+
+    The per-trial (per-screen) ``image_path`` lives on the reading's rows, the
+    words' first and then the fixations'. The page is offered only when the file
+    exists and its pixel size is readable (a PNG). Its origin (``image_x`` /
+    ``image_y``, where the centred stimulus sat on the monitor) places it to
+    align with the fixations, which carry the same offset; without one it sits
+    at ``(0, 0)``.
+
+    ``allow`` vets the path before anything opens it, returning the one to read
+    or ``None``: the app passes ENG-57's rule on what its server may read
+    (`tabs._servable_image_path`). The headless surfaces read the caller's own
+    disk and pass none. One function for the app and for every builder's
+    ``show_stimulus_image`` (#420), so the two cannot place a page apart.
+    """
+    path = _first_present(words, "image_path", numeric=False) or _first_present(
+        fixations, "image_path", numeric=False
+    )
+    if allow is not None:
+        path = allow(path)
+    size = _png_pixel_size(path) if path and Path(path).exists() else None
+    if size is None:
+        return None
+    # Round 11: coalesce on presence, not truthiness — 0 is a real origin, and
+    # `or` replaced the words' (0, 0) with the fixations' own value.
+    origin = tuple(
+        next(
+            (
+                value
+                for value in (
+                    _first_present(words, column, numeric=True),
+                    _first_present(fixations, column, numeric=True),
+                )
+                if value is not None
+            ),
+            0.0,
+        )
+        for column in ("image_x", "image_y")
+    )
+    return path, size, origin
+
+
+def _reading_rows(frame: pd.DataFrame | None, reading: tuple) -> pd.DataFrame | None:
+    """``frame``'s rows of one ``(participant_id, trial_id)`` reading, matched
+    the way the comparison builder slices its two scanpaths."""
+    if frame is None or frame.empty:
+        return frame
+    if not {"participant_id", "trial_id"} <= set(frame.columns):
+        return frame.iloc[0:0]
+    return frame[
+        (frame["participant_id"] == reading[0]) & (frame["trial_id"] == reading[1])
+    ]
+
+
+def _reading_label(words: pd.DataFrame | None, fixations: pd.DataFrame | None) -> str:
+    """``participant='…', trial='…'`` for whichever frame names the reading."""
+    for frame in (fixations, words):
+        if frame is None or frame.empty:
+            continue
+        ids = [
+            f"{column.removesuffix('_id')}={frame[column].iloc[0]!r}"
+            for column in ("participant_id", "trial_id", SCREEN_ID)
+            if column in frame.columns and pd.notna(frame[column].iloc[0])
+        ]
+        if ids:
+            return ", ".join(ids)
+    return "this reading"
+
+
+def _with_stimulus_pages(
+    settings: FigureSettings,
+    page: tuple[pd.DataFrame | None, pd.DataFrame | None],
+    page_b: tuple[pd.DataFrame | None, pd.DataFrame | None] | None = None,
+) -> FigureSettings:
+    """``settings`` with ``show_stimulus_image`` resolved (#420): ``page``'s
+    reading fills ``background_image*`` and ``page_b``'s the split comparison's
+    ``background_image*_b``, each only where the caller left it empty.
+
+    A reading with no page draws none and says so in a ``UserWarning``, the
+    way the loaders report what they could not read: a script cannot see a
+    missing layer, and a batch over trials should not stop for one."""
+    if not settings.show_stimulus_image:
+        return settings
+    updates: dict[str, Any] = {}
+    for suffix, frames in (("", page), ("_b", page_b)):
+        if frames is None or getattr(settings, f"background_image{suffix}"):
+            continue
+        found = reading_stimulus_image(*frames)
+        if found is None:
+            warnings.warn(
+                f"show_stimulus_image: {_reading_label(*frames)} has no stimulus "
+                "image to draw — its rows name no image_path, or the file it "
+                "names is missing or not a PNG. Point image_root= at the folder "
+                "(load_scanpath_data, attach_stimulus_images; render "
+                "--image-root), or pass the page as background_image=.",
+                UserWarning,
+                stacklevel=3,
+            )
+            continue
+        path, (width, height), (x0, y0) = found
+        updates[f"background_image{suffix}"] = path
+        updates[f"background_image_size{suffix}"] = (float(width), float(height))
+        updates[f"background_image_origin{suffix}"] = (float(x0), float(y0))
+    return settings.with_overrides(**updates) if updates else settings
 
 
 def _background_image_spec(
@@ -9176,6 +9310,7 @@ def make_scanpath_figure(
     object can flow unchanged through UI, export, and headless surfaces.
     """
     resolved = _resolve_figure_settings(settings, overrides)
+    resolved = _with_stimulus_pages(resolved, (words, fixations))
     fields_xy = (resolved.x_field, resolved.y_field)
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     fixations = _finite_for_plotting(fixations, fields_xy)
@@ -9241,6 +9376,16 @@ def build_scanpath_replay(
             "highlight_column": None,
             "word_hover_measure": None,
         },
+    )
+    # The replay draws one page, under the text it draws: B's when
+    # `compare_stimulus="b"` puts B's words on screen, else A's.
+    b_on_screen = (
+        resolved.compare_stimulus == "b"
+        and fixations_b is not None
+        and not fixations_b.empty
+    )
+    resolved = _with_stimulus_pages(
+        resolved, (words_b, fixations_b) if b_on_screen else (words, fixations)
     )
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     words_b = _finite_for_plotting(words_b, drop_on=_WORD_BOX_COLUMNS)
@@ -9355,6 +9500,20 @@ def make_comparison_figure(
             "heatmap_metric": "duration_ms",
         },
     )
+    if resolved.show_stimulus_image:
+
+        def page(reading: tuple) -> tuple:
+            return _reading_rows(words, reading), _reading_rows(fixations, reading)
+
+        if resolved.layout in {"side_by_side", "stacked"}:
+            # Each split panel over its own reading's page.
+            resolved = _with_stimulus_pages(resolved, page(trial_a), page(trial_b))
+        else:
+            # One page under the overlay's one stimulus layer: the reading
+            # whose text is drawn (`compare_stimulus`), A's for "both".
+            resolved = _with_stimulus_pages(
+                resolved, page(trial_b if resolved.compare_stimulus == "b" else trial_a)
+            )
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     fixations = _finite_for_plotting(fixations)
     raw_gaze = _finite_for_plotting(raw_gaze)

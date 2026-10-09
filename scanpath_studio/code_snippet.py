@@ -530,6 +530,47 @@ def _raw_gaze_only_cli(source: SnippetSource) -> list[str]:
     return _raw_gaze_cli(source)
 
 
+#: #420 — the filename pattern ``attach_stimulus_images`` and ``render
+#: --image-pattern`` use when none is given, so a snippet leaves it out.
+_DEFAULT_IMAGE_PATTERN = "{text_id}.png"
+
+
+def _image_folder(source: SnippetSource) -> tuple[str, str] | None:
+    """``(folder, pattern)`` when the data half matched stimulus pages to its
+    rows (``render --image-root``), else ``None``. Raw gaze alone has no rows
+    to match a page to."""
+    root = source.options.get("image_root")
+    if not root or source.kind == SOURCE_RAW_GAZE:
+        return None
+    return str(root), str(source.options.get("image_pattern") or _DEFAULT_IMAGE_PATTERN)
+
+
+def _image_folder_python(source: SnippetSource) -> list[str]:
+    folder = _image_folder(source)
+    if folder is None:
+        return []
+    root, pattern = folder
+    args = ["words", "fixations", _py(root)]
+    if pattern != _DEFAULT_IMAGE_PATTERN:
+        args.append(_py(pattern))
+    return [
+        "words, fixations = sps.attach_stimulus_images(",
+        *(f"    {arg}," for arg in args),
+        ")",
+    ]
+
+
+def _image_folder_cli(source: SnippetSource) -> list[str]:
+    folder = _image_folder(source)
+    if folder is None:
+        return []
+    root, pattern = folder
+    argv = ["--image-root", root]
+    if pattern != _DEFAULT_IMAGE_PATTERN:
+        argv += ["--image-pattern", pattern]
+    return argv
+
+
 #: kind → (Python loader lines, CLI input flags). A source whose CLI writer is
 #: ``None`` has no ``render`` flags at all, and the CLI snippet says so rather
 #: than inventing one.
@@ -1286,6 +1327,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_size": _pair("--stimulus-image-size", "x"),
     "background_image_origin": _pair("--stimulus-image-origin", ","),
     "background_image_opacity": _valued("--stimulus-image-opacity"),
+    "show_stimulus_image": _flag_when("--show-stimulus-image", True),
     "anim_grid_step_ms": _valued("--anim-grid-step-ms"),
     "anim_max_frames": _int_valued("--anim-max-frames"),
     # EXP-20 — every figure option `render` could not say before. Each flag is
@@ -1675,6 +1717,7 @@ def python_snippet(
         )
     lines.append("")
     lines += loader(source)
+    lines += _image_folder_python(source)
     # A raw-gaze-only source loaded its samples as its data half already.
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
@@ -1794,6 +1837,7 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
+    argv += _image_folder_cli(source)
 
     if state.participant:
         argv += ["-p", str(state.participant)]

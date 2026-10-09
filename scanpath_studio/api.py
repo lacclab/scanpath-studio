@@ -228,6 +228,7 @@ _CANONICAL_OPTION_NAMES = {
     "background_image_size",
     "background_image_origin",
     "background_image_opacity",
+    "show_stimulus_image",
     "word_hover_fields",
     "fixation_hover_fields",
 }
@@ -812,6 +813,18 @@ def load_scanpath_data(
     whichever table has them, so a figure can color, hover or plot by them
     (the app's *Extra fields to keep*; ``render --keep-columns`` on the command line).
 
+    ``image_root`` is a local folder of stimulus images, one page per trial (or
+    screen), matched to each row by ``image_pattern``, whose ``{placeholders}``
+    name the rows' canonical columns (``"{text_id}.png"``,
+    ``"{participant_id}/{trial_id}.png"``). A match fills that row's
+    ``image_path``, and a row without one keeps the ``image_path`` it had. A
+    folder that does not exist, or a pattern that is absolute or climbs out of
+    it, raises ``ValueError``. ``show_stimulus_image=True`` draws the page under
+    the figure ([`plot_scanpath`][scanpath_studio.api.plot_scanpath] and the
+    other builders); [`attach_stimulus_images`][scanpath_studio.api.attach_stimulus_images]
+    does the same matching for frames that are already loaded, such as a
+    corpus loader's.
+
     Returns the normalized ``(words, fixations)`` frames the plotting
     functions expect. Raises ``ValueError`` if a required field can't be found —
     the message names the canonical field, the column names auto-detection
@@ -825,6 +838,8 @@ def load_scanpath_data(
     _check_names_choice(names)
     if words is None and fixations is None:
         raise ValueError("Provide at least one of words= or fixations=.")
+    if image_root is not None:
+        _require_image_folder(image_root)
     # DATA-66: a frame this API already named is loaded under its internal
     # names; its own map then renames the new one back to the user's.
     prior = {
@@ -923,6 +938,58 @@ def load_scanpath_data(
         words_norm = _cn.attach(words_norm, "words", maps.get("words"))
         fixations_norm = _cn.attach(fixations_norm, "fixations", maps.get("fixations"))
     return ScanpathData(words_norm, fixations_norm, maps)
+
+
+def _require_image_folder(image_root: str | Path) -> None:
+    """#420: a mistyped folder matched nothing and drew no page, without a word."""
+    folder = Path(image_root).expanduser()
+    if not folder.is_dir():
+        raise ValueError(
+            f"image_root={str(image_root)!r} is not a folder"
+            + (" (it is a file)." if folder.exists() else " (it does not exist).")
+            + " Point it at the folder that holds the stimulus images."
+        )
+
+
+def attach_stimulus_images(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    image_root: str | Path,
+    image_pattern: str = "{text_id}.png",
+) -> ScanpathData:
+    """Fill ``image_path`` from a folder of stimulus images, on frames already
+    loaded.
+
+    [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]'s
+    ``image_root`` / ``image_pattern``, for frames that came from somewhere
+    else. The corpus loaders take no folder::
+
+        words, fixations = sps.attach_stimulus_images(
+            *sps.load_potec("data/PoTeC"), "pages/", "{text_id}.png"
+        )
+        sps.plot_scanpath(words, fixations, show_stimulus_image=True)
+
+    The rules are ``load_scanpath_data``'s: the placeholders name the rows'
+    canonical columns, a row the pattern finds no file for keeps the
+    ``image_path`` it had, and a folder that does not exist, or a pattern that
+    is absolute or climbs out of it, raises ``ValueError``. Either table may be
+    ``None``. Returns new frames under the names they came in; the ones passed
+    in are not modified.
+    """
+    _require_image_folder(image_root)
+    words, word_names = _named_in(words, "words", optional=True)
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    words = _data.resolve_stimulus_image_paths(words, image_root, image_pattern)
+    fixations = _data.resolve_stimulus_image_paths(fixations, image_root, image_pattern)
+    return ScanpathData(
+        _named_out(words, "words", word_names),
+        _named_out(fixations, "fixations", fix_names),
+        {
+            table: names
+            for table, names in (("words", word_names), ("fixations", fix_names))
+            if names is not None
+        },
+    )
 
 
 def _with_optional_fields(
@@ -2372,6 +2439,14 @@ def plot_scanpath(
     (``"default"``, ``"print"`` or ``"high-contrast"``, or the app's names) sets
     a group of colors at once; a color you pass explicitly wins.
 
+    ``show_stimulus_image=True`` draws the trial's own stimulus page under the
+    scanpath, as the app's 📄 Stimulus → image does: the ``image_path`` its rows
+    carry (from ``load_scanpath_data(image_root=…)`` or
+    [`attach_stimulus_images`][scanpath_studio.api.attach_stimulus_images]; the
+    bundled demo ships its pages), placed at its ``image_x`` / ``image_y``. A
+    ``background_image=`` you pass wins. A trial with no readable page (a PNG)
+    draws none and raises a ``UserWarning`` saying so.
+
     Remaining keywords override the app's defaults and are forwarded to
     `plots.make_scanpath_figure` (e.g. ``show_heatmap=True``,
     ``color_by="pass_index"``, ``x_field="order_in_trial"``); an unknown keyword raises
@@ -2552,6 +2627,11 @@ def animate_scanpath(
     When ``playback_speed`` is not ``1``, the automatic Illustration label says
     the replay timing was changed. ``illustration_label`` accepts ``"auto"``,
     ``"show"``, or ``"hide"`` like [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
+
+    ``show_stimulus_image=True`` draws the trial's own stimulus page under the
+    replay, as [`plot_scanpath`][scanpath_studio.api.plot_scanpath] does. A
+    co-animation draws one page, under the text it draws: B's when
+    ``compare_stimulus="b"``, else A's.
 
     In a co-animation ``fix_index_range`` windows A only (the app's
     rule — A's slider never cuts B), ``fix_index_range_b`` windows B, and
@@ -3199,6 +3279,11 @@ def compare_scanpaths(
     B's panel over ``background_image_b`` (with ``background_image_size_b`` /
     ``background_image_origin_b``) and over nothing without it — never A's,
     since sharing a dataset says nothing about sharing a page.
+    ``show_stimulus_image=True`` takes each reading's own page from its rows,
+    as [`plot_scanpath`][scanpath_studio.api.plot_scanpath] does: a split
+    layout draws A's and B's, each in its own panel, and an overlay draws the
+    page of the text it draws — B's for ``compare_stimulus="b"``, else A's. An
+    image passed explicitly wins.
 
     ``compare_stimulus`` picks whose word boxes and text an **overlay** draws —
     ``"both"`` (default), ``"a"`` or ``"b"``. Two datasets' AOIs coincide only

@@ -73,7 +73,7 @@ scanpath_studio/
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
-├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache, version_info/check_for_updates (#139))
+├─ api.py            headless public API (load/normalize, attach_stimulus_images (#420), plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache, version_info/check_for_updates (#139))
 ├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache, `version [--check]` prints the build and checks for a newer release (#139)
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
 ├─ __init__.py       exposes __release__ (the hand-set release), __version__ (the exact build, lazily — build_info.py), main(), and lazy re-exports of the api.py surface

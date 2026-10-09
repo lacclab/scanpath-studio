@@ -36,6 +36,10 @@ an editor.
 Comparison-subtab candidates match the selected trial on
 one chosen field, keep each candidate's own stimulus and the main plot styling,
 exclude the selected trial, and show only trial IDs above their panels.
+`tabs._collect_generations` keys them by the `(participant_id, trial_id)` pair
+through scoring and the caps; the captions, the similarity table's rows and the
+convergence lines are labelled only where drawn, made unique by
+`_distinct_labels` (#412 — ids can contain the ` · ` a label joins them with).
 
 Data Management's **📂 Available datasets** is a focused table since **UX-174**
 (`app.render_dataset_table`): Kind · Dataset · Participants · Texts · Trials ·

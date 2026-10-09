@@ -58,6 +58,7 @@ from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_ORDER_FONT_COLOR,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     EXPERIMENTAL_ENV_VAR,
     FONT_FAMILY,
     PLOTLY_CONFIG,
@@ -766,7 +767,7 @@ def load_scanpath_data(
     fix_schema: dict | None = None,
     trial_parts_manifest: dict | None = None,
     image_root: str | Path | None = None,
-    image_pattern: str = "{text_id}.png",
+    image_pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN,
     keep_columns: Iterable[str] | None = None,
     names: str = NAMES_SOURCE,
 ) -> ScanpathData:

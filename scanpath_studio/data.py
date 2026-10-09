@@ -26,6 +26,7 @@ import streamlit as st
 from . import progress
 from .constants import (
     DEFAULT_FIGURE_SIZE,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     PACKAGE_NAME,
     SAMPLE_INDEX,
     UPLOAD_FILE_TYPES,
@@ -3827,10 +3828,141 @@ def _pattern_placeholders(pattern: str) -> list[str]:
     return names
 
 
+def stimulus_image_source(value: object) -> dict[str, str] | None:
+    """A dataset's stored stimulus-image source as ``{"folder", "pattern"}``,
+    or ``None`` when ``value`` names no folder (#417).
+
+    What the add screen and ✏️ Edit dataset save, read back from session state
+    and the recovery cache — so anything malformed is ``None`` rather than an
+    error, and a blank pattern is the default one. The folder is kept as typed
+    (``~`` included); `resolve_stimulus_image_paths` expands it.
+    """
+    if not isinstance(value, dict):
+        return None
+    folder = value.get("folder")
+    pattern = value.get("pattern")
+    if not isinstance(folder, str) or not folder.strip():
+        return None
+    if not isinstance(pattern, str) or not pattern.strip():
+        pattern = DEFAULT_STIMULUS_IMAGE_PATTERN
+    return {"folder": folder.strip(), "pattern": pattern.strip()}
+
+
+@dataclass(frozen=True)
+class StimulusImageMatch:
+    """Where a folder + filename pattern found an image, row by row (#417).
+
+    ``paths`` holds, per row of the frame it was matched on, the file found
+    for that row, or ``None``; ``found`` counts the rows with one. ``signature``
+    names what was found — each distinct placeholder value with its file — so
+    two matches that found the same files compare equal whatever the folder's
+    timestamp says.
+    """
+
+    paths: np.ndarray
+    found: int
+    signature: str
+
+    def apply(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """``frame`` with each found file as its ``image_path``; a row with
+        none keeps its own. A new frame sharing every other column."""
+        series = pd.Series(self.paths, index=frame.index, dtype=object)
+        if "image_path" in frame.columns:
+            series = series.where(series.notna(), frame["image_path"])
+        # `assign` shares the other columns (copy-on-write), where `copy()`
+        # duplicated the whole frame to change one column.
+        return frame.assign(image_path=series)
+
+
+def match_stimulus_images(
+    frame: pd.DataFrame | None,
+    root: str | os.PathLike,
+    pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN,
+    *,
+    require_exists: bool = True,
+) -> StimulusImageMatch:
+    """Find each row's stimulus image in ``root`` by ``pattern`` (#417).
+
+    The probing half of `resolve_stimulus_image_paths`, which documents the
+    rules; this answers what was found without building a frame, so the app
+    can count a folder's images, or keep its frames, at the cost of one object
+    array. Raises ``ValueError`` for a pattern that is absolute or that names a
+    file outside ``root``.
+    """
+    if frame is None or frame.empty:
+        return StimulusImageMatch(np.empty(0, dtype=object), 0, "")
+    base = Path(root).expanduser().resolve()
+    if not pattern or Path(pattern).is_absolute():
+        raise ValueError("Image filename pattern must be a non-empty relative path.")
+
+    class _Row(dict):
+        def __missing__(self, key):
+            raise KeyError(key)
+
+    def _resolved(values: dict[str, str]) -> str | None:
+        """One placeholder tuple to an absolute path, or None to keep `previous`."""
+        try:
+            relative = pattern.format_map(_Row(values))
+        except (KeyError, ValueError, AttributeError):
+            return None
+        # Contained by its *spelling*: a placeholder value cannot climb out of
+        # the folder with `..`, while an image the user linked into it from
+        # elsewhere is still theirs to use (resolving the link first refused
+        # every such folder outright).
+        candidate = Path(os.path.normpath(base / relative))
+        try:
+            candidate.relative_to(base)
+        except ValueError as exc:
+            raise ValueError(
+                f"Image pattern resolves outside the selected folder: {relative!r}"
+            ) from exc
+        if require_exists and not candidate.is_file():
+            return None
+        return str(candidate)
+
+    # Keyed by the *stringified* column label, as the per-row dict was; a
+    # duplicate label keeps the last column, as that dict's later write did.
+    by_name: dict[str, object] = {str(column): column for column in frame.columns}
+    used = [by_name[name] for name in _pattern_placeholders(pattern) if name in by_name]
+
+    if used:
+        text = pd.DataFrame(index=frame.index)
+        missing = np.zeros(len(frame), dtype=bool)
+        for position, column in enumerate(used):
+            values = frame[column]
+            if isinstance(values, pd.DataFrame):  # duplicate column labels
+                values = values.iloc[:, -1]
+            missing |= values.isna().to_numpy()
+            text[position] = values.astype(str)
+        codes, uniques = pd.factorize(pd.MultiIndex.from_frame(text))
+        names = [str(column) for column in used]
+        per_key = [_resolved(dict(zip(names, key))) for key in uniques]
+        # By its text: a missing placeholder value is a float NaN beside the
+        # strings, and the two do not order.
+        found_keys = sorted(
+            (repr(tuple(key)), path)
+            for key, path in zip(uniques, per_key, strict=True)
+            if path is not None
+        )
+        resolved = np.asarray(per_key, dtype=object)[codes]
+        # A NaN placeholder never reached the format mapping, so the row keeps
+        # its own `image_path`; `astype(str)` above turned it into "nan".
+        resolved[missing] = None
+    else:
+        only = _resolved({})
+        found_keys = [((), only)] if only is not None else []
+        resolved = np.full(len(frame), only, dtype=object)
+    found = int(pd.notna(resolved).sum())
+    signature = hashlib.blake2b(
+        repr((names if used else [], found_keys)).encode(), digest_size=16
+    ).hexdigest()
+    return StimulusImageMatch(resolved, found, signature)
+
+
 def resolve_stimulus_image_paths(
     frame: pd.DataFrame,
     root: str | os.PathLike,
-    pattern: str = "{text_id}.png",
+    pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN,
     *,
     require_exists: bool = True,
 ) -> pd.DataFrame:
@@ -3859,62 +3991,8 @@ def resolve_stimulus_image_paths(
     """
     if frame is None or frame.empty:
         return frame.copy() if isinstance(frame, pd.DataFrame) else pd.DataFrame()
-    base = Path(root).expanduser().resolve()
-    if not pattern or Path(pattern).is_absolute():
-        raise ValueError("Image filename pattern must be a non-empty relative path.")
-
-    class _Row(dict):
-        def __missing__(self, key):
-            raise KeyError(key)
-
-    def _resolved(values: dict[str, str]) -> str | None:
-        """One placeholder tuple to an absolute path, or None to keep `previous`."""
-        try:
-            relative = pattern.format_map(_Row(values))
-        except (KeyError, ValueError, AttributeError):
-            return None
-        candidate = (base / relative).resolve()
-        try:
-            candidate.relative_to(base)
-        except ValueError as exc:
-            raise ValueError(
-                f"Image pattern resolves outside the selected folder: {relative!r}"
-            ) from exc
-        if require_exists and not candidate.is_file():
-            return None
-        return str(candidate)
-
-    # Keyed by the *stringified* column label, as the per-row dict was; a
-    # duplicate label keeps the last column, as that dict's later write did.
-    by_name: dict[str, object] = {str(column): column for column in frame.columns}
-    used = [by_name[name] for name in _pattern_placeholders(pattern) if name in by_name]
-
-    if used:
-        text = pd.DataFrame(index=frame.index)
-        missing = np.zeros(len(frame), dtype=bool)
-        for position, column in enumerate(used):
-            values = frame[column]
-            if isinstance(values, pd.DataFrame):  # duplicate column labels
-                values = values.iloc[:, -1]
-            missing |= values.isna().to_numpy()
-            text[position] = values.astype(str)
-        codes, uniques = pd.factorize(pd.MultiIndex.from_frame(text))
-        names = [str(column) for column in used]
-        resolved = np.asarray(
-            [_resolved(dict(zip(names, key))) for key in uniques], dtype=object
-        )[codes]
-        # A NaN placeholder never reached the format mapping, so the row keeps
-        # its own `image_path`; `astype(str)` above turned it into "nan".
-        resolved[missing] = None
-    else:
-        resolved = np.full(len(frame), _resolved({}), dtype=object)
-
-    series = pd.Series(resolved, index=frame.index, dtype=object)
-    if "image_path" in frame.columns:
-        series = series.where(series.notna(), frame["image_path"])
-    result = frame.copy()
-    result["image_path"] = series
-    return result
+    match = match_stimulus_images(frame, root, pattern, require_exists=require_exists)
+    return match.apply(frame)
 
 
 @st.cache_data

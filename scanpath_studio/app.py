@@ -47,7 +47,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import pandas as pd
 import streamlit as st
@@ -103,9 +103,11 @@ from scanpath_studio.constants import (
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
     DATASET_SETUP_OVERRIDES_KEY,
+    DATASET_STIMULUS_IMAGES_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     DEMO_CHOICE,
     DOWNLOAD_DIR_ENV,
     DOWNLOAD_DIR_KEY,
@@ -195,6 +197,7 @@ from scanpath_studio.data import (
     load_onestop_server_bundle,
     load_sample_data,
     load_sample_raw_gaze,
+    match_stimulus_images,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
@@ -212,9 +215,9 @@ from scanpath_studio.data import (
     read_tables,
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
-    resolve_stimulus_image_paths,
     select_trials_cached,
     stamp_source,
+    stimulus_image_source,
     text_ids,
     trial_filter_conflict_note,
     trial_filter_params,
@@ -6016,6 +6019,246 @@ def render_description_field(host, token: str) -> None:
     )
 
 
+def dataset_stimulus_images(token: str | None) -> dict[str, str] | None:
+    """The folder of stimulus images ``token`` was pointed at, as
+    ``{"folder", "pattern"}``, or ``None`` when it has none (#417).
+
+    Saved by the add screen and ✏️ Edit dataset (`DATASET_STIMULUS_IMAGES_KEY`)
+    for any kind of dataset, so opening a dataset brings its own images and
+    no other dataset's.
+    """
+    if not token:
+        return None
+    own = st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {}
+    return stimulus_image_source(own.get(token))
+
+
+def set_dataset_stimulus_images(token: str, folder: str, pattern: str) -> None:
+    """Store ``folder`` + ``pattern`` as ``token``'s stimulus images; a blank
+    folder forgets them."""
+    own = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
+    source = stimulus_image_source({"folder": folder, "pattern": pattern})
+    if source is None:
+        own.pop(token, None)
+    else:
+        own[token] = source
+    st.session_state[DATASET_STIMULUS_IMAGES_KEY] = own
+
+
+def _stimulus_field_keys(token: str) -> tuple[str, str]:
+    slug = _dataset_row_slug(token)
+    return f"dataset_stimulus_folder_{slug}", f"dataset_stimulus_pattern_{slug}"
+
+
+def _stimulus_images_draft(token: str) -> dict[str, str] | None:
+    """The folder and pattern typed on the open editor, as the source they
+    would save (``{}`` for none), if they differ from what is saved — ``None``
+    when they do not, or the fields have not drawn."""
+    folder_key, pattern_key = _stimulus_field_keys(token)
+    if folder_key not in st.session_state:
+        return None
+    typed = stimulus_image_source(
+        {
+            "folder": st.session_state.get(folder_key),
+            "pattern": st.session_state.get(pattern_key),
+        }
+    )
+    if typed == dataset_stimulus_images(token):
+        return None
+    return typed or {}
+
+
+def render_stimulus_images_fields(
+    host, folder_key: str, pattern_key: str, *, saved: dict | None = None
+) -> tuple[str, str]:
+    """*Stimulus images*' two fields — the folder and the filename pattern —
+    seeded from ``saved`` (a dataset's stored source) the first time they draw.
+
+    The add screen and ✏️ Edit dataset ask the same question, so they draw it
+    the same way; returns what is typed now.
+    """
+    if folder_key not in st.session_state:
+        st.session_state[folder_key] = (saved or {}).get("folder", "")
+    if pattern_key not in st.session_state:
+        st.session_state[pattern_key] = (saved or {}).get(
+            "pattern", DEFAULT_STIMULUS_IMAGE_PATTERN
+        )
+    # Each title carries its help as the dotted underline, as every other
+    # field on these screens does, not a `?` icon.
+    folder_help = (
+        "A folder on this computer with one screenshot per text or trial, drawn "
+        "under the scanpath. Saved with the dataset; never put on a share link."
+    )
+    row_label(host, "Image folder", folder_help)
+    folder = host.text_input(
+        "Image folder",
+        key=folder_key,
+        placeholder="/path/to/stimulus-images",
+        help=folder_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    pattern_help = (
+        "Use the app's field names in braces — {text_id}, {trial_id} or "
+        "{participant_id}. Subfolders work too."
+    )
+    row_label(host, "Filename pattern", pattern_help)
+    pattern = host.text_input(
+        "Filename pattern",
+        key=pattern_key,
+        help=pattern_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    return str(folder or "").strip(), str(pattern or "").strip()
+
+
+class StimulusImages(NamedTuple):
+    """A dataset's frames with its stimulus images attached (#417): how many
+    rows its folder found an image for, or why the pattern was refused."""
+
+    words: pd.DataFrame | None
+    fixations: pd.DataFrame | None
+    found: int = 0
+    problem: str | None = None
+
+
+def _attach_stimulus_images(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    folder: str,
+    pattern: str,
+) -> StimulusImages:
+    """The frames with what ``folder`` + ``pattern`` find, or the frames
+    themselves when it finds nothing — so nothing downstream is rebuilt for a
+    folder that is empty, missing or unplugged — and why not, when the
+    pattern is refused."""
+    progress.report()  # UX-165: a gated loading card shows for this build
+    try:
+        matches = [
+            match_stimulus_images(frame, folder, pattern)
+            for frame in (words, fixations)
+        ]
+    except ValueError as exc:
+        return StimulusImages(words, fixations, 0, str(exc))
+    found = sum(match.found for match in matches)
+    if not found:
+        return StimulusImages(words, fixations)
+    out = tuple(
+        match.apply(frame) if match.found else frame
+        for frame, match in zip((words, fixations), matches, strict=True)
+    )
+    # Named by what was found, not by when the folder last changed: a stray
+    # file in it re-checks the folder without making every cache downstream
+    # miss, and two checks that find the same files give the same frames.
+    assign_derived(
+        out,
+        "stimulus_images",
+        (words, fixations),
+        (folder, pattern, tuple(match.signature for match in matches)),
+    )
+    return StimulusImages(*out, found, None)
+
+
+def _stimulus_folder_stamp(folder: str) -> int | None:
+    """When ``folder`` last changed, so a file added to it is found on the
+    next run (the resolution is cached by it)."""
+    try:
+        return Path(folder).expanduser().stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _stimulus_images_cached(
+    slot: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    folder: str,
+    pattern: str,
+    *,
+    keep: int = 1,
+) -> StimulusImages:
+    """`_attach_stimulus_images`, kept per frames + folder + pattern.
+
+    The folder's own timestamp is in the key, so an image added to it is found
+    on the next run (one added inside a subfolder waits for a restart or
+    another change). A refused pattern is kept too, with its reason, rather
+    than tried again on every run.
+    """
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        folder,
+        pattern,
+        _stimulus_folder_stamp(folder),
+    )
+    return frame_cache(
+        slot,
+        key,
+        lambda: _attach_stimulus_images(words, fixations, folder, pattern),
+        keep=keep,
+    )
+
+
+def with_dataset_stimulus_images(
+    token: str | None,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    *,
+    slot: str = "stimulus_images",
+) -> StimulusImages:
+    """``words`` and ``fixations`` with ``token``'s own stimulus images
+    attached (#417), or as they are when it has none.
+
+    The open dataset's (`slot` ``"stimulus_images"``, two kept so switching
+    back is instant, as for the normalized frames) and Compare's B's
+    (``"cmp_stimulus_images"``) each have a slot of their own, or the two would
+    evict each other on every run.
+    """
+    source = dataset_stimulus_images(token)
+    if source is None:
+        return StimulusImages(words, fixations)
+    return _stimulus_images_cached(
+        slot,
+        words,
+        fixations,
+        source["folder"],
+        source["pattern"],
+        keep=2 if slot == "stimulus_images" else 1,
+    )
+
+
+def render_stimulus_images_preview(
+    host,
+    folder: str,
+    pattern: str,
+    frames: tuple[pd.DataFrame | None, pd.DataFrame | None],
+    *,
+    saved: StimulusImages | None = None,
+) -> None:
+    """How many rows of ``frames`` the folder and pattern find an image for,
+    or why they cannot be used.
+
+    ``saved`` is the open dataset's own resolution when the fields show what
+    is saved — its count, without looking again. Otherwise the count is kept
+    per frames + folder + pattern, so typing elsewhere on the screen does not
+    probe the folder again.
+    """
+    source = stimulus_image_source({"folder": folder, "pattern": pattern})
+    if source is None:
+        return
+    if not Path(source["folder"]).expanduser().is_dir():
+        host.caption(f"{ICONS['warning']} There is no folder at this path.")
+        return
+    result = saved or _stimulus_images_cached(
+        "stimulus_images_preview", *frames, source["folder"], source["pattern"]
+    )
+    if result.problem:
+        host.error(f"Couldn't use this folder or pattern: {result.problem}")
+        return
+    host.caption(f"Found an image in this folder for {plural(result.found, 'row')}.")
+
+
 def _render_dataset_overview(token: str, *, registry: dict) -> None:
     """The open dataset in a sentence, and its home page.
 
@@ -6220,7 +6463,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is under "
-        f"{ICONS['view_data']} Data Management → **Edit dataset** → **4 · Trial "
+        f"{ICONS['view_data']} Data Management → **Edit dataset** → **Trial "
         "identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
@@ -6238,7 +6481,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         key="trial_identity_alert_keep",
         width="stretch",
         help=f"Dismiss. Nothing changes; the verdict stays under {ICONS['view_data']} "
-        "Data Management → Edit dataset → 4 · Trial identity.",
+        "Data Management → Edit dataset → Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
@@ -6363,15 +6606,16 @@ def hold_editor_staging(token: str) -> None:
 
 
 def editor_staging_dirty() -> bool:
-    """Whether the open editor's name, description or metadata tables differ
-    from what it opened on — the part of an edit `tabs.dataset_editor_is_dirty`
-    does not see."""
+    """Whether the open editor's name, description, stimulus images or
+    metadata tables differ from what it opened on — the part of an edit
+    `tabs.dataset_editor_is_dirty` does not see."""
     snapshot = st.session_state.get(_EDITOR_SNAPSHOT_KEY)
     if not isinstance(snapshot, dict):
         return False
     token = str(snapshot.get("token") or "")
     return bool(
         _description_draft(token) is not None
+        or _stimulus_images_draft(token) is not None
         or _builtin_name_draft(token) is not None
         or _metadata_grains_changed(snapshot)
     )
@@ -6379,14 +6623,14 @@ def editor_staging_dirty() -> bool:
 
 def _editor_is_dirty() -> bool:
     """Whether ✕ Cancel would lose anything (UX-107): the mapping, setup and
-    uploads (`tabs.dataset_editor_is_dirty`), or the name, description and
-    metadata tables."""
+    uploads (`tabs.dataset_editor_is_dirty`), or the name, description,
+    stimulus images and metadata tables."""
     return dataset_editor_is_dirty() or editor_staging_dirty()
 
 
 def commit_editor_staging(token: str) -> None:
-    """✅ Save changes' share of the edit: the description, a built-in's name,
-    and the metadata tables as they now stand.
+    """✅ Save changes' share of the edit: the description, the stimulus
+    images, a built-in's name, and the metadata tables as they now stand.
 
     Called by both Saves — an upload's (`tabs._apply_remap`, before it re-keys
     the dataset under a new name) and a built-in's — once they know the save
@@ -6394,18 +6638,25 @@ def commit_editor_staging(token: str) -> None:
     """
     if (text := _description_draft(token)) is not None:
         set_dataset_description(token, text)
+    if (images := _stimulus_images_draft(token)) is not None:
+        set_dataset_stimulus_images(
+            token, images.get("folder", ""), images.get("pattern", "")
+        )
     if token not in (st.session_state.get("_datasets") or {}):
         _apply_builtin_name(token)
-    _drop_description_drafts()
+    _drop_editor_drafts()
     # Kept, not restored: what is attached now is what was saved.
     st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
 
 
-def _drop_description_drafts() -> None:
+def _drop_editor_drafts() -> None:
+    """Drop the description and stimulus-image fields the editor typed into,
+    so the next edit seeds them from what is saved."""
     for key in [
         k
         for k in list(st.session_state)
-        if isinstance(k, str) and k.startswith("dataset_description_")
+        if isinstance(k, str)
+        and k.startswith(("dataset_description_", "dataset_stimulus_"))
     ]:
         st.session_state.pop(key, None)
 
@@ -6473,8 +6724,8 @@ def _close_dataset_editor() -> None:
 
 
 def _discard_editor_staging() -> None:
-    """Drop the editor's description drafts; park its metadata restore."""
-    _drop_description_drafts()
+    """Drop the editor's drafts; park its metadata restore."""
+    _drop_editor_drafts()
     snapshot = st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
     if isinstance(snapshot, dict) and _metadata_grains_changed(snapshot):
         st.session_state[_EDITOR_RESTORE_KEY] = snapshot
@@ -6855,12 +7106,13 @@ def _edit_open_dataset(token: str) -> None:
         _edit_manual_sample()
         return
     if not st.session_state.get(DATASET_EDITOR_OPEN_KEY):
-        # UX-178 — the Name and Description fields are seeded on open; whatever
-        # an editor left behind without Cancel or Save (a switch of dataset,
-        # say) is not this edit's. An edit already open keeps its drafts.
+        # UX-178 — the Name and Description fields (and #417's image fields)
+        # are seeded on open; whatever an editor left behind without Cancel or
+        # Save (a switch of dataset, say) is not this edit's. An edit already
+        # open keeps its drafts.
         st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
         st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
-        _drop_description_drafts()
+        _drop_editor_drafts()
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
@@ -7276,21 +7528,6 @@ def render_dataset_table(
         _unreachable_dataset_dialog(unreachable)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
-
-
-def _rows_with_local_images(frame: pd.DataFrame) -> int:
-    """How many rows of ``frame`` name a stimulus image that exists on disk.
-
-    One ``os.path.isfile`` per **distinct** path rather than per row. The whole
-    point of `data.resolve_stimulus_image_paths` probing once per placeholder
-    tuple is lost if the caption it feeds then re-stats every row of a
-    multi-million-row corpus.
-    """
-    paths = None if frame is None else frame.get("image_path")
-    if paths is None or paths.empty:
-        return 0
-    counts = paths.dropna().astype(str).value_counts()
-    return int(sum(rows for path, rows in counts.items() if os.path.isfile(path)))
 
 
 def resolve_source_monitor(
@@ -9762,24 +9999,25 @@ def _run_app() -> None:
     # the mapping form. Filled from `tabs._render_column_mapping_section`, which
     # is handed this slot: it is the same renderer either way, only re-hosted.
     setup_recording_slot = editor_page.container(key="tutorial_recording_setup")
+    # VIZ-14: local stimulus-image paths. #417 — the add screen's part 4, so
+    # the editor's part 4 too: the two screens share their first four parts,
+    # and only the questions that need the finished dataset come after.
+    setup_stimulus_slot = editor_page.container(key="tutorial_stimulus_images")
     # UX-52 round 3 — the VAL-7 trial-identity verdict is its own section, not a
     # `#####` item inside "What's in this dataset" (the user's call). It carries
     # a *verdict* — sometimes a warning — and the fix it names is a change to the
-    # Trial ID mapping directly above it, so it belongs at the same level as the
-    # thing it judges rather than buried under the counts.
+    # Trial ID mapping, so it belongs at the same level as the thing it judges
+    # rather than buried under the counts.
     # Keyed → the `.st-key-…` selector the "Load and verify a dataset" tutorial
     # spotlights, alongside its siblings above and below.
     setup_identity_slot = editor_page.container(key="tutorial_trial_identity")
-    # VIZ-14: local stimulus-image paths, after the questions that describe the
-    # data itself.
-    setup_stimulus_slot = editor_page.container(key="tutorial_stimulus_images")
     setup_preproc_slot = editor_page.container(key="tutorial_preprocessing")
     # UX-106 — the editor's own foot: ✅ Save changes, under everything it
     # saves, the way ✅ Add dataset sits under the whole add screen. Reserved
     # last so it lands after preprocessing; filled at the end of the run.
     editor_footer_slot = editor_page.container(key="dataset_editor_footer")
 
-    # UX-135 — which of the editor's five parts are on screen this run, and so
+    # UX-135 — which of the editor's six parts are on screen this run, and so
     # what each one is numbered. Two are conditional (stimulus images need a
     # local filesystem; preprocessing is behind PRE-22's flag), and a screen
     # reading 1 · 2 · 3 · 5 looks like a section that failed to render rather
@@ -10264,50 +10502,24 @@ def _run_app() -> None:
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
-    # adding an image_path column to their data. This intentionally stays out
-    # of public deployments and share links because it contains machine-local
-    # filesystem information; the same resolver is available through the API
-    # and CLI for reproducible headless renders.
+    # adding an image_path column to their data. #417 — from the folder saved
+    # with the open dataset (the add screen's and ✏️ Edit dataset's *Stimulus
+    # images*), resolved before filtering and plotting so every view draws it.
+    # It stays out of public deployments and share links because it is
+    # machine-local filesystem information; the same resolver is available
+    # through the API and CLI for reproducible headless renders.
+    # The demo standing in for a missing corpus draws the demo's own folder,
+    # not the corpus' (the annotations follow the same rule).
+    images_owner = (
+        DEMO_CHOICE if st.session_state.get(_PLACEHOLDER_SHOWN_KEY) else _dataset_owner
+    )
+    images_unresolved = (words_df, fixations_df)
+    stimulus_images = StimulusImages(words_df, fixations_df)
     if local_filesystem_enabled():
-        with _editor_part(setup_stimulus_slot, "edit_stimulus"):
-            # Each title carries its help as the dotted underline, as every
-            # other field on this screen does, not a `?` icon.
-            root_help = "Local folder containing one image per text or trial."
-            row_label(st, "Image folder", root_help)
-            image_root = st.text_input(
-                "Image folder",
-                key="stimulus_image_root",
-                placeholder="/path/to/stimulus-images",
-                help=root_help,
-                label_visibility="collapsed",
-            ).strip()
-            pattern_help = (
-                "Use the app's field names in braces — {text_id}, {trial_id} or "
-                "{participant_id}. Subfolders work too."
-            )
-            row_label(st, "Filename pattern", pattern_help)
-            image_pattern = st.text_input(
-                "Filename pattern",
-                key="stimulus_image_pattern",
-                value="{text_id}.png",
-                help=pattern_help,
-                label_visibility="collapsed",
-            ).strip()
-            if image_root:
-                try:
-                    words_df = resolve_stimulus_image_paths(
-                        words_df, image_root, image_pattern
-                    )
-                    fixations_df = resolve_stimulus_image_paths(
-                        fixations_df, image_root, image_pattern
-                    )
-                    found = sum(
-                        _rows_with_local_images(frame)
-                        for frame in (words_df, fixations_df)
-                    )
-                    st.caption(f"Found a local image for {plural(int(found), 'row')}.")
-                except ValueError as exc:
-                    st.error(f"Couldn't use this folder or pattern: {exc}")
+        stimulus_images = with_dataset_stimulus_images(
+            images_owner, words_df, fixations_df
+        )
+        words_df, fixations_df = stimulus_images.words, stimulus_images.fixations
 
     # Optional raw gaze: the Upload source already mapped + normalized it above;
     # every other source loads it here (bundled demo sample, OneStop uploader).
@@ -10780,12 +10992,34 @@ def _run_app() -> None:
                 words=words_all,
                 fixations=fixations_all,
             )
+        if local_filesystem_enabled():
+            # #417 — the headline on every Data-page run, like the other parts;
+            # the fields only while the editor is open, since they are seeded
+            # from the open dataset and wait for ✅ Save changes.
+            images_body = _editor_part(setup_stimulus_slot, "edit_stimulus")
+            if editing:
+                images_token = str(
+                    st.session_state.get("data_source_choice") or data_choice
+                )
+                folder_key, pattern_key = _stimulus_field_keys(images_token)
+                saved_images = dataset_stimulus_images(images_token)
+                folder, pattern = render_stimulus_images_fields(
+                    images_body, folder_key, pattern_key, saved=saved_images
+                )
+                typed = stimulus_image_source({"folder": folder, "pattern": pattern})
+                # What is saved was already looked up for the figures; a draft
+                # is tried on the frames as they came, before any folder.
+                render_stimulus_images_preview(
+                    images_body,
+                    folder,
+                    pattern,
+                    images_unresolved,
+                    saved=stimulus_images
+                    if typed == saved_images and images_owner == images_token
+                    else None,
+                )
         with _editor_part(setup_identity_slot, "edit_identity"):
             render_trial_identity_section()
-        # ``setup_stimulus_slot`` is filled earlier because its values resolve
-        # image paths before filtering and plotting; its reserved position is
-        # what puts it after Trial identity on screen regardless (creation order
-        # is screen order, so where a slot is *filled* need not agree).
         with setup_metadata_slot:
             # UX-130 r2: the *add screen's* three metadata rows, not three
             # side-by-side panels. UX-114 put them in one row of three columns

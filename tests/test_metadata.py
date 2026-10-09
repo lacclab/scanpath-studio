@@ -1134,13 +1134,17 @@ class TestTheWizardStep:
         # table already uploaded and mapped in the same row), leaving three.
         # The participant table stays up beside the uploads — it is an
         # upload, so it belongs with them, under no heading of its own (r6).
-        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3]
+        # #417 added an optional fourth, last so leaving it out renumbers
+        # nothing.
+        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4]
         # UX-174 r2 renamed part 1 when it gained the Description field.
         assert [s.title for s in wizard_shell.STEPS] == [
             "Name & description",
             "Upload data tables",
             "Recording setup",
+            "Stimulus images",
         ]
+        assert [s.required for s in wizard_shell.STEPS] == [True, True, True, False]
         assert "readers" not in wizard_shell.STEPS_BY_ID
         assert "fields" not in wizard_shell.STEPS_BY_ID
 

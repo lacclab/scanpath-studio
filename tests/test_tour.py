@@ -1186,18 +1186,23 @@ def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
     assert tour._GROUP_RING_ID in tour._dismiss_listener_script(NAV_SELECTOR)
 
 
-def test_the_setup_guide_counts_the_parts_it_names():
-    """The guide's overview says "three parts" and each part card is headed
-    "1 ·", "2 ·", "3 ·" — so it counts parts, not cards ("Step 3 of 4" under
-    "2 · Upload data tables" contradicted both)."""
+def test_the_setup_guide_counts_the_parts_it_names(monkeypatch):
+    """Each part card is headed "1 ·", "2 ·", "3 ·" — so the guide counts
+    parts, not cards ("Step 3 of 4" under "2 · Upload data tables"
+    contradicted both). The fourth, Stimulus images, is a card only where the
+    add screen draws that part (#417), and the overview names no count, which
+    would be wrong on one install or the other."""
     from scanpath_studio import tour
 
-    intro, *parts, save = tour._WIZARD_GUIDE_STEPS
-    assert "three parts" in intro["body"]
-    assert len(parts) == 3
-    for number, part in enumerate(parts, start=1):
-        assert part["title"].startswith(f"{number} · ")
-        assert part["step_id"]
+    for local, expected in (("1", 4), ("0", 3)):
+        monkeypatch.setenv("SCANPATH_LOCAL_FS", local)
+        intro, *parts, save = tour._wizard_guide_steps()
+        assert "parts" not in intro["body"]
+        assert len(parts) == expected
+        for number, part in enumerate(parts, start=1):
+            assert part["title"].startswith(f"{number} · ")
+            assert part["step_id"]
+        assert tour._wizard_guide_progress(0, intro) == f"Overview · {expected} parts"
     # The closing card is not a fourth part: no number, no wizard part to open.
     assert save["step_id"] is None
     assert not save["title"][0].isdigit()

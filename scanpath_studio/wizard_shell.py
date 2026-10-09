@@ -4,8 +4,9 @@ navigation helpers that survive (DATA-22 → UX-135).
 Knows nothing about columns or dataframes — ``wizard.py`` keeps the part bodies
 and finalize. What lives here is the *chrome*:
 
-- `STEPS` — the add screen's three linear parts (name → data → setup), drawn by
-  `part()` as numbered one-line headlines. They are labels, not navigation: there
+- `STEPS` — the add screen's linear parts (name → data → setup, then the
+  optional stimulus images on a local install), drawn by `part()` as numbered
+  one-line headlines. They are labels, not navigation: there
   is nothing to map until a file is read, so no chips, no accordion, no open state.
 - `EDITOR_STEPS` + `numbered()` — the ✏️ Edit dataset screen's parts, renumbered
   over the ones that actually render.
@@ -106,10 +107,18 @@ class WizardStep:
 #: rather than an unlabeled header above everything, and Recording setup is
 #: its own numbered stage rather than a sub-heading nested inside "Upload data
 #: tables" — all three read as one flat sequence.
+#:
+#: #417 added a fourth, optional and last: *Stimulus images*, a folder of
+#: screenshots saved with the dataset. Only a local install draws it (a path on
+#: the server means nothing to a visitor), and being last it renumbers nothing
+#: when it is left out.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep("name", 1, "Name & description", "What to call it", True),
     WizardStep("data", 2, "Upload data tables", "The tables you exported", True),
     WizardStep("setup", 3, "Recording setup", "The screen it was recorded on", True),
+    WizardStep(
+        "images", 4, "Stimulus images", "Screenshots of what was on screen", False
+    ),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
@@ -122,8 +131,9 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: headline rather than the `st.divider()` + `st.subheader()` + `st.caption()`
 #: stack it grew section by section. The first three ids line up one-for-one with
 #: `STEPS` — naming it (UX-178), its tables and mapping (the same question as
-#: uploading them), and its recording setup (the *same renderer*) — and the rest
-#: are the questions that only have an answer once the dataset exists.
+#: uploading them), and its recording setup (the *same renderer*) — and so does
+#: the fourth, its stimulus images (#417, the same fields). The rest are the
+#: questions that only have an answer once the dataset exists.
 #:
 #: The ids are prefixed ``edit_`` because `part_key` makes them container keys
 #: and a key may be used once per run. The editor's *slots* are reserved on
@@ -132,7 +142,7 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: guard, so an unprefixed id could meet the wizard's own while the add screen
 #: is open.
 #:
-#: ``number`` here is a *placeholder*: two of the five are conditional (stimulus
+#: ``number`` here is a *placeholder*: two of the six are conditional (stimulus
 #: images need a local filesystem, preprocessing is behind PRE-22's flag), and a
 #: screen numbered 1 · 2 · 3 · 5 reads as a missing section rather than as a
 #: hidden one. `numbered()` renumbers whatever is actually on screen.
@@ -164,19 +174,20 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         True,
     ),
     WizardStep(
-        "edit_identity",
+        "edit_stimulus",
         3,
-        "Trial identity",
-        "Whether the Trial ID above actually identifies one trial — checked "
-        "on the whole dataset, before any filtering.",
+        "Stimulus images",
+        "Screenshots of the stimulus from a folder on this computer, drawn under "
+        "the scanpath without adding an image_path column to your data. Saved "
+        "with the dataset.",
         False,
     ),
     WizardStep(
-        "edit_stimulus",
+        "edit_identity",
         4,
-        "Stimulus images",
-        "Attach screenshots of the stimulus from a local folder, without adding "
-        "an image_path column to your data.",
+        "Trial identity",
+        "Whether the Trial ID above actually identifies one trial — checked "
+        "on the whole dataset, before any filtering.",
         False,
     ),
     WizardStep(

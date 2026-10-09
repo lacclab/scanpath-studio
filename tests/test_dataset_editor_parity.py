@@ -138,16 +138,17 @@ class TestThePageItDraws:
         at = self._data_page()
         parts = self._parts(at)
         # Name & description (UX-178) · Tables & mapping · Recording setup ·
-        # Trial identity, plus Stimulus images wherever a local filesystem is
-        # allowed.
-        assert len(parts) >= 4
+        # Stimulus images (the tests allow a local filesystem) · Trial
+        # identity — the add screen's four parts first (#417).
+        assert len(parts) >= 5
         numbers = [
             body.split('class="sps-wiz-part-n">')[1].split("<")[0] for body in parts
         ]
         assert numbers == [str(i + 1) for i in range(len(parts))]
         assert "Name &amp; description" in parts[0] or "Name & description" in parts[0]
         assert "Recording setup" in parts[2]
-        assert "Trial identity" in parts[3]
+        assert "Stimulus images" in parts[3]
+        assert "Trial identity" in parts[4]
 
     def test_the_old_subheaders_are_gone(self):
         """Only the overview screen keeps `st.subheader` sections; every heading
@@ -196,13 +197,14 @@ class TestTheSlotOrder:
 
     def test_metadata_sits_with_the_mapping_ahead_of_recording_setup(self):
         """The add screen's order: every upload and its mapping, the metadata
-        tables under the same heading, then Recording setup."""
+        tables under the same heading, then Recording setup and Stimulus images
+        (#417) — and only then the parts that need the finished dataset."""
         pos = self._positions(
             "editor_part_data_slot",
             "setup_metadata_slot",
             "setup_recording_slot",
-            "setup_identity_slot",
             "setup_stimulus_slot",
+            "setup_identity_slot",
             "setup_preproc_slot",
             "editor_footer_slot",
         )
@@ -210,8 +212,8 @@ class TestTheSlotOrder:
             pos["editor_part_data_slot"]
             < pos["setup_metadata_slot"]
             < pos["setup_recording_slot"]
-            < pos["setup_identity_slot"]
             < pos["setup_stimulus_slot"]
+            < pos["setup_identity_slot"]
             < pos["setup_preproc_slot"]
             < pos["editor_footer_slot"]
         )

@@ -6058,39 +6058,13 @@ def _annotation_trial_labels(combos: pd.DataFrame | None) -> dict[str, str] | No
 def render_dataset_inspection_head(token: str) -> None:
     """*What's in the `<name>` dataset* and the overview under it.
 
-    ✏️ **Edit dataset** is not on this line: it is drawn by
-    :func:`render_dataset_edit_button`, below the description and checks and
-    above the inspection subtabs.
+    ✏️ **Edit** is not here: it is on the dataset's row of 📂 Available
+    datasets, beside Remove (`_render_dataset_table_row`).
     """
     # #374 F30: the name alone — "the `Dataset 1` dataset" said it twice.
     label = _dataset_display_name(token).replace("*", r"\*")
     st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
-
-
-def render_dataset_edit_button(token: str) -> None:
-    """✏️ **Edit dataset**, between the dataset's overview and its subtabs.
-
-    UX-178: the section's one action is a button of its own, not a link-weight
-    one beside the description, so it reads as editing the whole dataset — its
-    name, its description and its setup, all on the screen it opens. It does
-    not apply to the add-dataset wizard's pending dataset or to the authoring
-    canvas, which are not rows of the table.
-    """
-    if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
-        return
-    st.button(
-        "Edit dataset",
-        icon=ICONS["edit"],
-        key="dataset_edit_btn",
-        on_click=_edit_open_dataset,
-        args=(token,),
-        help="Open the authoring editor — change the text, drag fixations, "
-        "or edit their timing."
-        if token == MANUAL_SAMPLE_CHOICE
-        else "Its name, description, column mapping, recording setup, "
-        "location and metadata tables.",
-    )
 
 
 def _builtin_name_draft(token: str) -> str | None:
@@ -6246,6 +6220,9 @@ _EDITOR_LEAVE_PENDING_KEY = "_dataset_editor_leave_pending"
 #: another row is a way out of the editor too, and goes through the same
 #: confirmation; ✕ Leave then opens this dataset.
 _EDITOR_LEAVE_TARGET_KEY = "_dataset_editor_leave_target"
+#: Set when that click was the row's ✏️ rather than the row itself: ✕ Leave
+#: then raises the editor on the dataset it opens.
+_EDITOR_LEAVE_EDIT_KEY = "_dataset_editor_leave_edit"
 #: UX-197 — set by whatever opens the editor, popped by its bar: the editor
 #: opens under the table, so the page is brought down to it once.
 _EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
@@ -6436,6 +6413,7 @@ def _close_dataset_editor() -> None:
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_EDIT_KEY, None)
     # Anything typed into the editor and not saved goes with it — including a
     # table uploaded to fill a missing half, which is only a *pending* attach
     # until ✅ Save changes runs.
@@ -6482,6 +6460,21 @@ def _ask_leave_dataset_editor() -> None:
 def _dismiss_leave_dataset_editor() -> None:
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_EDIT_KEY, None)
+
+
+def _leave_dataset_editor() -> None:
+    """✕ Leave: drop the edit, then open the dataset a row asked for, if any —
+    with its editor raised when the row's ✏️ asked (`_EDITOR_LEAVE_EDIT_KEY`)."""
+    target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
+    edit_target = st.session_state.get(_EDITOR_LEAVE_EDIT_KEY)
+    _close_dataset_editor()
+    if target:
+        # Through the pre-widget seam only: this runs from a button's return
+        # value, after the picker has instantiated in this run.
+        st.session_state["_pending_source_choice"] = target
+        if edit_target:
+            _edit_open_dataset(target)
 
 
 @st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
@@ -6515,12 +6508,7 @@ def _leave_dataset_editor_dialog() -> None:
         type="primary",
         width="stretch",
     ):
-        target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
-        _close_dataset_editor()
-        if target:
-            # Through the pre-widget seam only: this is a button's return
-            # value, after the picker has instantiated in this run.
-            st.session_state["_pending_source_choice"] = target
+        _leave_dataset_editor()
         st.rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
@@ -6601,7 +6589,9 @@ _DATASET_KIND_W = 92
 _DATASET_NAME_W = 280
 _DATASET_COUNT_W = 96
 _DATASET_STATUS_W = 156  # BUG-113: fits the "Needs download" badge
-_DATASET_ACTIONS_W = 40
+#: ✏️ Edit and 🗑 Remove, each an icon of `_DATASET_ICON_W`.
+_DATASET_ICON_W = 32
+_DATASET_ACTIONS_W = 72
 
 
 def _dataset_row_slug(token: str) -> str:
@@ -6836,6 +6826,25 @@ def _edit_open_dataset(token: str) -> None:
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
+
+
+def _edit_dataset_row(token: str) -> None:
+    """✏️ on a row of 📂 Available datasets: open that dataset, editor raised.
+
+    The editor edits the open dataset, so another row is opened first, the way
+    a click on it would (`_open_dataset_row`) — the unreachable-dataset note
+    and the open editor's *Leave without saving?* included. When that prompt
+    is up, ✕ Leave raises the editor on this dataset (`_EDITOR_LEAVE_EDIT_KEY`).
+    """
+    st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+    if token != st.session_state.get("data_source_choice"):
+        _open_dataset_row(token)
+        if st.session_state.get(_UNREACHABLE_DATASET_KEY) == token:
+            return
+        if st.session_state.get(_EDITOR_LEAVE_TARGET_KEY) == token:
+            st.session_state[_EDITOR_LEAVE_EDIT_KEY] = True
+            return
+    _edit_open_dataset(token)
 
 
 def _arm_dataset_row(pending_key: str, token: str) -> None:
@@ -7082,15 +7091,30 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         horizontal=True,
         horizontal_alignment="right",
         vertical_alignment="center",
+        gap="xsmall",
+    )
+    # Every dataset can be edited — its name, description, setup and
+    # metadata; the hand-drawn sample on its authoring canvas.
+    actions.button(
+        f"Edit {row.name}",
+        icon=ICONS["edit"],
+        key=f"dataset_row_edit_{slug}",
+        type="tertiary",
+        on_click=_edit_dataset_row,
+        args=(row.token,),
+        help="Open the authoring editor — change the text, drag fixations, or "
+        "edit their timing."
+        if row.token == MANUAL_SAMPLE_CHOICE
+        else f"Edit {row.name}: its name, description, column mapping, "
+        "recording setup, location and metadata tables.",
     )
     # Only a dataset you added can be removed. For the demo, a public corpus
     # or a local bundle, Remove only hid the row for the rest of the session —
     # nothing was deleted and nothing could bring it back — so they offer none.
-    # The empty cell keeps the columns lined up — drawn with a space in it, as
-    # the header's is, because an empty container is not drawn at all and the
-    # row's numbers then sat right of an added dataset's (#374 F30).
+    # Edit keeps the cell drawn, so the columns still line up (#374 F30); the
+    # spacer holds Remove's place so every row's Edit sits in one column.
     if row.token not in set(st.session_state.get("_data_source_uploaded") or []):
-        actions.markdown(
+        actions.container(key=f"dsc_noremove_{slug}", width=_DATASET_ICON_W).markdown(
             '<span aria-hidden="true">&nbsp;</span>', unsafe_allow_html=True
         )
         return
@@ -10795,8 +10819,8 @@ def _run_app() -> None:
             # the corpus home link, the coordinate-provenance sentence and a
             # six-row published-vs-loaded table, all standing between the user
             # and the counts they came for. UX-174 r2 put Rename on the heading
-            # and Edit on the description line, off the table's rows; Edit now
-            # sits under the overview, above the subtabs.
+            # and Edit on the description line, off the table's rows; Edit is
+            # back on the rows now, beside Remove.
             render_dataset_inspection_head(active_token)
             # DATA-67 — what the dataset supports, before any trial filter:
             # the first thing a newly added dataset's overview answers.
@@ -10808,7 +10832,6 @@ def _run_app() -> None:
             render_data_health(
                 words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
             )
-            render_dataset_edit_button(active_token)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

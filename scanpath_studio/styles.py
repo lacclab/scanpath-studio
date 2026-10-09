@@ -284,15 +284,19 @@ def get_app_css() -> str:
         font-size: 0.875rem;
     }
     .st-key-dsrow_head button p { white-space: nowrap; font-size: 0.875rem; }
-    /* Remove is its icon; the label names the dataset for screen readers. */
+    /* Edit and Remove are their icons; each label names the dataset for
+       screen readers. */
+    [class*="st-key-dataset_row_edit_"] button,
     [class*="st-key-dataset_row_remove_"] button {
         padding: 0 0.35rem !important;
         min-height: 0;
     }
+    [class*="st-key-dataset_row_edit_"] button [data-testid="stMarkdownContainer"],
     [class*="st-key-dataset_row_remove_"] button [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;
         overflow: hidden; clip-path: inset(50%); white-space: nowrap;
     }
+    .st-key-dataset_table_grid [class*="st-key-dataset_row_edit_"] button:focus-visible,
     .st-key-dataset_table_grid [class*="st-key-dataset_row_remove_"] button:focus-visible,
     .st-key-dsrow_head button:focus-visible {
         outline: 2px solid var(--sps-accent);

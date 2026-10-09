@@ -29,8 +29,8 @@ picker's help says more public datasets are planned). A manual draft appears as 
 once opened; Data Management omits that row, and its **+ Add dataset** menu
 (above 📂 Available datasets) holds **Create manually** and **Import files**. The sample and manual draft are separate; both share as authored scanpaths.
 Picking the sample **shows** it (`_manual_sample_frames`, through the normal
-view); its authoring editor opens only from its Data-page **Edit** (beside the
-description, `app._edit_open_dataset`), which
+view); its authoring editor opens only from its Data-page **Edit** (the ✏️ on its
+row, `app._edit_dataset_row`), which
 arms `_AUTHOR_EDITING_KEY` (`_authoring_editor_open`). `AUTHOR_CHOICE` is always
 an editor.
 Comparison-subtab candidates match the selected trial on
@@ -73,9 +73,11 @@ reads where the counts came from — that used to be the column (*Loaded* / *Not
 loaded*), so a corpus read *Loaded* until you opened it and found its files
 gone; the count headers' help says it now (`COUNTS_EXPLANATION`). A new
 downloadable corpus needs a `files_present` in its entry, or its row says
-*Available* while it is not. Rename and edit are not on the rows: **Edit dataset**
-sits under the *What's in…* overview, above its subtabs (`app.render_dataset_edit_button`),
-and the editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
+*Available* while it is not. Rename is not on the rows, but **Edit** is: an icon on every row beside an
+upload's Remove (`app._edit_dataset_row`, keyed `dataset_row_edit_<slug>`),
+which opens that dataset first — through the open editor's *Leave without
+saving?*, whose ✕ Leave then raises the editor on it (`_EDITOR_LEAVE_EDIT_KEY`).
+The editor's part 1 (**UX-178**, `EDITOR_STEPS` `edit_name`) holds **Name**
 and **Description**. An upload's name is applied by ✅ Save changes
 (`tabs._apply_remap`, via `EDITOR_PENDING_NAME_KEY`) because every editor
 widget key carries it; a built-in's is a display alias, also applied by Save.

@@ -185,7 +185,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check the column mapping",
-                "**Edit dataset**, under its overview, opens its setup screen — "
+                f"The {ICONS['edit']} on a dataset's row opens its setup screen — "
                 "the add screen's parts, for a dataset that exists. Part **2 · "
                 "Data tables & column mapping** decides which columns everything "
                 "reads. Rows marked ✨ were auto-detected; override any that "

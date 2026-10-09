@@ -16,7 +16,7 @@ import pytest
 
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
-from scanpath_studio.constants import ICONS
+from scanpath_studio.constants import DEMO_CHOICE, ICONS
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -39,6 +39,13 @@ AppTest = streamlit_testing.AppTest
 
 
 SYNTHETIC_SOURCE = "Synthetic test trial"
+
+
+def edit_row_key(token: str) -> str:
+    """The ✏️ Edit button on ``token``'s row of 📂 Available datasets."""
+    from scanpath_studio.app import _dataset_row_slug
+
+    return f"dataset_row_edit_{_dataset_row_slug(token)}"
 
 
 def _make_apptest(*, synthetic: bool = False) -> AppTest:
@@ -901,6 +908,10 @@ class TestDatasetTable:
 
         return _dataset_row_slug(token)
 
+    @staticmethod
+    def _edit(token):
+        return edit_row_key(token)
+
     def test_the_editor_opens_under_the_table_and_its_stats(self):
         """UX-197: ✏️ Edit dataset no longer replaces the overview — the table
         and *What's in the dataset* stay on screen, the editor opens under
@@ -913,7 +924,7 @@ class TestDatasetTable:
         )
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_EDITOR_OPEN_KEY]
         assert _EDITOR_SCROLL_KEY not in at.session_state  # used up by the bar
@@ -928,7 +939,7 @@ class TestDatasetTable:
         from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY, DEMO_CHOICE
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         self._click(at, f"dataset_open_{self._slug(DEMO_CHOICE)}")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The editor edits the open dataset, so opening another one closes it.
@@ -957,14 +968,12 @@ class TestDatasetTable:
             assert f"dataset_open_{slug}" in keys, f"open missing for {token}"
             removable = f"dataset_row_remove_{slug}" in keys
             assert removable == (token == self.NAME), token
-            for gone in (
-                "dataset_details_",
-                "dataset_row_edit_",
-                "dataset_row_rename_",
-            ):
+            # Every row can be edited, from the row itself.
+            assert f"dataset_row_edit_{slug}" in keys, f"edit missing for {token}"
+            for gone in ("dataset_details_", "dataset_row_rename_"):
                 assert f"{gone}{slug}" not in keys
         assert not [k for k in keys if "rename" in str(k)]
-        assert "dataset_edit_btn" in keys
+        assert "dataset_edit_btn" not in keys
         # BUG-113: Status says whether a dataset can be opened — a stored
         # upload is in memory, so it opens at once.
         status = frame.set_index("_token")["Status"]
@@ -1080,7 +1089,7 @@ class TestDatasetTable:
         from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
         assert field.value == self.NAME
         field.input("Pilot study")
@@ -1104,7 +1113,7 @@ class TestDatasetTable:
         at.session_state["data_source_choice"] = DEMO_CHOICE
         pin_data_view(at)
         at.run(timeout=90)
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(DEMO_CHOICE))
         field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
         field.input("Demo, renamed")
         text = next(
@@ -1139,11 +1148,11 @@ class TestDatasetTable:
         assert at.session_state[PENDING_DELETE_KEY] == self.NAME
         assert self.NAME in at.session_state["_datasets"]
 
-    def test_edit_beside_the_description_opens_the_editor(self):
+    def test_edit_on_its_row_opens_the_editor(self):
         from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
         assert at.session_state["data_source_choice"] == self.NAME
@@ -1151,6 +1160,57 @@ class TestDatasetTable:
         from scanpath_studio.app import _description_field_key
 
         assert [t for t in at.text_area if t.key == _description_field_key(self.NAME)]
+
+    def test_edit_on_another_row_opens_that_dataset_and_its_editor(self):
+        from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY, FOCUS_MAPPING_KEY
+
+        at = self._at()
+        self._click(at, self._edit(DEMO_CHOICE))
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == DEMO_CHOICE
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
+        assert at.session_state[FOCUS_MAPPING_KEY] == DEMO_CHOICE
+
+    def test_edit_on_another_row_asks_before_leaving_an_unsaved_edit(self):
+        """The open editor's *Leave without saving?* comes first; ✕ Leave then
+        opens the other dataset with its editor raised."""
+        from scanpath_studio import app as app_mod
+        from scanpath_studio.app import (
+            _EDITOR_LEAVE_EDIT_KEY,
+            _EDITOR_LEAVE_PENDING_KEY,
+            _EDITOR_LEAVE_TARGET_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+            FOCUS_MAPPING_KEY,
+        )
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+
+        at = self._at()
+        self._click(at, self._edit(self.NAME))
+        next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY).input(
+            "Pilot study"
+        )
+        pin_data_view(at)
+        at.run(timeout=90)
+        self._click(at, self._edit(DEMO_CHOICE))
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[_EDITOR_LEAVE_PENDING_KEY] is True
+        assert at.session_state[_EDITOR_LEAVE_EDIT_KEY] is True
+        assert at.session_state["data_source_choice"] == self.NAME
+        # ✕ Leave itself — AppTest cannot click inside this page's dialogs
+        # (cf. `test_delete_is_wired_to_the_remover`), so its action runs directly.
+        state = {
+            _EDITOR_LEAVE_PENDING_KEY: True,
+            _EDITOR_LEAVE_TARGET_KEY: DEMO_CHOICE,
+            _EDITOR_LEAVE_EDIT_KEY: True,
+            DATASET_EDITOR_OPEN_KEY: True,
+            FOCUS_MAPPING_KEY: self.NAME,
+        }
+        with mock.patch.object(app_mod.st, "session_state", state):
+            app_mod._leave_dataset_editor()
+        assert state["_pending_source_choice"] == DEMO_CHOICE
+        assert state[DATASET_EDITOR_OPEN_KEY] is True
+        assert state[FOCUS_MAPPING_KEY] == DEMO_CHOICE
+        assert _EDITOR_LEAVE_PENDING_KEY not in state
 
     def test_a_description_written_on_the_editor_waits_for_save(self):
         """Typed on ✏️ Edit dataset, it is an unsaved change until ✅ Save
@@ -1161,7 +1221,7 @@ class TestDatasetTable:
         from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         field = next(
             t for t in at.text_area if t.key == _description_field_key(self.NAME)
         )
@@ -1660,7 +1720,7 @@ class TestBuiltInRecordingSetupOverride:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
     def _open(self, at):
-        at.button(key="dataset_edit_btn").click()
+        at.button(key=edit_row_key(DEMO_CHOICE)).click()
         self._run(at)
 
     def _overrides(self, at) -> dict:
@@ -1752,7 +1812,7 @@ class TestBuiltInEditorSavesItsMapping:
         at.session_state["data_source_choice"] = DEMO_CHOICE
         pin_data_view(at)
         at.run(timeout=90)
-        at.button(key="dataset_edit_btn").click()
+        at.button(key=edit_row_key(DEMO_CHOICE)).click()
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

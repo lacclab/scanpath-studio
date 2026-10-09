@@ -73,8 +73,8 @@ The same question is on **Edit dataset**.
 ## The Data Management page
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
-**Edit dataset** opens under the list, below the open dataset's counts and
-tables, and changes its name, description, column mapping, recording setup
+The :material/edit: on a row opens that dataset's editor under the list, below
+its counts and tables. It changes its name, description, column mapping, recording setup
 and metadata tables, or adds a table it is missing (Fixations, Words (interest areas) or raw
 gaze); its mapped fields show the same value preview. On an
 added dataset, changing an ID or coordinate column shows a few values as they

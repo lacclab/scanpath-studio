@@ -4895,7 +4895,7 @@ def _scanpath_anim_specs(
     does: the duration scale stays shared — one duration is one *fraction* of
     the range on either side — and each side maps that fraction onto its own.
     """
-    from .measures import rebased_fixation_onsets
+    from .measures import fixation_clock
 
     if size_ranges is None:
         size_ranges = [marker_size_range] * len(entries)
@@ -4908,12 +4908,13 @@ def _scanpath_anim_specs(
         # Recorded-timestamp-vs-synthetic-index heuristic (shared with the
         # similarity time-curve): trust recorded timestamps only when they look
         # like real times, else lay fixations back-to-back by their durations.
-        onsets = rebased_fixation_onsets(ordered)
+        onsets, recorded_clock = fixation_clock(ordered)
         specs.append(
             dict(
                 ordered=ordered,
                 dur=dur,
                 onsets=onsets,
+                recorded_clock=recorded_clock,
                 end=float(onsets[-1] + dur.iloc[-1]),
                 color=color,
                 label=label,
@@ -5064,7 +5065,10 @@ def animation_timeline_summary(
     made the old hard-coded behaviour opaque.
 
     Returns ``{"n_frames", "step_ms", "requested_step_ms", "coarsened",
-    "frame_duration_ms", "reading_span_ms", "playback_ms"}``.
+    "frame_duration_ms", "reading_span_ms", "playback_ms", "recorded_clock"}``.
+    ``recorded_clock`` is ``True`` only when every scanpath plays on its
+    recorded onsets; otherwise ``reading_span_ms`` is (at least partly) summed
+    fixation time, which the side panel must not call a trial duration (#422).
     """
     requested = float(grid_step_ms if grid_step_ms else _ANIM_GRID_STEP_MS)
     specs = _scanpath_anim_specs(
@@ -5083,7 +5087,16 @@ def animation_timeline_summary(
         "frame_duration_ms": _anim_frame_duration_ms(frame_step_ms, playback_speed),
         "reading_span_ms": float(reading_span_ms),
         "playback_ms": float(reading_span_ms) / max(playback_speed, 1e-6),
+        "recorded_clock": _recorded_clock(specs),
     }
+
+
+def _recorded_clock(specs) -> bool | None:
+    """Whether the replay's clock is recorded time: ``True`` when every
+    scanpath has its own onsets, ``False`` when none has (their fixations play
+    end to end), ``None`` for a mix — or nothing to play."""
+    flags = {bool(s["recorded_clock"]) for s in specs}
+    return flags.pop() if len(flags) == 1 else None
 
 
 # BUG-93 — the replay's clock. Plotly's own ▶ Play steps a frame on the first
@@ -5579,7 +5592,13 @@ def _animation_play_buttons(frame_duration):
     ]
 
 
-def _animation_time_slider(frame_times, total_ms):
+# The replay readout's name for its clock (#422): a trial's own time only when
+# the data recorded the onsets — fixations laid end to end add up to the
+# fixation time, and a mix of the two is just "time".
+_REPLAY_CLOCK_PREFIX = {True: "Trial time ", False: "Fixation time ", None: "Time "}
+
+
+def _animation_time_slider(frame_times, total_ms, recorded_clock=True):
     """Linear time-scrubber slider (VIZ-11).
 
     Frame times sit on a uniform grid, so the handle moves linearly through
@@ -5604,8 +5623,9 @@ def _animation_time_slider(frame_times, total_ms):
             font=dict(color="rgba(0,0,0,0)"),
             currentvalue=dict(
                 font=dict(size=14, color="#444", family=_REPLAY_UI_FONT),
-                # #374 F23/F8: the trial's own clock, first fixation onward.
-                prefix="Trial time ",
+                # #374 F23/F8: the trial's own clock, first fixation onward —
+                # or, without onsets, the fixation time (#422).
+                prefix=_REPLAY_CLOCK_PREFIX[recorded_clock],
                 visible=True,
                 xanchor="right",
             ),
@@ -6415,7 +6435,9 @@ def _render_scanpath_animation(
     )
 
     sliders = (
-        _animation_time_slider(frame_times, reading_span_ms) if frame_times else []
+        _animation_time_slider(frame_times, reading_span_ms, _recorded_clock(specs))
+        if frame_times
+        else []
     )
     updatemenus = (
         _animation_play_buttons(_anim_frame_duration_ms(frame_step_ms, playback_speed))

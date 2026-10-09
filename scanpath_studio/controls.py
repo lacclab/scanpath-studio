@@ -8625,7 +8625,7 @@ SUMMARY_CHIP_HELP = {
     "@reading_time_s": "The sum of the trial's fixation durations "
     "(the recorded trial dwell time when the data has one).",
     "@trial_duration_s": "From the first fixation's onset to the last fixation's "
-    "end, saccades included.",
+    "end, saccades included. Only when the data records fixation onsets.",
 }
 #: …and the ones shown by default. The other two are offered in *Available*
 #: like any other field. All four used to be default chips behind a **Summary

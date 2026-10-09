@@ -73,24 +73,27 @@ regressions, for example. Filtering changes only the figure, never your data.
 
 ## Place the legends
 
-**:material/aspect_ratio: Figure & canvas → :material/legend_toggle: Legends** has a
-row for each legend the figure can draw: **Compare (A/B)**, **Saccade types**,
-**Fixation colours** (a categorical **Color by**, and the Highlight entries) and
-the duration **Size key**. Each row sets where the legend goes, how its items
-run and its text size:
+**:material/aspect_ratio: Figure & canvas → :material/legend_toggle: Legends** is a
+table with a row for each legend the current figure draws: **Compare (A/B)**
+while comparing, **Saccade types** when saccades are coloured by type,
+**Fixation colours** for a categorical **Color by**, a Highlight filter or raw
+gaze, and the duration **Size key** on a fixed marker scale. A legend the
+figure does not draw has no row. Its columns:
 
-- **Spot**: **Above**, **Below**, **Left** or **Right** of the plot, or
+- **Show**: draw the legend at all. This is the only place to turn a legend on
+  or off.
+- **Position**: **Above**, **Below**, **Left** or **Right** of the plot, or
   **Inside** one of its four corners. An outside spot makes the figure larger
   instead of shrinking the plot, so the text stays true to scale. Legends
   sharing a side line up one after the other.
 - **Arrangement**: **Stacked** (one item under the other) or **Side by side**.
-- **Size**: the text size in px; empty uses the figure's own.
+- **Text size**: in px; empty uses the figure's own.
 
-On **Auto** a legend stays where it is drawn by default. These rows only place a
-legend: whether it is drawn at all is still its own switch, under its layer. The
-size key's circles keep the true marker sizes wherever it goes; its **Size**
-sets the labels. Share links, settings files, saved designs, `render --legend`
-and the API's `legend_layout` all carry the placement.
+On **Auto** a legend stays where it is drawn by default. The size key's circles
+keep the true marker sizes wherever it goes; its **Text size** sets the labels.
+Compare's A/B label patterns stay under **Compare ▾**. Share links, settings
+files, saved designs, `render --legend` / `--no-color-legend` and the API's
+`legend_layout` / `show_color_legend` all carry these.
 
 ## Replay and compare
 

@@ -93,6 +93,7 @@ NON_DEFAULT = {
     "saccade_color_mode": "By type",
     "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#abcdef"},
     "saccade_type_legend": False,
+    "show_color_legend": False,
     "saccade_classes": ["forward", "regression"],
     "saccade_render_mode": "Arc",
     "critical_span_style": "Mark border",
@@ -268,6 +269,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             (80.0, 900.0),
         ),
         (["--no-duration-size-legend"], "duration_size_legend", False),
+        (["--no-color-legend"], "show_color_legend", False),
         (
             ["--legend", "saccades=right,14,stacked", "--legend", "size-key=below"],
             "legend_layout",

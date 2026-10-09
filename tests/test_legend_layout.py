@@ -355,3 +355,63 @@ def test_a_linked_legend_counts_as_a_departure_from_the_design():
         "global_legend_saccades_arrangement",
         "global_legend_saccades_size",
     } <= set(at.session_state["_linked"])
+
+
+class TestTheColourLegendSwitch:
+    def test_off_hides_only_the_colour_entries(self):
+        fig = _figure()
+        apply_legend_layout(fig, None, show_colors=False)
+        shown = {t.name: t.showlegend for t in fig.data}
+        assert shown["line: 1"] is False
+        assert shown["forward"] is not False
+
+
+def _drawn_app():
+    import streamlit as st
+
+    from scanpath_studio.controls import _legends_drawn
+
+    for key, value in st.session_state["_given"].items():
+        st.session_state[key] = value
+    st.session_state["_drawn"] = _legends_drawn(
+        show_fix=True,
+        show_saccades=True,
+        animating=st.session_state.get("_animating", False),
+        comparing=st.session_state.get("_comparing", False),
+        numeric_fields=["duration_ms"],
+    )
+
+
+def _drawn(given, **flags):
+    at = AppTest.from_function(_drawn_app)
+    at.session_state["_given"] = given
+    for key, value in flags.items():
+        at.session_state[key] = value
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+    return at.session_state["_drawn"]
+
+
+class TestOnlyTheLegendsDrawnGetARow:
+    def test_a_plain_figure_has_only_the_size_key(self):
+        assert _drawn({"global_color_by": "duration_ms"}) == ["size_key"]
+
+    def test_a_highlight_adds_the_fixation_colours(self):
+        drawn = _drawn({"global_fixclass_short_mode": "Highlight"})
+        assert "colors" in drawn
+
+    def test_a_categorical_colour_adds_them_too(self):
+        assert "colors" in _drawn({"global_color_by": "line"})
+
+    def test_saccade_types_only_on_the_static_figure(self):
+        by_type = {"global_saccade_color_mode": "By type"}
+        assert "saccades" in _drawn(by_type)
+        assert "saccades" not in _drawn(by_type, _animating=True)
+        assert "saccades" not in _drawn(by_type, _comparing=True)
+
+    def test_compare_only_while_comparing(self):
+        assert "compare" not in _drawn({})
+        assert "compare" in _drawn({}, _comparing=True)
+
+    def test_a_relative_scale_has_no_size_key(self):
+        assert "size_key" not in _drawn({"global_marker_size_scale": "relative"})

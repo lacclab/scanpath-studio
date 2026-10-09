@@ -205,7 +205,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check one trial id is one reading",
-                "Part **4 · Trial identity** checks the whole dataset, before any "
+                "The **Trial identity** part checks the whole dataset, before any "
                 "filtering, and says so either way. A warning here means the "
                 "Trial ID above is missing a column — several readings are being "
                 "drawn as one scanpath, which renders happily as a reading with a "
@@ -2396,9 +2396,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['datasets']} Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in three "
-            "parts: name it, upload and map each table (and pick which extras "
-            "to keep), and describe the recording setup — then save it. "
+            "Turn your eye-tracking tables into an interactive dataset: name "
+            "it, upload and map each table (and pick which extras to keep), "
+            "and describe the recording setup — then save it. "
             "Follow along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
@@ -2438,8 +2438,21 @@ _WIZARD_GUIDE_STEPS = [
         "selector": ".st-key-wiz_part_setup",
         "step_id": "setup",
     },
-    # The way out of the three parts, not a fourth part — no `step_id`, so the
-    # progress line reads "Last step" rather than "Part 4 of 3".
+    # #417 — the add screen's optional fourth part, drawn only on a local
+    # install; `_wizard_guide_steps` leaves this card out wherever it is not.
+    {
+        "title": "4 · Stimulus images",
+        "body": (
+            "Optional: a folder on this computer with a screenshot of each "
+            "text or trial, drawn under the scanpath. The pattern names each "
+            "file from your fields, such as `{text_id}.png`."
+        ),
+        "selector": ".st-key-wiz_part_images",
+        "step_id": "images",
+        "local_only": True,
+    },
+    # The way out of the parts, not one more part — no `step_id`, so the
+    # progress line reads "Last step" rather than "Part 5 of 4".
     {
         "title": f"{ICONS['confirm']} Save it",
         "body": (
@@ -2466,6 +2479,15 @@ _WIZARD_GUIDE_PAGE_CSS = """
 """
 
 
+def _wizard_guide_steps() -> list[dict]:
+    """The guide's cards for the add screen as it is drawn here: the
+    *Stimulus images* card only where that part is (a local install)."""
+    from .app import local_filesystem_enabled
+
+    local = local_filesystem_enabled()
+    return [s for s in _WIZARD_GUIDE_STEPS if local or not s.get("local_only")]
+
+
 def _wizard_guide_go(step_idx: int) -> None:
     """Move the guide to ``step_idx`` and open the wizard step it describes.
 
@@ -2476,9 +2498,10 @@ def _wizard_guide_go(step_idx: int) -> None:
     """
     from . import wizard_shell
 
-    step_idx = max(0, min(step_idx, len(_WIZARD_GUIDE_STEPS) - 1))
+    steps = _wizard_guide_steps()
+    step_idx = max(0, min(step_idx, len(steps) - 1))
     st.session_state["wizard_guide_step"] = step_idx
-    target = _WIZARD_GUIDE_STEPS[step_idx].get("step_id")
+    target = steps[step_idx].get("step_id")
     if target:
         wizard_shell.go_to_step(target)
 
@@ -2499,8 +2522,8 @@ def _wizard_guide_progress(step_idx: int, step: dict) -> str:
     """Where the guide is, counted in the screen's own parts ("2 · Upload data
     tables" is part 2 of 3), not in cards: neither the overview card nor the
     closing Save card is a part, and "Step 3 of 4" under a "2 ·" heading
-    contradicted the "three parts" it opens with."""
-    n_parts = sum(1 for s in _WIZARD_GUIDE_STEPS if s["step_id"])
+    contradicted the parts the screen numbers."""
+    n_parts = sum(1 for s in _wizard_guide_steps() if s["step_id"])
     if step["step_id"]:
         return f"Part {step_idx} of {n_parts}"
     if step_idx:
@@ -2557,9 +2580,10 @@ def render_spotlight_wizard_guide() -> None:
     """
     if st.session_state.get("tour_mode") != "wizard":
         return
-    n = len(_WIZARD_GUIDE_STEPS)
+    steps = _wizard_guide_steps()
+    n = len(steps)
     step_idx = min(st.session_state.get("wizard_guide_step", 0), n - 1)
-    step = _WIZARD_GUIDE_STEPS[step_idx]
+    step = steps[step_idx]
     progress_text = _wizard_guide_progress(step_idx, step)
     if guide_folded("wizard"):
         # Folded: the tab alone — no highlight, and nothing scrolled.

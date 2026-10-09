@@ -26,6 +26,7 @@ import streamlit as st
 from . import progress
 from .constants import (
     DEFAULT_FIGURE_SIZE,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     PACKAGE_NAME,
     SAMPLE_INDEX,
     UPLOAD_FILE_TYPES,
@@ -3825,6 +3826,26 @@ def _pattern_placeholders(pattern: str) -> list[str]:
         if name and name not in names:
             names.append(name)
     return names
+
+
+def stimulus_image_source(value: object) -> dict[str, str] | None:
+    """A dataset's stored stimulus-image source as ``{"folder", "pattern"}``,
+    or ``None`` when ``value`` names no folder (#417).
+
+    What the add screen and ✏️ Edit dataset save, read back from session state
+    and the recovery cache — so anything malformed is ``None`` rather than an
+    error, and a blank pattern is the default one. The folder is kept as typed
+    (``~`` included); `resolve_stimulus_image_paths` expands it.
+    """
+    if not isinstance(value, dict):
+        return None
+    folder = value.get("folder")
+    pattern = value.get("pattern")
+    if not isinstance(folder, str) or not folder.strip():
+        return None
+    if not isinstance(pattern, str) or not pattern.strip():
+        pattern = DEFAULT_STIMULUS_IMAGE_PATTERN
+    return {"folder": folder.strip(), "pattern": pattern.strip()}
 
 
 def resolve_stimulus_image_paths(

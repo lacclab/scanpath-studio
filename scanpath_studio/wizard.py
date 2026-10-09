@@ -28,6 +28,7 @@ from .constants import (
     CITATION,
     DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    DATASET_STIMULUS_IMAGES_KEY,
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
@@ -134,6 +135,9 @@ class _UploadResult(NamedTuple):
 #: never into a new upload. One constant serves every add-dataset session,
 #: because entering the wizard resets its mapping anyway.
 WIZARD_MAPPING_DATASET = "add-dataset wizard"
+#: #417 — the add screen's *Stimulus images* fields (part 4, local installs).
+WIZARD_IMAGES_FOLDER_KEY = "wizard_stimulus_folder"
+WIZARD_IMAGES_PATTERN_KEY = "wizard_stimulus_pattern"
 _WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
 
 
@@ -158,6 +162,8 @@ def _reset_wizard_widgets() -> None:
     for key in (
         "wizard_dataset_name",
         "wizard_dataset_description",
+        WIZARD_IMAGES_FOLDER_KEY,
+        WIZARD_IMAGES_PATTERN_KEY,
         "wizard_dataset_format",
         "wizard_config_restore",
         "_wizard_config_last",
@@ -371,6 +377,14 @@ def _finalize_wizard_dataset() -> None:
         descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
         descriptions[ds_name] = description
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
+    # #417 — and the folder of stimulus images part 4 pointed it at, kept the
+    # same way and for the same reason.
+    if app.local_filesystem_enabled():
+        app.set_dataset_stimulus_images(
+            ds_name,
+            str(st.session_state.get(WIZARD_IMAGES_FOLDER_KEY) or ""),
+            str(st.session_state.get(WIZARD_IMAGES_PATTERN_KEY) or ""),
+        )
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
     _apply_setup_to_figure(payload.get("setup"))
@@ -451,6 +465,10 @@ def _remove_dataset(name: str) -> None:
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if descriptions.pop(name, None) is not None:
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
+    # #417 — and its stimulus-image folder.
+    images = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
+    if images.pop(name, None) is not None:
+        st.session_state[DATASET_STIMULUS_IMAGES_KEY] = images
     # DATA-47 — its metadata tables go with it.
     from scanpath_studio import metadata as _metadata
 
@@ -504,6 +522,11 @@ def rename_dataset(old: str, new: str) -> str | None:
     if old in descriptions:
         descriptions[name] = descriptions.pop(old)
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
+    # #417 — and its stimulus-image folder.
+    images = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
+    if old in images:
+        images[name] = images.pop(old)
+        st.session_state[DATASET_STIMULUS_IMAGES_KEY] = images
     # DATA-47 — and its metadata tables, which are keyed by the name too (the
     # annotations moved above).
     from scanpath_studio import metadata as _metadata
@@ -4661,6 +4684,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
         has_data=has_words or has_fix,
     )
 
+    # #417 — part 4, *Stimulus images*: optional, last, and only on a local
+    # install, where a folder path means something. ✏️ Edit dataset asks the
+    # same question with the same fields. How many rows it finds an image for
+    # needs the normalized tables, so that line is filled further down.
+    images_note = None
+    if active and app.local_filesystem_enabled():
+        s_images = _part("images")
+        images_typed = app.render_stimulus_images_fields(
+            s_images, WIZARD_IMAGES_FOLDER_KEY, WIZARD_IMAGES_PATTERN_KEY
+        )
+        images_note = s_images.container()
+
     # The foot of the wizard: what is still missing, then the button. UX-53 put
     # the alerts *directly above* **Add dataset** — a blocker listed a screen
     # away from the control it blocks is a blocker the user reads after
@@ -4808,6 +4843,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
         st.session_state["_composite_trial_columns"] = (
             rg_trial_cols if len(rg_trial_cols) > 1 else None
+        )
+
+    if images_note is not None:
+        app.render_stimulus_images_preview(
+            images_note, *images_typed, (words_norm, fixations_norm)
         )
 
     if active:

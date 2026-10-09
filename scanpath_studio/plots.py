@@ -67,6 +67,7 @@ from .constants import (
     WORD_BOX_FILL_OPACITY,
     WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
+    canonical_legend_position,
     compare_palette_color,
 )
 from .illustration import MANUAL_LABEL_REASON
@@ -1640,12 +1641,14 @@ def _stack_bottom_right(fig: go.Figure) -> None:
 # it — keeps its size (the same rule as `_decoration_margins`).
 
 #: The size key's own spot when left on "auto": inside, bottom-right.
-_SIZE_KEY_AUTO_POSITION = "bottom-right"
+_SIZE_KEY_AUTO_POSITION = "bottom-right-inside"
+#: A moved legend's spot when only its arrangement or size was set.
+_LEGEND_AUTO_POSITION = "top-right-outside"
 _COLORS_LEGEND_META = "legend:colors"
 _LEGEND_IDS = {"compare": "legend2", "saccades": "legend3", "colors": "legend4"}
 _LEGEND_GAP_PX = 8
-_OUTSIDE = ("above", "below", "left", "right")
-_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+#: Spots whose legend reads as a row by default; the rest stack.
+_ROW_SPOTS = ("top-center", "bottom-center")
 
 
 def normalize_legend_layout(layout: Mapping | None) -> dict:
@@ -1671,11 +1674,11 @@ def normalize_legend_layout(layout: Mapping | None) -> dict:
                 f"Unknown legend setting(s) {sorted(unknown)} for {kind!r}; "
                 "expected position, arrangement, size."
             )
-        position = str(spec.get("position") or "auto")
-        if position not in LEGEND_POSITIONS:
+        position = canonical_legend_position(spec.get("position"))
+        if position is None:
             raise ValueError(
-                f"Legend position {position!r} for {kind!r}; expected one of "
-                f"{', '.join(LEGEND_POSITIONS)}."
+                f"Legend position {spec.get('position')!r} for {kind!r}; "
+                f"expected one of {', '.join(LEGEND_POSITIONS)}."
             )
         arrangement = str(spec.get("arrangement") or "auto")
         if arrangement not in LEGEND_ARRANGEMENTS:
@@ -1693,12 +1696,13 @@ def normalize_legend_layout(layout: Mapping | None) -> dict:
 
 
 def parse_legend_spec(text: str) -> dict:
-    """``"right,stacked,14"`` → ``{"position", "arrangement"?, "size"?}``.
+    """``"right-outside,stacked,14"`` → ``{"position", "arrangement"?, "size"?}``.
 
     The spelling shared by ``render --legend KIND=…``, the ``legend_<kind>``
-    link parameters and the code snippet: a spot first, then an arrangement
-    and a text size in either order, each recognised by its value. Raises
-    ``ValueError`` on anything else.
+    link parameters and the code snippet: a position first (``<spot>-outside``
+    or ``<spot>-inside``, or an old spelling such as ``above``), then an
+    arrangement and a text size in either order, each recognised by its
+    value. Raises ``ValueError`` on anything else.
     """
     head, *rest = [part.strip().lower() for part in str(text).split(",")]
     spec: dict = {"position": head or "auto"}
@@ -1712,7 +1716,8 @@ def parse_legend_spec(text: str) -> dict:
                 f"{part!r} is neither an arrangement "
                 f"({', '.join(LEGEND_ARRANGEMENTS[1:])}) nor a text size."
             )
-    normalize_legend_layout({"compare": spec})  # validates the values
+    # Validates the values, and spells an old position the new way.
+    spec["position"] = normalize_legend_layout({"compare": spec})["compare"]["position"]
     return spec
 
 
@@ -1773,6 +1778,130 @@ def _grow(fig: go.Figure, side: str, px: float) -> None:
         fig.layout.height = float(fig.layout.height) + px
 
 
+def _spot_parts(position: str) -> tuple[str, str, bool]:
+    """``"top-center-outside"`` → ``("top", "center", outside=True)``.
+
+    The first part is the edge the spot sits on (``top`` / ``bottom`` /
+    ``left`` / ``right``), the second where along it (``left`` / ``center`` /
+    ``right`` on the top and bottom edges, ``middle`` on the sides).
+    """
+    spot, _, side = position.rpartition("-")
+    if spot in ("left", "right"):
+        return spot, "middle", side == "outside"
+    edge, _, along = spot.partition("-")
+    return edge, along, side == "outside"
+
+
+def _legend_horizontal(position: str, arrangement: str) -> bool:
+    """Whether a legend at ``position`` runs as a row: its arrangement when
+    one is set; on *Auto* a row at the middle of the top or bottom edge, and a
+    stack elsewhere — down the side on the left and right."""
+    if arrangement != "auto":
+        return arrangement == "side-by-side"
+    return position.rpartition("-")[0] in _ROW_SPOTS
+
+
+class _LegendSlots:
+    """What each spot around the plot already holds, so the legends and the
+    size key that share one stack instead of overlapping.
+
+    An outside spot stacks away from the plot, beyond whatever the margin on
+    that side held before any legend moved (axis ticks, a colour bar, the
+    transport controls) — or, above the plot, beyond the default legend while
+    it still has entries. An inside spot stacks in toward the plot's middle.
+    """
+
+    def __init__(self, fig: go.Figure, *, top_start: float = 0.0) -> None:
+        _plot_w, _plot_h, margin = _plot_px(fig)
+        self.base = dict(margin)
+        self.top_start = top_start
+        self.used: dict = {}
+
+    @classmethod
+    def of(cls, fig: go.Figure) -> _LegendSlots:
+        """The figure's slots, as `apply_legend_layout` left them, or fresh."""
+        slots = getattr(fig, "_sps_legend_slots", None)
+        if slots is None:
+            slots = cls(fig, top_start=_default_legend_height(fig))
+            fig._sps_legend_slots = slots
+        return slots
+
+    def place(
+        self, fig: go.Figure, position: str, w: float, h: float, *, gap: float
+    ) -> dict:
+        """Claim a ``w`` x ``h`` px box at ``position``; return where it goes.
+
+        The answer is a paper point (``x``, ``y``), which side of the box sits
+        on it (``xanchor`` / ``yanchor``), and a px offset from that point
+        (``dx`` / ``dy``, y up). An outside spot grows the figure on its side
+        so the plot region keeps its size.
+        """
+        _plot_w, _plot_h, margin = _plot_px(fig)
+        edge, along, outside = _spot_parts(position)
+        used = self.used.get(position, 0.0)
+        out = {"dx": 0.0, "dy": 0.0}
+        if edge in ("top", "bottom"):
+            out["x"] = {"left": 0.0, "center": 0.5, "right": 1.0}[along]
+            out["xanchor"] = along
+            if not outside and along != "center":
+                out["dx"] = gap if along == "left" else -gap
+            self.used[position] = used + h + gap
+            if edge == "top":
+                out["y"] = 1.0
+                if outside:
+                    out["yanchor"] = "bottom"
+                    out["dy"] = self.top_start + gap + used
+                    need = self.top_start + gap + used + h
+                    _grow(fig, "t", max(0.0, need - margin["t"]))
+                else:
+                    out["yanchor"] = "top"
+                    out["dy"] = -(gap + used)
+            else:
+                out["y"] = 0.0
+                if outside:
+                    out["yanchor"] = "top"
+                    out["dy"] = -(self.base["b"] + gap + used)
+                    need = self.base["b"] + gap + used + h
+                    _grow(fig, "b", max(0.0, need - margin["b"]))
+                else:
+                    out["yanchor"] = "bottom"
+                    out["dy"] = gap + used
+            return out
+        # The left and right sides: a legend runs down the side, centred.
+        out["y"], out["yanchor"] = 0.5, "middle"
+        self.used[position] = used + w + gap
+        side = "l" if edge == "left" else "r"
+        out["x"] = 0.0 if edge == "left" else 1.0
+        if outside:
+            out["xanchor"] = "right" if edge == "left" else "left"
+            reach = self.base[side] + gap + used
+            out["dx"] = -reach if edge == "left" else reach
+            _grow(fig, side, max(0.0, reach + w - margin[side]))
+        else:
+            out["xanchor"] = edge
+            out["dx"] = gap + used if edge == "left" else -(gap + used)
+        return out
+
+
+def _default_legend_entries(fig: go.Figure) -> list:
+    """The names still listed in the figure's default legend."""
+    return [
+        t.name
+        for t in fig.data
+        if t.legend in (None, "legend") and t.showlegend is not False and t.name
+    ]
+
+
+def _default_legend_height(fig: go.Figure) -> float:
+    """The default legend's height above the plot (0 once it is empty), so a
+    legend moved above the plot sits beyond it rather than over it."""
+    names = _default_legend_entries(fig)
+    if not names:
+        return 0.0
+    font_px = float((fig.layout.font and fig.layout.font.size) or 12)
+    return _legend_extent(names, font_px, True)[1]
+
+
 def apply_legend_layout(
     fig: go.Figure,
     layout: Mapping | None,
@@ -1784,8 +1913,8 @@ def apply_legend_layout(
 
     Kinds still on "auto" stay in the figure's default ``legend``; the size key
     is placed by :func:`_add_duration_size_key`, not here. Legends sharing a
-    side are laid out one after another along it, and an outside side reserves
-    room for the widest (or tallest) of them.
+    spot stack one beyond the other, and an outside spot grows the figure on
+    its side by what it holds.
     """
     if not show_colors:
         # Fixation colours → Show off: the entries stay on the figure's traces
@@ -1816,92 +1945,48 @@ def apply_legend_layout(
             names[kind].append(title)
         if trace.name:
             names[kind].append(trace.name)
+    # The default legend's strip above the plot: when every entry has moved out
+    # of it and the strip is exactly that reserve — the single-trial figures'
+    # and the Compare overlay's (a title is added later, in a band of its own)
+    # — it is handed back. The side-by-side and stacked layouts keep theirs:
+    # their panels' names sit in it.
+    _plot_w, _plot_h, margin = _plot_px(fig)
+    if (
+        not _default_legend_entries(fig)
+        and margin["t"] in (_LEGEND_RESERVE_PX, _OVERLAY_TOP_PX)
+        and getattr(fig, "_grid_ref", None) is None
+    ):
+        _grow(fig, "t", -margin["t"])
+    slots = _LegendSlots(fig, top_start=_default_legend_height(fig))
+    fig._sps_legend_slots = slots
     base_font = float((fig.layout.font and fig.layout.font.size) or 12)
-    plot_w, plot_h, margin = _plot_px(fig)
-    gap = _LEGEND_GAP_PX
-    along = {side: 0.0 for side in (*_OUTSIDE, *_CORNERS)}
-    reserve = {side: 0.0 for side in _OUTSIDE}
     for kind in ("compare", "saccades", "colors"):
         if kind not in moved or not names[kind]:
             continue
         spec = specs[kind]
-        position = "above" if spec["position"] == "auto" else spec["position"]
-        horizontal = (
-            spec["arrangement"] == "side-by-side"
-            if spec["arrangement"] != "auto"
-            else position in ("above", "below")
+        position = (
+            _LEGEND_AUTO_POSITION if spec["position"] == "auto" else spec["position"]
         )
+        horizontal = _legend_horizontal(position, spec["arrangement"])
         font_px = float(spec["size"] or base_font)
         w, h = _legend_extent(names[kind], font_px, horizontal)
+        at = slots.place(fig, position, w, h, gap=_LEGEND_GAP_PX)
+        plot_w, plot_h, _margin = _plot_px(fig)
         cfg: dict = {
             "orientation": "h" if horizontal else "v",
             "bgcolor": "rgba(255,255,255,0.75)",
+            "xanchor": at["xanchor"],
+            "yanchor": at["yanchor"],
+            "x": at["x"] + at["dx"] / plot_w,
+            "y": at["y"] + at["dy"] / plot_h,
         }
+        if horizontal:
+            # A grouped legend gives each group a column of its own, so the
+            # saccade types would still stack; "normal" runs them as one row.
+            cfg["traceorder"] = "normal"
         if spec["size"]:
             cfg["font"] = {"size": font_px}
-        if position == "above":
-            cfg.update(
-                xanchor="right",
-                x=1 - along["above"] / plot_w,
-                yanchor="bottom",
-                y=1 + gap / plot_h,
-            )
-            along["above"] += w + gap
-            reserve["above"] = max(reserve["above"], h + gap)
-        elif position == "below":
-            cfg.update(
-                xanchor="left",
-                x=along["below"] / plot_w,
-                yanchor="top",
-                y=-(margin["b"] + gap) / plot_h,
-            )
-            along["below"] += w + gap
-            reserve["below"] = max(reserve["below"], h + gap)
-        elif position == "left":
-            cfg.update(
-                xanchor="right",
-                x=-(margin["l"] + gap) / plot_w,
-                yanchor="top",
-                y=1 - along["left"] / plot_h,
-            )
-            along["left"] += h + gap
-            reserve["left"] = max(reserve["left"], w + gap)
-        elif position == "right":
-            cfg.update(
-                xanchor="left",
-                x=1 + (margin["r"] + gap) / plot_w,
-                yanchor="top",
-                y=1 - along["right"] / plot_h,
-            )
-            along["right"] += h + gap
-            reserve["right"] = max(reserve["right"], w + gap)
-        else:
-            top = position.startswith("top")
-            left = position.endswith("left")
-            inset = along[position]
-            cfg.update(
-                xanchor="left" if left else "right",
-                x=gap / plot_w if left else 1 - gap / plot_w,
-                yanchor="top" if top else "bottom",
-                y=1 - (gap + inset) / plot_h if top else (gap + inset) / plot_h,
-            )
-            along[position] += h + gap
         fig.update_layout({_LEGEND_IDS[kind]: cfg})
-    # The default legend's strip above the plot: when every entry has moved out
-    # of it and the strip is exactly that reserve (the single-trial figures —
-    # a comparison's top margin also holds its title), it is handed back.
-    default_left = any(
-        t.legend in (None, "legend") and t.showlegend is not False and t.name
-        for t in fig.data
-    )
-    if not default_left and margin["t"] == _LEGEND_RESERVE_PX and not comparing:
-        _grow(fig, "t", -_LEGEND_RESERVE_PX)
-        margin["t"] = 0.0
-    # Above: the default legend's own reserve may already cover it.
-    _grow(fig, "t", max(0.0, reserve["above"] - margin["t"]))
-    _grow(fig, "b", reserve["below"])
-    _grow(fig, "l", reserve["left"])
-    _grow(fig, "r", reserve["right"])
     return fig
 
 
@@ -1909,11 +1994,13 @@ def _size_key_layout(layout: Mapping | None) -> dict:
     """The size key's resolved spot, arrangement and label size."""
     spec = normalize_legend_layout(layout)["size_key"]
     position = spec["position"]
-    return {
-        "position": _SIZE_KEY_AUTO_POSITION if position == "auto" else position,
-        "stacked": spec["arrangement"] == "stacked",
-        "size": spec["size"],
-    }
+    position = _SIZE_KEY_AUTO_POSITION if position == "auto" else position
+    if spec["arrangement"] == "auto":
+        # A row, as it always drew — except down the side of the plot.
+        stacked = _spot_parts(position)[0] in ("left", "right")
+    else:
+        stacked = spec["arrangement"] == "stacked"
+    return {"position": position, "stacked": stacked, "size": spec["size"]}
 
 
 def _add_duration_size_key(
@@ -1933,7 +2020,8 @@ def _add_duration_size_key(
     shapes rather than a trace. ``legend_layout``'s ``size_key`` entry picks the
     spot (inside bottom-right by default), a row or a column, and the labels'
     size; the circles themselves never scale, since their size *is* the key.
-    An outside spot grows the figure so the plot region keeps its size.
+    An outside spot grows the figure so the plot region keeps its size, and a
+    spot a moved legend already holds stacks the key beyond it.
     Nothing is drawn for the relative scale: its sizes mean something only
     inside one figure."""
     if scale == "relative":
@@ -2013,32 +2101,15 @@ def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple
     """``(left, bottom, anchor_x, anchor_y)``: where the size key's box goes.
 
     ``left`` / ``bottom`` are px from the paper anchor to the box's bottom-left
-    corner. An outside spot sits beyond whatever already occupies that margin
-    (a colour bar, the transport controls, another legend) and grows it.
+    corner. The spot is claimed through the figure's `_LegendSlots`, so a
+    legend already there is stacked past, and an outside spot grows the figure.
+    Inside, the key keeps to the plot's edge: its own padding is its gap.
     """
-    gap = _LEGEND_GAP_PX
-    if position in _CORNERS:
-        top = position.startswith("top")
-        right = position.endswith("right")
-        return (
-            (-w if right else 0.0),
-            (-h if top else 0.0),
-            (1 if right else 0),
-            (1 if top else 0),
-        )
-    _plot_w, _plot_h, margin = _plot_px(fig)
-    if position == "right":
-        _grow(fig, "r", w + gap)
-        return margin["r"] + gap, 0.0, 1, 0
-    if position == "left":
-        _grow(fig, "l", w + gap)
-        return -(margin["l"] + gap + w), 0.0, 0, 0
-    if position == "above":
-        _grow(fig, "t", max(0.0, h + gap - margin["t"]))
-        return 0.0, gap, 0, 1
-    # below
-    _grow(fig, "b", h + gap)
-    return -w, -(margin["b"] + gap + h), 1, 0
+    gap = 0.0 if not _spot_parts(position)[2] else float(_LEGEND_GAP_PX)
+    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap)
+    left = at["dx"] - {"left": 0.0, "center": w / 2.0, "right": w}[at["xanchor"]]
+    bottom = at["dy"] - {"bottom": 0.0, "middle": h / 2.0, "top": h}[at["yanchor"]]
+    return left, bottom, at["x"], at["y"]
 
 
 # VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight

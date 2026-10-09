@@ -75,8 +75,12 @@ NON_DEFAULT = {
     "marker_duration_range": (80.0, 900.0),
     "duration_size_legend": False,
     "legend_layout": {
-        "saccades": {"position": "right", "arrangement": "stacked", "size": 14},
-        "size_key": {"position": "top-left"},
+        "saccades": {
+            "position": "right-outside",
+            "arrangement": "stacked",
+            "size": 14,
+        },
+        "size_key": {"position": "top-left-inside"},
     },
     "fixation_snap_to_word": True,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
@@ -271,11 +275,20 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--no-duration-size-legend"], "duration_size_legend", False),
         (["--no-color-legend"], "show_color_legend", False),
         (
-            ["--legend", "saccades=right,14,stacked", "--legend", "size-key=below"],
+            [
+                "--legend",
+                "saccades=right-outside,14,stacked",
+                "--legend",
+                "size-key=bottom-center-outside",
+            ],
             "legend_layout",
             {
-                "saccades": {"position": "right", "arrangement": "stacked", "size": 14},
-                "size_key": {"position": "below"},
+                "saccades": {
+                    "position": "right-outside",
+                    "arrangement": "stacked",
+                    "size": 14,
+                },
+                "size_key": {"position": "bottom-center-outside"},
             },
         ),
         (["--hollow-fixations"], "hollow_fixations", True),

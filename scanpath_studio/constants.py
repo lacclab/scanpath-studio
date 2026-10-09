@@ -1310,29 +1310,66 @@ LEGEND_KIND_LABELS = {
     "colors": "Fixation colours",
     "size_key": "Size key",
 }
-#: Where a legend can go: outside the plot on a side, or inside a corner.
-LEGEND_POSITIONS = (
-    "auto",
-    "above",
-    "below",
+#: The eight spots a legend can take around the plot — each corner, the middle
+#: of the top and bottom edges, and the middle of the left and right sides
+#: (where a legend runs down the side).
+LEGEND_SPOTS = (
+    "top-left",
+    "top-center",
+    "top-right",
     "left",
     "right",
-    "top-left",
-    "top-right",
     "bottom-left",
+    "bottom-center",
     "bottom-right",
+)
+LEGEND_SPOT_LABELS = {
+    "top-left": "Top left",
+    "top-center": "Top center",
+    "top-right": "Top right",
+    "left": "Left",
+    "right": "Right",
+    "bottom-left": "Bottom left",
+    "bottom-center": "Bottom center",
+    "bottom-right": "Bottom right",
+}
+#: Where a legend can go: *Auto*, or a spot outside the plot (the figure grows
+#: to make room) or inside it (over the plot), spelled ``<spot>-<side>``.
+LEGEND_POSITIONS = (
+    "auto",
+    *(f"{spot}-outside" for spot in LEGEND_SPOTS),
+    *(f"{spot}-inside" for spot in LEGEND_SPOTS),
 )
 LEGEND_POSITION_LABELS = {
     "auto": "Auto",
-    "above": "Above",
-    "below": "Below",
-    "left": "Left",
-    "right": "Right",
-    "top-left": "Inside top-left",
-    "top-right": "Inside top-right",
-    "bottom-left": "Inside bottom-left",
-    "bottom-right": "Inside bottom-right",
+    **{
+        f"{spot}-{side}": f"{label}, {side}"
+        for side in ("outside", "inside")
+        for spot, label in LEGEND_SPOT_LABELS.items()
+    },
 }
+#: The positions links, settings files and scripts wrote before the eight
+#: spots, read as the spot each one drew at.
+LEGEND_POSITION_ALIASES = {
+    "above": "top-right-outside",
+    "below": "bottom-left-outside",
+    "left": "left-outside",
+    "right": "right-outside",
+    "top-left": "top-left-inside",
+    "top-right": "top-right-inside",
+    "bottom-left": "bottom-left-inside",
+    "bottom-right": "bottom-right-inside",
+}
+
+
+def canonical_legend_position(value) -> str | None:
+    """``value`` as one of `LEGEND_POSITIONS` (an old spelling is read through
+    `LEGEND_POSITION_ALIASES`), or ``None`` when it is neither."""
+    text = str(value or "auto").strip().lower()
+    text = LEGEND_POSITION_ALIASES.get(text, text)
+    return text if text in LEGEND_POSITIONS else None
+
+
 #: How a legend's items run: one under the other, or side by side.
 LEGEND_ARRANGEMENTS = ("auto", "stacked", "side-by-side")
 LEGEND_ARRANGEMENT_LABELS = {

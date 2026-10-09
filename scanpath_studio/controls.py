@@ -66,6 +66,7 @@ from .constants import (
     WORD_BOX_FILL_OPACITY,
     WORD_BOX_LINE_OPACITY,
     WORD_LABEL_COLOR,
+    canonical_legend_position,
     compare_palette_color,
     drift_correction_enabled,
     icon_html,
@@ -5427,14 +5428,15 @@ _LEGEND_COLUMNS = (
     ("Show", "Draw this legend on the figure."),
     (
         "Position",
-        "Where it sits. Above, Below, Left and Right are outside the plot (the "
-        "figure grows to make room); the Inside spots sit over it. Auto: where "
-        "it is drawn by default.",
+        "Where it sits: a corner, the middle of the top or bottom edge, or "
+        "down the left or right side — outside the plot (the figure grows to "
+        "make room) or inside it, over the plot. Legends sharing a spot stack. "
+        "Auto: where it is drawn by default.",
     ),
     (
         "Arrangement",
         "Stacked: one item under the other. Side by side: in a row. Auto: a row "
-        "above or below the plot, a stack elsewhere.",
+        "at the middle of the top or bottom edge, a stack elsewhere.",
     ),
     ("Text size", "Its text size in px. Empty: the figure's own."),
 )
@@ -5485,11 +5487,15 @@ def _legends_drawn(
 
 #: What each Legends row places (📐 Figure & canvas → Legends).
 _LEGEND_ROW_HELP = {
-    "compare": "The A/B legend naming the two scanpaths (Compare's *Legend*).",
-    "saccades": "The saccade-type legend (↗️ Saccades → Color by type → Legend).",
-    "colors": "The legend of a categorical Color by, and the Highlight entries.",
-    "size_key": "The duration size key (👁️ Fixations → Size key). Its circles "
-    "keep the true marker sizes; Size sets its labels.",
+    "compare": "The A/B legend naming the two scanpaths. Edit its labels in "
+    "⚖️ Compare ▾ → Label A / Label B.",
+    "saccades": "The saccade-type legend. Edit its colours in ↗️ Saccades ▾ → "
+    "Color, set to By type.",
+    "colors": "The legend of a categorical Color by, and the Highlight entries. "
+    "Its entries come from 👁️ Fixations ▾ → Marker → Color, and from the "
+    "Highlight filters in 🧹 Filter ▾.",
+    "size_key": "The duration size key. Its circles keep the true marker sizes; "
+    "edit the durations it shows in 👁️ Fixations ▾ → Durations.",
 }
 
 
@@ -5505,8 +5511,7 @@ def _collect_legend_layout(ss) -> dict | None:
         position = ss.get(f"global_legend_{kind}_position") or "auto"
         arrangement = ss.get(f"global_legend_{kind}_arrangement") or "auto"
         size = ss.get(f"global_legend_{kind}_size")
-        if position not in LEGEND_POSITION_LABELS:
-            position = "auto"
+        position = canonical_legend_position(position) or "auto"
         if arrangement not in LEGEND_ARRANGEMENT_LABELS:
             arrangement = "auto"
         try:
@@ -7996,6 +8001,12 @@ def render_plot_controls(
                 persist_state="session",
                 label_visibility="collapsed",
             )
+            # A position spelled the old way (a link, a settings file or the
+            # recovery cache from before the eight spots) reads as its spot.
+            pos_key = f"global_legend_{kind}_position"
+            stored = st.session_state.get(pos_key)
+            if stored is not None and stored not in LEGEND_POSITION_LABELS:
+                st.session_state[pos_key] = canonical_legend_position(stored) or "auto"
             pos_col.selectbox(
                 f"{LEGEND_KIND_LABELS[kind]} legend position",
                 disabled=not shown,

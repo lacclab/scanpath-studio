@@ -2064,27 +2064,32 @@ def _add_duration_size_key(
         centres = [(pad + (i + 0.5) * slot, cy) for i in range(n)]
         labels = [(cx, pad + label_px / 2.0, "center") for cx, _ in centres]
     left, bottom, ax, ay = _size_key_anchor(fig, placement["position"], w, h)
+    # Collected and added in one assignment: each `add_shape` re-validates every
+    # shape already on the figure — the word boxes and heatmap rects (#422).
+    circles = []
     for (_, label), size, (cx, cy), (lx, ly, align) in zip(
         refs, sizes, centres, labels
     ):
         r = size / 2.0
-        fig.add_shape(
-            type="circle",
-            xref="paper",
-            yref="paper",
-            xsizemode="pixel",
-            ysizemode="pixel",
-            xanchor=ax,
-            yanchor=ay,
-            x0=left + cx - r,
-            x1=left + cx + r,
-            y0=bottom + cy - r,
-            y1=bottom + cy + r,
-            line=dict(color="#555555", width=1),
-            fillcolor="rgba(120,120,120,0.35)",
-            layer="above",
-            # Rides the fixations layer of a separable export (VIZ-5).
-            name=_shape_layer_tag("fixations"),
+        circles.append(
+            dict(
+                type="circle",
+                xref="paper",
+                yref="paper",
+                xsizemode="pixel",
+                ysizemode="pixel",
+                xanchor=ax,
+                yanchor=ay,
+                x0=left + cx - r,
+                x1=left + cx + r,
+                y0=bottom + cy - r,
+                y1=bottom + cy + r,
+                line=dict(color="#555555", width=1),
+                fillcolor="rgba(120,120,120,0.35)",
+                layer="above",
+                # Rides the fixations layer of a separable export (VIZ-5).
+                name=_shape_layer_tag("fixations"),
+            )
         )
         fig.add_annotation(
             x=ax,
@@ -2102,6 +2107,7 @@ def _add_duration_size_key(
             ),
             name=_SIZE_KEY_NAME,
         )
+    fig.layout.shapes = (*(fig.layout.shapes or ()), *circles)
     _stack_bottom_right(fig)
 
 
@@ -3809,11 +3815,16 @@ def _render_scanpath_figure(
     )
     highlight_text = has_highlight and critical_span_style == "Mark text"
 
+    # Every layout shape the figure draws, in drawing order, set on the figure
+    # once at the end (#422): each `update_layout(shapes=…)` / `add_shape` on a
+    # figure that has shapes re-validates all of them, so adding the boxes, the
+    # heatmap and the frame one after another cost a second on a 150-word page.
+    layout_shapes: list = []
     if spatial_axes and not words.empty:
         # Word-box grid (the "Bounding boxes" layer) and the "Mark border" span
         # overlay are independent: the span borders show even when the boxes are
         # off (then only the span outline is drawn).
-        shapes = (
+        layout_shapes += (
             build_word_boxes(
                 words,
                 color=settings.word_box_color,
@@ -3825,12 +3836,10 @@ def _render_scanpath_figure(
             else []
         )
         if has_highlight and critical_span_style == "Mark border":
-            shapes = shapes + build_critical_span_overlay(
+            layout_shapes += build_critical_span_overlay(
                 words, highlight_column, color=span_border_color
             )
             _add_highlight_key(fig, highlight_column, span_border_color, border=True)
-        if shapes:
-            fig.update_layout(shapes=shapes)
         if show_word_labels:
             _add_word_label_trace(
                 fig,
@@ -3887,7 +3896,7 @@ def _render_scanpath_figure(
                 sigma_px=heatmap_sigma_px,
             )
         elif not words.empty:
-            _add_word_level_heatmap(
+            layout_shapes += _add_word_level_heatmap(
                 fig,
                 words,
                 fixations,
@@ -3925,7 +3934,7 @@ def _render_scanpath_figure(
         if word_heatmap_col is not None and word_heatmap_col in words.columns:
             heatmap_rendered = True
             values = pd.to_numeric(words[word_heatmap_col], errors="coerce").fillna(0.0)
-            _draw_word_value_heatmap(
+            layout_shapes += _draw_word_value_heatmap(
                 fig,
                 words,
                 [float(v) for v in values],
@@ -3944,7 +3953,7 @@ def _render_scanpath_figure(
             )
             if measure in words.columns:
                 heatmap_rendered = True
-                _add_word_measure_heatmap(
+                layout_shapes += _add_word_measure_heatmap(
                     fig,
                     words,
                     measure,
@@ -4282,9 +4291,8 @@ def _render_scanpath_figure(
             showticklabels=True, showgrid=True, title=_column_title(y_field)
         )
 
-    shapes = list(fig.layout.shapes) if fig.layout.shapes else []
     if spatial_axes:
-        shapes.append(
+        layout_shapes.append(
             dict(
                 type="rect",
                 x0=x_range[0],
@@ -4330,8 +4338,9 @@ def _render_scanpath_figure(
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
         font=font_settings,
-        shapes=shapes,
     )
+    # One assignment, no merge: nothing else in the build puts a shape on.
+    fig.layout.shapes = (*(fig.layout.shapes or ()), *layout_shapes)
     add_illustration_label(fig, illustration_reasons, text=settings.illustration_text)
     return fig
 
@@ -4419,7 +4428,9 @@ def _add_word_level_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
-) -> None:
+) -> list[dict]:
+    """Tint each word box by the fixations in it; returns the tint rects for
+    the caller to put on the figure (`_draw_word_value_heatmap`)."""
     # Pull the fixation coordinates (and optional weights) into numpy arrays once,
     # then test box membership per word against the arrays. Same O(words × fix)
     # work as before but without rebuilding pandas Series each iteration, and with
@@ -4446,7 +4457,7 @@ def _add_word_level_heatmap(
         )
         word_values.append(val)
 
-    _draw_word_value_heatmap(
+    return _draw_word_value_heatmap(
         fig,
         words,
         word_values,
@@ -4469,7 +4480,7 @@ def _add_word_measure_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
-) -> None:
+) -> list[dict]:
     """Word-box heatmap from a pre-aggregated per-word measure column.
 
     Used for words-only datasets (IA report without a fixation report): the
@@ -4477,7 +4488,7 @@ def _add_word_measure_heatmap(
     with no fixations the dataset's own reading measures (e.g. total fixation
     duration) carry the same information."""
     values = pd.to_numeric(words[measure], errors="coerce").fillna(0.0)
-    _draw_word_value_heatmap(
+    return _draw_word_value_heatmap(
         fig,
         words,
         [float(v) for v in values],
@@ -4503,7 +4514,12 @@ def _draw_word_value_heatmap(
     heatmap_norm: str = "Linear",
     colorbar_title: str,
     colorbar_style: dict | None = None,
-) -> None:
+) -> list[dict]:
+    """Add the heatmap's colour bar to ``fig`` and return its tint rects.
+
+    The rects are returned, not added: the builder sets every layout shape on
+    the figure in one assignment, since each addition re-validates every shape
+    already there (#422)."""
     from plotly.colors import sample_colorscale
 
     from .measures import word_box_bounds
@@ -4515,7 +4531,7 @@ def _draw_word_value_heatmap(
     boxes = zip(*word_box_bounds(words))
     nonzero_rows = [(box, v) for box, v in zip(boxes, word_values) if v > 0]
     if not nonzero_rows:
-        return
+        return []
     vals = [v for _, v in nonzero_rows]
     # Auto starts at 0: an empty word is the bottom of the scale.
     z_min_raw = heatmap_range[0] if heatmap_range else 0.0
@@ -4524,11 +4540,17 @@ def _draw_word_value_heatmap(
     z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
     z_span = max(z_max - z_min, 1e-9)
 
+    positions = [
+        max(
+            0.0,
+            min(1.0, (float(_apply_heatmap_norm(v, heatmap_norm)) - z_min) / z_span),
+        )
+        for v in vals
+    ]
+    # One call for every box: each call looks the scale up by name again.
+    colors = sample_colorscale(heatmap_colorscale, positions)
     heatmap_shapes = []
-    for (x0, y0, x1, y1), v in nonzero_rows:
-        tv = float(_apply_heatmap_norm(v, heatmap_norm))
-        norm = max(0.0, min(1.0, (tv - z_min) / z_span))
-        color = sample_colorscale(heatmap_colorscale, [norm])[0]
+    for ((x0, y0, x1, y1), _v), color in zip(nonzero_rows, colors):
         heatmap_shapes.append(
             dict(
                 type="rect",
@@ -4544,8 +4566,6 @@ def _draw_word_value_heatmap(
                 name=_shape_layer_tag("heatmap"),
             )
         )
-    existing = list(fig.layout.shapes) if fig.layout.shapes else []
-    fig.update_layout(shapes=existing + heatmap_shapes)
     if show_colorbars:
         fig.add_trace(
             go.Scatter(
@@ -4569,6 +4589,7 @@ def _draw_word_value_heatmap(
                 name="heatmap colorbar",
             )
         )
+    return heatmap_shapes
 
 
 def _add_density_heatmap(
@@ -7981,6 +8002,9 @@ def _render_comparison_figure(
         if show_heatmap
         else ([], 0.0, 1.0, "")
     )
+    # Every layout shape, in drawing order, set once at the end — as the static
+    # figure does (#422): each addition re-validates every shape already there.
+    layout_shapes: list = []
 
     if show_heatmap:
         reference_words = next(
@@ -7991,9 +8015,8 @@ def _render_comparison_figure(
             ),
             pd.DataFrame(),
         )
-        existing = list(fig.layout.shapes) if fig.layout.shapes else []
         for index, half in enumerate(("left", "right")):
-            existing.extend(
+            layout_shapes.extend(
                 _comparison_heatmap_shapes(
                     reference_words,
                     heatmap_maps[index],
@@ -8004,7 +8027,6 @@ def _render_comparison_figure(
                     half=half,
                 )
             )
-        fig.update_layout(shapes=existing)
         if show_heatmap_colorbar and any(heatmap_maps):
             for trace in _comparison_heatmap_colorbar_traces(
                 trial_specs,
@@ -8087,16 +8109,12 @@ def _render_comparison_figure(
             category_colors=category_colors[_idx],
         )
         if show_words and draws_stimulus[_idx]:
-            existing = list(fig.layout.shapes) if fig.layout.shapes else []
-            fig.update_layout(
-                shapes=existing
-                + build_word_boxes(
-                    spec["trial_words"],
-                    color=spec["box_color"],
-                    fill_color=spec["box_fill_color"],
-                    fill_opacity=settings.word_box_fill_opacity,
-                    line_opacity=settings.word_box_line_opacity,
-                )
+            layout_shapes += build_word_boxes(
+                spec["trial_words"],
+                color=spec["box_color"],
+                fill_color=spec["box_fill_color"],
+                fill_opacity=settings.word_box_fill_opacity,
+                line_opacity=settings.word_box_line_opacity,
             )
         if show_word_labels and draws_stimulus[_idx]:
             _add_word_label_trace(
@@ -8119,8 +8137,7 @@ def _render_comparison_figure(
 
     _add_category_legend(fig, category_legend, category_label or "")
 
-    shapes = list(fig.layout.shapes) if fig.layout.shapes else []
-    shapes.append(
+    layout_shapes.append(
         dict(
             type="rect",
             x0=x_range[0],
@@ -8207,8 +8224,8 @@ def _render_comparison_figure(
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
         font=font_settings,
-        shapes=shapes,
     )
+    fig.layout.shapes = (*(fig.layout.shapes or ()), *layout_shapes)
     return fig
 
 

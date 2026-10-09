@@ -42,6 +42,9 @@ sparse words don't look like stable estimates.
 Turn on **Compare a second group**, with the two group means and their
 difference — descriptive, with no significance test.
 Fields from attached participant, trial or text tables appear here too.
+A group is a set of whole trials, whichever table holds its field: its word
+and fixation measures come from the same trials. A trial whose Words and
+Fixations tables disagree about the field is left out, and the page says so.
 
 ## From summary to evidence
 

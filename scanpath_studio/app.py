@@ -213,8 +213,11 @@ from scanpath_studio.data import (
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
+    select_trials_cached,
     stamp_source,
     text_ids,
+    trial_filter_conflict_note,
+    trial_filter_params,
     trial_identity_warning,
     trial_keys,
     trial_mapping_columns,
@@ -10393,25 +10396,25 @@ def _run_app() -> None:
     # is on. `assign_derived` names them by their inputs and settings, so the
     # caches downstream are keyed without hashing the whole pool each time.
     pool = (words_df, fixations_df)
-    words_df, fixations_df = filter_trials(
-        words_df,
-        fixations_df,
-        participants=trial_filters["participants"],
-        metadata=trial_filters["metadata"],
-        ranges=trial_filters.get("ranges"),
-        drop_unknown=trial_filters.get("ranges_drop_unknown"),
+    selected = select_trials_cached(
+        words_df, fixations_df, trial_filters, slot="trial_filters"
     )
+    words_df, fixations_df = selected.words, selected.fixations
     assign_derived(
         (words_df, fixations_df),
         "filter_trials",
         pool,
-        (
-            trial_filters["participants"],
-            trial_filters["metadata"],
-            trial_filters.get("ranges"),
-            tuple(trial_filters.get("ranges_drop_unknown") or ()),
-        ),
+        trial_filter_params(trial_filters),
     )
+    if selected.conflicts:
+        # #412: a reading whose two tables disagree about a filtered field is
+        # left out of the pool, never decided for one table — and said so.
+        menu.notices.warning(
+            trial_filter_conflict_note(
+                selected.conflicts, active_all(st.session_state).label
+            ),
+            icon=ICONS["warning"],
+        )
     # DATA-29: a trial-grain metadata narrowing is already `(participant_id,
     # trial_id)` keys, so it applies through `filter_to_keys` rather than
     # `filter_trials` — the table is never broadcast onto the frames, which is
@@ -10499,6 +10502,9 @@ def _run_app() -> None:
             fixations_all,
             words_filtered,
             fixations_filtered,
+            # #412: a trial only the samples have has no value for a condition
+            # the other two tables decided, so a category leaves it out.
+            keep_unknown=selected.selection is None or selected.selection.keeps_unknown,
         )
         if raw_gaze_filtered.empty:
             # Informational, not an error: the loaded raw-gaze samples just

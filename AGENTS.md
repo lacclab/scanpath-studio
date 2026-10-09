@@ -191,6 +191,10 @@ and JSON export/import per dataset on 🗂️ Data → Annotations (the Export b
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,
 correctness) and by annotation state (favorites / tags) before `build_combo_options`.
+A condition or range is decided **per reading** `(participant_id, trial_id)`
+from whichever table carries its column and applied to every table, raw gaze
+included (#412, `data.select_trials` → `TrialSelection`); a reading the two
+tables disagree on is left out and reported, never decided for one table.
 
 ### Where the work is tracked
 

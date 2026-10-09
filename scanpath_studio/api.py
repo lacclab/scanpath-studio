@@ -1613,13 +1613,16 @@ def list_trials(
 ) -> pd.DataFrame:
     """One row per plottable trial: its participant id and trial id.
 
-    Trials present in both frames when both are loaded; for single-report
-    datasets (words-only or fixations-only), trials from whichever frame has
-    data. ``raw_gaze`` (a frame from
-    [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) adds the trials that
-    only its samples cover — every trial, for a dataset recorded as raw gaze
-    alone (pass ``None`` for ``words`` and ``fixations`` then). The id columns
-    take the names the frames carry."""
+    Every trial **any** table has — the words, the fixations or ``raw_gaze``
+    (a frame from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze]) — once,
+    however many of them have it: the app's trial picker, ``render
+    --list-trials`` and the export bundle list the same set (#412). A trial a
+    table lacks plots without that layer: a trial with words but no fixations
+    draws its text alone, one with fixations but no words its scanpath over no
+    word boxes. Pass ``None`` for a table the dataset does not have — both
+    ``words`` and ``fixations`` for a dataset recorded as raw gaze alone.
+    Sorted by participant, then trial; the id columns take the names the
+    frames carry."""
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     gaze_names = None
@@ -1627,26 +1630,7 @@ def list_trials(
         raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
     names = _call_names(fixations=fix_names, words=word_names, raw_gaze=gaze_names)
     cols = ["participant_id", "trial_id"]
-    if words.empty or fixations.empty:
-        present = fixations if words.empty else words
-        combos = present[cols].drop_duplicates()
-    else:
-        combos = words[cols].drop_duplicates().merge(fixations[cols].drop_duplicates())
-    if raw_gaze is not None and not raw_gaze.empty:
-        # The app's rule (`utils.combo_source`): a trial is listed when it has
-        # fixations — or, in a dataset without any, words — or when it has raw
-        # gaze. So a trial with words and samples but no fixations is listed,
-        # while one the intersection above drops for having fixations but no
-        # words stays dropped: its samples add nothing the rule is about.
-        known = _data.trial_keys(fixations if not fixations.empty else words)
-        samples = raw_gaze[cols].drop_duplicates()
-        extra = samples[
-            [
-                (str(p), str(t)) not in known
-                for p, t in zip(samples["participant_id"], samples["trial_id"])
-            ]
-        ]
-        combos = pd.concat([combos, extra], ignore_index=True)
+    combos = _data.trial_pool(fixations, words, raw_gaze)
     combos = combos.sort_values(cols).reset_index(drop=True)
     return _named_out(combos, "trials", names.identity() if names else None)
 
@@ -2673,9 +2657,9 @@ def animate_scanpath(
     if trial_fixations.empty:
         raise ValueError(
             f"participant={pid!r}, trial={tid!r} has no fixations to replay — the "
-            "replay is built from fixations. A trial recorded as raw gaze alone "
-            "can be drawn with plot_scanpath(..., raw_gaze=...); its samples are "
-            "not turned into fixations."
+            "replay is built from fixations. Draw it with plot_scanpath(...): its "
+            "words alone, or, for a trial recorded as raw gaze, with raw_gaze=... "
+            "(its samples are not turned into fixations)."
         )
     _check_column_options(named, words=trial_words, fixations=trial_fixations)
     full_fix_range = None
@@ -3330,8 +3314,10 @@ def compare_scanpaths(
     for frame, (pid, tid) in ((trial_fix_a, trial_a), (trial_fix_b, trial_b)):
         if frame.empty:
             raise ValueError(
-                f"No fixations for participant={pid!r}, trial={tid!r}. "
-                f"list_trials() shows what the frames contain."
+                f"No fixations for participant={pid!r}, trial={tid!r}: a "
+                "comparison draws two scanpaths, so each trial needs fixations. "
+                "list_trials() also lists the trials only the words or the raw "
+                "gaze has; draw one of those with plot_scanpath()."
             )
     # Either reading may carry the column (two corpora need not share them), so
     # it is looked for across both.

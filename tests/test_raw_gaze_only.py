@@ -743,15 +743,20 @@ class TestScanpathView:
 # -----------------------------------------------------------------------------
 
 
-def test_list_trials_adds_only_trials_neither_table_covers(raw_gaze):
-    """A trial the words∩fixations rule leaves out on purpose stays out when
-    its samples are passed too — only a trial *neither* table has is added."""
+def test_list_trials_lists_each_trial_any_table_has_once(raw_gaze):
+    """#412: the union, as the app's picker lists it. A trial whose words are
+    gone is still listed for its fixations (it used to be dropped by the
+    words∩fixations rule), its samples add no second entry, and a trial only
+    the samples have is added."""
     words, fixations = api.load_scanpath_data(
         *sps.load_sample_data(names="canonical"), names="canonical"
     )
     pid, tid = _key(raw_gaze)
+    every = sps.list_trials(words, fixations)
     words = words[~((words["participant_id"] == pid) & (words["trial_id"] == tid))]
     without = sps.list_trials(words, fixations)
+    assert len(without) == len(every)
+    assert (pid, tid) in set(without.itertuples(index=False, name=None))
     assert len(sps.list_trials(words, fixations, raw_gaze=raw_gaze)) == len(without)
     extra = raw_gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
     assert len(sps.list_trials(words, fixations, raw_gaze=extra)) == len(without) + 1

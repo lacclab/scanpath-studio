@@ -2508,7 +2508,7 @@ def _render_wizard_guide_card(step_idx: int, n: int, step: dict) -> None:
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
         st.markdown(f"## {step['title']}")
         st.button(
-            "—",
+            f"— {spoken('Fold the setup guide')}",
             key="wizard_sp_fold",
             on_click=_set_wizard_guide_folded,
             args=(True,),

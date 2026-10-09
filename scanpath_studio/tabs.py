@@ -4971,7 +4971,9 @@ _ANIM_QUALITY_PRESETS = {
 }
 
 
-def _render_anim_info_box(
+def _render_anim_info(
+    timing_host,
+    frames_host,
     trial_fixations: pd.DataFrame,
     fixations_b: pd.DataFrame | None,
     selected_participant: str,
@@ -4982,9 +4984,13 @@ def _render_anim_info_box(
     grid_step_ms: float | None = None,
     max_frames: int | None = None,
 ) -> float:
-    """Render the animation reading-time / playback info box (+ overlay caveats),
-    shown in the side panel under the Animate toggle. Returns the playback
-    duration in ms; the box deliberately omits a redundant fixation count."""
+    """Write the replay's timing and frame count into the Animate popover.
+
+    ``timing_host`` is the *Replay* group's Duration row: how long the reading
+    took and how long its replay plays at this speed (#422 moved it there from a
+    box under *Frames*, since it follows from the speed, not the frames).
+    ``frames_host`` sits under *Frames* and says what the grid produced.
+    Returns the playback duration in ms."""
     dual = fixations_b is not None and not fixations_b.empty
     summary = animation_timeline_summary(
         [trial_fixations] + ([fixations_b] if dual else []),
@@ -4997,39 +5003,29 @@ def _render_anim_info_box(
     if dual:
         span_a = animation_playback_ms([trial_fixations], 1.0)[0]
         span_b = animation_playback_ms([fixations_b], 1.0)[0]
-        st.info(
-            f"Trial duration **A** {span_a / 1000:.1f}s · **B** "
-            f"{span_b / 1000:.1f}s · Playback ×{playback_speed:g}: "
-            f"{playback_ms / 1000:.1f}s"
+        trial = f"**A** {span_a / 1000:.1f} s · **B** {span_b / 1000:.1f} s"
+    else:
+        trial = f"Trial {reading_span_ms / 1000:.1f} s"
+    timing_host.caption(f"{trial} · Playback {playback_ms / 1000:.1f} s")
+    # The different-texts caveat used to live here too; it is under the
+    # figure now (`_different_texts_note`), where it is actually read.
+    if dual and (compare_participant, compare_trial) == (
+        selected_participant,
+        selected_trial,
+    ):
+        timing_host.caption(
+            f"{ICONS['warning']} Scanpath B is the same trial as scanpath A."
         )
-        # The different-texts caveat used to live here too; it is under the
-        # figure now (`_different_texts_note`), where it is actually read.
-        if (compare_participant, compare_trial) == (
-            selected_participant,
-            selected_trial,
-        ):
-            st.caption(
-                f"{ICONS['warning']} Scanpath B is the same trial as scanpath A."
-            )
     # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
     # coarsening the step used to be invisible, which is the whole reason the
-    # setting felt arbitrary. UX-30 folded it INTO the box below rather than
-    # leaving it as a second, detached caption at the foot of the popover: the
-    # frame count is part of the same "what will this replay be like?" answer.
+    # setting felt arbitrary.
     grid = (
         f"**{summary['n_frames']}** frames · one every "
         f"{summary['step_ms']:.0f} ms of reading"
     )
     if summary["coarsened"]:
         grid += ". Spacing was widened automatically to stay within the frame limit."
-    if not dual:
-        st.info(
-            f"Trial duration: {reading_span_ms / 1000:.1f}s · "
-            f"Playback ×{playback_speed:g}: {playback_ms / 1000:.1f}s\n\n"
-            f"{grid}"
-        )
-    else:
-        st.caption(grid)
+    frames_host.caption(grid)
     return playback_ms
 
 
@@ -6576,7 +6572,7 @@ def render_single_trial_tab(
                 # open shows nothing. Off, every control inside is greyed instead
                 # (`anim_gate`), which is the same "your value is kept" contract the
                 # rail's own mode gating uses. Disabled or not, the body always runs,
-                # which is what keeps `playback_speed` / `anim_info_slot` defined.
+                # which is what keeps `playback_speed` / `anim_frames_slot` defined.
                 anim_disabled = not animate
                 anim_gate = (
                     ""
@@ -6644,6 +6640,20 @@ def render_single_trial_tab(
                             key="global_anim_autoplay",
                             persist_state="session",
                             disabled=anim_disabled,
+                        )
+                        # #422: how long the trial and its replay are belongs to
+                        # *Replay*, under the speed it follows from. Filled later
+                        # (`_render_anim_info`), once scanpath B is known; drawn
+                        # only while there is a replay to time.
+                        anim_timing_slot = (
+                            _sub_row(
+                                "Duration",
+                                caption_help="How long the trial's reading "
+                                "took, and how long its replay plays at the "
+                                "speed above.",
+                            )
+                            if animate
+                            else None
                         )
 
                         # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
@@ -6751,7 +6761,7 @@ def render_single_trial_tab(
                     # Filled later, once the selected comparison trial is known.
                     # Creating the slot here keeps the resulting frame count beside
                     # the smoothness control that determines it.
-                    anim_info_slot = st.container()
+                    anim_frames_slot = st.container()
             if animate:
                 # #374 F23: why the layer rows below are greyed, said where it
                 # is read without hovering each one.
@@ -7628,37 +7638,39 @@ def render_single_trial_tab(
         ),
     )
 
-    # Animation info box, in its slot inside the rail's Playback popover.
-    if animate and not fig_fixations.empty and anim_info_slot is not None:
-        with anim_info_slot:
-            # VIZ-25: quote the same timeline the replay draws. The animation
-            # builder drops Discard-mode fixation classes internally; apply the
-            # shared classifier here too so the info box cannot count hidden rows.
-            info_fixations = _discard_flagged_fixations(
-                fig_fixations,
-                trial_words,
-                viz_settings.get("fixation_flags"),
+    # The replay's timing and frame count, in their slots inside the rail's
+    # Animate popover.
+    if animate and not fig_fixations.empty and anim_timing_slot is not None:
+        # VIZ-25: quote the same timeline the replay draws. The animation
+        # builder drops Discard-mode fixation classes internally; apply the
+        # shared classifier here too so the info cannot count hidden rows.
+        info_fixations = _discard_flagged_fixations(
+            fig_fixations,
+            trial_words,
+            viz_settings.get("fixation_flags"),
+        )
+        info_compare_fix = (
+            _discard_flagged_fixations(
+                fig_compare_fix,
+                compare_meta["words"],
+                figure_settings.get("fixation_flags_b"),
             )
-            info_compare_fix = (
-                _discard_flagged_fixations(
-                    fig_compare_fix,
-                    compare_meta["words"],
-                    figure_settings.get("fixation_flags_b"),
-                )
-                if dual_anim
-                else None
-            )
-            _render_anim_info_box(
-                info_fixations,
-                info_compare_fix,
-                selected_participant,
-                selected_trial,
-                compare_participant,
-                compare_trial,
-                playback_speed,
-                grid_step_ms=viz_settings.get("anim_grid_step_ms"),
-                max_frames=viz_settings.get("anim_max_frames"),
-            )
+            if dual_anim
+            else None
+        )
+        _render_anim_info(
+            anim_timing_slot,
+            anim_frames_slot,
+            info_fixations,
+            info_compare_fix,
+            selected_participant,
+            selected_trial,
+            compare_participant,
+            compare_trial,
+            playback_speed,
+            grid_step_ms=viz_settings.get("anim_grid_step_ms"),
+            max_frames=viz_settings.get("anim_max_frames"),
+        )
 
     with plot_slot:
         if not animate:

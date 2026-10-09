@@ -62,6 +62,7 @@ from .constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_SETUP_OVERRIDES_KEY,
+    DATASET_STIMULUS_IMAGES_KEY,
     DOWNLOAD_DIR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
@@ -182,6 +183,9 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # design library. A plain session key so editing one never touches the
     # stored frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
     DATASET_DESCRIPTIONS_KEY,
+    # #417 — each dataset's stimulus-image folder and pattern, kept the same
+    # way and for the same reason. A local path in a local cache.
+    DATASET_STIMULUS_IMAGES_KEY,
     # VIZ-45 — which dataset the raw-gaze layer's default was last decided for,
     # and what it overwrote. Without them a relaunch onto a raw-gaze-only
     # dataset decides again and turns back on a layer the user switched off.
@@ -1063,6 +1067,18 @@ def _restorable_session(stored: Any) -> dict:
                     str(name): str(text)
                     for name, text in value.items()
                     if isinstance(text, str)
+                }
+            continue
+        if key == DATASET_STIMULUS_IMAGES_KEY:
+            # #417 — ``{dataset: {"folder", "pattern"}}``; an entry naming no
+            # folder is dropped.
+            if isinstance(value, dict):
+                from .data import stimulus_image_source
+
+                clean[key] = {
+                    str(name): source
+                    for name, entry in value.items()
+                    if (source := stimulus_image_source(entry)) is not None
                 }
             continue
         if key == DOWNLOAD_DIR_KEY:

@@ -867,6 +867,16 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 
+#: #417 — ``{dataset token: {"folder": str, "pattern": str}}``, the local
+#: folder of stimulus images each dataset was pointed at (the add screen's and
+#: ✏️ Edit dataset's *Stimulus images*), for any kind of dataset. Kept beside
+#: the store like the descriptions, for the same reason. A machine-local path,
+#: so it is in the recovery cache — which is local itself — and never on a
+#: share link or in a settings file.
+DATASET_STIMULUS_IMAGES_KEY = "_dataset_stimulus_images"
+#: The filename pattern a dataset starts with when none was given.
+DEFAULT_STIMULUS_IMAGE_PATTERN = "{text_id}.png"
+
 #: ``{dataset token: SetupSnapshot.to_dict()}`` — the recording setup the user
 #: saved on ✏️ Edit dataset for a **built-in or public** dataset, in place of
 #: the one the corpus declares (which is never rewritten). An upload keeps its

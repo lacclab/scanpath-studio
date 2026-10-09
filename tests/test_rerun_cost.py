@@ -163,43 +163,39 @@ class TestWithholdingTheFramesIsHonest:
 
 
 class TestTheImageCaptionCountsPathsNotRows:
-    def test_a_thousand_rows_of_two_images_stat_two_paths(self, tmp_path, monkeypatch):
-        good = tmp_path / "a.png"
-        good.write_bytes(b"\x89PNG")
+    """#417: *Stimulus images*' "Found an image … for N rows" comes from the
+    match itself — one probe per distinct placeholder value, never per row."""
+
+    def test_a_thousand_rows_of_two_texts_probe_two_paths(self, tmp_path, monkeypatch):
+        from pathlib import Path
+
+        from scanpath_studio.data import match_stimulus_images
+
+        (tmp_path / "a.png").write_bytes(b"\x89PNG")
         probes: list[str] = []
-        real = app.os.path.isfile
+        real = Path.is_file
         monkeypatch.setattr(
-            app.os.path,
-            "isfile",
-            lambda path: (probes.append(path), real(path))[1],
+            Path, "is_file", lambda path: (probes.append(str(path)), real(path))[1]
         )
-        frame = pd.DataFrame(
-            {"image_path": [str(good), str(tmp_path / "missing.png")] * 500}
-        )
+        frame = pd.DataFrame({"text_id": ["a", "missing"] * 500})
 
-        found = app._rows_with_local_images(frame)
+        match = match_stimulus_images(frame, tmp_path, "{text_id}.png")
 
-        assert found == 500, "every row naming the real file counts"
-        assert len(probes) == 2, "one probe per distinct path"
+        assert match.found == 500, "every row of the text with an image counts"
+        assert len(probes) == 2, "one probe per distinct text"
 
-    def test_missing_values_are_not_probed(self, tmp_path, monkeypatch):
-        probes: list[str] = []
-        monkeypatch.setattr(
-            app.os.path, "isfile", lambda path: (probes.append(path), False)[1]
-        )
+    def test_missing_values_are_not_counted(self, tmp_path):
+        from scanpath_studio.data import match_stimulus_images
 
-        found = app._rows_with_local_images(
-            pd.DataFrame({"image_path": [None, np.nan, None]})
-        )
+        (tmp_path / "nan.png").write_bytes(b"\x89PNG")
+        frame = pd.DataFrame({"text_id": [None, np.nan, None]})
+        assert match_stimulus_images(frame, tmp_path, "{text_id}.png").found == 0
 
-        assert found == 0
-        assert probes == []
+    def test_nothing_to_match_counts_nothing(self, tmp_path):
+        from scanpath_studio.data import match_stimulus_images
 
-    def test_a_frame_with_no_image_path_column_counts_nothing(self):
-        assert app._rows_with_local_images(pd.DataFrame({"x": [1.0]})) == 0
-
-    def test_none_counts_nothing(self):
-        assert app._rows_with_local_images(None) == 0
+        assert match_stimulus_images(None, tmp_path).found == 0
+        assert match_stimulus_images(pd.DataFrame(), tmp_path).found == 0
 
 
 class TestAFullWindowIsATrueNoOp:

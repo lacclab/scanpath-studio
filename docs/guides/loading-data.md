@@ -29,7 +29,8 @@ left out. See [Data format](../data-format.md) for every field.
 
 ## Import files
 
-The import screen has three parts:
+The import screen has three parts, and a fourth when the app runs on your own
+computer:
 
 1. **Name & description** — the description is optional.
 2. **Upload data tables** — start from scratch, or with **Start from** reuse a
@@ -50,6 +51,10 @@ The import screen has three parts:
    are what Corpus Analysis shows. Optional tables, one row per participant, trial
    or text, add fields to filter and group by.
 3. **Recording setup** — the screen the data was recorded on (below).
+4. **Stimulus images** — optional: a folder with a screenshot of each text or
+   trial, drawn under the scanpath, and a filename pattern that names each file
+   from your fields, such as `{text_id}.png`. The folder is saved with the
+   dataset and never put on a share link.
 
 Then click **:material/check: Add dataset**. Anything the app cannot use is listed above the
 button before you confirm.
@@ -82,8 +87,8 @@ and every line can be changed later on **Edit dataset**.
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
 The :material/edit: on a row opens that dataset's editor under the list, below
-its counts and tables. It changes its name, description, column mapping, recording setup
-and metadata tables, or adds a table it is missing (Fixations, Words (interest areas) or raw
+its counts and tables. It changes its name, description, column mapping, recording setup,
+stimulus images and metadata tables, or adds a table it is missing (Fixations, Words (interest areas) or raw
 gaze); its mapped fields show the same value preview. On an
 added dataset, changing an ID or coordinate column shows a few values as they
 are now and as they will be after saving, and **:material/search: Count trials and check

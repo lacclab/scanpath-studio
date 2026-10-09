@@ -2036,10 +2036,23 @@ def get_app_css() -> str:
     /* Section dividers default to 32px top+bottom margin — far too airy for the
        narrow rail. Tighten them so the sections sit close together. */
     .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
-    /* The palette divider meets the first bordered layer card; leave a small
-       extra pause so the rule and the Fixations border do not crowd together. */
+    /* #422 — the palette divider sits midway between the Palette box and the
+       Fixations card, ~0.55rem from each, instead of a rem below the box and
+       half that above the card. Its own margins are zeroed — the rule's, and
+       its markdown wrapper's (Streamlit's -1rem that cancels a paragraph's
+       margin, which with the rule's margins made the space lopsided) — so the
+       rail's gap and the app-wide 0.25rem under each block set the space
+       above it; the 0.2rem below makes up for the layer rows sitting a little
+       closer than other blocks do. */
+    .st-key-scanpath_rail .st-key-palette_layers_divider > div,
+    .st-key-scanpath_rail .st-key-palette_layers_divider
+        [data-testid="stMarkdownContainer"],
+    .st-key-scanpath_rail .st-key-palette_layers_divider hr {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
     .st-key-scanpath_rail .st-key-palette_layers_divider {
-        margin-bottom: 0.4rem !important;
+        margin-bottom: 0.2rem !important;
     }
     /* Plot-rail triggers need enough height for their labels and switch tracks;
        the app-wide compact button treatment otherwise leaves them cramped. */
@@ -2051,8 +2064,9 @@ def get_app_css() -> str:
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
     }
+    /* #422: the presets' height, not 3rem — one line of label needs no more. */
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
-        min-height: 3rem;
+        min-height: 2.6rem;
     }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
@@ -2110,8 +2124,17 @@ def get_app_css() -> str:
         padding-top: 0.45rem;
         margin-bottom: 0.05rem;
     }
-    .st-key-scanpath_rail .st-key-quick_views_grid > [data-testid="stVerticalBlock"] {
-        gap: 0.15rem !important;
+    /* #422 — the grid's two rows are as far apart as its two columns
+       (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
+       app-wide 0.25rem under each block, twice over. The key sits on the
+       vertical block itself, so the rule names it, not a child of it. */
+    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"] {
+        gap: 0.4rem !important;
+    }
+    .st-key-scanpath_rail .st-key-quick_views_grid > div,
+    .st-key-scanpath_rail .st-key-quick_views_grid [data-testid="stColumn"]
+        [data-testid="stVerticalBlock"] > div {
+        margin-bottom: 0 !important;
     }
     /* VIZ-39 — 🎨 My designs. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
@@ -2243,7 +2266,7 @@ def get_app_css() -> str:
        the rail (`plot_reset_footer`), full width like every other trigger there,
        so neither the two-column header nor the query that patched it remains.
        Keep the heading a single element: a second column here is what broke. */
-    .st-key-plot_reset_footer { margin-top: 0.35rem; }
+    .st-key-plot_reset_footer { margin-top: 0.15rem; }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on

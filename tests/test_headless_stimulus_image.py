@@ -453,16 +453,33 @@ class TestShareCode:
         assert "background_image=" in code
 
     def test_a_folders_page_comes_with_the_folder(self, every_page):
-        at = _app(stimulus_image_root=str(every_page))
+        from scanpath_studio.constants import (
+            DATASET_STIMULUS_IMAGES_KEY,
+            DEFAULT_STIMULUS_IMAGE_PATTERN,
+            DEMO_CHOICE,
+        )
+
+        # #417: the folder saved with the open dataset (the demo, here).
+        saved = {
+            DATASET_STIMULUS_IMAGES_KEY: {
+                DEMO_CHOICE: {
+                    "folder": str(every_page),
+                    "pattern": DEFAULT_STIMULUS_IMAGE_PATTERN,
+                }
+            }
+        }
+        at = _app(**saved)
         state = at.session_state[cs.SNIPPET_STATE_KEY]
-        # The app drew the folder's page (the key the folder box writes)…
+        # The app drew the folder's page…
         assert str(state.settings["background_image"]).startswith(str(every_page))
-        # …and the Share panel, reading the same box, loads it with the folder.
+        # …and the Share panel, reading the same store, loads it with the folder.
         from streamlit.testing.v1 import AppTest
 
         panel = AppTest.from_function(_share_code_panel)
         panel.session_state[cs.SNIPPET_STATE_KEY] = state
-        panel.session_state["stimulus_image_root"] = str(every_page)
+        panel.session_state["data_source_choice"] = DEMO_CHOICE
+        for key, value in saved.items():
+            panel.session_state[key] = value
         panel.run(timeout=60)
         assert not panel.exception, panel.exception
         code = panel.session_state["_snippet_code_current"]

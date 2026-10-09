@@ -956,7 +956,7 @@ def attach_stimulus_images(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,
     image_root: str | Path,
-    image_pattern: str = "{text_id}.png",
+    image_pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN,
 ) -> ScanpathData:
     """Fill ``image_path`` from a folder of stimulus images, on frames already
     loaded.

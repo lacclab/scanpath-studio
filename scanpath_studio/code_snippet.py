@@ -531,19 +531,20 @@ def _raw_gaze_only_cli(source: SnippetSource) -> list[str]:
     return _raw_gaze_cli(source)
 
 
-#: #420 — the filename pattern ``attach_stimulus_images`` and ``render
-#: --image-pattern`` use when none is given, so a snippet leaves it out.
-_DEFAULT_IMAGE_PATTERN = "{text_id}.png"
-
-
-def _image_folder(source: SnippetSource) -> tuple[str, str] | None:
+def _image_folder(source: SnippetSource) -> tuple[str, str | None] | None:
     """``(folder, pattern)`` when the data half matched stimulus pages to its
-    rows (``render --image-root``), else ``None``. Raw gaze alone has no rows
-    to match a page to."""
+    rows (``render --image-root``), else ``None``; the pattern is ``None`` when
+    it is the default one, which a snippet leaves out (#420). Raw gaze alone
+    has no rows to match a page to."""
+    from .constants import DEFAULT_STIMULUS_IMAGE_PATTERN
+
     root = source.options.get("image_root")
     if not root or source.kind == SOURCE_RAW_GAZE:
         return None
-    return str(root), str(source.options.get("image_pattern") or _DEFAULT_IMAGE_PATTERN)
+    pattern = str(source.options.get("image_pattern") or "")
+    return str(root), (
+        None if pattern in ("", DEFAULT_STIMULUS_IMAGE_PATTERN) else pattern
+    )
 
 
 def _image_folder_python(source: SnippetSource) -> list[str]:
@@ -552,7 +553,7 @@ def _image_folder_python(source: SnippetSource) -> list[str]:
         return []
     root, pattern = folder
     args = ["words", "fixations", _py(root)]
-    if pattern != _DEFAULT_IMAGE_PATTERN:
+    if pattern is not None:
         args.append(_py(pattern))
     return [
         "words, fixations = sps.attach_stimulus_images(",
@@ -567,7 +568,7 @@ def _image_folder_cli(source: SnippetSource) -> list[str]:
         return []
     root, pattern = folder
     argv = ["--image-root", root]
-    if pattern != _DEFAULT_IMAGE_PATTERN:
+    if pattern is not None:
         argv += ["--image-pattern", pattern]
     return argv
 

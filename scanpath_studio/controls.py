@@ -5528,6 +5528,94 @@ def _collect_legend_layout(ss) -> dict | None:
     return layout or None
 
 
+#: The background choice that means "the colour in ``global_bg_custom``".
+BG_CUSTOM_CHOICE = "Custom…"
+#: Every value ``global_bg_choice`` can hold: the presets, then Custom….
+BG_CHOICES = (*BACKGROUND_PRESETS, BG_CUSTOM_CHOICE)
+#: #422 — the shadow behind the background swatch. The swatch always shows the
+#: colour the figure is drawn on (a preset's, or the custom one), so picking a
+#: colour in it simply applies it; only that pick writes the two wire keys.
+_BG_SWATCH_KEY = "rail_bg_swatch"
+
+
+def shadow_widget_key(name: str, value) -> str:
+    """The key a shadow widget showing ``value`` is drawn under (#422).
+
+    A shadow shows a value derived from wire keys it does not own, and writes
+    them only from its own ``on_change``. Inside a popover (#374 F9) a browser
+    that once showed the widget keeps sending back the value it last showed, so
+    a shadow re-seeded under one fixed key could take that stale value for a
+    pick and write it back over a change made elsewhere (a link, a settings
+    file, a design, another dataset). So, like the fixation window's slider,
+    the widget moves to a fresh key whenever ``value`` changed without it: a
+    widget the browser has never seen has nothing old to send back. Returns
+    the key to draw under; its value is already ``value``."""
+    ss = st.session_state
+    gen_key = f"_{name}_gen"
+    generation = int(ss.get(gen_key) or 0)
+    widget_key = f"_{name}__w{generation}"
+    if widget_key not in ss or ss[widget_key] != value:
+        ss.pop(widget_key, None)
+        generation += 1
+        ss[gen_key] = generation
+        widget_key = f"_{name}__w{generation}"
+        ss[widget_key] = value
+    return widget_key
+
+
+def resolved_background_color(state) -> str:
+    """The figure's background colour from ``global_bg_choice`` /
+    ``global_bg_custom``: a preset's colour, or the custom one."""
+    choice = state.get("global_bg_choice", BG_CHOICES[0])
+    if choice == BG_CUSTOM_CHOICE:
+        return str(state.get("global_bg_custom") or DEFAULT_BACKGROUND_COLOR)
+    return BACKGROUND_PRESETS.get(choice, BACKGROUND_PRESETS[BG_CHOICES[0]])
+
+
+def _apply_background_swatch(widget_key: str) -> None:
+    """A colour picked in the swatch becomes the background (#422).
+
+    A colour that is a preset's selects that preset; any other is stored as
+    the custom colour and selects *Custom…*. Both keys are written through
+    (#374 F9): the selectbox beside the swatch sits in the same popover."""
+    if _shadow_key_missing(widget_key):  # BUG-18
+        return
+    picked = str(st.session_state[widget_key])
+    preset = next(
+        (
+            name
+            for name, value in BACKGROUND_PRESETS.items()
+            if value.lower() == picked.lower()
+        ),
+        None,
+    )
+    if preset is None:
+        write_through("global_bg_custom", picked)
+    write_through("global_bg_choice", preset or BG_CUSTOM_CHOICE)
+
+
+def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
+    """The background's colour box: it shows the colour in use, and a colour
+    picked in it is applied at once (#422).
+
+    It used to be the *Custom…* colour's own picker, greyed until *Custom…* was
+    chosen in the selectbox beside it — a box that did nothing until you found
+    the other control. It is a shadow now (`shadow_widget_key`), derived every
+    run from the wire keys, so links, settings files and presets move it and
+    only a pick writes them."""
+    widget_key = shadow_widget_key(
+        _BG_SWATCH_KEY, resolved_background_color(st.session_state)
+    )
+    return host.color_picker(
+        label,
+        key=widget_key,
+        on_change=_apply_background_swatch,
+        args=(widget_key,),
+        disabled=disabled,
+        **kwargs,
+    )
+
+
 def _collect_viz_settings(
     trial_fixations: pd.DataFrame,
     words: pd.DataFrame | None,
@@ -5606,16 +5694,9 @@ def _collect_viz_settings(
         candidate = ss.get("global_highlight_column")
         highlight_column = candidate if candidate in highlight_options else None
 
-    # Background colour comes from the Experimental Setup picker (read here so it
-    # flows into the figure via viz_settings).
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    bg_choice = ss.get("global_bg_choice", bg_options[0])
-    if bg_choice == "Custom…":
-        background_color = ss.get("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
-    else:
-        background_color = BACKGROUND_PRESETS.get(
-            bg_choice, BACKGROUND_PRESETS[bg_options[0]]
-        )
+    # Background colour comes from 📄 Stimulus → Text's Color row (read here so
+    # it flows into the figure via viz_settings).
+    background_color = resolved_background_color(ss)
 
     return dict(
         show_words=bool(ss.get("global_show_words")),

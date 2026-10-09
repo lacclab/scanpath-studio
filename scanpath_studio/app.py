@@ -88,7 +88,6 @@ from scanpath_studio.constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     AUTHOR_CHOICE,
-    BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
     BENCHMARK_SHORT_SUFFIX,
     BENCHMARK_WIP_SUFFIX,
@@ -150,6 +149,7 @@ from scanpath_studio.constants import (
 )
 from scanpath_studio.controls import (
     _LABEL_GAP,
+    BG_CHOICES,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
@@ -157,6 +157,7 @@ from scanpath_studio.controls import (
     _pin,
     _sub_caption,
     _sub_row,
+    background_swatch,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
@@ -8107,8 +8108,7 @@ def seed_canvas_state(
     # share-link / saved-config wire format, so this is not cosmetic. Pinned by
     # `test_canvas_settings_survive_a_corpus_analysis_round_trip`.
     ss = st.session_state
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    if ss.get("global_bg_choice") not in bg_options:
+    if ss.get("global_bg_choice") not in BG_CHOICES:
         ss.pop("global_bg_choice", None)
     # One table drives both the pin and the read-back. `_pin` swallows the
     # StreamlitAPIException raised when a key's widget was already built earlier
@@ -8123,11 +8123,10 @@ def seed_canvas_state(
         "global_line_spacing": float(DEFAULT_LINE_SPACING),
         "global_font_family": FONT_FAMILY,
         "global_text_color": WORD_LABEL_COLOR,
-        "global_bg_choice": bg_options[0],
-        # Pinned here as well as in the render path: its picker exists only while
-        # the choice is "Custom…", so it is the one key with no other keeper —
-        # without this a custom background is lost the first time the user opens
-        # Corpus Analysis and the choice silently falls back to a preset.
+        "global_bg_choice": BG_CHOICES[0],
+        # No widget owns this key (the swatch is a shadow of it, #422), so it is
+        # pinned here: without this a custom background is lost the first time
+        # the user opens Corpus Analysis and the choice falls back to a preset.
         "global_bg_custom": DEFAULT_BACKGROUND_COLOR,
     }
 
@@ -8205,8 +8204,9 @@ def _rail_text_rows(
       greys; otherwise it is the reading text's, and a size in points is
       converted with the dataset DPI (px = pt × DPI ÷ 72);
     * *Font* — the font family and the *Multilingual* stack;
-    * *Color* — the text colour, then the plot background (and its custom
-      colour, greyed unless *Custom…* is picked).
+    * *Color* — the text colour, then the plot background: a preset, and a
+      colour box showing the colour in use, where any colour picked applies
+      at once (#422).
 
     ``disabled`` greys every row while the Text layer is off (UX-97's contract:
     the settings stay readable, and their stored values are untouched).
@@ -8328,13 +8328,12 @@ def _rail_text_rows(
             width="stretch",
         )
 
-        # Seeded rather than given a `value=`: restored pre-widget by a deep
-        # link / saved config (BUG-17). `seed_canvas_state` pins it too, so a
-        # custom background survives the runs this picker is greyed.
-        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
         color = _sub_row(
             "Color",
-            caption_help=tip("The reading text's color, and the plot background."),
+            caption_help=tip(
+                "The reading text's color, then the plot background: pick a "
+                "preset, or any color in the box beside it."
+            ),
         )
         text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
             [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
@@ -8347,19 +8346,18 @@ def _rail_text_rows(
             label_visibility="collapsed",
         )
         _sub_caption(bg_cap_col, "Background")
-        bg_choice = bg_col.selectbox(
+        bg_col.selectbox(
             "Plot background",
-            options=list(BACKGROUND_PRESETS.keys()) + ["Custom…"],
+            options=BG_CHOICES,
             key="global_bg_choice",
             persist_state="session",
             disabled=disabled,
             label_visibility="collapsed",
         )
-        bg_custom_col.color_picker(
-            "Custom background color",
-            key="global_bg_custom",
-            persist_state="session",
-            disabled=disabled or bg_choice != "Custom…",
+        background_swatch(
+            bg_custom_col,
+            label="Background color",
+            disabled=disabled,
             label_visibility="collapsed",
         )
 
@@ -8714,33 +8712,17 @@ def render_canvas_controls(
 
     # Plot background lives here (Experimental Setup) rather than under
     # Visualization; render_plot_controls reads the chosen value from session state.
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
     field(
         text,
         "selectbox",
         "Plot background",
-        options=bg_options,
+        options=BG_CHOICES,
         key="global_bg_choice",
         persist_state="session",
         help="Background of the plotting area (and exported figures).",
     )
-    if st.session_state.get("global_bg_choice") == "Custom…":
-        # Seed rather than pass `value=`: this key is restored pre-widget by a
-        # deep link / saved config, and a keyed widget given both logs Streamlit's
-        # "default value but also had its value set" warning (BUG-17).
-        # This picker exists only while the choice is "Custom…", so it typically
-        # FIRST mounts on a later run — the BUG-15 case, now handled by the
-        # widget's own `persist_state="session"` (ENG-36) rather than by
-        # re-asserting the value from Python on every run.
-        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
-        field(
-            text,
-            "color_picker",
-            "Custom background color",
-            display="Custom color",
-            key="global_bg_custom",
-            persist_state="session",
-        )
+    # #422: the colour in use, and any colour picked here applies at once.
+    background_swatch(text, label="Background color")
 
     return (
         int(canvas_width),

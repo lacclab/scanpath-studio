@@ -4682,6 +4682,7 @@ def _read_uploaded_frame(
     container=None,
     kind: str | None = None,
     label_visibility: str = "visible",
+    messages=None,
 ) -> pd.DataFrame:
     """Render one upload box and return its (concatenated) frame.
 
@@ -4698,8 +4699,14 @@ def _read_uploaded_frame(
     Streamlit's own label + native (~1s) help tooltip. The widget still gets the
     real ``uploader_label``/``upload_help`` as its accessible name and help; only
     where they are drawn changes.
+
+    ``messages`` is where a file the readers refuse, or a large-upload warning,
+    is said — the add screen's wide side of the row. Drawn in the uploader's own
+    narrow column, an error pushed the file chip, and with it the ✕ that removes
+    the file, out of sight.
     """
     host = container if container is not None else st.container()
+    messages = messages if messages is not None else host
     uploaded = host.file_uploader(
         uploader_label,
         type=_UPLOAD_TYPES,
@@ -4723,14 +4730,14 @@ def _read_uploaded_frame(
         str(getattr(st.context, "url", "") or "")
     ):
         mb = uploaded_files_total_bytes(uploaded) / (1024 * 1024)
-        host.warning(
+        messages.warning(
             f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
             "parsing a corpus this large can exhaust memory and crash the app. "
             f"For big corpora, use the [desktop app]({CITATION['desktop_url']}) "
             "or `pip install scanpath-studio`, or upload a subset (e.g. a few "
             "participants)."
         )
-        if not host.checkbox(
+        if not messages.checkbox(
             "Load it anyway",
             key=f"{state_prefix}_load_large",
             help="Parse this large upload regardless. Safe on a local machine "
@@ -4754,9 +4761,9 @@ def _read_uploaded_frame(
         st.session_state.pop(f"{state_prefix}_header", None)
         files = uploaded if multi else [uploaded]
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
-        host.error(
+        messages.error(
             f"Couldn't read **{names}**: {exc}. Check it is a table file with one "
-            "header row."
+            "header row, or remove it with the ✕ on its chip."
         )
         return pd.DataFrame()
     # BUG-103: this upload's own ID, before the wizard derives anything from it.

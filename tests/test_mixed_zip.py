@@ -142,3 +142,39 @@ def test_same_shape_files_keep_the_source_file_advice():
     report = diagnose_trial_identity(frame, pd.DataFrame())
     assert not report["mixed_source_shapes"]
     assert "source_file" in trial_identity_warning(report)
+
+
+class TestNonTableMembers:
+    """A README or notes file shipped beside the data is not a table: it was
+    read as one, its first line taken for a header, and the whole upload failed
+    with a tokenizing error (2026-10-09)."""
+
+    @staticmethod
+    def _zip(members: dict[str, str]) -> io.BytesIO:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as archive:
+            for name, text in members.items():
+                archive.writestr(name, text)
+        buf.seek(0)
+        buf.name = "data.zip"
+        return buf
+
+    def test_a_readme_is_skipped(self):
+        archive = self._zip(
+            {
+                "README.md": "# My data\n\nSome notes, with, commas.\n",
+                "p1_fix.tsv": _fix_report("p1"),
+            }
+        )
+        frame = read_table(archive, kind="fixations")
+        assert len(frame) == 5
+        assert "CURRENT_FIX_X" in frame.columns
+        archive.seek(0)
+        assert "CURRENT_FIX_X" in read_table_columns(archive, kind="fixations")
+
+    def test_a_zip_of_notes_only_holds_no_table(self):
+        import pytest
+
+        archive = self._zip({"README.md": "# notes\n", "LICENSE": "MIT\n"})
+        with pytest.raises(ValueError, match="holds no table file"):
+            read_table(archive, kind="fixations")

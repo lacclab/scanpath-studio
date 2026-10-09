@@ -1652,6 +1652,27 @@ def get_app_css() -> str:
     [class*="st-key-wiz_map_upload_"] [data-testid="stFileUploaderDropzoneInstructions"] {
         display: none;
     }
+    /* 2026-10-09 — before a file is in, the Fixations / Words / Raw gaze
+       uploader is a real drop target the height of its row, not a lone
+       button: its row is otherwise empty, and a small box is easy to miss.
+       It shrinks back to the button once a file is there. */
+    [class*="st-key-wiz_map_block_col_map_"]:not(:has([data-testid="stFileChip"])) {
+        min-height: 9.5rem;
+    }
+    [class*="st-key-wiz_map_upload_col_map_"]:not(:has([data-testid="stFileChip"])) [data-testid="stFileUploaderDropzone"] {
+        min-height: 6.25rem;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4rem;
+        border: 1px dashed rgba(128, 128, 128, 0.5) !important;
+        border-radius: 0.5rem;
+    }
+    [class*="st-key-wiz_map_upload_col_map_"]:not(:has([data-testid="stFileChip"])) [data-testid="stFileUploaderDropzone"]::after {
+        content: "or drop files here";
+        font-size: 0.78rem;
+        opacity: 0.7;
+    }
     /* UX-124 — the uploaded-file chip is sized for a full-width column; in
        this ~9%-wide one it clipped outright rather than shrinking (its
        `stFileChips` wrapper has its own `overflow: hidden`, so the chip's

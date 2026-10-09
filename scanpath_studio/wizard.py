@@ -954,16 +954,41 @@ _DERIVE_TABLE_DISPLAY = {"Words / IA": WORDS_TABLE_LABEL}
 ROW_CAPTIONS = {
     "fixations": "One row per fixation — e.g. EyeLink's Fixation Report.",
     "words": "One row per word with its box — e.g. EyeLink's Interest Area Report.",
+    "raw_gaze": "One row per gaze sample — e.g. EyeLink's Sample Report; drawn as "
+    "recorded.",
+}
+
+#: What each metadata table holds, beside its empty uploader.
+META_ROW_CAPTIONS = {
+    "participant": "One row per participant — e.g. age, native language, a group.",
+    "trial": "One row per trial — e.g. a list, a condition, a comprehension score.",
+    "text": "One row per text — e.g. a genre or a difficulty rating.",
+}
+
+#: What each table must map, said under its caption until a file is in — the
+#: mapping fields themselves say it once one is (2026-10-09).
+ROW_NEEDS = {
+    "fixations": "Needs a Trial ID, a Duration, and X and Y or a Word/IA ID.",
+    "words": "Needs a Trial ID, a Word/IA ID and each word's box.",
+    "raw_gaze": "Needs a Trial ID, X and Y.",
 }
 
 
-def _row_note(block, text: str):
+def _row_note(block, table: str, prefix: str):
     """A caption line across the top of an upload row's mapping side (#374
-    F12), returned so later notes for the row (a mixed ZIP's) land under it.
+    F12), returned so later notes for the row — a mixed ZIP's, a file the
+    readers refuse — land under it.
+
+    Until a file is in it also says what the table must map (`ROW_NEEDS`):
+    the space beside an empty uploader was otherwise blank. Read off the
+    uploader's own state, which holds last run's files before it renders.
 
     Drawn right of the row's name column: that column is an overlay spanning
     the whole block (`styles.py`), so a full-width line would sit under it."""
     note = block.columns(_META_ROW_W, gap="small")[1]
+    text = ROW_CAPTIONS[table]
+    if not st.session_state.get(f"{prefix}_upload"):
+        text += f"  \n{ROW_NEEDS[table]}"
     note.caption(text)
     return note
 
@@ -3414,7 +3439,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # three tables below say the same thing at their own titles' hover, this
         # is just the nudge to open with.
         guide = intro.container(
-            key="wiz_example_row",
+            key="wiz_upload_intro",
             horizontal=True,
             vertical_alignment="center",
             gap="small",
@@ -3474,6 +3499,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             container=host,
             kind=kind,
             label_visibility="collapsed",
+            messages=notes_host,
         )
         if not frame.empty:
             # PERF-6 parses only the columns the mapping needs, so the frame's
@@ -3583,9 +3609,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
             emphasis=True,
         )
 
+        from scanpath_studio import metadata as metadata_mod
+
         def _meta_row(slug, renderer, ids):
             block = meta_host.container(key=f"wiz_map_block_meta_{slug}")
             row = block.columns(_META_ROW_W, gap="small")
+            # What the table is for, until one is attached (2026-10-09).
+            if not st.session_state.get(metadata_mod.upload_key(slug)):
+                row[1].caption(META_ROW_CAPTIONS[slug])
             # UX-116: `live_join=False` — there is no finished dataset to join
             # against yet (the pools below are provisional, still shifting as
             # identity mapping is worked out), so the wizard only collects the
@@ -3670,7 +3701,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # defeating `vertical_alignment="center"` on row 1 alone).
     fix_block = s2.container(key="wiz_map_block_col_map_fix")
     # #374 F12: which export goes in this row, in EyeLink's own terms.
-    fix_note = _row_note(fix_block, ROW_CAPTIONS["fixations"])
+    fix_note = _row_note(fix_block, "fixations", "col_map_fix")
     row_fix = fix_block.columns(_MAP_ROW_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
@@ -3691,7 +3722,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
     words_block = s2.container(key="wiz_map_block_col_map_words")
-    words_note = _row_note(words_block, ROW_CAPTIONS["words"])
+    words_note = _row_note(words_block, "words", "col_map_words")
     row_words = words_block.columns(
         _MAP_ROW_W, gap="small", vertical_alignment="center"
     )
@@ -3746,6 +3777,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # without it, AOI and Raw gaze had no line between them when both were
     # still empty).
     s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
+    rg_note = _row_note(s3, "raw_gaze", "col_map_raw_gaze")
     # Line 1: the identity line every table opens with (`MAP_LINES`).
     rg_row1 = s3.columns(_MAP_ROW_W, gap="small", vertical_alignment="center")
     raw_gaze = upload_box(
@@ -3761,6 +3793,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_raw_gaze",
         multi=False,
         noun="gaze point",
+        notes_host=rg_note,
     )
 
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here

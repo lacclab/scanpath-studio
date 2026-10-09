@@ -483,3 +483,69 @@ class TestAnEmptyAddScreenLeavesTheFigureAlone:
         assert not at.exception, at.exception
         assert at.session_state["global_scale_text_to_boxes"] is True
         assert at.session_state["global_canvas_width"] == 1920
+
+
+def _restore_then_words_app():
+    """A setup whose text fits the boxes, applied before any Words table."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.experimental_setup import SetupSnapshot
+    from scanpath_studio.wizard import _apply_restored_setup, _wizard_setup_step
+
+    if not st.session_state.get("_restored"):
+        st.session_state["_restored"] = True
+        snap = SetupSnapshot.from_dict(
+            {
+                "canvas_width": 1920,
+                "canvas_height": 1080,
+                "scale_text_to_boxes": True,
+                "provenance": {
+                    "screen": "measured",
+                    "geometry": "skipped",
+                    "text": "measured",
+                },
+            }
+        )
+        st.session_state["_wizard_restored_setup"] = snap.to_dict()
+        _apply_restored_setup(snap)
+    _wizard_setup_step(
+        st.container(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        bool(st.session_state.get("_has_words")),
+        estimate=lambda: (800, 600),
+        has_data=bool(st.session_state.get("_has_words")),
+    )
+
+
+class TestASetupAppliedBeforeTheWords:
+    def test_fit_to_the_boxes_comes_back_when_they_arrive(self):
+        from scanpath_studio.wizard import _SETUP_MODE_KEYS, _TEXT_BOXES, _TEXT_DEFAULT
+
+        at = AppTest.from_function(_restore_then_words_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state[_SETUP_MODE_KEYS["text"]] == _TEXT_DEFAULT
+        at.session_state["_has_words"] = True
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state[_SETUP_MODE_KEYS["text"]] == _TEXT_BOXES
+
+
+class TestAMalformedSetupFile:
+    def test_bad_sections_are_skipped(self):
+        from scanpath_studio.wizard import _applied_summary, _clean_setup_config
+
+        config = _clean_setup_config(
+            {
+                "data_source": "x",
+                "column_mapping": 5,
+                "filename_derive": ["not", "a", "dict"],
+                "keep_and_filter": {"wizard_keep_by_table": "x"},
+            }
+        )
+        assert "column_mapping" not in config
+        assert "filename_derive" not in config
+        assert "wizard_keep_by_table" not in config["keep_and_filter"]
+        assert _applied_summary(config) == "nothing this screen uses"

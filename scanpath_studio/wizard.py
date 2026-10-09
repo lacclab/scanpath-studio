@@ -22,7 +22,7 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
-from .column_names import ColumnNames, for_tables
+from .column_names import ColumnNames, for_tables, stored_source_recipe
 from .constants import (
     _VIEW_DATA,
     CITATION,
@@ -315,6 +315,27 @@ def _source_recipe(
     }
 
 
+def _apply_setup_to_figure(setup: dict | None) -> None:
+    """A newly added dataset's recording setup, onto the figure's settings.
+
+    The add screen writes only the answers the user chose while it is open
+    (`_wizard_setup_step`), so the ones it chose itself — the estimate, the
+    text fitted to its boxes — arrive here, with the dataset they belong to.
+    """
+    if not isinstance(setup, dict):
+        return
+    snapshot = SetupSnapshot.from_dict(setup, fallback=SetupSnapshot())
+    st.session_state["global_canvas_width"] = snapshot.canvas_width
+    st.session_state["global_canvas_height"] = snapshot.canvas_height
+    if snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
+        st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
+        st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
+    if snapshot.text_provenance is not None:
+        st.session_state["global_base_font_size"] = snapshot.base_font_size
+        st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
+    st.session_state["global_font_family"] = snapshot.font_family
+
+
 def _finalize_wizard_dataset() -> None:
     """Store the wizard's normalized frames as a named dataset and switch to it.
 
@@ -356,6 +377,7 @@ def _finalize_wizard_dataset() -> None:
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
+    _apply_setup_to_figure(payload.get("setup"))
     # DATA-47: the tables just attached are this dataset's, not a session-wide
     # slot — hand them over before the switch, so the next run has nothing to
     # swap (and so the dataset this wizard was opened over keeps its own).
@@ -1715,7 +1737,7 @@ def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
 def _row_body(host):
     """Indent to where the field-mapping pickers start (`_MAP_ROW_W`'s name
     column), for a row that has no name of its own — the "Extra fields to
-    keep" picker and the "Aggregate character AOIs" toggle both describe the
+    keep" picker and the "Merge character boxes" toggle both describe the
     table above them rather than naming a new one, so they line up under the
     pickers rather than under the row-name label."""
     _, body = host.columns([_MAP_ROW_W[0], 1 - _MAP_ROW_W[0]], gap="small")
@@ -1902,13 +1924,41 @@ def _dataset_setup_config(name: str) -> dict | None:
     setup = entry.get("setup")
     return {
         "data_source": name,
+        # An upload stored before `source_recipe` existed gets one rebuilt
+        # from its stored mapping (`column_names.stored_source_recipe`).
         "column_mapping": _mapping_keys_from_schemas(
-            (entry.get("source_recipe") or {}).get("schemas") or {}
+            stored_source_recipe(entry).get("schemas") or {}
         ),
         "experimental_setup": setup if isinstance(setup, dict) else None,
         "filename_derive": choices.get("filename_derive"),
         "keep_and_filter": choices.get("keep_and_filter"),
     }
+
+
+_SETUP_CONFIG_SECTIONS = (
+    "column_mapping",
+    "experimental_setup",
+    "filename_derive",
+    "keep_and_filter",
+    "canvas_px",
+)
+
+
+def _clean_setup_config(config: dict) -> dict:
+    """``config`` with every section that is not a table of values dropped, so
+    a hand-edited or foreign file's bad section is skipped, not a crash."""
+    clean = dict(config)
+    for section in _SETUP_CONFIG_SECTIONS:
+        if section in clean and not isinstance(clean[section], dict):
+            clean.pop(section)
+    for section, field in (
+        ("keep_and_filter", "wizard_keep_by_table"),
+        ("filename_derive", "widgets"),
+    ):
+        part = clean.get(section)
+        if isinstance(part, dict) and not isinstance(part.get(field), dict | None):
+            clean[section] = {k: v for k, v in part.items() if k != field}
+    return clean
 
 
 def _setup_config_writes(config: dict) -> set:
@@ -1921,7 +1971,7 @@ def _setup_config_writes(config: dict) -> set:
         _FILENAME_DERIVE_APPLIED_KEY,
         *_SETUP_RESTORE_WRITES,
     }
-    for key in config.get("column_mapping") or {}:
+    for key in config.get("column_mapping") or {}:  # cleaned: a dict
         if (
             isinstance(key, str)
             and key.startswith("col_map_")
@@ -1965,7 +2015,7 @@ def _applied_summary(config: dict) -> str:
     if kept:
         parts.append(plural(kept, "kept field"))
     applied = (config.get("filename_derive") or {}).get("applied")
-    if applied:
+    if isinstance(applied, dict | list) and applied:
         parts.append(
             plural(
                 len(applied) if isinstance(applied, list) else 1, "column derivation"
@@ -1986,6 +2036,7 @@ def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
     for Undo, once: applying a second setup still undoes to the screen before
     the first.
     """
+    config = _clean_setup_config(config)
     held = dict(st.session_state.get(_RESTORE_UNDO_KEY) or {})
     for key in _setup_config_writes(config):
         if key not in held:
@@ -2847,7 +2898,14 @@ def _wizard_setup_step(
         # option that silently does nothing.
         text_options.insert(0, _TEXT_BOXES)
     if st.session_state.get(text_key) not in text_options:
+        # *Fit to the word boxes* from a setup applied before the Words table:
+        # the default stands in as the screen's own answer, so the boxes are
+        # picked again the moment they arrive (`_seed_setup_answer`).
         st.session_state[text_key] = _TEXT_DEFAULT
+        if initial is None:
+            auto = dict(st.session_state.get(_SETUP_AUTO_KEY) or {})
+            auto[text_key] = _TEXT_DEFAULT
+            st.session_state[_SETUP_AUTO_KEY] = auto
     text_mode = _setup_choice(how_col, "Text size", text_options, text_key, persist)
     scale_to_boxes = True
     base_font = int(
@@ -3025,14 +3083,15 @@ def _wizard_setup_step(
     # Only what the user entered is remembered for the next dataset: an
     # estimate or a default pre-filled into *I know it* would read as known.
     #
-    # And before a table is in, a line the screen answered itself writes
-    # nothing to the figure's settings: those keys are shared, and opening ➕
-    # Add dataset and cancelling it must not leave the dataset you came from
-    # with a 2560 × 1440 canvas and its text no longer fitted to its boxes.
+    # A line the screen answered itself writes nothing to the figure's
+    # settings: those keys are shared, and opening ➕ Add dataset and leaving
+    # it must not hand the dataset you came from this one's estimated canvas
+    # and text sizing. The new dataset gets its whole setup when it is added
+    # (`_apply_setup_to_figure`).
     auto = st.session_state.get(_SETUP_AUTO_KEY) or {}
 
     def _chosen(group: str) -> bool:
-        return has_data or f"{key_prefix}_setup_{group}_mode" not in auto
+        return f"{key_prefix}_setup_{group}_mode" not in auto
 
     recall: dict = {}
     if publish and _chosen("screen") and snapshot.screen_provenance is not None:

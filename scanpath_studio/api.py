@@ -944,8 +944,8 @@ def load_participant_metadata(
 ):
     """Load a participant-level metadata table.
 
-    ``table`` is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
-    **one row per participant**: an id column plus anything known about them
+    ``table`` is a DataFrame, or a path/glob to a CSV/TSV/Parquet/Excel file — or
+    a list of them, stacked into one table — with **one row per participant**: an id column plus anything known about them
     (``native_language``, ``age``, a comprehension score). ``id_column``
     defaults to the first recognized spelling (``participant_id``, ``subject``,
     ``RECORDING_SESSION_LABEL``, …).
@@ -1004,7 +1004,7 @@ def load_trial_metadata(
     [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata], one
     grain down: ``table`` has **one row per trial** — a trial-id column plus anything
     known about that trial (a list name, a condition, a per-trial comprehension
-    score).
+    score). Several files, as a list or a glob, are stacked into one table.
 
     **The key is yours to state, and it changes what the table means.** Keyed by
     trial id alone, a row describes a *text*, and every trial of it
@@ -1076,6 +1076,7 @@ def load_text_metadata(
     text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like
     [`load_participant_metadata`][scanpath_studio.api.load_participant_metadata]: never
     keyed by participant, since a text is a stimulus rather than something one participant owns.
+    Several files, as a list or a glob, are stacked into one table.
     ``id_column`` defaults to the first recognized spelling (``text_id``,
     ``paragraph_id``, ``stimulus_id``, …) and may be several columns to build a
     composite id, the same way the uploaded data's own Text ID mapping does.

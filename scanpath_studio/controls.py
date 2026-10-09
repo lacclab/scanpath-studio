@@ -2479,7 +2479,7 @@ WORD_FIELD_SPECS: list[dict] = [
         "The plot's line coloring and hover infer lines from the word boxes' Y "
         "instead, since many exports carry one constant here.",
     },
-    # UX-113: only meaningful alongside "Aggregate character AOIs into word
+    # UX-113: only meaningful alongside "Merge character boxes into word
     # boxes" — a table whose rows are grouped into sub-blocks that each
     # restart their own numbering (e.g. a comprehension question's stem /
     # target / distractor answer blocks). Without it, two blocks' word 0

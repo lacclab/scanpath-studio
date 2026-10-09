@@ -3825,17 +3825,18 @@ class TestSetupWizard:
 
     def test_recording_setup_writes_shared_global_key(self, monkeypatch):
         """DATA-22: the Recording-setup step feeds the shared ``global_*`` keys
-        the rest of the app reads. It starts on the estimate, published at once;
-        *I know it* reveals the width/height inputs, and what they hold is
-        published instead."""
+        the rest of the app reads — the answers the user chose, at once. The
+        screen's own starting answer (the estimate) waits for Add dataset, so
+        leaving the screen hands the previous dataset nothing."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["global_canvas_width"] = 1234
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # On the estimate there is nothing to type.
+        # On the estimate there is nothing to type, and nothing is written.
         assert not [n for n in at.number_input if n.key == "wizard_setup_screen_w"]
-        assert "global_canvas_width" in at.session_state
+        assert at.session_state["global_canvas_width"] == 1234
 
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.run(timeout=60)
@@ -5285,6 +5286,9 @@ class TestRecordingSetupGate(TestSetupWizard):
             "geometry": "skipped",
             "text": "measured",
         }
+        # The dataset's setup reaches the figure when it is added.
+        assert at.session_state["global_canvas_width"] == entry["setup"]["canvas_width"]
+        assert at.session_state["global_scale_text_to_boxes"] is True
 
     def test_the_answers_ride_into_the_stored_dataset(self, monkeypatch):
         """The provenance travels with the dataset, not just the wizard — that is

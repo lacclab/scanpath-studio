@@ -394,6 +394,61 @@ class TestNameOwnPages:
         settings = _drawn(self.PAGE)
         assert cs.name_own_pages(settings, {"": None}) is settings
 
+    def test_nothing_is_named_while_a_slot_the_option_fills_draws_none(self):
+        """The option fills every empty slot: a split whose B panel the app
+        left blank (no page, or ENG-57's veto) must not get one headless."""
+        settings = _drawn(self.PAGE)
+        slots = ("", "_b")
+        assert cs.name_own_pages(settings, {"": self.PAGE}, slots) is settings
+        both = {**settings, **_drawn(self.PAGE_B, "_b")}
+        named = cs.name_own_pages(both, {"": self.PAGE, "_b": self.PAGE_B}, slots)
+        assert named == {"show_stimulus_image": True}
+
+    def test_a_slot_outside_the_figures_is_ignored(self):
+        """An overlay draws one page; B's slot does not count there."""
+        settings = {**_drawn(self.PAGE), **_drawn(self.PAGE_B, "_b")}
+        named = cs.name_own_pages(settings, {"_b": self.PAGE_B})
+        assert named is settings
+
+
+class TestTheImageFolderInTheSnippet:
+    """The data half loads the folder only for a page it names from it."""
+
+    def _python(self, folder, page):
+        source = cs.SnippetSource(
+            kind=cs.SOURCE_DEMO,
+            options={"image_root": str(folder), "image_pattern": "{text_id}.png"},
+        )
+        state = cs.FigureState(
+            kind="static",
+            settings={**api.figure_options("static"), **_drawn(page)},
+            participant=TRIAL[0],
+            trial=TRIAL[1],
+            own_pages={"": page},
+        )
+        return cs.python_snippet(source, state)
+
+    def test_a_page_from_the_folder_brings_it(self, tmp_path):
+        page = (str(tmp_path / "a.png"), (10, 10), (0.0, 0.0))
+        code = self._python(tmp_path, page)
+        assert "show_stimulus_image=True" in code
+        assert "attach_stimulus_images(" in code
+
+    def test_a_page_from_elsewhere_leaves_it_out(self, tmp_path):
+        """A missing, empty or refused folder matched nothing, and the page came
+        from the dataset itself: quoting the folder would make the snippet
+        raise on a folder the app shrugged off."""
+        page = ("/elsewhere/a.png", (10, 10), (0.0, 0.0))
+        code = self._python(tmp_path / "missing", page)
+        assert "show_stimulus_image=True" in code
+        assert "attach_stimulus_images" not in code
+
+
+def test_bs_page_from_a_second_dataset_keeps_its_path():
+    """Its tables load from placeholders that hold no page to find again."""
+    meta = {"dataset": "Other", "words": pd.DataFrame(), "fixations": pd.DataFrame()}
+    assert tabs._own_page_b({"show_stimulus_image": True}, meta) is None
+
 
 def _app(**state) -> object:
     from streamlit.testing.v1 import AppTest

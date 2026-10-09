@@ -8428,8 +8428,14 @@ def _page_under_text_b(
 
 def _own_page_b(viz_settings: dict, compare_meta: dict | None):
     """B's own page, unmoved — what `api` would place for it (#420) — or ``None``
-    while the layer is off."""
-    if not compare_meta or not viz_settings.get("show_stimulus_image"):
+    while the layer is off, or when B comes from a second dataset: the snippet
+    loads that one's tables from placeholders, which hold no page to find
+    again, so B's page keeps its path there."""
+    if (
+        not compare_meta
+        or compare_meta.get("dataset")
+        or not viz_settings.get("show_stimulus_image")
+    ):
         return None
     return _reading_stimulus_image(
         compare_meta.get("words", pd.DataFrame()),
@@ -8585,29 +8591,33 @@ def _render_comparison_figure(
     # the builder hands B's panel A's stimulus image, and dataset identity is
     # no reason to think B read A's page. B's own image is resolved next.
     overrides["canvas_b"] = canvas_b or canvas_a
-    overrides.update(
-        _comparison_image_b(
-            settings,
-            viz_settings,
-            compare_meta,
-            same_page=(
-                not cross_dataset
-                and primary_text_id is not None
-                and primary_text_id == compare_text_id
-                and _first_str(
-                    extract_trial(words_filtered, selected_participant, selected_trial),
-                    SCREEN_ID,
-                )
-                == _first_str(
-                    (compare_meta or {}).get("words", pd.DataFrame()), SCREEN_ID
-                )
-            ),
-        )
-    )
     own_b = _own_page_b(viz_settings, compare_meta)
-    # Every layout carries B's slot (an overlay just never draws it).
-    _amend_snippet_own_pages({"_b": own_b})
-    if layout not in {"side_by_side", "stacked"} and compare_stimulus == "b":
+    if layout in {"side_by_side", "stacked"}:
+        # B's panel over B's page. Only a split layout draws that slot, so an
+        # overlay leaves it empty rather than carry (and quote) a page it hides.
+        overrides.update(
+            _comparison_image_b(
+                settings,
+                viz_settings,
+                compare_meta,
+                same_page=(
+                    not cross_dataset
+                    and primary_text_id is not None
+                    and primary_text_id == compare_text_id
+                    and _first_str(
+                        extract_trial(
+                            words_filtered, selected_participant, selected_trial
+                        ),
+                        SCREEN_ID,
+                    )
+                    == _first_str(
+                        (compare_meta or {}).get("words", pd.DataFrame()), SCREEN_ID
+                    )
+                ),
+            )
+        )
+        _amend_snippet_own_pages({"_b": own_b})
+    elif compare_stimulus == "b":
         # #420: one page under the overlay's one stimulus layer — B's, since
         # B's text is the one drawn.
         overrides.update(_page_under_text_b(settings, viz_settings, compare_meta))

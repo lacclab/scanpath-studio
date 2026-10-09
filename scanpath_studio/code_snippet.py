@@ -694,7 +694,9 @@ def _floats(pair) -> tuple[float, ...]:
     return tuple(float(value) for value in pair)
 
 
-def name_own_pages(settings: dict, own_pages: Mapping) -> dict:
+def name_own_pages(
+    settings: dict, own_pages: Mapping, slots: tuple[str, ...] = ("",)
+) -> dict:
     """``settings`` with every image slot that draws its reading's own page
     written as ``show_stimulus_image=True`` instead of a path (#420).
 
@@ -702,11 +704,19 @@ def name_own_pages(settings: dict, own_pages: Mapping) -> dict:
     package), while the option asks the reader's data for its page, so the
     snippet runs anywhere the data loads. A slot drawing anything else — an
     upload, or a page the VIZ-4 offset or scale moved — keeps its path, which
-    the builders let win over the option."""
+    the builders let win over the option.
+
+    ``slots`` are the image slots the figure's builder fills under the option
+    (a split comparison's ``"_b"`` beside ``""``). The option fills every one
+    left empty, so nothing is named while one of them draws no page: the app
+    may have drawn none there on purpose (ENG-57's veto), and the snippet must
+    not draw one the app did not."""
+    if any(not settings.get(f"background_image{suffix}") for suffix in slots):
+        return settings
     named = [
         suffix
         for suffix, page in (own_pages or {}).items()
-        if _same_page(settings, suffix, page)
+        if suffix in slots and _same_page(settings, suffix, page)
     ]
     if not named:
         return settings
@@ -716,9 +726,40 @@ def name_own_pages(settings: dict, own_pages: Mapping) -> dict:
     return out
 
 
+def _image_slots(state: FigureState) -> tuple[str, ...]:
+    """The image slots ``state``'s builder fills: B's own only in a split
+    comparison (an overlay and a co-animation draw one page)."""
+    split = state.compare is not None and state.compare.layout in (
+        "side_by_side",
+        "stacked",
+    )
+    return ("", "_b") if state.kind == "comparison" and split else ("",)
+
+
 def _with_own_pages(state: FigureState) -> FigureState:
-    settings = name_own_pages(state.settings, state.own_pages)
+    settings = name_own_pages(state.settings, state.own_pages, _image_slots(state))
     return state if settings is state.settings else replace(state, settings=settings)
+
+
+def _writes_image_folder(source: SnippetSource, state: FigureState) -> bool:
+    """Whether the snippet loads the source's image folder (#420): only when a
+    page it names by ``show_stimulus_image`` lies in that folder. A folder the
+    app matched nothing from — missing, empty, or a pattern it refused — is
+    never quoted, since `attach_stimulus_images` would raise on it. ``render
+    --print-code`` records no pages; its own ``--image-root`` already loaded."""
+    import os
+    from pathlib import Path
+
+    folder = _image_folder(source)
+    if folder is None or not state.settings.get("show_stimulus_image"):
+        return False
+    if not state.own_pages:
+        return True
+    root = Path(folder[0]).expanduser().resolve()
+    return any(
+        page is not None and Path(os.path.normpath(str(page[0]))).is_relative_to(root)
+        for page in state.own_pages.values()
+    )
 
 
 def _comparable(value):
@@ -1775,7 +1816,7 @@ def python_snippet(
         )
     lines.append("")
     lines += loader(source)
-    if state.settings.get("show_stimulus_image"):
+    if _writes_image_folder(source, state):
         lines += _image_folder_python(source)
     # A raw-gaze-only source loaded its samples as its data half already.
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
@@ -1897,7 +1938,7 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
-    if state.settings.get("show_stimulus_image"):
+    if _writes_image_folder(source, state):
         argv += _image_folder_cli(source)
 
     if state.participant:

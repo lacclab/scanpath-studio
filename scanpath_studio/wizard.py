@@ -3024,20 +3024,34 @@ def _wizard_setup_step(
     # just told us the resolution should see the canvas change now.
     # Only what the user entered is remembered for the next dataset: an
     # estimate or a default pre-filled into *I know it* would read as known.
+    #
+    # And before a table is in, a line the screen answered itself writes
+    # nothing to the figure's settings: those keys are shared, and opening ➕
+    # Add dataset and cancelling it must not leave the dataset you came from
+    # with a 2560 × 1440 canvas and its text no longer fitted to its boxes.
+    auto = st.session_state.get(_SETUP_AUTO_KEY) or {}
+
+    def _chosen(group: str) -> bool:
+        return has_data or f"{key_prefix}_setup_{group}_mode" not in auto
+
     recall: dict = {}
-    if publish and snapshot.screen_provenance is not None:
+    if publish and _chosen("screen") and snapshot.screen_provenance is not None:
         st.session_state["global_canvas_width"] = snapshot.canvas_width
         st.session_state["global_canvas_height"] = snapshot.canvas_height
         if snapshot.screen_provenance is Provenance.MEASURED:
             recall["canvas_width"] = snapshot.canvas_width
             recall["canvas_height"] = snapshot.canvas_height
-    if publish and snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
+    if (
+        publish
+        and _chosen("geometry")
+        and snapshot.geometry_provenance not in (None, Provenance.SKIPPED)
+    ):
         st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
         st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
         if snapshot.geometry_provenance is Provenance.MEASURED:
             recall["monitor_width_mm"] = snapshot.monitor_width_mm
             recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
-    if publish and snapshot.text_provenance is not None:
+    if publish and _chosen("text") and snapshot.text_provenance is not None:
         st.session_state["global_base_font_size"] = snapshot.base_font_size
         st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
         recall["base_font_size"] = snapshot.base_font_size

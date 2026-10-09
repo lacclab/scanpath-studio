@@ -208,6 +208,7 @@ from scanpath_studio.data import (
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
+    assign_fingerprint,
     brought_reading_measures,
     coerce_bool_or_na,
     compute_word_metrics,
@@ -14861,11 +14862,15 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
                     # #374 F3: a zip of both EyeLink reports, read for one.
                     kind=table_key if table_key in ("words", "fixations") else None,
                 )
-                st.session_state[raw_key] = fresh
-                st.session_state[signature_key] = (
-                    files,
-                    _literal_columns(name, table_key, fresh.columns),
+                literal = _literal_columns(name, table_key, fresh.columns)
+                # BUG-103: named by what decides re-reading it, so the per-rerun
+                # fingerprints (the editor's *Estimate from my data* above all)
+                # never hash a table that can run to millions of rows.
+                assign_fingerprint(
+                    fresh, ("editor-added", name, table_key, files, literal)
                 )
+                st.session_state[raw_key] = fresh
+                st.session_state[signature_key] = (files, literal)
             except Exception as exc:  # unreadable file — say so, keep the page
                 st.session_state.pop(raw_key, None)
                 box.error(

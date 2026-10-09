@@ -452,3 +452,34 @@ class TestMappingKeysFromSchemas:
         assert keys["col_map_words_text_id"] == []
         assert keys["col_map_raw_gaze_trial"] == ["t"]
         assert keys["col_map_raw_gaze_participant"] == "p"
+
+
+def _empty_wizard_setup_app():
+    """The add screen's Recording setup, with no table in yet."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.wizard import _wizard_setup_step
+
+    st.session_state.setdefault("global_scale_text_to_boxes", True)
+    st.session_state.setdefault("global_canvas_width", 1920)
+    _wizard_setup_step(
+        st.container(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        False,
+        estimate=lambda: (2560, 1440),
+        has_data=False,
+    )
+
+
+class TestAnEmptyAddScreenLeavesTheFigureAlone:
+    """Opening ➕ Add dataset and cancelling must not leave the dataset you
+    came from with the setup lines' own starting answers (2026-10-09)."""
+
+    def test_its_starting_answers_write_no_figure_setting(self):
+        at = AppTest.from_function(_empty_wizard_setup_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["global_scale_text_to_boxes"] is True
+        assert at.session_state["global_canvas_width"] == 1920

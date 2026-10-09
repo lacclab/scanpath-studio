@@ -6093,33 +6093,246 @@ def filter_data(
     return words_filtered, fixations_filtered
 
 
-def filter_trials(
+@dataclass(frozen=True)
+class TrialSelection:
+    """What the trial-level filters keep, resolved to readings (#412).
+
+    A condition such as ``difficulty_level`` may live on the Words table only,
+    the Fixations table only, or both. Filtering each table by its own column
+    left the other table's rows of an excluded reading in place, and the trial
+    pool — built from every table — kept offering it. So each filter is decided
+    once per reading, ``(participant_id, trial_id)``, from the tables that
+    carry its column, and that one answer is applied to every table.
+
+    ``kept`` are the readings the tables know that the filters keep, ``known``
+    every reading the tables know. A reading none of them knows (one only the
+    raw-gaze samples have) has no value for any filter, so it survives exactly
+    when ``keeps_unknown``: a category never matches a missing value, while a
+    range keeps one unless its *Keep unknown values* is off. ``conflicts`` maps
+    a column to the readings whose two tables disagree about it — one says the
+    reading is in the selection, the other that it is not. They are left out,
+    never decided for one table, and the caller reports them.
+    """
+
+    kept: frozenset
+    known: frozenset
+    keeps_unknown: bool = True
+    conflicts: dict = field(default_factory=dict)
+
+    def narrow(self, frame: pd.DataFrame | None) -> pd.DataFrame | None:
+        """``frame``'s rows of the readings this selection keeps.
+
+        For a table the selection was not resolved from (raw gaze): a reading
+        the resolving tables know follows their answer, and one they do not
+        survives when ``keeps_unknown``. ``frame`` itself when nothing goes.
+        """
+        if frame is None or frame.empty:
+            return frame
+        if "participant_id" not in frame.columns or "trial_id" not in frame.columns:
+            return frame
+        keys = pd.MultiIndex.from_arrays(
+            [frame["participant_id"].astype(str), frame["trial_id"].astype(str)]
+        )
+        mask = keys.isin(self.kept)
+        if self.keeps_unknown:
+            mask |= ~keys.isin(self.known)
+        return frame if mask.all() else frame[mask]
+
+
+@dataclass(frozen=True)
+class TrialFilterResult:
+    """`select_trials`' answer: the narrowed frames and how they were decided.
+
+    ``selection`` is ``None`` when no condition or range filter applied (no
+    filter set, or none on a column either table carries) — then nothing about
+    the readings was decided beyond the participant narrowing.
+    """
+
+    words: pd.DataFrame
+    fixations: pd.DataFrame
+    selection: TrialSelection | None = None
+
+    @property
+    def conflicts(self) -> dict:
+        return self.selection.conflicts if self.selection is not None else {}
+
+
+def _reading_codes(frame: pd.DataFrame) -> tuple[np.ndarray, pd.MultiIndex]:
+    """Each row's reading as a code into the frame's distinct readings.
+
+    One grouping pass (~30 ms per million rows), after which every filter on
+    the frame is a ``bincount`` over the codes rather than another pass over
+    the string ids.
+    """
+    grouped = frame.groupby(
+        [
+            frame["participant_id"].astype(str).rename("participant_id"),
+            frame["trial_id"].astype(str).rename("trial_id"),
+        ],
+        sort=False,
+    )
+    return grouped.ngroup().to_numpy(), grouped.size().index
+
+
+def carries_mapped_text(frame: pd.DataFrame) -> bool:
+    """Whether ``frame``'s ``text_id`` came from a mapped Text ID.
+
+    Read off ``_text_id_mapped`` only, so it is one pass over a boolean column:
+    a frame without the flag (built by hand, stored before it) counts as
+    mapped, which is what every frame was taken to be before."""
+    if TEXT_ID_MAPPED not in frame.columns:
+        return True
+    return bool(frame[TEXT_ID_MAPPED].fillna(False).astype(bool).any())
+
+
+#: The text columns a trial-id fallback can fill (see `carries_mapped_text`).
+_TEXT_COLUMNS = ("text_id", "unique_text_id")
+
+
+def _filter_owners(frames: list[pd.DataFrame], column: str) -> list[pd.DataFrame]:
+    """The frames whose ``column`` decides a filter on it.
+
+    Every frame that carries it — except that a ``text_id`` which is only the
+    trial-id fallback (no Text ID mapped on that table) is not a text, so it
+    gives way to a table that has a real one rather than disagree with it."""
+    carriers = [f for f in frames if column in f.columns]
+    if column in _TEXT_COLUMNS and len(carriers) > 1:
+        real = [f for f in carriers if carries_mapped_text(f)]
+        if real:
+            return real
+    return carriers
+
+
+def _resolve_trial_filters(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    metadata: dict | None,
+    ranges: dict | None,
+    drop_unknown: Iterable[str] | None,
+) -> tuple[TrialSelection, list[np.ndarray | None]] | None:
+    """The selection the condition + range filters make, and a row mask per frame.
+
+    ``None`` when no filter applies to a column either frame carries. The masks
+    line up with ``(words, fixations)``; ``None`` for a frame that cannot be
+    keyed by reading (no ids), which is left as it is.
+    """
+    dropping = set(drop_unknown or ())
+    frames = [words, fixations]
+    keyed = [
+        f is not None
+        and not f.empty
+        and "participant_id" in f.columns
+        and "trial_id" in f.columns
+        for f in frames
+    ]
+    usable = [f for f, ok in zip(frames, keyed) if ok]
+    rules: list[tuple[str, Callable[[pd.Series], tuple], bool, list]] = []
+    for col, allowed in (metadata or {}).items():
+        if not allowed:
+            continue
+        owners = _filter_owners(usable, col)
+        if owners:
+            allowed = set(allowed)
+            rules.append(
+                (
+                    col,
+                    lambda values, a=allowed: (
+                        values.isin(a).to_numpy(),
+                        values.notna().to_numpy(),
+                    ),
+                    False,
+                    owners,
+                )
+            )
+    for col, bounds in (ranges or {}).items():
+        if not bounds:
+            continue
+        owners = _filter_owners(usable, col)
+        if owners:
+            lo, hi = bounds
+
+            def _in_range(values, lo=lo, hi=hi):
+                numbers = pd.to_numeric(values, errors="coerce")
+                # A nullable dtype answers <NA> for a missing value; that is a
+                # "no", the same as NaN's.
+                inside = numbers.between(lo, hi).fillna(False).astype(bool)
+                return inside.to_numpy(), numbers.notna().to_numpy()
+
+            # UX-49: a range is a narrowing control, so a reading with no value
+            # is kept unless *Keep unknown values* is off for this column.
+            rules.append((col, _in_range, col not in dropping, owners))
+    if not rules:
+        return None
+    codes = {id(f): _reading_codes(f) for f in usable}
+    universe = codes[id(usable[0])][1]
+    for f in usable[1:]:
+        universe = universe.union(codes[id(f)][1], sort=False)
+    # Each frame's rows as codes into the readings both frames know.
+    row_codes = {
+        key: universe.get_indexer(readings)[local]
+        for key, (local, readings) in codes.items()
+    }
+    n = len(universe)
+    keep = np.ones(n, dtype=bool)
+    keeps_unknown = True
+    conflicts: dict[str, tuple] = {}
+    for col, rule, keep_unvalued, owners in rules:
+        matched = np.zeros(n, dtype=bool)
+        refuted = np.zeros(n, dtype=bool)
+        for frame in owners:
+            ucodes = row_codes[id(frame)]
+            hit, valued = rule(frame[col])
+            in_this = np.bincount(ucodes[hit], minlength=n) > 0
+            valued_here = np.bincount(ucodes[valued], minlength=n) > 0
+            matched |= in_this
+            # This table has a value for the reading and none of it matches.
+            refuted |= valued_here & ~in_this
+        disputed = matched & refuted
+        if disputed.any():
+            conflicts[col] = tuple(sorted(universe[disputed]))
+        decided = matched & ~refuted
+        if keep_unvalued:
+            decided |= ~(matched | refuted)
+        else:
+            keeps_unknown = False
+        keep &= decided
+    selection = TrialSelection(
+        kept=frozenset(universe[keep]),
+        known=frozenset(universe),
+        keeps_unknown=keeps_unknown,
+        conflicts=conflicts,
+    )
+    masks = [keep[row_codes[id(f)]] if ok else None for f, ok in zip(frames, keyed)]
+    return selection, masks
+
+
+def select_trials(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     participants: list | None = None,
     metadata: dict[str, set] | None = None,
     ranges: dict[str, tuple[float, float]] | None = None,
     drop_unknown: Iterable[str] | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Narrow words + fixations by participant and by trial metadata.
+) -> TrialFilterResult:
+    """Narrow words + fixations by participant and by trial-level filters.
 
     ``metadata`` maps a column name to the set of allowed values (membership).
-    Only columns present on a frame are applied, so a condition like
-    ``question_preview`` (Hunting/Gathering) narrows both words and fixations —
-    the column is copied onto both during normalization. A falsy selection means
-    "no constraint".
+    A falsy selection means "no constraint". ``ranges`` (UX-49) is the
+    *continuous* counterpart: column → ``(lo, hi)`` inclusive bounds for a
+    numeric trial-level column. **A reading with no value survives a range**:
+    a range is a narrowing control, so a reader missing a comprehension score
+    is not what the user asked to exclude. ``drop_unknown`` names the ranged
+    columns whose researcher unticked *Keep unknown values*: there, a reading
+    with no value is left out with the rest.
 
-    ``ranges`` (UX-49) is the *continuous* counterpart: column → ``(lo, hi)``
-    inclusive bounds for a numeric trial-level column, where enumerating the
-    distinct values would be useless. **Rows with no value survive**: a range is
-    a narrowing control, so a reader missing a comprehension score is not what
-    the user asked to exclude — and pandas compares ``NaN`` as ``False``, so the
-    obvious bare ``.between()`` would silently drop every one of them.
-    ``drop_unknown`` names the ranged columns whose researcher unticked *Keep
-    unknown values*: there, a row with no value is left out with the rest.
+    #412: every condition and range is decided **per reading**, from whichever
+    of the two tables carries its column, and the answer applies to both —
+    a filter on a column only the Words table has narrows the fixations too.
+    A reading the deciding tables disagree on is left out and listed in the
+    result's ``conflicts`` (see :class:`TrialSelection`). A column neither table
+    carries is ignored, as before.
     """
     w, f = words, fixations
-    dropping = set(drop_unknown or ())
     # `None` is "no constraint"; an **empty list is a constraint that nothing
     # satisfies** and must empty the pool. The two were conflated while every
     # producer could only emit None-or-non-empty, but DATA-20's metadata
@@ -6132,31 +6345,54 @@ def filter_trials(
         keep = set(map(str, participants))
         w = w[w["participant_id"].isin(keep)]
         f = f[f["participant_id"].isin(keep)]
-    for col, allowed in (metadata or {}).items():
-        if not allowed:
-            continue
-        allowed = set(allowed)
-        if col in w.columns:
-            w = w[w[col].isin(allowed)]
-        if col in f.columns:
-            f = f[f[col].isin(allowed)]
-    for col, bounds in (ranges or {}).items():
-        if not bounds:
-            continue
-        lo, hi = bounds
-        for frame_name in ("w", "f"):
-            frame = w if frame_name == "w" else f
-            if col not in frame.columns:
-                continue
-            values = pd.to_numeric(frame[col], errors="coerce")
-            mask = values.between(lo, hi)
-            if col not in dropping:
-                mask |= values.isna()
-            if frame_name == "w":
-                w = w[mask]
-            else:
-                f = f[mask]
-    return w, f
+    resolved = _resolve_trial_filters(w, f, metadata, ranges, drop_unknown)
+    if resolved is None:
+        return TrialFilterResult(w, f)
+    selection, (word_mask, fix_mask) = resolved
+    if word_mask is not None and not word_mask.all():
+        w = w[word_mask]
+    if fix_mask is not None and not fix_mask.all():
+        f = f[fix_mask]
+    return TrialFilterResult(w, f, selection)
+
+
+def filter_trials(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    participants: list | None = None,
+    metadata: dict[str, set] | None = None,
+    ranges: dict[str, tuple[float, float]] | None = None,
+    drop_unknown: Iterable[str] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """`select_trials`' two frames — for a caller that reports no conflicts."""
+    result = select_trials(
+        words,
+        fixations,
+        participants=participants,
+        metadata=metadata,
+        ranges=ranges,
+        drop_unknown=drop_unknown,
+    )
+    return result.words, result.fixations
+
+
+def trial_filter_conflict_note(conflicts: dict, label=str, *, limit: int = 3) -> str:
+    """One sentence per filtered column whose two tables disagree (#412).
+
+    ``label`` names a column for the reader (the app passes the dataset's own
+    names). Empty when there is nothing to report.
+    """
+    lines = []
+    for col, readings in conflicts.items():
+        shown = ", ".join(f"{p} · {t}" for p, t in readings[:limit])
+        more = f", … (+{len(readings) - limit} more)" if len(readings) > limit else ""
+        lines.append(
+            f"**{plural(len(readings), 'trial')}** {'has' if len(readings) == 1 else 'have'} "
+            f"one {label(col)} in the Words table and another in the Fixations "
+            f"table, so the {label(col)} filter leaves "
+            f"{'it' if len(readings) == 1 else 'them'} out ({shown}{more})."
+        )
+    return " ".join(lines)
 
 
 def trial_keys(frame: pd.DataFrame) -> set:
@@ -6234,6 +6470,8 @@ def raw_gaze_in_pool(
     fixations_all: pd.DataFrame,
     words_pool: pd.DataFrame,
     fixations_pool: pd.DataFrame,
+    *,
+    keep_unknown: bool = True,
 ) -> pd.DataFrame:
     """The raw-gaze rows of the trials in the current pool (VIZ-45).
 
@@ -6244,7 +6482,10 @@ def raw_gaze_in_pool(
     and used to be dropped for it: the old narrowing kept only the participants
     and trials the other two tables listed. Those trials stay, narrowed only by
     what applies to the samples themselves (participant, annotations, the
-    trial-metadata keys — applied to ``raw_gaze`` before this).
+    trial-metadata keys — applied to ``raw_gaze`` before this) — unless
+    ``keep_unknown`` is off: a condition filter on the other two tables cannot
+    say such a trial has the value it asks for, so it leaves it out
+    (`TrialSelection.keeps_unknown`, #412).
 
     ``words_all`` / ``fixations_all`` are the frames *before* the filters, which
     is what tells "filtered out" from "never there". Returns ``raw_gaze`` itself
@@ -6259,12 +6500,21 @@ def raw_gaze_in_pool(
         fixations_all is None or fixations_all.empty
     ):
         return raw_gaze
-    if words_pool is words_all and fixations_pool is fixations_all:
+    if keep_unknown and words_pool is words_all and fixations_pool is fixations_all:
         # Unfiltered: every raw-gaze trial is either pooled or unknown to them.
         return raw_gaze
-    key = tuple(
-        frame_fingerprint(frame)
-        for frame in (raw_gaze, words_all, fixations_all, words_pool, fixations_pool)
+    key = (
+        *(
+            frame_fingerprint(frame)
+            for frame in (
+                raw_gaze,
+                words_all,
+                fixations_all,
+                words_pool,
+                fixations_pool,
+            )
+        ),
+        keep_unknown,
     )
 
     def _build() -> pd.DataFrame:
@@ -6278,7 +6528,7 @@ def raw_gaze_in_pool(
         # samples' own keys are the one full pass worth not repeating.
         present = _raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
         pooled = trial_keys(words_pool) | trial_keys(fixations_pool)
-        keep = {k for k in present if k in pooled or k not in known}
+        keep = {k for k in present if k in pooled or (keep_unknown and k not in known)}
         return raw_gaze if keep == present else filter_frame_to_keys(raw_gaze, keep)
 
     return frame_cache("raw_gaze_pool", key, _build)

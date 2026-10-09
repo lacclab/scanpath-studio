@@ -173,6 +173,7 @@ from scanpath_studio.data import (
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
     StimulusJoin,
+    TrialFilterResult,
     adopt_source,
     assign_derived,
     clear_frame_cache,
@@ -213,8 +214,10 @@ from scanpath_studio.data import (
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
+    select_trials,
     stamp_source,
     text_ids,
+    trial_filter_conflict_note,
     trial_identity_warning,
     trial_keys,
     trial_mapping_columns,
@@ -3326,6 +3329,48 @@ _RAW_GAZE_LAYER_KEY = "global_show_raw_gaze"
 #: `RAW_GAZE_LINK_FOR_KEY` once the link's visit is over — not None, so the
 #: same link, still on the URL, cannot claim another dataset.
 _RAW_GAZE_LINK_SPENT = "\x00spent"
+
+
+def _trial_filter_params(trial_filters: dict) -> tuple:
+    """The part of the trial filters `data.select_trials` reads, as a key."""
+    return (
+        trial_filters["participants"],
+        trial_filters["metadata"],
+        trial_filters.get("ranges"),
+        tuple(trial_filters.get("ranges_drop_unknown") or ()),
+    )
+
+
+def _select_pool_trials(
+    words: pd.DataFrame, fixations: pd.DataFrame, trial_filters: dict
+) -> TrialFilterResult:
+    """`data.select_trials` over the pool, worked out once per filter change.
+
+    #412 decides each condition per reading across both tables, which is a
+    grouping pass over each — so it is kept in a `frame_cache`, and a rerun
+    under the same filters gets the same frames back without one. With no
+    filter set the frames come back as they are, with no cache entry."""
+    params = _trial_filter_params(trial_filters)
+    participants, metadata, ranges, drop_unknown = params
+    if participants is None and not metadata and not ranges:
+        return TrialFilterResult(words, fixations)
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        hashable_key(params),
+    )
+    return frame_cache(
+        "trial_filters",
+        key,
+        lambda: select_trials(
+            words,
+            fixations,
+            participants=participants,
+            metadata=metadata,
+            ranges=ranges,
+            drop_unknown=drop_unknown,
+        ),
+    )
 
 
 def _narrowed_raw_gaze(
@@ -10392,25 +10437,23 @@ def _run_app() -> None:
     # is on. `assign_derived` names them by their inputs and settings, so the
     # caches downstream are keyed without hashing the whole pool each time.
     pool = (words_df, fixations_df)
-    words_df, fixations_df = filter_trials(
-        words_df,
-        fixations_df,
-        participants=trial_filters["participants"],
-        metadata=trial_filters["metadata"],
-        ranges=trial_filters.get("ranges"),
-        drop_unknown=trial_filters.get("ranges_drop_unknown"),
-    )
+    selected = _select_pool_trials(words_df, fixations_df, trial_filters)
+    words_df, fixations_df = selected.words, selected.fixations
     assign_derived(
         (words_df, fixations_df),
         "filter_trials",
         pool,
-        (
-            trial_filters["participants"],
-            trial_filters["metadata"],
-            trial_filters.get("ranges"),
-            tuple(trial_filters.get("ranges_drop_unknown") or ()),
-        ),
+        _trial_filter_params(trial_filters),
     )
+    if selected.conflicts:
+        # #412: a reading whose two tables disagree about a filtered field is
+        # left out of the pool, never decided for one table — and said so.
+        menu.notices.warning(
+            trial_filter_conflict_note(
+                selected.conflicts, active_all(st.session_state).label
+            ),
+            icon=ICONS["warning"],
+        )
     # DATA-29: a trial-grain metadata narrowing is already `(participant_id,
     # trial_id)` keys, so it applies through `filter_to_keys` rather than
     # `filter_trials` — the table is never broadcast onto the frames, which is
@@ -10498,6 +10541,9 @@ def _run_app() -> None:
             fixations_all,
             words_filtered,
             fixations_filtered,
+            # #412: a trial only the samples have has no value for a condition
+            # the other two tables decided, so a category leaves it out.
+            keep_unknown=selected.selection is None or selected.selection.keeps_unknown,
         )
         if raw_gaze_filtered.empty:
             # Informational, not an error: the loaded raw-gaze samples just

@@ -47,7 +47,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import pandas as pd
 import streamlit as st
@@ -197,6 +197,7 @@ from scanpath_studio.data import (
     load_onestop_server_bundle,
     load_sample_data,
     load_sample_raw_gaze,
+    match_stimulus_images,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
@@ -214,7 +215,6 @@ from scanpath_studio.data import (
     read_tables,
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
-    resolve_stimulus_image_paths,
     select_trials_cached,
     stamp_source,
     stimulus_image_source,
@@ -6098,19 +6098,136 @@ def render_stimulus_images_fields(
     return str(folder or "").strip(), str(pattern or "").strip()
 
 
+class StimulusImages(NamedTuple):
+    """A dataset's frames with its stimulus images attached (#417): how many
+    rows its folder found an image for, or why the pattern was refused."""
+
+    words: pd.DataFrame | None
+    fixations: pd.DataFrame | None
+    found: int = 0
+    problem: str | None = None
+
+
+def _attach_stimulus_images(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    folder: str,
+    pattern: str,
+) -> StimulusImages:
+    """The frames with what ``folder`` + ``pattern`` find, or the frames
+    themselves when it finds nothing — so nothing downstream is rebuilt for a
+    folder that is empty, missing or unplugged — and why not, when the
+    pattern is refused."""
+    progress.report()  # UX-165: a gated loading card shows for this build
+    try:
+        matches = [
+            match_stimulus_images(frame, folder, pattern)
+            for frame in (words, fixations)
+        ]
+    except ValueError as exc:
+        return StimulusImages(words, fixations, 0, str(exc))
+    found = sum(match.found for match in matches)
+    if not found:
+        return StimulusImages(words, fixations)
+    out = tuple(
+        match.apply(frame) if match.found else frame
+        for frame, match in zip((words, fixations), matches, strict=True)
+    )
+    # Named by what was found, not by when the folder last changed: a stray
+    # file in it re-checks the folder without making every cache downstream
+    # miss, and two checks that find the same files give the same frames.
+    assign_derived(
+        out,
+        "stimulus_images",
+        (words, fixations),
+        (folder, pattern, tuple(match.signature for match in matches)),
+    )
+    return StimulusImages(*out, found, None)
+
+
+def _stimulus_folder_stamp(folder: str) -> int | None:
+    """When ``folder`` last changed, so a file added to it is found on the
+    next run (the resolution is cached by it)."""
+    try:
+        return Path(folder).expanduser().stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _stimulus_images_cached(
+    slot: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    folder: str,
+    pattern: str,
+    *,
+    keep: int = 1,
+) -> StimulusImages:
+    """`_attach_stimulus_images`, kept per frames + folder + pattern.
+
+    The folder's own timestamp is in the key, so an image added to it is found
+    on the next run (one added inside a subfolder waits for a restart or
+    another change). A refused pattern is kept too, with its reason, rather
+    than tried again on every run.
+    """
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        folder,
+        pattern,
+        _stimulus_folder_stamp(folder),
+    )
+    return frame_cache(
+        slot,
+        key,
+        lambda: _attach_stimulus_images(words, fixations, folder, pattern),
+        keep=keep,
+    )
+
+
+def with_dataset_stimulus_images(
+    token: str | None,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    *,
+    slot: str = "stimulus_images",
+) -> StimulusImages:
+    """``words`` and ``fixations`` with ``token``'s own stimulus images
+    attached (#417), or as they are when it has none.
+
+    The open dataset's (`slot` ``"stimulus_images"``, two kept so switching
+    back is instant, as for the normalized frames) and Compare's B's
+    (``"cmp_stimulus_images"``) each have a slot of their own, or the two would
+    evict each other on every run.
+    """
+    source = dataset_stimulus_images(token)
+    if source is None:
+        return StimulusImages(words, fixations)
+    return _stimulus_images_cached(
+        slot,
+        words,
+        fixations,
+        source["folder"],
+        source["pattern"],
+        keep=2 if slot == "stimulus_images" else 1,
+    )
+
+
 def render_stimulus_images_preview(
     host,
     folder: str,
     pattern: str,
-    frames: Iterable[pd.DataFrame | None],
+    frames: tuple[pd.DataFrame | None, pd.DataFrame | None],
     *,
-    resolved: bool = False,
+    saved: StimulusImages | None = None,
 ) -> None:
-    """How many rows of ``frames`` the folder and pattern find an image for.
+    """How many rows of ``frames`` the folder and pattern find an image for,
+    or why they cannot be used.
 
-    ``resolved`` says the frames already carry these images (the open
-    dataset's saved ones), so they are counted as they are rather than
-    resolved again.
+    ``saved`` is the open dataset's own resolution when the fields show what
+    is saved — its count, without looking again. Otherwise the count is kept
+    per frames + folder + pattern, so typing elsewhere on the screen does not
+    probe the folder again.
     """
     source = stimulus_image_source({"folder": folder, "pattern": pattern})
     if source is None:
@@ -6118,71 +6235,13 @@ def render_stimulus_images_preview(
     if not Path(source["folder"]).expanduser().is_dir():
         host.caption(f"{ICONS['warning']} There is no folder at this path.")
         return
-    found = 0
-    try:
-        for frame in frames:
-            if frame is None or frame.empty:
-                continue
-            if not resolved:
-                frame = resolve_stimulus_image_paths(
-                    frame, source["folder"], source["pattern"]
-                )
-            found += _rows_with_local_images(frame)
-    except ValueError as exc:
-        host.error(f"Couldn't use this folder or pattern: {exc}")
-        return
-    host.caption(f"Found a local image for {plural(found, 'row')}.")
-
-
-def _stimulus_folder_stamp(folder: str) -> int | None:
-    """When ``folder`` last changed, so a file added to it is found on the
-    next run (`_with_dataset_stimulus_images` caches the resolution)."""
-    try:
-        return Path(folder).expanduser().stat().st_mtime_ns
-    except OSError:
-        return None
-
-
-def _with_dataset_stimulus_images(
-    token: str | None, words: pd.DataFrame, fixations: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """``words`` and ``fixations`` with ``token``'s own stimulus images
-    attached (#417), or as they are when it has none.
-
-    Resolved once per frames + folder + pattern and kept (`frame_cache`), since
-    the result is a copy of the corpus: re-made on every rerun, it would be
-    hashed in full each time downstream. The folder's own timestamp is in the
-    key, so an image added to it is found on the next run (one added inside a
-    subfolder waits for a restart or another change). A pattern the resolver
-    refuses leaves the frames as they are; ✏️ Edit dataset says why.
-    """
-    source = dataset_stimulus_images(token)
-    if source is None:
-        return words, fixations
-    folder, pattern = source["folder"], source["pattern"]
-    stamp = _stimulus_folder_stamp(folder)
-
-    def build() -> tuple[pd.DataFrame, pd.DataFrame]:
-        out = (
-            resolve_stimulus_image_paths(words, folder, pattern),
-            resolve_stimulus_image_paths(fixations, folder, pattern),
-        )
-        assign_derived(
-            out, "stimulus_images", (words, fixations), source | {"at": stamp}
-        )
-        return out
-
-    key = (
-        frame_fingerprint(words),
-        frame_fingerprint(fixations),
-        folder,
-        pattern,
-        stamp,
+    result = saved or _stimulus_images_cached(
+        "stimulus_images_preview", *frames, source["folder"], source["pattern"]
     )
-    try:
-        return frame_cache("stimulus_images", key, build)
-    except ValueError:
-        return words, fixations
+    if result.problem:
+        host.error(f"Couldn't use this folder or pattern: {result.problem}")
+        return
+    host.caption(f"Found an image in this folder for {plural(result.found, 'row')}.")
 
 
 def _render_dataset_overview(token: str, *, registry: dict) -> None:
@@ -7454,21 +7513,6 @@ def render_dataset_table(
         _unreachable_dataset_dialog(unreachable)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
-
-
-def _rows_with_local_images(frame: pd.DataFrame) -> int:
-    """How many rows of ``frame`` name a stimulus image that exists on disk.
-
-    One ``os.path.isfile`` per **distinct** path rather than per row. The whole
-    point of `data.resolve_stimulus_image_paths` probing once per placeholder
-    tuple is lost if the caption it feeds then re-stats every row of a
-    multi-million-row corpus.
-    """
-    paths = None if frame is None else frame.get("image_path")
-    if paths is None or paths.empty:
-        return 0
-    counts = paths.dropna().astype(str).value_counts()
-    return int(sum(rows for path, rows in counts.items() if os.path.isfile(path)))
 
 
 def resolve_source_monitor(
@@ -10449,11 +10493,18 @@ def _run_app() -> None:
     # It stays out of public deployments and share links because it is
     # machine-local filesystem information; the same resolver is available
     # through the API and CLI for reproducible headless renders.
+    # The demo standing in for a missing corpus draws the demo's own folder,
+    # not the corpus' (the annotations follow the same rule).
+    images_owner = (
+        DEMO_CHOICE if st.session_state.get(_PLACEHOLDER_SHOWN_KEY) else _dataset_owner
+    )
     images_unresolved = (words_df, fixations_df)
+    stimulus_images = StimulusImages(words_df, fixations_df)
     if local_filesystem_enabled():
-        words_df, fixations_df = _with_dataset_stimulus_images(
-            _dataset_owner, words_df, fixations_df
+        stimulus_images = with_dataset_stimulus_images(
+            images_owner, words_df, fixations_df
         )
+        words_df, fixations_df = stimulus_images.words, stimulus_images.fixations
 
     # Optional raw gaze: the Upload source already mapped + normalized it above;
     # every other source loads it here (bundled demo sample, OneStop uploader).
@@ -10941,16 +10992,16 @@ def _run_app() -> None:
                     images_body, folder_key, pattern_key, saved=saved_images
                 )
                 typed = stimulus_image_source({"folder": folder, "pattern": pattern})
-                # What is saved is already on the frames; a draft is tried on
-                # the frames as they came, before any folder.
+                # What is saved was already looked up for the figures; a draft
+                # is tried on the frames as they came, before any folder.
                 render_stimulus_images_preview(
                     images_body,
                     folder,
                     pattern,
-                    (words_all, fixations_all)
-                    if typed == saved_images
-                    else images_unresolved,
-                    resolved=typed == saved_images,
+                    images_unresolved,
+                    saved=stimulus_images
+                    if typed == saved_images and images_owner == images_token
+                    else None,
                 )
         with _editor_part(setup_identity_slot, "edit_identity"):
             render_trial_identity_section()

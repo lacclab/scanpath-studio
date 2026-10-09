@@ -41,6 +41,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
     SACCADE_CLASS_COLORS,
@@ -514,7 +515,7 @@ def _render_parser() -> argparse.ArgumentParser:
     )
     src.add_argument(
         "--image-pattern",
-        default="{text_id}.png",
+        default=DEFAULT_STIMULUS_IMAGE_PATTERN,
         metavar="PATTERN",
         help="Relative filename pattern with row placeholders, for example "
         "'{text_id}.png' or '{participant_id}/{trial_id}.png'.",

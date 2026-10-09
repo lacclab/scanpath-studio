@@ -163,13 +163,20 @@ def _resolve_app() -> None:
     fixations = pd.DataFrame(
         {"participant_id": ["p1"], "trial_id": ["t1"], "text_id": ["a"]}
     )
+    from scanpath_studio.data import frame_fingerprint
+
     out = {}
     for token in ("Mine", "Other"):
-        w, f = app._with_dataset_stimulus_images(token, words, fixations)
+        result = app.with_dataset_stimulus_images(token, words, fixations)
+        w, f = result.words, result.fixations
         out[token] = (
             w["image_path"].tolist() if "image_path" in w else None,
             f["image_path"].tolist() if "image_path" in f else None,
             id(w),
+            frame_fingerprint(w),
+            result.found,
+            result.problem,
+            w is words,
         )
     st.session_state["_probe"] = out
 
@@ -188,12 +195,25 @@ class TestTheFiguresUseTheOpenDatasetsFolder:
     def test_only_the_dataset_it_was_saved_for(self, tmp_path):
         (tmp_path / "a.png").write_bytes(b"")
         _, out = self._run(tmp_path)
-        words, fixations, _ = out["Mine"]
+        words, fixations, *_ = out["Mine"]
         image = str((tmp_path / "a.png").resolve())
         assert words == [image, None]
         assert fixations == [image]
+        assert out["Mine"][4] == 2  # rows the folder found an image for
         # Another dataset is drawn without them.
         assert out["Other"][:2] == (None, None)
+
+    def test_a_folder_that_finds_nothing_hands_the_frames_back(self, tmp_path):
+        """Nothing downstream is rebuilt for an empty, missing or unplugged
+        folder: the frames are the very objects that came in."""
+        _, out = self._run(tmp_path)
+        assert out["Mine"][6] is True
+        assert out["Mine"][4] == 0 and out["Mine"][5] is None
+
+    @staticmethod
+    def _touch(folder):
+        stamp = folder.stat().st_mtime_ns
+        os.utime(folder, ns=(stamp, stamp + 1_000_000_000))
 
     def test_kept_across_reruns_and_redone_when_the_folder_changes(self, tmp_path):
         (tmp_path / "a.png").write_bytes(b"")
@@ -201,21 +221,45 @@ class TestTheFiguresUseTheOpenDatasetsFolder:
         at, again = self._run(tmp_path, at)
         assert again["Mine"][2] == first["Mine"][2]  # the same frames, kept
         (tmp_path / "b.png").write_bytes(b"")
-        stamp = tmp_path.stat().st_mtime_ns
-        os.utime(tmp_path, ns=(stamp, stamp + 1_000_000_000))
+        self._touch(tmp_path)
         _, after = self._run(tmp_path, at)
         assert after["Mine"][0] == [
             str((tmp_path / "a.png").resolve()),
             str((tmp_path / "b.png").resolve()),
         ]
+        assert after["Mine"][3] != first["Mine"][3]
 
-    def test_a_pattern_outside_the_folder_draws_none(self, tmp_path):
+    def test_a_stray_file_rebuilds_nothing_downstream(self, tmp_path):
+        """The folder is looked at again when it changes, but the frames are
+        named by what was found: the same images, the same fingerprint, so no
+        cache keyed by them misses."""
+        (tmp_path / "a.png").write_bytes(b"")
+        at, first = self._run(tmp_path)
+        (tmp_path / ".DS_Store").write_bytes(b"")
+        self._touch(tmp_path)
+        _, after = self._run(tmp_path, at)
+        assert after["Mine"][3] == first["Mine"][3]
+
+    def test_a_pattern_outside_the_folder_draws_none_and_says_why(self, tmp_path):
         at = AppTest.from_function(_resolve_app)
         at.session_state[DATASET_STIMULUS_IMAGES_KEY] = {
             "Mine": {"folder": str(tmp_path), "pattern": "../{text_id}.png"}
         }
         _, out = self._run(tmp_path, at)
         assert out["Mine"][:2] == (None, None)
+        assert "outside the selected folder" in out["Mine"][5]
+
+    def test_an_image_linked_into_the_folder_is_found(self, tmp_path):
+        """Only the pattern's spelling must stay inside the folder: a file
+        the user linked in from elsewhere is theirs to use."""
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "a.png").write_bytes(b"")
+        folder = tmp_path / "images"
+        folder.mkdir()
+        (folder / "a.png").symlink_to(elsewhere / "a.png")
+        _, out = self._run(folder)
+        assert out["Mine"][4] == 2 and out["Mine"][5] is None
 
 
 class TestTheAddScreen:
@@ -354,7 +398,7 @@ class TestThePart:
         assert not at.exception, at.exception
         captions = " ".join(str(c.value) for c in at.caption)
         # Three word boxes and two fixations, all of trial t1.
-        assert "Found a local image for 5 rows." in captions
+        assert "Found an image in this folder for 5 rows." in captions
 
     def test_and_not_where_a_path_means_nothing(self, monkeypatch):
         from scanpath_studio import wizard
@@ -411,3 +455,27 @@ def test_the_editor_saves_the_folder_with_its_dataset(tmp_path):
     run(at)
     other_folder, _ = app._stimulus_field_keys(SYNTHETIC_CHOICE)
     assert at.text_input(key=other_folder).value == ""
+
+
+def test_compares_b_draws_its_own_datasets_images(session, tmp_path):
+    """Scanpath B from another dataset brings that dataset's folder, not A's."""
+    from scanpath_studio import app
+    from scanpath_studio.compare_source import load_secondary_dataset
+
+    (tmp_path / "t1.png").write_bytes(b"")
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "trial_id": ["t1"],
+            "text_id": ["t1"],
+            "x": [1.0],
+            "y": [1.0],
+            "duration_ms": [200.0],
+        }
+    )
+    session["_datasets"] = {"B": {"words": None, "fixations": fixations}}
+    app.set_dataset_stimulus_images("B", str(tmp_path), "{trial_id}.png")
+    source = load_secondary_dataset("B")
+    assert source.fixations["image_path"].tolist() == [
+        str((tmp_path / "t1.png").resolve())
+    ]

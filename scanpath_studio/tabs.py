@@ -15786,7 +15786,7 @@ def _render_remap_editor(
     # UX-106: ✅ Save changes is no longer rendered here. It belongs at the foot
     # of the whole screen the way ✅ Add dataset does — this section is the
     # first of six, so a commit button at its end sat in the middle of the page
-    # with trial identity, stimulus images and two metadata tables below it.
+    # with stimulus images, trial identity and two metadata tables below it.
     # `render_dataset_editor_footer` draws it into a slot `app.main` reserves
     # last.
 
@@ -16170,7 +16170,7 @@ def render_dataset_editor_footer(host) -> None:
     ✅ Save changes is the one commit, and it is the last thing on the page,
     under everything it commits. It used to sit at the end of the *Column
     mapping* section — the first of six — which put it in the middle of the
-    screen, above trial identity, stimulus images and both metadata tables.
+    screen, above stimulus images, trial identity and both metadata tables.
 
     It also prints what blocked the last attempt. `_apply_remap` records those
     in ``_remap_problems``, which until now only tinted the offending selects;

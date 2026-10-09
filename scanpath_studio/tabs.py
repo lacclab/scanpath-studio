@@ -210,6 +210,7 @@ from scanpath_studio.data import (
     StimulusJoinWarning,
     aggregate_char_boxes,
     assign_derived,
+    assign_fingerprint,
     brought_reading_measures,
     coerce_bool_or_na,
     compute_word_metrics,
@@ -231,6 +232,7 @@ from scanpath_studio.data import (
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
+    read_table,
     read_tables,
     remap_normalized_frame,
     repeat_bases,
@@ -285,6 +287,7 @@ from scanpath_studio.fields import (
     labeled,
     panel_field,
     row_label,
+    switch,
 )
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -13518,6 +13521,53 @@ def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
     )
 
 
+class _MetadataReadError(Exception):
+    """One of a metadata table's files could not be read; names which."""
+
+    def __init__(self, name: str, cause: Exception) -> None:
+        super().__init__(
+            f"Could not read {name} — is it a CSV, TSV, Parquet or Excel table "
+            f"with one header row? ({cause})"
+        )
+
+
+def _metadata_upload_signature(uploads) -> tuple:
+    """What a metadata uploader holds, by each file's `file_id` — not its name
+    and size: a corrected file of the same name and length must be read again
+    (VIZ-4's precedent in `controls._uploaded_image_data_uri`)."""
+    return tuple(
+        getattr(upload, "file_id", None) or (upload.name, getattr(upload, "size", None))
+        for upload in uploads
+    )
+
+
+def _metadata_upload_name(uploads) -> str:
+    """The files a metadata table was read from, for its "from **X**" captions."""
+    first = uploads[0].name
+    if len(uploads) == 1:
+        return first
+    return f"{first} + {plural(len(uploads) - 1, 'more file')}"
+
+
+def _read_metadata_uploads(uploads) -> pd.DataFrame:
+    """Every file uploaded for one metadata table, stacked into one table.
+
+    A table split across files (one per session, one per lab) reads as one:
+    columns line up by name, and a column a file lacks is empty for its rows.
+    The same reader turning up in two files is what the builders already
+    handle — combined when the rows agree, dropped and reported when not.
+    """
+    frames = []
+    for upload in uploads:
+        try:
+            frames.append(read_table(upload))
+        except Exception as exc:  # unreadable file — the caller names it
+            raise _MetadataReadError(upload.name, exc) from exc
+    if len(frames) == 1:
+        return frames[0]
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
 def render_participant_metadata_section(
     participants, *, host=None, live_join: bool = True, upload_host=None
 ) -> None:
@@ -13571,7 +13621,6 @@ def _participant_metadata_body(
     participants, *, live_join: bool = True, upload_host=None
 ) -> None:
     from scanpath_studio import metadata as md
-    from scanpath_studio.data import read_table
 
     # UX-53 r5: the paragraph that used to print here now rides the uploader's
     # own title as a tooltip — descriptive prose on this page is hover-only.
@@ -13581,7 +13630,8 @@ def _participant_metadata_body(
     _pm_help = (
         "One row per participant, with a participant-id column. The columns "
         "then behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel."
+        "inspection and export. CSV / TSV / Parquet / Excel; several files "
+        "are stacked into one table."
     )
     # UX-127/UX-129: with `upload_host` (the wizard's row format), the title +
     # uploader move into that thin left column — mirroring `upload_box`'s
@@ -13599,10 +13649,11 @@ def _participant_metadata_body(
             st, "Participant metadata table (optional)", _pm_help, emphasis=True
         )
         stats_host = st
-    upload = stats_host.file_uploader(
+    uploads = stats_host.file_uploader(
         "Participant metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
         key=md.upload_key("participant"),
+        accept_multiple_files=True,
         # No `persist_state` — `st.file_uploader` does not take it. It does
         # not need it either: the parsed frame is kept in session state under
         # `md.RAW_SESSION_KEY`, so the attached table survives even if the
@@ -13611,7 +13662,7 @@ def _participant_metadata_body(
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
-    if upload is None:
+    if not uploads:
         if active_participant_metadata() is None:
             return
         # UX-115: removing the file from its uploader chip detaches the table
@@ -13643,22 +13694,16 @@ def _participant_metadata_body(
         # `file_id`, not (name, size): re-uploading a corrected file of the
         # same name and byte length must be read again (VIZ-4 precedent in
         # `controls._uploaded_image_data_uri`).
-        signature = getattr(upload, "file_id", None) or (
-            upload.name,
-            getattr(upload, "size", None),
-        )
+        signature = _metadata_upload_signature(uploads)
         if st.session_state.get(md.FILE_SESSION_KEY) != signature:
             try:
-                st.session_state[md.RAW_SESSION_KEY] = read_table(upload)
-                st.session_state[md.FILE_SESSION_KEY] = signature
-                st.session_state[_PM_NAME_KEY] = upload.name
-                st.session_state.pop("participant_metadata_id_column", None)
-            except Exception as exc:  # unreadable file — say so, keep the page
-                st.error(
-                    f"Could not read {upload.name} — is it a CSV, TSV, Parquet "
-                    f"or Excel table with one header row? ({exc})"
-                )
+                st.session_state[md.RAW_SESSION_KEY] = _read_metadata_uploads(uploads)
+            except _MetadataReadError as exc:  # say which file, keep the page
+                st.error(str(exc))
                 return
+            st.session_state[md.FILE_SESSION_KEY] = signature
+            st.session_state[_PM_NAME_KEY] = _metadata_upload_name(uploads)
+            st.session_state.pop("participant_metadata_id_column", None)
 
     raw = st.session_state.get(md.RAW_SESSION_KEY)
     if raw is None or raw.empty:
@@ -13807,13 +13852,13 @@ def render_trial_metadata_section(
 
 def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) -> None:
     from scanpath_studio import metadata as md
-    from scanpath_studio.data import read_table
 
     # UX-113: same dotted-underline title format as the mapping fields.
     _tm_help = (
         "One row per trial, with a trial-id column. The columns then "
         "behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel."
+        "inspection and export. CSV / TSV / Parquet / Excel; several files "
+        "are stacked into one table."
     )
     # UX-127/UX-129 — see the matching branch in `_participant_metadata_body`.
     if upload_host is not None:
@@ -13824,15 +13869,16 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
             st, "Trial metadata table (optional)", _tm_help, emphasis=True
         )
         stats_host = st
-    upload = stats_host.file_uploader(
+    uploads = stats_host.file_uploader(
         "Trial metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
         key=md.upload_key("trial"),
+        accept_multiple_files=True,
         help=_tm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
-    if upload is None:
+    if not uploads:
         if md.active_trials() is None:
             return
         # UX-115/UX-129/DATA-38 — see the matching note in
@@ -13848,23 +13894,19 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
         _clear_trial_metadata()
         return
     else:
-        signature = getattr(upload, "file_id", None) or (
-            upload.name,
-            getattr(upload, "size", None),
-        )
+        signature = _metadata_upload_signature(uploads)
         if st.session_state.get(md.TRIAL_FILE_SESSION_KEY) != signature:
             try:
-                st.session_state[md.TRIAL_RAW_SESSION_KEY] = read_table(upload)
-                st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
-                st.session_state[_TM_NAME_KEY] = upload.name
-                st.session_state.pop("trial_metadata_id_column", None)
-                st.session_state.pop("trial_metadata_participant_column", None)
-            except Exception as exc:  # unreadable file — say so, keep the page
-                st.error(
-                    f"Could not read {upload.name} — is it a CSV, TSV, Parquet "
-                    f"or Excel table with one header row? ({exc})"
+                st.session_state[md.TRIAL_RAW_SESSION_KEY] = _read_metadata_uploads(
+                    uploads
                 )
+            except _MetadataReadError as exc:  # say which file, keep the page
+                st.error(str(exc))
                 return
+            st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
+            st.session_state[_TM_NAME_KEY] = _metadata_upload_name(uploads)
+            st.session_state.pop("trial_metadata_id_column", None)
+            st.session_state.pop("trial_metadata_participant_column", None)
 
     raw = st.session_state.get(md.TRIAL_RAW_SESSION_KEY)
     if raw is None or raw.empty:
@@ -14032,12 +14074,12 @@ def render_text_metadata_section(
 
 def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> None:
     from scanpath_studio import metadata as md
-    from scanpath_studio.data import read_table
 
     _txm_help = (
         "One row per text, with a text-id column. The columns then "
         "behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export. CSV / TSV / Parquet / Excel."
+        "inspection and export. CSV / TSV / Parquet / Excel; several files "
+        "are stacked into one table."
     )
     # UX-127/UX-129 — see the matching branch in `_participant_metadata_body`.
     if upload_host is not None:
@@ -14048,15 +14090,16 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
             st, "Text metadata table (optional)", _txm_help, emphasis=True
         )
         stats_host = st
-    upload = stats_host.file_uploader(
+    uploads = stats_host.file_uploader(
         "Text metadata table (optional)",
         type=list(UPLOAD_FILE_TYPES),
         key=md.upload_key("text"),
+        accept_multiple_files=True,
         help=_txm_help,
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
-    if upload is None:
+    if not uploads:
         if md.active_texts() is None:
             return
         # UX-115/UX-129/DATA-38 — see the matching note in
@@ -14072,22 +14115,18 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
         _clear_text_metadata()
         return
     else:
-        signature = getattr(upload, "file_id", None) or (
-            upload.name,
-            getattr(upload, "size", None),
-        )
+        signature = _metadata_upload_signature(uploads)
         if st.session_state.get(md.TEXT_FILE_SESSION_KEY) != signature:
             try:
-                st.session_state[md.TEXT_RAW_SESSION_KEY] = read_table(upload)
-                st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
-                st.session_state[_TXM_NAME_KEY] = upload.name
-                st.session_state.pop("text_metadata_id_column", None)
-            except Exception as exc:  # unreadable file — say so, keep the page
-                st.error(
-                    f"Could not read {upload.name} — is it a CSV, TSV, Parquet "
-                    f"or Excel table with one header row? ({exc})"
+                st.session_state[md.TEXT_RAW_SESSION_KEY] = _read_metadata_uploads(
+                    uploads
                 )
+            except _MetadataReadError as exc:  # say which file, keep the page
+                st.error(str(exc))
                 return
+            st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
+            st.session_state[_TXM_NAME_KEY] = _metadata_upload_name(uploads)
+            st.session_state.pop("text_metadata_id_column", None)
 
     raw = st.session_state.get(md.TEXT_RAW_SESSION_KEY)
     if raw is None or raw.empty:
@@ -14790,69 +14829,43 @@ def _apply_remap() -> None:
 
 
 #: UX-104 — the editor's field grid, now the **same blocks the add-dataset
-#: screen draws**: one block per table, its identity line first (what a row
-#: *is*: trial, screen, reader, text, word, and the table's own id) and its
-#: feature line under it, rather than the old grouping which interleaved the
-#: two tables and split a table's own fields three rows apart.
+#: screen draws**: one block per table, read off `wizard.MAP_LINES` line by
+#: line — its identity line first (what a row *is*: trial, reader, text,
+#: screen), then the table's own fields — so the two screens' lines are the
+#: same lines, at the same widths, to the pixel.
 #:
 #: ``(label, widths, fields, extra)`` per rendered line, ``fields`` being
 #: ``("<table>", "<field>")`` pairs and ``extra`` naming a non-mapping control
 #: that belongs under that line (UX-106: the AOI block's char-aggregation
-#: question, which is the add screen's third AOI line). The widths are `wizard._ID_ROW1_W` and its
-#: two row-2 grids, imported rather than restated so the two screens' rows line
-#: up to the pixel. A blank label continues the block above it.
+#: question, under the word box as on the add screen). A blank label continues
+#: the block above it.
 #:
 #: Whatever a table's specs carry beyond these still lands on a trailing *More*
 #: line, so a field can never be dropped by this list falling behind
 #: ``*_FIELD_SPECS``.
 def _edit_rows() -> tuple:
     from scanpath_studio.wizard import (
-        _AOI_ROW2_W,
-        _FIX_ROW2_W,
-        _ID_ROW1_W,
+        _MAP_ROW_W,
+        _META_ROW_W,
+        MAP_LINES,
         MEASURE_ROW_W,
         MEASURE_ROWS,
     )
 
+    def block(table: str, slug: str) -> tuple:
+        return tuple(
+            (
+                _TABLE_LABELS[table] if index == 0 else "",
+                _META_ROW_W if keys == ("box",) else _MAP_ROW_W,
+                tuple((table, key) for key in keys),
+                "aggregate" if keys == ("box",) else "",
+            )
+            for index, keys in enumerate(MAP_LINES[slug])
+        )
+
     return (
-        (
-            "Fixations",
-            _ID_ROW1_W,
-            (
-                ("fixations", "trial"),
-                ("fixations", "screen_id"),
-                ("fixations", "participant"),
-                ("fixations", "text_id"),
-                ("fixations", "word_id"),
-                ("fixations", "fixation_id"),
-            ),
-            "",
-        ),
-        (
-            "",
-            _FIX_ROW2_W,
-            (
-                ("fixations", "x"),
-                ("fixations", "y"),
-                ("fixations", "timestamp"),
-                ("fixations", "duration"),
-            ),
-            "",
-        ),
-        (
-            "Words (interest areas)",
-            _ID_ROW1_W,
-            (
-                ("words", "trial"),
-                ("words", "screen_id"),
-                ("words", "participant"),
-                ("words", "text_id"),
-                ("words", "word_id"),
-                ("words", "text"),
-            ),
-            "",
-        ),
-        ("", _AOI_ROW2_W, (("words", "box"), ("words", "line")), "aggregate"),
+        *block("fixations", "fix"),
+        *block("words", "words"),
         # AN-32 — the reading measures, on the same two lines the add screen
         # gives them. Part of the AOI block, so no block gap above them.
         *(
@@ -14864,20 +14877,7 @@ def _edit_rows() -> tuple:
             )
             for line, keys in enumerate(MEASURE_ROWS)
         ),
-        (
-            "Raw gaze",
-            _ID_ROW1_W,
-            (
-                ("raw_gaze", "trial"),
-                ("raw_gaze", "screen_id"),
-                ("raw_gaze", "participant"),
-                ("raw_gaze", "x"),
-                ("raw_gaze", "y"),
-                ("raw_gaze", "timestamp"),
-            ),
-            "",
-        ),
-        ("", _FIX_ROW2_W, (("raw_gaze", "text"),), ""),
+        *block("raw_gaze", "raw_gaze"),
     )
 
 
@@ -14999,11 +14999,15 @@ def _render_missing_table_uploads(name: str, stored: dict, *, host=None) -> dict
                     # #374 F3: a zip of both EyeLink reports, read for one.
                     kind=table_key if table_key in ("words", "fixations") else None,
                 )
-                st.session_state[raw_key] = fresh
-                st.session_state[signature_key] = (
-                    files,
-                    _literal_columns(name, table_key, fresh.columns),
+                literal = _literal_columns(name, table_key, fresh.columns)
+                # BUG-103: named by what decides re-reading it, so the per-rerun
+                # fingerprints (the editor's *Estimate from my data* above all)
+                # never hash a table that can run to millions of rows.
+                assign_fingerprint(
+                    fresh, ("editor-added", name, table_key, files, literal)
                 )
+                st.session_state[raw_key] = fresh
+                st.session_state[signature_key] = (files, literal)
             except Exception as exc:  # unreadable file — say so, keep the page
                 st.session_state.pop(raw_key, None)
                 box.error(
@@ -15077,8 +15081,10 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
     quietly do nothing. Rendered either way so the block keeps the add screen's
     shape, and disabled says which case you are in.
     """
-    st.toggle(
-        "Aggregate character AOIs into word boxes",
+    switch(
+        st,
+        "toggle",
+        "Merge character boxes into word boxes",
         key=aggregate_key(name),
         disabled=not adding,
         # Streamlit 1.65: read only by Save changes (`_apply_remap`).
@@ -15202,9 +15208,9 @@ def _render_remap_fields(
         if label and drawn and extra != "measures":
             st.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
         drawn.add(label or "-")
-        row = st.columns(
-            list(widths[: len(live) + 1]), gap="small", vertical_alignment="bottom"
-        )
+        # The line's whole grid, filled from the left, so a line with fewer
+        # fields keeps its cells under the ones above it.
+        row = st.columns(list(widths), gap="small", vertical_alignment="bottom")
         row[0].markdown(
             f'<div class="sps-id-row-name sps-geo-row-name">{label}</div>',
             unsafe_allow_html=True,
@@ -16107,7 +16113,7 @@ def _setup_file_mapping(
     if "aggregate_char_boxes" in (recipe.get("steps") or ()):
         notes.append(
             "Words: character boxes were combined into word boxes; turn "
-            "*Aggregate character AOIs into word boxes* on again after restoring."
+            "*Merge character boxes into word boxes* on again after restoring."
         )
     return mapping, notes
 
@@ -16117,7 +16123,7 @@ def _editor_setup_config(name: str) -> dict:
     format (``wizard._wizard_setup_config``).
 
     So ⬇️ Download setup file means the same thing on both screens, and a file saved from
-    either is restored by the same *Restore a saved setup* uploader — over the
+    either is restored by the same *Start from → A setup file* uploader — over the
     **original files**, which is why the mapping is written in their column
     names rather than the stored frame's (`_setup_file_mapping`). What a
     restore cannot reproduce is listed under ``column_mapping_notes``, and the
@@ -16201,7 +16207,8 @@ def render_dataset_editor_footer(host) -> None:
         width="stretch",
         help="Save this dataset's column mapping and recording setup to re-use "
         "on similar data — or to send with the files, so whoever loads them "
-        "restores it from *Restore a saved setup* instead of re-mapping by hand.",
+        "restores it with *Start from → A setup file* instead of re-mapping by "
+        "hand.",
     )
     apply_col.button(
         # UX-54 r2: the add-dataset screen's ✅ Add dataset, for the screen that
@@ -16456,8 +16463,7 @@ def _render_setup_provenance_note(host=None) -> None:
         "geometry": (
             "—"
             if snapshot.geometry_provenance is Provenance.SKIPPED
-            else f"{snapshot.monitor_width_mm:.0f} mm wide, "
-            f"{snapshot.viewing_distance_mm:.0f} mm away"
+            else f"{snapshot.monitor_width_mm:.0f} mm wide"
         ),
         "text": (
             "scaled to word boxes"

@@ -271,7 +271,7 @@ def _remove_dataset_app():
 
 class TestWizardRestoreSeeding:
     def test_overwrite_replaces_existing_widget_keys(self):
-        # Regression: the wizard "Restore a saved setup" silently did nothing
+        # Regression: the wizard's setup restore silently did nothing
         # because setdefault no-ops on keys the mapping widgets already created.
         at = AppTest.from_function(_seed_overwrite_app)
         at.run()
@@ -363,3 +363,189 @@ class TestRestoreSetupOncePerUpload:
         at.session_state["_setup"] = json.dumps({"data_source": "Lab A"})
         at.run()  # same file_id and bytes as before, but after a clear
         assert at.session_state["_wizard_restored_meta"]["data_source"] == "Lab A"
+
+
+def _copy_setup_app():
+    """*Start from → A dataset you added*: copy, then Undo (2026-10-09)."""
+    import streamlit as st
+
+    from scanpath_studio import wizard
+
+    st.session_state["_datasets"] = {
+        "Lab A": {
+            "source_recipe": {
+                "schemas": {
+                    "fixations": {
+                        "trial": "TRIAL_INDEX",
+                        "participant": "RECORDING_SESSION_LABEL",
+                        "x": "CURRENT_FIX_X",
+                        "duration": "CURRENT_FIX_DURATION",
+                    },
+                    "words": {
+                        "trial": ["RECORDING_SESSION_LABEL", "TRIAL_INDEX"],
+                        "left": "IA_LEFT",
+                        "right": "IA_RIGHT",
+                    },
+                }
+            },
+            "setup": {"canvas_width": 1920, "canvas_height": 1080},
+            wizard.WIZARD_CHOICES_FIELD: {
+                "keep_and_filter": {"wizard_keep_by_table": {"col_map_fix": ["eye"]}}
+            },
+        }
+    }
+    step = st.session_state.get("_step", 0)
+    if step == 0:
+        st.session_state["col_map_fix_x"] = "mine"
+        st.session_state[wizard._COPY_FROM_KEY] = "Lab A"
+        wizard._copy_dataset_setup()
+    elif step == 1:
+        wizard._undo_and_start_from_scratch()
+
+
+class TestStartFromADataset:
+    def test_copying_fills_the_mapping_and_undo_puts_it_back(self):
+        from scanpath_studio import wizard
+
+        at = AppTest.from_function(_copy_setup_app)
+        at.run()
+        assert not at.exception, at.exception
+        state = at.session_state
+        assert state["col_map_fix_x"] == "CURRENT_FIX_X"
+        assert state["col_map_fix_trial"] == ["TRIAL_INDEX"]
+        assert state["col_map_fix_participant"] == ["RECORDING_SESSION_LABEL"]
+        assert state["col_map_words_trial"] == [
+            "RECORDING_SESSION_LABEL",
+            "TRIAL_INDEX",
+        ]
+        assert state["col_map_words_box_format"] == "Edges"
+        assert state["wizard_keep_col_map_fix"] == ["eye"]
+        assert state["_wizard_restored_setup"]["canvas_width"] == 1920
+        meta = state["_wizard_restored_meta"]
+        assert meta["kind"] == "dataset" and meta["data_source"] == "Lab A"
+        assert "column mapping (Fixations, Words (interest areas))" in meta["applied"]
+        assert (
+            "1 kept field" in meta["applied"] and "recording setup" in meta["applied"]
+        )
+
+        at.session_state["_step"] = 1
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["col_map_fix_x"] == "mine"
+        assert "col_map_words_trial" not in at.session_state
+        assert "_wizard_restored_setup" not in at.session_state
+        assert "_wizard_restored_meta" not in at.session_state
+        assert at.session_state[wizard._START_FROM_KEY] == wizard._START_SCRATCH
+
+
+class TestMappingKeysFromSchemas:
+    def test_origin_size_boxes_and_raw_gaze_singles(self):
+        from scanpath_studio.wizard import _mapping_keys_from_schemas
+
+        keys = _mapping_keys_from_schemas(
+            {
+                "words": {"x": "x", "width": "w", "text_id": None},
+                "raw_gaze": {"trial": "t", "participant": "p"},
+            }
+        )
+        assert keys["col_map_words_box_format"] == "Origin + size"
+        assert keys["col_map_words_text_id"] == []
+        assert keys["col_map_raw_gaze_trial"] == ["t"]
+        assert keys["col_map_raw_gaze_participant"] == "p"
+
+
+def _empty_wizard_setup_app():
+    """The add screen's Recording setup, with no table in yet."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.wizard import _wizard_setup_step
+
+    st.session_state.setdefault("global_scale_text_to_boxes", True)
+    st.session_state.setdefault("global_canvas_width", 1920)
+    _wizard_setup_step(
+        st.container(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        False,
+        estimate=lambda: (2560, 1440),
+        has_data=False,
+    )
+
+
+class TestAnEmptyAddScreenLeavesTheFigureAlone:
+    """Opening ➕ Add dataset and cancelling must not leave the dataset you
+    came from with the setup lines' own starting answers (2026-10-09)."""
+
+    def test_its_starting_answers_write_no_figure_setting(self):
+        at = AppTest.from_function(_empty_wizard_setup_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["global_scale_text_to_boxes"] is True
+        assert at.session_state["global_canvas_width"] == 1920
+
+
+def _restore_then_words_app():
+    """A setup whose text fits the boxes, applied before any Words table."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.experimental_setup import SetupSnapshot
+    from scanpath_studio.wizard import _apply_restored_setup, _wizard_setup_step
+
+    if not st.session_state.get("_restored"):
+        st.session_state["_restored"] = True
+        snap = SetupSnapshot.from_dict(
+            {
+                "canvas_width": 1920,
+                "canvas_height": 1080,
+                "scale_text_to_boxes": True,
+                "provenance": {
+                    "screen": "measured",
+                    "geometry": "skipped",
+                    "text": "measured",
+                },
+            }
+        )
+        st.session_state["_wizard_restored_setup"] = snap.to_dict()
+        _apply_restored_setup(snap)
+    _wizard_setup_step(
+        st.container(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        bool(st.session_state.get("_has_words")),
+        estimate=lambda: (800, 600),
+        has_data=bool(st.session_state.get("_has_words")),
+    )
+
+
+class TestASetupAppliedBeforeTheWords:
+    def test_fit_to_the_boxes_comes_back_when_they_arrive(self):
+        from scanpath_studio.wizard import _SETUP_MODE_KEYS, _TEXT_BOXES, _TEXT_DEFAULT
+
+        at = AppTest.from_function(_restore_then_words_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state[_SETUP_MODE_KEYS["text"]] == _TEXT_DEFAULT
+        at.session_state["_has_words"] = True
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state[_SETUP_MODE_KEYS["text"]] == _TEXT_BOXES
+
+
+class TestAMalformedSetupFile:
+    def test_bad_sections_are_skipped(self):
+        from scanpath_studio.wizard import _applied_summary, _clean_setup_config
+
+        config = _clean_setup_config(
+            {
+                "data_source": "x",
+                "column_mapping": 5,
+                "filename_derive": ["not", "a", "dict"],
+                "keep_and_filter": {"wizard_keep_by_table": "x"},
+            }
+        )
+        assert "column_mapping" not in config
+        assert "filename_derive" not in config
+        assert "wizard_keep_by_table" not in config["keep_and_filter"]
+        assert _applied_summary(config) == "nothing this screen uses"

@@ -3056,11 +3056,7 @@ def _zipped_table_columns(file_like_or_path, *, kind: str | None = None) -> list
     """
     columns: list[str] = []
     with zipfile.ZipFile(file_like_or_path) as zf:
-        infos = [
-            i
-            for i in zf.infolist()
-            if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
-        ]
+        infos = _zip_table_members(zf)
         if not infos:
             raise ValueError(
                 "the zip holds no table file (CSV, TSV, TXT, Excel, Parquet or Feather)"
@@ -3318,6 +3314,25 @@ def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
 #: Formats whose pandas reader seeks (columnar footers, zip-container
 #: workbooks), so their member can't be streamed and is read into memory whole.
 _SEEKABLE_ONLY_SUFFIXES = (".parquet", ".feather", ".xlsx", ".xls")
+#: What a zip member must be called to be read as a table.
+_TABLE_MEMBER_SUFFIXES = (".csv", ".tsv", ".tab", ".txt", *_SEEKABLE_ONLY_SUFFIXES)
+
+
+def _zip_table_members(zf: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    """A zip's table files, in archive order.
+
+    Folders and macOS/dotfile cruft (``__MACOSX``, ``.DS_Store``) are skipped,
+    and so is anything that is no table at all: a ``README.md`` shipped beside
+    the data was read as one more table, and its first line taken for a header,
+    so the whole upload failed to parse.
+    """
+    return [
+        info
+        for info in zf.infolist()
+        if not info.is_dir()
+        and not Path(info.filename).name.startswith((".", "__"))
+        and info.filename.lower().endswith(_TABLE_MEMBER_SUFFIXES)
+    ]
 
 
 class _BudgetedZipMember(io.RawIOBase):
@@ -3488,11 +3503,7 @@ def zip_member_split(file_like_or_path, kind: str | None) -> ZipMemberSplit:
     _rewind(file_like_or_path)
     try:
         with zipfile.ZipFile(file_like_or_path) as zf:
-            infos = [
-                i
-                for i in zf.infolist()
-                if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
-            ]
+            infos = _zip_table_members(zf)
             _check_zip_limits(infos)
             return _zip_split(zf, infos, kind)
     finally:
@@ -3525,11 +3536,7 @@ def read_table_sample(
         if not name.endswith(".zip"):
             return pd.DataFrame()
         with zipfile.ZipFile(file_like_or_path) as zf:
-            infos = [
-                i
-                for i in zf.infolist()
-                if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
-            ]
+            infos = _zip_table_members(zf)
             _check_zip_limits(infos)
             used = _zip_split(zf, infos, kind).used_infos
             info = next(
@@ -3583,11 +3590,7 @@ def _read_zipped_table(
     (``ZIP_MAX_*``) — both the declared sizes and the bytes actually read are
     bounded, so a forged header can't slip past."""
     with zipfile.ZipFile(file_like_or_path) as zf:
-        infos = [
-            i
-            for i in zf.infolist()
-            if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
-        ]
+        infos = _zip_table_members(zf)
         if not infos:
             raise ValueError(
                 "the zip holds no table file (CSV, TSV, TXT, Excel, Parquet or Feather)"

@@ -62,7 +62,9 @@ under **Metadata → Participants**. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's *By participant* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
-sessions.
+sessions. A table split across files — one per session, one per lab — can be
+uploaded as several files at once: they are stacked into one table, matching
+columns by name. The same holds for the trial and text tables.
 
 ```csv
 participant_id,native_language,age,comprehension
@@ -87,7 +89,7 @@ Three rules are worth knowing:
   counts as no value. The same choice sits under every numeric trial filter,
   for the trial and text tables as well.
 
-Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
+Headless, it is a `--participant-metadata FILE…` flag on `scanpath-studio render`
 and [`load_participant_metadata()`](api.md) in the Python API.
 
 ## Trial metadata
@@ -120,7 +122,7 @@ Python API.
 
 Join reporting and duplicate handling are as for the participant table.
 
-Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and
+Headless, it is `--trial-metadata FILE…` on `scanpath-studio render` and
 [`load_trial_metadata()`](api.md) in the Python API.
 
 ## Text metadata
@@ -134,7 +136,7 @@ columns. Its columns behave like fields in the data in the same way, travel with
 exports (`metadata/texts.csv`) and saved sessions, and follow the same join
 rules.
 
-Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
+Headless, it is `--text-metadata FILE…` on `scanpath-studio render` and
 [`load_text_metadata()`](api.md) in the Python API.
 
 ## Flexible loading

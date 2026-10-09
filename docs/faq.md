@@ -11,7 +11,7 @@ tables are in different coordinate frames — a different origin, unit or offset
 ([Data format → Units](data-format.md#tables)). If the alignment is right but
 the figure is framed or sized wrongly, the recording screen size is: set the
 resolution of the monitor used in the experiment under :material/database: **Data Management → :material/edit: Edit dataset → Recording
-setup**. *Estimate from my data* only gives a lower bound.
+setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
 

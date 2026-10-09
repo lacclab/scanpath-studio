@@ -250,6 +250,7 @@ from scanpath_studio.experimental_setup import (
     SetupSnapshot,
     font_pt_to_px,
 )
+from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
     close_open_popovers,
@@ -4685,6 +4686,7 @@ def _read_uploaded_frame(
     container=None,
     kind: str | None = None,
     label_visibility: str = "visible",
+    messages=None,
 ) -> pd.DataFrame:
     """Render one upload box and return its (concatenated) frame.
 
@@ -4701,8 +4703,14 @@ def _read_uploaded_frame(
     Streamlit's own label + native (~1s) help tooltip. The widget still gets the
     real ``uploader_label``/``upload_help`` as its accessible name and help; only
     where they are drawn changes.
+
+    ``messages`` is where a file the readers refuse, or a large-upload warning,
+    is said — the add screen's wide side of the row. Drawn in the uploader's own
+    narrow column, an error pushed the file chip, and with it the ✕ that removes
+    the file, out of sight.
     """
     host = container if container is not None else st.container()
+    messages = messages if messages is not None else host
     uploaded = host.file_uploader(
         uploader_label,
         type=_UPLOAD_TYPES,
@@ -4726,14 +4734,14 @@ def _read_uploaded_frame(
         str(getattr(st.context, "url", "") or "")
     ):
         mb = uploaded_files_total_bytes(uploaded) / (1024 * 1024)
-        host.warning(
+        messages.warning(
             f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
             "parsing a corpus this large can exhaust memory and crash the app. "
             f"For big corpora, use the [desktop app]({CITATION['desktop_url']}) "
             "or `pip install scanpath-studio`, or upload a subset (e.g. a few "
             "participants)."
         )
-        if not host.checkbox(
+        if not messages.checkbox(
             "Load it anyway",
             key=f"{state_prefix}_load_large",
             help="Parse this large upload regardless. Safe on a local machine "
@@ -4757,9 +4765,9 @@ def _read_uploaded_frame(
         st.session_state.pop(f"{state_prefix}_header", None)
         files = uploaded if multi else [uploaded]
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
-        host.error(
+        messages.error(
             f"Couldn't read **{names}**: {exc}. Check it is a table file with one "
-            "header row."
+            "header row, or remove it with the ✕ on its chip."
         )
         return pd.DataFrame()
     # BUG-103: this upload's own ID, before the wizard derives anything from it.
@@ -5972,12 +5980,18 @@ def render_description_field(host, token: str) -> None:
     key = _description_field_key(token)
     if key not in st.session_state:
         st.session_state[key] = dataset_description(token)[0]
+    help_text = (
+        f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        f"Management page. Saved with **{ICONS['confirm']} Save changes**."
+    )
+    # The title carries its help as the dotted underline, not a `?` icon.
+    row_label(host, "Description", help_text)
     host.text_area(
         "Description",
         key=key,
         placeholder="What this dataset is — the participants, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
-        f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
+        help=help_text,
+        label_visibility="collapsed",
         height=80,
         # Streamlit 1.65: read only by Save changes / Cancel, so typing needs
         # no rerun.
@@ -5999,7 +6013,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     published-vs-loaded table, and a coordinate badge for every dataset. The
     table's Status already says whether its numbers are published or loaded.
 
-    Editing it is ✏️ **Edit dataset**, under the overview (UX-178).
+    Editing it is the ✏️ on the dataset's row (UX-178).
     """
     about = dataset_about(token, registry)
     text, own = dataset_description(token, registry)
@@ -6062,39 +6076,13 @@ def _annotation_trial_labels(combos: pd.DataFrame | None) -> dict[str, str] | No
 def render_dataset_inspection_head(token: str) -> None:
     """*What's in the `<name>` dataset* and the overview under it.
 
-    ✏️ **Edit dataset** is not on this line: it is drawn by
-    :func:`render_dataset_edit_button`, below the description and checks and
-    above the inspection subtabs.
+    ✏️ **Edit** is not here: it is on the dataset's row of 📂 Available
+    datasets, beside Remove (`_render_dataset_table_row`).
     """
     # #374 F30: the name alone — "the `Dataset 1` dataset" said it twice.
     label = _dataset_display_name(token).replace("*", r"\*")
     st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
-
-
-def render_dataset_edit_button(token: str) -> None:
-    """✏️ **Edit dataset**, between the dataset's overview and its subtabs.
-
-    UX-178: the section's one action is a button of its own, not a link-weight
-    one beside the description, so it reads as editing the whole dataset — its
-    name, its description and its setup, all on the screen it opens. It does
-    not apply to the add-dataset wizard's pending dataset or to the authoring
-    canvas, which are not rows of the table.
-    """
-    if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
-        return
-    st.button(
-        "Edit dataset",
-        icon=ICONS["edit"],
-        key="dataset_edit_btn",
-        on_click=_edit_open_dataset,
-        args=(token,),
-        help="Open the authoring editor — change the text, drag fixations, "
-        "or edit their timing."
-        if token == MANUAL_SAMPLE_CHOICE
-        else "Its name, description, column mapping, recording setup, "
-        "location and metadata tables.",
-    )
 
 
 def _builtin_name_draft(token: str) -> str | None:
@@ -6148,6 +6136,11 @@ def render_name_field(host, token: str) -> None:
         st.session_state[EDITOR_NAME_FIELD_KEY] = st.session_state.get(
             EDITOR_PENDING_NAME_KEY
         ) or _dataset_display_name(token)
+    help_text = (
+        "Shown in the list of datasets and the dataset picker. Saved with "
+        f"**{ICONS['confirm']} Save changes**."
+    )
+    row_label(host, "Name", help_text)
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
@@ -6155,8 +6148,8 @@ def render_name_field(host, token: str) -> None:
         # An upload stages its name on change; a built-in's is read only by
         # Save changes / Cancel, so it needs no rerun (Streamlit 1.65).
         on_change=_stage_upload_name if uploaded else "ignore",
-        help="Shown in the list of datasets and the dataset picker. Saved with "
-        f"**{ICONS['confirm']} Save changes**.",
+        help=help_text,
+        label_visibility="collapsed",
         # A draft outlives a visit to another view while the editor is open.
         persist_state="session",
     )
@@ -6250,6 +6243,9 @@ _EDITOR_LEAVE_PENDING_KEY = "_dataset_editor_leave_pending"
 #: another row is a way out of the editor too, and goes through the same
 #: confirmation; ✕ Leave then opens this dataset.
 _EDITOR_LEAVE_TARGET_KEY = "_dataset_editor_leave_target"
+#: Set when that click was the row's ✏️ rather than the row itself: ✕ Leave
+#: then raises the editor on the dataset it opens.
+_EDITOR_LEAVE_EDIT_KEY = "_dataset_editor_leave_edit"
 #: UX-197 — set by whatever opens the editor, popped by its bar: the editor
 #: opens under the table, so the page is brought down to it once.
 _EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
@@ -6440,6 +6436,7 @@ def _close_dataset_editor() -> None:
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_EDIT_KEY, None)
     # Anything typed into the editor and not saved goes with it — including a
     # table uploaded to fill a missing half, which is only a *pending* attach
     # until ✅ Save changes runs.
@@ -6486,6 +6483,21 @@ def _ask_leave_dataset_editor() -> None:
 def _dismiss_leave_dataset_editor() -> None:
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_EDIT_KEY, None)
+
+
+def _leave_dataset_editor() -> None:
+    """✕ Leave: drop the edit, then open the dataset a row asked for, if any —
+    with its editor raised when the row's ✏️ asked (`_EDITOR_LEAVE_EDIT_KEY`)."""
+    target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
+    edit_target = st.session_state.get(_EDITOR_LEAVE_EDIT_KEY)
+    _close_dataset_editor()
+    if target:
+        # Through the pre-widget seam only: this runs from a button's return
+        # value, after the picker has instantiated in this run.
+        st.session_state["_pending_source_choice"] = target
+        if edit_target:
+            _edit_open_dataset(target)
 
 
 @st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
@@ -6519,12 +6531,7 @@ def _leave_dataset_editor_dialog() -> None:
         type="primary",
         width="stretch",
     ):
-        target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
-        _close_dataset_editor()
-        if target:
-            # Through the pre-widget seam only: this is a button's return
-            # value, after the picker has instantiated in this run.
-            st.session_state["_pending_source_choice"] = target
+        _leave_dataset_editor()
         st.rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
@@ -6605,7 +6612,9 @@ _DATASET_KIND_W = 92
 _DATASET_NAME_W = 280
 _DATASET_COUNT_W = 96
 _DATASET_STATUS_W = 156  # BUG-113: fits the "Needs download" badge
-_DATASET_ACTIONS_W = 40
+#: ✏️ Edit and 🗑 Remove, each an icon of `_DATASET_ICON_W`.
+_DATASET_ICON_W = 32
+_DATASET_ACTIONS_W = 72
 
 
 def _dataset_row_slug(token: str) -> str:
@@ -6840,6 +6849,25 @@ def _edit_open_dataset(token: str) -> None:
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
+
+
+def _edit_dataset_row(token: str) -> None:
+    """✏️ on a row of 📂 Available datasets: open that dataset, editor raised.
+
+    The editor edits the open dataset, so another row is opened first, the way
+    a click on it would (`_open_dataset_row`) — the unreachable-dataset note
+    and the open editor's *Leave without saving?* included. When that prompt
+    is up, ✕ Leave raises the editor on this dataset (`_EDITOR_LEAVE_EDIT_KEY`).
+    """
+    st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+    if token != st.session_state.get("data_source_choice"):
+        _open_dataset_row(token)
+        if st.session_state.get(_UNREACHABLE_DATASET_KEY) == token:
+            return
+        if st.session_state.get(_EDITOR_LEAVE_TARGET_KEY) == token:
+            st.session_state[_EDITOR_LEAVE_EDIT_KEY] = True
+            return
+    _edit_open_dataset(token)
 
 
 def _arm_dataset_row(pending_key: str, token: str) -> None:
@@ -7086,15 +7114,30 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         horizontal=True,
         horizontal_alignment="right",
         vertical_alignment="center",
+        gap="xsmall",
+    )
+    # Every dataset can be edited — its name, description, setup and
+    # metadata; the hand-drawn sample on its authoring canvas.
+    actions.button(
+        f"Edit {row.name}",
+        icon=ICONS["edit"],
+        key=f"dataset_row_edit_{slug}",
+        type="tertiary",
+        on_click=_edit_dataset_row,
+        args=(row.token,),
+        help="Open the authoring editor — change the text, drag fixations, or "
+        "edit their timing."
+        if row.token == MANUAL_SAMPLE_CHOICE
+        else f"Edit {row.name}: its name, description, column mapping, "
+        "recording setup, location and metadata tables.",
     )
     # Only a dataset you added can be removed. For the demo, a public corpus
     # or a local bundle, Remove only hid the row for the rest of the session —
     # nothing was deleted and nothing could bring it back — so they offer none.
-    # The empty cell keeps the columns lined up — drawn with a space in it, as
-    # the header's is, because an empty container is not drawn at all and the
-    # row's numbers then sat right of an added dataset's (#374 F30).
+    # Edit keeps the cell drawn, so the columns still line up (#374 F30); the
+    # spacer holds Remove's place so every row's Edit sits in one column.
     if row.token not in set(st.session_state.get("_data_source_uploaded") or []):
-        actions.markdown(
+        actions.container(key=f"dsc_noremove_{slug}", width=_DATASET_ICON_W).markdown(
             '<span aria-hidden="true">&nbsp;</span>', unsafe_allow_html=True
         )
         return
@@ -8200,8 +8243,10 @@ def render_canvas_controls(
             persist_state="session",
         )
     # DATA-2: physical setup values live beside the pixel canvas they explain.
-    # They are persisted with the plot config and immediately yield a px/degree
-    # scale for downstream saccade/reporting work.
+    # The width gives the DPI the point-size font converts through. The viewing
+    # distance is not asked for (2026-10-09): only px/degree reads it, and
+    # nothing in this release draws in degrees. `global_viewing_distance_mm`
+    # still rides links and configs, pinned by `seed_canvas_state`.
     #
     # **UX-81 — in the rail these three are not drawn at all.** They are
     # experiment facts, and the 🗂️ Data page's Recording setup (#DATA-22) already
@@ -8210,7 +8255,7 @@ def render_canvas_controls(
     # are not widget-owned any more: `seed_canvas_state` pins all three on every
     # run (including the derived DPI), so a share link or saved config still
     # restores them and every consumer reads the same numbers as before.
-    # The wizard's standalone form still shows them: that *is* where they are set.
+    # The wizard's standalone form still shows the width and DPI.
     if bare:
         monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
         display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
@@ -8226,17 +8271,6 @@ def render_canvas_controls(
             key="global_monitor_width_mm",
             persist_state="session",
             help="Width of the visible display area, not the diagonal size.",
-        )
-        field(
-            screen,
-            "number_input",
-            "Viewing distance (mm)",
-            min_value=100.0,
-            max_value=3000.0,
-            step=10.0,
-            key="global_viewing_distance_mm",
-            persist_state="session",
-            help="Eye-to-screen distance during the experiment.",
         )
         derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
         display_dpi = field(
@@ -10221,18 +10255,28 @@ def _run_app() -> None:
     # and CLI for reproducible headless renders.
     if local_filesystem_enabled():
         with _editor_part(setup_stimulus_slot, "edit_stimulus"):
+            # Each title carries its help as the dotted underline, as every
+            # other field on this screen does, not a `?` icon.
+            root_help = "Local folder containing one image per text or trial."
+            row_label(st, "Image folder", root_help)
             image_root = st.text_input(
                 "Image folder",
                 key="stimulus_image_root",
                 placeholder="/path/to/stimulus-images",
-                help="Local folder containing one image per text or trial.",
+                help=root_help,
+                label_visibility="collapsed",
             ).strip()
+            pattern_help = (
+                "Use the app's field names in braces — {text_id}, {trial_id} or "
+                "{participant_id}. Subfolders work too."
+            )
+            row_label(st, "Filename pattern", pattern_help)
             image_pattern = st.text_input(
                 "Filename pattern",
                 key="stimulus_image_pattern",
                 value="{text_id}.png",
-                help="Use the app's field names in braces — {text_id}, {trial_id} "
-                "or {participant_id}. Subfolders work too.",
+                help=pattern_help,
+                label_visibility="collapsed",
             ).strip()
             if image_root:
                 try:
@@ -10806,8 +10850,8 @@ def _run_app() -> None:
             # the corpus home link, the coordinate-provenance sentence and a
             # six-row published-vs-loaded table, all standing between the user
             # and the counts they came for. UX-174 r2 put Rename on the heading
-            # and Edit on the description line, off the table's rows; Edit now
-            # sits under the overview, above the subtabs.
+            # and Edit on the description line, off the table's rows; Edit is
+            # back on the rows now, beside Remove.
             render_dataset_inspection_head(active_token)
             # DATA-67 — what the dataset supports, before any trial filter:
             # the first thing a newly added dataset's overview answers.
@@ -10819,7 +10863,6 @@ def _run_app() -> None:
             render_data_health(
                 words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
             )
-            render_dataset_edit_button(active_token)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

@@ -32,8 +32,12 @@ left out. See [Data format](../data-format.md) for every field.
 The import screen has three parts:
 
 1. **Name & description** — the description is optional.
-2. **Upload data tables** — upload Fixations, Words (interest areas) and, optionally,
-   raw gaze. The app
+2. **Upload data tables** — start from scratch, or with **Start from** reuse a
+   setup you already have: a dataset you added before (its column mapping, the
+   fields it kept and its recording setup, copied without a file) or a setup
+   file saved with **:material/download: Download setup file**. Everything stays editable, and
+   **Undo** puts the screen back. Then upload Fixations, Words (interest areas) and,
+   optionally, raw gaze — each row says what its table must map. The app
    guesses which column is which; check its guesses. The trial count under each
    ID picker is a quick sanity check, and hovering the :material/visibility:
    icon beside a mapped field shows its first few values and how they are read,
@@ -50,31 +54,35 @@ The import screen has three parts:
 Then click **:material/check: Add dataset**. Anything the app cannot use is listed above the
 button before you confirm.
 
-To see what the two main tables look like, click **:material/download: Download example
-tables** before uploading anything: a tiny Words table and fixation table that map
-without a single manual pick, with a README giving each column's unit and what
-the IDs mean.
-
 ### Recording setup
 
 Describe the screen the data was **recorded** on, not the one you are using
-now. A wrong resolution rescales every figure, so nothing is preselected. For
-each value, say how you know it: measured, estimated from your data, or a
-default. That answer travels with the dataset, so others can tell measured
-values from assumed ones.
+now. Four lines, each already filled in with the answer that invents nothing:
 
-Beside them, **Font** asks which typeface the text was shown in. Pick it from
-the list (Courier New, Consolas, Arial, Times New Roman, …) or choose **Other…**
-and type its name. The word labels are then drawn in that font wherever it is
-installed, so they line up with the stimulus letter for letter. **I don't
-know** keeps a generic monospace font, which can draw a few percent narrower.
-The same question is on **Edit dataset**.
+- **Screen** — estimated from the extent of your word boxes and fixations. That
+  is a lower bound: text rarely fills the screen, so choose **I know it** and
+  enter the real resolution if you have it.
+- **Physical size** — off. **I know it** takes the monitor's width in
+  millimetres (the visible area, not the diagonal); **Typical 597 mm** assumes
+  one. The width gives the screen's DPI, which turns a font size in points into
+  pixels; while it is off, a point size is read as pixels.
+- **Text size** — each word sized to its box. **I know the size** takes the
+  font size in points.
+- **Font** — a generic monospace until you name the typeface (Courier New,
+  Consolas, Arial, Times New Roman, …, or **Other…**). The word labels are then
+  drawn in it wherever it is installed, so they line up with the stimulus.
+
+Beside each value, a label says how it is known — *You entered it*, *From your
+data*, *Estimated*, *Assumed* or *Off* — and that travels with the dataset, so
+others can tell measured values from assumed ones. While a line is an estimate
+or a default, a note above them asks for the real value; nothing waits on it,
+and every line can be changed later on **Edit dataset**.
 
 ## The Data Management page
 
 :material/database: **Data Management** lists every dataset with its counts; click a row to open it.
-**Edit dataset** opens under the list, below the open dataset's counts and
-tables, and changes its name, description, column mapping, recording setup
+The :material/edit: on a row opens that dataset's editor under the list, below
+its counts and tables. It changes its name, description, column mapping, recording setup
 and metadata tables, or adds a table it is missing (Fixations, Words (interest areas) or raw
 gaze); its mapped fields show the same value preview. On an
 added dataset, changing an ID or coordinate column shows a few values as they

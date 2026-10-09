@@ -166,7 +166,7 @@ def test_a_mapping_restored_for_a_dataset_is_kept_by_it():
 
 
 def test_a_mapping_restored_for_one_dataset_is_dropped_by_another():
-    """➕ Add dataset → *Restore a saved setup* → ✕ Cancel before any upload:
+    """➕ Add dataset → *Start from → A setup file* → ✕ Cancel before any upload:
     the restored keys were claimed for the dataset being added, so the demo,
     meeting them first, does not adopt them."""
     at = _mapped("demo")

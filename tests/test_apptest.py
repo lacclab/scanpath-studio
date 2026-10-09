@@ -16,7 +16,7 @@ import pytest
 
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
-from scanpath_studio.constants import ICONS
+from scanpath_studio.constants import DEMO_CHOICE, ICONS
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -40,6 +40,13 @@ AppTest = streamlit_testing.AppTest
 
 
 SYNTHETIC_SOURCE = "Synthetic test trial"
+
+
+def edit_row_key(token: str) -> str:
+    """The ✏️ Edit button on ``token``'s row of 📂 Available datasets."""
+    from scanpath_studio.app import _dataset_row_slug
+
+    return f"dataset_row_edit_{_dataset_row_slug(token)}"
 
 
 def _make_apptest(*, synthetic: bool = False) -> AppTest:
@@ -902,6 +909,10 @@ class TestDatasetTable:
 
         return _dataset_row_slug(token)
 
+    @staticmethod
+    def _edit(token):
+        return edit_row_key(token)
+
     def test_the_editor_opens_under_the_table_and_its_stats(self):
         """UX-197: ✏️ Edit dataset no longer replaces the overview — the table
         and *What's in the dataset* stay on screen, the editor opens under
@@ -914,7 +925,7 @@ class TestDatasetTable:
         )
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_EDITOR_OPEN_KEY]
         assert _EDITOR_SCROLL_KEY not in at.session_state  # used up by the bar
@@ -929,7 +940,7 @@ class TestDatasetTable:
         from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY, DEMO_CHOICE
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         self._click(at, f"dataset_open_{self._slug(DEMO_CHOICE)}")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The editor edits the open dataset, so opening another one closes it.
@@ -958,14 +969,12 @@ class TestDatasetTable:
             assert f"dataset_open_{slug}" in keys, f"open missing for {token}"
             removable = f"dataset_row_remove_{slug}" in keys
             assert removable == (token == self.NAME), token
-            for gone in (
-                "dataset_details_",
-                "dataset_row_edit_",
-                "dataset_row_rename_",
-            ):
+            # Every row can be edited, from the row itself.
+            assert f"dataset_row_edit_{slug}" in keys, f"edit missing for {token}"
+            for gone in ("dataset_details_", "dataset_row_rename_"):
                 assert f"{gone}{slug}" not in keys
         assert not [k for k in keys if "rename" in str(k)]
-        assert "dataset_edit_btn" in keys
+        assert "dataset_edit_btn" not in keys
         # BUG-113: Status says whether a dataset can be opened — a stored
         # upload is in memory, so it opens at once.
         status = frame.set_index("_token")["Status"]
@@ -1081,7 +1090,7 @@ class TestDatasetTable:
         from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
         assert field.value == self.NAME
         field.input("Pilot study")
@@ -1105,7 +1114,7 @@ class TestDatasetTable:
         at.session_state["data_source_choice"] = DEMO_CHOICE
         pin_data_view(at)
         at.run(timeout=90)
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(DEMO_CHOICE))
         field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
         field.input("Demo, renamed")
         text = next(
@@ -1140,11 +1149,11 @@ class TestDatasetTable:
         assert at.session_state[PENDING_DELETE_KEY] == self.NAME
         assert self.NAME in at.session_state["_datasets"]
 
-    def test_edit_beside_the_description_opens_the_editor(self):
+    def test_edit_on_its_row_opens_the_editor(self):
         from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
         assert at.session_state["data_source_choice"] == self.NAME
@@ -1152,6 +1161,57 @@ class TestDatasetTable:
         from scanpath_studio.app import _description_field_key
 
         assert [t for t in at.text_area if t.key == _description_field_key(self.NAME)]
+
+    def test_edit_on_another_row_opens_that_dataset_and_its_editor(self):
+        from scanpath_studio.app import DATASET_EDITOR_OPEN_KEY, FOCUS_MAPPING_KEY
+
+        at = self._at()
+        self._click(at, self._edit(DEMO_CHOICE))
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == DEMO_CHOICE
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
+        assert at.session_state[FOCUS_MAPPING_KEY] == DEMO_CHOICE
+
+    def test_edit_on_another_row_asks_before_leaving_an_unsaved_edit(self):
+        """The open editor's *Leave without saving?* comes first; ✕ Leave then
+        opens the other dataset with its editor raised."""
+        from scanpath_studio import app as app_mod
+        from scanpath_studio.app import (
+            _EDITOR_LEAVE_EDIT_KEY,
+            _EDITOR_LEAVE_PENDING_KEY,
+            _EDITOR_LEAVE_TARGET_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+            FOCUS_MAPPING_KEY,
+        )
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+
+        at = self._at()
+        self._click(at, self._edit(self.NAME))
+        next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY).input(
+            "Pilot study"
+        )
+        pin_data_view(at)
+        at.run(timeout=90)
+        self._click(at, self._edit(DEMO_CHOICE))
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state[_EDITOR_LEAVE_PENDING_KEY] is True
+        assert at.session_state[_EDITOR_LEAVE_EDIT_KEY] is True
+        assert at.session_state["data_source_choice"] == self.NAME
+        # ✕ Leave itself — AppTest cannot click inside this page's dialogs
+        # (cf. `test_delete_is_wired_to_the_remover`), so its action runs directly.
+        state = {
+            _EDITOR_LEAVE_PENDING_KEY: True,
+            _EDITOR_LEAVE_TARGET_KEY: DEMO_CHOICE,
+            _EDITOR_LEAVE_EDIT_KEY: True,
+            DATASET_EDITOR_OPEN_KEY: True,
+            FOCUS_MAPPING_KEY: self.NAME,
+        }
+        with mock.patch.object(app_mod.st, "session_state", state):
+            app_mod._leave_dataset_editor()
+        assert state["_pending_source_choice"] == DEMO_CHOICE
+        assert state[DATASET_EDITOR_OPEN_KEY] is True
+        assert state[FOCUS_MAPPING_KEY] == DEMO_CHOICE
+        assert _EDITOR_LEAVE_PENDING_KEY not in state
 
     def test_a_description_written_on_the_editor_waits_for_save(self):
         """Typed on ✏️ Edit dataset, it is an unsaved change until ✅ Save
@@ -1162,7 +1222,7 @@ class TestDatasetTable:
         from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
 
         at = self._at()
-        self._click(at, "dataset_edit_btn")
+        self._click(at, self._edit(self.NAME))
         field = next(
             t for t in at.text_area if t.key == _description_field_key(self.NAME)
         )
@@ -1661,7 +1721,7 @@ class TestBuiltInRecordingSetupOverride:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
     def _open(self, at):
-        at.button(key="dataset_edit_btn").click()
+        at.button(key=edit_row_key(DEMO_CHOICE)).click()
         self._run(at)
 
     def _overrides(self, at) -> dict:
@@ -1681,7 +1741,9 @@ class TestBuiltInRecordingSetupOverride:
         self._run(at)
         self._open(at)
         # The upload's form, not a read-only summary.
-        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert (
+            at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        )
         # An untouched Save saves no setup of the user's.
         at.button(key="builtin_mapping_save").click()
         self._run(at)
@@ -1689,7 +1751,7 @@ class TestBuiltInRecordingSetupOverride:
 
         # A change that is cancelled is gone, and gone from the next edit too.
         self._open(at)
-        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        at.segmented_control(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
         self._run(at)
         assert at.session_state["_remap_builtin_setup_dirty"] is True
         for key in [k for k in at.session_state if str(k).startswith("_remap_")]:
@@ -1697,11 +1759,13 @@ class TestBuiltInRecordingSetupOverride:
         del at.session_state["_dataset_editor_open"]
         self._run(at)
         self._open(at)
-        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert (
+            at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        )
         assert DEMO_CHOICE not in self._overrides(at)
 
         # A saved change is this dataset's own setup, on the figure at once.
-        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        at.segmented_control(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
         self._run(at)
         at.number_input(key=f"{self.PREFIX}_monitor_mm").set_value(400.0)
         self._run(at)
@@ -1731,7 +1795,9 @@ class TestBuiltInRecordingSetupOverride:
         self._open(at)
         at.button(key="edit_src_Bundled Demo_reset").click()
         self._run(at)
-        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert (
+            at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        )
         at.button(key="builtin_mapping_save").click()
         self._run(at)
         assert DEMO_CHOICE not in self._overrides(at)
@@ -1753,7 +1819,7 @@ class TestBuiltInEditorSavesItsMapping:
         at.session_state["data_source_choice"] = DEMO_CHOICE
         pin_data_view(at)
         at.run(timeout=90)
-        at.button(key="dataset_edit_btn").click()
+        at.button(key=edit_row_key(DEMO_CHOICE)).click()
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3304,12 +3370,15 @@ class TestSetupWizard:
         assert "col_map_words_trial" in ms_keys
         assert "col_map_trial_unified" not in ms_keys
         assert not [t for t in at.toggle if "per table" in (t.label or "")]
-        # DATA-22: the recording setup is now step 4, *after* the upload, and
-        # asks how each group is known instead of seeding a monitor. Nothing is
-        # preselected — a wrong guess here silently rescales every figure.
-        modes = {r.key: r.value for r in at.radio}
-        assert set(_SETUP_MODE_KEYS.values()) <= set(modes)
-        assert all(modes[k] is None for k in _SETUP_MODE_KEYS.values())
+        # 2026-10-09: the recording setup starts on the answers that invent
+        # nothing — the screen estimated from the data, visual angle off, the
+        # text fitted to the word boxes — each one a row of buttons.
+        modes = {c.key: c.value for c in at.segmented_control}
+        assert modes[_SETUP_MODE_KEYS["screen"]] == "Estimate from my data"
+        assert modes[_SETUP_MODE_KEYS["geometry"]] == (
+            "Skip — I don't need visual-angle units"
+        )
+        assert modes[_SETUP_MODE_KEYS["text"]] == "Scale to the word boxes"
 
     def test_per_table_trial_toggle_reveals_per_table_pickers(self, monkeypatch):
         app = self._inject(monkeypatch)
@@ -3756,17 +3825,19 @@ class TestSetupWizard:
         assert not any(k.startswith("single_composite_") for k in keys), keys
 
     def test_recording_setup_writes_shared_global_key(self, monkeypatch):
-        """DATA-22: the Recording-setup step still feeds the shared ``global_*``
-        keys the rest of the app reads — but only once the user has said *how*
-        they know the screen. Answering "I know the resolution" reveals the
-        width/height inputs, and the value they hold is published."""
+        """DATA-22: the Recording-setup step feeds the shared ``global_*`` keys
+        the rest of the app reads — the answers the user chose, at once. The
+        screen's own starting answer (the estimate) waits for Add dataset, so
+        leaving the screen hands the previous dataset nothing."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["global_canvas_width"] = 1234
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Before answering, the wizard publishes no canvas at all.
+        # On the estimate there is nothing to type, and nothing is written.
         assert not [n for n in at.number_input if n.key == "wizard_setup_screen_w"]
+        assert at.session_state["global_canvas_width"] == 1234
 
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.run(timeout=60)
@@ -5183,35 +5254,42 @@ class TestDeepLinkToAFilteredOutReader:
 
 @pytest.mark.timeout(180)
 class TestRecordingSetupGate(TestSetupWizard):
-    """DATA-22 §3: **Add dataset** is blocked until all three setup groups say
-    how they are known.
+    """The Recording setup asks for real values but never holds the dataset
+    back (2026-10-09). It starts on the answers that invent nothing, says
+    which lines are estimates or defaults, and records how each is known — so
+    no uploaded dataset silently passes off a guess as a measurement."""
 
-    The gate is deliberately hard — there is no "decide later" escape — but it
-    can never strand anyone: *Estimate from my data* always exists for the screen
-    group and always succeeds. What it buys is that no uploaded dataset can
-    silently inherit a monitor, viewing distance or font nobody chose.
-    """
-
-    def test_finalize_is_disabled_until_every_group_is_answered(self, monkeypatch):
+    def test_add_dataset_is_not_held_up_by_the_setup(self, monkeypatch):
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        finalize = [b for b in at.button if b.key == "wizard_finalize"]
-        assert finalize, "the finalize button should render (disabled), not vanish"
-        assert finalize[0].disabled, "Add dataset must be gated on the setup step"
+        finalize = next(b for b in at.button if b.key == "wizard_finalize")
+        assert not finalize.disabled
+        # The estimate is said to be one, with the ask for the real value.
+        assert any(
+            "**Screen** is an estimate or a default" in c.value for c in at.caption
+        )
 
-        # Answering two of three is still not enough.
+        # Entering the screen answers the ask.
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
-        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
         at.run(timeout=60)
-        assert next(b for b in at.button if b.key == "wizard_finalize").disabled
+        assert not [c for c in at.caption if "an estimate or a default" in c.value]
 
-        answer_setup_step(at)
+        finalize = next(b for b in at.button if b.key == "wizard_finalize")
+        finalize.click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not next(b for b in at.button if b.key == "wizard_finalize").disabled
+        entry = at.session_state["_datasets"][at.session_state["data_source_choice"]]
+        assert entry["setup"]["provenance"] == {
+            "screen": "measured",
+            "geometry": "skipped",
+            "text": "measured",
+        }
+        # The dataset's setup reaches the figure when it is added.
+        assert at.session_state["global_canvas_width"] == entry["setup"]["canvas_width"]
+        assert at.session_state["global_scale_text_to_boxes"] is True
 
     def test_the_answers_ride_into_the_stored_dataset(self, monkeypatch):
         """The provenance travels with the dataset, not just the wizard — that is

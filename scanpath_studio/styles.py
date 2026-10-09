@@ -284,15 +284,19 @@ def get_app_css() -> str:
         font-size: 0.875rem;
     }
     .st-key-dsrow_head button p { white-space: nowrap; font-size: 0.875rem; }
-    /* Remove is its icon; the label names the dataset for screen readers. */
+    /* Edit and Remove are their icons; each label names the dataset for
+       screen readers. */
+    [class*="st-key-dataset_row_edit_"] button,
     [class*="st-key-dataset_row_remove_"] button {
         padding: 0 0.35rem !important;
         min-height: 0;
     }
+    [class*="st-key-dataset_row_edit_"] button [data-testid="stMarkdownContainer"],
     [class*="st-key-dataset_row_remove_"] button [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;
         overflow: hidden; clip-path: inset(50%); white-space: nowrap;
     }
+    .st-key-dataset_table_grid [class*="st-key-dataset_row_edit_"] button:focus-visible,
     .st-key-dataset_table_grid [class*="st-key-dataset_row_remove_"] button:focus-visible,
     .st-key-dsrow_head button:focus-visible {
         outline: 2px solid var(--sps-accent);
@@ -1501,7 +1505,10 @@ def get_app_css() -> str:
     }
 
     /* The dataset name leads the wizard and names the whole thing, so it is set
-       larger than an ordinary field rather than looking like the first of them. */
+       larger than an ordinary field rather than looking like the first of them.
+       Its label is the part's own title, so the box gets the room under that
+       title a label would have taken — it sat pressed against it. */
+    .st-key-wiz_name_box { margin-top: 1rem; }
     .st-key-wiz_name_box input {
         font-size: 1.05rem;
         font-weight: 600;
@@ -1587,12 +1594,12 @@ def get_app_css() -> str:
         top: 0;
         bottom: 0;
         left: 0;
-        /* UX-127: widened from 9% to match `_ID_ROW1_W`/`_META_ROW_W`'s own
+        /* UX-127: widened from 9% to match `_MAP_ROW_W`/`_META_ROW_W`'s own
            widened first cell in wizard.py (0.09 -> 0.135) — the Browse-files
            button didn't fit at 9%. */
         width: 13.5%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
-        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_ID_ROW1_W`
+        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_MAP_ROW_W`
            (and its row-2/meta siblings) widening from 0.135 to 0.155 — that
            gives the divider room on the picker side, this gives it room on
            the upload side, so the line no longer reads as glued to either
@@ -1644,6 +1651,27 @@ def get_app_css() -> str:
        `help_text` in wizard.py). */
     [class*="st-key-wiz_map_upload_"] [data-testid="stFileUploaderDropzoneInstructions"] {
         display: none;
+    }
+    /* 2026-10-09 — before a file is in, the Fixations / Words / Raw gaze
+       uploader is a real drop target the height of its row, not a lone
+       button: its row is otherwise empty, and a small box is easy to miss.
+       It shrinks back to the button once a file is there. */
+    [class*="st-key-wiz_map_block_col_map_"]:not(:has([data-testid="stFileChip"])) {
+        min-height: 9.5rem;
+    }
+    [class*="st-key-wiz_map_upload_col_map_"]:not(:has([data-testid="stFileChip"])) [data-testid="stFileUploaderDropzone"] {
+        min-height: 6.25rem;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4rem;
+        border: 1px dashed rgba(128, 128, 128, 0.5) !important;
+        border-radius: 0.5rem;
+    }
+    [class*="st-key-wiz_map_upload_col_map_"]:not(:has([data-testid="stFileChip"])) [data-testid="stFileUploaderDropzone"]::after {
+        content: "or drop files here";
+        font-size: 0.78rem;
+        opacity: 0.7;
     }
     /* UX-124 — the uploaded-file chip is sized for a full-width column; in
        this ~9%-wide one it clipped outright rather than shrinking (its

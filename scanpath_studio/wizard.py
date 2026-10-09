@@ -22,7 +22,7 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
-from .column_names import ColumnNames, for_tables
+from .column_names import ColumnNames, for_tables, stored_source_recipe
 from .constants import (
     _VIEW_DATA,
     CITATION,
@@ -42,6 +42,8 @@ from .constants import (
 from .controls import (
     _GRID_LABEL_W,
     ADD_ATTEMPTED_KEY,
+    BOX_FORMAT_EDGES,
+    BOX_FORMAT_ORIGIN,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
@@ -90,17 +92,16 @@ from .data import (
     validate_word_schema,
 )
 from .experimental_setup import (
-    SETUP_GROUP_LABELS,
     SETUP_GROUPS,
     Provenance,
     SetupSnapshot,
     font_pt_to_px,
 )
+from .fields import switch, tooltip
 from .menu import view_label
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
-from .synthetic import EXAMPLE_ZIP_FILE, example_import_zip
 from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
@@ -161,6 +162,9 @@ def _reset_wizard_widgets() -> None:
         "wizard_config_restore",
         "_wizard_config_last",
         "_wizard_restored_meta",
+        _RESTORE_UNDO_KEY,
+        _START_FROM_KEY,
+        _COPY_FROM_KEY,
         "_composite_trial_columns",
         "wizard_filter_fields",
         # MultiplEYE preset uploads + generic filename-derivation / aggregation.
@@ -187,11 +191,11 @@ def _reset_wizard_widgets() -> None:
         "wizard_setup_screen_w",
         "wizard_setup_screen_h",
         "wizard_setup_monitor_mm",
-        "wizard_setup_distance_mm",
         "wizard_setup_font_pt",
         "wizard_setup_font_family",
         "_wizard_restored_setup",
         "_wizard_setup_restored_applied",
+        _SETUP_AUTO_KEY,
         "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
@@ -307,6 +311,27 @@ def _source_recipe(
     }
 
 
+def _apply_setup_to_figure(setup: dict | None) -> None:
+    """A newly added dataset's recording setup, onto the figure's settings.
+
+    The add screen writes only the answers the user chose while it is open
+    (`_wizard_setup_step`), so the ones it chose itself — the estimate, the
+    text fitted to its boxes — arrive here, with the dataset they belong to.
+    """
+    if not isinstance(setup, dict):
+        return
+    snapshot = SetupSnapshot.from_dict(setup, fallback=SetupSnapshot())
+    st.session_state["global_canvas_width"] = snapshot.canvas_width
+    st.session_state["global_canvas_height"] = snapshot.canvas_height
+    if snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
+        st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
+        st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
+    if snapshot.text_provenance is not None:
+        st.session_state["global_base_font_size"] = snapshot.base_font_size
+        st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
+    st.session_state["global_font_family"] = snapshot.font_family
+
+
 def _finalize_wizard_dataset() -> None:
     """Store the wizard's normalized frames as a named dataset and switch to it.
 
@@ -348,6 +373,7 @@ def _finalize_wizard_dataset() -> None:
         st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
+    _apply_setup_to_figure(payload.get("setup"))
     # DATA-47: the tables just attached are this dataset's, not a session-wide
     # slot — hand them over before the switch, so the next run has nothing to
     # swap (and so the dataset this wizard was opened over keeps its own).
@@ -954,16 +980,41 @@ _DERIVE_TABLE_DISPLAY = {"Words / IA": WORDS_TABLE_LABEL}
 ROW_CAPTIONS = {
     "fixations": "One row per fixation — e.g. EyeLink's Fixation Report.",
     "words": "One row per word with its box — e.g. EyeLink's Interest Area Report.",
+    "raw_gaze": "One row per gaze sample — e.g. EyeLink's Sample Report; drawn as "
+    "recorded.",
+}
+
+#: What each metadata table holds, beside its empty uploader.
+META_ROW_CAPTIONS = {
+    "participant": "One row per participant — e.g. age, native language, a group.",
+    "trial": "One row per trial — e.g. a list, a condition, a comprehension score.",
+    "text": "One row per text — e.g. a genre or a difficulty rating.",
+}
+
+#: What each table must map, said under its caption until a file is in — the
+#: mapping fields themselves say it once one is (2026-10-09).
+ROW_NEEDS = {
+    "fixations": "Needs a Trial ID, a Duration, and X and Y or a Word/IA ID.",
+    "words": "Needs a Trial ID, a Word/IA ID and each word's box.",
+    "raw_gaze": "Needs a Trial ID, X and Y.",
 }
 
 
-def _row_note(block, text: str):
+def _row_note(block, table: str, prefix: str):
     """A caption line across the top of an upload row's mapping side (#374
-    F12), returned so later notes for the row (a mixed ZIP's) land under it.
+    F12), returned so later notes for the row — a mixed ZIP's, a file the
+    readers refuse — land under it.
+
+    Until a file is in it also says what the table must map (`ROW_NEEDS`):
+    the space beside an empty uploader was otherwise blank. Read off the
+    uploader's own state, which holds last run's files before it renders.
 
     Drawn right of the row's name column: that column is an overlay spanning
     the whole block (`styles.py`), so a full-width line would sit under it."""
     note = block.columns(_META_ROW_W, gap="small")[1]
+    text = ROW_CAPTIONS[table]
+    if not st.session_state.get(f"{prefix}_upload"):
+        text += f"  \n{ROW_NEEDS[table]}"
     note.caption(text)
     return note
 
@@ -1049,7 +1100,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     toggle_col, controls_col = body.columns(
         [0.26, 0.74], gap="small", vertical_alignment="center"
     )
-    enabled = toggle_col.toggle(
+    enabled = switch(
+        toggle_col,
+        "toggle",
         "Derive columns from text",
         key="wizard_filename_split",
         help=(
@@ -1171,7 +1224,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 help=f"e.g. `{_FILENAME_REGEX_EXAMPLE}` — each named group becomes "
                 "a column. Edit this to match your own filenames.",
             )
-            lower = lower_col.toggle(
+            lower = switch(
+                lower_col,
+                "toggle",
                 "Lowercase",
                 key=lower_key,
                 help="Fold case so a value matches across tables (e.g. CamelCase "
@@ -1676,12 +1731,12 @@ def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
 
 
 def _row_body(host):
-    """Indent to where the field-mapping pickers start (`_ID_ROW1_W`'s name
+    """Indent to where the field-mapping pickers start (`_MAP_ROW_W`'s name
     column), for a row that has no name of its own — the "Extra fields to
-    keep" picker and the "Aggregate character AOIs" toggle both describe the
+    keep" picker and the "Merge character boxes" toggle both describe the
     table above them rather than naming a new one, so they line up under the
     pickers rather than under the row-name label."""
-    _, body = host.columns([_ID_ROW1_W[0], 1 - _ID_ROW1_W[0]], gap="small")
+    _, body = host.columns([_MAP_ROW_W[0], 1 - _MAP_ROW_W[0]], gap="small")
     return body
 
 
@@ -1799,16 +1854,288 @@ def _wizard_table_keep_picker(
     return chosen, meta_fields
 
 
+#: 2026-10-09 — part 2 opens on **Start from**: from scratch, from a dataset
+#: already added (its mapping, kept fields, column derivation and recording
+#: setup, copied — no file needed), or from a setup file saved with
+#: ⬇️ Download setup file. It replaced a popover beside the part's title that
+#: offered only the file, which a first-time user had no way to know about.
+_START_FROM_KEY = "wizard_start_from"
+_START_SCRATCH = "Scratch"
+_START_DATASET = "A dataset you added"
+_START_FILE = "A setup file"
+_COPY_FROM_KEY = "wizard_copy_from"
+#: What the screen held before a setup was applied: ``{key: (present, value)}``,
+#: which Undo — or going back to *Scratch* — puts back.
+_RESTORE_UNDO_KEY = "_wizard_restore_undo"
+#: A finished upload's own wizard choices that its stored entry keeps nowhere
+#: else — the column derivation and the kept fields — so *A dataset you added*
+#: can copy them too.
+WIZARD_CHOICES_FIELD = "wizard_choices"
+_TABLE_PREFIXES = {
+    "words": "col_map_words",
+    "fixations": "col_map_fix",
+    "raw_gaze": "col_map_raw_gaze",
+}
+
+
+def _mapping_keys_from_schemas(schemas: dict) -> dict:
+    """A stored dataset's mapping (`source_recipe`'s schemas, in its files' own
+    column names) as the add screen's ``col_map_*`` widget values."""
+    keys: dict = {}
+    for table, schema in (schemas or {}).items():
+        prefix = _TABLE_PREFIXES.get(table)
+        if prefix is None or not isinstance(schema, dict):
+            continue
+        for field, value in schema.items():
+            # The identity pickers are multiselects: Trial ID everywhere, and
+            # Participant / Text ID on the Fixations and Words rows.
+            if field == "trial" or (
+                table != "raw_gaze" and field in ("participant", "text_id")
+            ):
+                value = (
+                    []
+                    if not value
+                    else [value]
+                    if isinstance(value, str)
+                    else list(value)
+                )
+            keys[f"{prefix}_{field}"] = value
+        if table == "words":
+            if schema.get("left") or schema.get("right"):
+                keys[f"{prefix}_box_format"] = BOX_FORMAT_EDGES
+            elif schema.get("width") or schema.get("height"):
+                keys[f"{prefix}_box_format"] = BOX_FORMAT_ORIGIN
+    return keys
+
+
+def _dataset_setup_config(name: str) -> dict | None:
+    """``name``'s setup in a setup file's shape: its mapping as it stands now
+    (✏️ Edit dataset keeps `source_recipe` current), its recording setup, and
+    the derivation and kept fields it was added with."""
+    entry = (st.session_state.get("_datasets") or {}).get(name)
+    if not isinstance(entry, dict):
+        return None
+    choices = entry.get(WIZARD_CHOICES_FIELD)
+    choices = choices if isinstance(choices, dict) else {}
+    setup = entry.get("setup")
+    return {
+        "data_source": name,
+        # An upload stored before `source_recipe` existed gets one rebuilt
+        # from its stored mapping (`column_names.stored_source_recipe`).
+        "column_mapping": _mapping_keys_from_schemas(
+            stored_source_recipe(entry).get("schemas") or {}
+        ),
+        "experimental_setup": setup if isinstance(setup, dict) else None,
+        "filename_derive": choices.get("filename_derive"),
+        "keep_and_filter": choices.get("keep_and_filter"),
+    }
+
+
+_SETUP_CONFIG_SECTIONS = (
+    "column_mapping",
+    "experimental_setup",
+    "filename_derive",
+    "keep_and_filter",
+    "canvas_px",
+)
+
+
+def _clean_setup_config(config: dict) -> dict:
+    """``config`` with every section that is not a table of values dropped, so
+    a hand-edited or foreign file's bad section is skipped, not a crash."""
+    clean = dict(config)
+    for section in _SETUP_CONFIG_SECTIONS:
+        if section in clean and not isinstance(clean[section], dict):
+            clean.pop(section)
+    for section, field in (
+        ("keep_and_filter", "wizard_keep_by_table"),
+        ("filename_derive", "widgets"),
+    ):
+        part = clean.get(section)
+        if isinstance(part, dict) and not isinstance(part.get(field), dict | None):
+            clean[section] = {k: v for k, v in part.items() if k != field}
+    return clean
+
+
+def _setup_config_writes(config: dict) -> set:
+    """Every session key :func:`_apply_setup_config` may write for ``config`` —
+    what Undo has to be able to put back."""
+    keys = {
+        "_wizard_restored_setup",
+        "_wizard_setup_restored_applied",
+        "_wizard_setup_recall",
+        _FILENAME_DERIVE_APPLIED_KEY,
+        *_SETUP_RESTORE_WRITES,
+    }
+    for key in config.get("column_mapping") or {}:  # cleaned: a dict
+        if (
+            isinstance(key, str)
+            and key.startswith("col_map_")
+            and not key.endswith("_upload")
+        ):
+            keys.add(
+                key[: -len("_paragraph")] + "_text_id"
+                if key.endswith("_paragraph")
+                else key
+            )
+    widgets = (config.get("filename_derive") or {}).get("widgets")
+    if isinstance(widgets, dict):
+        keys.update(widgets)
+    by_table = (config.get("keep_and_filter") or {}).get("wizard_keep_by_table")
+    keys.update(
+        f"wizard_keep_{prefix}" for prefix in (by_table or _WIZARD_MAPPING_PREFIXES)
+    )
+    return keys
+
+
+def _applied_summary(config: dict) -> str:
+    """What a setup filled in, in a phrase — for the line under *Start from*."""
+    mapping = config.get("column_mapping") or {}
+    tables = [
+        label
+        for prefix, label in (
+            ("col_map_fix", "Fixations"),
+            ("col_map_words", WORDS_TABLE_LABEL),
+            ("col_map_raw_gaze", "Raw gaze"),
+        )
+        if any(
+            key.startswith(f"{prefix}_")
+            and not key.endswith(("_header", "_upload", "_cell_confirm"))
+            and value not in (None, "", [])
+            for key, value in mapping.items()
+        )
+    ]
+    parts = [f"column mapping ({', '.join(tables)})"] if tables else []
+    by_table = (config.get("keep_and_filter") or {}).get("wizard_keep_by_table") or {}
+    kept = sum(len(cols) for cols in by_table.values() if isinstance(cols, list))
+    if kept:
+        parts.append(plural(kept, "kept field"))
+    applied = (config.get("filename_derive") or {}).get("applied")
+    if isinstance(applied, dict | list) and applied:
+        parts.append(
+            plural(
+                len(applied) if isinstance(applied, list) else 1, "column derivation"
+            )
+        )
+    if isinstance(config.get("experimental_setup"), dict):
+        parts.append("recording setup")
+    return ", ".join(parts) if parts else "nothing this screen uses"
+
+
+def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
+    """Fill the add screen in from a setup (``kind`` "file" or "dataset").
+
+    Runs before the mapping widgets are drawn — from a button's callback, or
+    from the file reader at the top of part 2 — so writing their keys is safe,
+    and it overwrites: those widgets already exist from earlier runs, so
+    ``setdefault`` would silently do nothing. What the keys held first is kept
+    for Undo, once: applying a second setup still undoes to the screen before
+    the first.
+    """
+    config = _clean_setup_config(config)
+    held = dict(st.session_state.get(_RESTORE_UNDO_KEY) or {})
+    for key in _setup_config_writes(config):
+        if key not in held:
+            held[key] = (key in st.session_state, st.session_state.get(key))
+    st.session_state[_RESTORE_UNDO_KEY] = held
+    _seed_column_mapping(
+        config.get("column_mapping"),
+        overwrite=True,
+        dataset=WIZARD_MAPPING_DATASET,
+    )
+    # UX-113 Phase 3: filename/column-derive settings + keep/filter-field
+    # choices. Both sections are optional (older files lack them).
+    if isinstance(config.get("filename_derive"), dict):
+        fd = config["filename_derive"]
+        # UX-129: a setup saved before multiple lines existed wrote one dict;
+        # the current writer always writes a list — accept either.
+        if isinstance(fd.get("applied"), (dict, list)):
+            st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = fd["applied"]
+        widgets = fd.get("widgets")
+        if isinstance(widgets, dict):
+            for key, value in widgets.items():
+                if value is not None:
+                    st.session_state[key] = value
+    if isinstance(config.get("keep_and_filter"), dict):
+        kf = config["keep_and_filter"]
+        # UX-114: the per-table picks are the source of truth.
+        by_table = kf.get("wizard_keep_by_table")
+        if isinstance(by_table, dict):
+            for prefix, cols in by_table.items():
+                if isinstance(cols, list):
+                    st.session_state[f"wizard_keep_{prefix}"] = list(cols)
+        elif kf.get("wizard_keep_extra") is not None:
+            # A setup saved before UX-114 has one flat list — offer it to every
+            # table; each picker prunes what it doesn't offer.
+            for prefix in _WIZARD_MAPPING_PREFIXES:
+                st.session_state[f"wizard_keep_{prefix}"] = list(
+                    kf["wizard_keep_extra"]
+                )
+    if isinstance(config.get("experimental_setup"), dict):
+        # A plot config keeps the canvas in a sibling `canvas_px` section; merge
+        # it in, or `_restored_setup_snapshot` would fall back to the class
+        # default and pre-answer the screen with a monitor nobody measured.
+        restored = dict(config["experimental_setup"])
+        canvas = config.get("canvas_px")
+        if isinstance(canvas, dict):
+            for key, src in (("canvas_width", "width"), ("canvas_height", "height")):
+                if canvas.get(src) is not None:
+                    restored.setdefault(key, canvas[src])
+        st.session_state["_wizard_restored_setup"] = restored
+        st.session_state.pop("_wizard_setup_restored_applied", None)
+    st.session_state["_wizard_restored_meta"] = {
+        "data_source": config.get("data_source") or source,
+        "exported_at": config.get("exported_at"),
+        "kind": kind,
+        "applied": _applied_summary(config),
+    }
+
+
+def _undo_setup_restore() -> None:
+    """Put the screen back as it was before a setup was applied."""
+    for key, (present, value) in (
+        st.session_state.pop(_RESTORE_UNDO_KEY, None) or {}
+    ).items():
+        if present:
+            st.session_state[key] = value
+        else:
+            st.session_state.pop(key, None)
+    st.session_state.pop("_wizard_restored_meta", None)
+    st.session_state.pop("_wizard_config_last", None)
+
+
+def _undo_and_start_from_scratch() -> None:
+    """The applied line's Undo: the setup goes, and *Start from* goes back to
+    Scratch with it."""
+    _undo_setup_restore()
+    st.session_state[_START_FROM_KEY] = _START_SCRATCH
+
+
+def _start_from_changed() -> None:
+    """Choosing *Scratch* after a setup was applied undoes it — that is what
+    starting from scratch means."""
+    if st.session_state.get(_START_FROM_KEY) == _START_SCRATCH:
+        _undo_setup_restore()
+
+
+def _copy_dataset_setup() -> None:
+    """*Copy its setup*: the chosen dataset's setup onto this screen."""
+    name = st.session_state.get(_COPY_FROM_KEY)
+    config = _dataset_setup_config(name) if name else None
+    if config is not None:
+        _apply_setup_config(config, source=str(name), kind="dataset")
+
+
 def _wizard_restore_config(host) -> None:
-    """Step 1 of the wizard: optionally restore a previously saved setup, seeding
-    the column mapping + kept-field choices so the user skips re-mapping. Applied
-    once per uploaded file; reruns so the mapping widgets pick up the values."""
+    """*Start from → A setup file*: read the file once per upload and apply it
+    (:func:`_apply_setup_config`), then rerun so the mapping widgets show it."""
     uploaded = host.file_uploader(
-        "Restore a saved setup (optional)",
+        "Setup file",
         type=["json"],
         key="wizard_config_restore",
-        help="Re-apply a column mapping + field choices you saved earlier "
-        "(⬇️ Download setup file at the foot of this page).",
+        help="The file ⬇️ Download setup file saved at the foot of this screen "
+        "when you added data like this before.",
+        label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
@@ -1837,87 +2164,72 @@ def _wizard_restore_config(host) -> None:
         # #374: an unrelated JSON used to toast "Restored" with nothing restored.
         host.warning("That file holds no saved setup, so nothing was restored.")
         return
-    if isinstance(config, dict):
-        # Overwrite: the wizard's mapping widgets were already created on a prior
-        # render, so their keys exist — setdefault would no-op and the restore
-        # would silently fail. This step runs before the widgets re-instantiate
-        # this pass, so writing the keys is safe, and it reruns afterwards.
-        _seed_column_mapping(
-            config.get("column_mapping"),
-            overwrite=True,
-            dataset=WIZARD_MAPPING_DATASET,
+    _apply_setup_config(config, source=uploaded.name, kind="file")
+    st.rerun()
+
+
+def _render_start_from(host) -> None:
+    """Part 2's first line: start from scratch, or from a setup that exists."""
+    uploads = list(st.session_state.get("_datasets") or {})
+    options = [_START_SCRATCH, *([_START_DATASET] if uploads else []), _START_FILE]
+    if st.session_state.get(_START_FROM_KEY) not in options:
+        st.session_state[_START_FROM_KEY] = _START_SCRATCH
+    row = host.container(
+        key="wiz_start_from",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    tip = tooltip(
+        "Start from",
+        "Fill this screen in from a setup you already have: a dataset you "
+        "added before — its column mapping, the fields it kept and its recording "
+        "setup — or the file Download setup file saved. Everything stays "
+        "editable, and Undo puts the screen back.",
+    )
+    row.markdown(
+        f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
+        '<span class="sps-flabel sps-flabel-help">Start from</span></span>',
+        unsafe_allow_html=True,
+        width="content",
+    )
+    choice = row.segmented_control(
+        "Start from",
+        options,
+        key=_START_FROM_KEY,
+        required=True,
+        label_visibility="collapsed",
+        on_change=_start_from_changed,
+    )
+    if choice == _START_DATASET:
+        if st.session_state.get(_COPY_FROM_KEY) not in uploads:
+            st.session_state[_COPY_FROM_KEY] = uploads[0]
+        row.selectbox(
+            "Dataset to copy from",
+            uploads,
+            key=_COPY_FROM_KEY,
+            label_visibility="collapsed",
+            width=260,
         )
-        # Remember the restored config's provenance so the caller can show which
-        # dataset (and when) it was exported from, below the upload box (9.1).
-        st.session_state["_wizard_restored_meta"] = {
-            "data_source": config.get("data_source"),
-            "exported_at": config.get("exported_at"),
-        }
-        # DATA-22 decision (a): a restored setup file pre-answers the
-        # Recording-setup step. The section is optional — a file written before
-        # this existed simply leaves the step unanswered, which is the honest
-        # outcome rather than a silent default. Additive, so per ENG-11 the
-        # PLOT_CONFIG_SCHEMA stays where it is.
-        # UX-113 Phase 3: filename/column-derive settings + keep/filter-field
-        # choices weren't captured before — a restored setup silently dropped
-        # them, forcing a re-do even though the mapping itself round-tripped.
-        # Both sections are optional (older files simply lack them), so no
-        # PLOT_CONFIG_SCHEMA bump — same precedent as experimental_setup.
-        if isinstance(config.get("filename_derive"), dict):
-            fd = config["filename_derive"]
-            # UX-129: a setup saved before multiple lines existed wrote one
-            # dict; the current writer always writes a list (one entry per
-            # line) — accept either, `_wizard_filename_derive` normalizes.
-            if isinstance(fd.get("applied"), (dict, list)):
-                st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = fd["applied"]
-            widgets = fd.get("widgets")
-            if isinstance(widgets, dict):
-                for key, value in widgets.items():
-                    if value is not None:
-                        st.session_state[key] = value
-        if isinstance(config.get("keep_and_filter"), dict):
-            kf = config["keep_and_filter"]
-            # UX-114: the per-table picks are the real source of truth — each
-            # `wizard_keep_<prefix>` widget re-derives `wizard_filter_fields`
-            # itself once the mapping resolves, so seeding those (rather than
-            # the flat legacy keys) is what actually reproduces the setup.
-            by_table = kf.get("wizard_keep_by_table")
-            if isinstance(by_table, dict):
-                for prefix, cols in by_table.items():
-                    if isinstance(cols, list):
-                        st.session_state[f"wizard_keep_{prefix}"] = list(cols)
-            elif kf.get("wizard_keep_extra") is not None:
-                # A setup saved before UX-114 only has the flat cross-table
-                # list — apply it to both tables; each one's picker prunes
-                # away whatever it doesn't actually offer.
-                cols = list(kf["wizard_keep_extra"])
-                for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
-                    st.session_state[f"wizard_keep_{prefix}"] = list(cols)
-        if isinstance(config.get("experimental_setup"), dict):
-            # The canvas is carried in a *sibling* section by the plot-config
-            # writer (`tabs._build_studio_config` puts it under `canvas_px`), so
-            # it has to be merged in here — see `_restored_setup_snapshot`, which
-            # would otherwise fall back to the 2560x1440 class default and, if
-            # the file's provenance said "measured", pre-answer the step with a
-            # measured monitor nobody ever measured.
-            restored = dict(config["experimental_setup"])
-            canvas = config.get("canvas_px")
-            if isinstance(canvas, dict):
-                for key, source in (
-                    ("canvas_width", "width"),
-                    ("canvas_height", "height"),
-                ):
-                    if canvas.get(source) is not None:
-                        restored.setdefault(key, canvas[source])
-            st.session_state["_wizard_restored_setup"] = restored
-            st.session_state.pop("_wizard_setup_restored_applied", None)
-        st.toast("Restored the saved setup — review it below.", icon=ICONS["success"])
-        st.rerun()
+        row.button(
+            "Copy its setup",
+            key="wizard_copy_setup",
+            on_click=_copy_dataset_setup,
+            help="Its column mapping, kept fields, column derivation and "
+            "recording setup, onto this screen. Your files still go below.",
+        )
+    elif choice == _START_FILE:
+        box = host.container(key="wiz_start_from_file")
+        box.caption(
+            f"The file **{ICONS['download']} Download setup file** saved at the "
+            "foot of this screen when you added data like this before."
+        )
+        _wizard_restore_config(box)
+    _render_restored_config_caption(host)
 
 
 def _render_restored_config_caption(host) -> None:
-    """Below the restore box: name the dataset the restored setup came from (and
-    when it was exported), so the user can confirm they loaded the right one."""
+    """Under *Start from*: what was applied, from where, with Undo."""
     meta = st.session_state.get("_wizard_restored_meta")
     if not meta:
         return
@@ -1930,11 +2242,31 @@ def _render_restored_config_caption(host) -> None:
         try:
             from datetime import datetime
 
-            bits.append(f"exported {datetime.fromisoformat(exported):%Y-%m-%d %H:%M}")
+            bits.append(f"saved {datetime.fromisoformat(exported):%Y-%m-%d %H:%M}")
         except (ValueError, TypeError):
-            bits.append(f"exported {exported}")
+            bits.append(f"saved {exported}")
+    verb = "Copied" if meta.get("kind") == "dataset" else "Restored"
     detail = " · ".join(bits) if bits else "from a saved file"
-    host.caption(f"✓ Restored setup {detail} — review the mapping below.")
+    line = host.container(
+        key="wiz_start_from_applied",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    line.caption(
+        f"{ICONS['success']} {verb} {detail}: {meta.get('applied') or 'the setup'}. "
+        "Check it below.",
+        width="content",
+    )
+    if st.session_state.get(_RESTORE_UNDO_KEY):
+        line.button(
+            "Undo",
+            key="wizard_restore_undo",
+            type="tertiary",
+            icon=ICONS["undo"],
+            on_click=_undo_and_start_from_scratch,
+            help="Put this screen back as it was before.",
+        )
 
 
 def _filename_derive_section() -> dict | None:
@@ -2041,7 +2373,7 @@ def current_setup_section() -> dict | None:
 
 def _render_setup_download(host) -> None:
     """Export the current column mapping as a JSON setup file, so it can be
-    re-applied later via the wizard's *Restore a saved setup* step. Rendered
+    re-applied later via the wizard's *Start from → A setup file*. Rendered
     beside the **Add dataset** button (UX-53)."""
     host.download_button(
         # UX-93: short enough to sit on ONE line at the ✕ Cancel width the
@@ -2054,8 +2386,8 @@ def _render_setup_download(host) -> None:
         mime="application/json",
         key="wizard_setup_download",
         width="stretch",
-        help="Save this column mapping to re-use on similar data — restore it "
-        "from *↩️ Restore a saved setup* beside *Upload data tables*.",
+        help="Save this column mapping and recording setup to re-use on similar "
+        "data — load it with *Start from → A setup file* at the top of part 2.",
     )
 
 
@@ -2115,20 +2447,28 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
 # nothing telling the user those were guesses. Estimating from the data was not
 # even possible there, because there was no data yet.
 #
-# Now it sits after the upload and asks, per group, *how do you know?* — with
-# `index=None` so nothing is preselected. The user either knows the values,
-# derives them from their own data, knowingly takes a named default, or (for
-# visual-angle units only) skips. The answer is recorded as a `Provenance` that
-# travels with the dataset, so a reader downstream can tell a measured screen
-# from an assumed one.
-#
-# The gate is deliberately hard: **Add dataset** stays disabled until all three
-# are answered. Nobody can be stranded by it — *Estimate from my data* always
-# exists for the screen group and always succeeds — but nobody gets a silent
-# default either.
+# DATA-22 then asked, per group, *how do you know?*, with nothing preselected
+# and Add dataset held until all three were answered. 2026-10-09 kept what
+# that bought — every answer recorded as a `Provenance` that travels with the
+# dataset, so a reader downstream can tell a measured screen from an assumed
+# one — and dropped the hold: each line starts on the answer that invents
+# nothing (the screen estimated from the data, the physical size off, the text
+# fitted to its boxes), says how it is known beside the value, and asks for
+# the real value while it is an estimate or a default. None of those starting
+# answers is a silent default: an estimate is labelled one, and *off* hides
+# what it cannot derive.
 # -----------------------------------------------------------------------------
 
 _SETUP_MODE_KEYS = {g: f"wizard_setup_{g}_mode" for g in SETUP_GROUPS}
+#: The keys a restored setup's recording setup may write (`_apply_restored_setup`)
+#: — what *Start from*'s Undo has to put back.
+_SETUP_RESTORE_WRITES = (
+    *_SETUP_MODE_KEYS.values(),
+    "_wizard_setup_auto",
+    "wizard_setup_font_mode",
+    "wizard_setup_font_name",
+    "wizard_setup_font_other",
+)
 
 _SCREEN_KNOW = "I know the resolution"
 _SCREEN_ESTIMATE = "Estimate from my data"
@@ -2136,7 +2476,13 @@ _SCREEN_DEFAULT = "Use a common default (2560×1440)"
 
 _GEOM_KNOW = "I know them"
 #: The setup headings as drawn (UX-58's short forms) — what blockers name.
-_SETUP_HEADINGS = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+_SETUP_HEADINGS = {
+    "screen": "Screen",
+    "geometry": "Physical size",
+    "text": "Text size",
+}
+# The stored answers keep their pre-2026-10-09 wording: setup files name them.
+# What the buttons say is `_SETUP_CHOICE_LABELS`.
 _GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)"
 _GEOM_SKIP = "Skip — I don't need visual-angle units"
 
@@ -2214,40 +2560,79 @@ def _remember_setup(values: dict) -> None:
     st.session_state["_wizard_setup_recall"] = recall
 
 
-def _setup_mode(
-    host,
-    group: str,
-    options: list,
-    help_text: str,
-    label=None,
-    *,
-    key_prefix: str = "wizard",
-    persist: dict | None = None,
-):
-    """One setup group's radio, namespaced for add or edit.
+#: How each answer reads as a button. The keys are the answers' stored values
+#: (`_SETUP_PROVENANCE` reads them, and restored setups name them).
+_SETUP_CHOICE_LABELS = {
+    _SCREEN_KNOW: "I know it",
+    _SCREEN_ESTIMATE: "Estimate from my data",
+    _SCREEN_DEFAULT: "Common 2560×1440",
+    _GEOM_KNOW: "I know it",
+    _GEOM_DEFAULT: "Typical 597 mm",
+    _GEOM_SKIP: "Off",
+    _TEXT_BOXES: "Fit to the word boxes",
+    _TEXT_FONT: "I know the size",
+    _TEXT_DEFAULT: "Default 16 px",
+    _FONT_KNOW: "I know it",
+    _FONT_UNKNOWN: "Not sure",
+}
+#: Each line's columns: its name · what will be saved and how it is known · the
+#: answers to pick from.
+_SETUP_ROW_W = (0.13, 0.47, 0.40)
+#: The answers the add screen chose itself, ``{key: value}`` — re-chosen when
+#: the data changes under them (a Words table arriving makes *Fit to the word
+#: boxes* the answer), and dropped the moment anything else sets the key: the
+#: user, or a setup *Start from* applied.
+_SETUP_AUTO_KEY = "_wizard_setup_auto"
+#: How each provenance is said beside a value, and in what colour: green for
+#: what the user or the data said, orange for what the app had to assume.
+_SETUP_BADGES = {
+    "entered": ("You entered it", "green", "confirm"),
+    "data": ("From your data", "green", "confirm"),
+    "estimated": ("Estimated — a lower bound", "orange", "warning"),
+    "assumed": ("Assumed", "orange", "warning"),
+    "off": ("Off", "gray", "info"),
+    "generic": ("Not set", "gray", "info"),
+}
 
-    Returns the chosen label or ``None``. The mode keys are wizard-local UI state
-    and deliberately **not** wire format (same reasoning as ``share_identity_mode``
-    in ``url_state.py``): what travels is the resolved value plus its provenance,
-    not which radio button produced it.
 
-    ``label`` overrides the heading for display only (UX-58). Three groups
-    side by side leave no room for *Physical size & viewing distance*, and a
-    heading that wraps to two lines drops its column out of line with the other
-    two — which is the whole point of the row. `SETUP_GROUP_LABELS` stays the
-    name everything else reports by.
-    """
-    # UX-90: every setup group is mandatory — *Add dataset* stays disabled until
-    # each says how it is known — so each carries the same trailing `*` the
-    # required mapping fields do. One convention for "you must answer this",
-    # rather than a starred column mapping above an unstarred set of questions.
-    return host.radio(
-        f"{label or SETUP_GROUP_LABELS[group]} *",
+def _setup_badge(host, kind: str, help_text: str | None = None) -> None:
+    text, color, icon = _SETUP_BADGES[kind]
+    host.badge(text, color=color, icon=ICONS[icon], help=help_text)
+
+
+def _setup_row(host, label: str, help_text: str):
+    """One line of the Recording setup: its name, then the value and answer
+    columns, returned for the caller to fill."""
+    label_col, value_col, how_col = host.columns(
+        _SETUP_ROW_W, gap="small", vertical_alignment="center"
+    )
+    inline_field_label(label_col, label, help_text)
+    return value_col, how_col
+
+
+def _seed_setup_answer(key: str, value: str) -> None:
+    """Start an unanswered line on ``value``, and keep it on the default while
+    the app is still the one who chose it."""
+    auto = dict(st.session_state.get(_SETUP_AUTO_KEY) or {})
+    current = st.session_state.get(key)
+    if key not in st.session_state or (key in auto and current == auto[key]):
+        st.session_state[key] = value
+        auto[key] = value
+    else:
+        auto.pop(key, None)  # someone else's answer now
+    st.session_state[_SETUP_AUTO_KEY] = auto
+
+
+def _setup_choice(host, label: str, options: list, key: str, persist: dict):
+    """A line's answers, as one row of buttons."""
+    return host.segmented_control(
+        label,
         options,
-        index=None,
-        key=f"{key_prefix}_setup_{group}_mode",
-        help=help_text,
-        **(persist or {}),
+        key=key,
+        required=True,
+        format_func=lambda option: _SETUP_CHOICE_LABELS.get(option, option),
+        label_visibility="collapsed",
+        **persist,
     )
 
 
@@ -2261,16 +2646,27 @@ def _wizard_setup_step(
     initial: SetupSnapshot | None = None,
     publish: bool = True,
     estimate=None,
+    has_data: bool = True,
 ) -> SetupSnapshot:
-    """Render the Recording-setup groups and resolve them to a snapshot.
+    """Render the Recording setup and resolve it to a snapshot.
 
-    Three say how each is known (screen, physical size, text size); the fourth,
-    *Font*, names the typeface, and "I don't know" is an answer.
+    2026-10-09 — four lines, each already answered with the answer that
+    invents nothing: the screen **estimated** from the data, degrees of visual
+    angle **off**, the text **fitted to the word boxes**, the font **not set**.
+    Beside each value, how it is known (*You entered it*, *From your data*,
+    *Estimated*, *Assumed*, *Off*), which is the provenance saved with the
+    dataset. A line still on an estimate or a default says so above the four,
+    asking for the real value — but nothing waits on it: Add dataset is never
+    held up by this part. It used to be four questions with nothing chosen,
+    each a column of long radio options, which a first-time user had to
+    answer before the dataset could be added.
 
     ``estimate`` (DATA-46) is a zero-argument callable giving the *Estimate from
     my data* size; when it is ``None``, ``words_raw`` / ``fix_raw`` must already
     carry canonical coordinates (the editor's stored frames) and are measured
-    directly. Either way it is called only when that answer is chosen.
+    directly. ``has_data`` is False on the add screen before a Fixations or
+    Words table is in: there is nothing yet to estimate from, so the line says
+    so rather than showing the fallback size as an estimate.
 
     Writes the resolved values into the existing ``global_*`` wire-format keys
     (unchanged — the *values* were always wire format; only the provenance is
@@ -2283,17 +2679,14 @@ def _wizard_setup_step(
     # setup draft (Streamlit forgets an unrendered widget's key) while the
     # mapping fields beside it — `persist_state` since DATA-26 — kept theirs.
     persist = {"persist_state": "session"} if initial is not None else {}
-    # UX-58: three columns, one per group, so their headings sit at the same
-    # line height. Each column starts with its own radio, which is what keeps
-    # them level even though what follows differs per answer (two number inputs,
-    # an info box, or a caption) and so the columns end at different heights.
-    # The description that used to print here is now the section's hover text.
-    screen_host, geom_host, text_host, font_host = host.columns(4, gap="medium")
+    screen_key = f"{key_prefix}_setup_screen_mode"
+    geom_key = f"{key_prefix}_setup_geometry_mode"
+    text_key = f"{key_prefix}_setup_text_mode"
+    font_key = f"{key_prefix}_setup_font_mode"
 
-    # The Data Management editor reuses this exact control layout. Seed its
-    # three mode choices from the saved snapshot once; the add flow keeps its
-    # deliberate unanswered state because ``initial`` is None.
     if initial is not None:
+        # The Data Management editor reuses this exact layout, seeded from the
+        # saved snapshot once.
         screen_modes = {
             Provenance.MEASURED: _SCREEN_KNOW,
             Provenance.ESTIMATED: _SCREEN_ESTIMATE,
@@ -2312,25 +2705,36 @@ def _wizard_setup_step(
             else _TEXT_FONT
         )
         st.session_state.setdefault(
-            f"{key_prefix}_setup_screen_mode",
-            screen_modes.get(initial.screen_provenance, _SCREEN_KNOW),
+            screen_key, screen_modes.get(initial.screen_provenance, _SCREEN_KNOW)
         )
         st.session_state.setdefault(
-            f"{key_prefix}_setup_geometry_mode",
-            geometry_modes.get(initial.geometry_provenance, _GEOM_DEFAULT),
+            geom_key, geometry_modes.get(initial.geometry_provenance, _GEOM_DEFAULT)
         )
-        st.session_state.setdefault(f"{key_prefix}_setup_text_mode", text_mode)
+        st.session_state.setdefault(text_key, text_mode)
+    else:
+        # The answers that invent nothing. A restored setup has set its own
+        # already, and the user's own picks are left alone.
+        _seed_setup_answer(screen_key, _SCREEN_ESTIMATE)
+        _seed_setup_answer(geom_key, _GEOM_SKIP)
+        _seed_setup_answer(text_key, _TEXT_BOXES if has_boxes else _TEXT_DEFAULT)
+
+    # A line on an estimate or a default asks for the real value, above the
+    # four — reserved first, filled once the answers are known.
+    nudge = host.container()
 
     # --- Screen -------------------------------------------------------------
-    screen_mode = _setup_mode(
-        screen_host,
-        "screen",
-        [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
+    value_col, how_col = _setup_row(
+        host,
+        "Screen",
         "The presentation monitor's resolution in pixels. Everything is drawn in "
         "these coordinates.",
-        label="Screen",
-        key_prefix=key_prefix,
-        persist=persist,
+    )
+    screen_mode = _setup_choice(
+        how_col,
+        "Screen",
+        [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
+        screen_key,
+        persist,
     )
     canvas_w = (
         initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
@@ -2341,23 +2745,29 @@ def _wizard_setup_step(
         else _recalled("canvas_height", 1440)
     )
     if screen_mode == _SCREEN_KNOW:
-        w_col, h_col = screen_host.columns(2, gap="small")
+        w_col, x_col, h_col, badge_col = value_col.columns(
+            [0.3, 0.06, 0.3, 0.34], gap="xsmall", vertical_alignment="center"
+        )
         canvas_w = w_col.number_input(
             "Width (px)",
             100,
             10000,
             int(canvas_w),
             key=f"{key_prefix}_setup_screen_w",
+            label_visibility="collapsed",
             **persist,
         )
+        x_col.markdown("×")
         canvas_h = h_col.number_input(
             "Height (px)",
             100,
             10000,
             int(canvas_h),
             key=f"{key_prefix}_setup_screen_h",
+            label_visibility="collapsed",
             **persist,
         )
+        _setup_badge(badge_col, "entered")
     elif screen_mode == _SCREEN_ESTIMATE:
         est_w, est_h = (
             estimate()
@@ -2365,10 +2775,9 @@ def _wizard_setup_step(
             else compute_canvas_size(words_raw, fix_raw)
         )
         # DATA-46: on ✏️ Edit dataset, a screen that was *saved* as an estimate
-        # keeps the size it was saved with. Re-estimating on every open meant a
-        # ✅ Save changes with nothing touched rewrote the canvas of every figure
-        # from this dataset — the editor must not change what the user did not.
-        # A fresh estimate is still one click away, and says what it would be.
+        # keeps the size it was saved with — a ✅ Save changes with nothing
+        # touched must not rewrite the canvas of every figure. A fresh estimate
+        # is one click away, and says what it would be.
         reestimate_key = f"{key_prefix}_setup_reestimate"
         keep_saved = (
             initial is not None
@@ -2377,40 +2786,63 @@ def _wizard_setup_step(
         )
         if keep_saved:
             canvas_w, canvas_h = int(initial.canvas_width), int(initial.canvas_height)
-            screen_host.info(
-                f"Estimated **{canvas_w} × {canvas_h} px** when this dataset was "
-                "added — a **lower bound** from the extent of its word boxes and "
-                "fixations."
-            )
-            if (est_w, est_h) != (canvas_w, canvas_h):
-                screen_host.button(
-                    f"↻ Use the current estimate ({est_w} × {est_h} px)",
-                    key=f"{key_prefix}_setup_reestimate_btn",
-                    on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
-                    help="Re-estimate the screen from this dataset's data as "
-                    "mapped above. Nothing changes until you save.",
-                )
         else:
             canvas_w, canvas_h = est_w, est_h
-            screen_host.info(
-                f"Estimated **{est_w} × {est_h} px** from the extent of your word "
-                "boxes and fixations. This is a **lower bound** — text rarely fills "
-                "the whole screen, so the real monitor was probably larger."
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        if not has_data:
+            line.caption(
+                "Estimated from your data once a Fixations or Words table is in.",
+                width="content",
             )
-    elif screen_mode == _SCREEN_DEFAULT:
+        else:
+            line.markdown(f"**{canvas_w} × {canvas_h} px**", width="content")
+        _setup_badge(
+            line,
+            "estimated",
+            "From the extent of the word boxes and fixations. Text rarely fills "
+            "the whole screen, so the real monitor was probably larger — choose "
+            "*I know it* to enter it.",
+        )
+        if keep_saved and (est_w, est_h) != (canvas_w, canvas_h):
+            line.button(
+                f"↻ {est_w} × {est_h} px now",
+                key=f"{key_prefix}_setup_reestimate_btn",
+                type="tertiary",
+                on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
+                help="Re-estimate the screen from this dataset's data as mapped "
+                "above. Nothing changes until you save.",
+            )
+    else:
         canvas_w, canvas_h = 2560, 1440
-        screen_host.caption("Recorded as **assumed** — a common 1440p monitor.")
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("**2560 × 1440 px**", width="content")
+        _setup_badge(line, "assumed", "A common 1440p monitor, not this study's.")
 
-    # --- Physical size & viewing distance -----------------------------------
-    geom_mode = _setup_mode(
-        geom_host,
-        "geometry",
+    # --- Physical size (the monitor's width) -------------------------------
+    # 2026-10-09: this row used to be *Visual angle* and also asked for the
+    # viewing distance. Nothing in this release draws in degrees, so the only
+    # thing the physical size does is turn a point-sized font into pixels (the
+    # DPI). The viewing distance is no longer asked: the snapshot keeps the
+    # value it already had (the dataset's, or the default) so a later release
+    # that converts to degrees still finds one, and its provenance says how
+    # the *width* is known.
+    value_col, how_col = _setup_row(
+        host,
+        "Physical size",
+        "The monitor's physical width — of the visible display area, not the "
+        "diagonal. It gives the screen's DPI, which turns a font size in points "
+        "into pixels. Off is a real answer: a point size is then read as pixels.",
+    )
+    geom_mode = _setup_choice(
+        how_col,
+        "Physical size",
         [_GEOM_KNOW, _GEOM_DEFAULT, _GEOM_SKIP],
-        "Needed only to express distances in degrees of visual angle. Skipping is "
-        "a real answer — the app then hides the numbers it cannot honestly derive.",
-        label="Physical size",
-        key_prefix=key_prefix,
-        persist=persist,
+        geom_key,
+        persist,
     )
     mon_mm = float(
         initial.monitor_width_mm
@@ -2423,7 +2855,10 @@ def _wizard_setup_step(
         else _recalled("viewing_distance_mm", 800.0)
     )
     if geom_mode == _GEOM_KNOW:
-        mon_mm = geom_host.number_input(
+        mon_col, badge_col = value_col.columns(
+            [0.5, 0.5], gap="xsmall", vertical_alignment="bottom"
+        )
+        mon_mm = mon_col.number_input(
             "Monitor width (mm)",
             50.0,
             2000.0,
@@ -2431,39 +2866,48 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_monitor_mm",
             **persist,
         )
-        dist_mm = geom_host.number_input(
-            "Viewing distance (mm)",
-            50.0,
-            5000.0,
-            dist_mm,
-            key=f"{key_prefix}_setup_distance_mm",
-            **persist,
-        )
+        _setup_badge(badge_col, "entered")
     elif geom_mode == _GEOM_DEFAULT:
-        mon_mm, dist_mm = 597.0, 800.0
-        geom_host.caption("Recorded as **assumed** — typical lab values.")
-    elif geom_mode == _GEOM_SKIP:
-        geom_host.caption(
-            "Visual-angle units stay **hidden** for this dataset rather than being "
-            "computed from a default."
+        mon_mm = 597.0
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("**597 mm wide**", width="content")
+        _setup_badge(line, "assumed", "A typical lab monitor, not this study's.")
+    else:
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("No physical size", width="content")
+        _setup_badge(
+            line,
+            "off",
+            "No DPI is derived for this dataset rather than one computed from a "
+            "default; a font size in points is read as pixels.",
         )
 
-    # --- Reading text size ---------------------------------------------------
+    # --- Text size ------------------------------------------------------------
+    value_col, how_col = _setup_row(
+        host,
+        "Text size",
+        "How big the reading text was drawn. Word labels are rendered at this "
+        "size so the figure matches what the participant saw.",
+    )
     text_options = [_TEXT_FONT, _TEXT_DEFAULT]
     if has_boxes:
         # Only offered when there are boxes to scale to — otherwise it is an
         # option that silently does nothing.
         text_options.insert(0, _TEXT_BOXES)
-    text_mode = _setup_mode(
-        text_host,
-        "text",
-        text_options,
-        "How big the reading text was drawn. Word labels are rendered at this size "
-        "so the figure matches what the participant saw.",
-        label="Text size",
-        key_prefix=key_prefix,
-        persist=persist,
-    )
+    if st.session_state.get(text_key) not in text_options:
+        # *Fit to the word boxes* from a setup applied before the Words table:
+        # the default stands in as the screen's own answer, so the boxes are
+        # picked again the moment they arrive (`_seed_setup_answer`).
+        st.session_state[text_key] = _TEXT_DEFAULT
+        if initial is None:
+            auto = dict(st.session_state.get(_SETUP_AUTO_KEY) or {})
+            auto[text_key] = _TEXT_DEFAULT
+            st.session_state[_SETUP_AUTO_KEY] = auto
+    text_mode = _setup_choice(how_col, "Text size", text_options, text_key, persist)
     scale_to_boxes = True
     base_font = int(
         initial.base_font_size
@@ -2477,56 +2921,72 @@ def _wizard_setup_step(
     )
     if text_mode == _TEXT_BOXES:
         scale_to_boxes = True
-        text_host.caption(
-            "Label size is derived from each word box — the usual choice."
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
         )
+        line.markdown("**Each word sized to its box**", width="content")
+        _setup_badge(line, "data")
     elif text_mode == _TEXT_FONT:
         scale_to_boxes = False
         initial_font_pt = float(_recalled("stimulus_font_pt", 12.0))
         if initial is not None and mon_mm > 0 and geom_mode != _GEOM_SKIP:
             initial_dpi = float(canvas_w) / (float(mon_mm) / 25.4)
             initial_font_pt = float(initial.base_font_size) * 72.0 / initial_dpi
-        font_pt = text_host.number_input(
+        pt_col, note_col = value_col.columns(
+            [0.3, 0.7], gap="xsmall", vertical_alignment="center"
+        )
+        font_pt = pt_col.number_input(
             "Stimulus font (pt)",
             4.0,
             96.0,
             initial_font_pt,
             key=f"{key_prefix}_setup_font_pt",
+            label_visibility="collapsed",
             **persist,
         )
-        # pt→px needs a DPI, which needs the physical width. Under a skipped
-        # geometry group there is no honest DPI, so the conversion is withheld
-        # and the point size falls back to being read as pixels.
+        note = note_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        # pt→px needs a DPI, which needs the physical width. With the physical
+        # size off there is no honest DPI, so the point size is read as pixels.
         if geom_mode == _GEOM_SKIP:
-            text_host.warning(
-                "Converting points to pixels needs the monitor width, skipped "
-                "under **Physical size**, so the size is read as **pixels**."
-            )
             base_font = int(min(max(round(font_pt), 6), 72))
+            note.markdown(f"pt → read as **{base_font} px**", width="content")
+            _setup_badge(
+                note,
+                "entered",
+                "Points become pixels through the monitor's width, which "
+                "*Physical size → I know it* gives. Without it the size is read as "
+                "pixels.",
+            )
         else:
             dpi = float(canvas_w) / (float(mon_mm) / 25.4) if mon_mm > 0 else 96.0
             base_font = int(min(max(round(font_pt_to_px(font_pt, dpi)), 6), 72))
-            text_host.caption(f"→ **{base_font} px** at {dpi:.0f} DPI.")
-    elif text_mode == _TEXT_DEFAULT:
+            note.markdown(f"pt → **{base_font} px** at {dpi:.0f} DPI", width="content")
+            _setup_badge(note, "entered")
+    else:
         scale_to_boxes = False
         base_font = 16
-        text_host.caption("Recorded as **assumed** — a 16 px reading font.")
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("**16 px**", width="content")
+        _setup_badge(line, "assumed", "A common reading size, not this study's.")
 
     # --- Font ------------------------------------------------------------------
     # Which typeface the words were shown in. The labels are drawn in it, so a
     # known font makes them match the stimulus letter for letter; the generic
     # monospace the browser picks otherwise can be several percent narrower.
-    known = stimulus_font_name(font_family)
-    st.session_state.setdefault(
-        f"{key_prefix}_setup_font_mode", _FONT_KNOW if known else _FONT_UNKNOWN
-    )
-    font_mode = font_host.radio(
+    value_col, how_col = _setup_row(
+        host,
         "Font",
-        [_FONT_KNOW, _FONT_UNKNOWN],
-        key=f"{key_prefix}_setup_font_mode",
-        help="The typeface the text was shown in. Word labels are drawn in it, "
-        "so they match the stimulus. Not sure? Leave it on I don't know.",
-        **persist,
+        "The typeface the text was shown in. Word labels are drawn in it, so "
+        "they match the stimulus. Not sure leaves a generic monospace font.",
+    )
+    known = stimulus_font_name(font_family)
+    st.session_state.setdefault(font_key, _FONT_KNOW if known else _FONT_UNKNOWN)
+    font_mode = _setup_choice(
+        how_col, "Font", [_FONT_KNOW, _FONT_UNKNOWN], font_key, persist
     )
     if font_mode == _FONT_KNOW:
         choices = [*STIMULUS_FONTS, _FONT_OTHER]
@@ -2534,7 +2994,10 @@ def _wizard_setup_step(
             f"{key_prefix}_setup_font_name",
             known if known in STIMULUS_FONTS else _FONT_OTHER if known else choices[0],
         )
-        picked = font_host.selectbox(
+        name_col, other_col, badge_col = value_col.columns(
+            [0.4, 0.34, 0.26], gap="xsmall", vertical_alignment="center"
+        )
+        picked = name_col.selectbox(
             "Font name",
             choices,
             key=f"{key_prefix}_setup_font_name",
@@ -2546,7 +3009,7 @@ def _wizard_setup_step(
                 f"{key_prefix}_setup_font_other",
                 known if known and known not in STIMULUS_FONTS else "",
             )
-            typed = font_host.text_input(
+            typed = other_col.text_input(
                 "Font name (other)",
                 key=f"{key_prefix}_setup_font_other",
                 placeholder="e.g. Source Code Pro",
@@ -2556,13 +3019,19 @@ def _wizard_setup_step(
             font_family = stimulus_font_css(typed) if typed.strip() else FONT_FAMILY
         else:
             font_family = stimulus_font_css(picked)
-        if font_family != FONT_FAMILY:
-            font_host.caption(
-                f"Drawn in **{stimulus_font_name(font_family)}** where it is "
-                "installed on this computer."
-            )
+        _setup_badge(
+            badge_col,
+            "entered",
+            "Drawn in this font wherever it is installed on the computer showing "
+            "the figure.",
+        )
     else:
         font_family = FONT_FAMILY
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("Generic monospace", width="content")
+        _setup_badge(line, "generic")
 
     snapshot = SetupSnapshot(
         canvas_width=int(canvas_w),
@@ -2582,83 +3051,77 @@ def _wizard_setup_step(
         text_provenance=_SETUP_PROVENANCE.get(text_mode),
     )
 
-    # Publish the snapshot for the save/restore + export writers. A partial one
-    # resolves to None, so `current_setup_section` writes nothing rather than an
-    # all-defaults section that would read as a real answer.
+    # The ask for real values: only while a line is on an estimate or a
+    # default. Physical size *off* is an answer, not a guess, so it is not one.
+    guessed = [
+        _SETUP_HEADINGS[group]
+        for group, provenance in snapshot.provenance.items()
+        if provenance in (Provenance.ESTIMATED, Provenance.ASSUMED)
+    ]
+    if guessed:
+        nudge.caption(
+            f"{ICONS['warning']} **{' and '.join(guessed)}** "
+            + ("is" if len(guessed) == 1 else "are")
+            + " an estimate or a default. If you know the real "
+            + ("value" if len(guessed) == 1 else "values")
+            + ", choose *I know it* — every figure is drawn to them."
+            + (
+                " You can also add the dataset now and change them later."
+                if initial is None
+                else ""
+            )
+        )
+
+    # Publish the snapshot for the save/restore + export writers.
     if publish:
         st.session_state["_wizard_setup_snapshot"] = (
             snapshot.to_dict() if snapshot.is_answered() else None
         )
 
-    # Publish each group's values as soon as *that* group is answered, into the
-    # wire-format `global_*` keys the rest of the app reads. The hard gate is on
-    # **Add dataset**, not on a setting taking effect — a user who has just told
-    # us the resolution should see the canvas change now, not after answering two
-    # unrelated questions. Only the values were ever wire format; the provenance
-    # beside them is what is new.
+    # Publish each group's values as soon as it is answered, into the
+    # wire-format `global_*` keys the rest of the app reads — a user who has
+    # just told us the resolution should see the canvas change now.
+    # Only what the user entered is remembered for the next dataset: an
+    # estimate or a default pre-filled into *I know it* would read as known.
+    #
+    # A line the screen answered itself writes nothing to the figure's
+    # settings: those keys are shared, and opening ➕ Add dataset and leaving
+    # it must not hand the dataset you came from this one's estimated canvas
+    # and text sizing. The new dataset gets its whole setup when it is added
+    # (`_apply_setup_to_figure`).
+    auto = st.session_state.get(_SETUP_AUTO_KEY) or {}
+
+    def _chosen(group: str) -> bool:
+        return f"{key_prefix}_setup_{group}_mode" not in auto
+
     recall: dict = {}
-    if publish and snapshot.screen_provenance is not None:
+    if publish and _chosen("screen") and snapshot.screen_provenance is not None:
         st.session_state["global_canvas_width"] = snapshot.canvas_width
         st.session_state["global_canvas_height"] = snapshot.canvas_height
-        recall["canvas_width"] = snapshot.canvas_width
-        recall["canvas_height"] = snapshot.canvas_height
-    if publish and snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
+        if snapshot.screen_provenance is Provenance.MEASURED:
+            recall["canvas_width"] = snapshot.canvas_width
+            recall["canvas_height"] = snapshot.canvas_height
+    if (
+        publish
+        and _chosen("geometry")
+        and snapshot.geometry_provenance not in (None, Provenance.SKIPPED)
+    ):
         st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
         st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
-        recall["monitor_width_mm"] = snapshot.monitor_width_mm
-        recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
-    if publish and snapshot.text_provenance is not None:
+        if snapshot.geometry_provenance is Provenance.MEASURED:
+            recall["monitor_width_mm"] = snapshot.monitor_width_mm
+            recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
+    if publish and _chosen("text") and snapshot.text_provenance is not None:
         st.session_state["global_base_font_size"] = snapshot.base_font_size
         st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
         recall["base_font_size"] = snapshot.base_font_size
     if publish:
-        # Its own question, always answered (I don't know is an answer).
+        # Its own question, always answered (Not sure is an answer).
         st.session_state["global_font_family"] = snapshot.font_family
         recall["font_family"] = snapshot.font_family
     if publish and recall:
         _remember_setup(recall)
-
-    # UX-90 — an error, not a warning, and only once the user has actually tried
-    # to add. Before that an unanswered question is one they have not reached
-    # yet, and saying so in yellow on arrival made the page open already
-    # complaining. Same rule the mapping fields follow
-    # (`controls.ADD_ATTEMPTED_KEY`), so one click now turns the whole page red
-    # at once instead of it nagging in two different tenses.
-    unanswered = [g for g, p in snapshot.provenance.items() if p is None]
-    if publish and unanswered and st.session_state.get(ADD_ATTEMPTED_KEY):
-        host.error(
-            "Still to answer: "
-            + ", ".join(f"**{_SETUP_HEADINGS[g]}**" for g in unanswered)
-            + ". Pick an answer for each, then press Add dataset again."
-        )
-        _mark_missing_setup_groups(unanswered)
     return snapshot
-
-
-def _mark_missing_setup_groups(unanswered: list) -> None:
-    """Ring the unanswered required setup radios in red (UX-90).
-
-    One ``<style>`` block for all of them, targeting each radio's `.st-key-…`
-    container — the same technique as `controls._emit_field_tints`, and for the
-    same reason: a wrapper element per group would be more DOM on a page whose
-    whole problem is length.
-
-    A ring and a red label rather than a fill: the group is a list of radio
-    options, and tinting three option rows reads as three separate problems
-    instead of one unanswered question.
-    """
-    keys = [_SETUP_MODE_KEYS[group] for group in unanswered]
-    box = ", ".join(f".st-key-{key} > div" for key in keys)
-    label = ", ".join(f".st-key-{key} label p" for key in keys)
-    st.markdown(
-        "<style>"
-        f"{box} {{ border: 1px solid rgba(239, 68, 68, 0.85);"
-        " border-radius: 0.4rem; padding: 0.35rem 0.5rem;"
-        " background: rgba(239, 68, 68, 0.06); }"
-        f"{label} {{ color: rgb(239, 68, 68); }}"
-        "</style>",
-        unsafe_allow_html=True,
-    )
 
 
 def _restored_setup_snapshot() -> SetupSnapshot | None:
@@ -2717,12 +3180,18 @@ def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
             Provenance.ASSUMED: _TEXT_DEFAULT,
         },
     }
+    if snapshot.scale_text_to_boxes:
+        by_prov["text"][Provenance.MEASURED] = _TEXT_BOXES
+    auto = dict(st.session_state.get(_SETUP_AUTO_KEY) or {})
     for group, provenance in snapshot.provenance.items():
         if group not in answerable:
             continue
         label = by_prov.get(group, {}).get(provenance)
         if label is not None:
             st.session_state[_SETUP_MODE_KEYS[group]] = label
+            # The setup's answer, not the screen's own default: kept.
+            auto.pop(_SETUP_MODE_KEYS[group], None)
+    st.session_state[_SETUP_AUTO_KEY] = auto
     # The font question, from the file's font: a named one is "I know the font".
     known = stimulus_font_name(snapshot.font_family)
     st.session_state["wizard_setup_font_mode"] = _FONT_KNOW if known else _FONT_UNKNOWN
@@ -3002,54 +3471,67 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
-#: UX-55 r4 — `table name | Trial ID | Screen ID | Participant ID | Text ID |
-#: Word/IA ID | Fixation ID-or-Word text` — row 1 of the per-table block, now
-#: merged with what used to be a separate "geometry" section (r3/r4:
-#: identity-vs-description stopped paying for itself once Screen name left the
-#: view and Word/IA id joined the row it already read as identity). The name
-#: column stays narrow for one short word; the six pickers split the rest
-#: evenly — a column name is what has to stay readable, and six is the most
-#: this row fits.
-#: UX-127: the name column widened from 0.09 to 0.135 (and the CSS overlay's
-#: `width` in `styles.py` alongside it) — the file uploader's own "Browse
-#: files" button didn't fit inside the narrower column. The six picker cells
-#: shrink slightly (evenly) to make room.
-#: UX-129: widened again, from 0.135 to 0.155, *without* moving the CSS
-#: overlay's own `width` (still 13.5%, `styles.py`) — that mismatch is now
-#: deliberate. The overlay (and the border-right line on it) still ends at
-#: 13.5% of the block, but this reserved column is wider than that, so the
-#: extra ~2% sits empty between the line and the first picker cell, reading
-#: as breathing room rather than the pickers crowding the divider.
-_ID_ROW1_W = (0.155, 0.1409, 0.1409, 0.1409, 0.1409, 0.1409, 0.1409)
+#: Every mapping line is one grid (2026-10-09): the table's name column, then
+#: four equal picker cells. A table maps on three short lines rather than two
+#: long ones — six pickers to a line left each one too narrow to read the
+#: column name it held. The name column is wider than its uploader overlay
+#: (13.5%, `styles.py`) on purpose (UX-129): the gap reads as breathing room
+#: between the divider and the first picker.
+_MAP_ROW_W = (0.155, *([0.845 / 4] * 4))
 
-#: Row 2 of the Fixations block: X · Y · Timestamp · Duration. Same grid as
-#: row 1 (UX-55 r2) so the two halves of the mapping line up down the page —
-#: four equal picker cells under the name column, since these selects hold
-#: column names rather than short ids.
-_FIX_ROW2_W = (0.155, 0.2113, 0.2113, 0.2113, 0.2113)
+#: What each table maps, line by line. Line 1 is the same for every table —
+#: what identifies a row — so the tables' IDs line up down the page; then the
+#: table's own fields, grouped by what they describe. The word box (a format
+#: radio plus four coordinate selects that lay themselves out) takes a line of
+#: its own, in one wide cell.
+MAP_LINES = {
+    "fix": (
+        ("trial", "participant", "text_id", "screen_id"),
+        ("x", "y", "word_id"),
+        ("timestamp", "duration", "fixation_id"),
+    ),
+    "words": (
+        ("trial", "participant", "text_id", "screen_id"),
+        ("word_id", "text", "line"),
+        ("box",),
+    ),
+    "raw_gaze": (
+        ("trial", "participant", "text_id", "screen_id"),
+        ("x", "y", "timestamp"),
+        ("word_id", "text"),
+    ),
+}
 
-#: Row 2 of the AOI block: the word box (a format radio plus four coordinate
-#: selects that lay themselves out) and, sharing the same line, Line index —
-#: the box gets most of the row, Line index the rest (UX-55 r3).
-_AOI_ROW2_W = (0.155, 0.678, 0.167)
-
-#: AN-32 — rows 3-4 of the AOI block: the reading measures the report brings,
-#: seven to a line under the same name column (thirteen fields on one line
-#: would leave each select a sliver). Shared with the ✏️ Edit dataset grid.
+#: AN-32 — the AOI block's reading measures, seven to a line under the same
+#: name column (thirteen fields on one line would leave each select a
+#: sliver). Shared with the ✏️ Edit dataset grid.
 MEASURE_ROW_W = (0.155, *([0.845 / 7] * 7))
 #: The measures, split into those two lines: durations and the count first,
 #: then the flags, the regression count and the landing measures.
 MEASURE_ROWS = (READING_MEASURE_KEYS[:7], READING_MEASURE_KEYS[7:])
 
-#: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
-#: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
-#: same six identity fields, same shape as Fixations/AOI above it).
-_RAW_GAZE_ROW2_W = (0.155, 0.2817, 0.2817, 0.2816)
-
 #: UX-127: the metadata rows' own two-cell grid — same name-column width as
 #: every other table's row 1, one wide cell for the id-column + keep-fields
 #: picker stack (there is nothing to split across several picker cells here).
 _META_ROW_W = (0.155, 0.845)
+
+
+def _map_cells(block, first_row, lines) -> dict:
+    """``{field: cell}`` over one table's mapping lines (`MAP_LINES`).
+
+    ``first_row`` is the line the uploader sits in, already drawn; the others
+    are drawn here, under it, in order — screen order is creation order, so a
+    table's lines stay together whatever fills them first.
+    """
+    cells = dict(zip(lines[0], first_row[1:]))
+    for keys in lines[1:]:
+        row = block.columns(
+            _META_ROW_W if keys == ("box",) else _MAP_ROW_W,
+            gap="small",
+            vertical_alignment="bottom",
+        )
+        cells.update(zip(keys, row[1:]))
+    return cells
 
 
 def _mark_add_attempted() -> None:
@@ -3086,12 +3568,19 @@ def _wizard_name_header(host, active: bool) -> None:
         label_visibility="collapsed",
     )
     # UX-174 r2 — optional, and edited later on ✏️ Edit dataset.
+    description_help = (
+        f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        "Management page."
+    )
+    # The title carries its help as the dotted underline, not a `?` icon.
+    inline_field_label(box, "Description", description_help)
     box.text_area(
         "Description",
         key="wizard_dataset_description",
         placeholder="Optional — what this dataset is: the participants, the texts, "
         "the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
+        help=description_help,
+        label_visibility="collapsed",
         height=68,
         # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
         on_change="ignore",
@@ -3216,10 +3705,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             '<div class="sps-wiz-title">Set up your dataset</div>',
             unsafe_allow_html=True,
         )
-        # Step-by-step guide: a bottom-right card that auto-opens once per session
-        # and is replayable via the popover below. Arm it (auto/first-visit) then
-        # render the card early so it streams before the heavy upload/normalize
-        # work.
+        # Step-by-step guide: a floating card that auto-opens once per session
+        # and is replayable via the popover below. Arm it (auto/first-visit)
+        # then render the card early so it streams before the heavy
+        # upload/normalize work. Drawn outside the sticky bar: a sticky parent
+        # can become the containing block of a fixed child.
         maybe_show_wizard_guide()
         render_spotlight_wizard_guide()
         # UX-84: one ❓ Help popover replaces the two buttons that used to sit
@@ -3311,16 +3801,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s_name = _part("name")
     _wizard_name_header(s_name, active)
 
-    def _render_restore_trigger(host) -> None:
-        # UX-127: beside stage 2's title now, not stage 3's — UX-113's reason
-        # (it never touches the uploads themselves) no longer separates the
-        # two stages, since every table now uploads *inside* stage 3 too;
-        # what actually matters is that a restored setup is visible before
-        # the wizard is filled in, and stage 2 is the first thing on screen.
-        restore_box = host.popover(f"{ICONS['undo']} Restore a saved setup (optional)")
-        _wizard_restore_config(restore_box)
-        _render_restored_config_caption(restore_box)
-
     # UX-114: the "Dataset format" choice + the MultiplEYE branch it dispatches
     # to are held back this release (mirrors PRE-21/PRE-22's gate) — the code
     # stays for a later revival, but with the flag off there is no format
@@ -3339,10 +3819,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _generic_format = (
         st.session_state.get("wizard_dataset_format", "Generic") != "MultiplEYE"
     )
-    s1 = _part(
-        "data",
-        trailing=_render_restore_trigger if active and _generic_format else None,
-    )
+    s1 = _part("data")
+    if active and _generic_format:
+        _render_start_from(s1)
     # UX-129: "mapping" is no longer its own numbered stage — everything that
     # used to render under it (the identity/geometry sections, each table's
     # own upload+mapping row) now renders straight into `s1`, the same "data"
@@ -3390,7 +3869,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # three tables below say the same thing at their own titles' hover, this
         # is just the nudge to open with.
         guide = intro.container(
-            key="wiz_example_row",
+            key="wiz_upload_intro",
             horizontal=True,
             vertical_alignment="center",
             gap="small",
@@ -3400,22 +3879,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             f"**{WORDS_TABLE_LABEL}**, or "
             "**Raw gaze** below to get started.",
             width="content",
-        )
-        # DATA-67: a tiny AOI + fixation pair that maps with no manual pick,
-        # with a README naming every column's unit and what the IDs mean.
-        # Built on click (`data=` a callable) and `on_click="ignore"`, so the
-        # download neither costs a run nor reruns the wizard.
-        guide.download_button(
-            "Download example tables",
-            data=example_import_zip,
-            file_name=EXAMPLE_ZIP_FILE,
-            mime="application/zip",
-            icon=ICONS["download"],
-            key="wizard_example_download",
-            on_click="ignore",
-            help="Two tiny tables, one Words table and one fixation table, that "
-            "import with every column mapped automatically. The README inside "
-            "explains each column, its unit, and the IDs.",
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
@@ -3466,6 +3929,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             container=host,
             kind=kind,
             label_visibility="collapsed",
+            messages=notes_host,
         )
         if not frame.empty:
             # PERF-6 parses only the columns the mapping needs, so the frame's
@@ -3575,9 +4039,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
             emphasis=True,
         )
 
+        from scanpath_studio import metadata as metadata_mod
+
         def _meta_row(slug, renderer, ids):
             block = meta_host.container(key=f"wiz_map_block_meta_{slug}")
             row = block.columns(_META_ROW_W, gap="small")
+            # What the table is for, until one is attached (2026-10-09).
+            if not st.session_state.get(metadata_mod.upload_key(slug)):
+                row[1].caption(META_ROW_CAPTIONS[slug])
             # UX-116: `live_join=False` — there is no finished dataset to join
             # against yet (the pools below are provisional, still shifting as
             # identity mapping is worked out), so the wizard only collects the
@@ -3644,8 +4113,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # resolving `has_fix`/`has_words` and reserving its own feature/keep rows
     # immediately (UX-89: a table's rows stay adjacent, not batched by kind)
     # before the next table's row begins.
-    id_rows = {}
-    feature_rows = {}
+    cells = {}
     extra_rows = {}
     keep_rows = {}
 
@@ -3663,8 +4131,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # defeating `vertical_alignment="center"` on row 1 alone).
     fix_block = s2.container(key="wiz_map_block_col_map_fix")
     # #374 F12: which export goes in this row, in EyeLink's own terms.
-    fix_note = _row_note(fix_block, ROW_CAPTIONS["fixations"])
-    row_fix = fix_block.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    fix_note = _row_note(fix_block, "fixations", "col_map_fix")
+    row_fix = fix_block.columns(_MAP_ROW_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
         label="Fixations table(s)",
@@ -3679,17 +4147,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     has_fix = not raw_fix.empty
     if has_fix:
-        id_rows["fix"] = row_fix[1:]
-        feature_rows["fix"] = fix_block.columns(
-            _FIX_ROW2_W, gap="small", vertical_alignment="bottom"
-        )
+        cells["fix"] = _map_cells(fix_block, row_fix, MAP_LINES["fix"])
         keep_rows["fix"] = fix_block.container()
 
     s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
     words_block = s2.container(key="wiz_map_block_col_map_words")
-    words_note = _row_note(words_block, ROW_CAPTIONS["words"])
+    words_note = _row_note(words_block, "words", "col_map_words")
     row_words = words_block.columns(
-        _ID_ROW1_W, gap="small", vertical_alignment="center"
+        _MAP_ROW_W, gap="small", vertical_alignment="center"
     )
     raw_words = upload_box(
         row_words[0].container(key="wiz_map_upload_col_map_words"),
@@ -3705,10 +4170,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     has_words = not raw_words.empty
     if has_words:
-        id_rows["words"] = row_words[1:]
-        feature_rows["words"] = words_block.columns(
-            _AOI_ROW2_W, gap="small", vertical_alignment="bottom"
-        )
+        cells["words"] = _map_cells(words_block, row_words, MAP_LINES["words"])
         # AN-32: the two measure lines, reserved here so they sit under the
         # box row and above the character-AOI toggle, whatever fills first.
         measure_rows = [
@@ -3745,10 +4207,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # without it, AOI and Raw gaze had no line between them when both were
     # still empty).
     s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
-    # Word text/label — same six-cell grid, same field order, as the
-    # Fixations/AOI row above.
-    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    rg_note = _row_note(s3, "raw_gaze", "col_map_raw_gaze")
+    # Line 1: the identity line every table opens with (`MAP_LINES`).
+    rg_row1 = s3.columns(_MAP_ROW_W, gap="small", vertical_alignment="center")
     raw_gaze = upload_box(
         rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
         label="Raw gaze table (optional)",
@@ -3762,6 +4223,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_raw_gaze",
         multi=False,
         noun="gaze point",
+        notes_host=rg_note,
     )
 
     # UX-113: stages 3-5 render unconditionally now, rather than exiting here
@@ -3821,12 +4283,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if has_words or has_fix:
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
-        def _cells_for(index: int) -> list:
-            return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
+        def _cells_for(field: str) -> list:
+            return [cells[s][field] for s in ("fix", "words") if s in cells]
 
         id_extras = counts_host
-        # Row 1, in the order the request pins: Trial ID · Screen ID ·
-        # Participant ID · Text ID · Word/IA ID · Fixation ID-or-Word text.
+        # Line 1: Trial ID · Participant ID · Text ID · Screen ID.
         disjoint_trials = _wizard_trial_step(
             s2,
             raw_words,
@@ -3837,7 +4298,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(0),
+            cells=_cells_for("trial"),
         )
         # Screen ID (DATA-21 multipart) — a simple per-table field, not a
         # composite like Trial/Participant/Text, so it goes straight through
@@ -3852,7 +4313,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             ("words", raw_words, WORD_FIELD_SPECS, prop_w, word_schema, has_words),
         )
         for slug, raw, specs, proposal, schema, present in screen_specs:
-            if not present or slug not in id_rows:
+            if not present or slug not in cells:
                 continue
             schema.update(
                 _map_section(
@@ -3860,7 +4321,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     specs,
                     proposal,
                     f"col_map_{slug}",
-                    id_rows[slug][1],
+                    cells[slug]["screen_id"],
                     ["screen_id"],
                 )
             )
@@ -3879,7 +4340,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(2),
+            cells=_cells_for("participant"),
             extras_host=id_extras,
         )
         _wizard_participant_text_step(
@@ -3900,7 +4361,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(3),
+            cells=_cells_for("text_id"),
             extras_host=id_extras,
         )
         # DATA-49: an AOI table with no Participant ID is stimulus-level and
@@ -3913,7 +4374,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # fixation hit; the AOI table's is which AOI a row *is*. Different
         # columns, same slot: both tables read it as identity now.
         for slug, raw, specs, proposal, schema, present in screen_specs:
-            if not present or slug not in id_rows:
+            if not present or slug not in cells:
                 continue
             schema.update(
                 _map_section(
@@ -3921,12 +4382,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     specs,
                     proposal,
                     f"col_map_{slug}",
-                    id_rows[slug][4],
+                    cells[slug]["word_id"],
                     ["word_id"],
                 )
             )
-        # Row 1's last slot differs per table: Fixation ID for Fixations,
-        # Word text/label for AOI.
+        # Each table's own id: Fixation ID for Fixations, Word text/label
+        # for AOI.
         if has_fix:
             fix_schema.update(
                 _map_section(
@@ -3934,7 +4395,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     FIX_FIELD_SPECS,
                     prop_f,
                     "col_map_fix",
-                    id_rows["fix"][5],
+                    cells["fix"]["fixation_id"],
                     ["fixation_id"],
                 )
             )
@@ -3945,51 +4406,45 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     WORD_FIELD_SPECS,
                     prop_w,
                     "col_map_words",
-                    id_rows["words"][5],
+                    cells["words"]["text"],
                     ["text"],
                 )
             )
 
-        # Row 2 of each block: the table's own features, filled into the cells
-        # reserved above so they sit directly under that table's identity row.
+        # The table's own features, filled into the cells reserved above so
+        # they sit directly under that table's identity line.
         # UX-89 also removed the per-block validation warnings that used to
         # print here ("Words/IA — missing Word/IA ID", …): a required field that
         # is empty turns red in place the moment ✅ Add dataset is pressed, and
         # a sentence repeating it below the row was the third copy of the same
         # complaint on a page whose problem is length.
         if has_fix:
-            for cell, key in zip(
-                feature_rows["fix"][1:], ["x", "y", "timestamp", "duration"]
-            ):
+            for key in ("x", "y", "timestamp", "duration"):
                 fix_schema.update(
                     _map_section(
-                        raw_fix, FIX_FIELD_SPECS, prop_f, "col_map_fix", cell, [key]
+                        raw_fix,
+                        FIX_FIELD_SPECS,
+                        prop_f,
+                        "col_map_fix",
+                        cells["fix"][key],
+                        [key],
                     )
                 )
         if has_words:
-            # The box (a format radio plus four coordinate selects that lay
-            # themselves out) and Line index share the row (UX-55 r3).
-            words_row2 = feature_rows["words"]
-            word_schema.update(
-                _map_section(
-                    raw_words,
-                    WORD_FIELD_SPECS,
-                    prop_w,
-                    "col_map_words",
-                    words_row2[1],
-                    ["box"],
+            # Line index beside the word's own ids; the box (a format radio
+            # plus four coordinate selects that lay themselves out) on a line
+            # of its own.
+            for key in ("line", "box"):
+                word_schema.update(
+                    _map_section(
+                        raw_words,
+                        WORD_FIELD_SPECS,
+                        prop_w,
+                        "col_map_words",
+                        cells["words"][key],
+                        [key],
+                    )
                 )
-            )
-            word_schema.update(
-                _map_section(
-                    raw_words,
-                    WORD_FIELD_SPECS,
-                    prop_w,
-                    "col_map_words",
-                    words_row2[2],
-                    ["line"],
-                )
-            )
             # AN-32 — the reading measures, two lines named once. Each is an
             # optional field seeded from its EyeLink name, so an IA report maps
             # them all without a click and a report without them leaves the
@@ -4017,7 +4472,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # label — this line has no name of its own, it describes the AOI
             # table above it.
             aoi_extra = _row_body(extra_rows["words"])
-            aggregate_char_boxes_on = aoi_extra.toggle(
+            aggregate_char_boxes_on = switch(
+                aoi_extra,
+                "toggle",
                 "Merge character boxes into word boxes",
                 key="wizard_aggregate_char_boxes",
                 help="For a Words table with one row per *character* (e.g. Chinese "
@@ -4052,22 +4509,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         else {}
     )
     if not raw_gaze.empty:
-        # Row 2: X · Y · Timestamp — no Duration, raw gaze has no such concept.
-        rg_row2 = s3.columns(_RAW_GAZE_ROW2_W, gap="small", vertical_alignment="bottom")
+        # X · Y · Timestamp — no Duration, raw gaze has no such concept.
+        rg_cells = _map_cells(s3, rg_row1, MAP_LINES["raw_gaze"])
         raw_gaze_schema: dict = {}
-        row1_keys = ["trial", "screen_id", "participant", "text_id", "word_id", "text"]
-        for cell, key in zip(rg_row1[1:], row1_keys):
-            raw_gaze_schema.update(
-                _map_section(
-                    raw_gaze,
-                    RAW_GAZE_FIELD_SPECS,
-                    prop_g,
-                    "col_map_raw_gaze",
-                    cell,
-                    [key],
-                )
-            )
-        for cell, key in zip(rg_row2[1:], ["x", "y", "timestamp"]):
+        for key, cell in rg_cells.items():
             raw_gaze_schema.update(
                 _map_section(
                     raw_gaze,
@@ -4180,8 +4625,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     restored_setup = _restored_setup_snapshot()
     if restored_setup is not None:
         _apply_restored_setup(restored_setup)
+        meta = st.session_state.get("_wizard_restored_meta") or {}
         s_setup.caption(
-            "✓ Pre-answered from the restored setup file — review it below."
+            f"{ICONS['success']} Filled in from "
+            + (f"**{meta['data_source']}**" if meta.get("data_source") else "the setup")
+            + " — check it below."
         )
 
     # DATA-46: the estimate needs canonical coordinates, and nothing is
@@ -4205,7 +4653,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     setup_snapshot = _wizard_setup_step(
-        s_setup, raw_words, raw_fix, has_boxes=has_words, estimate=_estimate
+        s_setup,
+        raw_words,
+        raw_fix,
+        has_boxes=has_words,
+        estimate=_estimate,
+        has_data=has_words or has_fix,
     )
 
     # The foot of the wizard: what is still missing, then the button. UX-53 put
@@ -4464,6 +4917,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # geometry at all before this, which is why switching to one left the
             # canvas on the previous source's monitor.
             "setup": setup_snapshot.to_dict(),
+            # What *Start from → A dataset you added* copies besides the
+            # mapping and the setup: how columns were derived, and which
+            # extra fields were kept.
+            WIZARD_CHOICES_FIELD: {
+                "filename_derive": _filename_derive_section(),
+                "keep_and_filter": _keep_and_filter_section(),
+            },
             # DATA-66: what each canonical column was called in these files —
             # the record the app shows, exports and accepts names from. Built
             # from exactly what normalization read: the tables after character

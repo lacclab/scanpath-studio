@@ -224,3 +224,57 @@ class TestTextMetadata:
     def test_a_missing_file_exits(self, tmp_path):
         with pytest.raises(SystemExit):
             _render(tmp_path, "--text-metadata", str(tmp_path / "nope.csv"))
+
+
+class TestSeveralFiles:
+    """A metadata table split across files (one per session or per lab) is
+    stacked into one, on the CLI as in the app's uploaders."""
+
+    def test_two_participant_files_read_as_one_table(self, tmp_path, sample, capsys):
+        _words, fixations = sample
+        readers = sorted(fixations["participant_id"].astype(str).unique())
+        half = len(readers) // 2 or 1
+        paths = []
+        for name, chunk in (("a.csv", readers[:half]), ("b.csv", readers[half:])):
+            path = tmp_path / name
+            pd.DataFrame({"participant_id": chunk, "age": 30}).to_csv(path, index=False)
+            paths.append(str(path))
+
+        _render(tmp_path, "--participant-metadata", *paths)
+
+        assert f"for {len(readers)} participants" in capsys.readouterr().err
+
+
+class TestTheAppReadsSeveralUploads:
+    """`tabs._read_metadata_uploads`: what the three metadata uploaders read."""
+
+    @staticmethod
+    def _upload(name: str, text: str):
+        import io
+
+        upload = io.BytesIO(text.encode("utf-8"))
+        upload.name = name
+        upload.file_id = name
+        return upload
+
+    def test_files_are_stacked_with_their_columns_aligned(self):
+        from scanpath_studio.tabs import _metadata_upload_name, _read_metadata_uploads
+
+        uploads = [
+            self._upload("a.csv", "participant_id,age\np1,30\n"),
+            self._upload("b.csv", "participant_id,group\np2,B\n"),
+        ]
+        frame = _read_metadata_uploads(uploads)
+        assert frame["participant_id"].astype(str).tolist() == ["p1", "p2"]
+        assert set(frame.columns) == {"participant_id", "age", "group"}
+        assert _metadata_upload_name(uploads) == "a.csv + 1 more file"
+
+    def test_an_unreadable_file_is_named(self):
+        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+
+        uploads = [
+            self._upload("a.csv", "participant_id,age\np1,30\n"),
+            self._upload("broken.parquet", "not parquet"),
+        ]
+        with pytest.raises(_MetadataReadError, match="broken.parquet"):
+            _read_metadata_uploads(uploads)

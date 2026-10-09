@@ -1740,7 +1740,9 @@ class TestBuiltInRecordingSetupOverride:
         self._run(at)
         self._open(at)
         # The upload's form, not a read-only summary.
-        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert (
+            at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        )
         # An untouched Save saves no setup of the user's.
         at.button(key="builtin_mapping_save").click()
         self._run(at)
@@ -1748,7 +1750,7 @@ class TestBuiltInRecordingSetupOverride:
 
         # A change that is cancelled is gone, and gone from the next edit too.
         self._open(at)
-        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        at.segmented_control(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
         self._run(at)
         assert at.session_state["_remap_builtin_setup_dirty"] is True
         for key in [k for k in at.session_state if str(k).startswith("_remap_")]:
@@ -1756,11 +1758,13 @@ class TestBuiltInRecordingSetupOverride:
         del at.session_state["_dataset_editor_open"]
         self._run(at)
         self._open(at)
-        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert (
+            at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        )
         assert DEMO_CHOICE not in self._overrides(at)
 
         # A saved change is this dataset's own setup, on the figure at once.
-        at.radio(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
+        at.segmented_control(key=f"{self.PREFIX}_geometry_mode").set_value(_GEOM_KNOW)
         self._run(at)
         at.number_input(key=f"{self.PREFIX}_monitor_mm").set_value(400.0)
         self._run(at)
@@ -1790,7 +1794,9 @@ class TestBuiltInRecordingSetupOverride:
         self._open(at)
         at.button(key="edit_src_Bundled Demo_reset").click()
         self._run(at)
-        assert at.radio(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        assert (
+            at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
+        )
         at.button(key="builtin_mapping_save").click()
         self._run(at)
         assert DEMO_CHOICE not in self._overrides(at)
@@ -3363,12 +3369,15 @@ class TestSetupWizard:
         assert "col_map_words_trial" in ms_keys
         assert "col_map_trial_unified" not in ms_keys
         assert not [t for t in at.toggle if "per table" in (t.label or "")]
-        # DATA-22: the recording setup is now step 4, *after* the upload, and
-        # asks how each group is known instead of seeding a monitor. Nothing is
-        # preselected — a wrong guess here silently rescales every figure.
-        modes = {r.key: r.value for r in at.radio}
-        assert set(_SETUP_MODE_KEYS.values()) <= set(modes)
-        assert all(modes[k] is None for k in _SETUP_MODE_KEYS.values())
+        # 2026-10-09: the recording setup starts on the answers that invent
+        # nothing — the screen estimated from the data, visual angle off, the
+        # text fitted to the word boxes — each one a row of buttons.
+        modes = {c.key: c.value for c in at.segmented_control}
+        assert modes[_SETUP_MODE_KEYS["screen"]] == "Estimate from my data"
+        assert modes[_SETUP_MODE_KEYS["geometry"]] == (
+            "Skip — I don't need visual-angle units"
+        )
+        assert modes[_SETUP_MODE_KEYS["text"]] == "Scale to the word boxes"
 
     def test_per_table_trial_toggle_reveals_per_table_pickers(self, monkeypatch):
         app = self._inject(monkeypatch)
@@ -3815,17 +3824,18 @@ class TestSetupWizard:
         assert not any(k.startswith("single_composite_") for k in keys), keys
 
     def test_recording_setup_writes_shared_global_key(self, monkeypatch):
-        """DATA-22: the Recording-setup step still feeds the shared ``global_*``
-        keys the rest of the app reads — but only once the user has said *how*
-        they know the screen. Answering "I know the resolution" reveals the
-        width/height inputs, and the value they hold is published."""
+        """DATA-22: the Recording-setup step feeds the shared ``global_*`` keys
+        the rest of the app reads. It starts on the estimate, published at once;
+        *I know it* reveals the width/height inputs, and what they hold is
+        published instead."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Before answering, the wizard publishes no canvas at all.
+        # On the estimate there is nothing to type.
         assert not [n for n in at.number_input if n.key == "wizard_setup_screen_w"]
+        assert "global_canvas_width" in at.session_state
 
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.run(timeout=60)
@@ -5242,35 +5252,39 @@ class TestDeepLinkToAFilteredOutReader:
 
 @pytest.mark.timeout(180)
 class TestRecordingSetupGate(TestSetupWizard):
-    """DATA-22 §3: **Add dataset** is blocked until all three setup groups say
-    how they are known.
+    """The Recording setup asks for real values but never holds the dataset
+    back (2026-10-09). It starts on the answers that invent nothing, says
+    which lines are estimates or defaults, and records how each is known — so
+    no uploaded dataset silently passes off a guess as a measurement."""
 
-    The gate is deliberately hard — there is no "decide later" escape — but it
-    can never strand anyone: *Estimate from my data* always exists for the screen
-    group and always succeeds. What it buys is that no uploaded dataset can
-    silently inherit a monitor, viewing distance or font nobody chose.
-    """
-
-    def test_finalize_is_disabled_until_every_group_is_answered(self, monkeypatch):
+    def test_add_dataset_is_not_held_up_by_the_setup(self, monkeypatch):
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        finalize = [b for b in at.button if b.key == "wizard_finalize"]
-        assert finalize, "the finalize button should render (disabled), not vanish"
-        assert finalize[0].disabled, "Add dataset must be gated on the setup step"
+        finalize = next(b for b in at.button if b.key == "wizard_finalize")
+        assert not finalize.disabled
+        # The estimate is said to be one, with the ask for the real value.
+        assert any(
+            "**Screen** is an estimate or a default" in c.value for c in at.caption
+        )
 
-        # Answering two of three is still not enough.
+        # Entering the screen answers the ask.
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
-        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
         at.run(timeout=60)
-        assert next(b for b in at.button if b.key == "wizard_finalize").disabled
+        assert not [c for c in at.caption if "an estimate or a default" in c.value]
 
-        answer_setup_step(at)
+        finalize = next(b for b in at.button if b.key == "wizard_finalize")
+        finalize.click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not next(b for b in at.button if b.key == "wizard_finalize").disabled
+        entry = at.session_state["_datasets"][at.session_state["data_source_choice"]]
+        assert entry["setup"]["provenance"] == {
+            "screen": "measured",
+            "geometry": "skipped",
+            "text": "measured",
+        }
 
     def test_the_answers_ride_into_the_stored_dataset(self, monkeypatch):
         """The provenance travels with the dataset, not just the wizard — that is

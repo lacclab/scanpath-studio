@@ -92,7 +92,6 @@ from .data import (
     validate_word_schema,
 )
 from .experimental_setup import (
-    SETUP_GROUP_LABELS,
     SETUP_GROUPS,
     Provenance,
     SetupSnapshot,
@@ -200,6 +199,7 @@ def _reset_wizard_widgets() -> None:
         "wizard_setup_font_family",
         "_wizard_restored_setup",
         "_wizard_setup_restored_applied",
+        _SETUP_AUTO_KEY,
         "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
@@ -2400,17 +2400,16 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
 # nothing telling the user those were guesses. Estimating from the data was not
 # even possible there, because there was no data yet.
 #
-# Now it sits after the upload and asks, per group, *how do you know?* — with
-# `index=None` so nothing is preselected. The user either knows the values,
-# derives them from their own data, knowingly takes a named default, or (for
-# visual-angle units only) skips. The answer is recorded as a `Provenance` that
-# travels with the dataset, so a reader downstream can tell a measured screen
-# from an assumed one.
-#
-# The gate is deliberately hard: **Add dataset** stays disabled until all three
-# are answered. Nobody can be stranded by it — *Estimate from my data* always
-# exists for the screen group and always succeeds — but nobody gets a silent
-# default either.
+# DATA-22 then asked, per group, *how do you know?*, with nothing preselected
+# and Add dataset held until all three were answered. 2026-10-09 kept what
+# that bought — every answer recorded as a `Provenance` that travels with the
+# dataset, so a reader downstream can tell a measured screen from an assumed
+# one — and dropped the hold: each line starts on the answer that invents
+# nothing (the screen estimated from the data, visual angle off, the text
+# fitted to its boxes), says how it is known beside the value, and asks for
+# the real value while it is an estimate or a default. None of those starting
+# answers is a silent default: an estimate is labelled one, and *off* hides
+# what it cannot derive.
 # -----------------------------------------------------------------------------
 
 _SETUP_MODE_KEYS = {g: f"wizard_setup_{g}_mode" for g in SETUP_GROUPS}
@@ -2418,6 +2417,7 @@ _SETUP_MODE_KEYS = {g: f"wizard_setup_{g}_mode" for g in SETUP_GROUPS}
 #: — what *Start from*'s Undo has to put back.
 _SETUP_RESTORE_WRITES = (
     *_SETUP_MODE_KEYS.values(),
+    "_wizard_setup_auto",
     "wizard_setup_font_mode",
     "wizard_setup_font_name",
     "wizard_setup_font_other",
@@ -2429,7 +2429,7 @@ _SCREEN_DEFAULT = "Use a common default (2560×1440)"
 
 _GEOM_KNOW = "I know them"
 #: The setup headings as drawn (UX-58's short forms) — what blockers name.
-_SETUP_HEADINGS = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+_SETUP_HEADINGS = {"screen": "Screen", "geometry": "Visual angle", "text": "Text size"}
 _GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)"
 _GEOM_SKIP = "Skip — I don't need visual-angle units"
 
@@ -2507,40 +2507,79 @@ def _remember_setup(values: dict) -> None:
     st.session_state["_wizard_setup_recall"] = recall
 
 
-def _setup_mode(
-    host,
-    group: str,
-    options: list,
-    help_text: str,
-    label=None,
-    *,
-    key_prefix: str = "wizard",
-    persist: dict | None = None,
-):
-    """One setup group's radio, namespaced for add or edit.
+#: How each answer reads as a button. The keys are the answers' stored values
+#: (`_SETUP_PROVENANCE` reads them, and restored setups name them).
+_SETUP_CHOICE_LABELS = {
+    _SCREEN_KNOW: "I know it",
+    _SCREEN_ESTIMATE: "Estimate from my data",
+    _SCREEN_DEFAULT: "Common 2560×1440",
+    _GEOM_KNOW: "I know the setup",
+    _GEOM_DEFAULT: "Typical lab values",
+    _GEOM_SKIP: "Off",
+    _TEXT_BOXES: "Fit to the word boxes",
+    _TEXT_FONT: "I know the size",
+    _TEXT_DEFAULT: "Default 16 px",
+    _FONT_KNOW: "I know it",
+    _FONT_UNKNOWN: "Not sure",
+}
+#: Each line's columns: its name · what will be saved and how it is known · the
+#: answers to pick from.
+_SETUP_ROW_W = (0.13, 0.47, 0.40)
+#: The answers the add screen chose itself, ``{key: value}`` — re-chosen when
+#: the data changes under them (a Words table arriving makes *Fit to the word
+#: boxes* the answer), and dropped the moment anything else sets the key: the
+#: user, or a setup *Start from* applied.
+_SETUP_AUTO_KEY = "_wizard_setup_auto"
+#: How each provenance is said beside a value, and in what colour: green for
+#: what the user or the data said, orange for what the app had to assume.
+_SETUP_BADGES = {
+    "entered": ("You entered it", "green", "confirm"),
+    "data": ("From your data", "green", "confirm"),
+    "estimated": ("Estimated — a lower bound", "orange", "warning"),
+    "assumed": ("Assumed", "orange", "warning"),
+    "off": ("Off", "gray", "info"),
+    "generic": ("Not set", "gray", "info"),
+}
 
-    Returns the chosen label or ``None``. The mode keys are wizard-local UI state
-    and deliberately **not** wire format (same reasoning as ``share_identity_mode``
-    in ``url_state.py``): what travels is the resolved value plus its provenance,
-    not which radio button produced it.
 
-    ``label`` overrides the heading for display only (UX-58). Three groups
-    side by side leave no room for *Physical size & viewing distance*, and a
-    heading that wraps to two lines drops its column out of line with the other
-    two — which is the whole point of the row. `SETUP_GROUP_LABELS` stays the
-    name everything else reports by.
-    """
-    # UX-90: every setup group is mandatory — *Add dataset* stays disabled until
-    # each says how it is known — so each carries the same trailing `*` the
-    # required mapping fields do. One convention for "you must answer this",
-    # rather than a starred column mapping above an unstarred set of questions.
-    return host.radio(
-        f"{label or SETUP_GROUP_LABELS[group]} *",
+def _setup_badge(host, kind: str, help_text: str | None = None) -> None:
+    text, color, icon = _SETUP_BADGES[kind]
+    host.badge(text, color=color, icon=ICONS[icon], help=help_text)
+
+
+def _setup_row(host, label: str, help_text: str):
+    """One line of the Recording setup: its name, then the value and answer
+    columns, returned for the caller to fill."""
+    label_col, value_col, how_col = host.columns(
+        _SETUP_ROW_W, gap="small", vertical_alignment="center"
+    )
+    inline_field_label(label_col, label, help_text)
+    return value_col, how_col
+
+
+def _seed_setup_answer(key: str, value: str) -> None:
+    """Start an unanswered line on ``value``, and keep it on the default while
+    the app is still the one who chose it."""
+    auto = dict(st.session_state.get(_SETUP_AUTO_KEY) or {})
+    current = st.session_state.get(key)
+    if key not in st.session_state or (key in auto and current == auto[key]):
+        st.session_state[key] = value
+        auto[key] = value
+    else:
+        auto.pop(key, None)  # someone else's answer now
+    st.session_state[_SETUP_AUTO_KEY] = auto
+
+
+def _setup_choice(host, label: str, options: list, key: str, persist: dict):
+    """A line's answers, as one row of buttons."""
+    return host.segmented_control(
+        label,
         options,
-        index=None,
-        key=f"{key_prefix}_setup_{group}_mode",
-        help=help_text,
-        **(persist or {}),
+        key=key,
+        required=True,
+        format_func=lambda option: _SETUP_CHOICE_LABELS.get(option, option),
+        label_visibility="collapsed",
+        **persist,
     )
 
 
@@ -2554,16 +2593,27 @@ def _wizard_setup_step(
     initial: SetupSnapshot | None = None,
     publish: bool = True,
     estimate=None,
+    has_data: bool = True,
 ) -> SetupSnapshot:
-    """Render the Recording-setup groups and resolve them to a snapshot.
+    """Render the Recording setup and resolve it to a snapshot.
 
-    Three say how each is known (screen, physical size, text size); the fourth,
-    *Font*, names the typeface, and "I don't know" is an answer.
+    2026-10-09 — four lines, each already answered with the answer that
+    invents nothing: the screen **estimated** from the data, degrees of visual
+    angle **off**, the text **fitted to the word boxes**, the font **not set**.
+    Beside each value, how it is known (*You entered it*, *From your data*,
+    *Estimated*, *Assumed*, *Off*), which is the provenance saved with the
+    dataset. A line still on an estimate or a default says so above the four,
+    asking for the real value — but nothing waits on it: Add dataset is never
+    held up by this part. It used to be four questions with nothing chosen,
+    each a column of long radio options, which a first-time user had to
+    answer before the dataset could be added.
 
     ``estimate`` (DATA-46) is a zero-argument callable giving the *Estimate from
     my data* size; when it is ``None``, ``words_raw`` / ``fix_raw`` must already
     carry canonical coordinates (the editor's stored frames) and are measured
-    directly. Either way it is called only when that answer is chosen.
+    directly. ``has_data`` is False on the add screen before a Fixations or
+    Words table is in: there is nothing yet to estimate from, so the line says
+    so rather than showing the fallback size as an estimate.
 
     Writes the resolved values into the existing ``global_*`` wire-format keys
     (unchanged — the *values* were always wire format; only the provenance is
@@ -2576,17 +2626,14 @@ def _wizard_setup_step(
     # setup draft (Streamlit forgets an unrendered widget's key) while the
     # mapping fields beside it — `persist_state` since DATA-26 — kept theirs.
     persist = {"persist_state": "session"} if initial is not None else {}
-    # UX-58: three columns, one per group, so their headings sit at the same
-    # line height. Each column starts with its own radio, which is what keeps
-    # them level even though what follows differs per answer (two number inputs,
-    # an info box, or a caption) and so the columns end at different heights.
-    # The description that used to print here is now the section's hover text.
-    screen_host, geom_host, text_host, font_host = host.columns(4, gap="medium")
+    screen_key = f"{key_prefix}_setup_screen_mode"
+    geom_key = f"{key_prefix}_setup_geometry_mode"
+    text_key = f"{key_prefix}_setup_text_mode"
+    font_key = f"{key_prefix}_setup_font_mode"
 
-    # The Data Management editor reuses this exact control layout. Seed its
-    # three mode choices from the saved snapshot once; the add flow keeps its
-    # deliberate unanswered state because ``initial`` is None.
     if initial is not None:
+        # The Data Management editor reuses this exact layout, seeded from the
+        # saved snapshot once.
         screen_modes = {
             Provenance.MEASURED: _SCREEN_KNOW,
             Provenance.ESTIMATED: _SCREEN_ESTIMATE,
@@ -2605,25 +2652,36 @@ def _wizard_setup_step(
             else _TEXT_FONT
         )
         st.session_state.setdefault(
-            f"{key_prefix}_setup_screen_mode",
-            screen_modes.get(initial.screen_provenance, _SCREEN_KNOW),
+            screen_key, screen_modes.get(initial.screen_provenance, _SCREEN_KNOW)
         )
         st.session_state.setdefault(
-            f"{key_prefix}_setup_geometry_mode",
-            geometry_modes.get(initial.geometry_provenance, _GEOM_DEFAULT),
+            geom_key, geometry_modes.get(initial.geometry_provenance, _GEOM_DEFAULT)
         )
-        st.session_state.setdefault(f"{key_prefix}_setup_text_mode", text_mode)
+        st.session_state.setdefault(text_key, text_mode)
+    else:
+        # The answers that invent nothing. A restored setup has set its own
+        # already, and the user's own picks are left alone.
+        _seed_setup_answer(screen_key, _SCREEN_ESTIMATE)
+        _seed_setup_answer(geom_key, _GEOM_SKIP)
+        _seed_setup_answer(text_key, _TEXT_BOXES if has_boxes else _TEXT_DEFAULT)
+
+    # A line on an estimate or a default asks for the real value, above the
+    # four — reserved first, filled once the answers are known.
+    nudge = host.container()
 
     # --- Screen -------------------------------------------------------------
-    screen_mode = _setup_mode(
-        screen_host,
-        "screen",
-        [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
+    value_col, how_col = _setup_row(
+        host,
+        "Screen",
         "The presentation monitor's resolution in pixels. Everything is drawn in "
         "these coordinates.",
-        label="Screen",
-        key_prefix=key_prefix,
-        persist=persist,
+    )
+    screen_mode = _setup_choice(
+        how_col,
+        "Screen",
+        [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
+        screen_key,
+        persist,
     )
     canvas_w = (
         initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
@@ -2634,23 +2692,29 @@ def _wizard_setup_step(
         else _recalled("canvas_height", 1440)
     )
     if screen_mode == _SCREEN_KNOW:
-        w_col, h_col = screen_host.columns(2, gap="small")
+        w_col, x_col, h_col, badge_col = value_col.columns(
+            [0.3, 0.06, 0.3, 0.34], gap="xsmall", vertical_alignment="center"
+        )
         canvas_w = w_col.number_input(
             "Width (px)",
             100,
             10000,
             int(canvas_w),
             key=f"{key_prefix}_setup_screen_w",
+            label_visibility="collapsed",
             **persist,
         )
+        x_col.markdown("×")
         canvas_h = h_col.number_input(
             "Height (px)",
             100,
             10000,
             int(canvas_h),
             key=f"{key_prefix}_setup_screen_h",
+            label_visibility="collapsed",
             **persist,
         )
+        _setup_badge(badge_col, "entered")
     elif screen_mode == _SCREEN_ESTIMATE:
         est_w, est_h = (
             estimate()
@@ -2658,10 +2722,9 @@ def _wizard_setup_step(
             else compute_canvas_size(words_raw, fix_raw)
         )
         # DATA-46: on ✏️ Edit dataset, a screen that was *saved* as an estimate
-        # keeps the size it was saved with. Re-estimating on every open meant a
-        # ✅ Save changes with nothing touched rewrote the canvas of every figure
-        # from this dataset — the editor must not change what the user did not.
-        # A fresh estimate is still one click away, and says what it would be.
+        # keeps the size it was saved with — a ✅ Save changes with nothing
+        # touched must not rewrite the canvas of every figure. A fresh estimate
+        # is one click away, and says what it would be.
         reestimate_key = f"{key_prefix}_setup_reestimate"
         keep_saved = (
             initial is not None
@@ -2670,40 +2733,56 @@ def _wizard_setup_step(
         )
         if keep_saved:
             canvas_w, canvas_h = int(initial.canvas_width), int(initial.canvas_height)
-            screen_host.info(
-                f"Estimated **{canvas_w} × {canvas_h} px** when this dataset was "
-                "added — a **lower bound** from the extent of its word boxes and "
-                "fixations."
-            )
-            if (est_w, est_h) != (canvas_w, canvas_h):
-                screen_host.button(
-                    f"↻ Use the current estimate ({est_w} × {est_h} px)",
-                    key=f"{key_prefix}_setup_reestimate_btn",
-                    on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
-                    help="Re-estimate the screen from this dataset's data as "
-                    "mapped above. Nothing changes until you save.",
-                )
         else:
             canvas_w, canvas_h = est_w, est_h
-            screen_host.info(
-                f"Estimated **{est_w} × {est_h} px** from the extent of your word "
-                "boxes and fixations. This is a **lower bound** — text rarely fills "
-                "the whole screen, so the real monitor was probably larger."
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        if not has_data:
+            line.caption(
+                "Estimated from your data once a Fixations or Words table is in.",
+                width="content",
             )
-    elif screen_mode == _SCREEN_DEFAULT:
+        else:
+            line.markdown(f"**{canvas_w} × {canvas_h} px**", width="content")
+        _setup_badge(
+            line,
+            "estimated",
+            "From the extent of the word boxes and fixations. Text rarely fills "
+            "the whole screen, so the real monitor was probably larger — choose "
+            "*I know it* to enter it.",
+        )
+        if keep_saved and (est_w, est_h) != (canvas_w, canvas_h):
+            line.button(
+                f"↻ {est_w} × {est_h} px now",
+                key=f"{key_prefix}_setup_reestimate_btn",
+                type="tertiary",
+                on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
+                help="Re-estimate the screen from this dataset's data as mapped "
+                "above. Nothing changes until you save.",
+            )
+    else:
         canvas_w, canvas_h = 2560, 1440
-        screen_host.caption("Recorded as **assumed** — a common 1440p monitor.")
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("**2560 × 1440 px**", width="content")
+        _setup_badge(line, "assumed", "A common 1440p monitor, not this study's.")
 
-    # --- Physical size & viewing distance -----------------------------------
-    geom_mode = _setup_mode(
-        geom_host,
-        "geometry",
+    # --- Visual angle (physical size & viewing distance) --------------------
+    value_col, how_col = _setup_row(
+        host,
+        "Visual angle",
+        "Degrees of visual angle need the monitor's physical width and the "
+        "viewing distance. Off is a real answer: the app then hides the "
+        "numbers it cannot honestly derive.",
+    )
+    geom_mode = _setup_choice(
+        how_col,
+        "Visual angle",
         [_GEOM_KNOW, _GEOM_DEFAULT, _GEOM_SKIP],
-        "Needed only to express distances in degrees of visual angle. Skipping is "
-        "a real answer — the app then hides the numbers it cannot honestly derive.",
-        label="Physical size",
-        key_prefix=key_prefix,
-        persist=persist,
+        geom_key,
+        persist,
     )
     mon_mm = float(
         initial.monitor_width_mm
@@ -2716,7 +2795,10 @@ def _wizard_setup_step(
         else _recalled("viewing_distance_mm", 800.0)
     )
     if geom_mode == _GEOM_KNOW:
-        mon_mm = geom_host.number_input(
+        mon_col, dist_col, badge_col = value_col.columns(
+            [0.36, 0.36, 0.28], gap="xsmall", vertical_alignment="bottom"
+        )
+        mon_mm = mon_col.number_input(
             "Monitor width (mm)",
             50.0,
             2000.0,
@@ -2724,7 +2806,7 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_monitor_mm",
             **persist,
         )
-        dist_mm = geom_host.number_input(
+        dist_mm = dist_col.number_input(
             "Viewing distance (mm)",
             50.0,
             5000.0,
@@ -2732,31 +2814,41 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_distance_mm",
             **persist,
         )
+        _setup_badge(badge_col, "entered")
     elif geom_mode == _GEOM_DEFAULT:
         mon_mm, dist_mm = 597.0, 800.0
-        geom_host.caption("Recorded as **assumed** — typical lab values.")
-    elif geom_mode == _GEOM_SKIP:
-        geom_host.caption(
-            "Visual-angle units stay **hidden** for this dataset rather than being "
-            "computed from a default."
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("**597 mm wide, viewed from 800 mm**", width="content")
+        _setup_badge(line, "assumed", "Typical lab values, not this study's.")
+    else:
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("No distances in degrees", width="content")
+        _setup_badge(
+            line,
+            "off",
+            "Visual-angle numbers stay hidden for this dataset rather than being "
+            "computed from a default.",
         )
 
-    # --- Reading text size ---------------------------------------------------
+    # --- Text size ------------------------------------------------------------
+    value_col, how_col = _setup_row(
+        host,
+        "Text size",
+        "How big the reading text was drawn. Word labels are rendered at this "
+        "size so the figure matches what the participant saw.",
+    )
     text_options = [_TEXT_FONT, _TEXT_DEFAULT]
     if has_boxes:
         # Only offered when there are boxes to scale to — otherwise it is an
         # option that silently does nothing.
         text_options.insert(0, _TEXT_BOXES)
-    text_mode = _setup_mode(
-        text_host,
-        "text",
-        text_options,
-        "How big the reading text was drawn. Word labels are rendered at this size "
-        "so the figure matches what the participant saw.",
-        label="Text size",
-        key_prefix=key_prefix,
-        persist=persist,
-    )
+    if st.session_state.get(text_key) not in text_options:
+        st.session_state[text_key] = _TEXT_DEFAULT
+    text_mode = _setup_choice(how_col, "Text size", text_options, text_key, persist)
     scale_to_boxes = True
     base_font = int(
         initial.base_font_size
@@ -2770,56 +2862,72 @@ def _wizard_setup_step(
     )
     if text_mode == _TEXT_BOXES:
         scale_to_boxes = True
-        text_host.caption(
-            "Label size is derived from each word box — the usual choice."
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
         )
+        line.markdown("**Each word sized to its box**", width="content")
+        _setup_badge(line, "data")
     elif text_mode == _TEXT_FONT:
         scale_to_boxes = False
         initial_font_pt = float(_recalled("stimulus_font_pt", 12.0))
         if initial is not None and mon_mm > 0 and geom_mode != _GEOM_SKIP:
             initial_dpi = float(canvas_w) / (float(mon_mm) / 25.4)
             initial_font_pt = float(initial.base_font_size) * 72.0 / initial_dpi
-        font_pt = text_host.number_input(
+        pt_col, note_col = value_col.columns(
+            [0.3, 0.7], gap="xsmall", vertical_alignment="center"
+        )
+        font_pt = pt_col.number_input(
             "Stimulus font (pt)",
             4.0,
             96.0,
             initial_font_pt,
             key=f"{key_prefix}_setup_font_pt",
+            label_visibility="collapsed",
             **persist,
         )
-        # pt→px needs a DPI, which needs the physical width. Under a skipped
-        # geometry group there is no honest DPI, so the conversion is withheld
-        # and the point size falls back to being read as pixels.
+        note = note_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        # pt→px needs a DPI, which needs the physical width. With visual angle
+        # off there is no honest DPI, so the point size is read as pixels.
         if geom_mode == _GEOM_SKIP:
-            text_host.warning(
-                "Converting points to pixels needs the monitor width, skipped "
-                "under **Physical size**, so the size is read as **pixels**."
-            )
             base_font = int(min(max(round(font_pt), 6), 72))
+            note.markdown(f"pt → read as **{base_font} px**", width="content")
+            _setup_badge(
+                note,
+                "entered",
+                "Points become pixels through the monitor's width, which *Visual "
+                "angle → I know the setup* gives. Without it the size is read as "
+                "pixels.",
+            )
         else:
             dpi = float(canvas_w) / (float(mon_mm) / 25.4) if mon_mm > 0 else 96.0
             base_font = int(min(max(round(font_pt_to_px(font_pt, dpi)), 6), 72))
-            text_host.caption(f"→ **{base_font} px** at {dpi:.0f} DPI.")
-    elif text_mode == _TEXT_DEFAULT:
+            note.markdown(f"pt → **{base_font} px** at {dpi:.0f} DPI", width="content")
+            _setup_badge(note, "entered")
+    else:
         scale_to_boxes = False
         base_font = 16
-        text_host.caption("Recorded as **assumed** — a 16 px reading font.")
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("**16 px**", width="content")
+        _setup_badge(line, "assumed", "A common reading size, not this study's.")
 
     # --- Font ------------------------------------------------------------------
     # Which typeface the words were shown in. The labels are drawn in it, so a
     # known font makes them match the stimulus letter for letter; the generic
     # monospace the browser picks otherwise can be several percent narrower.
-    known = stimulus_font_name(font_family)
-    st.session_state.setdefault(
-        f"{key_prefix}_setup_font_mode", _FONT_KNOW if known else _FONT_UNKNOWN
-    )
-    font_mode = font_host.radio(
+    value_col, how_col = _setup_row(
+        host,
         "Font",
-        [_FONT_KNOW, _FONT_UNKNOWN],
-        key=f"{key_prefix}_setup_font_mode",
-        help="The typeface the text was shown in. Word labels are drawn in it, "
-        "so they match the stimulus. Not sure? Leave it on I don't know.",
-        **persist,
+        "The typeface the text was shown in. Word labels are drawn in it, so "
+        "they match the stimulus. Not sure leaves a generic monospace font.",
+    )
+    known = stimulus_font_name(font_family)
+    st.session_state.setdefault(font_key, _FONT_KNOW if known else _FONT_UNKNOWN)
+    font_mode = _setup_choice(
+        how_col, "Font", [_FONT_KNOW, _FONT_UNKNOWN], font_key, persist
     )
     if font_mode == _FONT_KNOW:
         choices = [*STIMULUS_FONTS, _FONT_OTHER]
@@ -2827,7 +2935,10 @@ def _wizard_setup_step(
             f"{key_prefix}_setup_font_name",
             known if known in STIMULUS_FONTS else _FONT_OTHER if known else choices[0],
         )
-        picked = font_host.selectbox(
+        name_col, other_col, badge_col = value_col.columns(
+            [0.4, 0.34, 0.26], gap="xsmall", vertical_alignment="center"
+        )
+        picked = name_col.selectbox(
             "Font name",
             choices,
             key=f"{key_prefix}_setup_font_name",
@@ -2839,7 +2950,7 @@ def _wizard_setup_step(
                 f"{key_prefix}_setup_font_other",
                 known if known and known not in STIMULUS_FONTS else "",
             )
-            typed = font_host.text_input(
+            typed = other_col.text_input(
                 "Font name (other)",
                 key=f"{key_prefix}_setup_font_other",
                 placeholder="e.g. Source Code Pro",
@@ -2849,13 +2960,19 @@ def _wizard_setup_step(
             font_family = stimulus_font_css(typed) if typed.strip() else FONT_FAMILY
         else:
             font_family = stimulus_font_css(picked)
-        if font_family != FONT_FAMILY:
-            font_host.caption(
-                f"Drawn in **{stimulus_font_name(font_family)}** where it is "
-                "installed on this computer."
-            )
+        _setup_badge(
+            badge_col,
+            "entered",
+            "Drawn in this font wherever it is installed on the computer showing "
+            "the figure.",
+        )
     else:
         font_family = FONT_FAMILY
+        line = value_col.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        )
+        line.markdown("Generic monospace", width="content")
+        _setup_badge(line, "generic")
 
     snapshot = SetupSnapshot(
         canvas_width=int(canvas_w),
@@ -2875,83 +2992,58 @@ def _wizard_setup_step(
         text_provenance=_SETUP_PROVENANCE.get(text_mode),
     )
 
-    # Publish the snapshot for the save/restore + export writers. A partial one
-    # resolves to None, so `current_setup_section` writes nothing rather than an
-    # all-defaults section that would read as a real answer.
+    # The ask for real values: only while a line is on an estimate or a
+    # default. Visual angle *off* is an answer, not a guess, so it is not one.
+    guessed = [
+        _SETUP_HEADINGS[group]
+        for group, provenance in snapshot.provenance.items()
+        if provenance in (Provenance.ESTIMATED, Provenance.ASSUMED)
+    ]
+    if guessed:
+        nudge.caption(
+            f"{ICONS['warning']} **{' and '.join(guessed)}** "
+            + ("is" if len(guessed) == 1 else "are")
+            + " an estimate or a default. If you know the real "
+            + ("value" if len(guessed) == 1 else "values")
+            + ", choose *I know it* — every figure is drawn to them. You can "
+            "also add the dataset now and change them later."
+        )
+
+    # Publish the snapshot for the save/restore + export writers.
     if publish:
         st.session_state["_wizard_setup_snapshot"] = (
             snapshot.to_dict() if snapshot.is_answered() else None
         )
 
-    # Publish each group's values as soon as *that* group is answered, into the
-    # wire-format `global_*` keys the rest of the app reads. The hard gate is on
-    # **Add dataset**, not on a setting taking effect — a user who has just told
-    # us the resolution should see the canvas change now, not after answering two
-    # unrelated questions. Only the values were ever wire format; the provenance
-    # beside them is what is new.
+    # Publish each group's values as soon as it is answered, into the
+    # wire-format `global_*` keys the rest of the app reads — a user who has
+    # just told us the resolution should see the canvas change now.
+    # Only what the user entered is remembered for the next dataset: an
+    # estimate or a default pre-filled into *I know it* would read as known.
     recall: dict = {}
     if publish and snapshot.screen_provenance is not None:
         st.session_state["global_canvas_width"] = snapshot.canvas_width
         st.session_state["global_canvas_height"] = snapshot.canvas_height
-        recall["canvas_width"] = snapshot.canvas_width
-        recall["canvas_height"] = snapshot.canvas_height
+        if snapshot.screen_provenance is Provenance.MEASURED:
+            recall["canvas_width"] = snapshot.canvas_width
+            recall["canvas_height"] = snapshot.canvas_height
     if publish and snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
         st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
         st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
-        recall["monitor_width_mm"] = snapshot.monitor_width_mm
-        recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
+        if snapshot.geometry_provenance is Provenance.MEASURED:
+            recall["monitor_width_mm"] = snapshot.monitor_width_mm
+            recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
     if publish and snapshot.text_provenance is not None:
         st.session_state["global_base_font_size"] = snapshot.base_font_size
         st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
         recall["base_font_size"] = snapshot.base_font_size
     if publish:
-        # Its own question, always answered (I don't know is an answer).
+        # Its own question, always answered (Not sure is an answer).
         st.session_state["global_font_family"] = snapshot.font_family
         recall["font_family"] = snapshot.font_family
     if publish and recall:
         _remember_setup(recall)
-
-    # UX-90 — an error, not a warning, and only once the user has actually tried
-    # to add. Before that an unanswered question is one they have not reached
-    # yet, and saying so in yellow on arrival made the page open already
-    # complaining. Same rule the mapping fields follow
-    # (`controls.ADD_ATTEMPTED_KEY`), so one click now turns the whole page red
-    # at once instead of it nagging in two different tenses.
-    unanswered = [g for g, p in snapshot.provenance.items() if p is None]
-    if publish and unanswered and st.session_state.get(ADD_ATTEMPTED_KEY):
-        host.error(
-            "Still to answer: "
-            + ", ".join(f"**{_SETUP_HEADINGS[g]}**" for g in unanswered)
-            + ". Pick an answer for each, then press Add dataset again."
-        )
-        _mark_missing_setup_groups(unanswered)
     return snapshot
-
-
-def _mark_missing_setup_groups(unanswered: list) -> None:
-    """Ring the unanswered required setup radios in red (UX-90).
-
-    One ``<style>`` block for all of them, targeting each radio's `.st-key-…`
-    container — the same technique as `controls._emit_field_tints`, and for the
-    same reason: a wrapper element per group would be more DOM on a page whose
-    whole problem is length.
-
-    A ring and a red label rather than a fill: the group is a list of radio
-    options, and tinting three option rows reads as three separate problems
-    instead of one unanswered question.
-    """
-    keys = [_SETUP_MODE_KEYS[group] for group in unanswered]
-    box = ", ".join(f".st-key-{key} > div" for key in keys)
-    label = ", ".join(f".st-key-{key} label p" for key in keys)
-    st.markdown(
-        "<style>"
-        f"{box} {{ border: 1px solid rgba(239, 68, 68, 0.85);"
-        " border-radius: 0.4rem; padding: 0.35rem 0.5rem;"
-        " background: rgba(239, 68, 68, 0.06); }"
-        f"{label} {{ color: rgb(239, 68, 68); }}"
-        "</style>",
-        unsafe_allow_html=True,
-    )
 
 
 def _restored_setup_snapshot() -> SetupSnapshot | None:
@@ -3010,12 +3102,18 @@ def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
             Provenance.ASSUMED: _TEXT_DEFAULT,
         },
     }
+    if snapshot.scale_text_to_boxes:
+        by_prov["text"][Provenance.MEASURED] = _TEXT_BOXES
+    auto = dict(st.session_state.get(_SETUP_AUTO_KEY) or {})
     for group, provenance in snapshot.provenance.items():
         if group not in answerable:
             continue
         label = by_prov.get(group, {}).get(provenance)
         if label is not None:
             st.session_state[_SETUP_MODE_KEYS[group]] = label
+            # The setup's answer, not the screen's own default: kept.
+            auto.pop(_SETUP_MODE_KEYS[group], None)
+    st.session_state[_SETUP_AUTO_KEY] = auto
     # The font question, from the file's font: a named one is "I know the font".
     known = stimulus_font_name(snapshot.font_family)
     st.session_state["wizard_setup_font_mode"] = _FONT_KNOW if known else _FONT_UNKNOWN
@@ -4465,8 +4563,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
     restored_setup = _restored_setup_snapshot()
     if restored_setup is not None:
         _apply_restored_setup(restored_setup)
+        meta = st.session_state.get("_wizard_restored_meta") or {}
         s_setup.caption(
-            "✓ Pre-answered from the restored setup file — review it below."
+            f"{ICONS['success']} Filled in from "
+            + (f"**{meta['data_source']}**" if meta.get("data_source") else "the setup")
+            + " — check it below."
         )
 
     # DATA-46: the estimate needs canonical coordinates, and nothing is
@@ -4490,7 +4591,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     setup_snapshot = _wizard_setup_step(
-        s_setup, raw_words, raw_fix, has_boxes=has_words, estimate=_estimate
+        s_setup,
+        raw_words,
+        raw_fix,
+        has_boxes=has_words,
+        estimate=_estimate,
+        has_data=has_words or has_fix,
     )
 
     # The foot of the wizard: what is still missing, then the button. UX-53 put

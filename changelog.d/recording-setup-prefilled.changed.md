@@ -1,0 +1,1 @@
+The add and edit screens' Recording setup starts filled in with the answers that invent nothing — the screen estimated from your data, visual angle off, text sized to the word boxes — labels how each value is known, asks for the real values while any are estimates, and no longer holds up Add dataset.

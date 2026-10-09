@@ -364,12 +364,14 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     qualified_participant,
     qualify_for_compare,
+    reading_key,
     row_tail,
     safe_summary,
     select_trial,
     self_compare_participant,
     separate_self_compare,
     sort_trial_options,
+    split_reading_key,
     step_within,
     trial_id_help,
     trial_id_layout,
@@ -2412,14 +2414,18 @@ def _order_compare_options(
     if choice == _CMP_SORT_DEFAULT or len(options) < 2:
         return options
     key_series = None if choice == TRIAL_SORT_DEFAULT else sort_keys.get(choice)
-    trial_ids = [str(option[1]) for option in options]
-    ordered_ids = sort_trial_options(
-        trial_ids,
+    # Per reading, as the sort keys are (#412): two readers' trials of one id
+    # each take their own value.
+    keys = [reading_key(option[0], option[1]) for option in options]
+    ordered = sort_trial_options(
+        keys,
         key_series,
         descending=descending if key_series is not None else False,
     )
-    rank = {trial_id: idx for idx, trial_id in enumerate(ordered_ids)}
-    return sorted(options, key=lambda option: rank.get(str(option[1]), len(rank)))
+    rank = {key: idx for idx, key in enumerate(ordered)}
+    return [
+        option for _, option in sorted(zip(keys, options), key=lambda p: rank[p[0]])
+    ]
 
 
 #: CMP-13: scanpath B remembered as ``(participant_id, trial_id)``. The picker's
@@ -10190,10 +10196,12 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
     """The text of the trial the Scanpath view shows, while it is new to Per
     text — ``None`` once Per text has opened on it (so a text picked here is
     kept) or when the pool does not hold it."""
-    trial = st.session_state.get(SINGLE_TRIAL_ID)
-    if trial is None or st.session_state.get(_PTEXT_SEEDED_FROM) == trial:
+    selected = st.session_state.get(SINGLE_TRIAL_ID)
+    if selected is None or st.session_state.get(_PTEXT_SEEDED_FROM) == selected:
         return None
-    st.session_state[_PTEXT_SEEDED_FROM] = trial
+    st.session_state[_PTEXT_SEEDED_FROM] = selected
+    # A reading key since #412; a trial id alone is from before it.
+    participant, trial = split_reading_key(selected)
     for col in ("unique_trial_id", "trial_id"):
         if col in words.columns:
             ids = words[col]
@@ -10202,10 +10210,17 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
             same = ids == trial
             if not same.any():
                 same = ids.astype(str) == str(trial)
+            same = same.to_numpy().copy()
+            if participant is not None and "participant_id" in words.columns:
+                # That reader's rows of the id only (#412) — read off the rows
+                # the id matched, not the whole column.
+                rows = np.flatnonzero(same)
+                readers = words["participant_id"].iloc[rows].astype(str)
+                same[rows] = readers.to_numpy() == participant
             texts = words.loc[same, text_col].dropna().unique()
             if len(texts):
-                # An id several participants share can name different texts:
-                # then the Scanpath trial is ambiguous here, so don't guess.
+                # A trial id alone that several participants share can name
+                # different texts: then it is ambiguous here, so don't guess.
                 return texts[0] if len(texts) == 1 else None
     return None
 

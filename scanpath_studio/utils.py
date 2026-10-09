@@ -292,6 +292,86 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # Trial selection UI
 # -----------------------------------------------------------------------------
 
+# #412 — the trial picker names a *reading*, ``(participant_id, trial_id)``. Many
+# datasets give every reader the same Trial IDs, and a picker keyed on the id
+# alone offered only the first reader's reading of each — and opened that one
+# under a link that named the second. So its options, its state
+# (``{prefix}_trial_id``), its sort keys, its per-dataset memory and what a link
+# seeds are all reading keys; only the labels are written for people.
+
+#: Between the participant and the trial id in a reading key. A control
+#: character, so no id a dataset writes holds it, and a value without it is a
+#: trial id alone — what ``{prefix}_trial_id`` held before #412 (a recovery cache
+#: saved then), resolved only when it names one reading.
+READING_KEY_SEP = "\x1f"
+
+
+def reading_key(participant_id, trial_id) -> str:
+    """The trial picker's value for one reading."""
+    return f"{participant_id}{READING_KEY_SEP}{trial_id}"
+
+
+def split_reading_key(value) -> tuple[str | None, str | None]:
+    """``(participant_id, trial_id)`` from a picker value: ``(None, trial_id)``
+    for a trial id alone, ``(None, None)`` for none."""
+    if value is None:
+        return None, None
+    participant, sep, trial = str(value).partition(READING_KEY_SEP)
+    return (participant, trial) if sep else (None, participant)
+
+
+def reading_order(value) -> tuple[str, str]:
+    """Where a picker value sorts in *Trial ID* order: by its trial id, then its
+    participant — a trial id alone sorts exactly as it always has."""
+    # Inlined rather than through `split_reading_key`: a sort calls it once per
+    # trial in the pool, every rerun.
+    participant, sep, trial = str(value).partition(READING_KEY_SEP)
+    return (trial, participant) if sep else (participant, "")
+
+
+def readings_by_trial(keys: Iterable[str]) -> dict[str, list[str]]:
+    """The reading keys of each trial id among ``keys``."""
+    by_trial: dict[str, list[str]] = {}
+    for key in keys:
+        trial = str(key).partition(READING_KEY_SEP)
+        by_trial.setdefault(trial[2] if trial[1] else trial[0], []).append(key)
+    return by_trial
+
+
+def resolve_reading(
+    value, keys, by_trial: dict[str, list[str]]
+) -> tuple[str | None, list[str]]:
+    """The reading key among ``keys`` that ``value`` names, and the readings a
+    trial id alone could mean when it names more than one.
+
+    A reading key names itself, or nothing once its reading has left the pool.
+    A trial id alone names the one reading of that id — and none when several
+    readers have it: ``(None, [their keys])``, so the caller can say so rather
+    than pick one of them."""
+    if value is None:
+        return None, []
+    if value in keys:
+        return value, []
+    participant, trial = split_reading_key(value)
+    if participant is not None:
+        return None, []
+    matches = by_trial.get(str(trial), [])
+    if len(matches) == 1:
+        return matches[0], []
+    return None, list(matches)
+
+
+def combo_reading_keys(combos: pd.DataFrame, trial_field: str) -> pd.Series:
+    """Each ``combos`` row's reading key, aligned with its index."""
+    if combos is None or combos.empty or trial_field not in combos.columns:
+        return pd.Series(dtype=object)
+    return (
+        combos["participant_id"].astype(str)
+        + READING_KEY_SEP
+        + combos[trial_field].astype(str)
+    )
+
+
 # UX-10 · sorting the trial pool.
 #
 # The picker listed trials in data order, so finding "the slowest reader", "the
@@ -450,18 +530,43 @@ def _looks_like_free_text(series: pd.Series) -> bool:
     return bool(values) and any(len(v) > 200 or len(v.split()) > 24 for v in values)
 
 
+def _by_reading(values: pd.Series, by_trial: dict[str, list[str]] | None) -> pd.Series:
+    """``values`` — indexed by ``(participant_id, trial id)`` pairs, or by trial
+    ids alone for a table with no readers — re-indexed by reading key (#412).
+
+    A trial id alone gives its value to every reading of it in the pool
+    (``by_trial``); without a pool it keeps the trial id."""
+    if isinstance(values.index, pd.MultiIndex):
+        keys = [reading_key(p, t) for p, t in values.index]
+        return values.set_axis(pd.Index(keys, dtype=object))
+    trials = values.index.astype(str)
+    if by_trial is None:
+        return values.set_axis(trials)
+    spread = [
+        (pos, key)
+        for pos, trial in enumerate(trials)
+        for key in by_trial.get(trial, ())
+    ]
+    return values.iloc[[pos for pos, _ in spread]].set_axis(
+        pd.Index([key for _, key in spread], dtype=object)
+    )
+
+
 def _trial_level_columns_from_frame(
     frame: pd.DataFrame | None,
     trial_field: str,
     picker_ids: set[str],
     participants: set[str],
+    by_trial: dict[str, list[str]] | None = None,
 ) -> dict[str, pd.Series]:
-    """Discover one scalar value per active trial directly from one source table.
+    """Discover one scalar value per active reading directly from one source
+    table, as a Series indexed by reading key — what ``sort_trial_options``
+    consumes.
 
-    Grouping includes participant identity, preventing repeated plain trial ids
-    from being merged before the active picker scope is applied. The returned
-    Series uses the picker's effective id because that is what
-    ``sort_trial_options`` consumes.
+    Grouped per reading (participant and trial id), so readers who share a
+    Trial ID each keep their own value (#412) — they used to be merged, and
+    the column dropped when they disagreed. A table with no participant column
+    gives each trial id's value to every reading of it (``by_trial``).
     """
     identity = _effective_trial_field(frame, trial_field, picker_ids)
     if frame is None or frame.empty or identity is None:
@@ -489,21 +594,10 @@ def _trial_level_columns_from_frame(
                 values = scoped[group_cols].drop_duplicates().copy()
             else:
                 values = grouped[col].agg(lambda cells: cells.iloc[0]).reset_index()
-            # If the same effective id survives for multiple participants, it is
-            # usable only when those rows agree. A participant-narrowed picker
-            # naturally has one row here; a global ambiguous picker is not
-            # allowed to choose one participant silently.
-            by_id = values.groupby(values[identity].astype(str), sort=False)[col]
-            if (by_id.nunique(dropna=False) > 1).any():
-                continue
-            deduped = values.drop_duplicates(subset=[identity])
         except (TypeError, ValueError):
             # Nested/list-like event payloads are not sortable scalar metadata.
             continue
-        series = pd.Series(
-            deduped[col].to_numpy(),
-            index=deduped[identity].astype(str).to_numpy(),
-        )
+        series = _by_reading(values.set_index(group_cols, drop=False)[col], by_trial)
         if series.dropna().empty or _looks_like_free_text(series):
             continue
         discovered[str(col)] = series
@@ -559,19 +653,22 @@ def _trial_level_sort_columns_cached(
         if "participant_id" in _combos.columns
         else set()
     )
+    by_trial = _pool_readings(_combos, trial_field)
     return _merge_trial_level_sources(
-        (
-            _trial_level_columns_from_frame(
-                _combos, trial_field, picker_ids, participants
-            ),
-            _trial_level_columns_from_frame(
-                _words, trial_field, picker_ids, participants
-            ),
-            _trial_level_columns_from_frame(
-                _fixations, trial_field, picker_ids, participants
-            ),
+        _trial_level_columns_from_frame(
+            frame, trial_field, picker_ids, participants, by_trial
         )
+        for frame in (_combos, _words, _fixations)
     )
+
+
+def _pool_readings(
+    combos: pd.DataFrame | None, trial_field: str
+) -> dict[str, list[str]] | None:
+    """The reading keys of each trial id in ``combos`` (``None`` without a pool)."""
+    if combos is None or combos.empty or "participant_id" not in combos.columns:
+        return None
+    return readings_by_trial(combo_reading_keys(combos, trial_field).unique())
 
 
 def _trial_level_sort_columns(
@@ -594,23 +691,45 @@ def _trial_level_sort_columns(
     )
 
 
-def _per_trial_stat(frame: pd.DataFrame, trial_field: str, how: str) -> pd.Series:
-    """One computed stat per trial id, as a Series indexed by that id."""
+def _per_reading_stats(
+    frame: pd.DataFrame,
+    trial_field: str,
+    hows: Iterable[str],
+    by_trial: dict[str, list[str]] | None = None,
+) -> dict[str, pd.Series]:
+    """Each computed stat in ``hows`` per reading, as a Series indexed by
+    reading key — per participant and trial id, so two readers who share a
+    Trial ID are not counted as one trial (#412). A table with no participant
+    column gives each trial id's stat to every reading of it (``by_trial``).
+
+    One group-by serves them all: the frame is corpus-sized, and grouping it
+    once per stat cost more than the stats themselves."""
     if frame is None or frame.empty or trial_field not in frame.columns:
-        return pd.Series(dtype=float)
-    grouped = frame.groupby(frame[trial_field].astype(str), sort=False)
-    if how == "size":
-        return grouped.size().astype(float)
-    if how == "timestamp_min":
-        if "timestamp_ms" not in frame.columns:
-            return pd.Series(dtype=float)
-        return pd.to_numeric(grouped["timestamp_ms"].min(), errors="coerce").astype(
-            float
-        )
-    if "duration_ms" not in frame.columns:
-        return pd.Series(dtype=float)
-    durations = grouped["duration_ms"].agg("sum" if "sum" in how else "mean")
-    return (durations / 1000.0) if how.endswith("_s") else durations.astype(float)
+        return {}
+    group_cols = [
+        *(["participant_id"] if "participant_id" in frame.columns else []),
+        trial_field,
+    ]
+    grouped = frame.groupby([frame[c].astype(str) for c in group_cols], sort=False)
+    stats: dict[str, pd.Series] = {}
+    for how in hows:
+        if how == "size":
+            stat = grouped.size().astype(float)
+        elif how == "timestamp_min":
+            if "timestamp_ms" not in frame.columns:
+                continue
+            stat = pd.to_numeric(grouped["timestamp_ms"].min(), errors="coerce").astype(
+                float
+            )
+        elif "duration_ms" not in frame.columns:
+            continue
+        else:
+            durations = grouped["duration_ms"].agg("sum" if "sum" in how else "mean")
+            stat = (
+                (durations / 1000.0) if how.endswith("_s") else durations.astype(float)
+            )
+        stats[how] = _by_reading(stat, by_trial)
+    return stats
 
 
 def trial_sort_keys(
@@ -621,7 +740,8 @@ def trial_sort_keys(
     fixations: pd.DataFrame | None = None,
     label_of: Callable[[str], str] = str,
 ) -> dict[str, pd.Series]:
-    """Available sort keys (UX-10): label → Series indexed by trial id.
+    """Available sort keys (UX-10): label → Series indexed by reading key
+    (:func:`reading_key`, #412 — one value per participant's trial).
 
     The dataset's own trial-level columns come first, each under ``label_of``
     (the dataset's own name, DATA-66 — `ColumnNames.label`), then the statistics
@@ -640,10 +760,10 @@ def trial_sort_keys(
         and trial_field in combos.columns
         and "_data_order" in combos.columns
     ):
-        deduped = combos.drop_duplicates(subset=[trial_field])
+        deduped = combos.drop_duplicates(subset=["participant_id", trial_field])
         keys[TRIAL_SORT_DATA_ORDER] = pd.Series(
             deduped["_data_order"].to_numpy(),
-            index=deduped[trial_field].astype(str).to_numpy(),
+            index=combo_reading_keys(deduped, trial_field).to_numpy(),
         )
     has_combos = (
         combos is not None and not combos.empty and trial_field in combos.columns
@@ -703,12 +823,21 @@ def _trial_sort_stats_cached(
         if _combos is not None
         else set()
     )
-    stats: dict[str, pd.Series] = {}
-    for label, (which, how) in _TRIAL_SORT_STATS.items():
+    by_trial = _pool_readings(_combos, trial_field)
+    hows_by_frame: dict[str, list[str]] = {}
+    for which, how in _TRIAL_SORT_STATS.values():
+        hows_by_frame.setdefault(which, []).append(how)
+    per_frame: dict[str, dict[str, pd.Series]] = {}
+    for which, hows in hows_by_frame.items():
         frame = _fixations if which == "fixations" else _words
         field = _effective_trial_field(frame, trial_field, picker_ids)
-        series = _per_trial_stat(frame, field or trial_field, how)
-        if not series.empty:
+        per_frame[which] = _per_reading_stats(
+            frame, field or trial_field, hows, by_trial
+        )
+    stats: dict[str, pd.Series] = {}
+    for label, (which, how) in _TRIAL_SORT_STATS.items():
+        series = per_frame[which].get(how)
+        if series is not None and not series.empty:
             stats[label] = series
     return stats
 
@@ -719,19 +848,29 @@ def sort_trial_options(
     *,
     descending: bool = False,
 ) -> list[str]:
-    """Order ``options`` (trial ids) by ``key_series``, ties broken by id.
+    """Order ``options`` (reading keys, or trial ids) by ``key_series``, ties
+    broken by id (:func:`reading_order`: trial id, then participant).
 
     Trials the key doesn't cover sort last regardless of direction — an unranked
     trial is missing information, not an extreme value, so it shouldn't lead.
     """
     if key_series is None or key_series.empty:
-        return sorted(options)
-    lookup = key_series.to_dict()
+        return sorted(options, key=reading_order)
+    lookup = _series_lookup(key_series)
     ranked = [o for o in options if o in lookup and pd.notna(lookup[o])]
     ranked_set = set(ranked)
-    unranked = sorted(o for o in options if o not in ranked_set)
-    ranked.sort(key=lambda o: (_sort_scalar(lookup[o]), o), reverse=descending)
+    unranked = sorted((o for o in options if o not in ranked_set), key=reading_order)
+    ranked.sort(
+        key=lambda o: (_sort_scalar(lookup[o]), reading_order(o)), reverse=descending
+    )
     return ranked + unranked
+
+
+def _series_lookup(series: pd.Series) -> dict:
+    """``series`` as a dict — through lists, which on a pandas-3 string index
+    is several times faster than ``Series.to_dict``; the picker builds one for
+    every trial in the pool on every rerun."""
+    return dict(zip(series.index.tolist(), series.tolist()))
 
 
 def _sort_scalar(value):
@@ -1175,24 +1314,22 @@ def _select_trial_none_mode(
     only draw once the trial is resolved, so it keeps the slot and fills it
     later. The row's ⇅ 🔎 ✏️ then move after it (``row_tail``)."""
     host = picker_host if picker_host is not None else st
-    available_trials = combos.drop_duplicates(subset=[trial_field])
-    trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
+    # #412: one option per *reading*, never one per trial id — the pool used to
+    # be cut to the first reader of each id, so a dataset that gives every
+    # reader the same Trial IDs offered one reader's readings alone.
+    available_trials = combos.dropna(subset=[trial_field]).drop_duplicates(
+        subset=["participant_id", trial_field]
+    )
+    # Reading key → its row's position in `available_trials`.
+    keys = combo_reading_keys(available_trials, trial_field)
+    position = dict(zip(keys.tolist(), range(len(keys))))
+    trial_options = sorted(position, key=reading_order)
     if not trial_options:
         st.warning(
             "No trials match the filters. Clear one, or use ✕ Clear all filters."
         )
         st.stop()
-
-    # Trial id → participant, so the annotation markers (UX-6) can be looked up per
-    # option (annotations are keyed by (participant, trial)). Mirrors the selection
-    # below, which resolves the participant the same way (first matching row).
-    trial_to_pid = dict(
-        zip(
-            available_trials[trial_field].astype(str),
-            available_trials["participant_id"],
-            strict=True,
-        )
-    )
+    by_trial = readings_by_trial(trial_options)
 
     # Populated once the ⇅ popover has rendered (below), and read by the option
     # labels — so an active ordering is *visible* in the picker itself rather than
@@ -1205,18 +1342,38 @@ def _select_trial_none_mode(
         trial_field,
         composite_cols=st.session_state.get("_composite_trial_columns") or (),
     )
+    # The browser names the picked option by its label, so no two may share
+    # one: a Trial ID several readers have adds the reader, as *Trial B* does.
+    # Allocated in id order, so the labels do not change with the ⇅ order.
+    base_labels: dict[str, str] = {}
+    reading_of: dict[str, tuple[str, str]] = {}
+    used_labels: set[str] = set()
+    for key in trial_options:
+        participant, trial = reading_of[key] = split_reading_key(key)
+        shown = id_display.get(trial) or _trial_display_label(trial)
+        if len(by_trial[trial]) > 1:
+            shown = f"{shown} [{participant}]"
+        base_labels[key] = _allocate_label(shown, f"{shown} [{trial}]", used_labels)
 
     # Read once: a picker lists every trial in the pool, and going through the
     # session for each one cost ~0.3 s a rerun at OneStop scale.
     store = store_for_prefix()
 
     def _option_label(value: str) -> str:
-        marks = annotation_markers(trial_to_pid.get(value), value, store=store)
-        base = id_display.get(value) or _trial_display_label(value)
+        key = (
+            value
+            if value in reading_of
+            else resolve_reading(value, position, by_trial)[0]
+        )
+        if key is None:
+            return _trial_display_label(value)
+        participant, trial = reading_of[key]
+        marks = annotation_markers(participant, trial, store=store)
+        base = base_labels[key]
         # #374 F27: the badges follow the trial, so a narrow picker cuts the
         # badges rather than the trial.
         label = f"{base} {marks}" if marks else base
-        shown = sort_values.get(value)
+        shown = sort_values.get(key)
         return f"{label}  ·  {shown}" if shown else label
 
     # Every label made once, when the order is final (filled below): Streamlit
@@ -1234,8 +1391,8 @@ def _select_trial_none_mode(
 
     # The selectbox (`*_trial_id`) is the canonical selection — the deep-link /
     # Save-&-restore code seeds it (`_restore_selection`). The slider mirrors it
-    # and ◀ ▶ step it; all stay in sync via the trial id.
-    current_label = st.session_state.get(trial_id_key) if trial_id_key else None
+    # and ◀ ▶ step it; all stay in sync via the reading key.
+    raw_value = st.session_state.get(trial_id_key) if trial_id_key else None
     # #374 F34: the trial each dataset was last on, so switching away and back
     # returns to it rather than to the first trial.
     dataset = annotations_dataset(st.session_state)
@@ -1243,29 +1400,30 @@ def _select_trial_none_mode(
     last_dataset_key = f"{_TRIAL_BY_DATASET_KEY}_{key_prefix}"
     previous = st.session_state.get(last_dataset_key, dataset)
     st.session_state[last_dataset_key] = dataset
+    # A reading key names its reading; a trial id alone (a value saved before
+    # #412) names it only when one reader has that id — never the first of
+    # several (`url_state._settle_picker_selection` says so on the page).
+    current_label = resolve_reading(raw_value, position, by_trial)[0]
     # A trial carried over from the dataset left behind is not a choice; one a
     # link or a restored settings file put there with the switch is.
-    chosen = st.session_state.pop(f"_{key_prefix}_trial_chosen", None)
+    chosen = resolve_reading(
+        st.session_state.pop(f"_{key_prefix}_trial_chosen", None), position, by_trial
+    )[0]
     carried = (
         previous != dataset
         and current_label != chosen
         and current_label == remembered.get(f"{key_prefix}|{previous}")
     )
     back_to = remembered.get(f"{key_prefix}|{dataset}")
-    if (
-        trial_id_key
-        and back_to in trial_options
-        and (carried or current_label not in trial_options)
-    ):
+    if trial_id_key and back_to in position and (carried or current_label is None):
         current_label = back_to
-        st.session_state[trial_id_key] = current_label
     # Seeded rather than chosen: re-seeded to the *sorted* list's first trial
     # once the ⇅ order is known (UX-171 — data order's first, not the id's).
-    seeded = current_label not in trial_options
+    seeded = current_label is None
     if seeded:
         current_label = trial_options[0]
-        if trial_id_key:
-            st.session_state[trial_id_key] = current_label
+    if trial_id_key:
+        st.session_state[trial_id_key] = current_label
 
     idx_of = {opt: i for i, opt in enumerate(trial_options)}
 
@@ -1332,7 +1490,7 @@ def _select_trial_none_mode(
             filter_renderer(filter_col)
         # UX-10: order the pool *before* the widgets read `trial_options`, so the
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
-        # canonical selection is a trial *id*, so re-sorting never changes which
+        # canonical selection is a reading key, so re-sorting never changes which
         # trial is selected — only where it sits in the list.
         # UX-27: each of the three step/sort triggers goes in a `railbtn_*`
         # container so styles.py can give the whole cluster above the plot one
@@ -1355,7 +1513,7 @@ def _select_trial_none_mode(
             # UX-171: data order is the default and its values are bare ranks,
             # so it carries no per-option value and names itself only reversed.
             if sort_choice != TRIAL_SORT_DATA_ORDER:
-                lookup = sort_key.to_dict()
+                lookup = _series_lookup(sort_key)
                 sort_values.update(
                     {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
                 )
@@ -1493,12 +1651,11 @@ def _select_trial_none_mode(
             help="Next trial." + step_help,
         )
 
-    if not selected_trial_label:
+    selected_key = resolve_reading(selected_trial_label, position, by_trial)[0]
+    if selected_key is None:
         return None, None, None
 
-    chosen = available_trials[
-        available_trials[trial_field].astype(str) == selected_trial_label
-    ].iloc[0]
+    chosen = available_trials.iloc[position[selected_key]]
     selected_text = str(chosen[text_field]) if text_field in chosen.index else None
     return chosen["participant_id"], chosen["trial_id"], selected_text
 
@@ -1529,6 +1686,11 @@ def select_trial(
     worked on some datasets and not others. Participant and Text are what **Narrow
     by** is for; the composite flag now only tells the chip strip to spell the
     joined id out (``tabs._render_trial_condition_chips``).
+
+    #412: each option is a *reading* — :func:`reading_key` of its participant and
+    trial id — and so is ``{key_prefix}_trial_id``, the state a link or a settings
+    file seeds. Readers who share a Trial ID are each an option, labelled
+    ``<id> [<participant>]``; one per Trial ID used to drop all but the first.
 
     ``picker_host`` is the container to render into (defaults to the current one);
     the picker builds its own row of columns, so call it where columns are allowed.

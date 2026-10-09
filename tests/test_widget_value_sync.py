@@ -305,18 +305,18 @@ def test_the_selected_trial_survives_a_trip_to_another_view():
     at.run()
     picker = next(s for s in at.selectbox if s.key == "single_trial_id")
     # The options are the ids as shown (UX-187 / UX-202).
-    from tests.conftest import picker_trial_id
+    from tests.conftest import picked_trial_id, picker_trial_id
 
     chosen = picker_trial_id(picker.options[3])
     picker.select_index(3)
     at.run()
-    assert at.session_state["single_trial_id"] == chosen
+    assert picked_trial_id(at.session_state["single_trial_id"]) == chosen
 
     for view in ("Corpus Analysis", "Data", "Scanpath"):
         pin_view(at, view)
         at.run()
         assert not at.exception, at.exception
-    assert at.session_state["single_trial_id"] == chosen
+    assert picked_trial_id(at.session_state["single_trial_id"]) == chosen
 
 
 def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):

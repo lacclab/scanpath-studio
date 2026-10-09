@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import pytest
 
+from scanpath_studio.utils import reading_key
+
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
@@ -175,9 +177,9 @@ class TestPlotConfigRestore:
         assert ss["global_canvas_height"] == 1080
         assert ss["global_x_field"] == "x"
         assert ss["global_y_field"] == "y"
-        # selection (none/Trial mode → single_trial_id holds the option value)
+        # selection: single_trial_id holds the reading's option value (#412)
         assert ss["single_select_trial_mode"] == "Trial"
-        assert ss["single_trial_id"] == "t2"
+        assert ss["single_trial_id"] == reading_key("p1", "t2")
         assert ss["_skipped"] == []
 
     def test_a_settings_file_leaves_the_column_mapping_alone(self):
@@ -345,11 +347,20 @@ class TestPlotConfigRestore:
             # trial `t1` is not a stand-in for p9's.
             ({"participant_id": "p9", "trial_id": "t1"}, None, "participant p9's"),
             # No reader named and only one reader has `t2`: that reading.
-            ({"trial_id": "t2"}, "t2", None),
-            ({"participant_id": "", "trial_id": "t2"}, "t2", None),
+            ({"trial_id": "t2"}, reading_key("p1", "t2"), None),
+            (
+                {"participant_id": "", "trial_id": "t2"},
+                reading_key("p1", "t2"),
+                None,
+            ),
             # No reader named, and two readers have `t1`: reported, not guessed.
             ({"trial_id": "t1"}, None, "belongs to 2 participants"),
-            ({"participant_id": "p2", "trial_id": "t1"}, "t1", None),
+            # Named, the second reader of a shared id is that reader's (#412).
+            (
+                {"participant_id": "p2", "trial_id": "t1"},
+                reading_key("p2", "t1"),
+                None,
+            ),
         ],
     )
     def test_a_selection_restores_only_the_reading_it_names(

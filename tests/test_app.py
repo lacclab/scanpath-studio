@@ -19,7 +19,7 @@ from scanpath_studio.app import (
 from scanpath_studio.data import compute_canvas_size
 
 # Imported from its real home (utils); app.py does not re-export it.
-from scanpath_studio.utils import compute_trial_stats
+from scanpath_studio.utils import compute_trial_stats, reading_key
 
 
 class TestBuildComboOptions:
@@ -544,7 +544,9 @@ class TestExplicitReaderIsBinding:
         from scanpath_studio.url_state import _restore_selection
 
         assert _restore_selection({"trial_id": "trial-1"}, self._COMBOS) is True
-        assert fake_st.session_state["single_trial_id"] == "trial-1"
+        assert fake_st.session_state["single_trial_id"] == reading_key(
+            "other-reader", "trial-1"
+        )
 
     def test_the_in_app_open_says_why_it_could_not_navigate(self, fake_st):
         from scanpath_studio.url_state import (
@@ -577,7 +579,9 @@ class TestExplicitReaderIsBinding:
             "screen_id": None,
         }
         assert _apply_pending_trial_selection(self._COMBOS) is None
-        assert fake_st.session_state["single_trial_id"] == "trial-1"
+        assert fake_st.session_state["single_trial_id"] == reading_key(
+            "other-reader", "trial-1"
+        )
 
 
 class TestApplyUrlTrialSelection:
@@ -595,7 +599,7 @@ class TestApplyUrlTrialSelection:
         fake_st.query_params = {"participant": "p1", "trial_id": "t2"}
         _apply_url_trial_selection(self._combos())
         assert fake_st.session_state["single_select_trial_mode"] == "Trial"
-        assert fake_st.session_state["single_trial_id"] == "t2"
+        assert fake_st.session_state["single_trial_id"] == reading_key("p1", "t2")
         assert fake_st.session_state["_url_trial_applied"] is True
 
     def test_seeds_every_selection_prefix(self, fake_st):
@@ -604,14 +608,14 @@ class TestApplyUrlTrialSelection:
         # to seed — _SELECTION_PREFIXES is just ("single",).
         fake_st.query_params = {"trial_id": "t2"}
         _apply_url_trial_selection(self._combos())
-        assert fake_st.session_state["single_trial_id"] == "t2"
+        assert fake_st.session_state["single_trial_id"] == reading_key("p1", "t2")
         assert "multi_trial_id" not in fake_st.session_state
 
     def test_trial_id_alone_without_participant(self, fake_st):
         # A ?trial_id= link with no ?participant= must still land on the trial.
         fake_st.query_params = {"trial_id": "t3"}
         _apply_url_trial_selection(self._combos())
-        assert fake_st.session_state["single_trial_id"] == "t3"
+        assert fake_st.session_state["single_trial_id"] == reading_key("p2", "t3")
         assert fake_st.session_state["_url_trial_applied"] is True
 
     def test_noop_without_trial_id(self, fake_st):
@@ -654,6 +658,48 @@ class TestApplyUrlTrialSelection:
         fake_st.session_state = {"_url_trial_applied": True, "single_trial_id": "t9"}
         _apply_url_trial_selection(self._combos())
         assert fake_st.session_state["single_trial_id"] == "t9"
+
+    def test_a_link_naming_the_second_reader_of_a_shared_id_seeds_that_reading(
+        self, fake_st
+    ):
+        """#412: the picker's key names the reading, not the id both share."""
+        fake_st.query_params = {"participant": "p2", "trial_id": "t1"}
+        combos = pd.DataFrame({"participant_id": ["p1", "p2"], "trial_id": ["t1"] * 2})
+        assert _apply_url_trial_selection(combos) is None
+        assert fake_st.session_state["single_trial_id"] == reading_key("p2", "t1")
+        assert fake_st.session_state["_single_trial_chosen"] == reading_key("p2", "t1")
+
+
+class TestSettlePickerSelection:
+    """#412: a trial id alone in the picker's key — saved before it held
+    readings — opens its reading only when one reader has that id."""
+
+    _COMBOS = pd.DataFrame(
+        {"participant_id": ["p1", "p2", "p1"], "trial_id": ["shared", "shared", "own"]}
+    )
+
+    def _settle(self, fake_st, value):
+        from scanpath_studio.url_state import _settle_picker_selection
+
+        fake_st.session_state = {"single_trial_id": value}
+        return _settle_picker_selection(self._COMBOS)
+
+    def test_an_unambiguous_trial_id_becomes_its_reading(self, fake_st):
+        assert self._settle(fake_st, "own") is None
+        assert fake_st.session_state["single_trial_id"] == reading_key("p1", "own")
+
+    def test_a_shared_trial_id_picks_no_reader_and_says_so(self, fake_st):
+        message = self._settle(fake_st, "shared")
+        assert message is not None
+        assert "trial shared belongs to 2 participants" in message
+        assert "single_trial_id" not in fake_st.session_state
+
+    def test_a_reading_key_and_a_trial_out_of_the_pool_are_left_alone(self, fake_st):
+        key = reading_key("p2", "shared")
+        assert self._settle(fake_st, key) is None
+        assert fake_st.session_state["single_trial_id"] == key
+        assert self._settle(fake_st, "gone") is None
+        assert fake_st.session_state["single_trial_id"] == "gone"
 
 
 class TestDatasetFont:

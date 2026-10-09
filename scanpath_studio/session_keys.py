@@ -206,6 +206,9 @@ EXPORT_FIGURE_DPI = "export_figure_dpi"
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
 # widget keys, seeded before the picker renders.
 SINGLE_SELECT_TRIAL_MODE = "single_select_trial_mode"
+#: The picked reading — ``utils.reading_key(participant, trial)`` since #412. A
+#: trial id alone (a recovery cache from before) still reopens its trial when
+#: one reader has it (`url_state._settle_picker_selection`).
 SINGLE_TRIAL_ID = "single_trial_id"
 #: #374 — one-shot: the trial a link or settings file chose, so the per-dataset
 #: trial memory never takes it for one carried over (`utils.select_trial`).

@@ -1367,7 +1367,9 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
         host.warning(note.removeprefix("warning:"), icon=ICONS["warning"])
     elif note:
         host.success(note, icon=ICONS["confirm"])
-    row = host.container(horizontal=True, gap="small", key="design_file_row")
+    # #422: the two share the row's width, so the row ends where the design
+    # cards above it do instead of leaving a gap on the right.
+    row = host.container(horizontal=True, gap="xsmall", key="design_file_row")
     row.download_button(
         "Export",
         icon=ICONS["download"],
@@ -1376,10 +1378,11 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
         mime="application/json",
         key="design_export",
         disabled=not saved,
+        width="stretch",
         help="Download your saved designs as a JSON file, to use on another "
         "computer or share.",
     )
-    with row.popover("Import", icon=ICONS["upload"]):
+    with row.popover("Import", icon=ICONS["upload"], width="stretch"):
         st.file_uploader(
             "Designs file (JSON)",
             type=["json"],

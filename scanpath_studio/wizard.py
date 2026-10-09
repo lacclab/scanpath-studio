@@ -96,6 +96,7 @@ from .experimental_setup import (
     SetupSnapshot,
     font_pt_to_px,
 )
+from .fields import switch
 from .menu import view_label
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
@@ -1048,7 +1049,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     toggle_col, controls_col = body.columns(
         [0.26, 0.74], gap="small", vertical_alignment="center"
     )
-    enabled = toggle_col.toggle(
+    enabled = switch(
+        toggle_col,
+        "toggle",
         "Derive columns from text",
         key="wizard_filename_split",
         help=(
@@ -1170,7 +1173,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 help=f"e.g. `{_FILENAME_REGEX_EXAMPLE}` — each named group becomes "
                 "a column. Edit this to match your own filenames.",
             )
-            lower = lower_col.toggle(
+            lower = switch(
+                lower_col,
+                "toggle",
                 "Lowercase",
                 key=lower_key,
                 help="Fold case so a value matches across tables (e.g. CamelCase "
@@ -3085,12 +3090,19 @@ def _wizard_name_header(host, active: bool) -> None:
         label_visibility="collapsed",
     )
     # UX-174 r2 — optional, and edited later on ✏️ Edit dataset.
+    description_help = (
+        f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        "Management page."
+    )
+    # The title carries its help as the dotted underline, not a `?` icon.
+    inline_field_label(box, "Description", description_help)
     box.text_area(
         "Description",
         key="wizard_dataset_description",
         placeholder="Optional — what this dataset is: the participants, the texts, "
         "the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data Management page.",
+        help=description_help,
+        label_visibility="collapsed",
         height=68,
         # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
         on_change="ignore",
@@ -4000,7 +4012,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # label — this line has no name of its own, it describes the AOI
             # table above it.
             aoi_extra = _row_body(extra_rows["words"])
-            aggregate_char_boxes_on = aoi_extra.toggle(
+            aggregate_char_boxes_on = switch(
+                aoi_extra,
+                "toggle",
                 "Merge character boxes into word boxes",
                 key="wizard_aggregate_char_boxes",
                 help="For a Words table with one row per *character* (e.g. Chinese "

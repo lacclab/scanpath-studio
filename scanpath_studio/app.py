@@ -247,6 +247,7 @@ from scanpath_studio.experimental_setup import (
     SetupSnapshot,
     font_pt_to_px,
 )
+from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
     close_open_popovers,
@@ -5968,12 +5969,18 @@ def render_description_field(host, token: str) -> None:
     key = _description_field_key(token)
     if key not in st.session_state:
         st.session_state[key] = dataset_description(token)[0]
+    help_text = (
+        f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        f"Management page. Saved with **{ICONS['confirm']} Save changes**."
+    )
+    # The title carries its help as the dotted underline, not a `?` icon.
+    row_label(host, "Description", help_text)
     host.text_area(
         "Description",
         key=key,
         placeholder="What this dataset is — the participants, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
-        f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
+        help=help_text,
+        label_visibility="collapsed",
         height=80,
         # Streamlit 1.65: read only by Save changes / Cancel, so typing needs
         # no rerun.
@@ -5995,7 +6002,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     published-vs-loaded table, and a coordinate badge for every dataset. The
     table's Status already says whether its numbers are published or loaded.
 
-    Editing it is ✏️ **Edit dataset**, under the overview (UX-178).
+    Editing it is the ✏️ on the dataset's row (UX-178).
     """
     about = dataset_about(token, registry)
     text, own = dataset_description(token, registry)
@@ -6118,6 +6125,11 @@ def render_name_field(host, token: str) -> None:
         st.session_state[EDITOR_NAME_FIELD_KEY] = st.session_state.get(
             EDITOR_PENDING_NAME_KEY
         ) or _dataset_display_name(token)
+    help_text = (
+        "Shown in the list of datasets and the dataset picker. Saved with "
+        f"**{ICONS['confirm']} Save changes**."
+    )
+    row_label(host, "Name", help_text)
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
@@ -6125,8 +6137,8 @@ def render_name_field(host, token: str) -> None:
         # An upload stages its name on change; a built-in's is read only by
         # Save changes / Cancel, so it needs no rerun (Streamlit 1.65).
         on_change=_stage_upload_name if uploaded else "ignore",
-        help="Shown in the list of datasets and the dataset picker. Saved with "
-        f"**{ICONS['confirm']} Save changes**.",
+        help=help_text,
+        label_visibility="collapsed",
         # A draft outlives a visit to another view while the editor is open.
         persist_state="session",
     )

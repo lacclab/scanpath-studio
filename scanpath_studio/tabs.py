@@ -279,6 +279,7 @@ from scanpath_studio.fields import (
     labeled,
     panel_field,
     row_label,
+    switch,
 )
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -14977,8 +14978,10 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
     quietly do nothing. Rendered either way so the block keeps the add screen's
     shape, and disabled says which case you are in.
     """
-    st.toggle(
-        "Aggregate character AOIs into word boxes",
+    switch(
+        st,
+        "toggle",
+        "Merge character boxes into word boxes",
         key=aggregate_key(name),
         disabled=not adding,
         # Streamlit 1.65: read only by Save changes (`_apply_remap`).
@@ -16007,7 +16010,7 @@ def _setup_file_mapping(
     if "aggregate_char_boxes" in (recipe.get("steps") or ()):
         notes.append(
             "Words: character boxes were combined into word boxes; turn "
-            "*Aggregate character AOIs into word boxes* on again after restoring."
+            "*Merge character boxes into word boxes* on again after restoring."
         )
     return mapping, notes
 

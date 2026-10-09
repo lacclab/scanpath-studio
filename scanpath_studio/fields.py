@@ -170,6 +170,22 @@ def labeled(
     )
 
 
+def switch(host, kind: str, label: str, *, help: str | None = None, **kwargs):
+    """A toggle or checkbox titled like a field: its help on the title's hover.
+
+    Streamlit draws a switch's ``help`` as a ``?`` icon after its label. Here
+    the switch keeps its real label and ``help`` but collapses them, and the
+    title is drawn beside it by :func:`row_label` — the dotted underline every
+    other field on the add and edit screens carries. Returns the value.
+    """
+    row = host.container(horizontal=True, vertical_alignment="center", gap="xsmall")
+    value = getattr(row, kind)(
+        accessible_name(label), help=help, label_visibility="collapsed", **kwargs
+    )
+    row_label(row, label, help)
+    return value
+
+
 def accessible_name(label: str) -> str:
     """``label`` as words: icon shortcodes and markdown bold removed (#374 F19).
 

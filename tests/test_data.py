@@ -796,6 +796,156 @@ class TestUnreadableNumbers:
         assert data_module.numeric_parse_issues(raw, self.SCHEMA, table="F") == []
 
 
+class TestTextWordIds:
+    """#412 (review finding 11): Word/IA IDs are read as numbers, so text ids
+    (`w1`, `w2`) parse to NaN — and pandas joins NaN to NaN, so every
+    coordinate-less fixation was placed on the first word's box."""
+
+    WORD_SCHEMA = {
+        "participant": "participant",
+        "trial": "trial",
+        "text_id": None,
+        "word_id": "id",
+        "text": "text",
+        "line": None,
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    FIX_SCHEMA = {
+        "participant": "participant",
+        "trial": "trial",
+        "text_id": None,
+        "word_id": "id",
+        "duration": "duration",
+        "x": None,
+        "y": None,
+        "timestamp": None,
+        "fixation_id": None,
+    }
+
+    @staticmethod
+    def _words(ids=("w1", "w2")):
+        return pd.DataFrame(
+            {
+                "participant": ["r", "r"],
+                "trial": ["one", "one"],
+                "id": list(ids),
+                "text": ["Hello", "world"],
+                "x": [0, 100],
+                "y": [0, 0],
+                "width": [50, 50],
+                "height": [20, 20],
+            }
+        )
+
+    @staticmethod
+    def _fixations(ids=("w1", "w2"), **extra):
+        return pd.DataFrame(
+            {
+                "participant": ["r", "r"],
+                "trial": ["one", "one"],
+                "id": list(ids),
+                "duration": [100, 200],
+                **extra,
+            }
+        )
+
+    def _load(self, words, fixations, **fix_schema):
+        from scanpath_studio import api
+
+        return api.load_scanpath_data(
+            words,
+            fixations,
+            word_schema=self.WORD_SCHEMA,
+            fix_schema={**self.FIX_SCHEMA, **fix_schema},
+            names="canonical",
+        )
+
+    def test_text_ids_with_no_xy_are_refused(self):
+        """The review's probe: both fixations landed on 'Hello' (x 25)."""
+        with (
+            pytest.raises(data_module.UnplacedFixationsError) as raised,
+            pytest.warns(UserWarning, match="Words table: 2 of 2 values in 'id'"),
+        ):
+            self._load(self._words(), self._fixations())
+        message = str(raised.value)
+        assert message.startswith(
+            "Fixations: the Word/IA ID column `id` holds no numbers (e.g. 'w1', 'w2')."
+        )
+        assert "Map the fixations' X and Y" in message
+        assert isinstance(raised.value, ValueError)  # for API callers
+
+    def test_a_missing_word_id_matches_no_box(self):
+        words = normalize_words(self._words(ids=(0, np.nan)), self.WORD_SCHEMA)
+        fixations = normalize_fixations(
+            self._fixations(ids=(np.nan, 0)), self.FIX_SCHEMA
+        )
+        filled = data_module.fill_fixation_xy_from_words(fixations, words)
+        assert filled["x"].isna().tolist() == [True, False]
+        assert filled["x"].iloc[1] == 25.0
+
+    def test_a_few_unreadable_ids_leave_only_those_fixations_off(self):
+        with pytest.warns(UserWarning, match="left off the plot"):
+            _, fixations = self._load(
+                self._words(ids=(1, 2)), self._fixations(ids=("w1", "2"))
+            )
+        assert fixations["x"].isna().tolist() == [True, False]
+        assert fixations["x"].iloc[1] == 125.0
+
+    def test_mapped_xy_need_no_numeric_ids(self):
+        with pytest.warns(UserWarning, match="aren't numbers"):
+            _, fixations = self._load(
+                self._words(),
+                self._fixations(fx=[10.0, 110.0], fy=[5.0, 5.0]),
+                x="fx",
+                y="fy",
+            )
+        assert fixations["x"].tolist() == [10.0, 110.0]
+
+    def test_an_edit_that_leaves_only_text_ids_is_refused(self):
+        """✏️ Edit dataset re-normalizes the stored frame: a Word/IA ID moved
+        onto a kept text column, with X and Y cleared, is the same mapping."""
+        stored = normalize_fixations(
+            self._fixations(ids=(1, 2), label=["w1", "w2"], fx=[1.0, 2.0], fy=[0, 0]),
+            {**self.FIX_SCHEMA, "x": "fx", "y": "fy"},
+            keep_columns={"label"},
+        )
+        remap = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "word_id": "label",
+            "duration": "duration_ms",
+        }
+        with pytest.raises(data_module.UnplacedFixationsError, match="`label`"):
+            data_module.remap_normalized_frame(stored, remap, kind="fixations")
+
+    def test_the_cli_says_it_in_its_own_terms(self):
+        from scanpath_studio.cli import _load_error_message
+
+        exc = data_module.UnplacedFixationsError(
+            data_module.unplaced_fixations_issue(self._fixations(), self.FIX_SCHEMA)
+        )
+        said = _load_error_message(exc)
+        assert "`" not in said
+        assert "column 'id' holds no numbers" in said
+        assert "--fix-schema" in said
+        assert "--fix-schema" not in _load_error_message(exc, schema_flags=False)
+
+    def test_snapping_skips_a_box_with_no_id(self):
+        """VIZ-9's linear-reading snap looked boxes up by id through
+        `Series.map`, which matches a NaN key to a NaN id too."""
+        from scanpath_studio import plots
+
+        words = normalize_words(self._words(ids=(np.nan, 1)), self.WORD_SCHEMA)
+        fixations = pd.DataFrame(
+            {"x": [300.0, 110.0], "y": [40.0, 5.0], "word_id": [np.nan, 1.0]}
+        )
+        snapped = plots._snap_fixations_to_words(fixations, words, "x", "y")
+        assert snapped["x"].tolist() == [300.0, 125.0]
+
+
 class TestRowsWithoutIdentity:
     """BUG-56: one blank row made a dataset impossible to add.
 

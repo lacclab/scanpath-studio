@@ -261,8 +261,18 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
     ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
     second comparison dataset, which has no mapping flag of its own."""
     from .api import SchemaError
-    from .data import StimulusJoinError
+    from .data import StimulusJoinError, UnplacedFixationsError
 
+    if isinstance(exc, UnplacedFixationsError):
+        # #412: the fix is the fixations' mapping — X and Y, on this command line.
+        message = str(exc).replace("`", "'")
+        if not schema_flags:
+            return message
+        return (
+            f"{message}\nOn the command line, map them with --fix-schema: the "
+            "fixations' full mapping as JSON (or a path to a .json file), with "
+            '"x" and "y" naming its columns.'
+        )
     if isinstance(exc, StimulusJoinError):
         # DATA-49: the fix is a mapping, and here a mapping is a flag.
         message = str(exc).replace("`", "'")

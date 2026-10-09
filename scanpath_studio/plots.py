@@ -2275,8 +2275,13 @@ def _snap_fixations_to_words(
     from .measures import word_box_bounds
 
     x0, _, x1, _ = word_box_bounds(words)
-    cx_by_id = dict(zip(words["word_id"], (x0 + x1) / 2.0))
-    top_by_id = dict(zip(words["word_id"], pd.to_numeric(words["y"], errors="coerce")))
+    # Boxes with no id are no target: `Series.map` matches a NaN key to a NaN
+    # id, so every fixation on no word was snapped onto one (#412).
+    known = words["word_id"].notna().to_numpy()
+    ids = words["word_id"].to_numpy()[known]
+    cx_by_id = dict(zip(ids, ((x0 + x1) / 2.0)[known]))
+    tops = pd.to_numeric(words["y"], errors="coerce").to_numpy()[known]
+    top_by_id = dict(zip(ids, tops))
     snap_x = wid.map(cx_by_id)
     snap_y = wid.map(top_by_id)
     out[x_field] = snap_x.where(snap_x.notna(), out[x_field])

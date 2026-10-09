@@ -73,7 +73,7 @@ are carried through when present.
 | `trial_id` | Must match the words table. **Required.** |
 | `screen_id`, `screen_index` | Optional child screen and 1-based order; scientific operations never join across it. |
 | `text_id` | Text/passage id, when present. |
-| `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers. |
+| `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers, so its word ids must be numbers. |
 | `duration_ms` | Fixation duration. **Required.** |
 | `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the replay lays the fixations end to end by their durations. |
 | `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
@@ -307,6 +307,7 @@ raising. Every flag is in the [CLI reference](cli.md).
 | `Options not supported by the animation:` | A static-only option (heatmap, arcs, saccade types) passed to `animate_scanpath`. | Drop it, or render the static figure. |
 | `Static .png export failed:` | Kaleido has no Chrome. | `plotly_get_chrome -y`, or save `.html`. |
 | `Fixations … have no usable coordinates` | AOI-sequence fixations with no matching word boxes. | Supply the words table whose `word_id`s match. |
+| `Fixations: the Word/IA ID column … holds no numbers` | `data.UnplacedFixationsError`: the fixations map no `x`/`y` and their word ids are text (`w1`), so none can be placed. | Map `x` and `y` in `fix_schema`, or give both tables numeric word ids. |
 
 ## GIF / MP4 of a replay
 

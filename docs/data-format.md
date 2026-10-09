@@ -163,7 +163,12 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   reading takes its first reading's trial ID (without the `_r2`), so per-text
   grouping counts a re-reading as the same text.
 - **AOI-only fixations** — fixations with a word/IA id but no x/y are placed at
-  the matching word-box centers.
+  the matching word-box centers. Word/IA ids are read as numbers: a fixation
+  whose id is blank or not a number matches no box and stays off the plot, and
+  when the fixations map no x/y and their Word/IA ID column holds no numbers at
+  all (`w1`, `w2` …), the dataset is refused with a message saying so — on the
+  add-dataset screen, and as an error from the Python API and CLI — rather than
+  loaded with nothing to draw.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial
   ID* to several columns (e.g. participant + paragraph + repeated-reading) and a
   combined unique id is built on the fly: the values joined with `_`. A `_`

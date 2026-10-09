@@ -2497,8 +2497,57 @@ def numeric_parse_issues(
             _UNPARSED_CONSEQUENCE if fixations else _UNPARSED_WORD_CONSEQUENCE
         )
         consequence = consequences.get(key, "those cells are left empty")
+        if fixations and key == "word_id" and not (schema.get("x") and schema.get("y")):
+            # The word id is these fixations' only position (#412).
+            consequence = (
+                "with no X and Y mapped, those fixations have no position and are "
+                "left off the plot"
+            )
         issues.append(f"{line}; {consequence}.")
     return issues
+
+
+class UnplacedFixationsError(ValueError):
+    """Fixations whose only position is a Word/IA ID that holds no numbers (#412).
+
+    With no X and Y mapped, a fixation is placed at the center of the word box
+    its Word/IA ID names, and Word/IA IDs are read as numbers: a column of text
+    ids (``w1``, ``w2`` …) leaves every fixation without a position. Raised by
+    :func:`normalize_fixations` — so by the headless API and every loader built
+    on it — rather than load a dataset with nothing to draw: the add-dataset
+    wizard and ✏️ Edit dataset block on it, and the CLI prints it."""
+
+
+def unplaced_fixations_issue(
+    raw: pd.DataFrame, schema: dict, *, table: str = "Fixations"
+) -> str | None:
+    """The :class:`UnplacedFixationsError` message for ``raw`` under ``schema``.
+
+    ``None`` unless X or Y is unmapped, a Word/IA ID is mapped, and not one of
+    its filled cells reads as a number. A few unreadable ids among numbers are
+    :func:`numeric_parse_issues`' warning instead: only those fixations are left
+    off the plot.
+    """
+    if schema.get("x") and schema.get("y"):
+        return None
+    column = schema.get("word_id")
+    if not isinstance(column, str) or column not in raw.columns:
+        return None
+    values = raw[column]
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return None
+    filled = _filled_cells(values)
+    failed = _unparsed_cells(values, _to_number(values))
+    if filled.empty or len(failed) < len(filled):
+        return None
+    examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
+    return (
+        f"{table}: the Word/IA ID column `{column}` holds no numbers (e.g. "
+        f"{examples}). With no X and Y mapped, a fixation is placed at the center "
+        "of the word box its Word/IA ID names, and Word/IA IDs are read as "
+        "numbers — so none of these fixations can be placed. Map the fixations' "
+        "X and Y, or use numeric Word/IA IDs in both tables."
+    )
 
 
 def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
@@ -4599,7 +4648,13 @@ def fill_fixation_xy_from_words(
     a ``word_id``, place them at the center of the matching word box (keyed by
     participant_id + trial_id + word_id). Fixations whose word_id matches no
     box keep NaN coordinates. Rows that already have coordinates are left
-    untouched."""
+    untouched.
+
+    A missing key is no key (#412): pandas joins NaN to NaN, so a fixation with
+    no ``word_id`` — one whose Word/IA ID did not parse as a number, say — used
+    to land on the first box that had none either, and a table of text ids
+    (``w1``, ``w2`` …) put every fixation on one word. Rows missing any key are
+    left out on both sides, so they keep NaN coordinates."""
     if fixations.empty or words.empty:
         return fixations
     missing = fixations["x"].isna() | fixations["y"].isna()
@@ -4614,10 +4669,10 @@ def fill_fixation_xy_from_words(
     centers = words[keys].copy()
     centers["_word_cx"] = (x0 + x1) / 2.0
     centers["_word_cy"] = (y0 + y1) / 2.0
-    centers = centers.drop_duplicates(keys)
+    centers = centers.dropna(subset=keys).drop_duplicates(keys)
     merged = fixations[keys].merge(centers, on=keys, how="left")
     fixations = fixations.copy()
-    fill = missing.to_numpy()
+    fill = (missing & fixations[keys].notna().all(axis=1)).to_numpy()
     fixations.loc[fill, "x"] = merged["_word_cx"].to_numpy()[fill]
     fixations.loc[fill, "y"] = merged["_word_cy"].to_numpy()[fill]
     return fixations
@@ -5690,6 +5745,8 @@ def normalize_fixations(
 ) -> pd.DataFrame:
     if not _renormalizing:
         fixations = _drop_reserved_columns(fixations, schema, table="Fixations")
+    if (unplaced := unplaced_fixations_issue(fixations, schema)) is not None:
+        raise UnplacedFixationsError(unplaced)
     _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
     fixations = _drop_rows_missing_identity(fixations, schema)
     # Explicit index so a constant participant placeholder fills every row.

@@ -818,7 +818,9 @@ def load_scanpath_data(
     looked for, and the columns the table actually has — and
     ``data.StimulusJoinError`` (a ``ValueError``) when a stimulus-level words
     table shares neither a trial id nor a ``text_id`` with any trial (or,
-    multipart, with every screen a trial has fixations on).
+    multipart, with every screen a trial has fixations on), and
+    ``data.UnplacedFixationsError`` (a ``ValueError``) when the fixations map no
+    x/y and their word/AOI ID column holds no numbers, so none could be placed.
     """
     _check_names_choice(names)
     if words is None and fixations is None:

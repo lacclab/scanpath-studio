@@ -5487,11 +5487,15 @@ def _legends_drawn(
 
 #: What each Legends row places (📐 Figure & canvas → Legends).
 _LEGEND_ROW_HELP = {
-    "compare": "The A/B legend naming the two scanpaths (Compare's *Legend*).",
-    "saccades": "The saccade-type legend (↗️ Saccades → Color by type → Legend).",
-    "colors": "The legend of a categorical Color by, and the Highlight entries.",
-    "size_key": "The duration size key (👁️ Fixations → Size key). Its circles "
-    "keep the true marker sizes; Size sets its labels.",
+    "compare": "The A/B legend naming the two scanpaths. Edit its labels in "
+    "⚖️ Compare ▾ → Label A / Label B.",
+    "saccades": "The saccade-type legend. Edit its colours in ↗️ Saccades ▾ → "
+    "Color, set to By type.",
+    "colors": "The legend of a categorical Color by, and the Highlight entries. "
+    "Its entries come from 👁️ Fixations ▾ → Marker → Color, and from the "
+    "Highlight filters in 🧹 Filter ▾.",
+    "size_key": "The duration size key. Its circles keep the true marker sizes; "
+    "edit the durations it shows in 👁️ Fixations ▾ → Durations.",
 }
 
 

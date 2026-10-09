@@ -1247,8 +1247,9 @@ def _render_parser() -> argparse.ArgumentParser:
         "--line-spacing",
         type=float,
         metavar="N",
-        help="Line slots each word box stands for, which sizes the reading text "
-        "(default: 3 — OneStop's one blank line above and below).",
+        help="How far apart the lines are, in font sizes: the reading text is "
+        "the distance between lines ÷ N (default: 3, a blank line above and "
+        "below).",
     )
     viz.add_argument(
         "--no-scale-text-to-boxes",

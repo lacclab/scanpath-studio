@@ -7177,7 +7177,7 @@ def render_plot_controls(
             persist_state="session",
             on_change=_on_span_toggle,
             help="Mark the words where the chosen true/false column is true "
-            "(OneStop: its answer span).",
+            "(e.g. a target span).",
         )
         span_off_disabled, _ = _layer_gate(not span_on, None)
         if highlight_options:

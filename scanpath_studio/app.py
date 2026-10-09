@@ -8228,9 +8228,10 @@ def _rail_text_rows(
             section=section,
             section_help="How the reading text is drawn.",
             caption_help=tip(
-                "**Scale to boxes**: size the text from the word-box height (box "
-                "height ÷ line spacing). Spacing: how many text lines one box "
-                "spans (OneStop: 3). Untick to set a fixed size below."
+                "**Scale to boxes**: size the text from the word boxes (the "
+                "distance between lines ÷ line spacing). Spacing: how far apart "
+                "the lines are, in font sizes (3: a blank line above and below). "
+                "Untick to set a fixed size below."
             ),
         )
         fit_col, spacing_cap_col, spacing_col = fit.columns(
@@ -8610,7 +8611,8 @@ def render_canvas_controls(
             step=0.5,
             key="global_line_spacing",
             persist_state="session",
-            help="Line slots represented by each word box. OneStop uses 3.",
+            help="How far apart the lines are, in font sizes: the text is the "
+            "distance between lines ÷ this (3: a blank line above and below).",
         )
     else:
         use_stimulus_font_pt = field(

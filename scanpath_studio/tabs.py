@@ -15981,7 +15981,7 @@ def _editor_setup_config(name: str) -> dict:
     format (``wizard._wizard_setup_config``).
 
     So ⬇️ Download setup file means the same thing on both screens, and a file saved from
-    either is restored by the same *Restore a saved setup* uploader — over the
+    either is restored by the same *Start from → A setup file* uploader — over the
     **original files**, which is why the mapping is written in their column
     names rather than the stored frame's (`_setup_file_mapping`). What a
     restore cannot reproduce is listed under ``column_mapping_notes``, and the
@@ -16065,7 +16065,8 @@ def render_dataset_editor_footer(host) -> None:
         width="stretch",
         help="Save this dataset's column mapping and recording setup to re-use "
         "on similar data — or to send with the files, so whoever loads them "
-        "restores it from *Restore a saved setup* instead of re-mapping by hand.",
+        "restores it with *Start from → A setup file* instead of re-mapping by "
+        "hand.",
     )
     apply_col.button(
         # UX-54 r2: the add-dataset screen's ✅ Add dataset, for the screen that

@@ -241,7 +241,7 @@ def part(
     a header and a click each on a sequence with no choices in it.
 
     ``trailing`` (UX-113), when given, is called with a column beside the
-    title — e.g. stage 2's "↩️ Restore a saved setup" popover trigger — so it
+    title — a control that belongs on the title line rather than in the body — so it
     reads as part of the title line instead of as the first thing in the body.
     Only the title line splits; the returned body container stays full width.
 

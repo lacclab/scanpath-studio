@@ -271,7 +271,7 @@ def _remove_dataset_app():
 
 class TestWizardRestoreSeeding:
     def test_overwrite_replaces_existing_widget_keys(self):
-        # Regression: the wizard "Restore a saved setup" silently did nothing
+        # Regression: the wizard's setup restore silently did nothing
         # because setdefault no-ops on keys the mapping widgets already created.
         at = AppTest.from_function(_seed_overwrite_app)
         at.run()
@@ -363,3 +363,92 @@ class TestRestoreSetupOncePerUpload:
         at.session_state["_setup"] = json.dumps({"data_source": "Lab A"})
         at.run()  # same file_id and bytes as before, but after a clear
         assert at.session_state["_wizard_restored_meta"]["data_source"] == "Lab A"
+
+
+def _copy_setup_app():
+    """*Start from → A dataset you added*: copy, then Undo (2026-10-09)."""
+    import streamlit as st
+
+    from scanpath_studio import wizard
+
+    st.session_state["_datasets"] = {
+        "Lab A": {
+            "source_recipe": {
+                "schemas": {
+                    "fixations": {
+                        "trial": "TRIAL_INDEX",
+                        "participant": "RECORDING_SESSION_LABEL",
+                        "x": "CURRENT_FIX_X",
+                        "duration": "CURRENT_FIX_DURATION",
+                    },
+                    "words": {
+                        "trial": ["RECORDING_SESSION_LABEL", "TRIAL_INDEX"],
+                        "left": "IA_LEFT",
+                        "right": "IA_RIGHT",
+                    },
+                }
+            },
+            "setup": {"canvas_width": 1920, "canvas_height": 1080},
+            wizard.WIZARD_CHOICES_FIELD: {
+                "keep_and_filter": {"wizard_keep_by_table": {"col_map_fix": ["eye"]}}
+            },
+        }
+    }
+    step = st.session_state.get("_step", 0)
+    if step == 0:
+        st.session_state["col_map_fix_x"] = "mine"
+        st.session_state[wizard._COPY_FROM_KEY] = "Lab A"
+        wizard._copy_dataset_setup()
+    elif step == 1:
+        wizard._undo_and_start_from_scratch()
+
+
+class TestStartFromADataset:
+    def test_copying_fills_the_mapping_and_undo_puts_it_back(self):
+        from scanpath_studio import wizard
+
+        at = AppTest.from_function(_copy_setup_app)
+        at.run()
+        assert not at.exception, at.exception
+        state = at.session_state
+        assert state["col_map_fix_x"] == "CURRENT_FIX_X"
+        assert state["col_map_fix_trial"] == ["TRIAL_INDEX"]
+        assert state["col_map_fix_participant"] == ["RECORDING_SESSION_LABEL"]
+        assert state["col_map_words_trial"] == [
+            "RECORDING_SESSION_LABEL",
+            "TRIAL_INDEX",
+        ]
+        assert state["col_map_words_box_format"] == "Edges"
+        assert state["wizard_keep_col_map_fix"] == ["eye"]
+        assert state["_wizard_restored_setup"]["canvas_width"] == 1920
+        meta = state["_wizard_restored_meta"]
+        assert meta["kind"] == "dataset" and meta["data_source"] == "Lab A"
+        assert "column mapping (Fixations, Words (interest areas))" in meta["applied"]
+        assert (
+            "1 kept field" in meta["applied"] and "recording setup" in meta["applied"]
+        )
+
+        at.session_state["_step"] = 1
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["col_map_fix_x"] == "mine"
+        assert "col_map_words_trial" not in at.session_state
+        assert "_wizard_restored_setup" not in at.session_state
+        assert "_wizard_restored_meta" not in at.session_state
+        assert at.session_state[wizard._START_FROM_KEY] == wizard._START_SCRATCH
+
+
+class TestMappingKeysFromSchemas:
+    def test_origin_size_boxes_and_raw_gaze_singles(self):
+        from scanpath_studio.wizard import _mapping_keys_from_schemas
+
+        keys = _mapping_keys_from_schemas(
+            {
+                "words": {"x": "x", "width": "w", "text_id": None},
+                "raw_gaze": {"trial": "t", "participant": "p"},
+            }
+        )
+        assert keys["col_map_words_box_format"] == "Origin + size"
+        assert keys["col_map_words_text_id"] == []
+        assert keys["col_map_raw_gaze_trial"] == ["t"]
+        assert keys["col_map_raw_gaze_participant"] == "p"

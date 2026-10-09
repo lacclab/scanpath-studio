@@ -2157,7 +2157,7 @@ def _seed_column_mapping(
 
     BUG-32: the mapping is scoped to a dataset, so a caller restoring keys *for*
     a dataset whose table has not been read yet names it as ``dataset`` — the
-    wizard's *Restore a saved setup* — and the keys are claimed for it
+    wizard's *Start from* — and the keys are claimed for it
     (``controls.claim_mapping``): its first table keeps them, another dataset
     meeting them first drops them. Without ``dataset`` (the 💾 plot-config
     restore) the keys describe whatever those prefixes already map, and the
@@ -3255,7 +3255,7 @@ def _build_share_query(
         # re-mapping, which is a real second half of "load the same data": the
         # column mapping and recording setup are exportable as JSON from the
         # add-dataset screen's ⬇️ Download setup file, and re-applied from that screen's
-        # *Restore a saved setup*. The caveat used to stop at "load the same
+        # *Start from → A setup file*. The caveat used to stop at "load the same
         # data" and leave the mapping to be redone by hand.
         #
         # #374 F14: the link names the dataset, so the recipient's app can open

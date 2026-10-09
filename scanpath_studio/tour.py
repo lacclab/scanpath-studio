@@ -2239,9 +2239,9 @@ _WIZARD_GUIDE_STEPS = [
         "title": f"{ICONS['confirm']} Save it",
         "body": (
             f"**{ICONS['confirm']} Add dataset** saves it and opens it, ready to "
-            f"explore. **{ICONS['download']} Download setup file** downloads this mapping "
-            "and recording setup as a file — load it with *Restore a saved "
-            "setup* the next time you add data shaped like this."
+            f"explore. **{ICONS['download']} Download setup file** saves this mapping "
+            "and recording setup as a file. Next time, *Start from* reuses "
+            "either the file or this dataset."
         ),
         "selector": ".st-key-wizard_footer_row",
         "step_id": None,

@@ -42,6 +42,8 @@ from .constants import (
 from .controls import (
     _GRID_LABEL_W,
     ADD_ATTEMPTED_KEY,
+    BOX_FORMAT_EDGES,
+    BOX_FORMAT_ORIGIN,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
@@ -96,7 +98,7 @@ from .experimental_setup import (
     SetupSnapshot,
     font_pt_to_px,
 )
-from .fields import switch
+from .fields import switch, tooltip
 from .menu import view_label
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
@@ -164,6 +166,9 @@ def _reset_wizard_widgets() -> None:
         "wizard_config_restore",
         "_wizard_config_last",
         "_wizard_restored_meta",
+        _RESTORE_UNDO_KEY,
+        _START_FROM_KEY,
+        _COPY_FROM_KEY,
         "_composite_trial_columns",
         "wizard_filter_fields",
         # MultiplEYE preset uploads + generic filename-derivation / aggregation.
@@ -1831,16 +1836,259 @@ def _wizard_table_keep_picker(
     return chosen, meta_fields
 
 
+#: 2026-10-09 — part 2 opens on **Start from**: from scratch, from a dataset
+#: already added (its mapping, kept fields, column derivation and recording
+#: setup, copied — no file needed), or from a setup file saved with
+#: ⬇️ Download setup file. It replaced a popover beside the part's title that
+#: offered only the file, which a first-time user had no way to know about.
+_START_FROM_KEY = "wizard_start_from"
+_START_SCRATCH = "Scratch"
+_START_DATASET = "A dataset you added"
+_START_FILE = "A setup file"
+_COPY_FROM_KEY = "wizard_copy_from"
+#: What the screen held before a setup was applied: ``{key: (present, value)}``,
+#: which Undo — or going back to *Scratch* — puts back.
+_RESTORE_UNDO_KEY = "_wizard_restore_undo"
+#: A finished upload's own wizard choices that its stored entry keeps nowhere
+#: else — the column derivation and the kept fields — so *A dataset you added*
+#: can copy them too.
+WIZARD_CHOICES_FIELD = "wizard_choices"
+_TABLE_PREFIXES = {
+    "words": "col_map_words",
+    "fixations": "col_map_fix",
+    "raw_gaze": "col_map_raw_gaze",
+}
+
+
+def _mapping_keys_from_schemas(schemas: dict) -> dict:
+    """A stored dataset's mapping (`source_recipe`'s schemas, in its files' own
+    column names) as the add screen's ``col_map_*`` widget values."""
+    keys: dict = {}
+    for table, schema in (schemas or {}).items():
+        prefix = _TABLE_PREFIXES.get(table)
+        if prefix is None or not isinstance(schema, dict):
+            continue
+        for field, value in schema.items():
+            # The identity pickers are multiselects: Trial ID everywhere, and
+            # Participant / Text ID on the Fixations and Words rows.
+            if field == "trial" or (
+                table != "raw_gaze" and field in ("participant", "text_id")
+            ):
+                value = (
+                    []
+                    if not value
+                    else [value]
+                    if isinstance(value, str)
+                    else list(value)
+                )
+            keys[f"{prefix}_{field}"] = value
+        if table == "words":
+            if schema.get("left") or schema.get("right"):
+                keys[f"{prefix}_box_format"] = BOX_FORMAT_EDGES
+            elif schema.get("width") or schema.get("height"):
+                keys[f"{prefix}_box_format"] = BOX_FORMAT_ORIGIN
+    return keys
+
+
+def _dataset_setup_config(name: str) -> dict | None:
+    """``name``'s setup in a setup file's shape: its mapping as it stands now
+    (✏️ Edit dataset keeps `source_recipe` current), its recording setup, and
+    the derivation and kept fields it was added with."""
+    entry = (st.session_state.get("_datasets") or {}).get(name)
+    if not isinstance(entry, dict):
+        return None
+    choices = entry.get(WIZARD_CHOICES_FIELD)
+    choices = choices if isinstance(choices, dict) else {}
+    setup = entry.get("setup")
+    return {
+        "data_source": name,
+        "column_mapping": _mapping_keys_from_schemas(
+            (entry.get("source_recipe") or {}).get("schemas") or {}
+        ),
+        "experimental_setup": setup if isinstance(setup, dict) else None,
+        "filename_derive": choices.get("filename_derive"),
+        "keep_and_filter": choices.get("keep_and_filter"),
+    }
+
+
+def _setup_config_writes(config: dict) -> set:
+    """Every session key :func:`_apply_setup_config` may write for ``config`` —
+    what Undo has to be able to put back."""
+    keys = {
+        "_wizard_restored_setup",
+        "_wizard_setup_restored_applied",
+        "_wizard_setup_recall",
+        _FILENAME_DERIVE_APPLIED_KEY,
+        *_SETUP_RESTORE_WRITES,
+    }
+    for key in config.get("column_mapping") or {}:
+        if (
+            isinstance(key, str)
+            and key.startswith("col_map_")
+            and not key.endswith("_upload")
+        ):
+            keys.add(
+                key[: -len("_paragraph")] + "_text_id"
+                if key.endswith("_paragraph")
+                else key
+            )
+    widgets = (config.get("filename_derive") or {}).get("widgets")
+    if isinstance(widgets, dict):
+        keys.update(widgets)
+    by_table = (config.get("keep_and_filter") or {}).get("wizard_keep_by_table")
+    keys.update(
+        f"wizard_keep_{prefix}" for prefix in (by_table or _WIZARD_MAPPING_PREFIXES)
+    )
+    return keys
+
+
+def _applied_summary(config: dict) -> str:
+    """What a setup filled in, in a phrase — for the line under *Start from*."""
+    mapping = config.get("column_mapping") or {}
+    tables = [
+        label
+        for prefix, label in (
+            ("col_map_fix", "Fixations"),
+            ("col_map_words", WORDS_TABLE_LABEL),
+            ("col_map_raw_gaze", "Raw gaze"),
+        )
+        if any(
+            key.startswith(f"{prefix}_")
+            and not key.endswith(("_header", "_upload", "_cell_confirm"))
+            and value not in (None, "", [])
+            for key, value in mapping.items()
+        )
+    ]
+    parts = [f"column mapping ({', '.join(tables)})"] if tables else []
+    by_table = (config.get("keep_and_filter") or {}).get("wizard_keep_by_table") or {}
+    kept = sum(len(cols) for cols in by_table.values() if isinstance(cols, list))
+    if kept:
+        parts.append(plural(kept, "kept field"))
+    applied = (config.get("filename_derive") or {}).get("applied")
+    if applied:
+        parts.append(
+            plural(
+                len(applied) if isinstance(applied, list) else 1, "column derivation"
+            )
+        )
+    if isinstance(config.get("experimental_setup"), dict):
+        parts.append("recording setup")
+    return ", ".join(parts) if parts else "nothing this screen uses"
+
+
+def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
+    """Fill the add screen in from a setup (``kind`` "file" or "dataset").
+
+    Runs before the mapping widgets are drawn — from a button's callback, or
+    from the file reader at the top of part 2 — so writing their keys is safe,
+    and it overwrites: those widgets already exist from earlier runs, so
+    ``setdefault`` would silently do nothing. What the keys held first is kept
+    for Undo, once: applying a second setup still undoes to the screen before
+    the first.
+    """
+    held = dict(st.session_state.get(_RESTORE_UNDO_KEY) or {})
+    for key in _setup_config_writes(config):
+        if key not in held:
+            held[key] = (key in st.session_state, st.session_state.get(key))
+    st.session_state[_RESTORE_UNDO_KEY] = held
+    _seed_column_mapping(
+        config.get("column_mapping"),
+        overwrite=True,
+        dataset=WIZARD_MAPPING_DATASET,
+    )
+    # UX-113 Phase 3: filename/column-derive settings + keep/filter-field
+    # choices. Both sections are optional (older files lack them).
+    if isinstance(config.get("filename_derive"), dict):
+        fd = config["filename_derive"]
+        # UX-129: a setup saved before multiple lines existed wrote one dict;
+        # the current writer always writes a list — accept either.
+        if isinstance(fd.get("applied"), (dict, list)):
+            st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = fd["applied"]
+        widgets = fd.get("widgets")
+        if isinstance(widgets, dict):
+            for key, value in widgets.items():
+                if value is not None:
+                    st.session_state[key] = value
+    if isinstance(config.get("keep_and_filter"), dict):
+        kf = config["keep_and_filter"]
+        # UX-114: the per-table picks are the source of truth.
+        by_table = kf.get("wizard_keep_by_table")
+        if isinstance(by_table, dict):
+            for prefix, cols in by_table.items():
+                if isinstance(cols, list):
+                    st.session_state[f"wizard_keep_{prefix}"] = list(cols)
+        elif kf.get("wizard_keep_extra") is not None:
+            # A setup saved before UX-114 has one flat list — offer it to every
+            # table; each picker prunes what it doesn't offer.
+            for prefix in _WIZARD_MAPPING_PREFIXES:
+                st.session_state[f"wizard_keep_{prefix}"] = list(
+                    kf["wizard_keep_extra"]
+                )
+    if isinstance(config.get("experimental_setup"), dict):
+        # A plot config keeps the canvas in a sibling `canvas_px` section; merge
+        # it in, or `_restored_setup_snapshot` would fall back to the class
+        # default and pre-answer the screen with a monitor nobody measured.
+        restored = dict(config["experimental_setup"])
+        canvas = config.get("canvas_px")
+        if isinstance(canvas, dict):
+            for key, src in (("canvas_width", "width"), ("canvas_height", "height")):
+                if canvas.get(src) is not None:
+                    restored.setdefault(key, canvas[src])
+        st.session_state["_wizard_restored_setup"] = restored
+        st.session_state.pop("_wizard_setup_restored_applied", None)
+    st.session_state["_wizard_restored_meta"] = {
+        "data_source": config.get("data_source") or source,
+        "exported_at": config.get("exported_at"),
+        "kind": kind,
+        "applied": _applied_summary(config),
+    }
+
+
+def _undo_setup_restore() -> None:
+    """Put the screen back as it was before a setup was applied."""
+    for key, (present, value) in (
+        st.session_state.pop(_RESTORE_UNDO_KEY, None) or {}
+    ).items():
+        if present:
+            st.session_state[key] = value
+        else:
+            st.session_state.pop(key, None)
+    st.session_state.pop("_wizard_restored_meta", None)
+    st.session_state.pop("_wizard_config_last", None)
+
+
+def _undo_and_start_from_scratch() -> None:
+    """The applied line's Undo: the setup goes, and *Start from* goes back to
+    Scratch with it."""
+    _undo_setup_restore()
+    st.session_state[_START_FROM_KEY] = _START_SCRATCH
+
+
+def _start_from_changed() -> None:
+    """Choosing *Scratch* after a setup was applied undoes it — that is what
+    starting from scratch means."""
+    if st.session_state.get(_START_FROM_KEY) == _START_SCRATCH:
+        _undo_setup_restore()
+
+
+def _copy_dataset_setup() -> None:
+    """*Copy its setup*: the chosen dataset's setup onto this screen."""
+    name = st.session_state.get(_COPY_FROM_KEY)
+    config = _dataset_setup_config(name) if name else None
+    if config is not None:
+        _apply_setup_config(config, source=str(name), kind="dataset")
+
+
 def _wizard_restore_config(host) -> None:
-    """Step 1 of the wizard: optionally restore a previously saved setup, seeding
-    the column mapping + kept-field choices so the user skips re-mapping. Applied
-    once per uploaded file; reruns so the mapping widgets pick up the values."""
+    """*Start from → A setup file*: read the file once per upload and apply it
+    (:func:`_apply_setup_config`), then rerun so the mapping widgets show it."""
     uploaded = host.file_uploader(
-        "Restore a saved setup (optional)",
+        "Setup file",
         type=["json"],
         key="wizard_config_restore",
-        help="Re-apply a column mapping + field choices you saved earlier "
-        "(⬇️ Download setup file at the foot of this page).",
+        help="The file ⬇️ Download setup file saved at the foot of this screen "
+        "when you added data like this before.",
+        label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
     if uploaded is None:
@@ -1869,87 +2117,72 @@ def _wizard_restore_config(host) -> None:
         # #374: an unrelated JSON used to toast "Restored" with nothing restored.
         host.warning("That file holds no saved setup, so nothing was restored.")
         return
-    if isinstance(config, dict):
-        # Overwrite: the wizard's mapping widgets were already created on a prior
-        # render, so their keys exist — setdefault would no-op and the restore
-        # would silently fail. This step runs before the widgets re-instantiate
-        # this pass, so writing the keys is safe, and it reruns afterwards.
-        _seed_column_mapping(
-            config.get("column_mapping"),
-            overwrite=True,
-            dataset=WIZARD_MAPPING_DATASET,
+    _apply_setup_config(config, source=uploaded.name, kind="file")
+    st.rerun()
+
+
+def _render_start_from(host) -> None:
+    """Part 2's first line: start from scratch, or from a setup that exists."""
+    uploads = list(st.session_state.get("_datasets") or {})
+    options = [_START_SCRATCH, *([_START_DATASET] if uploads else []), _START_FILE]
+    if st.session_state.get(_START_FROM_KEY) not in options:
+        st.session_state[_START_FROM_KEY] = _START_SCRATCH
+    row = host.container(
+        key="wiz_start_from",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    tip = tooltip(
+        "Start from",
+        "Fill this screen in from a setup you already have: a dataset you "
+        "added before — its column mapping, the fields it kept and its recording "
+        "setup — or the file Download setup file saved. Everything stays "
+        "editable, and Undo puts the screen back.",
+    )
+    row.markdown(
+        f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
+        '<span class="sps-flabel sps-flabel-help">Start from</span></span>',
+        unsafe_allow_html=True,
+        width="content",
+    )
+    choice = row.segmented_control(
+        "Start from",
+        options,
+        key=_START_FROM_KEY,
+        required=True,
+        label_visibility="collapsed",
+        on_change=_start_from_changed,
+    )
+    if choice == _START_DATASET:
+        if st.session_state.get(_COPY_FROM_KEY) not in uploads:
+            st.session_state[_COPY_FROM_KEY] = uploads[0]
+        row.selectbox(
+            "Dataset to copy from",
+            uploads,
+            key=_COPY_FROM_KEY,
+            label_visibility="collapsed",
+            width=260,
         )
-        # Remember the restored config's provenance so the caller can show which
-        # dataset (and when) it was exported from, below the upload box (9.1).
-        st.session_state["_wizard_restored_meta"] = {
-            "data_source": config.get("data_source"),
-            "exported_at": config.get("exported_at"),
-        }
-        # DATA-22 decision (a): a restored setup file pre-answers the
-        # Recording-setup step. The section is optional — a file written before
-        # this existed simply leaves the step unanswered, which is the honest
-        # outcome rather than a silent default. Additive, so per ENG-11 the
-        # PLOT_CONFIG_SCHEMA stays where it is.
-        # UX-113 Phase 3: filename/column-derive settings + keep/filter-field
-        # choices weren't captured before — a restored setup silently dropped
-        # them, forcing a re-do even though the mapping itself round-tripped.
-        # Both sections are optional (older files simply lack them), so no
-        # PLOT_CONFIG_SCHEMA bump — same precedent as experimental_setup.
-        if isinstance(config.get("filename_derive"), dict):
-            fd = config["filename_derive"]
-            # UX-129: a setup saved before multiple lines existed wrote one
-            # dict; the current writer always writes a list (one entry per
-            # line) — accept either, `_wizard_filename_derive` normalizes.
-            if isinstance(fd.get("applied"), (dict, list)):
-                st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = fd["applied"]
-            widgets = fd.get("widgets")
-            if isinstance(widgets, dict):
-                for key, value in widgets.items():
-                    if value is not None:
-                        st.session_state[key] = value
-        if isinstance(config.get("keep_and_filter"), dict):
-            kf = config["keep_and_filter"]
-            # UX-114: the per-table picks are the real source of truth — each
-            # `wizard_keep_<prefix>` widget re-derives `wizard_filter_fields`
-            # itself once the mapping resolves, so seeding those (rather than
-            # the flat legacy keys) is what actually reproduces the setup.
-            by_table = kf.get("wizard_keep_by_table")
-            if isinstance(by_table, dict):
-                for prefix, cols in by_table.items():
-                    if isinstance(cols, list):
-                        st.session_state[f"wizard_keep_{prefix}"] = list(cols)
-            elif kf.get("wizard_keep_extra") is not None:
-                # A setup saved before UX-114 only has the flat cross-table
-                # list — apply it to both tables; each one's picker prunes
-                # away whatever it doesn't actually offer.
-                cols = list(kf["wizard_keep_extra"])
-                for prefix in ("col_map_words", "col_map_fix", "col_map_raw_gaze"):
-                    st.session_state[f"wizard_keep_{prefix}"] = list(cols)
-        if isinstance(config.get("experimental_setup"), dict):
-            # The canvas is carried in a *sibling* section by the plot-config
-            # writer (`tabs._build_studio_config` puts it under `canvas_px`), so
-            # it has to be merged in here — see `_restored_setup_snapshot`, which
-            # would otherwise fall back to the 2560x1440 class default and, if
-            # the file's provenance said "measured", pre-answer the step with a
-            # measured monitor nobody ever measured.
-            restored = dict(config["experimental_setup"])
-            canvas = config.get("canvas_px")
-            if isinstance(canvas, dict):
-                for key, source in (
-                    ("canvas_width", "width"),
-                    ("canvas_height", "height"),
-                ):
-                    if canvas.get(source) is not None:
-                        restored.setdefault(key, canvas[source])
-            st.session_state["_wizard_restored_setup"] = restored
-            st.session_state.pop("_wizard_setup_restored_applied", None)
-        st.toast("Restored the saved setup — review it below.", icon=ICONS["success"])
-        st.rerun()
+        row.button(
+            "Copy its setup",
+            key="wizard_copy_setup",
+            on_click=_copy_dataset_setup,
+            help="Its column mapping, kept fields, column derivation and "
+            "recording setup, onto this screen. Your files still go below.",
+        )
+    elif choice == _START_FILE:
+        box = host.container(key="wiz_start_from_file")
+        box.caption(
+            f"The file **{ICONS['download']} Download setup file** saved at the "
+            "foot of this screen when you added data like this before."
+        )
+        _wizard_restore_config(box)
+    _render_restored_config_caption(host)
 
 
 def _render_restored_config_caption(host) -> None:
-    """Below the restore box: name the dataset the restored setup came from (and
-    when it was exported), so the user can confirm they loaded the right one."""
+    """Under *Start from*: what was applied, from where, with Undo."""
     meta = st.session_state.get("_wizard_restored_meta")
     if not meta:
         return
@@ -1962,11 +2195,31 @@ def _render_restored_config_caption(host) -> None:
         try:
             from datetime import datetime
 
-            bits.append(f"exported {datetime.fromisoformat(exported):%Y-%m-%d %H:%M}")
+            bits.append(f"saved {datetime.fromisoformat(exported):%Y-%m-%d %H:%M}")
         except (ValueError, TypeError):
-            bits.append(f"exported {exported}")
+            bits.append(f"saved {exported}")
+    verb = "Copied" if meta.get("kind") == "dataset" else "Restored"
     detail = " · ".join(bits) if bits else "from a saved file"
-    host.caption(f"✓ Restored setup {detail} — review the mapping below.")
+    line = host.container(
+        key="wiz_start_from_applied",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    )
+    line.caption(
+        f"{ICONS['success']} {verb} {detail}: {meta.get('applied') or 'the setup'}. "
+        "Check it below.",
+        width="content",
+    )
+    if st.session_state.get(_RESTORE_UNDO_KEY):
+        line.button(
+            "Undo",
+            key="wizard_restore_undo",
+            type="tertiary",
+            icon=ICONS["undo"],
+            on_click=_undo_and_start_from_scratch,
+            help="Put this screen back as it was before.",
+        )
 
 
 def _filename_derive_section() -> dict | None:
@@ -2073,7 +2326,7 @@ def current_setup_section() -> dict | None:
 
 def _render_setup_download(host) -> None:
     """Export the current column mapping as a JSON setup file, so it can be
-    re-applied later via the wizard's *Restore a saved setup* step. Rendered
+    re-applied later via the wizard's *Start from → A setup file*. Rendered
     beside the **Add dataset** button (UX-53)."""
     host.download_button(
         # UX-93: short enough to sit on ONE line at the ✕ Cancel width the
@@ -2086,8 +2339,8 @@ def _render_setup_download(host) -> None:
         mime="application/json",
         key="wizard_setup_download",
         width="stretch",
-        help="Save this column mapping to re-use on similar data — restore it "
-        "from *↩️ Restore a saved setup* beside *Upload data tables*.",
+        help="Save this column mapping and recording setup to re-use on similar "
+        "data — load it with *Start from → A setup file* at the top of part 2.",
     )
 
 
@@ -2161,6 +2414,14 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
 # -----------------------------------------------------------------------------
 
 _SETUP_MODE_KEYS = {g: f"wizard_setup_{g}_mode" for g in SETUP_GROUPS}
+#: The keys a restored setup's recording setup may write (`_apply_restored_setup`)
+#: — what *Start from*'s Undo has to put back.
+_SETUP_RESTORE_WRITES = (
+    *_SETUP_MODE_KEYS.values(),
+    "wizard_setup_font_mode",
+    "wizard_setup_font_name",
+    "wizard_setup_font_other",
+)
 
 _SCREEN_KNOW = "I know the resolution"
 _SCREEN_ESTIMATE = "Estimate from my data"
@@ -3380,16 +3641,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s_name = _part("name")
     _wizard_name_header(s_name, active)
 
-    def _render_restore_trigger(host) -> None:
-        # UX-127: beside stage 2's title now, not stage 3's — UX-113's reason
-        # (it never touches the uploads themselves) no longer separates the
-        # two stages, since every table now uploads *inside* stage 3 too;
-        # what actually matters is that a restored setup is visible before
-        # the wizard is filled in, and stage 2 is the first thing on screen.
-        restore_box = host.popover(f"{ICONS['undo']} Restore a saved setup (optional)")
-        _wizard_restore_config(restore_box)
-        _render_restored_config_caption(restore_box)
-
     # UX-114: the "Dataset format" choice + the MultiplEYE branch it dispatches
     # to are held back this release (mirrors PRE-21/PRE-22's gate) — the code
     # stays for a later revival, but with the flag off there is no format
@@ -3408,10 +3659,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _generic_format = (
         st.session_state.get("wizard_dataset_format", "Generic") != "MultiplEYE"
     )
-    s1 = _part(
-        "data",
-        trailing=_render_restore_trigger if active and _generic_format else None,
-    )
+    s1 = _part("data")
+    if active and _generic_format:
+        _render_start_from(s1)
     # UX-129: "mapping" is no longer its own numbered stage — everything that
     # used to render under it (the identity/geometry sections, each table's
     # own upload+mapping row) now renders straight into `s1`, the same "data"
@@ -4499,6 +4749,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # geometry at all before this, which is why switching to one left the
             # canvas on the previous source's monitor.
             "setup": setup_snapshot.to_dict(),
+            # What *Start from → A dataset you added* copies besides the
+            # mapping and the setup: how columns were derived, and which
+            # extra fields were kept.
+            WIZARD_CHOICES_FIELD: {
+                "filename_derive": _filename_derive_section(),
+                "keep_and_filter": _keep_and_filter_section(),
+            },
             # DATA-66: what each canonical column was called in these files —
             # the record the app shows, exports and accepts names from. Built
             # from exactly what normalization read: the tables after character

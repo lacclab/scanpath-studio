@@ -129,7 +129,6 @@ from scanpath_studio.constants import (
     RAW_GAZE_SNAP_RESTORE_KEY,
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
-    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -7408,19 +7407,37 @@ def _apply_setup_override(
 ) -> None:
     """Write ``snapshot`` onto the figure as ``token``'s setup, remembering what
     it replaced. ``skip`` — keys a share link just seeded, which win."""
+    _apply_dataset_values(token, setup_override_session_values(snapshot), skip)
+
+
+def _apply_dataset_values(
+    token: str, values: Mapping, skip: frozenset = frozenset()
+) -> None:
+    """Write ``values`` (``global_*`` setup keys) onto the figure as dataset
+    ``token``'s own, remembering what they replaced so leaving it puts that
+    back (`_restore_setup_override_stash`)."""
     if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != token:
         # The first override of a run of them keeps the pre-override state.
         st.session_state.setdefault(
             SETUP_OVERRIDE_RESTORE_KEY,
-            {
-                key: None if key in skip else st.session_state.get(key)
-                for key in SETUP_OVERRIDE_SESSION_KEYS
-            },
+            {key: None if key in skip else st.session_state.get(key) for key in values},
         )
-    for key, value in setup_override_session_values(snapshot).items():
+    for key, value in values.items():
         if key not in skip:
             st.session_state[key] = value
     st.session_state[SETUP_OVERRIDE_FOR_KEY] = token
+
+
+def upload_font_family(name: str | None) -> str | None:
+    """The typeface an added dataset was set up with (the add and edit
+    screens' *Font* question), or ``None`` when ``name`` is no added dataset.
+    One set up before that question, or answered *I don't know*, has the
+    default font."""
+    stored = (st.session_state.get("_datasets") or {}).get(name) if name else None
+    if not isinstance(stored, dict):
+        return None
+    setup = stored.get("setup") if isinstance(stored.get("setup"), dict) else {}
+    return str(SetupSnapshot.from_dict(setup, fallback=SetupSnapshot()).font_family)
 
 
 def save_dataset_setup_override(token: str, payload: dict | None) -> None:
@@ -7760,6 +7777,17 @@ def seed_canvas_state(
         and (override := dataset_setup_override(override_token)) is not None
     ):
         _apply_setup_override(override_token, override, frozenset(from_link))
+    # An added dataset's font is its own in the same way: entering it draws the
+    # text in the font it was set up with, and leaving it puts back the font the
+    # figure had — or every dataset opened after it would inherit it.
+    elif (
+        override_token
+        and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != override_token
+        and (font := upload_font_family(override_token)) is not None
+    ):
+        _apply_dataset_values(
+            override_token, {"global_font_family": font}, frozenset(from_link)
+        )
 
     # The remaining widget defaults. Each of these used to be `setdefault`ed
     # inline, immediately above its own widget; seeding them here is what lets a

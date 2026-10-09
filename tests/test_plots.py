@@ -1077,7 +1077,7 @@ class TestMakeScanpathAnimation:
         )
         assert isinstance(fig, go.Figure)
         assert hasattr(fig, "frames")
-        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES
 
     @pytest.mark.parametrize(
         "style",
@@ -1168,7 +1168,7 @@ class TestMakeScanpathAnimation:
         assert (im.x, im.y, im.sizex, im.sizey) == (305.0, 44.5, 1310, 991)
         assert im.layer == "below" and im.yanchor == "top"
         assert str(im.source).startswith("data:image/png;base64,")
-        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES
 
     def test_make_scanpath_animation_background_image_dual_overlay(
         self, tmp_path, normalized_words_df, normalized_fixations_df
@@ -1386,7 +1386,7 @@ class TestMakeScanpathAnimation:
             font_family="Arial",
         )
         slider = fig.layout.sliders[0]
-        assert 1 <= len(slider.steps) <= _ANIM_MAX_FRAMES + 1
+        assert 1 <= len(slider.steps) <= _ANIM_MAX_FRAMES
         # "elapsed / total s" label on every step (meaningful for any reader count).
         assert all(" / " in s.label and s.label.endswith("s") for s in slider.steps)
         assert slider.currentvalue.visible
@@ -1423,7 +1423,7 @@ class TestMakeScanpathAnimation:
             base_font_size=12,
             font_family="Arial",
         )
-        assert len(long_fig.frames) <= _ANIM_MAX_FRAMES + 1 < long_n
+        assert len(long_fig.frames) == _ANIM_MAX_FRAMES < long_n
 
 
 class TestAnimationPlayer:
@@ -1725,7 +1725,7 @@ class TestDualScanpathAnimation:
         assert hasattr(fig, "frames")
         # Frames sit on a uniform time grid (VIZ-11), bounded regardless of the
         # onset pattern across the two overlaid scanpaths.
-        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES
         # A/B legend is off by default (CMP-2) — the flat colours already tell the
         # two readers apart.
         assert [t.name for t in fig.data if t.showlegend] == []
@@ -1817,7 +1817,7 @@ class TestDualScanpathAnimation:
             font_family="Arial",
             fixations_b=normalized_fixations_df,
         )
-        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES
 
     def test_dual_animation_one_empty_falls_back(
         self, normalized_words_df, normalized_fixations_df
@@ -1833,7 +1833,7 @@ class TestDualScanpathAnimation:
             fixations_b=pd.DataFrame(),
         )
         assert isinstance(fig, go.Figure)
-        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES
         assert [t for t in fig.data if t.showlegend] == []
 
     def test_dual_animation_both_empty(self, normalized_words_df):
@@ -1890,7 +1890,9 @@ class TestAnimationFrameGrid:
         summary = animation_timeline_summary(
             [self._fix()], 1.0, grid_step_ms=10, max_frames=25
         )
-        assert summary["n_frames"] <= 26  # the exact end lands one extra frame
+        # #422: the limit counts every frame, the first and the last included.
+        assert summary["n_frames"] == 25
+        assert summary["max_frames"] == 25
         assert summary["coarsened"] is True
         assert summary["requested_step_ms"] == pytest.approx(10)
         assert summary["step_ms"] > 10
@@ -1911,6 +1913,22 @@ class TestAnimationFrameGrid:
         )
         implicit = animation_timeline_summary([fixations], 1.0)
         assert implicit == explicit
+
+    def test_the_standard_preset_is_the_default_grid(self):
+        # #422: a fresh session's grid is named *Standard*, not *Custom* — so it
+        # has to be the grid the rail, the API and `render` all start on.
+        from scanpath_studio.controls import _VIZ_WIDGET_DEFAULTS
+        from scanpath_studio.plots import _ANIM_GRID_STEP_MS, _ANIM_MAX_FRAMES
+        from scanpath_studio.tabs import _ANIM_QUALITY_PRESETS
+
+        assert _ANIM_QUALITY_PRESETS["Standard"] == (
+            _ANIM_GRID_STEP_MS,
+            _ANIM_MAX_FRAMES,
+        )
+        assert _ANIM_QUALITY_PRESETS["Standard"] == (
+            _VIZ_WIDGET_DEFAULTS["global_anim_grid_step_ms"],
+            _VIZ_WIDGET_DEFAULTS["global_anim_max_frames"],
+        )
 
     def test_the_figure_honours_the_grid(self, normalized_words_df):
         from scanpath_studio.plots import make_scanpath_animation
@@ -1933,7 +1951,7 @@ class TestAnimationFrameGrid:
             **kwargs,
         )
         assert len(fine.frames) > len(capped.frames)
-        assert len(capped.frames) <= 21
+        assert len(capped.frames) == 20
 
 
 class TestAnimationPlaybackTiming:

@@ -4977,13 +4977,16 @@ def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
     if not specs or reading_span_ms <= 0:
         return [], 0.0, reading_span_ms
-    step = max(step_pref, reading_span_ms / max(cap, 1))
-    frame_times = [
-        min(k * step, reading_span_ms) for k in range(int(reading_span_ms // step) + 1)
-    ]
-    # Land the final frame exactly on the reading end so it reveals everything.
-    if frame_times[-1] < reading_span_ms:
-        frame_times.append(reading_span_ms)
+    # #422: the cap counts every frame, the one at t=0 included, so a limit of
+    # 120 gives at most 120 frames (it used to give 121): `cap` frames span
+    # `cap - 1` steps. Two frames — the start and the end — is the least a
+    # replay can have.
+    step = max(step_pref, reading_span_ms / max(cap - 1, 1))
+    # The steps it takes to reach the end; the tolerance keeps a span that is a
+    # whole number of steps, give or take float rounding, from gaining a step.
+    n_steps = max(math.ceil(reading_span_ms / step - 1e-6), 1)
+    # The final frame lands exactly on the reading end, so it reveals everything.
+    frame_times = [k * step for k in range(n_steps)] + [reading_span_ms]
     return frame_times, step, reading_span_ms
 
 
@@ -5063,8 +5066,9 @@ def animation_timeline_summary(
     the cap *coarsened* the requested step. Silently coarsening is the thing that
     made the old hard-coded behaviour opaque.
 
-    Returns ``{"n_frames", "step_ms", "requested_step_ms", "coarsened",
-    "frame_duration_ms", "reading_span_ms", "playback_ms"}``.
+    Returns ``{"n_frames", "step_ms", "requested_step_ms", "max_frames",
+    "coarsened", "frame_duration_ms", "reading_span_ms", "playback_ms"}`` —
+    ``max_frames`` being the limit in force, so a caller can name it.
     """
     requested = float(grid_step_ms if grid_step_ms else _ANIM_GRID_STEP_MS)
     specs = _scanpath_anim_specs(
@@ -5079,6 +5083,7 @@ def animation_timeline_summary(
         "n_frames": n_frames,
         "step_ms": float(step),
         "requested_step_ms": requested,
+        "max_frames": int(max_frames if max_frames else _ANIM_MAX_FRAMES),
         "coarsened": bool(n_frames > 1 and step > requested + 1e-6),
         "frame_duration_ms": _anim_frame_duration_ms(frame_step_ms, playback_speed),
         "reading_span_ms": float(reading_span_ms),
@@ -6308,7 +6313,7 @@ def _render_scanpath_animation(
     frames = []
     n_frames = len(frame_times)
     for k, t in enumerate(frame_times):
-        # UX-169: the card's "120 of 361 frames" — and a cancel checkpoint, so an
+        # UX-169: the card's "120 of 360 frames" — and a cancel checkpoint, so an
         # abandoned build stops within a frame. A no-op outside a card.
         progress.report(k + 1, n_frames, unit="frames")
         traces_in_frame = []

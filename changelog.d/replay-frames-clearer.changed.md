@@ -1,0 +1,1 @@
+The Animate menu's Frames group explains what a frame is, keeps its spacing and limit sliders live under every preset, names the default grid Standard, and says under Result which of the two decided this trial's frames.

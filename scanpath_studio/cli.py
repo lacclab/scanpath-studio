@@ -1543,8 +1543,9 @@ def _render_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="With --animate: cap the frame count at N (default: 360). A long "
-        "trial coarsens the grid to stay under it.",
+        help="With --animate: at most N frames, the first included (default: "
+        "360). A trial too long for that many at --anim-grid-step-ms gets a "
+        "wider step instead.",
     )
     # EXP-7: the same reproduction snippet the app's 🔗 Share subtab shows,
     # for the invocation you just typed. Chiefly a *translation*: "I have this

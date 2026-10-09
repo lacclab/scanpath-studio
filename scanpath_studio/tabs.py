@@ -4966,7 +4966,11 @@ _ANIM_DEFAULT_SPEED = 1.0
 _ANIM_QUALITY_PRESETS = {
     # Fast enough for trial browsing and compact GIF/MP4 drafts.
     "Coarse": (300, 120),
-    # High-fidelity review/export: noticeably smoother than the old 100 ms grid.
+    # #422: the grid a fresh session, the API and `render` start on
+    # (`global_anim_grid_step_ms` / `global_anim_max_frames`'s defaults), named
+    # so a first look at the menu does not find *Custom* already picked.
+    "Standard": (100, 360),
+    # High-fidelity review/export: noticeably smoother than the 100 ms grid.
     "Fine": (40, 900),
 }
 
@@ -5018,13 +5022,17 @@ def _render_anim_info(
         )
     # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
     # coarsening the step used to be invisible, which is the whole reason the
-    # setting felt arbitrary.
+    # setting felt arbitrary. #422: and say which control decided it, in the
+    # controls' own numbers, so the result never reads as contradicting them.
     grid = (
-        f"**{summary['n_frames']}** frames · one every "
-        f"{summary['step_ms']:.0f} ms of reading"
+        f"**{summary['n_frames']}** frames, one every "
+        f"{summary['step_ms']:.0f} ms of reading."
     )
     if summary["coarsened"]:
-        grid += ". Spacing was widened automatically to stay within the frame limit."
+        grid += (
+            f" The {summary['max_frames']}-frame limit widened it "
+            f"from {summary['requested_step_ms']:.0f} ms."
+        )
     frames_host.caption(grid)
     return playback_ms
 
@@ -6591,177 +6599,197 @@ def render_single_trial_tab(
                 # across reruns and drop the open state. See `_rail_section`
                 # in controls.py for the full diagnosis; this row predates
                 # that helper but shares its exact shape and its exposure.
-                with st.popover(
-                    # BUG-108: named for screen readers; `styles.py` clips the
-                    # label off screen, so the chevron is all that is drawn.
-                    "Replay settings",
-                    width="content",
-                    key="split_mode_animate_popover",
-                    help="Replay settings. Playback controls appear above the plot.",
+                # UX-164: the rail popovers' layout (UX-158) — a *Replay*
+                # group (speed, autoplay, duration) and a *Frames* group (the
+                # smoothness preset, the spacing and the limit, and what they
+                # give this trial), in place of five full-width rows, a
+                # divider, and two that came and went with Custom.
+                with (
+                    st.popover(
+                        # BUG-108: named for screen readers; `styles.py` clips the
+                        # label off screen, so the chevron is all that is drawn.
+                        "Replay settings",
+                        width="content",
+                        key="split_mode_animate_popover",
+                        help="Replay settings. Playback controls appear above the plot.",
+                    ),
+                    _popover_rows("animate"),
                 ):
-                    # UX-164: the rail popovers' layout (UX-158) — a *Replay*
-                    # group (speed, autoplay) and a *Frames* group (the
-                    # smoothness preset and, greyed unless it is Custom, the
-                    # spacing and the limit), in place of five full-width rows,
-                    # a divider, and two that came and went with Custom.
-                    with _popover_rows("animate"):
-                        st.session_state.setdefault(
-                            "single_playback_speed", _ANIM_DEFAULT_SPEED
-                        )
-                        playback_speed = _sub_row(
-                            "Speed",
-                            section="Replay",
-                            section_help="How the replay plays.",
-                            caption_help=_gated_help(
-                                "Playback speed relative to the recorded fixation "
-                                "timings.",
-                                anim_gate,
-                            ),
-                        ).select_slider(
-                            "Playback speed",
-                            options=_ANIM_SPEED_OPTIONS,
-                            format_func=lambda x: _ANIM_SPEED_LABELS[
-                                _ANIM_SPEED_OPTIONS.index(x)
-                            ],
-                            key="single_playback_speed",
-                            persist_state="session",
-                            disabled=anim_disabled,
-                            label_visibility="collapsed",
-                        )
-                        # VIZ-10: start the replay automatically on load (at the speed
-                        # above). Off → the figure waits on the ▶ Play button.
+                    st.session_state.setdefault(
+                        "single_playback_speed", _ANIM_DEFAULT_SPEED
+                    )
+                    playback_speed = _sub_row(
+                        "Speed",
+                        section="Replay",
+                        section_help="How the replay plays.",
+                        caption_help=_gated_help(
+                            "Playback speed relative to the recorded fixation timings.",
+                            anim_gate,
+                        ),
+                    ).select_slider(
+                        "Playback speed",
+                        options=_ANIM_SPEED_OPTIONS,
+                        format_func=lambda x: _ANIM_SPEED_LABELS[
+                            _ANIM_SPEED_OPTIONS.index(x)
+                        ],
+                        key="single_playback_speed",
+                        persist_state="session",
+                        disabled=anim_disabled,
+                        label_visibility="collapsed",
+                    )
+                    # VIZ-10: start the replay automatically on load (at the speed
+                    # above). Off → the figure waits on the ▶ Play button.
+                    _sub_row(
+                        "Autoplay",
+                        caption_help=_gated_help(
+                            "Start playing when the plot loads.", anim_gate
+                        ),
+                    ).checkbox(
+                        "On load",
+                        key="global_anim_autoplay",
+                        persist_state="session",
+                        disabled=anim_disabled,
+                    )
+                    # #422: how long the trial and its replay are belongs to
+                    # *Replay*, under the speed it follows from. Filled later
+                    # (`_render_anim_info`), once scanpath B is known; drawn
+                    # only while there is a replay to time.
+                    anim_timing_slot = (
                         _sub_row(
-                            "Autoplay",
-                            caption_help=_gated_help(
-                                "Start playing when the plot loads.", anim_gate
-                            ),
-                        ).checkbox(
-                            "On load",
-                            key="global_anim_autoplay",
-                            persist_state="session",
-                            disabled=anim_disabled,
+                            "Duration",
+                            caption_help="How long the trial's reading "
+                            "took, and how long its replay plays at the "
+                            "speed above.",
                         )
-                        # #422: how long the trial and its replay are belongs to
-                        # *Replay*, under the speed it follows from. Filled later
-                        # (`_render_anim_info`), once scanpath B is known; drawn
-                        # only while there is a replay to time.
-                        anim_timing_slot = (
-                            _sub_row(
-                                "Duration",
-                                caption_help="How long the trial's reading "
-                                "took, and how long its replay plays at the "
-                                "speed above.",
-                            )
-                            if animate
-                            else None
-                        )
+                        if animate
+                        else None
+                    )
 
-                        # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
-                        # against frame count, which is what export size and render time
-                        # are made of. It used to be decided for the user in two module
-                        # constants, and the cap coarsened the grid silently.
-                        def _apply_anim_quality() -> None:
-                            preset = _ANIM_QUALITY_PRESETS.get(
-                                st.session_state.get("global_anim_quality")
-                            )
-                            if preset is not None:
-                                (
-                                    st.session_state["global_anim_grid_step_ms"],
-                                    st.session_state["global_anim_max_frames"],
-                                ) = preset
-
-                        current_grid = (
-                            int(st.session_state.get("global_anim_grid_step_ms", 100)),
-                            int(st.session_state.get("global_anim_max_frames", 360)),
+                    # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
+                    # against frame count, which is what export size and render time
+                    # are made of. It used to be decided for the user in two module
+                    # constants, and the cap coarsened the grid silently.
+                    def _apply_anim_quality() -> None:
+                        preset = _ANIM_QUALITY_PRESETS.get(
+                            st.session_state.get("global_anim_quality")
                         )
-                        matched_quality = next(
+                        if preset is not None:
                             (
-                                name
-                                for name, values in _ANIM_QUALITY_PRESETS.items()
-                                if values == current_grid
-                            ),
-                            None,
-                        )
-                        # UX-30: gating the sliders behind Custom means picking Custom on
-                        # the segmented control has to be "sticky" even while the grid
-                        # still equals a Coarse/Fine preset exactly (the state right after
-                        # switching, before either slider is touched) — otherwise this
-                        # same re-inference would immediately snap it back to that preset's
-                        # name and grey the sliders that were just enabled. Only fall back
-                        # to inferring Coarse/Fine here when the mode isn't already Custom;
-                        # a grid matching no preset at all is unambiguous either way.
-                        previous_quality = st.session_state.get("global_anim_quality")
-                        if matched_quality is None:
-                            st.session_state["global_anim_quality"] = "Custom"
-                        elif previous_quality != "Custom":
-                            st.session_state["global_anim_quality"] = matched_quality
+                                st.session_state["global_anim_grid_step_ms"],
+                                st.session_state["global_anim_max_frames"],
+                            ) = preset
+
+                    current_grid = (
+                        int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                        int(st.session_state.get("global_anim_max_frames", 360)),
+                    )
+                    matched_quality = next(
+                        (
+                            name
+                            for name, values in _ANIM_QUALITY_PRESETS.items()
+                            if values == current_grid
+                        ),
+                        None,
+                    )
+                    # UX-30: picking Custom on the segmented control has to be
+                    # "sticky" even while the grid still equals a preset
+                    # exactly (the state right after switching, before
+                    # either slider is touched) — otherwise this re-inference
+                    # would snap it straight back to that preset's name. Only
+                    # infer a preset when the mode isn't already Custom; a
+                    # grid matching no preset is unambiguous either way.
+                    previous_quality = st.session_state.get("global_anim_quality")
+                    if matched_quality is None:
+                        st.session_state["global_anim_quality"] = "Custom"
+                    elif previous_quality != "Custom":
+                        st.session_state["global_anim_quality"] = matched_quality
+                    # #422: written for someone meeting the replay for the
+                    # first time — what a frame is, what each control does
+                    # and what more of them costs — with the presets' own
+                    # numbers, so the help cannot drift from them.
+                    presets_help = " ".join(
+                        f"{name}: a frame every {step} ms, at most {cap}."
+                        for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
+                    )
+                    _sub_row(
+                        "Quality",
+                        section="Frames",
+                        section_help="The replay is a run of still frames, each "
+                        "showing the scanpath up to that moment of the reading. "
+                        "More frames play smoother but take longer to build and "
+                        "export.",
+                        caption_help=_gated_help(
+                            f"{presets_help} Moving a slider below makes it Custom.",
+                            anim_gate,
+                        ),
+                    ).segmented_control(
+                        "Animation smoothness",
+                        options=[*_ANIM_QUALITY_PRESETS, "Custom"],
+                        key="global_anim_quality",
+                        persist_state="session",
+                        on_change=_apply_anim_quality,
+                        disabled=anim_disabled,
+                        label_visibility="collapsed",
+                    )
+
+                    def _mark_anim_quality_custom() -> None:
+                        st.session_state["global_anim_quality"] = "Custom"
+
+                    # #422: the two sliders are live whatever the preset —
+                    # a preset only sets them, and moving one makes it
+                    # Custom — so there is no Custom click before a drag.
+                    step_help = _gated_help(
+                        "Reading time between frames. Smaller plays smoother.",
+                        anim_gate,
+                    )
+                    _numeric_slider(
+                        st,
+                        "Frame every (ms)",
+                        key="global_anim_grid_step_ms",
+                        persist_state="session",
+                        min_value=20,
+                        max_value=500,
+                        step=10,
+                        slider_format="%d ms",
+                        number_format="%d",
+                        on_change=_mark_anim_quality_custom,
+                        disabled=anim_disabled,
+                        help=step_help,
+                        field_host=_sub_row("Every", caption_help=step_help),
+                    )
+                    limit_help = _gated_help(
+                        "The most frames a replay gets. A trial too long for "
+                        "that many at the spacing above gets wider spacing "
+                        "instead.",
+                        anim_gate,
+                    )
+                    _numeric_slider(
+                        st,
+                        "Frame limit",
+                        key="global_anim_max_frames",
+                        persist_state="session",
+                        min_value=30,
+                        max_value=2000,
+                        step=10,
+                        slider_format="%d frames",
+                        number_format="%d",
+                        on_change=_mark_anim_quality_custom,
+                        disabled=anim_disabled,
+                        help=limit_help,
+                        field_host=_sub_row("Limit", caption_help=limit_help),
+                    )
+                    # Filled later, once the selected comparison trial is
+                    # known: what the two controls above give this trial,
+                    # said beside them.
+                    anim_frames_slot = (
                         _sub_row(
-                            "Quality",
-                            section="Frames",
-                            section_help="How often the replay samples the scanpath.",
-                            caption_help=_gated_help(
-                                "Fine is smoother; Coarse renders faster. Custom sets "
-                                "the spacing and the limit below.",
-                                anim_gate,
-                            ),
-                        ).segmented_control(
-                            "Animation smoothness",
-                            options=["Coarse", "Fine", "Custom"],
-                            key="global_anim_quality",
-                            persist_state="session",
-                            on_change=_apply_anim_quality,
-                            disabled=anim_disabled,
-                            label_visibility="collapsed",
+                            "Result",
+                            caption_help="What the spacing and the limit "
+                            "give this trial.",
                         )
-
-                        def _mark_anim_quality_custom() -> None:
-                            st.session_state["global_anim_quality"] = "Custom"
-
-                        grid_idle = (
-                            anim_disabled
-                            or st.session_state["global_anim_quality"] != "Custom"
-                        )
-                        step_help = _gated_help(
-                            "Time between frames. Smaller is smoother (Custom only).",
-                            anim_gate,
-                        )
-                        _numeric_slider(
-                            st,
-                            "Frame every (ms)",
-                            key="global_anim_grid_step_ms",
-                            persist_state="session",
-                            min_value=20,
-                            max_value=500,
-                            step=10,
-                            slider_format="%d ms",
-                            number_format="%d",
-                            on_change=_mark_anim_quality_custom,
-                            disabled=grid_idle,
-                            help=step_help,
-                            field_host=_sub_row("Every", caption_help=step_help),
-                        )
-                        max_help = _gated_help(
-                            "Maximum replay frames; long trials are spaced "
-                            "automatically (Custom only).",
-                            anim_gate,
-                        )
-                        _numeric_slider(
-                            st,
-                            "Max frames",
-                            key="global_anim_max_frames",
-                            persist_state="session",
-                            min_value=30,
-                            max_value=2000,
-                            step=10,
-                            on_change=_mark_anim_quality_custom,
-                            disabled=grid_idle,
-                            help=max_help,
-                            field_host=_sub_row("Max", caption_help=max_help),
-                        )
-                    # Filled later, once the selected comparison trial is known.
-                    # Creating the slot here keeps the resulting frame count beside
-                    # the smoothness control that determines it.
-                    anim_frames_slot = st.container()
+                        if animate
+                        else None
+                    )
             if animate:
                 # #374 F23: why the layer rows below are greyed, said where it
                 # is read without hovering each one.

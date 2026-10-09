@@ -1815,6 +1815,18 @@ def _design_delete_dialog(name: str) -> None:
 #: the dialog, by any way, discards.
 _DESIGN_NEW_NAME_KEY = "design_new_name"
 _DESIGN_REPLACE_TARGET_KEY = "design_replace_target"
+#: The name the 💾 dialog offers (#422), so saving needs no naming at all.
+_DEFAULT_DESIGN_NAME = "My design {n}"
+
+
+def next_design_name(taken) -> str:
+    """The first of "My design 1", "My design 2", … that no design in
+    ``taken`` is called — a number freed by a delete is offered again."""
+    taken = set(taken)
+    n = 1
+    while _DEFAULT_DESIGN_NAME.format(n=n) in taken:
+        n += 1
+    return _DEFAULT_DESIGN_NAME.format(n=n)
 
 
 def _close_design_save_dialog() -> None:
@@ -1877,6 +1889,10 @@ def _design_save_dialog() -> None:
                 icon=ICONS["warning"],
             )
         else:
+            # Filled with the next free "My design N" (#422): saving needs no
+            # name thought up, and typing over it is one select-all away.
+            # `setdefault`, so a name being typed survives the radio's rerun.
+            st.session_state.setdefault(_DESIGN_NEW_NAME_KEY, next_design_name(saved))
             name = st.text_input(
                 "Design name",
                 key=_DESIGN_NEW_NAME_KEY,

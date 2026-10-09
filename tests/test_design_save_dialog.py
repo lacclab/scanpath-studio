@@ -77,3 +77,43 @@ def test_save_with_an_empty_name_is_refused_and_stays_open():
     assert _pending(at)
     assert any("name first" in e.value for e in at.error)
     assert not _library(at)
+
+
+@pytest.mark.parametrize(
+    ("taken", "expected"),
+    [
+        ([], "My design 1"),
+        (["Paper figure"], "My design 1"),
+        (["My design 1", "Paper figure"], "My design 2"),
+        (["My design 1", "My design 2"], "My design 3"),
+        # A number a delete freed is offered again.
+        (["My design 2"], "My design 1"),
+    ],
+)
+def test_the_offered_name_is_the_first_free_one(taken, expected):
+    assert controls.next_design_name(taken) == expected
+
+
+def test_the_dialog_offers_a_name():
+    at = _open_dialog({"My design 1": {}})
+    assert at.text_input(key=controls._DESIGN_NEW_NAME_KEY).value == "My design 2"
+
+
+def test_saving_without_typing_keeps_the_offered_name():
+    at = _open_dialog()
+    at.button(key="design_save_go").click().run()
+    assert not at.exception, at.exception
+    assert not _pending(at)
+    assert list(_library(at)) == ["My design 1"]
+    # The next save offers the next number, not the draft just used.
+    at.session_state[controls._DESIGN_SAVE_PENDING_KEY] = True
+    at.run()
+    assert at.text_input(key=controls._DESIGN_NEW_NAME_KEY).value == "My design 2"
+
+
+def test_a_typed_name_replaces_the_offered_one():
+    at = _open_dialog()
+    at.text_input(key=controls._DESIGN_NEW_NAME_KEY).set_value("Paper figure")
+    at.button(key="design_save_go").click().run()
+    assert not at.exception, at.exception
+    assert list(_library(at)) == ["Paper figure"]

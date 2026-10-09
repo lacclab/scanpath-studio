@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -658,10 +659,65 @@ class FigureState:
     playback_speed: float = 1.0
     autoplay: bool = True
     compare: CompareTarget | None = None
+    #: #420 — each reading's own stimulus page as the app resolved it,
+    #: ``(path, (width, height), (x0, y0))`` under the image slot it would fill:
+    #: ``""`` (``background_image``) and ``"_b"`` (a split comparison's B). A
+    #: page drawn exactly there is written as ``show_stimulus_image=True``
+    #: rather than as a path, which the reader's own data finds again.
+    own_pages: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}, got {self.kind!r}.")
+
+
+#: #420 — the three settings that place one stimulus image slot.
+_IMAGE_SLOT = ("background_image", "background_image_size", "background_image_origin")
+
+
+def _same_page(settings: dict, suffix: str, page) -> bool:
+    """Whether ``settings`` draws ``page`` — ``(path, size, origin)`` — in the
+    image slot ``suffix``, unmoved and unscaled."""
+    path, size, origin = (settings.get(f"{key}{suffix}") for key in _IMAGE_SLOT)
+    if not path or page is None or size is None:
+        return False
+    own_path, own_size, own_origin = page
+    return (
+        str(path) == str(own_path)
+        and _floats(size) == _floats(own_size)
+        and _floats(origin or (0.0, 0.0)) == _floats(own_origin)
+    )
+
+
+def _floats(pair) -> tuple[float, ...]:
+    return tuple(float(value) for value in pair)
+
+
+def name_own_pages(settings: dict, own_pages: Mapping) -> dict:
+    """``settings`` with every image slot that draws its reading's own page
+    written as ``show_stimulus_image=True`` instead of a path (#420).
+
+    The path is the server's (the bundled demo's lives in the installed
+    package), while the option asks the reader's data for its page, so the
+    snippet runs anywhere the data loads. A slot drawing anything else — an
+    upload, or a page the VIZ-4 offset or scale moved — keeps its path, which
+    the builders let win over the option."""
+    named = [
+        suffix
+        for suffix, page in (own_pages or {}).items()
+        if _same_page(settings, suffix, page)
+    ]
+    if not named:
+        return settings
+    dropped = {f"{slot}{suffix}" for slot in _IMAGE_SLOT for suffix in named}
+    out = {key: value for key, value in settings.items() if key not in dropped}
+    out["show_stimulus_image"] = True
+    return out
+
+
+def _with_own_pages(state: FigureState) -> FigureState:
+    settings = name_own_pages(state.settings, state.own_pages)
+    return state if settings is state.settings else replace(state, settings=settings)
 
 
 def _comparable(value):
@@ -1707,6 +1763,7 @@ def python_snippet(
     non-default raster geometry (``--width`` / ``--height`` / ``--scale``) so a
     translated invocation writes the same-sized file, not just the same
     picture."""
+    state = _with_own_pages(state)
     loader, _ = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     source = _with_kept_columns(source, state)
     other = second_dataset(state)
@@ -1717,7 +1774,8 @@ def python_snippet(
         )
     lines.append("")
     lines += loader(source)
-    lines += _image_folder_python(source)
+    if state.settings.get("show_stimulus_image"):
+        lines += _image_folder_python(source)
     # A raw-gaze-only source loaded its samples as its data half already.
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
@@ -1829,6 +1887,7 @@ def cli_snippet(
     figure needs that ``render`` has no flag for — reported, never dropped, so a
     snippet can't quietly promise a figure the CLI won't produce.
     """
+    state = _with_own_pages(state)
     _, source_cli = _SOURCE_WRITERS.get(source.kind, _SOURCE_WRITERS[SOURCE_UNKNOWN])
     source = _with_kept_columns(source, state)
     other = second_dataset(state)
@@ -1837,7 +1896,8 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
-    argv += _image_folder_cli(source)
+    if state.settings.get("show_stimulus_image"):
+        argv += _image_folder_cli(source)
 
     if state.participant:
         argv += ["-p", str(state.participant)]

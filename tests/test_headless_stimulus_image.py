@@ -21,7 +21,9 @@ import pytest
 
 import scanpath_studio as sps
 from scanpath_studio import api, cli, plots, tabs
+from scanpath_studio import code_snippet as cs
 from scanpath_studio.plots import _image_to_data_uri, _png_pixel_size
+from tests.conftest import APP_SCRIPT
 
 #: Two demo readings of different texts — so of different pages.
 TRIAL = ("l37_1129", "l37_1129_2_2_1_Adv_r0")
@@ -343,3 +345,181 @@ def test_reading_stimulus_image_lets_the_caller_veto_the_path(demo):
     rows = words[words["trial_id"] == TRIAL[1]]
     assert plots.reading_stimulus_image(rows, None) is not None
     assert plots.reading_stimulus_image(rows, None, allow=lambda path: None) is None
+
+
+# ---------------------------------------------------------------------------
+# The app's side: Share → Code names the page, and B's text gets B's page
+# ---------------------------------------------------------------------------
+_SLOT = ("background_image", "background_image_size", "background_image_origin")
+
+
+def _drawn(page, suffix=""):
+    path, size, origin = page
+    return dict(zip((f"{key}{suffix}" for key in _SLOT), (path, size, origin)))
+
+
+class TestNameOwnPages:
+    PAGE = ("/data/pages/a.png", (1824, 1254), (368.0, 186.0))
+    PAGE_B = ("/data/pages/b.png", (800, 600), (0.0, 0.0))
+
+    def test_a_page_drawn_where_it_sat_is_named_by_the_option(self):
+        settings = {"show_heatmap": True, **_drawn(self.PAGE)}
+        named = cs.name_own_pages(settings, {"": self.PAGE})
+        assert named == {"show_heatmap": True, "show_stimulus_image": True}
+
+    @pytest.mark.parametrize(
+        "moved",
+        [
+            {"background_image_origin": (378.0, 186.0)},  # the VIZ-4 offset
+            {"background_image_size": (912.0, 627.0)},  # the VIZ-4 scale
+            {"background_image": "data:image/png;base64,AAAA"},  # an upload
+        ],
+    )
+    def test_anything_else_keeps_its_path(self, moved):
+        settings = {**_drawn(self.PAGE), **moved}
+        assert cs.name_own_pages(settings, {"": self.PAGE}) is settings
+
+    def test_each_slot_is_decided_on_its_own(self):
+        settings = {
+            **_drawn(self.PAGE),
+            **_drawn(("/data/pages/b.png", (800, 600), (5.0, 0.0)), "_b"),
+        }
+        named = cs.name_own_pages(settings, {"": self.PAGE, "_b": self.PAGE_B})
+        # A is its own page, B was moved: B's path stays and wins over the option.
+        assert named["show_stimulus_image"] is True
+        assert "background_image" not in named
+        assert named["background_image_b"] == "/data/pages/b.png"
+
+    def test_no_page_of_its_own_names_nothing(self):
+        settings = _drawn(self.PAGE)
+        assert cs.name_own_pages(settings, {"": None}) is settings
+
+
+def _app(**state) -> object:
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP_SCRIPT)
+    at.session_state["global_show_stimulus_image"] = True
+    for key, value in state.items():
+        at.session_state[key] = value
+    at.run(timeout=120)
+    assert not at.exception, at.exception
+    return at
+
+
+def _run_snippet(code: str):
+    namespace: dict = {}
+    exec(compile(code, "<snippet>", "exec"), namespace)  # noqa: S102
+    return namespace["fig"]
+
+
+@pytest.fixture
+def every_page(tmp_path: Path) -> Path:
+    """The demo's pages, copied into a folder under ``<text_id>.png``."""
+    folder = tmp_path / "pages"
+    folder.mkdir()
+    images = Path(api.__file__).parent / "sample_data" / "images"
+    for page in images.glob("*__paragraph.png"):
+        text = page.name.removesuffix("__paragraph.png")
+        (folder / f"{text}.png").write_bytes(page.read_bytes())
+    return folder
+
+
+def _share_code_panel():
+    """The Share subtab's code block, for the bundled demo."""
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.url_state import _render_code_snippet_body
+
+    _render_code_snippet_body(DEMO_CHOICE)
+
+
+@pytest.mark.timeout(240)
+class TestShareCode:
+    def test_the_demos_page_is_named_by_the_option_not_its_path(self):
+        state = _app().session_state[cs.SNIPPET_STATE_KEY]
+        code = cs.python_snippet(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
+        assert "show_stimulus_image=True" in code
+        # The installed package's path is no part of the recipe.
+        assert "background_image" not in code
+        assert _sources(_run_snippet(code)) == [
+            _image_to_data_uri(state.own_pages[""][0])
+        ]
+
+    def test_a_moved_page_keeps_its_path(self):
+        at = _app(global_stimulus_image_offset_x=10.0)
+        state = at.session_state[cs.SNIPPET_STATE_KEY]
+        code = cs.python_snippet(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
+        assert "show_stimulus_image" not in code
+        assert "background_image=" in code
+
+    def test_a_folders_page_comes_with_the_folder(self, every_page):
+        at = _app(stimulus_image_root=str(every_page))
+        state = at.session_state[cs.SNIPPET_STATE_KEY]
+        # The app drew the folder's page (the key the folder box writes)…
+        assert str(state.settings["background_image"]).startswith(str(every_page))
+        # …and the Share panel, reading the same box, loads it with the folder.
+        from streamlit.testing.v1 import AppTest
+
+        panel = AppTest.from_function(_share_code_panel)
+        panel.session_state[cs.SNIPPET_STATE_KEY] = state
+        panel.session_state["stimulus_image_root"] = str(every_page)
+        panel.run(timeout=60)
+        assert not panel.exception, panel.exception
+        code = panel.session_state["_snippet_code_current"]
+        assert "sps.attach_stimulus_images(" in code.python
+        assert repr(str(every_page)) in code.python
+        assert f"--image-root {every_page}" in code.cli
+        assert "--show-stimulus-image" in code.cli
+        fig = _run_snippet(code.python.split("\nsps.save_figure(")[0])
+        assert _sources(fig) == [_image_to_data_uri(state.settings["background_image"])]
+
+
+def _compare_on_another_text(**state):
+    at = _app(
+        single_compare_toggle=True,
+        single_compare_layout="Overlay",
+        single_compare_stimulus="B",
+        **state,
+    )
+    picker = at.selectbox(key="single_compare_trial")
+    other = next(option for option in picker.options if "2_2_2_Adv" in str(option))
+    picker.set_value(other)
+    at.run(timeout=120)
+    assert not at.exception, at.exception
+    return at.session_state[cs.SNIPPET_STATE_KEY]
+
+
+@pytest.mark.timeout(240)
+class TestBsTextGetsBsPage:
+    """An overlay or co-animation that draws B's text draws B's page — as
+    `api.compare_scanpaths` / `animate_scanpath` do — never A's."""
+
+    def test_the_overlay(self, demo):
+        state = _compare_on_another_text()
+        assert (state.kind, state.compare.compare_stimulus) == ("comparison", "b")
+        page_b = _page(demo[0], (state.compare.participant, state.compare.trial))
+        assert page_b != _page(demo[0], (state.participant, state.trial))
+        assert state.settings["background_image"] == page_b
+        code = cs.python_snippet(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
+        assert "show_stimulus_image=True" in code
+        assert "background_image" not in code
+        assert _sources(_run_snippet(code)) == [_image_to_data_uri(page_b)]
+
+    def test_the_co_animation(self, demo):
+        state = _compare_on_another_text(single_animate=True)
+        assert state.kind == "animation"
+        page_b = _page(demo[0], (state.compare.participant, state.compare.trial))
+        assert state.settings["background_image"] == page_b
+
+    def test_an_upload_stays_the_users_choice(self):
+        settings = plots.FigureSettings(
+            canvas_width=10, canvas_height=10, base_font_size=12
+        )
+        assert (
+            tabs._page_under_text_b(
+                settings,
+                {"show_stimulus_image": True, "stimulus_image_upload_uri": "data:x"},
+                {"words": pd.DataFrame(), "fixations": pd.DataFrame()},
+            )
+            == {}
+        )

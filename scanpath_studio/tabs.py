@@ -2078,6 +2078,7 @@ def _publish_snippet_state(
     compare: CompareTarget | None,
     full_fix_range: tuple[int, int] | None = None,
     fix_index_range_b: tuple[int, int] | None = None,
+    own_pages: dict | None = None,
 ) -> None:
     """EXP-7: park the state the Share subtab's code snippet is written from.
 
@@ -2092,6 +2093,10 @@ def _publish_snippet_state(
     the whole trial the instant there are two fixations, so an untouched figure
     published ``fix_index_range=(1, 154)`` and both code forms wrote a window
     nobody had chosen (EXP-8 §3).
+
+    ``own_pages`` is each reading's own stimulus page by image slot (#420), so
+    a page drawn unmoved is written as ``show_stimulus_image=True``; the
+    branches that draw B's page add it (`_amend_snippet_own_pages`).
     """
     window = viz_settings.get("fix_index_range")
     if window and full_fix_range and tuple(window) == tuple(full_fix_range):
@@ -2123,6 +2128,19 @@ def _publish_snippet_state(
         playback_speed=float(playback_speed or 1.0),
         autoplay=bool(viz_settings.get("anim_autoplay", True)),
         compare=compare,
+        own_pages=dict(own_pages or {}),
+    )
+
+
+def _amend_snippet_own_pages(pages: dict) -> None:
+    """Record the own page of each image slot a branch fills with B's (#420):
+    a split comparison's ``"_b"``, and ``""`` when an overlay or co-animation
+    draws B's text — see `_publish_snippet_state`."""
+    state = st.session_state.get(SNIPPET_STATE_KEY)
+    if state is None:
+        return
+    st.session_state[SNIPPET_STATE_KEY] = replace(
+        state, own_pages={**state.own_pages, **pages}
     )
 
 
@@ -7570,6 +7588,7 @@ def render_single_trial_tab(
         playback_speed=playback_speed,
         full_fix_range=full_fix_range,
         fix_index_range_b=snippet_window_b,
+        own_pages={"": trial_image} if trial_image is not None else None,
         compare=(
             CompareTarget(
                 # The real ids, never the CMP-8 namespaced ones — a snippet
@@ -7699,9 +7718,16 @@ def render_single_trial_tab(
             # UX-169: planned before the card opens, since the replay's task is
             # keyed by its frames — a setting that changes them cancels the
             # build under way — and the build below uses this very plan.
+            replay_settings = render_settings
+            if dual_anim and compare_stimulus == "b":
+                # #420: the replay's one page goes under the text it draws.
+                replay_settings = render_settings.with_overrides(
+                    **_page_under_text_b(render_settings, viz_settings, compare_meta)
+                )
+                _amend_snippet_own_pages({"": _own_page_b(viz_settings, compare_meta)})
             replay = _plan_replay(
                 *replay_frames,
-                settings=render_settings,
+                settings=replay_settings,
                 viz_settings=viz_settings,
                 playback_speed=playback_speed,
                 drift_corrected=drift_corrected_primary,
@@ -8386,6 +8412,32 @@ def _comparison_image_b(
     }
 
 
+def _page_under_text_b(
+    settings: FigureSettings, viz_settings: dict, compare_meta: dict | None
+) -> dict:
+    """The page an overlay or co-animation draws under B's text
+    (``compare_stimulus="b"``, #420): B's own, nudged as `_comparison_image_b`
+    nudges it, or none. Never A's, which is a picture of another text; an
+    uploaded image is the user's explicit choice and stays, as an explicit
+    ``background_image`` does in `api.compare_scanpaths`."""
+    if viz_settings.get("stimulus_image_upload_uri"):
+        return {}
+    image_b = _comparison_image_b(settings, viz_settings, compare_meta, same_page=False)
+    return {key.removesuffix("_b"): value for key, value in image_b.items()}
+
+
+def _own_page_b(viz_settings: dict, compare_meta: dict | None):
+    """B's own page, unmoved — what `api` would place for it (#420) — or ``None``
+    while the layer is off."""
+    if not compare_meta or not viz_settings.get("show_stimulus_image"):
+        return None
+    return _reading_stimulus_image(
+        compare_meta.get("words", pd.DataFrame()),
+        compare_meta.get("fixations", pd.DataFrame()),
+        source=compare_meta.get("dataset"),
+    )
+
+
 def _render_comparison_figure(
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
@@ -8552,6 +8604,14 @@ def _render_comparison_figure(
             ),
         )
     )
+    own_b = _own_page_b(viz_settings, compare_meta)
+    # Every layout carries B's slot (an overlay just never draws it).
+    _amend_snippet_own_pages({"_b": own_b})
+    if layout not in {"side_by_side", "stacked"} and compare_stimulus == "b":
+        # #420: one page under the overlay's one stimulus layer — B's, since
+        # B's text is the one drawn.
+        overrides.update(_page_under_text_b(settings, viz_settings, compare_meta))
+        _amend_snippet_own_pages({"": own_b})
     if cross_dataset:
         # §5.4: a metric only one corpus ships would colour one panel and blank
         # the other. Fall back for *this render* — the stored choice is left

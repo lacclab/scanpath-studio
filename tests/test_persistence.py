@@ -38,6 +38,22 @@ def _dataset():
     }
 
 
+def _manifest(root):
+    return json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+
+
+def _frame_files(root, name):
+    """Where the manifest keeps one dataset's frames — a fresh name per write
+    since #412, so read from it rather than derived from the dataset's name."""
+    frames = _manifest(root)["datasets"][name]["frames"]
+    return {key: root / relative for key, relative in frames.items()}
+
+
+def _sidecar(root):
+    """The metadata tables' file the manifest names (#412: versioned)."""
+    return root / _manifest(root)["metadata"]["file"]
+
+
 def test_enabled_only_for_loopback_without_override():
     assert persistence_enabled("http://localhost:8501", {})
     assert persistence_enabled("http://127.0.0.1:8501/path", {})
@@ -670,20 +686,21 @@ def test_a_cache_written_before_the_setup_key_still_restores(tmp_path):
 # so the cache never accumulates orphans under the old name's slug.
 
 
-def test_rename_moves_the_cached_frames_and_keeps_the_restore(tmp_path):
+def test_rename_rekeys_the_cache_and_keeps_the_restore(tmp_path):
+    """#412: the files are not named after the dataset, so a rename moves none —
+    one manifest replacement, never a half-moved cache."""
     session = {"_datasets": {"Corpus": _dataset()}, "data_source_choice": "Corpus"}
     assert save_state(session, tmp_path)
-    before = sorted(path.name for path in (tmp_path / "datasets").glob("*.parquet"))
+    files = _frame_files(tmp_path, "Corpus")
+    stamps = {key: path.stat().st_mtime_ns for key, path in files.items()}
 
     session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
     session["data_source_choice"] = "Renamed"
     assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
 
-    after = sorted(path.name for path in (tmp_path / "datasets").glob("*.parquet"))
-    assert len(after) == len(before) and after != before, (
-        "the frames should have been renamed in place, not duplicated or rewritten"
-    )
-    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert _frame_files(tmp_path, "Renamed") == files
+    assert {key: path.stat().st_mtime_ns for key, path in files.items()} == stamps
+    manifest = _manifest(tmp_path)
     assert set(manifest["datasets"]) == {"Renamed"}
     assert manifest["session"]["data_source_choice"] == "Renamed"
 
@@ -1245,7 +1262,7 @@ class TestMetadataTablesInTheRecoveryCache:
         from scanpath_studio import metadata as md
 
         save_state(self._attached(), tmp_path)
-        path = tmp_path / persistence.METADATA_FILE
+        path = _sidecar(tmp_path)
         payloads = json.loads(path.read_text("utf-8"))
         payloads["datasets"]["study"]["participant"]["records"] = [{"no_id": 1}]
         path.write_text(json.dumps(payloads), "utf-8")
@@ -1261,17 +1278,19 @@ class TestMetadataTablesInTheRecoveryCache:
         manifest and is written only when its content changes."""
         session = {"global_show_heatmap": True, **self._attached()}
         assert save_state(session, tmp_path)
-        sidecar = tmp_path / persistence.METADATA_FILE
+        sidecar = _sidecar(tmp_path)
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
-        assert manifest["metadata"] == {
-            "file": persistence.METADATA_FILE,
-            "tables": ["study:participant", "study:trial", "study:text"],
-        }
+        assert manifest["metadata"]["tables"] == [
+            "study:participant",
+            "study:trial",
+            "study:text",
+        ]
         # Mark the file (trailing whitespace is still valid JSON): a rewrite
         # would drop the mark.
         sidecar.write_text(sidecar.read_text("utf-8") + " ", "utf-8")
         session["global_show_heatmap"] = False
         assert save_state(session, tmp_path)
+        assert _sidecar(tmp_path) == sidecar
         assert sidecar.read_text("utf-8").endswith(" ")
 
     def test_a_reordered_table_is_a_change(self, tmp_path):
@@ -1288,12 +1307,14 @@ class TestMetadataTablesInTheRecoveryCache:
     def test_detaching_every_table_removes_the_file(self, tmp_path):
         session = self._attached()
         save_state(session, tmp_path)
-        assert (tmp_path / persistence.METADATA_FILE).is_file()
+        sidecar = _sidecar(tmp_path)
+        assert sidecar.is_file()
         for key in list(session):
-            session.pop(key)
+            if not key.startswith("_local_persistence"):
+                session.pop(key)
         session["global_show_heatmap"] = True
         assert save_state(session, tmp_path)
-        assert not (tmp_path / persistence.METADATA_FILE).exists()
+        assert not sidecar.exists()
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
         assert "metadata" not in manifest
 
@@ -1301,7 +1322,7 @@ class TestMetadataTablesInTheRecoveryCache:
         from scanpath_studio import metadata as md
 
         save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
-        (tmp_path / persistence.METADATA_FILE).unlink()
+        _sidecar(tmp_path).unlink()
         restored = {}
         assert restore_state(restored, tmp_path)
         assert "study" in restored["_datasets"]
@@ -1317,7 +1338,7 @@ class TestMetadataTablesInTheRecoveryCache:
         from scanpath_studio import metadata as md
 
         save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
-        sidecar = tmp_path / persistence.METADATA_FILE
+        sidecar = _sidecar(tmp_path)
         good = sidecar.read_text("utf-8")
         if damage == "corrupt":
             sidecar.write_text("{not json", "utf-8")
@@ -1334,7 +1355,7 @@ class TestMetadataTablesInTheRecoveryCache:
         restored["global_show_heatmap"] = True
         assert save_state(restored, tmp_path)
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
-        assert manifest["metadata"]["file"] == persistence.METADATA_FILE
+        assert manifest["metadata"]["file"] == sidecar.name
         if damage == "corrupt":
             assert sidecar.read_text("utf-8") == "{not json"
         # Repaired, a retry brings the tables back and saving them resumes.
@@ -1348,7 +1369,7 @@ class TestMetadataTablesInTheRecoveryCache:
 
     def test_removing_the_held_back_file_touches_nothing_else(self, tmp_path):
         save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
-        sidecar = tmp_path / persistence.METADATA_FILE
+        sidecar = _sidecar(tmp_path)
         sidecar.write_text("{not json", "utf-8")
         restored = {}
         restore_state(restored, tmp_path)
@@ -1368,8 +1389,9 @@ class TestMetadataTablesInTheRecoveryCache:
 
     def test_clearing_the_cache_removes_the_file(self, tmp_path):
         save_state(self._attached(), tmp_path)
+        sidecar = _sidecar(tmp_path)
         forget_state(tmp_path)
-        assert not (tmp_path / persistence.METADATA_FILE).exists()
+        assert not sidecar.exists()
 
     def test_cache_status_counts_the_tables(self, tmp_path):
         save_state(self._attached(), tmp_path)
@@ -1379,7 +1401,7 @@ class TestMetadataTablesInTheRecoveryCache:
 
     def test_cache_status_names_a_missing_tables_file(self, tmp_path):
         save_state(self._attached(), tmp_path)
-        (tmp_path / persistence.METADATA_FILE).unlink()
+        _sidecar(tmp_path).unlink()
         status = cache_status(tmp_path, environ={})
         assert "missing" in status["damaged_metadata"]
 
@@ -1479,15 +1501,11 @@ class TestEachCachedDatasetRestoresOnItsOwn:
 
     @staticmethod
     def _files(root, name):
-        slug = persistence._dataset_slug(name)
-        return {
-            key: root / "datasets" / f"{slug}-{key}.parquet"
-            for key in ("words", "fixations", "raw_gaze")
-        }
+        return _frame_files(root, name)
 
     @staticmethod
     def _manifest(root):
-        return json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        return _manifest(root)
 
     def _damage(self, root):
         """The review's case: only `damaged`'s word table goes missing."""
@@ -1653,8 +1671,7 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
     save_state({"_datasets": {"good": _dataset(), "damaged": _dataset()}}, tmp_path)
-    slug = persistence._dataset_slug("damaged")
-    (tmp_path / "datasets" / f"{slug}-words.parquet").unlink()
+    _frame_files(tmp_path, "damaged")["words"].unlink()
 
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=180)
     at.run()
@@ -1703,3 +1720,304 @@ def test_the_page_names_held_back_metadata_tables_with_their_actions():
         "probe_retry_metadata",
         "probe_remove_metadata",
     }
+
+
+class TestASaveIsAllOrNothing:
+    """#412 — a save that fails part-way must leave the previous session whole.
+
+    Each dataset frame used to be replaced in place, one file at a time, and the
+    metadata tables' file before the manifest: a failure in between left the old
+    manifest naming new Words beside old Fixations, or old settings beside new
+    metadata, and the next launch restored that mixture as if it were a session.
+    Now every changed file is written under a new name and the manifest naming
+    them is swapped in last, so a restart sees the whole old state or the whole
+    new one.
+    """
+
+    OLD = {"trial": "old", "age": 30, "heatmap": False}
+    NEW = {"trial": "new", "age": 40, "heatmap": True}
+
+    @staticmethod
+    def _session(trial: str, age: int, heatmap: bool) -> dict:
+        from scanpath_studio import metadata as md
+
+        def dataset(name):
+            rows = {"trial_id": [f"{name}-{trial}"]}
+            return {
+                "words": pd.DataFrame({**rows, "word_id": [1]}),
+                "fixations": pd.DataFrame({**rows, "duration_ms": [100]}),
+                "raw_gaze": pd.DataFrame({**rows, "x": [1.0]}),
+            }
+
+        return {
+            "_datasets": {"A": dataset("A"), "B": dataset("B")},
+            "global_show_heatmap": heatmap,
+            md.OWNER_KEY: "A",
+            md.SESSION_KEY: md.build_participant_metadata(
+                pd.DataFrame({"participant_id": ["p"], "age": [age]}), "participant_id"
+            ),
+        }
+
+    @staticmethod
+    def _expected(state: dict) -> dict:
+        trial = state["trial"]
+        return {
+            "frames": {
+                name: {key: [f"{name}-{trial}"] for key in persistence._FRAME_KEYS}
+                for name in ("A", "B")
+            },
+            "age": [state["age"]],
+            "heatmap": state["heatmap"],
+            "held_back": ({}, None),
+        }
+
+    @staticmethod
+    def _restored(root) -> dict:
+        """What a restart brings back, in the shape of `_expected`."""
+        from scanpath_studio import metadata as md
+
+        session: dict = {}
+        assert restore_state(session, root)
+        md.activate_dataset(session, "A")
+        return {
+            "frames": {
+                name: {
+                    key: payload[key]["trial_id"].tolist()
+                    for key in persistence._FRAME_KEYS
+                }
+                for name, payload in session["_datasets"].items()
+            },
+            "age": session[md.SESSION_KEY].frame["age"].tolist(),
+            "heatmap": session["global_show_heatmap"],
+            # Nothing may be held back as missing either: a mixture announced
+            # as a damaged dataset is still not the previous session.
+            "held_back": (
+                persistence.failed_datasets(session),
+                persistence.failed_metadata(session),
+            ),
+        }
+
+    @staticmethod
+    def _on_disk(root) -> set[str]:
+        files = {f"datasets/{path.name}" for path in (root / "datasets").iterdir()}
+        return files | {path.name for path in root.glob("metadata*.json")}
+
+    @staticmethod
+    def _writes(monkeypatch, fail_at=None, mode="fails"):
+        """Record the cache's file writes; make write number ``fail_at`` fail.
+
+        ``fails``: that write raises instead of writing. ``killed``: it
+        completes, then the process dies — so nothing cleans up after it.
+        """
+        calls: list[str] = []
+
+        class Injected(OSError):
+            pass
+
+        def kill(path):
+            return None
+
+        for name in ("_atomic_parquet", "_atomic_text"):
+            original = getattr(persistence, name)
+
+            def wrapped(source, destination, _original=original):
+                calls.append(destination.name)
+                if len(calls) == fail_at and mode == "fails":
+                    raise Injected(f"disk full writing {destination.name}")
+                _original(source, destination)
+                if len(calls) == fail_at:
+                    monkeypatch.setattr(persistence, "_unlink_quietly", kill)
+                    raise Injected(f"killed after writing {destination.name}")
+
+            monkeypatch.setattr(persistence, name, wrapped)
+        return calls, Injected
+
+    def test_a_clean_save_restores_the_new_state(self, tmp_path):
+        save_state(self._session(**self.OLD), tmp_path)
+        assert save_state(self._session(**self.NEW), tmp_path)
+        assert self._restored(tmp_path) == self._expected(self.NEW)
+
+    @pytest.mark.parametrize("mode", ["fails", "killed"])
+    def test_a_failure_at_any_write_restores_one_whole_state(
+        self, tmp_path, monkeypatch, mode
+    ):
+        counted = tmp_path / "count"
+        save_state(self._session(**self.OLD), counted)
+        with monkeypatch.context() as patch:
+            writes, _ = self._writes(patch)
+            assert save_state(self._session(**self.NEW), counted)
+        # Both datasets' three frames, the metadata tables, then the manifest.
+        assert len(writes) == 8 and writes[-1] == "manifest.json"
+
+        for fail_at in range(1, len(writes) + 1):
+            root = tmp_path / f"{mode}-{fail_at}"
+            save_state(self._session(**self.OLD), root)
+            before = self._on_disk(root)
+            with monkeypatch.context() as patch:
+                _, injected = self._writes(patch, fail_at, mode)
+                with pytest.raises(injected):
+                    save_state(self._session(**self.NEW), root)
+            committed = mode == "killed" and fail_at == len(writes)
+            expected = self._expected(self.NEW if committed else self.OLD)
+            assert self._restored(root) == expected, (mode, fail_at, writes)
+            if mode == "fails":
+                # The failed attempt took its own files away with it.
+                assert self._on_disk(root) == before, (fail_at, writes)
+
+    @staticmethod
+    def _age(root, relatives) -> None:
+        import os
+        import time
+
+        stale = time.time() - persistence._STALE_AFTER_S - 60
+        for relative in relatives:
+            os.utime(root / relative, (stale, stale))
+
+    def test_an_interrupted_saves_leftovers_go_once_stale(self, tmp_path, monkeypatch):
+        """A killed save leaves files no manifest names. The first save of a
+        later session removes them, once they are old enough not to be another
+        process's save still in flight — and not before."""
+        save_state(self._session(**self.OLD), tmp_path)
+        with monkeypatch.context() as patch:
+            writes, injected = self._writes(patch, fail_at=4, mode="killed")
+            with pytest.raises(injected):
+                save_state(self._session(**self.NEW), tmp_path)
+        left = {f"datasets/{name}" for name in writes}
+
+        young: dict = {}
+        restore_state(young, tmp_path)
+        young["global_show_heatmap"] = True
+        assert save_state(young, tmp_path)
+        referenced = set(young[persistence._LAST_REFERENCED_KEY])
+        assert self._on_disk(tmp_path) - referenced == left, "too young to go"
+
+        self._age(tmp_path, left)
+        later: dict = {}
+        restore_state(later, tmp_path)
+        later["global_show_heatmap"] = False
+        assert save_state(later, tmp_path)
+        assert self._on_disk(tmp_path) == set(later[persistence._LAST_REFERENCED_KEY])
+        assert self._restored(tmp_path)["frames"] == self._expected(self.OLD)["frames"]
+
+    def test_two_sessions_sharing_the_cache_leave_each_others_files(self, tmp_path):
+        """Two tabs on one cache: only a session's first save sweeps unnamed
+        files, so a dataset one tab added is not removed by the other tab's
+        every save, and re-encoded by its own next one."""
+        save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
+        tab_a: dict = {}
+        tab_b: dict = {}
+        for tab in (tab_a, tab_b):
+            restore_state(tab, tmp_path)
+            tab["global_show_heatmap"] = True
+            assert save_state(tab, tmp_path)  # each tab's one sweep
+
+        tab_a["_datasets"] = {**tab_a["_datasets"], "Added": _dataset()}
+        assert save_state(tab_a, tmp_path)
+        added = _frame_files(tmp_path, "Added")
+        self._age(tmp_path, [path.relative_to(tmp_path) for path in added.values()])
+
+        tab_b["global_show_heatmap"] = False  # its manifest has no "Added"
+        assert save_state(tab_b, tmp_path)
+        assert all(path.is_file() for path in added.values())
+        tab_a["global_show_heatmap"] = False
+        assert save_state(tab_a, tmp_path)
+        assert _frame_files(tmp_path, "Added") == added, "reused, not re-encoded"
+
+    def test_a_save_removes_the_versions_it_replaced(self, tmp_path):
+        from scanpath_studio import metadata as md
+
+        session = self._session(**self.OLD)
+        assert save_state(session, tmp_path)
+        for trial, age in (("two", 31), ("three", 32)):
+            new = self._session(trial, age, True)
+            session["_datasets"]["A"] = new["_datasets"]["A"]
+            session[md.SESSION_KEY] = new[md.SESSION_KEY]
+            assert save_state(session, tmp_path)
+            referenced = set(session[persistence._LAST_REFERENCED_KEY])
+            assert self._on_disk(tmp_path) == referenced
+            assert len(list((tmp_path / "datasets").iterdir())) == 6
+            assert len(list(tmp_path.glob("metadata*.json"))) == 1
+        restored = self._restored(tmp_path)
+        assert restored["frames"]["A"]["words"] == ["A-three"]
+        assert restored["age"] == [32]
+
+    def test_adding_a_dataset_leaves_the_others_files_alone(self, tmp_path):
+        session = {"_datasets": {"Corpus": _dataset()}}
+        assert save_state(session, tmp_path)
+        files = _frame_files(tmp_path, "Corpus")
+        stamps = {key: path.stat().st_mtime_ns for key, path in files.items()}
+        session["_datasets"] = {**session["_datasets"], "Second": _dataset()}
+        assert save_state(session, tmp_path)
+        assert _frame_files(tmp_path, "Corpus") == files
+        assert {key: path.stat().st_mtime_ns for key, path in files.items()} == stamps
+        assert set(_manifest(tmp_path)["datasets"]) == {"Corpus", "Second"}
+
+    def test_reused_files_that_vanished_are_written_again(self, tmp_path):
+        """Another tab's save can remove files this session still names; the
+        next save writes them afresh rather than naming a missing file."""
+        session = {"_datasets": {"Corpus": _dataset()}, "global_show_heatmap": True}
+        assert save_state(session, tmp_path)
+        for path in _frame_files(tmp_path, "Corpus").values():
+            path.unlink()
+        session["global_show_heatmap"] = False
+        assert save_state(session, tmp_path)
+        assert all(path.is_file() for path in _frame_files(tmp_path, "Corpus").values())
+        restored: dict = {}
+        assert restore_state(restored, tmp_path)
+        assert persistence.failed_datasets(restored) == {}
+        pd.testing.assert_frame_equal(
+            restored["_datasets"]["Corpus"]["words"], _dataset()["words"]
+        )
+
+    def test_a_cache_written_before_412_restores_and_moves_on(self, tmp_path):
+        """The layout every cache had until #412 — frames named after the
+        dataset's slug, the tables in `metadata.json` — still restores, and the
+        first save that rewrites a file retires the old one."""
+        import hashlib
+
+        assert save_state(self._session(**self.OLD), tmp_path)
+        manifest = _manifest(tmp_path)
+        for name, entry in manifest["datasets"].items():
+            slug = hashlib.sha256(name.encode("utf-8")).hexdigest()[:20]
+            for key, relative in entry["frames"].items():
+                legacy = f"datasets/{slug}-{key}.parquet"
+                (tmp_path / relative).rename(tmp_path / legacy)
+                entry["frames"][key] = legacy
+        (tmp_path / manifest["metadata"]["file"]).rename(
+            tmp_path / persistence.METADATA_FILE
+        )
+        manifest["metadata"]["file"] = persistence.METADATA_FILE
+        (tmp_path / "manifest.json").write_text(json.dumps(manifest), "utf-8")
+        legacy_files = self._on_disk(tmp_path)
+
+        assert self._restored(tmp_path) == self._expected(self.OLD)
+        status = cache_status(tmp_path, environ={})
+        assert status["readable"] and not status["damaged"]
+        assert status["metadata"] == 1 and status["damaged_metadata"] == ""
+
+        session: dict = {}
+        restore_state(session, tmp_path)
+        session["_datasets"]["A"] = self._session(**self.NEW)["_datasets"]["A"]
+        assert save_state(session, tmp_path)
+        on_disk = self._on_disk(tmp_path)
+        assert on_disk == set(session[persistence._LAST_REFERENCED_KEY])
+        # B is reused where it was; A and the tables went to new files, and
+        # their old ones with the manifest that named them.
+        b_frames = set(_manifest(tmp_path)["datasets"]["B"]["frames"].values())
+        assert legacy_files & on_disk == b_frames
+        restored = self._restored(tmp_path)
+        assert restored["frames"]["A"]["words"] == ["A-new"]
+        assert restored["frames"]["B"]["words"] == ["B-old"]
+        assert restored["age"] == [30]
+
+    def test_clearing_the_cache_removes_every_version(self, tmp_path, monkeypatch):
+        save_state(self._session(**self.OLD), tmp_path)
+        with monkeypatch.context() as patch:
+            _, injected = self._writes(patch, fail_at=7, mode="killed")
+            with pytest.raises(injected):
+                save_state(self._session(**self.NEW), tmp_path)
+        assert len(self._on_disk(tmp_path)) == 14  # both saves' frames and tables
+        forget_state(tmp_path)
+        assert not (tmp_path / "datasets").exists()
+        assert not list(tmp_path.glob("metadata*.json"))
+        assert cache_status(tmp_path, environ={})["bytes"] == 0

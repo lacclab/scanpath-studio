@@ -17,7 +17,7 @@ CI), and may z-score within reader — see :data:`MEASURES`,
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -1405,8 +1405,13 @@ def group_mask(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.Series:
     composite key the row must match as a whole (AN-31 — a trial-metadata
     cohort is a set of ``(participant_id, trial_id)`` readings, which two
     independent column constraints cannot express: reader p1's trial t1 and
-    reader p2's trial t2 are not p1's t2). Like a single column, a composite key
-    a frame does not fully carry constrains nothing on that frame.
+    reader p2's trial t2 are not p1's t2).
+
+    #412: a column the frame does not carry selects **nothing** on it. It used
+    to constrain nothing, so a group defined on a field of the Words table took
+    every fixation, and both groups of a comparison pooled the same ones. A
+    spec over fields of either table is resolved to readings first
+    (:func:`resolve_group_spec`), and those every table carries.
     """
     if frame is None or frame.empty:
         return pd.Series([], dtype=bool)
@@ -1414,16 +1419,112 @@ def group_mask(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.Series:
     for col, vals in (spec or {}).items():
         if not vals:
             continue
+        if not set(_spec_columns(col)) <= set(frame.columns):
+            return pd.Series(False, index=frame.index)
         if isinstance(col, tuple):
-            if not set(col) <= set(frame.columns):
-                continue
-            allowed = {tuple(str(part) for part in v) for v in vals}
-            keys = pd.MultiIndex.from_arrays([frame[c].astype(str) for c in col])
-            mask &= keys.isin(allowed)
-        elif col in frame.columns:
+            mask &= _composite_mask(frame, col, vals)
+        else:
             allowed = {str(v) for v in vals}
             mask &= frame[col].astype(str).isin(allowed)
     return mask
+
+
+def _spec_columns(column) -> tuple:
+    """A spec key's columns — one, or a composite key's several."""
+    return column if isinstance(column, tuple) else (column,)
+
+
+#: The reading key every table carries — the composite a group's fields
+#: resolve to (AN-31's trial-metadata cohorts use it too).
+READING_KEY = ("participant_id", "trial_id")
+#: A reading no dataset holds, standing in for an empty set of readings: an
+#: empty value list is "no constraint" to :func:`group_mask`.
+_NO_READING = ("\x00__no_such_reading__", "\x00__no_such_reading__")
+
+
+@dataclass(frozen=True)
+class GroupResolution:
+    """A group spec resolved to readings (#412) — see :func:`resolve_group_spec`.
+
+    ``spec`` constrains only the reading key, so :func:`group_mask` selects the
+    same readings from every table. ``missing`` names the fields neither table
+    carries: the group cannot be formed (and ``spec`` selects nothing).
+    ``conflicts`` maps a field to the readings the two tables disagree on,
+    which the group leaves out.
+    """
+
+    spec: dict
+    missing: tuple = ()
+    conflicts: Mapping = field(default_factory=dict)
+
+    @property
+    def available(self) -> bool:
+        return not self.missing
+
+
+def resolve_group_spec(
+    spec: Mapping | None,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+) -> GroupResolution:
+    """``spec``'s field constraints as the ``(participant_id, trial_id)`` readings
+    they select, decided across both tables (#412).
+
+    A field may be on the Words table only, the Fixations table only, or both;
+    each is decided per reading from the tables that carry it — the trial
+    filters' rule (`data.select_readings`): a reading the tables disagree on is
+    left out, one no table has a value for is not in the group. Constraints on
+    the reading key itself (a participant pick, AN-31's readings) stay as they
+    are; the field constraints become one more set of readings, intersected
+    with any already there. A spec with no field constraint comes back as is.
+    """
+    spec = dict(spec or {})
+    fields = {c: v for c, v in spec.items() if v and not on_reading_key(c)}
+    resolved = {c: v for c, v in spec.items() if on_reading_key(c)}
+    if not fields:
+        return GroupResolution(resolved, (), {})
+    tables = [f for f in (words, fixations) if f is not None and not f.empty]
+    missing = tuple(
+        c for c in fields if not any(set(_spec_columns(c)) <= set(f) for f in tables)
+    )
+    if missing:
+        return GroupResolution({READING_KEY: [_NO_READING]}, missing, {})
+    # Imported here: `data` carries the app's Streamlit caches, which this
+    # module keeps out of its own import (the resolver itself is pure pandas).
+    from .data import select_readings
+
+    selection = select_readings(words, fixations, fields)
+    readings = set(selection.kept) if selection is not None else set()
+    conflicts = dict(selection.conflicts) if selection is not None else {}
+    if READING_KEY in resolved:
+        readings &= {tuple(str(p) for p in v) for v in resolved[READING_KEY]}
+    resolved[READING_KEY] = sorted(readings) or [_NO_READING]
+    return GroupResolution(resolved, (), conflicts)
+
+
+def on_reading_key(column) -> bool:
+    """Whether a spec column is (part of) the reading key, which every table
+    carries — so it needs no resolving."""
+    return set(_spec_columns(column)) <= set(READING_KEY)
+
+
+def _composite_mask(frame: pd.DataFrame, columns: tuple, values) -> np.ndarray:
+    """Rows whose ``columns`` match one of ``values`` (tuples) as a whole.
+
+    Matched per distinct key rather than per row: the frame is grouped once
+    (~30 ms per million rows) and only its distinct keys are looked up, where a
+    row-level ``MultiIndex.isin`` against thousands of readings took ~140 ms —
+    and a cohort of #412's readings is matched several times a rerun.
+    """
+    grouped = frame.groupby(
+        [frame[c].astype(str).rename(c) for c in columns], sort=False, dropna=False
+    )
+    keys = grouped.size().index
+    if len(columns) == 1:
+        allowed = {str(v[0]) if isinstance(v, tuple) else str(v) for v in values}
+    else:
+        allowed = {tuple(str(part) for part in v) for v in values}
+    return keys.isin(allowed)[grouped.ngroup().to_numpy()]
 
 
 def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFrame:
@@ -1592,9 +1693,14 @@ def paired_group_summary(
     (#374): a spread over pooled words from the same few participants reads as
     a precision the data does not have. ``measures`` may mix word- and
     fixation-level measures; pass ``words``/``fixations`` so each reads its
-    backing frame (``frame`` is the fallback).
+    backing frame (``frame`` is the fallback) — and then each group is
+    resolved to readings across the two (:func:`resolve_group_spec`, #412),
+    so a field one table lacks narrows the other's measures too.
     """
     label_a, label_b = distinct_group_labels(label_a, label_b)
+    if words is not None or fixations is not None:
+        spec_a = resolve_group_spec(spec_a, words, fixations).spec
+        spec_b = resolve_group_spec(spec_b, words, fixations).spec
     rows = []
     for m in measures:
         src = (

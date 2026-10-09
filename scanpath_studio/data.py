@@ -6209,12 +6209,15 @@ def _resolve_trial_filters(
     metadata: dict | None,
     ranges: dict | None,
     drop_unknown: Iterable[str] | None,
+    *,
+    as_text: bool = False,
 ) -> tuple[TrialSelection, list[np.ndarray | None]] | None:
     """The selection the condition + range filters make, and a row mask per frame.
 
     ``None`` when no filter applies to a column either frame carries. The masks
     line up with ``(words, fixations)``; ``None`` for a frame that cannot be
-    keyed by reading (no ids), which is left as it is.
+    keyed by reading (no ids), which is left as it is. ``as_text`` compares a
+    condition's values as strings (`aggregation.group_mask`'s rule).
     """
     dropping = set(drop_unknown or ())
     frames = [words, fixations]
@@ -6232,18 +6235,13 @@ def _resolve_trial_filters(
             continue
         owners = _filter_owners(usable, col)
         if owners:
-            allowed = set(allowed)
-            rules.append(
-                (
-                    col,
-                    lambda values, a=allowed: (
-                        values.isin(a).to_numpy(),
-                        values.notna().to_numpy(),
-                    ),
-                    False,
-                    owners,
-                )
-            )
+            allowed = {str(v) for v in allowed} if as_text else set(allowed)
+
+            def _member(values, a=allowed):
+                compared = values.astype(str) if as_text else values
+                return compared.isin(a).to_numpy(), values.notna().to_numpy()
+
+            rules.append((col, _member, False, owners))
     for col, bounds in (ranges or {}).items():
         if not bounds:
             continue
@@ -6376,21 +6374,51 @@ def filter_trials(
     return result.words, result.fixations
 
 
-def trial_filter_conflict_note(conflicts: dict, label=str, *, limit: int = 3) -> str:
+def select_readings(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    conditions: dict,
+) -> TrialSelection | None:
+    """The readings matching every ``{column: allowed values}`` condition (#412).
+
+    The trial filters' rule (`select_trials`) for a Corpus Analysis cohort:
+    each condition is decided per reading from the tables that carry its
+    column, values compared as strings like `aggregation.group_mask` does, and
+    a reading the tables disagree on is left out (``conflicts``). ``None`` when
+    no condition names a column either table carries.
+    """
+    empty = pd.DataFrame()
+    resolved = _resolve_trial_filters(
+        words if words is not None else empty,
+        fixations if fixations is not None else empty,
+        conditions,
+        None,
+        None,
+        as_text=True,
+    )
+    return None if resolved is None else resolved[0]
+
+
+def trial_filter_conflict_note(
+    conflicts: dict, label=str, *, subject: str | None = None, limit: int = 3
+) -> str:
     """One sentence per filtered column whose two tables disagree (#412).
 
     ``label`` names a column for the reader (the app passes the dataset's own
-    names). Empty when there is nothing to report.
+    names); ``subject`` is what leaves the trials out — the column's filter by
+    default, a cohort's name for a Corpus Analysis group. Empty when there is
+    nothing to report.
     """
     lines = []
     for col, readings in conflicts.items():
         shown = ", ".join(f"{p} · {t}" for p, t in readings[:limit])
         more = f", … (+{len(readings) - limit} more)" if len(readings) > limit else ""
+        one = len(readings) == 1
         lines.append(
-            f"**{plural(len(readings), 'trial')}** {'has' if len(readings) == 1 else 'have'} "
+            f"**{plural(len(readings), 'trial')}** {'has' if one else 'have'} "
             f"one {label(col)} in the Words table and another in the Fixations "
-            f"table, so the {label(col)} filter leaves "
-            f"{'it' if len(readings) == 1 else 'them'} out ({shown}{more})."
+            f"table, so {subject or f'the {label(col)} filter'} leaves "
+            f"{'it' if one else 'them'} out ({shown}{more})."
         )
     return " ".join(lines)
 

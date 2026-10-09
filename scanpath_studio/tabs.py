@@ -29,6 +29,7 @@ from scanpath_studio.aggregation import (
     MEASURES,
     RATE_SERIES,
     READING_TIME_ESTIMATED,
+    GroupResolution,
     Measure,
     apply_group,
     available_features,
@@ -43,6 +44,7 @@ from scanpath_studio.aggregation import (
     measure_values,
     metric_by_trial_index,
     metric_over_time,
+    on_reading_key,
     paired_group_summary,
     per_participant_trend,
     per_reader_word_measure,
@@ -51,6 +53,7 @@ from scanpath_studio.aggregation import (
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
+    resolve_group_spec,
     saccade_vs_duration,
     text_read_counts,
     text_screen_options,
@@ -217,9 +220,11 @@ from scanpath_studio.data import (
     empty_words_frame,
     filter_to_keys,
     filter_trials,
+    frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
     has_explicit_trial_index,
+    hashable_key,
     identity_text_plan,
     normalize_fixations,
     normalize_raw_gaze,
@@ -234,6 +239,7 @@ from scanpath_studio.data import (
     shareable_frame,
     text_ids,
     timestamps_synthesized,
+    trial_filter_conflict_note,
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
@@ -9473,19 +9479,30 @@ def _render_filter_set(words, fixations, *, key, default_label):
 def _cohort_reader_ids(
     fixations: pd.DataFrame | None, words: pd.DataFrame | None, spec=None
 ) -> set[str]:
-    """The readers a cohort holds: read from its fixations, or — for a dataset
-    of word measures alone — from its words (BUG-112: an AOI-only dataset's
-    cohorts read "0 readers" beside charts drawn from theirs).
+    """The readers with a reading in the cohort, in either table.
 
-    ``spec`` selects the cohort from whole frames by mask, without copying them.
+    BUG-112: an AOI-only dataset's cohorts read "0 readers" beside charts drawn
+    from theirs; #412: a reading only one table has is the cohort's too, and a
+    field only one table carries selects the same readers from both. Read off
+    the tables' distinct readings (cached per frame), not their rows, once
+    ``spec`` is resolved to the reading key (`_resolve_cohort`).
     """
-    for frame in (fixations, words):
-        if frame is not None and not frame.empty and "participant_id" in frame:
-            ids = frame["participant_id"]
-            if spec:
-                ids = ids[group_mask(frame, spec)]
-            return set(ids.dropna().astype(str).unique())
-    return set()
+    tables = [
+        f
+        for f in (fixations, words)
+        if f is not None and not f.empty and {"participant_id", "trial_id"} <= set(f)
+    ]
+    if spec:
+        spec = _resolve_cohort(spec, words, fixations).spec
+    readings: set = set()
+    for frame in tables:
+        readings |= _c_trial_keys(frame, frame_fingerprint(frame))
+    if not readings:
+        return set()
+    keys = pd.DataFrame(sorted(readings), columns=list(_TRIAL_KEY_COLUMNS))
+    if spec:
+        keys = keys[group_mask(keys, spec)]
+    return set(keys["participant_id"])
 
 
 def _cohort_readers(
@@ -9592,32 +9609,54 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
     return spec, label
 
 
-def _warn_word_only_group_fields(host, fixations, *specs) -> None:
-    """Warn when a group is defined on a field absent from the fixation table.
+def _resolve_cohort(spec, words, fixations) -> GroupResolution:
+    """``spec`` resolved to readings (`aggregation.resolve_group_spec`, #412).
 
-    ``group_mask`` filters per frame, so a word-only spec column leaves the
-    fixation frame unfiltered — the *fixation-level* views (distributions for a
-    per-fixation measure, paired bars, group means) would then silently compare
-    all-vs-all. Surfacing it beats a misleading comparison.
+    A field on the Words table only used to constrain the words alone:
+    `group_mask` skipped a column the frame did not have, so the fixation
+    measures pooled *every* fixation into each group. Resolved once per pool
+    and group — a `frame_cache` holding A's and B's, so a rerun regroups
+    nothing — and the readings stand in for the fields from here on.
     """
-    present = set(getattr(fixations, "columns", []))
-    missing = sorted(
-        {
-            col
-            for spec in specs
-            for col, vals in (spec or {}).items()
-            # A composite key (AN-31's trial cohort) needs all of its columns.
-            if vals and not set(col if isinstance(col, tuple) else (col,)) <= present
-        },
-        key=str,
+    if not any(v and not on_reading_key(c) for c, v in (spec or {}).items()):
+        return resolve_group_spec(spec, words, fixations)
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        hashable_key(spec),
     )
-    if missing:
-        host.warning(
-            "Not in the fixation table: "
-            + ", ".join(_pretty_col(c) for c in missing)
-            + ". Views of a per-fixation measure compare all fixations, not the "
-            "groups. Use a field both the Words and the fixation table carry."
-        )
+    return frame_cache(
+        "cohort_readings",
+        key,
+        lambda: resolve_group_spec(spec, words, fixations),
+        keep=3,
+    )
+
+
+def _cohort_unavailable(host, cohorts) -> bool:
+    """Say why a group cannot be formed, and what it leaves out; ``True`` = stop.
+
+    ``cohorts`` are ``(label, GroupResolution)`` pairs. A field neither table
+    carries makes the group unavailable rather than everyone; a reading the
+    tables disagree on is left out of the group, and said so.
+    """
+    names = active_all(st.session_state)
+    blocked = False
+    for label, cohort in cohorts:
+        if cohort.missing:
+            blocked = True
+            fields = ", ".join(_pretty_col(c) for c in cohort.missing)
+            host.warning(
+                f"**{label}** cannot be formed: {fields} is in neither the Words "
+                "nor the Fixations table of the current pool. Pick another field."
+            )
+        if cohort.conflicts:
+            host.warning(
+                trial_filter_conflict_note(
+                    cohort.conflicts, names.label, subject=f"**{label}**"
+                )
+            )
+    return blocked
 
 
 def _text_column(frame: pd.DataFrame) -> str | None:
@@ -11098,13 +11137,17 @@ def render_per_group_tab(
         spec, label = _render_group_definition(
             words_filtered, fixations_filtered, key="pgrp", two_groups=False
         )
-    _warn_word_only_group_fields(st, fixations_filtered, spec)
-    words_g = apply_group(words_filtered, spec or {})
+    # #412: the group's fields resolved to readings, so its words and its
+    # fixations are the same readings whichever table carries the field.
+    cohort = _resolve_cohort(spec, words_filtered, fixations_filtered)
+    if _cohort_unavailable(st, [(label, cohort)]):
+        return
+    words_g = apply_group(words_filtered, cohort.spec)
     # One `apply_group` call, not two: it returns `frame[mask]`, a new full-size
     # copy, so calling it again just to compute the cache key built a second
     # corpus-sized frame that nothing else ever saw — and (since PERF-3) parked
     # it in the fingerprint memo for the rest of the run.
-    fix_in = apply_group(fixations_filtered, spec or {})
+    fix_in = apply_group(fixations_filtered, cohort.spec)
     # BUG-103: all three are new every rerun; each is named by what made it.
     assign_derived(words_g, "apply_group", words_filtered, spec or {})
     assign_derived(fix_in, "apply_group", fixations_filtered, spec or {})
@@ -11396,9 +11439,16 @@ def render_group_comparison_tab(
     # BUG-111: every chart keys its series by label, so equal labels merged A
     # into B; from here on both read apart, the caption included.
     label_a, label_b = distinct_group_labels(label_a, label_b)
-    _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
-    ids_a = _cohort_reader_ids(fixations_filtered, words_filtered, spec_a)
-    ids_b = _cohort_reader_ids(fixations_filtered, words_filtered, spec_b)
+    # #412: each group's fields resolved to readings before any measure reads
+    # them — a field the fixations lack no longer pools every fixation into
+    # both groups. The recipes keep the definitions (`spec_a` / `spec_b`).
+    cohort_a = _resolve_cohort(spec_a, words_filtered, fixations_filtered)
+    cohort_b = _resolve_cohort(spec_b, words_filtered, fixations_filtered)
+    if _cohort_unavailable(st, [(label_a, cohort_a), (label_b, cohort_b)]):
+        return
+    use_a, use_b = cohort_a.spec, cohort_b.spec
+    ids_a = _cohort_reader_ids(fixations_filtered, words_filtered, use_a)
+    ids_b = _cohort_reader_ids(fixations_filtered, words_filtered, use_b)
     readers_a, readers_b = len(ids_a), len(ids_b)
     shared = len(ids_a & ids_b)
     st.caption(
@@ -11448,8 +11498,8 @@ def render_group_comparison_tab(
         groups = two_group_values(
             frame,
             measure,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             label_a=label_a,
             label_b=label_b,
             normalize=normalize,
@@ -11499,8 +11549,8 @@ def render_group_comparison_tab(
             text_col,
             text_id,
             measure,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             agg=agg,
             min_readers=min_readers,
             screen_id=screen_id,
@@ -11568,8 +11618,8 @@ def render_group_comparison_tab(
         df = paired_group_summary(
             fixations_filtered,
             measures,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             agg=agg,
             label_a=label_a,
             label_b=label_b,
@@ -11598,7 +11648,7 @@ def render_group_comparison_tab(
         if measure is None:
             return
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        group_a, group_b = apply_group(frame, spec_a), apply_group(frame, spec_b)
+        group_a, group_b = apply_group(frame, use_a), apply_group(frame, use_b)
         # BUG-82: summarize readers, not pooled words/fixations — one reader's
         # many observations would otherwise outweigh another reader's few.
         a, b = reader_means(group_a, measure), reader_means(group_b, measure)
@@ -11718,8 +11768,8 @@ def render_group_comparison_tab(
             text_col,
             text_id,
             measure,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             agg=agg,
             label_a=label_a,
             label_b=label_b,

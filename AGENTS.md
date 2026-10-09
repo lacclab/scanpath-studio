@@ -69,7 +69,7 @@ scanpath_studio/
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state` back the Data page's *Saved on this computer* section (`app._render_saved_here_section`, UX-179), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
-├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source), and DATA-67's example import pair (`example_import_zip`: AOI + fixation CSVs and a README) behind the add wizard's **Download example tables**
+├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source), and DATA-67's example import pair (`example_import_tables`: an AOI and a fixation table that map with no manual pick)
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS

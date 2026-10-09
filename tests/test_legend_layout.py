@@ -237,6 +237,28 @@ class TestMovingTraceLegends:
         assert getattr(first, axis) != getattr(second, axis)
 
 
+class TestTheEmptyLegendStrip:
+    """Once every entry has left the default legend, its strip above the plot
+    goes too — the Compare overlay's as well as a single trial's."""
+
+    def test_the_overlay_hands_its_strip_back(self):
+        import scanpath_studio as sps
+
+        words, fixations = sps.load_sample_data()
+        (p1, t1), (p2, t2) = sps.list_trials(words, fixations).iloc[:2].values.tolist()
+        kept = sps.compare_scanpaths(words, fixations, (p1, t1), (p2, t2))
+        moved = sps.compare_scanpaths(
+            words,
+            fixations,
+            (p1, t1),
+            (p2, t2),
+            legend_layout={"compare": {"position": "right-outside"}},
+        )
+        assert kept.layout.margin.t > 0
+        assert moved.layout.margin.t == 0
+        assert _plot_region(moved) == pytest.approx(_plot_region(kept))
+
+
 class TestTheSizeKey:
     def _key(self, layout=None):
         fig = go.Figure()

@@ -1946,15 +1946,17 @@ def apply_legend_layout(
         if trace.name:
             names[kind].append(trace.name)
     # The default legend's strip above the plot: when every entry has moved out
-    # of it and the strip is exactly that reserve (the single-trial figures —
-    # a comparison's top margin also holds its title), it is handed back.
+    # of it and the strip is exactly that reserve — the single-trial figures'
+    # and the Compare overlay's (a title is added later, in a band of its own)
+    # — it is handed back. The side-by-side and stacked layouts keep theirs:
+    # their panels' names sit in it.
     _plot_w, _plot_h, margin = _plot_px(fig)
     if (
         not _default_legend_entries(fig)
-        and margin["t"] == _LEGEND_RESERVE_PX
-        and not comparing
+        and margin["t"] in (_LEGEND_RESERVE_PX, _OVERLAY_TOP_PX)
+        and getattr(fig, "_grid_ref", None) is None
     ):
-        _grow(fig, "t", -_LEGEND_RESERVE_PX)
+        _grow(fig, "t", -margin["t"])
     slots = _LegendSlots(fig, top_start=_default_legend_height(fig))
     fig._sps_legend_slots = slots
     base_font = float((fig.layout.font and fig.layout.font.size) or 12)

@@ -6569,6 +6569,14 @@ def render_single_trial_tab(
                     key="single_animate",
                     persist_state="session",
                     wrap=True,
+                    # #422 (in place of #374 F23's caption under this row): why
+                    # the layer rows below grey out, on the switch that does
+                    # it. `styles.py` draws no `?` for it: the whole switch is
+                    # the hover target.
+                    help="Replay the reading fixation by fixation. The replay "
+                    "draws its own fixations and has no heatmap or raw gaze, so "
+                    "the Fixations, Heatmap and Raw gaze switches are greyed "
+                    "while it is on.",
                 )
                 # VIZ-45: the replay is built from fixations, so a trial with none
                 # draws the static figure (its raw gaze, its text) instead of
@@ -6790,13 +6798,6 @@ def render_single_trial_tab(
                         if animate
                         else None
                     )
-            if animate:
-                # #374 F23: why the layer rows below are greyed, said where it
-                # is read without hovering each one.
-                st.caption(
-                    "Replay draws its own fixations; Heatmap and Raw gaze are off "
-                    "while it runs."
-                )
             # Compare is a view mode (toggle here); the second-trial selector renders
             # above the chips in the plot column (compare_slot below), mirroring the
             # main trial picker (CMP-1).

@@ -5893,6 +5893,30 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
+#: #422: what a greyed rail switch says on hover, for the Animate gate. The
+#: replay has its own fixation layer and none for the heatmap or raw gaze.
+_ANIMATE_GREYS = {
+    "fix": "Greyed while Animate is on: the replay always draws fixations. "
+    "This switch applies to the other figures.",
+    "heatmap": "Greyed while Animate is on: the replay has no heatmap. Turn "
+    "Animate off to show it.",
+    "rawgaze": "Greyed while Animate is on: the replay has no raw gaze. Turn "
+    "Animate off to show it.",
+}
+
+
+def _greyed_help(*reasons: tuple[bool, str]) -> str | None:
+    """A rail switch's hover text: why it is greyed, or nothing while it is live.
+
+    #422 moved the reason onto the switch itself (it was a caption under the
+    Animate row, #374 F23). ``reasons`` are ``(holds, text)`` pairs, most
+    fundamental first — a trial with nothing to draw stays greyed whatever the
+    mode — and the first that holds is the one said. `styles.py` makes the whole
+    switch the hover target and draws no `?` beside it.
+    """
+    return next((text for holds, text in reasons if holds), None)
+
+
 def _rail_section(host, label: str, *, slug: str, name: str | None = None, **toggle):
     """One rail section: `[toggle | ▾]` on a single line (UX-80).
 
@@ -6343,6 +6367,10 @@ def render_plot_controls(
         key="global_show_fix",
         persist_state="session",
         disabled=fix_off_disabled or not has_fixations,
+        help=_greyed_help(
+            (not has_fixations, "This trial has no fixations."),
+            (fix_off_disabled, _ANIMATE_GREYS["fix"]),
+        ),
         # No fixations: the popover body's own `_layer_off` caption says it.
         note=""
         if no_fixations_note
@@ -6361,6 +6389,7 @@ def render_plot_controls(
         key="global_show_saccades",
         persist_state="session",
         disabled=not has_fixations,
+        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
     )
     # UX-128: a master switch for the section's layers (text, image),
     # matching Fixations/Saccades. Earlier this was name-only — each
@@ -6392,6 +6421,7 @@ def render_plot_controls(
         persist_state="session",
         # No word boxes: the popover body's own `_layer_off` caption says it.
         disabled=not has_words,
+        help=_greyed_help((not has_words, "This trial has no word boxes.")),
     )
     # UX-86: Overlays dissolved — Heatmap and Raw gaze are now peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
@@ -6417,6 +6447,10 @@ def render_plot_controls(
         key="global_show_heatmap",
         persist_state="session",
         disabled=heat_disabled or heat_nothing,
+        help=_greyed_help(
+            (heat_nothing, "This trial has no fixations and no word boxes."),
+            (heat_disabled, _ANIMATE_GREYS["heatmap"]),
+        ),
         # Nothing to draw: the popover body's own `_layer_off` caption says it.
         note="" if heat_nothing else heat_reason,
     )
@@ -6431,6 +6465,10 @@ def render_plot_controls(
         key="global_show_raw_gaze",
         persist_state="session",
         disabled=not has_raw_gaze or raw_disabled,
+        help=_greyed_help(
+            (not has_raw_gaze, "This trial has no raw gaze samples."),
+            (raw_disabled, _ANIMATE_GREYS["rawgaze"]),
+        ),
         note=_gated_help(
             "" if has_raw_gaze else f"{ICONS['warning']} No raw gaze samples to show.",
             raw_reason,

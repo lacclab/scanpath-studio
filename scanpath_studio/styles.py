@@ -978,6 +978,37 @@ def get_app_css() -> str:
         [data-testid="stMarkdownContainer"] p {
         margin-bottom: 0;
     }
+    /* #422 — a switch's `help` is hover text on the switch itself: on
+       Animate, what it greys; on a greyed layer, why. Streamlit draws `help`
+       as a `?` button after the label, which UX-80/UX-103 cleared off these
+       rows (and which "Word boxes" has no room for). So the tooltip's hover
+       target is stretched over the whole switch — the <label>, already
+       `position: relative` — and the `?` is not drawn. A click still flips
+       the switch: the target is a plain span inside the <label>, while the
+       `?` button, interactive content that would swallow the click, takes no
+       pointer events. It stays focusable, and shows while it has focus. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"]
+        > span:has(> [data-testid="stTooltipIcon"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipIcon"] {
+        display: contents;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] {
+        position: absolute;
+        inset: 0;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] button {
+        opacity: 0;
+        pointer-events: none;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"]
+        button:focus-visible {
+        opacity: 1;
+    }
     /* The divider is drawn on the popover's SLOT — the row's own child — and not
        on the button, which is the obvious place and does not work. A trigger
        given `help=` is wrapped by Streamlit in a tooltip chain

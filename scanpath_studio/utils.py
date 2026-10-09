@@ -78,71 +78,87 @@ def combo_source(
 ) -> pd.DataFrame:
     """The frame the trial picker's combos are built from.
 
-    Fixations when there are any, else words (a words-only dataset), else raw
-    gaze (a raw-gaze-only one) — and, since VIZ-45, **plus the trials only the
-    raw gaze has**. A trial recorded as samples alone is a trial: in a dataset
-    whose fixations cover other trials, or whose words table covers other
-    texts, it used to be unpickable because the picker listed the first
-    non-empty table and nothing else.
+    **Every trial any table has** (#412) — `data.trial_pool`'s rule, which the
+    API's `list_trials`, the CLI and the export share: the fixations' trials,
+    then the trials only the words table has, then those only the raw gaze has
+    (VIZ-45). The picker used to list the first non-empty table and nothing
+    else, so a trial with words but no fixations was unpickable in a dataset
+    that had fixations for others, while the API listed only trials both
+    tables had. A trial a table lacks draws without that layer. A
+    stimulus-level words table not yet broadcast onto the readings adds none
+    (`data.names_readings`).
 
-    Returns the chosen frame itself whenever the raw gaze adds no trial (the
-    common case, and every dataset without raw gaze), so `build_combo_options`
-    keys its cache on the same object as before. Otherwise it returns a small
-    frame of identity rows — the chosen frame's, in their order, then the
-    raw-gaze-only trials' — which is all `build_combo_options` reads.
+    Returns the first non-empty frame itself whenever the others add no trial
+    (the common case), so `build_combo_options` keys its cache on the same
+    object as before. Otherwise it returns a small frame of identity rows —
+    the first frame's, in their order, then each other table's own trials' —
+    which is all `build_combo_options` reads.
     """
-    for primary in (fixations, words):
-        if primary is not None and not primary.empty:
-            break
-    else:
+    from .data import names_readings
+
+    tables = [f for f in (fixations, words, raw_gaze) if f is not None and not f.empty]
+    if not tables:
         return raw_gaze if raw_gaze is not None else pd.DataFrame()
-    if raw_gaze is None or raw_gaze.empty:
+    primary, others = tables[0], tuple(f for f in tables[1:] if names_readings(f))
+    if not others:
         return primary
     composite_cols = tuple(st.session_state.get("_composite_trial_columns") or [])
-    combined = _combo_source_with_raw_gaze(
+    combined = _combo_source_union(
         primary,
-        raw_gaze,
+        others,
         composite_cols,
-        cache_key=(frame_fingerprint(primary), frame_fingerprint(raw_gaze)),
+        cache_key=(frame_fingerprint(primary), *map(frame_fingerprint, others)),
     )
     return primary if combined is None else combined
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
-def _combo_source_with_raw_gaze(
+def _combo_source_union(
     _primary: pd.DataFrame,
-    _raw_gaze: pd.DataFrame,
+    _others: tuple[pd.DataFrame, ...],
     composite_cols: tuple[str, ...],
     cache_key,
 ) -> pd.DataFrame | None:
-    """`combo_source`'s identity rows, or ``None`` when raw gaze adds no trial."""
+    """`combo_source`'s identity rows, or ``None`` when no other table adds a
+    trial."""
     progress.report()
     from .data import trial_keys
 
-    # One deduplication per table, on the identity columns only; every key
-    # set below comes off those small frames rather than another pass over
-    # every sample (PERF: three full scans at 5M samples was ~0.8 s a miss).
-    wanted = [*_COMBO_ID_COLUMNS, *composite_cols]
-    primary_cols = [c for c in dict.fromkeys(wanted) if c in _primary.columns]
-    rows = _primary[primary_cols].drop_duplicates()
-    raw_cols = [c for c in dict.fromkeys(wanted) if c in _raw_gaze.columns]
-    raw_rows = _raw_gaze[raw_cols].drop_duplicates()
-    extra_keys = trial_keys(raw_rows) - trial_keys(rows)
-    if not extra_keys:
+    # The common answer — the other tables add nothing — costs one
+    # deduplication of two id columns per table. Only a table that does add
+    # trials is deduplicated on every identity column, and only the primary's
+    # rows are kept whole (PERF: three full scans at 5M samples was ~0.8 s).
+    known = trial_keys(_primary)
+    adding = []
+    for other in _others:
+        extra = trial_keys(other) - known
+        if extra:
+            adding.append((other, extra))
+            known |= extra
+    if not adding:
         return None
-    index = pd.MultiIndex.from_arrays(
-        [raw_rows["participant_id"].astype(str), raw_rows["trial_id"].astype(str)]
-    )
-    raw_rows = raw_rows[index.isin(extra_keys)].copy()
-    # The picker keys on the primary frame's trial and text columns; a raw-gaze
-    # row that lacks one takes its own trial id / text id, which is what those
-    # columns mean for a normalized frame (`data.normalize_raw_gaze`).
-    if "unique_trial_id" in rows.columns and "unique_trial_id" not in raw_rows:
-        raw_rows["unique_trial_id"] = raw_rows["trial_id"]
-    for text_col in ("unique_text_id", "text_id", "unique_paragraph_id"):
-        if text_col in rows.columns and text_col not in raw_rows.columns:
-            raw_rows[text_col] = raw_rows.get("text_id", raw_rows["trial_id"])
-    return pd.concat([rows, raw_rows], ignore_index=True)
+    wanted = list(dict.fromkeys([*_COMBO_ID_COLUMNS, *composite_cols]))
+    rows = _primary[[c for c in wanted if c in _primary.columns]].drop_duplicates()
+    parts = [rows]
+    for other, extra in adding:
+        other_rows = other[[c for c in wanted if c in other.columns]].drop_duplicates()
+        index = pd.MultiIndex.from_arrays(
+            [
+                other_rows["participant_id"].astype(str),
+                other_rows["trial_id"].astype(str),
+            ]
+        )
+        other_rows = other_rows[index.isin(extra)].copy()
+        # The picker keys on the primary frame's trial and text columns; a row
+        # that lacks one takes its own trial id / text id, which is what those
+        # columns mean for a normalized frame (`data.normalize_raw_gaze`).
+        if "unique_trial_id" in rows.columns and "unique_trial_id" not in other_rows:
+            other_rows["unique_trial_id"] = other_rows["trial_id"]
+        for text_col in ("unique_text_id", "text_id", "unique_paragraph_id"):
+            if text_col in rows.columns and text_col not in other_rows.columns:
+                other_rows[text_col] = other_rows.get("text_id", other_rows["trial_id"])
+        parts.append(other_rows)
+    return pd.concat(parts, ignore_index=True)
 
 
 def build_combo_options(

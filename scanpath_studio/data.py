@@ -6440,6 +6440,44 @@ def trial_keys(frame: pd.DataFrame) -> set:
     }
 
 
+def names_readings(frame: pd.DataFrame | None) -> bool:
+    """Whether ``frame``'s rows are readings a trial pool may list (#412).
+
+    Not a stimulus-level AOI table that has not been broadcast onto the
+    readings yet (`broadcast_stimulus_words`): its rows sit on the placeholder
+    participant and name texts, not readings. Once `harmonize_frames` has run,
+    every word row carries a real reading — a fixations reading it was copied
+    to, or, with no fixations at all, the synthetic reader."""
+    return (
+        frame is not None
+        and not frame.empty
+        and {"participant_id", "trial_id"} <= set(frame.columns)
+        and STIMULUS_WORDS_FLAG not in frame.columns
+    )
+
+
+def trial_pool(*frames: pd.DataFrame | None) -> pd.DataFrame:
+    """The ``(participant_id, trial_id)`` readings any of ``frames`` has (#412).
+
+    **The one trial-pool rule** the app's picker (`utils.combo_source`), the
+    API's `list_trials`, the CLI's ``render --list-trials`` and the export
+    bundle share: a trial is listed when *any* table has it — words,
+    fixations or raw gaze — once, however many tables have it; a table that
+    lacks it draws as an empty layer. Readings in first-appearance order
+    across ``frames``, taken in the order given; a table that does not
+    :func:`names_readings` adds none. One deduplication per table, on its id
+    columns only.
+    """
+    columns = ["participant_id", "trial_id"]
+    parts = [f[columns].drop_duplicates() for f in frames if names_readings(f)]
+    if not parts:
+        return pd.DataFrame(columns=columns)
+    combined = pd.concat(parts, ignore_index=True)
+    # Compared as strings, as `trial_keys` does: a table read with numeric ids
+    # names the same reading as one read with text ids.
+    return combined[~combined.astype(str).duplicated()].reset_index(drop=True)
+
+
 def text_ids(*frames: pd.DataFrame | None) -> set[str]:
     """The distinct text ids across every frame that carries one (DATA-50).
 

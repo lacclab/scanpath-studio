@@ -138,6 +138,13 @@ Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
 `sps.load_onestop(dir)` — which return the same normalized pair. See
 [OneStop](onestop.md).
 
+The two tables need not cover the same trials. `sps.list_trials(words,
+fixations)` lists every trial either table has, once — the set the app's trial
+picker, `render --list-trials` and the export bundle list too. A trial with
+words but no fixations plots its text alone, and one with fixations but no
+words its scanpath without word boxes; `animate_scanpath` and
+`compare_scanpaths` need fixations and say so.
+
 A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
 auto-detected; `raw_gaze_schema=` overrides), or `load_sample_raw_gaze()` for
 the demo's. Passing it as `plot_scanpath(raw_gaze=…)` filters it to the trial

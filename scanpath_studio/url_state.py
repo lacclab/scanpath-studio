@@ -119,6 +119,13 @@ from .session_keys import (
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
 )
+from .utils import (
+    combo_reading_keys,
+    reading_key,
+    readings_by_trial,
+    resolve_reading,
+    split_reading_key,
+)
 
 # URL query-param → session_state key map for the deep-link API. Used by
 # `_apply_url_preset()` to preset widgets when the page is opened from an
@@ -2003,18 +2010,20 @@ def _restore_selection(
         return False
     st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     # The picker renders a single dropdown keyed `<prefix>_trial_id` whose
-    # *options* are the trial_field values (`unique_trial_id` when present), so
-    # seed that one key with this row's option value — not a
-    # `<prefix>_<trial_field>` key, which no widget reads. The slider
-    # (`<prefix>_trial_pos`) needs no seeding: the picker mirrors it onto the
-    # selectbox's value before it renders.
+    # *options* are readings — `utils.reading_key` of the participant and the
+    # trial_field value (`unique_trial_id` when present), #412 — so seed that
+    # one key with this row's reading key, not a `<prefix>_<trial_field>` key,
+    # which no widget reads. The slider (`<prefix>_trial_pos`) needs no
+    # seeding: the picker mirrors it onto the selectbox's value before it
+    # renders.
     trial_field = (
         "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
     )
-    st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
+    key = reading_key(row["participant_id"], row[trial_field])
+    st.session_state[f"{key_prefix}_trial_id"] = key
     # Read once by `utils.select_trial`: a trial chosen here is never mistaken
     # for one carried over from another dataset that happens to share its id.
-    st.session_state[f"_{key_prefix}_trial_chosen"] = str(row[trial_field])
+    st.session_state[f"_{key_prefix}_trial_chosen"] = key
     if selection.get("screen_id") not in (None, ""):
         st.session_state[f"{key_prefix}_screen_id"] = str(selection["screen_id"])
     return True
@@ -2134,6 +2143,46 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
+
+
+def _settle_picker_selection(combos: pd.DataFrame) -> str | None:
+    """Turn a trial id alone in the picker's key into the reading it names (#412).
+
+    ``{prefix}_trial_id`` holds a reading key (``utils.reading_key``) since
+    #412; one saved before — a recovery cache from an older version — is a
+    trial id alone. It becomes the one reading with that id. When several
+    readers have the id it names none of them: the key is cleared, so the
+    picker opens where it would without it, and the sentence returned says why
+    for the page notices — where the picker used to open the first reader's.
+    A trial the filters left out is left to the picker, as before. ``None``
+    when nothing needed saying."""
+    if combos is None or combos.empty:
+        return None
+    trial_field = (
+        "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
+    )
+    message = None
+    pool = None
+    for prefix in _SELECTION_PREFIXES:
+        state_key = f"{prefix}_trial_id"
+        value = st.session_state.get(state_key)
+        participant, trial = split_reading_key(value)
+        if value is None or participant is not None:
+            continue
+        if pool is None:
+            keys = set(combo_reading_keys(combos, trial_field).tolist())
+            pool = (keys, readings_by_trial(keys))
+        key, readers = resolve_reading(value, *pool)
+        if key is not None:
+            st.session_state[state_key] = key
+        elif readers:
+            st.session_state.pop(state_key, None)
+            message = (
+                f"Couldn't reopen the last trial: trial {trial} belongs to "
+                f"{len(readers)} participants and the saved selection names none. "
+                "Pick one in the trial list."
+            )
+    return message
 
 
 def _seed_column_mapping(

@@ -282,6 +282,7 @@ def test_restore_selection_seeds_the_trial_id_for_a_composite_mapping(monkeypatc
     import pandas as pd
 
     from scanpath_studio import url_state as url_state_module
+    from scanpath_studio.utils import reading_key
 
     class _FakeSt:
         def __init__(self):
@@ -308,7 +309,7 @@ def test_restore_selection_seeds_the_trial_id_for_a_composite_mapping(monkeypatc
     )
     assert ok is True
     state = fake.session_state
-    assert state["single_trial_id"] == "p1_1_Ele"
+    assert state["single_trial_id"] == reading_key("p1", "p1_1_Ele")
     # No `_composite_*` keys at all — the cascade they fed is gone.
     assert not [k for k in state if k.startswith("single_composite")], state
 

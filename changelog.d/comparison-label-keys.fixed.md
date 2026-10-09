@@ -1,0 +1,1 @@
+The Comparisons subtab no longer drops a matching trial whose participant and trial IDs read the same as another's once joined (such as `p1` · `t1 · t2` and `p1 · t1` · `t2`): each gets its own panel and its own row in the similarity table.

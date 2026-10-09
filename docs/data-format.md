@@ -159,8 +159,14 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   same way when any screen a participant looked at has no boxes. When some readings
   find none, the screen, the API and the CLI warn with the counts. When it
   works, the screen says how the words attached.
+- **Repeated readings** — when a participant has one trial ID more than once,
+  told apart by a `TRIAL_INDEX` column, the later readings get `_r2`, `_r3` …,
+  so each stays a trial of its own. When that participant already has a trial
+  spelled that way (a recorded `a_r2` beside two readings of `a`), the repeat
+  is written `a__r2` instead, with one more `_` while that is taken too, so two
+  readings never merge.
 - **Text ID falls back to the trial ID** when it isn't mapped. A repeated
-  reading takes its first reading's trial ID (without the `_r2`), so per-text
+  reading takes its first reading's trial ID (without the suffix), so per-text
   grouping counts a re-reading as the same text.
 - **AOI-only fixations** — fixations with a word/IA id but no x/y are placed at
   the matching word-box centers. Word/IA ids are read as numbers: a fixation

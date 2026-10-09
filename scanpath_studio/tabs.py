@@ -364,12 +364,14 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     qualified_participant,
     qualify_for_compare,
+    reading_key,
     row_tail,
     safe_summary,
     select_trial,
     self_compare_participant,
     separate_self_compare,
     sort_trial_options,
+    split_reading_key,
     step_within,
     trial_id_help,
     trial_id_layout,
@@ -2412,14 +2414,18 @@ def _order_compare_options(
     if choice == _CMP_SORT_DEFAULT or len(options) < 2:
         return options
     key_series = None if choice == TRIAL_SORT_DEFAULT else sort_keys.get(choice)
-    trial_ids = [str(option[1]) for option in options]
-    ordered_ids = sort_trial_options(
-        trial_ids,
+    # Per reading, as the sort keys are (#412): two readers' trials of one id
+    # each take their own value.
+    keys = [reading_key(option[0], option[1]) for option in options]
+    ordered = sort_trial_options(
+        keys,
         key_series,
         descending=descending if key_series is not None else False,
     )
-    rank = {trial_id: idx for idx, trial_id in enumerate(ordered_ids)}
-    return sorted(options, key=lambda option: rank.get(str(option[1]), len(rank)))
+    rank = {key: idx for idx, key in enumerate(ordered)}
+    return [
+        option for _, option in sorted(zip(keys, options), key=lambda p: rank[p[0]])
+    ]
 
 
 #: CMP-13: scanpath B remembered as ``(participant_id, trial_id)``. The picker's
@@ -10190,10 +10196,12 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
     """The text of the trial the Scanpath view shows, while it is new to Per
     text — ``None`` once Per text has opened on it (so a text picked here is
     kept) or when the pool does not hold it."""
-    trial = st.session_state.get(SINGLE_TRIAL_ID)
-    if trial is None or st.session_state.get(_PTEXT_SEEDED_FROM) == trial:
+    selected = st.session_state.get(SINGLE_TRIAL_ID)
+    if selected is None or st.session_state.get(_PTEXT_SEEDED_FROM) == selected:
         return None
-    st.session_state[_PTEXT_SEEDED_FROM] = trial
+    st.session_state[_PTEXT_SEEDED_FROM] = selected
+    # A reading key since #412; a trial id alone is from before it.
+    participant, trial = split_reading_key(selected)
     for col in ("unique_trial_id", "trial_id"):
         if col in words.columns:
             ids = words[col]
@@ -10202,10 +10210,17 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
             same = ids == trial
             if not same.any():
                 same = ids.astype(str) == str(trial)
+            same = same.to_numpy().copy()
+            if participant is not None and "participant_id" in words.columns:
+                # That reader's rows of the id only (#412) — read off the rows
+                # the id matched, not the whole column.
+                rows = np.flatnonzero(same)
+                readers = words["participant_id"].iloc[rows].astype(str)
+                same[rows] = readers.to_numpy() == participant
             texts = words.loc[same, text_col].dropna().unique()
             if len(texts):
-                # An id several participants share can name different texts:
-                # then the Scanpath trial is ambiguous here, so don't guess.
+                # A trial id alone that several participants share can name
+                # different texts: then it is ambiguous here, so don't guess.
                 return texts[0] if len(texts) == 1 else None
     return None
 
@@ -12196,6 +12211,11 @@ def _collect_generations(
     trial and the selected trial itself is always excluded. ``differ_col``
     also drops every trial that shares the selected trial's value there —
     *Same text — other participants* drops the participant's own rereading.
+
+    Keyed by the ``(participant_id, trial_id)`` pair, never by a label (#412):
+    ids may contain the separator a label joins them with, so ``(p1, "t1 ·
+    t2")`` and ``("p1 · t1", t2)`` read alike and one replaced the other.
+    Labels are made where they are shown (:func:`_reading_labels`).
     """
     if (
         gen_col not in fixations_pool.columns
@@ -12225,22 +12245,59 @@ def _collect_generations(
                 & (pool["trial_id"] == selected_trial)
             )
         ]
-    candidates: dict = {}
-    for (participant, trial), group in pool.groupby(
-        ["participant_id", "trial_id"], dropna=False, sort=True
+    candidates: dict[tuple, pd.DataFrame] = {}
+    for reading, group in pool.groupby(
+        ["participant_id", "trial_id"], dropna=False, sort=False
     ):
         if group.empty:
             continue
-        label = f"{participant} · {trial}"
-        candidates[label] = group
+        candidates[reading] = group
     n_total = len(candidates)
     # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
     # similarity happens in the tab, after scoring). Sorted for determinism.
     # PRE-21: it is a *scoring* budget, so with similarity gated off it would
     # only drop panels for no reason — the grid's own cap is what applies then.
     budget = _GEN_MAX_SCORE if similarity_enabled() else _GEN_MAX_PANELS_UNRANKED
-    ordered = dict(sorted(candidates.items())[:budget])
-    return ordered, n_total
+    ordered = sorted(candidates.items(), key=lambda item: _reading_order(item[0]))
+    return dict(ordered[:budget]), n_total
+
+
+def _reading_order(reading: tuple) -> tuple[str, ...]:
+    """A reading's place in the Comparisons grid: by participant, then trial,
+    as text — ids of mixed types, or a missing one, still sort."""
+    return tuple(str(part) for part in reading)
+
+
+def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:
+    """``labels`` with each one that several readings share made unique —
+    ``qualify(reading, label)``, then a counter if even that is taken. A label
+    only one reading has is kept, and no qualified one lands on it."""
+    seen: dict[str, int] = {}
+    for label in labels.values():
+        seen[label] = seen.get(label, 0) + 1
+    used = {label for label, n in seen.items() if n == 1}
+    distinct = {}
+    for reading, label in labels.items():
+        if seen[label] > 1:
+            qualified = candidate = qualify(reading, label)
+            n = 2
+            while candidate in used:
+                candidate = f"{qualified} ({n})"
+                n += 1
+            label = candidate
+        used.add(label)
+        distinct[reading] = label
+    return distinct
+
+
+def _reading_labels(readings) -> dict:
+    """``participant · trial`` for each ``(participant_id, trial_id)`` — the
+    similarity table's rows and the convergence lines. Two readings whose ids
+    join to the same text (#412) are spelled out instead."""
+    return _distinct_labels(
+        {reading: " · ".join(map(str, reading)) for reading in readings},
+        lambda reading, _label: f"participant {reading[0]}, trial {reading[1]}",
+    )
 
 
 def _comparison_trial_words(
@@ -12290,6 +12347,19 @@ def _match_panel_caption(choice: str, fix: pd.DataFrame, text_col) -> str:
     if choice == _MATCH_SAME_PARTICIPANT and text_col in fix.columns:
         return f"Text {first[text_col]}"
     return trial_id_shown(first["trial_id"], fix)
+
+
+def _panel_captions(choice: str, panels: dict, text_col, reading_labels: dict) -> dict:
+    """:func:`_match_panel_caption` for each grid panel, made unique (#412): a
+    caption two panels share — one participant's two readings of a text, two
+    readers' trials of one id — names its reading as well."""
+    return _distinct_labels(
+        {
+            reading: _match_panel_caption(choice, fix, text_col)
+            for reading, fix in panels.items()
+        },
+        lambda reading, caption: f"{caption} ({reading_labels[reading]})",
+    )
 
 
 def render_multiple_comparison_tab(
@@ -12450,6 +12520,8 @@ def render_multiple_comparison_tab(
 
         # Rank by similarity (lowest NLD = most similar; unscored/NaN last) and show
         # the closest _GEN_MAX_PANELS in the grid — never an arbitrary label subset.
+        # Every key here is a `(participant_id, trial_id)` reading (#412); the
+        # labels below are only how it is written.
         if scoring:
             ranked = sorted(
                 sliced_gens,
@@ -12459,9 +12531,16 @@ def render_multiple_comparison_tab(
                 ),
             )
         else:
-            ranked = sorted(sliced_gens)
+            ranked = list(sliced_gens)  # already in `_reading_order`
         panel_cap = _GEN_MAX_PANELS if scoring else _GEN_MAX_PANELS_UNRANKED
         grid_names = ranked[:panel_cap]
+        reading_labels = _reading_labels(sliced_gens)
+        captions = _panel_captions(
+            choice,
+            {name: sliced_gens[name] for name in grid_names},
+            text_col,
+            reading_labels,
+        )
 
         st.markdown("#### Matching trials")
         # Estimate a uniform cell height from the figure aspect + column count so
@@ -12478,7 +12557,7 @@ def render_multiple_comparison_tab(
                 with cell:
                     fix = sliced_gens[name]
                     nld = nld_by_gen.get(name)
-                    trial_label = _match_panel_caption(choice, fix, text_col)
+                    trial_label = captions[name]
                     if nld is not None and pd.notna(nld):
                         st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
@@ -12501,8 +12580,9 @@ def render_multiple_comparison_tab(
             return
 
         st.markdown("#### Similarity")
+        shown = table.assign(Model=[reading_labels[name] for name in table["Model"]])
         st.dataframe(
-            _style_similarity_table(table.rename(columns={"Model": "Trial"})),
+            _style_similarity_table(shown.rename(columns={"Model": "Trial"})),
             hide_index=True,
             width="stretch",
         )
@@ -12529,7 +12609,7 @@ def render_multiple_comparison_tab(
             str(selected_participant),
             str(selected_trial),
             str(gen_col),
-            tuple(sorted(conv_gens.keys())),
+            tuple(sorted(conv_gens, key=_reading_order)),
             fix_fingerprint,
         )
         if st.session_state.get("_multi_conv_key") != conv_key:
@@ -12542,8 +12622,14 @@ def render_multiple_comparison_tab(
                 name: nld_by_time(trial_fixations, g, trial_words)
                 for name, g in conv_gens.items()
             }
-        fix_curves = st.session_state["_multi_conv_fix"]
-        time_curves = st.session_state["_multi_conv_time"]
+        fix_curves = {
+            reading_labels[name]: curve
+            for name, curve in st.session_state["_multi_conv_fix"].items()
+        }
+        time_curves = {
+            reading_labels[name]: curve
+            for name, curve in st.session_state["_multi_conv_time"].items()
+        }
 
         conv_cols = st.columns(2)
         with conv_cols[0]:

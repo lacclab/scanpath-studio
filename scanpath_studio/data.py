@@ -5001,6 +5001,9 @@ def _disambiguate_repeated_readings(
 
     Groups on the already-computed ``df["participant_id"]`` (1:1 with ``source``),
     so a composite participant id is handled without recomputing the join.
+
+    #412: a suffixed id never lands on a trial the participant already has —
+    see :func:`_colliding_repeat_ids` for the spelling it takes instead.
     """
     if trial_col == "unique_trial_id":
         return df
@@ -5026,14 +5029,81 @@ def _disambiguate_repeated_readings(
         .to_numpy()
     )
     base = df["trial_id"]
-    df["trial_id"] = [
-        tid if r == 1 else f"{tid}_r{r}" for tid, r in zip(base.to_numpy(), rank)
-    ]
+    ids = [tid if r == 1 else f"{tid}_r{r}" for tid, r in zip(base.to_numpy(), rank)]
+    respelled = _colliding_repeat_ids(df["participant_id"], base, rank)
+    if respelled:
+        pids = df["participant_id"].astype(str).to_numpy()
+        ids = [
+            respelled.get((pid, str(tid), r), new) if r > 1 else new
+            for pid, tid, r, new in zip(pids, base.to_numpy(), rank, ids)
+        ]
+    df["trial_id"] = ids
     if record_base and (rank > 1).any():
         # What the reading was recorded under, so a table keyed by the stimulus
         # still finds a repeat's boxes (BUG-57 / DATA-49's trial join).
         df[BASE_TRIAL_ID] = base
     return df
+
+
+def _colliding_repeat_ids(
+    participants: pd.Series, base: pd.Series, rank: np.ndarray
+) -> dict[tuple[str, str, int], str]:
+    """The repeated readings whose ``<id>_r<n>`` a participant already has.
+
+    ``(participant, id, n)`` → the id that reading takes instead (#412). A
+    reader with two readings of ``a`` and a recorded trial ``a_r2`` used to
+    get ``a_r2`` twice, merging two readings into one scanpath. Such a repeat
+    lengthens the separator until the spelling is free — ``a__r2``, then
+    ``a___r2`` … — checked against every id the participant has in the source
+    and every id given here, so no two readings meet. Only a collision is
+    respelled: every other repeat keeps ``_r<n>``, so a dataset without one
+    keeps its ids exactly. The triples are walked in sorted order, so the
+    words and the fixations — normalized apart — spell a repeat alike when
+    they hold the same readings."""
+    repeat = rank > 1
+    if not repeat.any():
+        return {}
+    # The common case, at the cost of two hash passes: no id anywhere in the
+    # table is spelled like a repeat's `_rN`, so none can collide.
+    ids = set(pd.unique(base.to_numpy()).tolist())
+    top = int(rank.max())
+    if not any(
+        f"{trial}_r{n}" in ids
+        for trial in pd.unique(base.to_numpy()[repeat]).tolist()
+        for n in range(2, top + 1)
+    ):
+        return {}
+    readings = pd.DataFrame(
+        {
+            "participant": participants.astype(str).to_numpy(),
+            "trial": base.astype(str).to_numpy(),
+            "rank": rank.astype(int),
+        }
+    )
+    repeats = readings[repeat].drop_duplicates().sort_values(list(readings.columns))
+    with_repeats = readings["participant"].isin(repeats["participant"])
+    taken = (
+        readings.loc[with_repeats, ["participant", "trial"]]
+        .drop_duplicates()
+        .groupby("participant")["trial"]
+        .agg(set)
+        .to_dict()
+    )
+    triples = list(repeats.itertuples(index=False, name=None))
+    # Every repeat that keeps its plain spelling is taken first, so a respelled
+    # one can never land on it either.
+    colliding = [t for t in triples if f"{t[1]}_r{t[2]}" in taken[t[0]]]
+    for participant, trial, n in triples:
+        taken[participant].add(f"{trial}_r{n}")
+    respelled: dict[tuple[str, str, int], str] = {}
+    for participant, trial, n in colliding:
+        separator = "__"
+        while f"{trial}{separator}r{n}" in taken[participant]:
+            separator += "_"
+        name = f"{trial}{separator}r{n}"
+        taken[participant].add(name)
+        respelled[(participant, trial, n)] = name
+    return respelled
 
 
 def has_explicit_trial_index(frame: pd.DataFrame) -> bool:

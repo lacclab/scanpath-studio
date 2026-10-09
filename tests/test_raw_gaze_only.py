@@ -38,7 +38,7 @@ from scanpath_studio.data import (
     raw_gaze_in_pool,
 )
 from scanpath_studio.illustration import illustration_reasons
-from scanpath_studio.utils import combo_source
+from scanpath_studio.utils import combo_source, reading_key
 from tests.conftest import APP_SCRIPT
 
 LAYER = "global_show_raw_gaze"
@@ -693,7 +693,7 @@ class TestScanpathView:
         at.toggle(key=LAYER).set_value(False).run()
         query, _ = at.session_state["_share_query_current"]
         params = dict(parse_qsl(query))
-        _, tid = _key(raw_gaze)
+        pid, tid = _key(raw_gaze)
         assert params["trial_id"] == tid
         assert params["show_raw_gaze"] == "0"
 
@@ -706,7 +706,7 @@ class TestScanpathView:
         recipient.session_state["data_source_choice"] = self.NAME
         recipient.run()
         assert not recipient.exception, recipient.exception
-        assert recipient.session_state["single_trial_id"] == tid
+        assert recipient.session_state["single_trial_id"] == reading_key(pid, tid)
         assert recipient.session_state[LAYER] is False
 
     def test_corpus_analysis_says_what_it_needs(self, raw_gaze):

@@ -332,6 +332,7 @@ from scanpath_studio.url_state import (
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _render_share_body,
+    _settle_picker_selection,
     apply_pending_preprocessing,
     corpus_choice_for_slug,
     link_dataset_notice,
@@ -10563,6 +10564,10 @@ def _run_app() -> None:
     # reported, never replaced by another reader's trial of the same name.
     if missed := _apply_pending_trial_selection(combos):
         menu.notices.warning(missed, icon=ICONS["warning"])
+    # #412: a trial id alone left in the picker's key by an older version names
+    # its reading — or, when several readers share the id, none, which is said.
+    if ambiguous := _settle_picker_selection(combos):
+        menu.notices.warning(ambiguous, icon=ICONS["warning"])
 
     # Restore settings from an uploaded settings file BEFORE the rail widgets
     # render, so they pick up the saved values (see _apply_url_preset for the

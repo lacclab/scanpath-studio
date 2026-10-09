@@ -8239,8 +8239,10 @@ def render_canvas_controls(
             persist_state="session",
         )
     # DATA-2: physical setup values live beside the pixel canvas they explain.
-    # They are persisted with the plot config and immediately yield a px/degree
-    # scale for downstream saccade/reporting work.
+    # The width gives the DPI the point-size font converts through. The viewing
+    # distance is not asked for (2026-10-09): only px/degree reads it, and
+    # nothing in this release draws in degrees. `global_viewing_distance_mm`
+    # still rides links and configs, pinned by `seed_canvas_state`.
     #
     # **UX-81 — in the rail these three are not drawn at all.** They are
     # experiment facts, and the 🗂️ Data page's Recording setup (#DATA-22) already
@@ -8249,7 +8251,7 @@ def render_canvas_controls(
     # are not widget-owned any more: `seed_canvas_state` pins all three on every
     # run (including the derived DPI), so a share link or saved config still
     # restores them and every consumer reads the same numbers as before.
-    # The wizard's standalone form still shows them: that *is* where they are set.
+    # The wizard's standalone form still shows the width and DPI.
     if bare:
         monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
         display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
@@ -8265,17 +8267,6 @@ def render_canvas_controls(
             key="global_monitor_width_mm",
             persist_state="session",
             help="Width of the visible display area, not the diagonal size.",
-        )
-        field(
-            screen,
-            "number_input",
-            "Viewing distance (mm)",
-            min_value=100.0,
-            max_value=3000.0,
-            step=10.0,
-            key="global_viewing_distance_mm",
-            persist_state="session",
-            help="Eye-to-screen distance during the experiment.",
         )
         derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
         display_dpi = field(

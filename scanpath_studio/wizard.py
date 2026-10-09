@@ -191,7 +191,6 @@ def _reset_wizard_widgets() -> None:
         "wizard_setup_screen_w",
         "wizard_setup_screen_h",
         "wizard_setup_monitor_mm",
-        "wizard_setup_distance_mm",
         "wizard_setup_font_pt",
         "wizard_setup_font_family",
         "_wizard_restored_setup",
@@ -2453,7 +2452,7 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
 # that bought — every answer recorded as a `Provenance` that travels with the
 # dataset, so a reader downstream can tell a measured screen from an assumed
 # one — and dropped the hold: each line starts on the answer that invents
-# nothing (the screen estimated from the data, visual angle off, the text
+# nothing (the screen estimated from the data, the physical size off, the text
 # fitted to its boxes), says how it is known beside the value, and asks for
 # the real value while it is an estimate or a default. None of those starting
 # answers is a silent default: an estimate is labelled one, and *off* hides
@@ -2477,7 +2476,13 @@ _SCREEN_DEFAULT = "Use a common default (2560×1440)"
 
 _GEOM_KNOW = "I know them"
 #: The setup headings as drawn (UX-58's short forms) — what blockers name.
-_SETUP_HEADINGS = {"screen": "Screen", "geometry": "Visual angle", "text": "Text size"}
+_SETUP_HEADINGS = {
+    "screen": "Screen",
+    "geometry": "Physical size",
+    "text": "Text size",
+}
+# The stored answers keep their pre-2026-10-09 wording: setup files name them.
+# What the buttons say is `_SETUP_CHOICE_LABELS`.
 _GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)"
 _GEOM_SKIP = "Skip — I don't need visual-angle units"
 
@@ -2561,8 +2566,8 @@ _SETUP_CHOICE_LABELS = {
     _SCREEN_KNOW: "I know it",
     _SCREEN_ESTIMATE: "Estimate from my data",
     _SCREEN_DEFAULT: "Common 2560×1440",
-    _GEOM_KNOW: "I know the setup",
-    _GEOM_DEFAULT: "Typical lab values",
+    _GEOM_KNOW: "I know it",
+    _GEOM_DEFAULT: "Typical 597 mm",
     _GEOM_SKIP: "Off",
     _TEXT_BOXES: "Fit to the word boxes",
     _TEXT_FONT: "I know the size",
@@ -2817,17 +2822,24 @@ def _wizard_setup_step(
         line.markdown("**2560 × 1440 px**", width="content")
         _setup_badge(line, "assumed", "A common 1440p monitor, not this study's.")
 
-    # --- Visual angle (physical size & viewing distance) --------------------
+    # --- Physical size (the monitor's width) -------------------------------
+    # 2026-10-09: this row used to be *Visual angle* and also asked for the
+    # viewing distance. Nothing in this release draws in degrees, so the only
+    # thing the physical size does is turn a point-sized font into pixels (the
+    # DPI). The viewing distance is no longer asked: the snapshot keeps the
+    # value it already had (the dataset's, or the default) so a later release
+    # that converts to degrees still finds one, and its provenance says how
+    # the *width* is known.
     value_col, how_col = _setup_row(
         host,
-        "Visual angle",
-        "Degrees of visual angle need the monitor's physical width and the "
-        "viewing distance. Off is a real answer: the app then hides the "
-        "numbers it cannot honestly derive.",
+        "Physical size",
+        "The monitor's physical width — of the visible display area, not the "
+        "diagonal. It gives the screen's DPI, which turns a font size in points "
+        "into pixels. Off is a real answer: a point size is then read as pixels.",
     )
     geom_mode = _setup_choice(
         how_col,
-        "Visual angle",
+        "Physical size",
         [_GEOM_KNOW, _GEOM_DEFAULT, _GEOM_SKIP],
         geom_key,
         persist,
@@ -2843,8 +2855,8 @@ def _wizard_setup_step(
         else _recalled("viewing_distance_mm", 800.0)
     )
     if geom_mode == _GEOM_KNOW:
-        mon_col, dist_col, badge_col = value_col.columns(
-            [0.36, 0.36, 0.28], gap="xsmall", vertical_alignment="bottom"
+        mon_col, badge_col = value_col.columns(
+            [0.5, 0.5], gap="xsmall", vertical_alignment="bottom"
         )
         mon_mm = mon_col.number_input(
             "Monitor width (mm)",
@@ -2854,32 +2866,24 @@ def _wizard_setup_step(
             key=f"{key_prefix}_setup_monitor_mm",
             **persist,
         )
-        dist_mm = dist_col.number_input(
-            "Viewing distance (mm)",
-            50.0,
-            5000.0,
-            dist_mm,
-            key=f"{key_prefix}_setup_distance_mm",
-            **persist,
-        )
         _setup_badge(badge_col, "entered")
     elif geom_mode == _GEOM_DEFAULT:
-        mon_mm, dist_mm = 597.0, 800.0
+        mon_mm = 597.0
         line = value_col.container(
             horizontal=True, vertical_alignment="center", gap="small"
         )
-        line.markdown("**597 mm wide, viewed from 800 mm**", width="content")
-        _setup_badge(line, "assumed", "Typical lab values, not this study's.")
+        line.markdown("**597 mm wide**", width="content")
+        _setup_badge(line, "assumed", "A typical lab monitor, not this study's.")
     else:
         line = value_col.container(
             horizontal=True, vertical_alignment="center", gap="small"
         )
-        line.markdown("No distances in degrees", width="content")
+        line.markdown("No physical size", width="content")
         _setup_badge(
             line,
             "off",
-            "Visual-angle numbers stay hidden for this dataset rather than being "
-            "computed from a default.",
+            "No DPI is derived for this dataset rather than one computed from a "
+            "default; a font size in points is read as pixels.",
         )
 
     # --- Text size ------------------------------------------------------------
@@ -2943,16 +2947,16 @@ def _wizard_setup_step(
         note = note_col.container(
             horizontal=True, vertical_alignment="center", gap="small"
         )
-        # pt→px needs a DPI, which needs the physical width. With visual angle
-        # off there is no honest DPI, so the point size is read as pixels.
+        # pt→px needs a DPI, which needs the physical width. With the physical
+        # size off there is no honest DPI, so the point size is read as pixels.
         if geom_mode == _GEOM_SKIP:
             base_font = int(min(max(round(font_pt), 6), 72))
             note.markdown(f"pt → read as **{base_font} px**", width="content")
             _setup_badge(
                 note,
                 "entered",
-                "Points become pixels through the monitor's width, which *Visual "
-                "angle → I know the setup* gives. Without it the size is read as "
+                "Points become pixels through the monitor's width, which "
+                "*Physical size → I know it* gives. Without it the size is read as "
                 "pixels.",
             )
         else:
@@ -3048,7 +3052,7 @@ def _wizard_setup_step(
     )
 
     # The ask for real values: only while a line is on an estimate or a
-    # default. Visual angle *off* is an answer, not a guess, so it is not one.
+    # default. Physical size *off* is an answer, not a guess, so it is not one.
     guessed = [
         _SETUP_HEADINGS[group]
         for group, provenance in snapshot.provenance.items()

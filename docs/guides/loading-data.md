@@ -62,9 +62,10 @@ now. Four lines, each already filled in with the answer that invents nothing:
 - **Screen** — estimated from the extent of your word boxes and fixations. That
   is a lower bound: text rarely fills the screen, so choose **I know it** and
   enter the real resolution if you have it.
-- **Visual angle** — off, so no distance is shown in degrees. **I know the
-  setup** takes the monitor's width and the viewing distance; **Typical lab
-  values** assumes them.
+- **Physical size** — off. **I know it** takes the monitor's width in
+  millimetres (the visible area, not the diagonal); **Typical 597 mm** assumes
+  one. The width gives the screen's DPI, which turns a font size in points into
+  pixels; while it is off, a point size is read as pixels.
 - **Text size** — each word sized to its box. **I know the size** takes the
   font size in points.
 - **Font** — a generic monospace until you name the typeface (Courier New,

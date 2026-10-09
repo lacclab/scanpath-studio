@@ -95,7 +95,7 @@ _WIRE_NAME_GROUPS: dict[str, str] = {v: k for k, v in _GROUP_WIRE_NAMES.items()}
 
 SETUP_GROUP_LABELS: dict[str, str] = {
     "screen": "Screen",
-    "geometry": "Physical size & viewing distance",
+    "geometry": "Physical size",
     "text": "Reading text size",
 }
 

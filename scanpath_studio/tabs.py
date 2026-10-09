@@ -16326,8 +16326,7 @@ def _render_setup_provenance_note(host=None) -> None:
         "geometry": (
             "—"
             if snapshot.geometry_provenance is Provenance.SKIPPED
-            else f"{snapshot.monitor_width_mm:.0f} mm wide, "
-            f"{snapshot.viewing_distance_mm:.0f} mm away"
+            else f"{snapshot.monitor_width_mm:.0f} mm wide"
         ),
         "text": (
             "scaled to word boxes"

@@ -1407,6 +1407,15 @@ def get_app_css() -> str:
         from { opacity: 0; }
         to { opacity: 1; }
     }
+    /* #422 — above the title instead, where the box that clips it (a rail
+       popover, the page) has no room below: `app._FIELD_TIP_PLACEMENT_SCRIPT`
+       sets the class on hover. Opened below there, a popover's last rows made
+       it scroll while the tip showed, and a scrollbar that takes room shook
+       the whole popover. */
+    .sps-fhelp.sps-tip-up::after {
+        top: auto;
+        bottom: calc(100% + 0.3rem);
+    }
 
     /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses
        the tooltip above. Two adjustments for this context: the carrier is a

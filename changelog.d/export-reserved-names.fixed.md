@@ -1,0 +1,1 @@
+An export bundle's file-name pattern can no longer give a trial's file the name of the bundle's README, index.csv, columns.json, a metadata or a combined table: that file gets the next free name (README-2.md), so every file in the ZIP is the one index.csv lists.

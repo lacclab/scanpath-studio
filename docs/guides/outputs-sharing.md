@@ -16,7 +16,10 @@ Open the **Export** subtab in the Scanpath view.
   Word tables carry the reading measures your data brought; the export computes
   none.
   Each bundle has an `index.csv` listing every file with its participant,
-  trial and screen, and any requested file that failed.
+  trial and screen, and any requested file that failed. When the file-name
+  pattern gives two files one name, or names a trial's file like one of the
+  bundle's own (`README.md`, `index.csv` …), the later file gets `-2`, `-3` …
+  added to its name, so no file hides another.
   The tables use your files' column names (`CURRENT_FIX_DURATION`, not
   `duration_ms`). A column Scanpath Studio built, converted, computed or
   changed keeps the app's name. For example, word ids shifted to line up with

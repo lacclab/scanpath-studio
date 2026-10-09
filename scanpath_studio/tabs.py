@@ -12494,32 +12494,35 @@ def render_multiple_comparison_tab(
     if st.session_state.get("multi_gen_col") not in match_options:
         st.session_state.pop("multi_gen_col", None)
 
-    intro_col, field_col, grid_col = st.columns(
-        [4.6, 3.2, 2.2], gap="medium", vertical_alignment="center"
+    # #422: one `label | field` row whose first label sits in the subtabs' own
+    # label column (`PANEL_LABEL_W`); what *Match field* does is its hover help,
+    # not a caption beside it repeating the same thing.
+    match_label_col, match_col, cols_label_col, cols_col = st.columns(
+        [PANEL_LABEL_W, 0.44, 0.09, 0.27],
+        gap=LABEL_GAP,
+        vertical_alignment="center",
     )
-    with intro_col:
-        st.caption("Show trials matching the selected trial on one field.")
-    with field_col:
-        choice = labeled(
-            st,
-            "selectbox",
-            "Match field",
-            options=match_options,
-            format_func=match_labels.__getitem__,
-            key="multi_gen_col",
-            help="Show trials with the same value as the selected trial.",
-        )
-    with grid_col:
-        n_cols = labeled(
-            st,
-            "slider",
-            "Columns",
-            min_value=1,
-            max_value=4,
-            value=2,
-            key="multi_n_cols",
-            help="Number of panels per row.",
-        )
+    match_help = "Shows the other trials that share the selected trial's value here."
+    row_label(match_label_col, "Match field", match_help)
+    choice = match_col.selectbox(
+        "Match field",
+        options=match_options,
+        format_func=match_labels.__getitem__,
+        key="multi_gen_col",
+        help=match_help,
+        label_visibility="collapsed",
+    )
+    cols_help = "Panels per row."
+    row_label(cols_label_col, "Columns", cols_help)
+    n_cols = cols_col.slider(
+        "Columns",
+        min_value=1,
+        max_value=4,
+        value=2,
+        key="multi_n_cols",
+        help=cols_help,
+        label_visibility="collapsed",
+    )
     gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
     candidates, n_total = _collect_generations(

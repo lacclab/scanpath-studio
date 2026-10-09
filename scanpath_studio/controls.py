@@ -1811,9 +1811,18 @@ def _design_delete_dialog(name: str) -> None:
         st.rerun(scope="app")
 
 
+#: The 💾 dialog's name field and its *replace* pick — the draft that closing
+#: the dialog, by any way, discards.
+_DESIGN_NEW_NAME_KEY = "design_new_name"
+_DESIGN_REPLACE_TARGET_KEY = "design_replace_target"
+
+
 def _close_design_save_dialog() -> None:
-    """Disarm the modal. Also the ``on_dismiss`` hook — see below."""
+    """Disarm the modal and drop its draft. Also the ``on_dismiss`` hook — see
+    below — so ✕ and Esc discard the draft exactly as *Cancel* does."""
     st.session_state.pop(_DESIGN_SAVE_PENDING_KEY, None)
+    st.session_state.pop(_DESIGN_NEW_NAME_KEY, None)
+    st.session_state.pop(_DESIGN_REPLACE_TARGET_KEY, None)
 
 
 # `on_dismiss` is what keeps a *flag*-driven dialog honest: ✕ and Esc close the
@@ -1829,6 +1838,11 @@ def _design_save_dialog() -> None:
     the form's *first* submit button, which is why Save is written before Cancel
     and why it is never `disabled` (a disabled first button turns Enter off for
     the whole form — an empty name is caught below instead).
+
+    The name field is **not** ``required`` (#422): in a form, a required field
+    blocks *every* submit button until it has a value — Cancel included, which
+    is how an emptied name left the dialog with no way out but ✕. A blank name
+    is refused on Save instead, server-side.
 
     Opened from a pending flag rather than the button's return value, and closed
     with an explicit ``scope="app"`` rerun, for the same reason as
@@ -1855,7 +1869,7 @@ def _design_save_dialog() -> None:
             name = st.selectbox(
                 "Design to replace",
                 options=list(saved),
-                key="design_replace_target",
+                key=_DESIGN_REPLACE_TARGET_KEY,
             )
             st.warning(
                 "The chosen design's stored settings are **overwritten** by "
@@ -1865,19 +1879,21 @@ def _design_save_dialog() -> None:
         else:
             name = st.text_input(
                 "Design name",
-                key="design_new_name",
+                key=_DESIGN_NEW_NAME_KEY,
                 placeholder="e.g. Paper figure",
-                # Streamlit 1.65 blocks the form's Save until there is a name;
-                # `save_design_preset` still refuses a blank one server-side.
-                required=True,
                 help="Stores every plot setting on screen now — layers, "
                 "colors, filter, figure and canvas.",
             )
         row = st.columns(2, gap="small")
         save = row[0].form_submit_button(
-            f"{ICONS['save']} Save", type="primary", width="stretch"
+            f"{ICONS['save']} Save",
+            key="design_save_go",
+            type="primary",
+            width="stretch",
         )
-        cancel = row[1].form_submit_button("Cancel", width="stretch")
+        cancel = row[1].form_submit_button(
+            "Cancel", key="design_save_cancel", width="stretch"
+        )
     if cancel:
         _close_design_save_dialog()
         st.rerun(scope="app")
@@ -1885,7 +1901,6 @@ def _design_save_dialog() -> None:
         if not save_design_preset(name or ""):
             st.error("Give the design a name first.")
         else:
-            st.session_state.pop("design_new_name", None)
             _close_design_save_dialog()
             st.rerun(scope="app")
 

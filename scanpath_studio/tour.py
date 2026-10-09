@@ -852,7 +852,8 @@ def _dismiss_listener_script(
         else ""
     )
     hide_css = (
-        ".st-key-tour_card, .tour-backdrop, "
+        ".st-key-tour_card, .st-key-wizard_guide_strip, .st-key-wizard_guide_pill, "
+        ".tour-backdrop, "
         f"#{_GROUP_RING_ID} {{ display: none !important; }} " + outline_clear
     )
     btn_selectors = [f".st-key-{k} button" for k in exit_keys]
@@ -2248,24 +2249,141 @@ _WIZARD_GUIDE_STEPS = [
 ]
 
 
-#: While the setup guide is open on a wide screen, the page keeps a gutter the
-#: card's width on the right, so the card sits beside the wizard instead of over
-#: its upload rows and the mappings that open to their right. A narrow screen
-#: has no room for one and keeps the card floating over the page, so there the
-#: page gets the card's height at its foot instead: whatever the card covers can
-#: still be scrolled up clear of it, the last fields and ✅ Add dataset included.
-_WIZARD_GUIDE_GUTTER_CSS = """
-@media (min-width: 1100px) {
-    [data-testid="stMainBlockContainer"] {
-        padding-right: calc(410px + 2.5rem) !important;
-    }
+#: Where the setup guide sits (2026-10-09). The wizard used to keep a gutter
+#: the card's width down the right of the page, so the card sat beside it
+#: rather than over its fields — at the cost of squeezing every mapping row
+#: into what was left. Both layouts give the wizard the full width back:
+#:
+#: - **Docked** — a slim strip pinned under the wizard's title bar, in the page
+#:   flow: it pushes the wizard down rather than covering it, and stays in view
+#:   as Next scrolls to each part.
+#: - **Floating** — the corner card, over the page, which can be dragged by its
+#:   title to wherever it covers nothing and folded to a small tab.
+#:
+#: Both are built while the user compares them; the switch in the wizard's
+#: *Setup help* menu is temporary.
+WIZARD_GUIDE_LAYOUT_KEY = "wizard_guide_layout"
+WIZARD_GUIDE_LAYOUTS = ("Docked", "Floating")
+#: The floating card folded to its tab — plain session state, set by its
+#: fold / open buttons.
+_WIZARD_GUIDE_FOLDED_KEY = "wizard_guide_folded"
+
+
+def wizard_guide_layout() -> str:
+    """The setup guide's layout: one of `WIZARD_GUIDE_LAYOUTS`, Docked unless chosen."""
+    value = st.session_state.get(WIZARD_GUIDE_LAYOUT_KEY)
+    return value if value in WIZARD_GUIDE_LAYOUTS else WIZARD_GUIDE_LAYOUTS[0]
+
+
+#: The docked strip: a tinted band under the title bar, one line of text
+#: beside the step buttons.
+_WIZARD_GUIDE_STRIP_CSS = """
+.st-key-wizard_guide_strip {
+    margin-top: 0.45rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 0.6rem;
+    border: 1px solid color-mix(in srgb, var(--sps-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--sps-accent) 9%, var(--sps-page-bg));
 }
-@media (max-width: 1099.98px) {
-    [data-testid="stMainBlockContainer"] {
-        padding-bottom: 22rem !important;
-    }
-}
+.st-key-wizard_guide_strip p { font-size: 0.9rem; margin: 0; }
+/* Streamlit pulls each element up by a negative bottom margin, which laid the
+   opt-out checkbox over the text's second line. */
+.st-key-wizard_guide_strip [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+.st-key-wizard_guide_dont_show { margin-top: 0.3rem; }
+.st-key-wizard_guide_dont_show label p { font-size: 0.82rem !important; opacity: 0.8; }
+.st-key-wizard_guide_strip button { min-height: 2rem; padding: 0.1rem 0.8rem; }
 """
+
+#: The floating card, dragged by its title, and its folded tab. The page keeps
+#: room at its foot, so whatever the card covers can still be scrolled clear.
+_WIZARD_GUIDE_FLOAT_CSS = """
+[data-testid="stMainBlockContainer"] { padding-bottom: 16rem !important; }
+.st-key-tour_card h2 { cursor: move; user-select: none; }
+.st-key-wizard_sp_fold {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.5rem;
+    width: auto;
+    z-index: 1;
+}
+.st-key-wizard_sp_fold button {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    padding: 0.05rem 0.4rem !important;
+    opacity: 0.6;
+}
+.st-key-wizard_sp_fold button:hover { opacity: 1; }
+.st-key-wizard_guide_pill {
+    position: fixed;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    z-index: 999990;
+    width: auto;
+    padding: 0.35rem 0.5rem 0.35rem 0.85rem;
+    border-radius: 999px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+    cursor: move;
+    user-select: none;
+}
+.st-key-wizard_guide_pill p { margin: 0; font-size: 0.88rem; white-space: nowrap; }
+.st-key-wizard_guide_pill button { min-height: 1.8rem; padding: 0 0.6rem; }
+"""
+
+#: Lets the floating card (or its tab) be dragged by its title, and puts it
+#: back where it was last left — in this tab's `sessionStorage`, so a reload
+#: keeps it and a new tab starts in the corner. Re-sent on every render: the
+#: card can be redrawn, and the saved spot has to be applied to the new one.
+_WIZARD_GUIDE_DRAG_SCRIPT = """<script>
+(function () {
+  const doc = window.parent.document;
+  const win = doc.defaultView;
+  const KEY = "sps_wizard_guide_pos";
+  const SEL = ".st-key-tour_card, .st-key-wizard_guide_pill";
+  const place = (el, x, y) => {
+    const r = el.getBoundingClientRect();
+    x = Math.min(Math.max(0, x), Math.max(0, win.innerWidth - r.width));
+    y = Math.min(Math.max(0, y), Math.max(0, win.innerHeight - r.height));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  };
+  let tries = 0;
+  (function wire() {
+    const el = doc.querySelector(SEL);
+    if (!el) {
+      if (++tries < 30) setTimeout(wire, 100);
+      return;
+    }
+    try {
+      const saved = JSON.parse(win.sessionStorage.getItem(KEY) || "null");
+      if (saved) place(el, saved[0], saved[1]);
+    } catch (e) {}
+    if (el.dataset.spsDrag) return;
+    el.dataset.spsDrag = "1";
+    const handle = el.querySelector("h2") || el;
+    handle.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || ev.target.closest("button, input, label")) return;
+      const r = el.getBoundingClientRect();
+      const dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+      const move = (e) => place(el, e.clientX - dx, e.clientY - dy);
+      const up = () => {
+        doc.removeEventListener("pointermove", move);
+        doc.removeEventListener("pointerup", up);
+        const r2 = el.getBoundingClientRect();
+        try {
+          win.sessionStorage.setItem(KEY, JSON.stringify([r2.left, r2.top]));
+        } catch (e) {}
+      };
+      doc.addEventListener("pointermove", move);
+      doc.addEventListener("pointerup", up);
+      ev.preventDefault();
+    });
+  })();
+})();
+</script>"""
 
 
 def _wizard_guide_go(step_idx: int) -> None:
@@ -2297,60 +2415,106 @@ def _exit_wizard_guide() -> None:
     st.session_state["tour_mode"] = None
 
 
-@st.fragment
-@guarded()
-def render_spotlight_wizard_guide() -> None:
-    """Floating bottom-right card walking through the dataset-setup wizard.
+def _wizard_guide_progress(step_idx: int, step: dict) -> str:
+    """Where the guide is, counted in the screen's own parts ("2 · Upload data
+    tables" is part 2 of 3), not in cards: neither the overview card nor the
+    closing Save card is a part, and "Step 3 of 4" under a "2 ·" heading
+    contradicted the "three parts" it opens with."""
+    n_parts = sum(1 for s in _WIZARD_GUIDE_STEPS if s["step_id"])
+    if step["step_id"]:
+        return f"Part {step_idx} of {n_parts}"
+    if step_idx:
+        return "Last step · save"
+    return f"Overview · {n_parts} parts"
 
-    The setup guide as a spotlight card (like the welcome tour) rather than a
-    blocking modal, so it sits in the corner and the user follows along while
-    filling in each wizard step. Shares the welcome tour's card CSS + instant
-    dismiss machinery but uses its own ``wizard_guide_step`` counter and
-    ``tour_mode == "wizard"`` so the two never collide. No backdrop / highlight /
-    scroll — the steps are descriptive, not anchored to specific controls.
 
-    Call early in the wizard's render (``app._render_data_setup``) so the card
-    streams to the browser before the heavy upload/normalize work. Runs as a
-    fragment: Back/Next/Skip rerun only this card.
-    """
-    if st.session_state.get("tour_mode") != "wizard":
-        return
-    n = len(_WIZARD_GUIDE_STEPS)
-    step_idx = min(st.session_state.get("wizard_guide_step", 0), n - 1)
-    step = _WIZARD_GUIDE_STEPS[step_idx]
-    title, body, selector = step["title"], step["body"], step["selector"]
-
-    accent = st.get_option("theme.primaryColor") or "#1f77b4"
-    theme = getattr(getattr(st, "context", None), "theme", None)
-    is_dark = getattr(theme, "type", "light") == "dark"
-    bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
-    st.markdown(
-        "<style>"
-        + _CARD_CSS
-        + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
-        + _WIZARD_GUIDE_GUTTER_CSS
-        + _highlight_css(selector, accent)
-        + "</style>",
-        unsafe_allow_html=True,
+def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -> None:
+    """Back · Skip · Next (or ✓ Got it on the last step) — one host each, or
+    the strip's one row three times."""
+    back_col.button(
+        "← Back",
+        key="wizard_sp_back",
+        width="stretch",
+        disabled=step_idx == 0,
+        on_click=_wizard_guide_back,
     )
-    if selector:
-        embed_html_iframe(_scroll_into_view_script(selector), height=0)
+    if step_idx < n - 1:
+        exit_col.button(
+            "Skip",
+            key="wizard_sp_exit",
+            width="stretch",
+            on_click=_exit_wizard_guide,
+        )
+        next_col.button(
+            "Next →",
+            key="wizard_sp_next",
+            width="stretch",
+            type="primary",
+            on_click=_wizard_guide_next,
+        )
+    else:
+        next_col.button(
+            "✓ Got it",
+            key="wizard_sp_done",
+            width="stretch",
+            type="primary",
+            on_click=_exit_wizard_guide,
+        )
 
+
+def _set_wizard_guide_folded(folded: bool) -> None:
+    st.session_state[_WIZARD_GUIDE_FOLDED_KEY] = folded
+
+
+def _render_wizard_guide_strip(step_idx: int, n: int, step: dict) -> None:
+    """The docked layout: one band under the wizard's title bar."""
+    with st.container(key="wizard_guide_strip"):
+        text_col, nav_col = st.columns(
+            [0.66, 0.34], gap="medium", vertical_alignment="center"
+        )
+        with text_col:
+            st.markdown(
+                f"**{step['title']}** · {_wizard_guide_progress(step_idx, step)} — "
+                f"{step['body']}"
+            )
+            # UX-110: only where a user decides they are done with the guide.
+            if step_idx in (0, n - 1):
+                _render_wizard_guide_optout()
+        row = nav_col.container(horizontal=True, gap="small")
+        _wizard_guide_buttons(row, row, row, step_idx, n)
+
+
+def _render_wizard_guide_card(step_idx: int, n: int, step: dict) -> None:
+    """The floating layout: the corner card, draggable by its title and
+    foldable to a tab (`_WIZARD_GUIDE_FOLDED_KEY`)."""
+    progress_text = _wizard_guide_progress(step_idx, step)
+    if st.session_state.get(_WIZARD_GUIDE_FOLDED_KEY):
+        with st.container(
+            key="wizard_guide_pill",
+            horizontal=True,
+            vertical_alignment="center",
+            gap="small",
+        ):
+            st.markdown(f"**Setup guide** · {progress_text}")
+            st.button(
+                "Open",
+                key="wizard_sp_unfold",
+                on_click=_set_wizard_guide_folded,
+                args=(False,),
+                help="Open the setup guide again.",
+            )
+        return
     with st.container(key="tour_card"):
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
-        st.markdown(f"## {title}")
-        st.markdown(body)
-        # Counted in the screen's own parts ("2 · Upload data tables" is part 2
-        # of 3), not in cards: neither the overview card nor the closing Save
-        # card is a part, and "Step 3 of 4" under a "2 ·" heading contradicted
-        # the "three parts" it opens with.
-        n_parts = sum(1 for s in _WIZARD_GUIDE_STEPS if s["step_id"])
-        if step["step_id"]:
-            progress_text = f"Part {step_idx} of {n_parts}"
-        elif step_idx:
-            progress_text = "Last step · save"
-        else:
-            progress_text = f"Overview · {n_parts} parts"
+        st.markdown(f"## {step['title']}")
+        st.button(
+            "—",
+            key="wizard_sp_fold",
+            on_click=_set_wizard_guide_folded,
+            args=(True,),
+            help="Fold the guide to a small tab. Drag it by its title to move it.",
+        )
+        st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=progress_text)
         # UX-110: same placement rule as the welcome tour's own opt-out — only
         # where a user decides they're done with the guide (the first step,
@@ -2359,43 +2523,62 @@ def render_spotlight_wizard_guide() -> None:
         if step_idx in (0, n - 1):
             _render_wizard_guide_optout()
         back_col, exit_col, next_col = st.columns(3)
-        back_col.button(
-            "← Back",
-            key="wizard_sp_back",
-            width="stretch",
-            disabled=step_idx == 0,
-            on_click=_wizard_guide_back,
+        _wizard_guide_buttons(back_col, exit_col, next_col, step_idx, n)
+
+
+@st.fragment
+@guarded()
+def render_spotlight_wizard_guide() -> None:
+    """The dataset-setup wizard's step-by-step guide, in its chosen layout.
+
+    Docked (a strip under the wizard's title bar — the wizard draws this inside
+    its sticky bar) or Floating (the corner card, draggable and foldable); see
+    `WIZARD_GUIDE_LAYOUT_KEY`. Shares the welcome tour's highlight, scroll and
+    instant-dismiss machinery but uses its own ``wizard_guide_step`` counter
+    and ``tour_mode == "wizard"`` so the two never collide.
+
+    Call early in the wizard's render (``wizard._render_data_setup``) so it
+    streams to the browser before the heavy upload/normalize work. Runs as a
+    fragment: Back/Next/Skip rerun only the guide.
+    """
+    if st.session_state.get("tour_mode") != "wizard":
+        return
+    n = len(_WIZARD_GUIDE_STEPS)
+    step_idx = min(st.session_state.get("wizard_guide_step", 0), n - 1)
+    step = _WIZARD_GUIDE_STEPS[step_idx]
+    selector = step["selector"]
+    docked = wizard_guide_layout() == "Docked"
+
+    accent = st.get_option("theme.primaryColor") or "#1f77b4"
+    if docked:
+        css = _WIZARD_GUIDE_STRIP_CSS
+    else:
+        theme = getattr(getattr(st, "context", None), "theme", None)
+        is_dark = getattr(theme, "type", "light") == "dark"
+        bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
+        css = (
+            _CARD_CSS
+            + f".st-key-tour_card, .st-key-wizard_guide_pill {{ background: {bg}; "
+            f"border: 1px solid {border}; }}" + _WIZARD_GUIDE_FLOAT_CSS
         )
-        if step_idx < n - 1:
-            exit_col.button(
-                "Skip",
-                key="wizard_sp_exit",
-                width="stretch",
-                on_click=_exit_wizard_guide,
-            )
-            next_col.button(
-                "Next →",
-                key="wizard_sp_next",
-                width="stretch",
-                type="primary",
-                on_click=_wizard_guide_next,
-            )
-        else:
-            next_col.button(
-                "✓ Got it",
-                key="wizard_sp_done",
-                width="stretch",
-                type="primary",
-                on_click=_exit_wizard_guide,
-            )
-        # Hide the card instantly on Skip/Done, even while the wizard's first run
-        # is still loading (see _dismiss_listener_script).
-        embed_html_iframe(
-            _dismiss_listener_script(
-                None, exit_keys=("wizard_sp_exit", "wizard_sp_done")
-            ),
-            height=0,
-        )
+    st.markdown(
+        "<style>" + css + _highlight_css(selector, accent) + "</style>",
+        unsafe_allow_html=True,
+    )
+    if selector:
+        embed_html_iframe(_scroll_into_view_script(selector), height=0)
+
+    if docked:
+        _render_wizard_guide_strip(step_idx, n, step)
+    else:
+        _render_wizard_guide_card(step_idx, n, step)
+        embed_html_iframe(_WIZARD_GUIDE_DRAG_SCRIPT, height=0)
+    # Hide the guide instantly on Skip/Done, even while the wizard's first run
+    # is still loading (see _dismiss_listener_script).
+    embed_html_iframe(
+        _dismiss_listener_script(None, exit_keys=("wizard_sp_exit", "wizard_sp_done")),
+        height=0,
+    )
 
 
 def _arm_wizard_guide() -> None:

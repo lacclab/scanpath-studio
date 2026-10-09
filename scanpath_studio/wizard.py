@@ -103,9 +103,12 @@ from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
 from .tabs import _collect_column_mapping
 from .tour import (
+    WIZARD_GUIDE_LAYOUT_KEY,
+    WIZARD_GUIDE_LAYOUTS,
     maybe_show_wizard_guide,
     render_spotlight_wizard_guide,
     render_wizard_guide_button,
+    wizard_guide_layout,
 )
 from .url_state import PLOT_CONFIG_SCHEMA, _seed_column_mapping
 
@@ -3265,12 +3268,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
             '<div class="sps-wiz-title">Set up your dataset</div>',
             unsafe_allow_html=True,
         )
-        # Step-by-step guide: a bottom-right card that auto-opens once per session
-        # and is replayable via the popover below. Arm it (auto/first-visit) then
-        # render the card early so it streams before the heavy upload/normalize
-        # work.
+        # Step-by-step guide: auto-opens once per session and is replayable via
+        # the popover below. Arm it (auto/first-visit) then render it early so
+        # it streams before the heavy upload/normalize work. Docked, it is part
+        # of this bar, so it stays pinned with it; floating, it is a fixed card
+        # drawn outside it (a sticky parent can become the containing block of
+        # a fixed child).
         maybe_show_wizard_guide()
-        render_spotlight_wizard_guide()
+        if wizard_guide_layout() == "Docked":
+            with bar:
+                render_spotlight_wizard_guide()
+        else:
+            render_spotlight_wizard_guide()
         # UX-84: one ❓ Help popover replaces the two buttons that used to sit
         # here (🧭 guide · 📖 docs) — a popover, not a dialog, since it is a
         # two-item chooser with no modal weight to it (matches #UX-65's nav
@@ -3296,6 +3305,17 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 type="tertiary",
                 help="What your export needs, how this wizard maps it, and the "
                 "recording setup it asks for.",
+            )
+            # Temporary (2026-10-09): both guide layouts, to compare them.
+            st.segmented_control(
+                "Guide layout",
+                WIZARD_GUIDE_LAYOUTS,
+                key=WIZARD_GUIDE_LAYOUT_KEY,
+                default=WIZARD_GUIDE_LAYOUTS[0],
+                required=True,
+                persist_state="session",
+                help="**Docked**: a strip under this bar. **Floating**: a card "
+                "you can drag by its title and fold to a tab.",
             )
         # The way out, on the row that stays on screen.
         #

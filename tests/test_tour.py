@@ -1203,7 +1203,7 @@ def test_the_setup_guide_counts_the_parts_it_names():
     assert not save["title"][0].isdigit()
     import inspect
 
-    source = inspect.getsource(tour.render_spotlight_wizard_guide)
+    source = inspect.getsource(tour._wizard_guide_progress)
     assert 'f"Part {step_idx} of {n_parts}"' in source
 
 
@@ -1230,6 +1230,24 @@ def test_the_setup_guide_progress_names_the_save_step():
 
     at.session_state["wizard_guide_step"] = len(_WIZARD_GUIDE_STEPS) - 1
     at.run()
+    # Docked (the default): the progress is in the strip's one line.
+    line = next(m.value for m in at.markdown if "Save it" in m.value)
+    assert "Last step" in line and "Part 4" not in line
+    # Floating: the card's progress bar.
+    at.session_state["wizard_guide_layout"] = "Floating"
+    at.run()
     (bar,) = at.get("progress")
     assert "Last step" in bar.proto.text
     assert "Part 4" not in bar.proto.text
+
+
+def test_the_floating_setup_guide_folds_to_a_tab_and_back():
+    at = AppTest.from_function(_wizard_guide_app)
+    at.session_state["wizard_guide_layout"] = "Floating"
+    at.run()
+    at.button(key="wizard_sp_fold").click().run()
+    assert not at.exception, at.exception
+    keys = {b.key for b in at.button if b.key}
+    assert keys == {"wizard_sp_unfold"}
+    at.button(key="wizard_sp_unfold").click().run()
+    assert "wizard_sp_next" in {b.key for b in at.button if b.key}

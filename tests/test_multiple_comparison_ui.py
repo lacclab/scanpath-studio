@@ -126,13 +126,11 @@ def test_generation_column_options_empty_frame():
 
 def test_collect_generations_matches_selected_field_value_across_texts():
     fix = _gen_fixations()
-    gens, n_total = _collect_generations(
-        fix, fix[fix["trial_id"] == "t1"], "model", "p1", "t1"
-    )
+    gens = _collect_generations(fix, fix[fix["trial_id"] == "t1"], "model", "p1", "t1")
     # The comparison field is a selector. The other human trial survives even
     # though it is text B; the selected p1/t1 trial is excluded.
     assert set(gens) == {("pX", "tX")}
-    assert n_total == 1
+    assert len(gens) == 1
     assert set(gens[("pX", "tX")]["text_id"]) == {"B"}
 
 
@@ -156,7 +154,7 @@ def test_collect_generations_by_participant_id():
         ],
         ignore_index=True,
     )
-    gens, _ = _collect_generations(
+    gens = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], "participant_id", "p1", "t1"
     )
     # Participant matching crosses texts and returns one panel per trial.
@@ -166,16 +164,14 @@ def test_collect_generations_by_participant_id():
 def test_collect_generations_none_when_only_selected_matches():
     fix = _gen_fixations()
     # Claude occurs only on p3/t3, so no other trial matches that value.
-    gens, n_total = _collect_generations(
-        fix, fix[fix["trial_id"] == "t3"], "model", "p3", "t3"
-    )
-    assert gens == {} and n_total == 0
+    gens = _collect_generations(fix, fix[fix["trial_id"] == "t3"], "model", "p3", "t3")
+    assert gens == {}
 
 
 def test_collect_generations_can_match_on_paragraph_id():
     fix = _gen_fixations(text_col="paragraph_id")
     assert "text_id" not in fix.columns
-    gens, _ = _collect_generations(
+    gens = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], "paragraph_id", "p1", "t1"
     )
     # Matching on the text field yields the other readings of A, one per trial.
@@ -215,11 +211,8 @@ def test_collect_generations_preserves_distinct_matching_trials():
             "order_in_trial": [1, 1, 1, 1],
         }
     )
-    gens, n_total = _collect_generations(
-        fix, fix[fix["trial_id"] == "t1"], "gen", "p1", "t1"
-    )
+    gens = _collect_generations(fix, fix[fix["trial_id"] == "t1"], "gen", "p1", "t1")
     # Each matching trial gets its own panel; the string "0" is not int 0.
-    assert n_total == 2
     assert set(gens) == {("p2", "t2"), ("p4", "t4")}
 
 
@@ -297,7 +290,7 @@ def test_same_text_shows_other_participants_only():
     reread = fix[fix["trial_id"] == "t1"].assign(trial_id="t1b")
     fix = pd.concat([fix, reread], ignore_index=True)
     column, differ = _resolve_match(_MATCH_SAME_TEXT, fix)
-    gens, _ = _collect_generations(
+    gens = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], column, "p1", "t1", differ
     )
     assert set(gens) == {("p2", "t2"), ("p3", "t3")}
@@ -353,22 +346,13 @@ def _lookalike_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
     return words, fixations
 
 
-def test_readings_whose_labels_match_are_two_matches(monkeypatch):
-    from scanpath_studio import tabs
-
+def test_readings_whose_labels_match_are_two_matches():
     _words, fix = _lookalike_frames()
     selected = fix[fix["participant_id"] == "p0"]
-    gens, n_total = _collect_generations(fix, selected, "text_id", "p0", "base")
-    assert n_total == 3
+    gens = _collect_generations(fix, selected, "text_id", "p0", "base")
     assert list(gens) == [("p1", "t1 · t2"), ("p1 · t1", "t2"), ("p9", "z")]
     assert gens[("p1", "t1 · t2")]["participant_id"].unique().tolist() == ["p1"]
     assert gens[("p1 · t1", "t2")]["participant_id"].unique().tolist() == ["p1 · t1"]
-    # Under a cap both still count, and both are kept: the cut is by reading.
-    monkeypatch.setattr(tabs, "_GEN_MAX_SCORE", 2)
-    monkeypatch.setattr(tabs, "_GEN_MAX_PANELS_UNRANKED", 2)
-    gens, n_total = _collect_generations(fix, selected, "text_id", "p0", "base")
-    assert n_total == 3
-    assert list(gens) == [("p1", "t1 · t2"), ("p1 · t1", "t2")]
 
 
 def test_lookalike_readings_are_labelled_apart():
@@ -418,15 +402,14 @@ def _lookalike_comparisons_app() -> None:
     )
 
 
-def test_lookalike_readings_get_a_panel_each_under_a_cap(monkeypatch):
+def test_lookalike_readings_get_a_panel_each_on_a_page_of_two(monkeypatch):
     """#412 acceptance: both readings are drawn, each in its own panel, when
-    the grid is capped to two — and the similarity table names them apart."""
+    a page holds two — and the similarity table names all three apart."""
     from streamlit.testing.v1 import AppTest
 
     from scanpath_studio import tabs
 
-    for cap in ("_GEN_MAX_PANELS", "_GEN_MAX_PANELS_UNRANKED"):
-        monkeypatch.setattr(tabs, cap, 2)
+    monkeypatch.setattr(tabs, "_GEN_PAGE_SIZE", 2)
     at = AppTest.from_function(_lookalike_comparisons_app).run(timeout=60)
     assert not at.exception, at.exception
     panels = [c.value for c in at.caption if str(c.value).startswith("**")]
@@ -436,3 +419,68 @@ def test_lookalike_readings_get_a_panel_each_under_a_cap(monkeypatch):
     # The suite runs with similarity on (conftest), so every match is scored.
     trials = at.dataframe[0].value["Trial"].tolist()
     assert len(set(trials)) == len(trials) == 3, trials
+
+
+# --- #422: the grid pages through every match --------------------------------
+
+
+def _panel_captions_shown(at) -> list[str]:
+    return [c.value for c in at.caption if str(c.value).startswith("**")]
+
+
+def _count_line(at) -> str:
+    return next(c.value for c in at.caption if "match" in str(c.value))
+
+
+def test_the_grid_shows_one_page_and_says_how_to_see_more(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    monkeypatch.setattr(tabs, "_GEN_PAGE_SIZE", 2)
+    at = AppTest.from_function(_lookalike_comparisons_app).run(timeout=60)
+    assert not at.exception, at.exception
+    assert len(_panel_captions_shown(at)) == 2
+    assert _count_line(at) == "Showing 1–2 of 3 matches — pick a page for more."
+    # A pager above the grid and one under it.
+    assert len(at.get("pagination")) == 2
+
+    at.session_state["multi_gen_page"] = 2
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    assert [c.split(" · NLD")[0] for c in _panel_captions_shown(at)] == [
+        "**Participant p9**"
+    ]
+    assert _count_line(at) == "Showing 3 of 3 matches — pick a page for more."
+
+
+def test_one_page_has_no_pager():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_lookalike_comparisons_app).run(timeout=60)
+    assert not at.exception, at.exception
+    assert _count_line(at) == "3 matches."
+    assert not at.get("pagination")
+
+
+def test_another_match_set_starts_on_page_one(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    monkeypatch.setattr(tabs, "_GEN_PAGE_SIZE", 2)
+    at = AppTest.from_function(_lookalike_comparisons_app)
+    at.session_state["multi_gen_page"] = 2
+    at.session_state[tabs._GEN_PAGE_FOR_KEY] = ("another trial",)
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    assert _count_line(at).startswith("Showing 1–2 of 3")
+
+
+def test_either_pager_moves_both(monkeypatch):
+    from scanpath_studio import tabs
+
+    state = {"multi_gen_page": 1, "multi_gen_page_end": 3}
+    monkeypatch.setattr(tabs.st, "session_state", state)
+    tabs._sync_gen_pages("multi_gen_page_end")
+    assert state == {"multi_gen_page": 3, "multi_gen_page_end": 3}

@@ -1,0 +1,1 @@
+Fixations with no X/Y whose Word/IA IDs are text (w1, w2) are no longer all drawn on the first word: adding such a dataset is blocked with a message saying why, and a blank or unreadable Word/IA ID never places a fixation on a box.

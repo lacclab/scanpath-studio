@@ -17,7 +17,9 @@ The Scanpath view draws one reading on the screen it was recorded on.
 
 Pick a trial above the plot. The **filter funnel** beside it narrows the list
 by text, participant, condition or annotation, and **⇅** sorts it. A trial with
-several screens gets a second navigator to move between them.
+several screens gets a second navigator to move between them. When several
+participants have the same trial ID, each reading is in the list on its own,
+with its participant in brackets, `3 [p2]`.
 
 ## Control the layers
 

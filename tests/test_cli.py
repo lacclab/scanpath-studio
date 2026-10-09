@@ -901,12 +901,11 @@ def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):
     it back and keeps it — beside the ones that restore."""
     import json as json_module
 
-    from scanpath_studio import persistence
-
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
     _seed_cache(tmp_path)
-    slug = persistence._dataset_slug("Corpus")
-    (tmp_path / "datasets" / f"{slug}-words.parquet").unlink()
+    # #412: a fresh name per write — the manifest says which file is Words.
+    manifest = json_module.loads((tmp_path / "manifest.json").read_text("utf-8"))
+    (tmp_path / manifest["datasets"]["Corpus"]["frames"]["words"]).unlink()
 
     cli.main(["cache"])
     out = capsys.readouterr().out

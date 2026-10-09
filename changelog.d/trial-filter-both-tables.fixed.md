@@ -1,0 +1,1 @@
+A trial filter on a field only one table has (a difficulty level on the Words table, say) now narrows every table, so an excluded trial no longer stays in the trial picker through its fixations; a trial whose Words and Fixations tables disagree about the field is left out, and a warning names it.

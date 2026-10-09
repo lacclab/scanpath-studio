@@ -131,9 +131,9 @@ def test_collect_generations_matches_selected_field_value_across_texts():
     )
     # The comparison field is a selector. The other human trial survives even
     # though it is text B; the selected p1/t1 trial is excluded.
-    assert set(gens) == {"pX · tX"}
+    assert set(gens) == {("pX", "tX")}
     assert n_total == 1
-    assert set(gens["pX · tX"]["text_id"]) == {"B"}
+    assert set(gens[("pX", "tX")]["text_id"]) == {"B"}
 
 
 def test_collect_generations_by_participant_id():
@@ -160,7 +160,7 @@ def test_collect_generations_by_participant_id():
         fix, fix[fix["trial_id"] == "t1"], "participant_id", "p1", "t1"
     )
     # Participant matching crosses texts and returns one panel per trial.
-    assert set(gens) == {"p1 · t4"}
+    assert set(gens) == {("p1", "t4")}
 
 
 def test_collect_generations_none_when_only_selected_matches():
@@ -179,7 +179,7 @@ def test_collect_generations_can_match_on_paragraph_id():
         fix, fix[fix["trial_id"] == "t1"], "paragraph_id", "p1", "t1"
     )
     # Matching on the text field yields the other readings of A, one per trial.
-    assert set(gens) == {"p2 · t2", "p3 · t3"}
+    assert set(gens) == {("p2", "t2"), ("p3", "t3")}
 
 
 def test_generation_column_options_excludes_within_trial_ids():
@@ -220,7 +220,7 @@ def test_collect_generations_preserves_distinct_matching_trials():
     )
     # Each matching trial gets its own panel; the string "0" is not int 0.
     assert n_total == 2
-    assert set(gens) == {"p2 · t2", "p4 · t4"}
+    assert set(gens) == {("p2", "t2"), ("p4", "t4")}
 
 
 def test_comparison_panels_use_the_candidate_words_and_keep_text_visible():
@@ -300,4 +300,139 @@ def test_same_text_shows_other_participants_only():
     gens, _ = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], column, "p1", "t1", differ
     )
-    assert set(gens) == {"p2 · t2", "p3 · t3"}
+    assert set(gens) == {("p2", "t2"), ("p3", "t3")}
+
+
+# --- #412: two readings whose ids join to the same label ---------------------
+
+#: `(p1, "t1 · t2")` and `("p1 · t1", "t2")` both read `p1 · t1 · t2` once
+#: joined, and the collector used to key on that label; `p9` sorts after both.
+_LOOKALIKE_READINGS = [
+    ("p0", "base"),
+    ("p1", "t1 · t2"),
+    ("p1 · t1", "t2"),
+    ("p9", "z"),
+]
+
+
+def _lookalike_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
+    words = pd.DataFrame(
+        [
+            {
+                "participant_id": p,
+                "trial_id": t,
+                "text_id": "same",
+                "word_id": i,
+                "text": w,
+                "x": 10.0 + 60 * i,
+                "y": 20.0,
+                "width": 50.0,
+                "height": 20.0,
+            }
+            for p, t in _LOOKALIKE_READINGS
+            for i, w in enumerate(["one", "two"])
+        ]
+    )
+    fixations = pd.DataFrame(
+        [
+            {
+                "participant_id": p,
+                "trial_id": t,
+                "text_id": "same",
+                "x": 20.0 + 60 * i,
+                "y": 30.0,
+                "duration_ms": 200,
+                "timestamp_ms": 250 * i,
+                "fixation_id": i,
+                "order_in_trial": i + 1,
+            }
+            for p, t in _LOOKALIKE_READINGS
+            for i in range(2)
+        ]
+    )
+    return words, fixations
+
+
+def test_readings_whose_labels_match_are_two_matches(monkeypatch):
+    from scanpath_studio import tabs
+
+    _words, fix = _lookalike_frames()
+    selected = fix[fix["participant_id"] == "p0"]
+    gens, n_total = _collect_generations(fix, selected, "text_id", "p0", "base")
+    assert n_total == 3
+    assert list(gens) == [("p1", "t1 · t2"), ("p1 · t1", "t2"), ("p9", "z")]
+    assert gens[("p1", "t1 · t2")]["participant_id"].unique().tolist() == ["p1"]
+    assert gens[("p1 · t1", "t2")]["participant_id"].unique().tolist() == ["p1 · t1"]
+    # Under a cap both still count, and both are kept: the cut is by reading.
+    monkeypatch.setattr(tabs, "_GEN_MAX_SCORE", 2)
+    monkeypatch.setattr(tabs, "_GEN_MAX_PANELS_UNRANKED", 2)
+    gens, n_total = _collect_generations(fix, selected, "text_id", "p0", "base")
+    assert n_total == 3
+    assert list(gens) == [("p1", "t1 · t2"), ("p1 · t1", "t2")]
+
+
+def test_lookalike_readings_are_labelled_apart():
+    from scanpath_studio.tabs import (
+        _MATCH_SAME_PARTICIPANT,
+        _panel_captions,
+        _reading_labels,
+    )
+
+    readings = [("p1", "t1 · t2"), ("p1 · t1", "t2"), ("p9", "z")]
+    labels = _reading_labels(readings)
+    assert labels[("p9", "z")] == "p9 · z"
+    assert labels[("p1", "t1 · t2")] != labels[("p1 · t1", "t2")]
+    assert labels[("p1", "t1 · t2")] == "participant p1, trial t1 · t2"
+    # Two of one participant's readings of a text share the caption *Text A*.
+    panels = {
+        (p, t): pd.DataFrame({"participant_id": [p], "trial_id": [t], "text_id": ["A"]})
+        for p, t in (("p1", "a"), ("p1", "a_r2"))
+    }
+    captions = _panel_captions(
+        _MATCH_SAME_PARTICIPANT, panels, "text_id", _reading_labels(panels)
+    )
+    assert captions == {
+        ("p1", "a"): "Text A (p1 · a)",
+        ("p1", "a_r2"): "Text A (p1 · a_r2)",
+    }
+
+
+def _lookalike_comparisons_app() -> None:
+    from scanpath_studio import tabs
+    from tests.test_mode_parity import _viz
+    from tests.test_multiple_comparison_ui import _lookalike_frames
+
+    words, fixations = _lookalike_frames()
+    tabs.render_multiple_comparison_tab(
+        words[words["participant_id"] == "p0"],
+        fixations[fixations["participant_id"] == "p0"],
+        words,
+        fixations,
+        selected_participant="p0",
+        selected_trial="base",
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        font_family="Arial",
+        viz_settings=_viz(),
+    )
+
+
+def test_lookalike_readings_get_a_panel_each_under_a_cap(monkeypatch):
+    """#412 acceptance: both readings are drawn, each in its own panel, when
+    the grid is capped to two — and the similarity table names them apart."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    for cap in ("_GEN_MAX_PANELS", "_GEN_MAX_PANELS_UNRANKED"):
+        monkeypatch.setattr(tabs, cap, 2)
+    at = AppTest.from_function(_lookalike_comparisons_app).run(timeout=60)
+    assert not at.exception, at.exception
+    panels = [c.value for c in at.caption if str(c.value).startswith("**")]
+    assert len(panels) == 2, panels
+    assert panels[0].startswith("**Participant p1**")
+    assert panels[1].startswith("**Participant p1 · t1**")
+    # The suite runs with similarity on (conftest), so every match is scored.
+    trials = at.dataframe[0].value["Trial"].tolist()
+    assert len(set(trials)) == len(trials) == 3, trials

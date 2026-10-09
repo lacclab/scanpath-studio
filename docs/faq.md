@@ -29,7 +29,8 @@ The app guesses columns from their names. Pick the right one under
 
 Yes. A Words table alone shows the text and any reading measures it carries; a
 fixations table alone shows gaze positions without text. Most features need
-both.
+both. The same holds trial by trial: when the two tables cover different
+trials, every trial either one has is listed, and drawn with what it has.
 
 ### Can I open PoTeC or OneStop in the online demo?
 

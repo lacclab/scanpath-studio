@@ -29,6 +29,7 @@ from scanpath_studio.aggregation import (
     MEASURES,
     RATE_SERIES,
     READING_TIME_ESTIMATED,
+    GroupResolution,
     Measure,
     apply_group,
     available_features,
@@ -36,13 +37,13 @@ from scanpath_studio.aggregation import (
     cohort_word_profile,
     distinct_group_labels,
     ensure_fixation_enrichment,
-    group_mask,
     group_mean_difference,
     group_word_difference,
     landing_positions,
     measure_values,
     metric_by_trial_index,
     metric_over_time,
+    on_reading_key,
     paired_group_summary,
     per_participant_trend,
     per_reader_word_measure,
@@ -51,6 +52,7 @@ from scanpath_studio.aggregation import (
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
+    resolve_group_spec,
     saccade_vs_duration,
     text_read_counts,
     text_screen_options,
@@ -212,14 +214,16 @@ from scanpath_studio.data import (
     coerce_bool_or_na,
     compute_word_metrics,
     derive_trial_index,
+    distinct_key_codes,
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
     filter_to_keys,
-    filter_trials,
+    frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
     has_explicit_trial_index,
+    hashable_key,
     identity_text_plan,
     normalize_fixations,
     normalize_raw_gaze,
@@ -231,9 +235,12 @@ from scanpath_studio.data import (
     remap_normalized_frame,
     repeat_bases,
     respell_reading,
+    select_trials_cached,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
+    trial_filter_conflict_note,
+    trial_filter_params,
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
@@ -364,12 +371,14 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     qualified_participant,
     qualify_for_compare,
+    reading_key,
     row_tail,
     safe_summary,
     select_trial,
     self_compare_participant,
     separate_self_compare,
     sort_trial_options,
+    split_reading_key,
     step_within,
     trial_id_help,
     trial_id_layout,
@@ -2412,14 +2421,18 @@ def _order_compare_options(
     if choice == _CMP_SORT_DEFAULT or len(options) < 2:
         return options
     key_series = None if choice == TRIAL_SORT_DEFAULT else sort_keys.get(choice)
-    trial_ids = [str(option[1]) for option in options]
-    ordered_ids = sort_trial_options(
-        trial_ids,
+    # Per reading, as the sort keys are (#412): two readers' trials of one id
+    # each take their own value.
+    keys = [reading_key(option[0], option[1]) for option in options]
+    ordered = sort_trial_options(
+        keys,
         key_series,
         descending=descending if key_series is not None else False,
     )
-    rank = {trial_id: idx for idx, trial_id in enumerate(ordered_ids)}
-    return sorted(options, key=lambda option: rank.get(str(option[1]), len(rank)))
+    rank = {key: idx for idx, key in enumerate(ordered)}
+    return [
+        option for _, option in sorted(zip(keys, options), key=lambda p: rank[p[0]])
+    ]
 
 
 #: CMP-13: scanpath B remembered as ``(participant_id, trial_id)``. The picker's
@@ -2711,24 +2724,17 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
     """
     # BUG-103: each step names its new frames by its inputs and settings, as
     # A's chain in `app._run_app` does, so B's pool is not re-hashed per rerun.
-    words, fixations = filter_trials(
-        source.words,
-        source.fixations,
-        participants=filters["participants"],
-        metadata=filters["metadata"],
-        ranges=filters.get("ranges"),
-        drop_unknown=filters.get("ranges_drop_unknown"),
+    # #412: decided per reading across B's two tables, once per filter change
+    # — in a slot of its own, or A's and B's would evict each other each run.
+    selected = select_trials_cached(
+        source.words, source.fixations, filters, slot="cmp_trial_filters"
     )
+    words, fixations = selected.words, selected.fixations
     assign_derived(
         (words, fixations),
         "filter_trials",
         (source.words, source.fixations),
-        (
-            filters["participants"],
-            filters["metadata"],
-            filters.get("ranges"),
-            tuple(filters.get("ranges_drop_unknown") or ()),
-        ),
+        trial_filter_params(filters),
     )
     selected_keys = filters.get("trial_keys")
     if selected_keys is not None:
@@ -9473,19 +9479,35 @@ def _render_filter_set(words, fixations, *, key, default_label):
 def _cohort_reader_ids(
     fixations: pd.DataFrame | None, words: pd.DataFrame | None, spec=None
 ) -> set[str]:
-    """The readers a cohort holds: read from its fixations, or — for a dataset
-    of word measures alone — from its words (BUG-112: an AOI-only dataset's
-    cohorts read "0 readers" beside charts drawn from theirs).
+    """The readers with a reading in the cohort, in either table.
 
-    ``spec`` selects the cohort from whole frames by mask, without copying them.
+    BUG-112: an AOI-only dataset's cohorts read "0 readers" beside charts drawn
+    from theirs; #412: a reading only one table has is the cohort's too, and a
+    field only one table carries selects the same readers from both. Read off
+    the tables' distinct readings (`data.distinct_key_codes`, remembered per
+    frame), not their rows, once ``spec`` is resolved to the reading key
+    (`_resolve_cohort`).
     """
+    readings = None
     for frame in (fixations, words):
-        if frame is not None and not frame.empty and "participant_id" in frame:
-            ids = frame["participant_id"]
-            if spec:
-                ids = ids[group_mask(frame, spec)]
-            return set(ids.dropna().astype(str).unique())
-    return set()
+        if frame is None or frame.empty or not set(_TRIAL_KEY_COLUMNS) <= set(frame):
+            continue
+        keys = distinct_key_codes(frame, _TRIAL_KEY_COLUMNS)[1]
+        readings = keys if readings is None else readings.union(keys, sort=False)
+    if readings is None or readings.empty:
+        return set()
+    if spec:
+        mask = np.ones(len(readings), dtype=bool)
+        for column, values in _resolve_cohort(spec, words, fixations).spec.items():
+            if not values:
+                continue
+            if column == _TRIAL_KEY_COLUMNS:
+                mask &= readings.isin({tuple(map(str, v)) for v in values})
+            else:  # a participant pick — the one other reading-key constraint
+                level = readings.get_level_values(column)
+                mask &= level.isin({str(v) for v in values})
+        readings = readings[mask]
+    return set(readings.get_level_values("participant_id"))
 
 
 def _cohort_readers(
@@ -9592,32 +9614,54 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
     return spec, label
 
 
-def _warn_word_only_group_fields(host, fixations, *specs) -> None:
-    """Warn when a group is defined on a field absent from the fixation table.
+def _resolve_cohort(spec, words, fixations) -> GroupResolution:
+    """``spec`` resolved to readings (`aggregation.resolve_group_spec`, #412).
 
-    ``group_mask`` filters per frame, so a word-only spec column leaves the
-    fixation frame unfiltered — the *fixation-level* views (distributions for a
-    per-fixation measure, paired bars, group means) would then silently compare
-    all-vs-all. Surfacing it beats a misleading comparison.
+    A field on the Words table only used to constrain the words alone:
+    `group_mask` skipped a column the frame did not have, so the fixation
+    measures pooled *every* fixation into each group. Resolved once per pool
+    and group — a `frame_cache` holding A's and B's, so a rerun regroups
+    nothing — and the readings stand in for the fields from here on.
     """
-    present = set(getattr(fixations, "columns", []))
-    missing = sorted(
-        {
-            col
-            for spec in specs
-            for col, vals in (spec or {}).items()
-            # A composite key (AN-31's trial cohort) needs all of its columns.
-            if vals and not set(col if isinstance(col, tuple) else (col,)) <= present
-        },
-        key=str,
+    if not any(v and not on_reading_key(c) for c, v in (spec or {}).items()):
+        return resolve_group_spec(spec, words, fixations)
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        hashable_key(spec),
     )
-    if missing:
-        host.warning(
-            "Not in the fixation table: "
-            + ", ".join(_pretty_col(c) for c in missing)
-            + ". Views of a per-fixation measure compare all fixations, not the "
-            "groups. Use a field both the Words and the fixation table carry."
-        )
+
+    def _build() -> GroupResolution:
+        progress.report()  # a miss is work: the Corpus card may show
+        return resolve_group_spec(spec, words, fixations)
+
+    return frame_cache("cohort_readings", key, _build, keep=3)
+
+
+def _cohort_unavailable(host, cohorts) -> bool:
+    """Say why a group cannot be formed, and what it leaves out; ``True`` = stop.
+
+    ``cohorts`` are ``(label, GroupResolution)`` pairs. A field neither table
+    carries makes the group unavailable rather than everyone; a reading the
+    tables disagree on is left out of the group, and said so.
+    """
+    names = active_all(st.session_state)
+    blocked = False
+    for label, cohort in cohorts:
+        if cohort.missing:
+            blocked = True
+            fields = ", ".join(_pretty_col(c) for c in cohort.missing)
+            host.warning(
+                f"**{label}** cannot be formed: {fields} is in neither the Words "
+                "nor the Fixations table of the current pool. Pick another field."
+            )
+        if cohort.conflicts:
+            host.warning(
+                trial_filter_conflict_note(
+                    cohort.conflicts, names.label, subject=f"**{label}**"
+                )
+            )
+    return blocked
 
 
 def _text_column(frame: pd.DataFrame) -> str | None:
@@ -10190,10 +10234,12 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
     """The text of the trial the Scanpath view shows, while it is new to Per
     text — ``None`` once Per text has opened on it (so a text picked here is
     kept) or when the pool does not hold it."""
-    trial = st.session_state.get(SINGLE_TRIAL_ID)
-    if trial is None or st.session_state.get(_PTEXT_SEEDED_FROM) == trial:
+    selected = st.session_state.get(SINGLE_TRIAL_ID)
+    if selected is None or st.session_state.get(_PTEXT_SEEDED_FROM) == selected:
         return None
-    st.session_state[_PTEXT_SEEDED_FROM] = trial
+    st.session_state[_PTEXT_SEEDED_FROM] = selected
+    # A reading key since #412; a trial id alone is from before it.
+    participant, trial = split_reading_key(selected)
     for col in ("unique_trial_id", "trial_id"):
         if col in words.columns:
             ids = words[col]
@@ -10202,10 +10248,17 @@ def _scanpath_trial_text(words: pd.DataFrame, text_col: str):
             same = ids == trial
             if not same.any():
                 same = ids.astype(str) == str(trial)
+            same = same.to_numpy().copy()
+            if participant is not None and "participant_id" in words.columns:
+                # That reader's rows of the id only (#412) — read off the rows
+                # the id matched, not the whole column.
+                rows = np.flatnonzero(same)
+                readers = words["participant_id"].iloc[rows].astype(str)
+                same[rows] = readers.to_numpy() == participant
             texts = words.loc[same, text_col].dropna().unique()
             if len(texts):
-                # An id several participants share can name different texts:
-                # then the Scanpath trial is ambiguous here, so don't guess.
+                # A trial id alone that several participants share can name
+                # different texts: then it is ambiguous here, so don't guess.
                 return texts[0] if len(texts) == 1 else None
     return None
 
@@ -11098,16 +11151,22 @@ def render_per_group_tab(
         spec, label = _render_group_definition(
             words_filtered, fixations_filtered, key="pgrp", two_groups=False
         )
-    _warn_word_only_group_fields(st, fixations_filtered, spec)
-    words_g = apply_group(words_filtered, spec or {})
+    # #412: the group's fields resolved to readings, so its words and its
+    # fixations are the same readings whichever table carries the field.
+    cohort = _resolve_cohort(spec, words_filtered, fixations_filtered)
+    if _cohort_unavailable(st, [(label, cohort)]):
+        return
+    words_g = apply_group(words_filtered, cohort.spec)
     # One `apply_group` call, not two: it returns `frame[mask]`, a new full-size
     # copy, so calling it again just to compute the cache key built a second
     # corpus-sized frame that nothing else ever saw — and (since PERF-3) parked
     # it in the fingerprint memo for the rest of the run.
-    fix_in = apply_group(fixations_filtered, spec or {})
-    # BUG-103: all three are new every rerun; each is named by what made it.
-    assign_derived(words_g, "apply_group", words_filtered, spec or {})
-    assign_derived(fix_in, "apply_group", fixations_filtered, spec or {})
+    fix_in = apply_group(fixations_filtered, cohort.spec)
+    # BUG-103: all three are new every rerun; each is named by what made it —
+    # both tables, since #412 decides the group's readings across the two.
+    pool = (words_filtered, fixations_filtered)
+    assign_derived(words_g, "apply_group", pool, (0, spec or {}))
+    assign_derived(fix_in, "apply_group", pool, (1, spec or {}))
     fix_g = _c_enrich_fix(
         fix_in,
         words_g,
@@ -11396,9 +11455,16 @@ def render_group_comparison_tab(
     # BUG-111: every chart keys its series by label, so equal labels merged A
     # into B; from here on both read apart, the caption included.
     label_a, label_b = distinct_group_labels(label_a, label_b)
-    _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
-    ids_a = _cohort_reader_ids(fixations_filtered, words_filtered, spec_a)
-    ids_b = _cohort_reader_ids(fixations_filtered, words_filtered, spec_b)
+    # #412: each group's fields resolved to readings before any measure reads
+    # them — a field the fixations lack no longer pools every fixation into
+    # both groups. The recipes keep the definitions (`spec_a` / `spec_b`).
+    cohort_a = _resolve_cohort(spec_a, words_filtered, fixations_filtered)
+    cohort_b = _resolve_cohort(spec_b, words_filtered, fixations_filtered)
+    if _cohort_unavailable(st, [(label_a, cohort_a), (label_b, cohort_b)]):
+        return
+    use_a, use_b = cohort_a.spec, cohort_b.spec
+    ids_a = _cohort_reader_ids(fixations_filtered, words_filtered, use_a)
+    ids_b = _cohort_reader_ids(fixations_filtered, words_filtered, use_b)
     readers_a, readers_b = len(ids_a), len(ids_b)
     shared = len(ids_a & ids_b)
     st.caption(
@@ -11448,8 +11514,8 @@ def render_group_comparison_tab(
         groups = two_group_values(
             frame,
             measure,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             label_a=label_a,
             label_b=label_b,
             normalize=normalize,
@@ -11499,8 +11565,8 @@ def render_group_comparison_tab(
             text_col,
             text_id,
             measure,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             agg=agg,
             min_readers=min_readers,
             screen_id=screen_id,
@@ -11568,8 +11634,8 @@ def render_group_comparison_tab(
         df = paired_group_summary(
             fixations_filtered,
             measures,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             agg=agg,
             label_a=label_a,
             label_b=label_b,
@@ -11598,7 +11664,7 @@ def render_group_comparison_tab(
         if measure is None:
             return
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        group_a, group_b = apply_group(frame, spec_a), apply_group(frame, spec_b)
+        group_a, group_b = apply_group(frame, use_a), apply_group(frame, use_b)
         # BUG-82: summarize readers, not pooled words/fixations — one reader's
         # many observations would otherwise outweigh another reader's few.
         a, b = reader_means(group_a, measure), reader_means(group_b, measure)
@@ -11718,8 +11784,8 @@ def render_group_comparison_tab(
             text_col,
             text_id,
             measure,
-            spec_a,
-            spec_b,
+            use_a,
+            use_b,
             agg=agg,
             label_a=label_a,
             label_b=label_b,
@@ -12196,6 +12262,11 @@ def _collect_generations(
     trial and the selected trial itself is always excluded. ``differ_col``
     also drops every trial that shares the selected trial's value there —
     *Same text — other participants* drops the participant's own rereading.
+
+    Keyed by the ``(participant_id, trial_id)`` pair, never by a label (#412):
+    ids may contain the separator a label joins them with, so ``(p1, "t1 ·
+    t2")`` and ``("p1 · t1", t2)`` read alike and one replaced the other.
+    Labels are made where they are shown (:func:`_reading_labels`).
     """
     if (
         gen_col not in fixations_pool.columns
@@ -12225,22 +12296,59 @@ def _collect_generations(
                 & (pool["trial_id"] == selected_trial)
             )
         ]
-    candidates: dict = {}
-    for (participant, trial), group in pool.groupby(
-        ["participant_id", "trial_id"], dropna=False, sort=True
+    candidates: dict[tuple, pd.DataFrame] = {}
+    for reading, group in pool.groupby(
+        ["participant_id", "trial_id"], dropna=False, sort=False
     ):
         if group.empty:
             continue
-        label = f"{participant} · {trial}"
-        candidates[label] = group
+        candidates[reading] = group
     n_total = len(candidates)
     # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
     # similarity happens in the tab, after scoring). Sorted for determinism.
     # PRE-21: it is a *scoring* budget, so with similarity gated off it would
     # only drop panels for no reason — the grid's own cap is what applies then.
     budget = _GEN_MAX_SCORE if similarity_enabled() else _GEN_MAX_PANELS_UNRANKED
-    ordered = dict(sorted(candidates.items())[:budget])
-    return ordered, n_total
+    ordered = sorted(candidates.items(), key=lambda item: _reading_order(item[0]))
+    return dict(ordered[:budget]), n_total
+
+
+def _reading_order(reading: tuple) -> tuple[str, ...]:
+    """A reading's place in the Comparisons grid: by participant, then trial,
+    as text — ids of mixed types, or a missing one, still sort."""
+    return tuple(str(part) for part in reading)
+
+
+def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:
+    """``labels`` with each one that several readings share made unique —
+    ``qualify(reading, label)``, then a counter if even that is taken. A label
+    only one reading has is kept, and no qualified one lands on it."""
+    seen: dict[str, int] = {}
+    for label in labels.values():
+        seen[label] = seen.get(label, 0) + 1
+    used = {label for label, n in seen.items() if n == 1}
+    distinct = {}
+    for reading, label in labels.items():
+        if seen[label] > 1:
+            qualified = candidate = qualify(reading, label)
+            n = 2
+            while candidate in used:
+                candidate = f"{qualified} ({n})"
+                n += 1
+            label = candidate
+        used.add(label)
+        distinct[reading] = label
+    return distinct
+
+
+def _reading_labels(readings) -> dict:
+    """``participant · trial`` for each ``(participant_id, trial_id)`` — the
+    similarity table's rows and the convergence lines. Two readings whose ids
+    join to the same text (#412) are spelled out instead."""
+    return _distinct_labels(
+        {reading: " · ".join(map(str, reading)) for reading in readings},
+        lambda reading, _label: f"participant {reading[0]}, trial {reading[1]}",
+    )
 
 
 def _comparison_trial_words(
@@ -12290,6 +12398,19 @@ def _match_panel_caption(choice: str, fix: pd.DataFrame, text_col) -> str:
     if choice == _MATCH_SAME_PARTICIPANT and text_col in fix.columns:
         return f"Text {first[text_col]}"
     return trial_id_shown(first["trial_id"], fix)
+
+
+def _panel_captions(choice: str, panels: dict, text_col, reading_labels: dict) -> dict:
+    """:func:`_match_panel_caption` for each grid panel, made unique (#412): a
+    caption two panels share — one participant's two readings of a text, two
+    readers' trials of one id — names its reading as well."""
+    return _distinct_labels(
+        {
+            reading: _match_panel_caption(choice, fix, text_col)
+            for reading, fix in panels.items()
+        },
+        lambda reading, caption: f"{caption} ({reading_labels[reading]})",
+    )
 
 
 def render_multiple_comparison_tab(
@@ -12450,6 +12571,8 @@ def render_multiple_comparison_tab(
 
         # Rank by similarity (lowest NLD = most similar; unscored/NaN last) and show
         # the closest _GEN_MAX_PANELS in the grid — never an arbitrary label subset.
+        # Every key here is a `(participant_id, trial_id)` reading (#412); the
+        # labels below are only how it is written.
         if scoring:
             ranked = sorted(
                 sliced_gens,
@@ -12459,9 +12582,16 @@ def render_multiple_comparison_tab(
                 ),
             )
         else:
-            ranked = sorted(sliced_gens)
+            ranked = list(sliced_gens)  # already in `_reading_order`
         panel_cap = _GEN_MAX_PANELS if scoring else _GEN_MAX_PANELS_UNRANKED
         grid_names = ranked[:panel_cap]
+        reading_labels = _reading_labels(sliced_gens)
+        captions = _panel_captions(
+            choice,
+            {name: sliced_gens[name] for name in grid_names},
+            text_col,
+            reading_labels,
+        )
 
         st.markdown("#### Matching trials")
         # Estimate a uniform cell height from the figure aspect + column count so
@@ -12478,7 +12608,7 @@ def render_multiple_comparison_tab(
                 with cell:
                     fix = sliced_gens[name]
                     nld = nld_by_gen.get(name)
-                    trial_label = _match_panel_caption(choice, fix, text_col)
+                    trial_label = captions[name]
                     if nld is not None and pd.notna(nld):
                         st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
@@ -12501,8 +12631,9 @@ def render_multiple_comparison_tab(
             return
 
         st.markdown("#### Similarity")
+        shown = table.assign(Model=[reading_labels[name] for name in table["Model"]])
         st.dataframe(
-            _style_similarity_table(table.rename(columns={"Model": "Trial"})),
+            _style_similarity_table(shown.rename(columns={"Model": "Trial"})),
             hide_index=True,
             width="stretch",
         )
@@ -12529,7 +12660,7 @@ def render_multiple_comparison_tab(
             str(selected_participant),
             str(selected_trial),
             str(gen_col),
-            tuple(sorted(conv_gens.keys())),
+            tuple(sorted(conv_gens, key=_reading_order)),
             fix_fingerprint,
         )
         if st.session_state.get("_multi_conv_key") != conv_key:
@@ -12542,8 +12673,14 @@ def render_multiple_comparison_tab(
                 name: nld_by_time(trial_fixations, g, trial_words)
                 for name, g in conv_gens.items()
             }
-        fix_curves = st.session_state["_multi_conv_fix"]
-        time_curves = st.session_state["_multi_conv_time"]
+        fix_curves = {
+            reading_labels[name]: curve
+            for name, curve in st.session_state["_multi_conv_fix"].items()
+        }
+        time_curves = {
+            reading_labels[name]: curve
+            for name, curve in st.session_state["_multi_conv_time"].items()
+        }
 
         conv_cols = st.columns(2)
         with conv_cols[0]:

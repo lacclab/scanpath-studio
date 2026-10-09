@@ -25,6 +25,14 @@ unreadable is held back (:func:`failed_datasets`) — the others, the settings,
 the annotations and the metadata tables restore regardless — and its manifest
 entry and files are written back unchanged by every save until the user retries
 it (:func:`retry_failed_datasets`) or removes it (:func:`discard_failed_dataset`).
+
+A save is all or nothing (#412). The manifest is the only file it replaces:
+a dataset whose frames changed, and metadata tables that changed, are written
+to files of their own under fresh names, and the manifest that names them is
+swapped in last. Until that swap the previous manifest names only the previous
+files, untouched, so a save that fails part-way — a full disk, a killed
+process — leaves the whole previous session, never some of each. Files no
+manifest names any more are removed after the swap (:func:`_remove_unreferenced`).
 """
 
 from __future__ import annotations
@@ -34,8 +42,11 @@ import ipaddress
 import json
 import logging
 import os
+import re
+import secrets
 import tempfile
 import threading
+import time
 from collections.abc import MutableMapping
 from datetime import datetime
 from pathlib import Path
@@ -116,12 +127,32 @@ _FRAME_KEYS = ("words", "fixations", "raw_gaze")
 #: DATA-38 — the attached metadata tables live beside the manifest, not in it,
 #: and are rewritten only when their content changes: the manifest is rewritten
 #: on every durable settings change (a layer toggle, a trial switch), and a
-#: trial table can run to tens of thousands of rows.
+#: trial table can run to tens of thousands of rows. #412: each write is a new
+#: ``metadata-<token>.json`` that the manifest's pointer names; this is the one
+#: name every cache written before that used, and a pointer to it still reads.
 METADATA_FILE = "metadata.json"
 _LAST_METADATA_SIGNATURE_KEY = "_local_persistence_metadata_signature"
 #: DATA-47 — the manifest pointer written with that file, reused while nothing
 #: changed (it lists every dataset's tables, which the signature does not).
 _LAST_METADATA_POINTER_KEY = "_local_persistence_metadata_pointer"
+#: #412 — the cache files the manifest this session last wrote or restored
+#: names, as paths relative to the cache folder. What the next save's manifest
+#: no longer names is this session's to remove at once (see `_remove_unreferenced`).
+_LAST_REFERENCED_KEY = "_local_persistence_referenced"
+#: The files this module writes, and so may remove: a dataset's frames — a
+#: random token per write, or before #412 a slug of its name — and the metadata
+#: sidecar, ``metadata.json`` before #412 and ``metadata-<token>.json`` since.
+_FRAME_FILE_RE = re.compile(r"^[0-9a-f]+-(?:words|fixations|raw_gaze)\.parquet$")
+_METADATA_FILE_RE = re.compile(r"^metadata(?:-[0-9a-f]+)?\.json$")
+#: An unnamed file this session did not retire itself is removed only by the
+#: session's first save — a pass at startup, not one per save, since a file
+#: another tab or process sharing the folder still names would otherwise be
+#: swept from under it on every save, and re-encoded by it on every next one —
+#: and only once it is this old, in seconds: a younger one may be another
+#: process's save not yet swapped in. Anything older is an interrupted save's
+#: leftover, or a manifest's that has since been replaced.
+_STALE_AFTER_S = 600.0
+_SWEPT_KEY = "_local_persistence_swept"
 _STATE_LOCK = threading.RLock()
 _LOGGER = logging.getLogger(__name__)
 _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
@@ -272,10 +303,6 @@ def _metadata_signature(session: MutableMapping[str, Any]) -> list:
     return metadata_mod.store_signature(session)
 
 
-def _dataset_slug(name: str) -> str:
-    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:20]
-
-
 def _dataset_identity(session: MutableMapping[str, Any]) -> list:
     """Cheap session identity for datasets whose frames are immutable objects."""
     datasets = []
@@ -368,61 +395,87 @@ def _atomic_text(source: str, destination: Path) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def _new_token() -> str:
+    """A fresh name for one write's files (#412): never one a manifest names."""
+    return secrets.token_hex(8)
+
+
+def _write_dataset(payload: dict, frames_dir: Path, written: list[Path]) -> dict:
+    """Write one dataset's frames under a fresh token; its manifest entry.
+
+    Each path goes into ``written`` before its write, so a save that fails
+    can remove what it left (see :func:`save_state`).
+    """
+    token = _new_token()
+    metadata = {k: _json_safe(v) for k, v in payload.items() if k not in _FRAME_KEYS}
+    frame_files = {}
+    frame_rows = {}
+    for frame_key in _FRAME_KEYS:
+        frame = payload.get(frame_key)
+        if not isinstance(frame, pd.DataFrame):
+            frame = pd.DataFrame()
+        filename = f"{token}-{frame_key}.parquet"
+        written.append(frames_dir / filename)
+        _atomic_parquet(frame, frames_dir / filename)
+        frame_files[frame_key] = f"datasets/{filename}"
+        frame_rows[frame_key] = len(frame)
+    # ``rows`` is reporting-only (cache_status / the in-app panel say how
+    # much is stored without opening the Parquet files). The restore path
+    # reads ``frames`` alone, so an older manifest without it still loads.
+    return {"metadata": metadata, "frames": frame_files, "rows": frame_rows}
+
+
 def _manifest_for(
-    session: MutableMapping[str, Any], root: Path, *, reuse_datasets: bool
+    session: MutableMapping[str, Any],
+    root: Path,
+    dataset_identity: list,
+    written: list[Path],
 ) -> dict:
+    """The manifest this save writes, with the frames of every changed dataset
+    written beside it under new names (``written`` lists them).
+
+    A dataset reuses its last entry — no Parquet is written — when its
+    identity is the one that entry was written for and the files it names are
+    still there; any other is written afresh. Per dataset, so adding one never
+    rewrites the others. The existence check is a ``stat`` per frame: another
+    session sharing the folder may have removed them since (#412).
+    """
     cached_entries = session.get(_LAST_DATASET_ENTRIES_KEY)
-    datasets = (
-        dict(cached_entries)
-        if reuse_datasets and isinstance(cached_entries, dict)
-        else {}
-    )
+    last_entries = cached_entries if isinstance(cached_entries, dict) else {}
+    last_identity = {
+        item[0]: item for item in session.get(_LAST_DATASET_IDENTITY_KEY) or ()
+    }
+    identity = {item[0]: item for item in dataset_identity}
     frames_dir = root / "datasets"
     frames_dir.mkdir(parents=True, exist_ok=True)
-    if reuse_datasets:
-        # A manifest written before ``rows`` existed is still restorable, and
-        # restoring seeds these entries verbatim — so without this backfill an
-        # upgraded install would reuse row-less entries forever and the panel
-        # would read "1 dataset · 0 rows · 812 MB". Reuse means the live frames
-        # ARE the ones on disk (_dataset_identity matched), so counting them is
-        # accurate and free (len is O(1)); no Parquet is rewritten.
-        live = dict(session.get("_datasets", {}))
-        for name, entry in list(datasets.items()):
-            if isinstance(entry, dict) and not entry.get("rows"):
-                payload = live.get(name)
-                if isinstance(payload, dict):
-                    datasets[name] = {
-                        **entry,
-                        "rows": {
-                            frame_key: len(payload[frame_key])
-                            for frame_key in _FRAME_KEYS
-                            if isinstance(payload.get(frame_key), pd.DataFrame)
-                        },
-                    }
-    if not reuse_datasets:
-        for name, payload in dict(session.get("_datasets", {})).items():
-            slug = _dataset_slug(str(name))
-            metadata = {
-                k: _json_safe(v) for k, v in payload.items() if k not in _FRAME_KEYS
-            }
-            frame_files = {}
-            frame_rows = {}
-            for frame_key in _FRAME_KEYS:
-                frame = payload.get(frame_key)
-                if not isinstance(frame, pd.DataFrame):
-                    frame = pd.DataFrame()
-                filename = f"{slug}-{frame_key}.parquet"
-                _atomic_parquet(frame, frames_dir / filename)
-                frame_files[frame_key] = f"datasets/{filename}"
-                frame_rows[frame_key] = len(frame)
-            # ``rows`` is reporting-only (cache_status / the in-app panel say how
-            # much is stored without opening the Parquet files). The restore path
-            # reads ``frames`` alone, so an older manifest without it still loads.
-            datasets[str(name)] = {
-                "metadata": metadata,
-                "frames": frame_files,
-                "rows": frame_rows,
-            }
+    datasets = {}
+    for name, payload in dict(session.get("_datasets", {})).items():
+        name = str(name)
+        entry = last_entries.get(name)
+        if (
+            isinstance(entry, dict)
+            and name in last_identity
+            and last_identity[name] == identity.get(name)
+            and _entry_files_present(root, entry)
+        ):
+            if not entry.get("rows") and isinstance(payload, dict):
+                # A manifest written before ``rows`` existed is still
+                # restorable, and restoring seeds these entries verbatim — so
+                # without this backfill an upgraded install would reuse row-less
+                # entries forever and the panel would read "1 dataset · 0 rows ·
+                # 812 MB". Reuse means the live frames ARE the ones on disk, so
+                # counting them is accurate and free (len is O(1)).
+                entry = {
+                    **entry,
+                    "rows": {
+                        frame_key: len(payload[frame_key])
+                        for frame_key in _FRAME_KEYS
+                        if isinstance(payload.get(frame_key), pd.DataFrame)
+                    },
+                }
+            datasets[name] = entry
+            continue
+        datasets[name] = _write_dataset(payload, frames_dir, written)
 
     # A stored dataset this session could not read goes back exactly as it was
     # found — entry and files untouched — so a save never costs the cache a
@@ -449,14 +502,23 @@ def _manifest_for(
 
 
 def _save_metadata(
-    session: MutableMapping[str, Any], root: Path, signature: list
-) -> dict | None:
-    """DATA-38 — write the attached tables to :data:`METADATA_FILE` if they changed.
+    session: MutableMapping[str, Any],
+    root: Path,
+    signature: list,
+    written: list[Path],
+) -> tuple[dict | None, dict]:
+    """DATA-38 — write the attached tables to a new sidecar if they changed.
 
-    Returns the manifest's pointer to them, or ``None`` (and removes the file)
-    when nothing is attached. The tables are `metadata`'s JSON payloads; the
-    pointer is optional, so a manifest without it (every one written
-    before this) still restores, and the schema version does not move.
+    Returns the manifest's pointer to them (``None`` when nothing is attached)
+    and the bookkeeping to keep once a manifest naming it is in place —
+    ``{key: value}``, ``None`` meaning "forget". The tables are `metadata`'s
+    JSON payloads; the pointer is optional, so a manifest without it (every
+    one written before DATA-38) still restores, and the schema version does
+    not move.
+
+    #412: a change is written to a new ``metadata-<token>.json`` (listed in
+    ``written``), never over the file the current manifest names, and nothing
+    is deleted here — the old file goes once the new manifest is in place.
     """
     from . import metadata as metadata_mod
 
@@ -466,43 +528,50 @@ def _save_metadata(
         # (often none) would replace or delete them, so the file and the
         # manifest's pointer stay as they are until a retry or a discard.
         pointer = held.get("pointer")
-        return dict(pointer) if isinstance(pointer, dict) else None
-    path = root / METADATA_FILE
+        return (dict(pointer) if isinstance(pointer, dict) else None), {}
+    forget = {_LAST_METADATA_SIGNATURE_KEY: None, _LAST_METADATA_POINTER_KEY: None}
     if not signature:
-        path.unlink(missing_ok=True)
-        session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
-        return None
+        return None, forget
     pointer = session.get(_LAST_METADATA_POINTER_KEY)
     if (
-        session.get(_LAST_METADATA_SIGNATURE_KEY) != signature
-        or not path.is_file()
-        or not isinstance(pointer, dict)
+        session.get(_LAST_METADATA_SIGNATURE_KEY) == signature
+        and isinstance(pointer, dict)
+        and not _metadata_file_problem(root, pointer)
     ):
-        # DATA-47: one entry per dataset, `{"datasets": {name: {grain: …}}}`.
-        datasets = metadata_mod.dataset_payloads(session)
-        if not datasets:
-            path.unlink(missing_ok=True)
-            session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
-            session.pop(_LAST_METADATA_POINTER_KEY, None)
-            return None
-        # No `sort_keys`: each row keeps its columns in the table's own order.
-        encoded = json.dumps(_json_safe({"datasets": datasets}), ensure_ascii=False)
-        _atomic_text(encoded, path)
-        pointer = {
-            "file": METADATA_FILE,
-            "tables": [
-                f"{name}:{grain}"
-                for name, tables in datasets.items()
-                for grain in tables
-            ],
-        }
-        session[_LAST_METADATA_SIGNATURE_KEY] = signature
-        session[_LAST_METADATA_POINTER_KEY] = pointer
-    return pointer
+        return pointer, {}
+    # DATA-47: one entry per dataset, `{"datasets": {name: {grain: …}}}`.
+    datasets = metadata_mod.dataset_payloads(session)
+    if not datasets:
+        return None, forget
+    # No `sort_keys`: each row keeps its columns in the table's own order.
+    encoded = json.dumps(_json_safe({"datasets": datasets}), ensure_ascii=False)
+    name = f"metadata-{_new_token()}.json"
+    written.append(root / name)
+    _atomic_text(encoded, root / name)
+    pointer = {
+        "file": name,
+        "tables": [
+            f"{dataset}:{grain}"
+            for dataset, tables in datasets.items()
+            for grain in tables
+        ],
+    }
+    return pointer, {
+        _LAST_METADATA_SIGNATURE_KEY: signature,
+        _LAST_METADATA_POINTER_KEY: pointer,
+    }
 
 
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
-    """Atomically save local datasets and durable session preferences."""
+    """Save local datasets and durable session preferences, all or nothing.
+
+    #412: what changed is written to new files, and the manifest naming them
+    replaces the old one in a single atomic rename — the save's only
+    replacement. A failure before it leaves the old manifest and every file it
+    names as they were (the new files are removed again), so the next launch
+    restores the whole previous session; after it, the whole new one. Files no
+    manifest names any longer are removed only once the new one is in place.
+    """
     with _STATE_LOCK:
         failed = _failed(session)
         live_names = {str(name) for name in dict(session.get("_datasets", {}))}
@@ -517,27 +586,33 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
             return False
         root.mkdir(parents=True, exist_ok=True)
         dataset_identity = _dataset_identity(session)
-        reuse_datasets = session.get(
-            _LAST_DATASET_IDENTITY_KEY
-        ) == dataset_identity and isinstance(
-            session.get(_LAST_DATASET_ENTRIES_KEY), dict
-        )
-        manifest = _manifest_for(session, root, reuse_datasets=reuse_datasets)
-        # Written before the manifest, so a manifest never names a file that is
-        # not there yet.
-        metadata = _save_metadata(session, root, metadata_signature)
-        if metadata:
-            manifest["metadata"] = metadata
-        # DATA-32: the dataset table's remembered counts ride along with the
-        # datasets they describe — one small dict, and it is what stops a
-        # restored session recounting every corpus it has ever opened. Written
-        # here rather than inside `_manifest_for` because it is session state,
-        # not a frame on disk.
-        counts = session.get(DATASET_COUNTS_STORE_KEY)
-        if isinstance(counts, dict) and counts:
-            manifest["dataset_counts"] = _json_safe(counts)
-        encoded = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)
-        _atomic_text(encoded, root / "manifest.json")
+        written: list[Path] = []
+        swapped = False
+        try:
+            manifest = _manifest_for(session, root, dataset_identity, written)
+            metadata, metadata_bookkeeping = _save_metadata(
+                session, root, metadata_signature, written
+            )
+            if metadata:
+                manifest["metadata"] = metadata
+            # DATA-32: the dataset table's remembered counts ride along with the
+            # datasets they describe — one small dict, and it is what stops a
+            # restored session recounting every corpus it has ever opened.
+            # Written here rather than inside `_manifest_for` because it is
+            # session state, not a frame on disk.
+            counts = session.get(DATASET_COUNTS_STORE_KEY)
+            if isinstance(counts, dict) and counts:
+                manifest["dataset_counts"] = _json_safe(counts)
+            encoded = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)
+            # The commit point: before this rename the old manifest is the
+            # cache, after it the new one is.
+            _atomic_text(encoded, root / "manifest.json")
+            swapped = True
+        finally:
+            if not swapped:
+                # Named by no manifest: this save's files would only be litter.
+                for path in written:
+                    _unlink_quietly(path)
         session[_LAST_FINGERPRINT_KEY] = fingerprint
         session[_LAST_DATASET_IDENTITY_KEY] = dataset_identity
         # The live datasets' entries only: a held-back one is merged in by
@@ -549,7 +624,118 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
             for name, entry in manifest["datasets"].items()
             if name not in held_back
         }
+        for key, value in metadata_bookkeeping.items():
+            if value is None:
+                session.pop(key, None)
+            else:
+                session[key] = value
+        referenced = _manifest_references(root, manifest)
+        previous = session.get(_LAST_REFERENCED_KEY)
+        retired = (set(previous) if isinstance(previous, list) else set()) - referenced
+        session[_LAST_REFERENCED_KEY] = sorted(referenced)
+        _remove_unreferenced(
+            root, referenced, retired, sweep=not session.get(_SWEPT_KEY)
+        )
+        session[_SWEPT_KEY] = True
         return True
+
+
+def _manifest_references(root: Path, manifest: Any) -> set[str]:
+    """The cache files ``manifest`` names, relative to ``root`` (#412).
+
+    Tolerant of any shape, since a manifest on disk can hold anything: what
+    does not name a file inside the cache folder names nothing to keep.
+    """
+    referenced: set[str] = set()
+    if not isinstance(manifest, dict):
+        return referenced
+    datasets = manifest.get("datasets")
+    for entry in datasets.values() if isinstance(datasets, dict) else ():
+        frames = entry.get("frames") if isinstance(entry, dict) else None
+        for relative in frames.values() if isinstance(frames, dict) else ():
+            plain = _plain_frame_file(relative)
+            if plain:
+                referenced.add(plain)
+                continue
+            try:
+                referenced.add(f"datasets/{_frame_path(root, relative).name}")
+            except (ValueError, OSError):
+                continue
+    pointer = manifest.get("metadata")
+    if isinstance(pointer, dict):
+        try:
+            referenced.add(_metadata_path(root, pointer).name)
+        except (ValueError, OSError):
+            pass
+    return referenced
+
+
+def _plain_frame_file(relative: Any) -> str | None:
+    """``relative`` when it is a frame path of the shape this module writes —
+    ``datasets/<name>`` with one of its own file names, which nothing can
+    resolve outside the cache folder — else ``None``.
+
+    The save path's shortcut past :func:`_frame_path`'s two ``resolve`` calls
+    per frame, which were most of a settings-only save's time; anything else
+    still goes through it.
+    """
+    if not isinstance(relative, str):
+        return None
+    folder, _, name = relative.partition("/")
+    return relative if folder == "datasets" and _FRAME_FILE_RE.match(name) else None
+
+
+def _entry_files_present(root: Path, entry: dict) -> bool:
+    """Whether every frame a reused entry names is still on disk (#412)."""
+    frames = entry.get("frames")
+    if not isinstance(frames, dict):
+        return False
+    plain = [_plain_frame_file(relative) for relative in frames.values()]
+    if all(plain):
+        return all((root / relative).is_file() for relative in plain)
+    return not _entry_problem(root, entry)
+
+
+def _owned(relative: str) -> bool:
+    """Whether ``relative`` (to the cache folder) names a file of this module's."""
+    folder, _, name = relative.rpartition("/")
+    if folder == "datasets":
+        return bool(_FRAME_FILE_RE.match(name))
+    return not folder and bool(_METADATA_FILE_RE.match(name))
+
+
+def _remove_unreferenced(
+    root: Path, referenced: set[str], retired: set[str], *, sweep: bool
+) -> None:
+    """Remove the cache files the manifest just written does not name (#412).
+
+    Run after the swap, never before: until then the old manifest is the
+    cache. What this session's previous manifest named (``retired``) goes at
+    once. With ``sweep`` — the session's first save — every other unnamed file
+    of ours goes too, once it is :data:`_STALE_AFTER_S` old: the leftovers of an
+    interrupted save, or of a manifest another session replaced. Only this
+    module's own file names are touched, and a file that will not go is left.
+    """
+    now = time.time()
+    candidates = [(relative, root / relative) for relative in retired]
+    folders = ((root / "datasets", "datasets/"), (root, "")) if sweep else ()
+    for folder, prefix in folders:
+        try:
+            candidates += [(f"{prefix}{path.name}", path) for path in folder.iterdir()]
+        except OSError:
+            continue  # a folder that will not list is left to a later session
+    for relative, path in candidates:
+        if not _owned(relative):
+            continue
+        if relative in referenced:
+            continue
+        if relative not in retired:
+            try:
+                if now - path.stat().st_mtime < _STALE_AFTER_S:
+                    continue
+            except OSError:
+                continue
+        _unlink_quietly(path)
 
 
 def restore_state(
@@ -600,6 +786,9 @@ def _restore_manifest(
         session[_PAUSED_KEY] = True
         _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
         return False
+    # #412: what the manifest on disk names, so the save that replaces it
+    # removes what the new one no longer does.
+    session[_LAST_REFERENCED_KEY] = sorted(_manifest_references(root, manifest))
 
     # Each dataset restores on its own: one with a missing or damaged file
     # costs that dataset — held back, entry and files kept — never the
@@ -809,11 +998,12 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
     with _STATE_LOCK:
         entry = record.get("entry")
         frames = entry.get("frames") if isinstance(entry, dict) else None
-        paths = {
-            directory / "datasets" / f"{_dataset_slug(str(name))}-{key}.parquet"
-            for key in _FRAME_KEYS
-        }
-        for relative in (frames or {}).values() if isinstance(frames, dict) else ():
+        # Only the files its entry names. Not guessed from its name: since #412
+        # a rename keeps a dataset's files where they are, so the files named
+        # after this one's slug may be another's now. A file an entry too
+        # damaged to name it leaves behind goes with the next save's sweep.
+        paths = set()
+        for relative in frames.values() if isinstance(frames, dict) else ():
             try:
                 paths.add(_frame_path(directory, relative))
             except ValueError:
@@ -968,13 +1158,20 @@ def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) ->
         return 0
 
 
-def _read_metadata_file(root: Path, pointer: Any) -> Any:
-    """The metadata sidecar's JSON, from inside the cache folder only."""
+def _metadata_path(root: Path, pointer: Any) -> Path:
+    """Where a manifest's metadata pointer leads — only ever inside the cache
+    folder, directly (``metadata.json`` before #412, ``metadata-<token>.json``
+    since)."""
     name = str(_as_mapping(pointer).get("file") or "")
     path = (root / name).resolve()
-    if path.parent != root.resolve():
+    if not name or path.parent != root.resolve():
         raise ValueError(f"it names a file outside the cache folder ({name})")
-    return json.loads(path.read_text("utf-8"))
+    return path
+
+
+def _read_metadata_file(root: Path, pointer: Any) -> Any:
+    """The metadata sidecar's JSON, from inside the cache folder only."""
+    return json.loads(_metadata_path(root, pointer).read_text("utf-8"))
 
 
 def _metadata_failure_reason(exc: BaseException) -> str:
@@ -1028,10 +1225,26 @@ def discard_failed_metadata(session, root: Path | None = None) -> bool:
         return False
     directory = state_directory() if root is None else root
     with _STATE_LOCK:
-        _unlink_quietly(directory / METADATA_FILE)
+        try:
+            path = _metadata_path(directory, held.get("pointer"))
+        except ValueError:
+            # A pointer that names no file in the cache folder is not followed.
+            path = directory / METADATA_FILE
+        _unlink_quietly(path)
         session.pop(_LAST_METADATA_SIGNATURE_KEY, None)
         session.pop(_LAST_METADATA_POINTER_KEY, None)
     return True
+
+
+def _metadata_files(root: Path) -> list[Path]:
+    """Every metadata sidecar in ``root``: the pre-#412 one and the versioned."""
+    if not root.is_dir():
+        return []
+    return sorted(
+        path
+        for path in root.iterdir()
+        if _METADATA_FILE_RE.match(path.name) and path.is_file()
+    )
 
 
 def forget_state(root: Path) -> None:
@@ -1041,7 +1254,8 @@ def forget_state(root: Path) -> None:
         if manifest.exists():
             manifest.unlink()
         (root / RESTORE_MARKER_NAME).unlink(missing_ok=True)
-        (root / METADATA_FILE).unlink(missing_ok=True)
+        for path in _metadata_files(root):
+            path.unlink(missing_ok=True)
         frames_dir = root / "datasets"
         if frames_dir.is_dir():
             for path in frames_dir.glob("*.parquet"):
@@ -1052,15 +1266,6 @@ def forget_state(root: Path) -> None:
                 pass
 
 
-def _reslug_entry(entry: Any, slug: str) -> dict:
-    """One manifest dataset entry with its frame paths moved onto ``slug``."""
-    frames = {
-        frame_key: f"datasets/{slug}-{frame_key}.parquet"
-        for frame_key in dict(entry.get("frames", {}))
-    }
-    return {**dict(entry), "frames": frames}
-
-
 def rename_cached_dataset(
     session: MutableMapping[str, Any],
     old: str,
@@ -1069,35 +1274,29 @@ def rename_cached_dataset(
 ) -> bool:
     """Follow a dataset rename (DATA-23) through the cache instead of rewriting it.
 
-    A dataset's Parquet files are named after ``_dataset_slug(name)``, so a rename
-    would otherwise leave the old slug's files behind as orphans nothing deletes,
-    and make the next save re-encode every frame under the new slug. Renaming the
-    files, re-keying ``manifest.json`` and re-keying this session's reuse
-    bookkeeping keeps the next :func:`save_state` on the cheap ``reuse_datasets``
-    path — it rewrites the manifest only.
+    A dataset's Parquet files are not named after the dataset (#412 — a token
+    per write; a cache from before that names them after the old name's slug,
+    and keeps those names), so a rename moves no file: re-keying
+    ``manifest.json`` — one atomic replacement — and this session's reuse
+    bookkeeping keeps the next :func:`save_state` on the cheap reuse path, which
+    rewrites the manifest only and leaves no orphan behind.
 
     Call it **after** the store itself has been re-keyed: the new reuse identity is
     read from the live ``session["_datasets"]``. Best-effort like the rest of this
     module — on any failure the session's bookkeeping is dropped so the next save
-    rebuilds the cache in full rather than trusting a half-moved one.
+    rebuilds the cache in full rather than trusting it.
     """
     if old == new:
         return False
     directory = state_directory() if root is None else root
     with _STATE_LOCK:
         try:
-            old_slug, new_slug = _dataset_slug(old), _dataset_slug(new)
-            frames_dir = directory / "datasets"
-            for frame_key in _FRAME_KEYS:
-                source = frames_dir / f"{old_slug}-{frame_key}.parquet"
-                if source.is_file():
-                    os.replace(source, frames_dir / f"{new_slug}-{frame_key}.parquet")
             manifest_path = directory / "manifest.json"
             if manifest_path.is_file():
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 datasets = dict(manifest.get("datasets", {}))
                 if old in datasets:
-                    datasets[new] = _reslug_entry(datasets.pop(old), new_slug)
+                    datasets[new] = datasets.pop(old)
                     manifest["datasets"] = datasets
                     values = dict(manifest.get("session", {}))
                     if values.get("data_source_choice") == old:
@@ -1112,7 +1311,7 @@ def rename_cached_dataset(
             entries = session.get(_LAST_DATASET_ENTRIES_KEY)
             if isinstance(entries, dict) and old in entries:
                 entries = dict(entries)
-                entries[new] = _reslug_entry(entries.pop(old), new_slug)
+                entries[new] = entries.pop(old)
                 session[_LAST_DATASET_ENTRIES_KEY] = entries
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
             return True
@@ -1288,6 +1487,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             _RESTORED_PAYLOAD_KEY,
             _LAST_METADATA_SIGNATURE_KEY,
             _LAST_METADATA_POINTER_KEY,
+            _LAST_REFERENCED_KEY,
             # DATA-32: the remembered counts are part of what "forget this
             # session" means — the ask named clearing the cache explicitly.
             DATASET_COUNTS_STORE_KEY,
@@ -1319,7 +1519,7 @@ def clear_saved_work(session) -> bool:
 
 def _cache_files(root: Path) -> list:
     """The files this module owns under ``root`` (mirrors forget_state)."""
-    files = [root / "manifest.json", root / RESTORE_MARKER_NAME, root / METADATA_FILE]
+    files = [root / "manifest.json", root / RESTORE_MARKER_NAME, *_metadata_files(root)]
     frames_dir = root / "datasets"
     if frames_dir.is_dir():
         files.extend(sorted(frames_dir.glob("*.parquet")))
@@ -1447,12 +1647,12 @@ def _metadata_file_problem(root: Path, pointer: dict) -> str:
     """Why the manifest's metadata tables cannot restore, by a ``stat``; ``""``
     when nothing is wrong that one can see (a corrupt file shows only when the
     app reads it, as for datasets)."""
-    name = str(pointer.get("file") or "")
-    path = (root / name).resolve()
-    if not name or path.parent != root.resolve():
+    try:
+        path = _metadata_path(root, pointer)
+    except ValueError:
         return "its entry in the manifest is damaged"
     if not path.is_file():
-        return f"its file is missing ({name})"
+        return f"its file is missing ({path.name})"
     return ""
 
 

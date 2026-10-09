@@ -1,0 +1,1 @@
+Corpus Analysis groups defined on a field only one table has (a difficulty level on the Words table, say) now hold the same trials in every measure and count: each group's fixation measures no longer pool every fixation, a field neither table has makes the group unavailable instead of selecting everyone, and a trial the two tables disagree on is left out with a note.

@@ -267,7 +267,12 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/data.py:harmonize_frames",
         unit="px",
         precedence="Only when x/y are absent; recorded coordinates always win.",
-        missing="No matching word box ⇒ the fixation keeps no coordinates.",
+        missing=(
+            "No matching word box, or no word id (blank, or not a number) ⇒ the "
+            "fixation keeps no coordinates — a missing id never matches a box "
+            "with none. No x/y mapped and a Word/IA ID column with no numbers "
+            "at all ⇒ UnplacedFixationsError, never an empty figure (#412)."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _CLI),

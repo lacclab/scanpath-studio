@@ -848,25 +848,16 @@ class TestCorpusGroupingByTrialAndTextAttributes:
             "hard",
         ]
 
-    def test_a_trial_cohort_raises_no_word_only_warning(self):
-        """Both key columns are on the fixation table, so nothing is missing."""
-        from scanpath_studio import tabs
+    def test_a_trial_cohort_needs_no_resolving(self):
+        """Its readings are the reading key every table carries, so #412's
+        resolution leaves it as it is and nothing is missing."""
+        from scanpath_studio import aggregation
 
-        class _Host:
-            def __init__(self):
-                self.warned: list = []
-
-            def warning(self, body):
-                self.warned.append(body)
-
-        host = _Host()
         pairs = {("participant_id", "trial_id"): [("p1", "t1")]}
-        tabs._warn_word_only_group_fields(host, self.FIX, pairs)
-        assert host.warned == []
-        tabs._warn_word_only_group_fields(
-            host, self.FIX.drop(columns="trial_id"), pairs
-        )
-        assert host.warned and "Participant × Trial" in host.warned[0]
+        resolved = aggregation.resolve_group_spec(pairs, self.FIX, self.FIX)
+        assert resolved.spec == pairs and resolved.available
+        selected = aggregation.apply_group(self.FIX, resolved.spec)
+        assert selected["duration_ms"].tolist() == [1.0]
 
 
 class TestTheExportOptOut:

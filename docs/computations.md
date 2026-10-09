@@ -197,7 +197,7 @@ Place a fixation with no x/y at its word box's center.
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Missing & edge cases** | No matching word box ⇒ the fixation keeps no coordinates. |
+| **Missing & edge cases** | No matching word box, or no word id (blank, or not a number) ⇒ the fixation keeps no coordinates — a missing id never matches a box with none. No x/y mapped and a Word/IA ID column with no numbers at all ⇒ UnplacedFixationsError, never an empty figure (#412). |
 | **Precedence & caveats** | Only when x/y are absent; recorded coordinates always win. |
 | **Code** | `scanpath_studio/data.py:harmonize_frames` |
 | **Consumers** | UI, API, CLI |

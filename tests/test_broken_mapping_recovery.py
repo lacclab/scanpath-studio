@@ -186,6 +186,34 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
     assert finalize and finalize[0].disabled
 
 
+def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
+    """#412: fixations with no X/Y are placed by their Word/IA ID, which is read
+    as a number — text ids put every one on the first word's box. Now the add
+    is blocked, saying why, directly above ✅ Add dataset."""
+    from scanpath_studio import app
+
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=["w0", "w1", "w2"])
+    fixations = _WIZARD_FIXATIONS.drop(columns=["x", "y"]).assign(
+        word_id=["w0", "w1", "w2"]
+    )
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_words": words, "col_map_fix": fixations}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    said = [e.value for e in at.error if "holds no numbers" in e.value]
+    assert said, "text Word/IA IDs loaded without a word"
+    assert "`word_id`" in said[0] and "Map the fixations' X and Y" in said[0]
+    finalize = [b for b in at.button if b.key == "wizard_finalize"]
+    assert finalize and finalize[0].disabled
+    assert "_wizard_finalize_payload" not in at.session_state
+
+
 def test_a_collapsed_wizard_upload_recovers_like_any_other_bad_mapping(
     one_sided_upload,
 ):

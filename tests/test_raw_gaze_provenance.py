@@ -15,6 +15,7 @@ from scanpath_studio import app
 from scanpath_studio.constants import DEMO_CHOICE, MANUAL_SAMPLE_CHOICE
 from scanpath_studio.export import ExportOptions, bulk_export
 from scanpath_studio.tabs import _raw_gaze_missing_note, _synthetic_raw_gaze_plot_note
+from scanpath_studio.utils import reading_key
 from tests.conftest import APP_SCRIPT
 
 #: The one demo trial the bundled (synthesized) samples cover, and one they don't.
@@ -114,7 +115,7 @@ def _demo(trial: str) -> AppTest:
 def test_the_demo_says_what_its_raw_gaze_is_at_the_plot(trial, synthetic, missing):
     at = _demo(trial)
     assert not at.exception, at.exception
-    assert at.session_state["single_trial_id"] == trial
+    assert at.session_state["single_trial_id"] == reading_key(PARTICIPANT, trial)
     assert at.session_state["global_show_raw_gaze"] is True
     captions = " ".join(str(c.value) for c in at.caption)
     warnings = " ".join(str(w.value) for w in at.warning)

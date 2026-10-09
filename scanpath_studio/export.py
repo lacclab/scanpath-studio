@@ -32,7 +32,7 @@ import io
 import json
 import re
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -720,14 +720,146 @@ def render_pattern(
     return _PLACEHOLDER_RE.sub(_sub, pattern)
 
 
+#: The tables a bundle can write once across every trial, as
+#: `aggregate/all_<table>` — each per-trial table artifact, and the reader
+#: summary, which has no per-trial form.
+_AGGREGATE_TABLES = (
+    "fixations",
+    "raw_gaze",
+    "measures",
+    "word_measures",
+    "saccades",
+    "sentence_measures",
+    "trial_summary",
+    "characters",
+    "cleaning_qa",
+    "reader_summary",
+)
+#: The attached metadata tables, as `metadata/<grain>` (DATA-20/29).
+_METADATA_TABLES = ("participants", "trials", "texts")
+
+
+def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
+    """The paths a bulk export writes for itself, whichever trials it holds (#412).
+
+    Reserved before any trial's file is named (:class:`ArchiveNames`), so a
+    path pattern can never give a trial's file one of them — the README, the
+    ``index.csv`` inventory, ``columns.json``, ``run_config.json``,
+    ``annotations.json``, the combined tables and the metadata tables, in each
+    table format. ``options`` narrows the combined tables to the ones a run
+    with them can write; without it, every name a bundle can have.
+    """
+    formats = options.table_formats() if options is not None else ["csv", "parquet"]
+    if options is None or (options.combine_trials and options.any_table()):
+        combined = _AGGREGATE_TABLES
+    elif options.include_analysis_family:
+        combined = ("reader_summary",)
+    else:
+        combined = ()
+    names = [
+        "README.md",
+        "index.csv",
+        "columns.json",
+        "run_config.json",
+        "annotations.json",
+    ]
+    for fmt in formats:
+        names += [f"aggregate/all_{table}.{fmt}" for table in combined]
+        names += [f"metadata/{table}.{fmt}" for table in _METADATA_TABLES]
+    return names
+
+
+class ArchiveNames:
+    """Every member name one ZIP has given out, so that no two collide (#412).
+
+    A bundle's own files are reserved up front (:func:`bundle_member_names`)
+    and keep their names (:meth:`own`); a file the user's path pattern names
+    takes the first free ``-2``, ``-3`` … variant of its name instead
+    (:meth:`claim`) — so a pattern of ``README.md`` writes ``README-2.md``
+    beside the README rather than a second ``README.md`` that hides it, and the
+    inventory names the file it describes. Names compare without case, since
+    unpacking on macOS or Windows merges ``README.md`` and ``readme.md`` into
+    one file; and a file never takes a folder's name, nor a folder a file's,
+    since the two cannot both be unpacked.
+    """
+
+    def __init__(self, reserved: Iterable[str] = ()) -> None:
+        self._files: set[str] = set()
+        self._folders: set[str] = set()
+        self._reserved: set[str] = set()
+        for path in reserved:
+            self._take(path)
+            self._reserved.add(path.casefold())
+
+    def _take(self, path: str) -> None:
+        key = path.casefold()
+        self._files.add(key)
+        parts = key.split("/")
+        self._folders.update("/".join(parts[:end]) for end in range(1, len(parts)))
+
+    def _free(self, parents: list[str], name: str, *, folder: bool) -> str:
+        """``name`` under ``parents``, or its first free ``-N`` variant."""
+
+        def taken(candidate: str) -> bool:
+            key = "/".join([*parents, candidate]).casefold()
+            # A folder may be shared; only a file may not have its name.
+            return key in self._files or (not folder and key in self._folders)
+
+        if not taken(name):
+            return name
+        stem, dot, suffix = name.rpartition(".")
+        base, tail = (stem, f".{suffix}") if dot and stem else (name, "")
+        n = 2
+        while taken(f"{base}-{n}{tail}"):
+            n += 1
+        return f"{base}-{n}{tail}"
+
+    def claim(self, path: str, *, record: bool = True) -> str:
+        """``path``, made free of every name given out so far, and recorded.
+
+        ``record=False`` only says what the name would be — for a file that
+        failed, listed in the inventory without taking the name from the next.
+        """
+        parts = path.split("/")
+        for index, name in enumerate(parts):
+            parts[index] = self._free(
+                parts[:index], name, folder=index < len(parts) - 1
+            )
+        path = "/".join(parts)
+        if record:
+            self._take(path)
+        return path
+
+    def own(self, path: str) -> str:
+        """A bundle's own member: its reserved name, given out once.
+
+        One that was not reserved is claimed like any other, so even a name
+        missing from :func:`bundle_member_names` never becomes a duplicate.
+        """
+        key = path.casefold()
+        if key in self._reserved:
+            self._reserved.discard(key)
+            return path
+        return self.claim(path)
+
+
 def resolve_export_path(
-    pattern: str, fields: dict, *, artifact: str, ext: str, used: set
+    pattern: str,
+    fields: dict,
+    *,
+    artifact: str,
+    ext: str,
+    used: ArchiveNames,
+    record: bool = True,
 ) -> str:
-    """The zip path for one artifact, de-duplicated against ``used``.
+    """The zip path for one artifact, made unique among the names in ``used``.
 
     Two trials can render to the same path (a pattern that omits the trial id,
-    say). Writing both would put two entries at one name in the zip and silently
-    lose one, so the second gets a ``-2`` suffix instead. ``used`` is mutated.
+    say), and a pattern can name a file as one of the bundle's own
+    (``README.md``). Writing both would put two entries at one name in the zip
+    and silently lose one, so the later file gets a ``-2`` suffix instead
+    (:class:`ArchiveNames`). ``used`` records the name unless ``record`` is
+    false.
     """
     path = render_pattern(
         pattern,
@@ -735,17 +867,7 @@ def resolve_export_path(
         as_path=True,
         multi_segment_fields=("artifact",),
     ).lstrip("/")
-    if path not in used:
-        used.add(path)
-        return path
-    stem, dot, suffix = path.rpartition(".")
-    base, tail = (stem, f"{dot}{suffix}") if dot else (path, "")
-    n = 2
-    while f"{base}-{n}{tail}" in used:
-        n += 1
-    path = f"{base}-{n}{tail}"
-    used.add(path)
-    return path
+    return used.claim(path, record=record)
 
 
 # --- EXP-2 · titles and captions on the exported figure -----------------------
@@ -1458,13 +1580,21 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
         f"{key_prefix}_path_pattern",
         "Path inside the ZIP. Use `/` for folders and `{…}` placeholders.",
     )
-    st.caption(
-        "Example: `"
-        + resolve_export_path(
-            path_pattern, fields, artifact="figure", ext="png", used=set()
+    plain, example = (
+        resolve_export_path(
+            path_pattern, fields, artifact="figure", ext="png", used=ArchiveNames(names)
         )
-        + "`"
+        for names in ((), bundle_member_names())
     )
+    # #412: a name the bundle keeps for its own files is not refused — the
+    # trial's file takes the next free one, which the example shows.
+    clash = (
+        f" — `{plain}` would clash with one of the bundle's own files, so it "
+        "gets the next free name."
+        if example != plain
+        else ""
+    )
+    st.caption(f"Example: `{example}`{clash}")
     return path_pattern
 
 
@@ -2158,12 +2288,14 @@ INVENTORY_COLUMNS = (
 )
 
 
-def _write_inventory(zf: zipfile.ZipFile, inventory: list[dict]) -> None:
+def _write_inventory(
+    zf: zipfile.ZipFile, inventory: list[dict], path: str = "index.csv"
+) -> None:
     """Write ``index.csv``: one row per file in the bundle, plus each requested
     file that failed and each reading skipped. ``status`` is ``written``,
     ``failed`` or ``skipped``; a file type nobody asked for has no row."""
     frame = pd.DataFrame(inventory, columns=list(INVENTORY_COLUMNS))
-    zf.writestr("index.csv", frame.to_csv(index=False))
+    zf.writestr(path, frame.to_csv(index=False))
 
 
 def screen_choices(*frames: pd.DataFrame | None) -> list[str]:
@@ -2495,6 +2627,12 @@ def bulk_export(
     )
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
+    # #412: every member's name comes from one registry, with the bundle's own
+    # files reserved first. A trial's file the path pattern names like one of
+    # them, or like another trial's, gets a `-2` instead of a second member of
+    # that name — which hid the README behind a plot config, and left the
+    # inventory pointing at whichever one a reader happened to open.
+    members = ArchiveNames(bundle_member_names(options))
     # The bundle's inventory, written last as `index.csv`: every file in it at
     # its actual path, and every requested file that failed, with the reading
     # and screen it belongs to.
@@ -2561,7 +2699,9 @@ def bulk_export(
         "failed (`status` = `failed`) or reading skipped (`skipped`). A file "
         "type that was not requested is not listed.",
         "- `per_trial/<participant>__<trial>/` holds each trial's files, "
-        "unless the File naming pattern moved them (`index.csv` has every path).",
+        "unless the File naming pattern moved them (`index.csv` has every path). "
+        "A file the pattern names like another, or like one of this bundle's "
+        "own files, has `-2`, `-3` … added to its name.",
         "- A trial shown on several screens adds `screens/screen-001-<id>/` "
         "inside its folder.",
         *(
@@ -2638,14 +2778,17 @@ def bulk_export(
             else []
         ),
     ]
-    zf.writestr("README.md", "\n".join(readme_lines))
-    _inventory("README.md", "readme", "written")
+    path = members.own("README.md")
+    zf.writestr(path, "\n".join(readme_lines))
+    _inventory(path, "readme", "written")
     if any(written.values()):
-        zf.writestr("columns.json", json.dumps(columns_manifest(written), indent=2))
-        _inventory("columns.json", "columns", "written")
+        path = members.own("columns.json")
+        zf.writestr(path, json.dumps(columns_manifest(written), indent=2))
+        _inventory(path, "columns", "written")
     if options.include_analysis_family:
+        path = members.own("run_config.json")
         zf.writestr(
-            "run_config.json",
+            path,
             json.dumps(
                 {
                     "generated_at": datetime.now(UTC).isoformat(),
@@ -2656,7 +2799,7 @@ def bulk_export(
                 default=str,
             ),
         )
-        _inventory("run_config.json", "run_config", "written")
+        _inventory(path, "run_config", "written")
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
@@ -2666,8 +2809,8 @@ def bulk_export(
     layer_formats = options.layer_formats()
     # EXP-1: a user pattern can map two trials to the same path (one that omits
     # the trial id, say). Two zip entries at one name silently loses a file, so
-    # `resolve_export_path` disambiguates against what's already been written.
-    used_paths: set = set()
+    # `resolve_export_path` disambiguates against `members` — every name given
+    # out so far, the bundle's own reserved among them.
     # The readers, trials and texts the bundle actually holds — what its
     # metadata tables are narrowed to at the end.
     exported_pairs: set[tuple[str, str]] = set()
@@ -2798,7 +2941,8 @@ def bulk_export(
                     _f,
                     artifact=artifact,
                     ext=ext,
-                    used=used_paths if reserve else set(used_paths),
+                    used=members,
+                    record=reserve,
                 )
 
             title = (
@@ -3083,7 +3227,7 @@ def bulk_export(
     }
     for fmt in options.table_formats():
         for artifact, table in stacked.items():
-            path = f"aggregate/all_{artifact}.{fmt}"
+            path = members.own(f"aggregate/all_{artifact}.{fmt}")
             progress.bytes_written += _write_table(
                 zf, path, table, fmt, *names_for(artifact)
             )
@@ -3108,7 +3252,7 @@ def bulk_export(
     )
     if participant_metadata is not None and not participant_metadata.empty:
         for fmt in options.table_formats():
-            path = f"metadata/participants.{fmt}"
+            path = members.own(f"metadata/participants.{fmt}")
             progress.bytes_written += _write_table(zf, path, participant_metadata, fmt)
             _inventory(path, "participant_metadata", "written")
     # DATA-29: and the trial table beside it, on the same terms — its own
@@ -3125,7 +3269,7 @@ def bulk_export(
     )
     if trial_metadata is not None and not trial_metadata.empty:
         for fmt in options.table_formats():
-            path = f"metadata/trials.{fmt}"
+            path = members.own(f"metadata/trials.{fmt}")
             progress.bytes_written += _write_table(zf, path, trial_metadata, fmt)
             _inventory(path, "trial_metadata", "written")
     # And the text table, the third grain — same reasoning again.
@@ -3140,7 +3284,7 @@ def bulk_export(
     )
     if text_metadata is not None and not text_metadata.empty:
         for fmt in options.table_formats():
-            path = f"metadata/texts.{fmt}"
+            path = members.own(f"metadata/texts.{fmt}")
             progress.bytes_written += _write_table(zf, path, text_metadata, fmt)
             _inventory(path, "text_metadata", "written")
     # UX-179: the exported trials' annotations, in the Data → Annotations file
@@ -3151,8 +3295,9 @@ def bulk_export(
         data = serialize(
             records_to_store(annotations_kept), dataset=annotation_dataset
         ).encode("utf-8")
-        zf.writestr("annotations.json", data)
-        _inventory("annotations.json", "annotations", "written")
+        path = members.own("annotations.json")
+        zf.writestr(path, data)
+        _inventory(path, "annotations", "written")
         progress.bytes_written += len(data)
     emit_status(
         status_callback,
@@ -3162,7 +3307,7 @@ def bulk_export(
         completed=progress.finished_trials,
         total=progress.total_trials,
     )
-    _write_inventory(zf, inventory)
+    _write_inventory(zf, inventory, members.own("index.csv"))
     progress.files_written = len(zf.namelist())
     zf.close()
     buf.seek(0)

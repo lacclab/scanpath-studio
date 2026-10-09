@@ -81,6 +81,7 @@ from .data import (
     INTERNAL_COLUMNS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
+    carries_mapped_text,
     coerce_bool_or_na,
     frame_fingerprint,
     mapping_value_preview,
@@ -9755,8 +9756,22 @@ def _compute_trial_filters(
 
 def _text_field_and_frame(words: pd.DataFrame, fixations: pd.DataFrame):
     """The text/passage id column to narrow by + the frame it lives on (prefer
-    fixations, where trials live). ``(None, fixations)`` when no text column."""
+    fixations, where trials live). ``(None, fixations)`` when no text column.
+
+    #412: not the fixations' when their ``text_id`` is only the trial-id
+    fallback and the Words table maps a real Text ID — the filter is decided
+    from the table with real texts (`data.select_trials`), so it offers those.
+    """
     for field in ("unique_text_id", "text_id"):
+        if (
+            field in fixations.columns
+            and field in words.columns
+            and not words.empty
+            and not fixations.empty
+            and not carries_mapped_text(fixations)
+            and carries_mapped_text(words)
+        ):
+            return field, words
         if field in fixations.columns:
             return field, fixations
         if field in words.columns:

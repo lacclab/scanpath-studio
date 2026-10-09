@@ -396,9 +396,13 @@ def _potec_fixations(
         char_boxes = _read_potec_ias(root, text_id)
         char_x = (char_boxes["start_x"] + char_boxes["end_x"]) / 2.0
         char_y = (char_boxes["start_y"] + char_boxes["end_y"]) / 2.0
-        centers = pd.DataFrame(
-            {"aoi": char_boxes["aoi"], "x": char_x, "y": char_y}
-        ).drop_duplicates("aoi")
+        # A box with no AOI index places nothing: the merge below would match
+        # it to every fixation with none (pandas joins NaN to NaN, #412).
+        centers = (
+            pd.DataFrame({"aoi": char_boxes["aoi"], "x": char_x, "y": char_y})
+            .dropna(subset=["aoi"])
+            .drop_duplicates("aoi")
+        )
         for path in sorted((base / source).glob(f"reader*_{text_id}_{suffix}.tsv")):
             reader_id = path.stem.removeprefix("reader").split("_")[0]
             if reader_set is not None and reader_id not in reader_set:

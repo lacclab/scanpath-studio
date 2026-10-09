@@ -261,8 +261,18 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
     ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
     second comparison dataset, which has no mapping flag of its own."""
     from .api import SchemaError
-    from .data import StimulusJoinError
+    from .data import StimulusJoinError, UnplacedFixationsError
 
+    if isinstance(exc, UnplacedFixationsError):
+        # #412: the fix is the fixations' mapping — X and Y, on this command line.
+        message = str(exc).replace("`", "'")
+        if not schema_flags:
+            return message
+        return (
+            f"{message}\nOn the command line, map them with --fix-schema: the "
+            "fixations' full mapping as JSON (or a path to a .json file), with "
+            '"x" and "y" naming its columns.'
+        )
     if isinstance(exc, StimulusJoinError):
         # DATA-49: the fix is a mapping, and here a mapping is a flag.
         message = str(exc).replace("`", "'")
@@ -1881,6 +1891,20 @@ def _compare_second_dataset(api, args, words, fixations):
         )
 
 
+def _trial_text_ids(*frames) -> pd.DataFrame | None:
+    """``[participant_id, trial_id, text_id]``, one row per trial, from the
+    first of ``frames`` that has it — ``None`` when none carries a text id."""
+    columns = ["participant_id", "trial_id", "text_id"]
+    parts = [
+        f[columns].drop_duplicates(columns[:2])
+        for f in frames
+        if f is not None and not f.empty and set(columns) <= set(f.columns)
+    ]
+    if not parts:
+        return None
+    return pd.concat(parts, ignore_index=True).drop_duplicates(columns[:2])
+
+
 def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
     """A trial or screen listing with its ids under the dataset's own names
     (DATA-66) — what ``--list-trials`` / ``--list-parts`` print."""
@@ -3016,37 +3040,19 @@ def render(argv: list[str]) -> None:
                 # `list_trials`'s combos is deliberately just
                 # (participant_id, trial_id) — text_id isn't part of its
                 # public contract — so bring it in here, from whichever
-                # frame has it, before projecting the text table onto it.
-                source = (
-                    fixations
-                    if not fixations.empty
-                    else words
-                    if not words.empty
-                    else join_frame
-                )
-                if "text_id" in source.columns:
+                # table has the trial, before projecting the text table.
+                texts = _trial_text_ids(fixations, words, join_frame)
+                if texts is not None:
                     combos = combos.merge(
-                        source[
-                            ["participant_id", "trial_id", "text_id"]
-                        ].drop_duplicates(),
-                        on=["participant_id", "trial_id"],
-                        how="left",
+                        texts, on=["participant_id", "trial_id"], how="left"
                     )
                     combos = _metadata.project_texts(attached_texts, combos)
-        # #374 F21: the text id too — the id the app shows a trial by.
-        source = fixations if not fixations.empty else words
-        if (
-            "text_id" not in combos.columns
-            and source is not None
-            and {"participant_id", "trial_id", "text_id"} <= set(source.columns)
-        ):
-            combos = combos.merge(
-                source[["participant_id", "trial_id", "text_id"]].drop_duplicates(
-                    ["participant_id", "trial_id"]
-                ),
-                on=["participant_id", "trial_id"],
-                how="left",
-            )
+        # #374 F21: the text id too — the id the app shows a trial by. #412:
+        # from whichever table has the trial, since every table's trials are
+        # listed.
+        texts = _trial_text_ids(fixations, words, raw_gaze)
+        if "text_id" not in combos.columns and texts is not None:
+            combos = combos.merge(texts, on=["participant_id", "trial_id"], how="left")
         print(
             f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
             "participant as -p and the trial as -t; the app shows a trial by "

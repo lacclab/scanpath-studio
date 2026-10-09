@@ -30,6 +30,7 @@ from tests.conftest import (
     add_benchmark_corpora,
     answer_setup_step,
     open_data_view,
+    picked_trial_id,
     pin_data_view,
     pin_view,
 )
@@ -4857,7 +4858,7 @@ class TestOpenTrialFromCorpusTable:
         at.run(timeout=60)
 
         target = "l7_1090_2_1_1_Ele_r0"
-        assert target != booted_on
+        assert target != picked_trial_id(booted_on)
         at.session_state[PENDING_TRIAL_KEY] = {
             "participant_id": None,
             "trial_id": target,
@@ -4866,7 +4867,7 @@ class TestOpenTrialFromCorpusTable:
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["single_trial_id"] == target
+        assert picked_trial_id(at.session_state["single_trial_id"]) == target
         # Consumed once it lands, so it can't re-apply over later navigation.
         assert PENDING_TRIAL_KEY not in at.session_state
 
@@ -4939,7 +4940,7 @@ class TestOpenTrialFromCorpusTable:
         at.session_state["main_nav"] = "Scanpath Visualization"
         at.run()
         assert not at.exception, at.exception
-        assert at.session_state["single_trial_id"] == "multipart_demo"
+        assert picked_trial_id(at.session_state["single_trial_id"]) == "multipart_demo"
         assert at.session_state["single_screen_id"] == "question"
 
 

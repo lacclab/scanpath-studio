@@ -26,6 +26,7 @@ from scanpath_studio.url_state import (
     _build_share_query,
     _restore_selection,
 )
+from scanpath_studio.utils import reading_key
 
 
 class _FakeSt:
@@ -95,7 +96,7 @@ class TestShareLinkIdentity:
             "trial_id": parsed["trial_id"][0],
         }
         assert _restore_selection(selection, _combos()) is True
-        assert fake_st.session_state["single_trial_id"] == "t3"
+        assert fake_st.session_state["single_trial_id"] == reading_key("p2", "t3")
         assert fake_st.session_state["single_select_trial_mode"] == "Trial"
 
     def test_settings_only_drops_both_ids(self, fake_st):

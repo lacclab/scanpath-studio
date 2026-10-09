@@ -1759,13 +1759,13 @@ def get_app_css() -> str:
     [data-testid="stLayoutWrapper"]:has(> .st-key-dataset_editor_bar),
     [data-testid="stLayoutWrapper"]:has(> .st-key-wiz_sticky_bar) {
         position: sticky;
-        top: 3.2rem;
+        top: 3.75rem;
         z-index: 60;
     }
     .st-key-dataset_editor_bar,
     .st-key-wiz_sticky_bar {
         background: var(--sps-page-bg);
-        padding: 0.35rem 0 0.4rem;
+        padding: 0.5rem 0 0.4rem;
         margin-bottom: 0.2rem;
         border-bottom: 1px solid rgba(128, 128, 128, 0.25);
     }

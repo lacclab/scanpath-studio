@@ -14821,6 +14821,9 @@ def _apply_remap() -> None:
                 "global_monitor_width_mm": setup.monitor_width_mm,
                 "global_viewing_distance_mm": setup.viewing_distance_mm,
                 "global_base_font_size": setup.base_font_size,
+                # #422: the setup's size is in px; a point size left on
+                # would replace it.
+                "global_use_stimulus_font_pt": False,
                 "global_font_family": setup.font_family,
                 "global_line_spacing": setup.line_spacing,
                 "global_scale_text_to_boxes": setup.scale_text_to_boxes,

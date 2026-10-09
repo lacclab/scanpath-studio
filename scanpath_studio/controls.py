@@ -7208,7 +7208,9 @@ def render_plot_controls(
             "Text",
             key="global_show_labels",
             persist_state="session",
-            help="Draw the reading text.",
+            help="Draw the reading text. Its font and size start from the "
+            "dataset's Recording setup (Data page); the rows below change only "
+            "this figure.",
         )
         # UX-81: the typography that draws this text lives beside the layer
         # that draws it. Reserved here and filled by the single

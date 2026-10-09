@@ -29,6 +29,7 @@ from .constants import (
     DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_STIMULUS_IMAGES_KEY,
+    DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
@@ -93,10 +94,20 @@ from .data import (
     validate_word_schema,
 )
 from .experimental_setup import (
+    FONT_CHOICES,
+    FONT_PT_RANGE,
+    FONT_PX_RANGE,
+    FONT_UNITS,
+    GENERIC_FONT,
+    OTHER_FONT,
     SETUP_GROUPS,
     Provenance,
     SetupSnapshot,
-    font_pt_to_px,
+    dpi_from_width,
+    font_choice,
+    font_choice_css,
+    font_other_text,
+    font_size_px,
 )
 from .fields import switch, tooltip
 from .menu import view_label
@@ -198,7 +209,12 @@ def _reset_wizard_widgets() -> None:
         "wizard_setup_screen_h",
         "wizard_setup_monitor_mm",
         "wizard_setup_font_pt",
-        "wizard_setup_font_family",
+        "wizard_setup_font_px",
+        "wizard_setup_font_unit",
+        "wizard_setup_line_spacing",
+        "wizard_setup_font_mode",
+        "wizard_setup_font_name",
+        "wizard_setup_font_other",
         "_wizard_restored_setup",
         "_wizard_setup_restored_applied",
         _SETUP_AUTO_KEY,
@@ -317,6 +333,20 @@ def _source_recipe(
     }
 
 
+def text_setup_values(snapshot: SetupSnapshot) -> dict:
+    """The figure's text-sizing keys a dataset's setup writes (#422).
+
+    The size is the setup's in px, so the figure's own point size is switched
+    off with it: left on, `seed_canvas_state` recomputes the size from the
+    figure's last point size and the dataset's size never shows."""
+    return {
+        "global_base_font_size": int(snapshot.base_font_size),
+        "global_use_stimulus_font_pt": False,
+        "global_line_spacing": float(snapshot.line_spacing),
+        "global_scale_text_to_boxes": bool(snapshot.scale_text_to_boxes),
+    }
+
+
 def _apply_setup_to_figure(setup: dict | None) -> None:
     """A newly added dataset's recording setup, onto the figure's settings.
 
@@ -333,8 +363,7 @@ def _apply_setup_to_figure(setup: dict | None) -> None:
         st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
         st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
     if snapshot.text_provenance is not None:
-        st.session_state["global_base_font_size"] = snapshot.base_font_size
-        st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
+        st.session_state.update(text_setup_values(snapshot))
     st.session_state["global_font_family"] = snapshot.font_family
 
 
@@ -2518,39 +2547,10 @@ _TEXT_DEFAULT = "Use a default (16 px)"
 # monospace), so it starts there and never holds up *Add dataset*.
 _FONT_KNOW = "I know the font"
 _FONT_UNKNOWN = "I don't know (generic monospace)"
-_FONT_OTHER = "Other…"
-#: The fonts offered under *I know the font*, each with the generic family the
-#: browser falls back to when the font itself is not installed.
-STIMULUS_FONTS = {
-    "Courier New": "monospace",
-    "Consolas": "monospace",
-    "Lucida Console": "monospace",
-    "Menlo": "monospace",
-    "Monaco": "monospace",
-    "DejaVu Sans Mono": "monospace",
-    "Arial": "sans-serif",
-    "Helvetica": "sans-serif",
-    "Verdana": "sans-serif",
-    "Calibri": "sans-serif",
-    "Times New Roman": "serif",
-    "Georgia": "serif",
-}
-_GENERIC_FAMILIES = {"monospace", "sans-serif", "serif", "cursive", "fantasy"}
-
-
-def stimulus_font_css(name: str) -> str:
-    """``"Courier New"`` → ``"'Courier New', monospace"``: the font, then the
-    generic family it belongs to, so a machine without it still draws close."""
-    name = str(name).strip().strip("'\"")
-    if not name or name in _GENERIC_FAMILIES:
-        return FONT_FAMILY
-    return f"'{name}', {STIMULUS_FONTS.get(name, 'monospace')}"
-
-
-def stimulus_font_name(css: str | None) -> str | None:
-    """The named font a CSS stack starts with, or ``None`` for a generic one."""
-    first = str(css or "").split(",")[0].strip().strip("'\"")
-    return None if not first or first in _GENERIC_FAMILIES else first
+#: #422: the fonts offered under *I know the font* — 📄 Stimulus → Text's list
+#: (`experimental_setup.FONT_CHOICES`), less the generic font, which is this
+#: line's *Not sure*.
+_KNOWN_FONT_CHOICES = [c for c in FONT_CHOICES if c != GENERIC_FONT]
 
 
 _SETUP_PROVENANCE = {
@@ -2592,7 +2592,8 @@ _SETUP_CHOICE_LABELS = {
     _GEOM_KNOW: "I know it",
     _GEOM_DEFAULT: "Typical 597 mm",
     _GEOM_SKIP: "Off",
-    _TEXT_BOXES: "Fit to the word boxes",
+    # #422: 📄 Stimulus → Text's checkbox says the same.
+    _TEXT_BOXES: "Fit to word boxes",
     _TEXT_FONT: "I know the size",
     _TEXT_DEFAULT: "Default 16 px",
     _FONT_KNOW: "I know it",
@@ -2910,11 +2911,16 @@ def _wizard_setup_step(
         )
 
     # --- Text size ------------------------------------------------------------
+    # #422: the same choices, units and words as 📄 Stimulus → Text — *Fit to
+    # word boxes* with its line spacing, or a size in px or pt.
     value_col, how_col = _setup_row(
         host,
         "Text size",
         "How big the reading text was drawn. Word labels are rendered at this "
-        "size so the figure matches what the participant saw.",
+        "size so the figure matches what the participant saw. **Fit to word "
+        "boxes** sizes them from the boxes: the distance between lines ÷ the "
+        "line spacing, how far apart the lines are in font sizes (3: a blank "
+        "line above and below).",
     )
     text_options = [_TEXT_FONT, _TEXT_DEFAULT]
     if has_boxes:
@@ -2922,7 +2928,7 @@ def _wizard_setup_step(
         # option that silently does nothing.
         text_options.insert(0, _TEXT_BOXES)
     if st.session_state.get(text_key) not in text_options:
-        # *Fit to the word boxes* from a setup applied before the Words table:
+        # *Fit to word boxes* from a setup applied before the Words table:
         # the default stands in as the screen's own answer, so the boxes are
         # picked again the moment they arrive (`_seed_setup_answer`).
         st.session_state[text_key] = _TEXT_DEFAULT
@@ -2937,6 +2943,14 @@ def _wizard_setup_step(
         if initial is not None
         else _recalled("base_font_size", 16)
     )
+    line_spacing = float(
+        initial.line_spacing
+        if initial is not None
+        else _recalled(
+            "line_spacing",
+            st.session_state.get("global_line_spacing", DEFAULT_LINE_SPACING),
+        )
+    )
     font_family = str(
         initial.font_family
         if initial is not None
@@ -2944,37 +2958,81 @@ def _wizard_setup_step(
     )
     if text_mode == _TEXT_BOXES:
         scale_to_boxes = True
-        line = value_col.container(
-            horizontal=True, vertical_alignment="center", gap="small"
+        cap_col, spacing_col, badge_col = value_col.columns(
+            [0.3, 0.22, 0.48], gap="xsmall", vertical_alignment="center"
         )
-        line.markdown("**Each word sized to its box**", width="content")
-        _setup_badge(line, "data")
-    elif text_mode == _TEXT_FONT:
-        scale_to_boxes = False
-        initial_font_pt = float(_recalled("stimulus_font_pt", 12.0))
-        if initial is not None and mon_mm > 0 and geom_mode != _GEOM_SKIP:
-            initial_dpi = float(canvas_w) / (float(mon_mm) / 25.4)
-            initial_font_pt = float(initial.base_font_size) * 72.0 / initial_dpi
-        pt_col, note_col = value_col.columns(
-            [0.3, 0.7], gap="xsmall", vertical_alignment="center"
-        )
-        font_pt = pt_col.number_input(
-            "Stimulus font (pt)",
-            4.0,
-            96.0,
-            initial_font_pt,
-            key=f"{key_prefix}_setup_font_pt",
+        cap_col.markdown("Line spacing", width="content")
+        line_spacing = spacing_col.number_input(
+            "Line spacing",
+            1.0,
+            10.0,
+            min(max(line_spacing, 1.0), 10.0),
+            step=0.5,
+            key=f"{key_prefix}_setup_line_spacing",
             label_visibility="collapsed",
             **persist,
         )
+        _setup_badge(
+            badge_col,
+            "data",
+            "Each word is sized from its box: the distance between lines ÷ the "
+            "line spacing.",
+        )
+    elif text_mode == _TEXT_FONT:
+        scale_to_boxes = False
+        # pt→px needs a DPI, which needs the physical width. With the physical
+        # size off there is no honest DPI, so a point size is read as pixels.
+        dpi = None
+        if geom_mode != _GEOM_SKIP and mon_mm > 0:
+            dpi = dpi_from_width(float(canvas_w), float(mon_mm))
+        unit_key = f"{key_prefix}_setup_font_unit"
+        st.session_state.setdefault(unit_key, "pt")
+        size_col, unit_col, note_col = value_col.columns(
+            [0.26, 0.22, 0.52], gap="xsmall", vertical_alignment="center"
+        )
+        unit = unit_col.segmented_control(
+            "Font unit",
+            list(FONT_UNITS),
+            key=unit_key,
+            required=True,
+            label_visibility="collapsed",
+            **persist,
+        )
+        if unit == "pt":
+            initial_size = float(_recalled("stimulus_font_pt", 12.0))
+            if initial is not None:
+                initial_size = (
+                    float(initial.base_font_size) * 72.0 / dpi
+                    if dpi
+                    else float(initial.base_font_size)
+                )
+            size = size_col.number_input(
+                "Font size (pt)",
+                FONT_PT_RANGE[0],
+                FONT_PT_RANGE[1],
+                min(max(initial_size, FONT_PT_RANGE[0]), FONT_PT_RANGE[1]),
+                step=0.5,
+                key=f"{key_prefix}_setup_font_pt",
+                label_visibility="collapsed",
+                **persist,
+            )
+        else:
+            size = size_col.number_input(
+                "Font size (px)",
+                FONT_PX_RANGE[0],
+                FONT_PX_RANGE[1],
+                min(max(int(base_font), FONT_PX_RANGE[0]), FONT_PX_RANGE[1]),
+                step=1,
+                key=f"{key_prefix}_setup_font_px",
+                label_visibility="collapsed",
+                **persist,
+            )
+        base_font = font_size_px(size, unit, dpi)
         note = note_col.container(
             horizontal=True, vertical_alignment="center", gap="small"
         )
-        # pt→px needs a DPI, which needs the physical width. With the physical
-        # size off there is no honest DPI, so the point size is read as pixels.
-        if geom_mode == _GEOM_SKIP:
-            base_font = int(min(max(round(font_pt), 6), 72))
-            note.markdown(f"pt → read as **{base_font} px**", width="content")
+        if unit == "pt" and dpi is None:
+            note.markdown(f"read as **{base_font} px**", width="content")
             _setup_badge(
                 note,
                 "entered",
@@ -2982,10 +3040,10 @@ def _wizard_setup_step(
                 "*Physical size → I know it* gives. Without it the size is read as "
                 "pixels.",
             )
+        elif unit == "pt":
+            note.markdown(f"= **{base_font} px** at {dpi:.0f} DPI", width="content")
+            _setup_badge(note, "entered")
         else:
-            dpi = float(canvas_w) / (float(mon_mm) / 25.4) if mon_mm > 0 else 96.0
-            base_font = int(min(max(round(font_pt_to_px(font_pt, dpi)), 6), 72))
-            note.markdown(f"pt → **{base_font} px** at {dpi:.0f} DPI", width="content")
             _setup_badge(note, "entered")
     else:
         scale_to_boxes = False
@@ -3000,48 +3058,53 @@ def _wizard_setup_step(
     # Which typeface the words were shown in. The labels are drawn in it, so a
     # known font makes them match the stimulus letter for letter; the generic
     # monospace the browser picks otherwise can be several percent narrower.
+    # #422: the list is 📄 Stimulus → Text's, less its generic font (this
+    # line's *Not sure*).
     value_col, how_col = _setup_row(
         host,
         "Font",
         "The typeface the text was shown in. Word labels are drawn in it, so "
-        "they match the stimulus. Not sure leaves a generic monospace font.",
+        "they match the stimulus. Not sure leaves a generic monospace font. "
+        "📄 Stimulus → Text offers the same fonts, to change a figure's.",
     )
-    known = stimulus_font_name(font_family)
-    st.session_state.setdefault(font_key, _FONT_KNOW if known else _FONT_UNKNOWN)
+    current = font_choice(font_family)
+    st.session_state.setdefault(
+        font_key, _FONT_UNKNOWN if current == GENERIC_FONT else _FONT_KNOW
+    )
     font_mode = _setup_choice(
         how_col, "Font", [_FONT_KNOW, _FONT_UNKNOWN], font_key, persist
     )
     if font_mode == _FONT_KNOW:
-        choices = [*STIMULUS_FONTS, _FONT_OTHER]
+        name_key = f"{key_prefix}_setup_font_name"
+        other_key = f"{key_prefix}_setup_font_other"
         st.session_state.setdefault(
-            f"{key_prefix}_setup_font_name",
-            known if known in STIMULUS_FONTS else _FONT_OTHER if known else choices[0],
+            name_key,
+            current if current in _KNOWN_FONT_CHOICES else _KNOWN_FONT_CHOICES[0],
         )
         name_col, other_col, badge_col = value_col.columns(
             [0.4, 0.34, 0.26], gap="xsmall", vertical_alignment="center"
         )
         picked = name_col.selectbox(
             "Font name",
-            choices,
-            key=f"{key_prefix}_setup_font_name",
+            _KNOWN_FONT_CHOICES,
+            key=name_key,
             label_visibility="collapsed",
             **persist,
         )
-        if picked == _FONT_OTHER:
+        typed = ""
+        if picked == OTHER_FONT:
             st.session_state.setdefault(
-                f"{key_prefix}_setup_font_other",
-                known if known and known not in STIMULUS_FONTS else "",
+                other_key,
+                font_other_text(font_family) if current == OTHER_FONT else "",
             )
             typed = other_col.text_input(
                 "Font name (other)",
-                key=f"{key_prefix}_setup_font_other",
+                key=other_key,
                 placeholder="e.g. Source Code Pro",
                 label_visibility="collapsed",
                 **persist,
             )
-            font_family = stimulus_font_css(typed) if typed.strip() else FONT_FAMILY
-        else:
-            font_family = stimulus_font_css(picked)
+        font_family = font_choice_css(picked, typed)
         _setup_badge(
             badge_col,
             "entered",
@@ -3063,11 +3126,7 @@ def _wizard_setup_step(
         viewing_distance_mm=float(dist_mm),
         base_font_size=int(base_font),
         font_family=font_family,
-        line_spacing=float(
-            initial.line_spacing
-            if initial is not None
-            else st.session_state.get("global_line_spacing", 3.0)
-        ),
+        line_spacing=float(line_spacing),
         scale_text_to_boxes=bool(scale_to_boxes),
         screen_provenance=_SETUP_PROVENANCE.get(screen_mode),
         geometry_provenance=_SETUP_PROVENANCE.get(geom_mode),
@@ -3135,9 +3194,9 @@ def _wizard_setup_step(
             recall["monitor_width_mm"] = snapshot.monitor_width_mm
             recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
     if publish and _chosen("text") and snapshot.text_provenance is not None:
-        st.session_state["global_base_font_size"] = snapshot.base_font_size
-        st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
+        st.session_state.update(text_setup_values(snapshot))
         recall["base_font_size"] = snapshot.base_font_size
+        recall["line_spacing"] = snapshot.line_spacing
     if publish:
         # Its own question, always answered (Not sure is an answer).
         st.session_state["global_font_family"] = snapshot.font_family
@@ -3216,17 +3275,20 @@ def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
             auto.pop(_SETUP_MODE_KEYS[group], None)
     st.session_state[_SETUP_AUTO_KEY] = auto
     # The font question, from the file's font: a named one is "I know the font".
-    known = stimulus_font_name(snapshot.font_family)
+    choice = font_choice(snapshot.font_family)
+    known = choice != GENERIC_FONT
     st.session_state["wizard_setup_font_mode"] = _FONT_KNOW if known else _FONT_UNKNOWN
     if known:
-        listed = known in STIMULUS_FONTS
-        st.session_state["wizard_setup_font_name"] = known if listed else _FONT_OTHER
-        if not listed:
-            st.session_state["wizard_setup_font_other"] = known
+        st.session_state["wizard_setup_font_name"] = choice
+        if choice == OTHER_FONT:
+            st.session_state["wizard_setup_font_other"] = font_other_text(
+                snapshot.font_family
+            )
     remembered = {
         "monitor_width_mm": snapshot.monitor_width_mm,
         "viewing_distance_mm": snapshot.viewing_distance_mm,
         "base_font_size": snapshot.base_font_size,
+        "line_spacing": snapshot.line_spacing,
         "font_family": snapshot.font_family,
     }
     # Only remember a canvas the file actually carried; otherwise this would

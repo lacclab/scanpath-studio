@@ -155,6 +155,7 @@ from scanpath_studio.controls import (
     WORD_FIELD_SPECS,
     _labeled,
     _pin,
+    _shadow_key_missing,
     _sub_caption,
     _sub_row,
     background_swatch,
@@ -164,8 +165,10 @@ from scanpath_studio.controls import (
     has_active_trial_filters,
     read_trial_filters,
     reassert_pending_writes,
+    shadow_widget_key,
     unique_field_labels,
     viz_settings_from_state,
+    write_through,
 )
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.data import (
@@ -250,9 +253,17 @@ from scanpath_studio.debug_log import (
 )
 from scanpath_studio.easter_egg import render_easter_egg
 from scanpath_studio.experimental_setup import (
+    FONT_CHOICES,
+    FONT_PT_RANGE,
+    FONT_PX_RANGE,
+    OTHER_FONT,
     Provenance,
     SetupSnapshot,
-    font_pt_to_px,
+    font_choice,
+    font_choice_css,
+    font_other_text,
+    font_size_px,
+    stimulus_font_css,
 )
 from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
@@ -3341,6 +3352,7 @@ _FONT_SNAP_KEYS = (
     "global_base_font_size",
     "global_font_family",
     "global_scale_text_to_boxes",
+    "global_use_stimulus_font_pt",
 )
 _FONT_SNAP_RESTORE_KEY = "_font_snap_restore"
 
@@ -7689,6 +7701,8 @@ def setup_override_session_values(snapshot: SetupSnapshot) -> dict:
             2,
         ),
         "global_base_font_size": int(snapshot.base_font_size),
+        # #422: the setup's size is in px, so the figure's point size is off.
+        "global_use_stimulus_font_pt": False,
         "global_font_family": str(snapshot.font_family),
         "global_line_spacing": float(snapshot.line_spacing),
         "global_scale_text_to_boxes": bool(snapshot.scale_text_to_boxes),
@@ -8048,8 +8062,10 @@ def seed_canvas_state(
                 },
             )
             snapped = {
-                "global_base_font_size": int(min(max(round(font_px), 6), 72)),
+                "global_base_font_size": font_size_px(font_px, "px", None),
                 "global_scale_text_to_boxes": False,
+                # #422: the size is in px — a point size left on would replace it.
+                "global_use_stimulus_font_pt": False,
             }
             if font_css:
                 snapped["global_font_family"] = font_css
@@ -8151,19 +8167,10 @@ def seed_canvas_state(
     if not _resolved("global_scale_text_to_boxes") and _resolved(
         "global_use_stimulus_font_pt"
     ):
-        ss["global_base_font_size"] = int(
-            min(
-                max(
-                    round(
-                        font_pt_to_px(
-                            float(_resolved("global_stimulus_font_pt")),
-                            float(ss.get("global_display_dpi", 96.0)),
-                        )
-                    ),
-                    6,
-                ),
-                72,
-            )
+        ss["global_base_font_size"] = font_size_px(
+            float(_resolved("global_stimulus_font_pt")),
+            "pt",
+            font_dpi(data_choice),
         )
     return (
         int(_resolved("global_canvas_width")),
@@ -8175,11 +8182,90 @@ def seed_canvas_state(
     )
 
 
-#: The CSS stack UX-163's *Multilingual* button writes into the text font — a
-#: CJK / Hebrew / Arabic-capable fallback (PRE-6).
-_MULTILINGUAL_FONT_STACK = (
-    "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
-    "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
+def font_dpi(data_choice: str | None = None) -> float | None:
+    """The DPI a point size converts through on the figure (#422).
+
+    The dataset's — or ``None`` when its Recording setup has no physical size,
+    where a point size is read as pixels, exactly as that screen reads it: a
+    DPI derived from the default monitor width would be a guess."""
+    snapshot = active_setup_snapshot(data_choice)
+    if snapshot is not None and snapshot.geometry_provenance is Provenance.SKIPPED:
+        return None
+    return float(st.session_state.get("global_display_dpi", 96.0))
+
+
+#: #422 — the Font row's two shadows of `global_font_family` (the choice, and
+#: the typed font of *Other…*), derived every run (`controls.shadow_widget_key`,
+#: F9-safe). The flag keeps *Other…* chosen while its box is still to be filled
+#: in; the font they were derived from tells a pick here from a change made
+#: elsewhere (a link, a settings file, a dataset's own font).
+_FONT_CHOICE_KEY = "rail_font_choice"
+_FONT_OTHER_KEY = "rail_font_other"
+_FONT_OTHER_OPEN_KEY = "_rail_font_other_open"
+_FONT_SEEDED_FROM_KEY = "_rail_font_seeded_from"
+
+
+def _apply_font_choice(widget_key: str) -> None:
+    """A font picked in the list becomes the text's font; *Other…* waits for
+    the font to be typed in the box beside it."""
+    if _shadow_key_missing(widget_key):  # BUG-18
+        return
+    choice = st.session_state[widget_key]
+    st.session_state[_FONT_OTHER_OPEN_KEY] = choice == OTHER_FONT
+    if choice != OTHER_FONT:
+        write_through("global_font_family", font_choice_css(choice))
+
+
+def _apply_font_other(widget_key: str) -> None:
+    """A font typed under *Other…*: a name (drawn with a monospace fallback)
+    or a whole CSS font stack."""
+    if _shadow_key_missing(widget_key):  # BUG-18
+        return
+    write_through("global_font_family", stimulus_font_css(st.session_state[widget_key]))
+
+
+def _font_rows(choice_host, other_host, *, disabled: bool, **kwargs) -> str:
+    """The font list and the box for *Other…*, over `global_font_family`.
+
+    The list is the Recording setup's (`experimental_setup.FONT_CHOICES`), so
+    the dataset's font and the figure's are picked from the same names. The box
+    is greyed, not hidden, unless *Other…* is chosen. Returns the font drawn.
+    """
+    ss = st.session_state
+    css = str(ss.get("global_font_family") or FONT_FAMILY)
+    if ss.get(_FONT_SEEDED_FROM_KEY) != css:
+        ss[_FONT_OTHER_OPEN_KEY] = False
+        ss[_FONT_SEEDED_FROM_KEY] = css
+    choice = OTHER_FONT if ss.get(_FONT_OTHER_OPEN_KEY) else font_choice(css)
+    choice_key = shadow_widget_key(_FONT_CHOICE_KEY, choice)
+    other_key = shadow_widget_key(
+        _FONT_OTHER_KEY, font_other_text(css) if choice == OTHER_FONT else ""
+    )
+    choice_host.selectbox(
+        "Text font",
+        FONT_CHOICES,
+        key=choice_key,
+        on_change=_apply_font_choice,
+        args=(choice_key,),
+        disabled=disabled,
+        **kwargs,
+    )
+    other_host.text_input(
+        "Other font",
+        key=other_key,
+        on_change=_apply_font_other,
+        args=(other_key,),
+        placeholder="Font name or CSS stack",
+        disabled=disabled or choice != OTHER_FONT,
+        **kwargs,
+    )
+    return css
+
+
+#: The help both forms give the line spacing.
+_LINE_SPACING_HELP = (
+    "How far apart the lines are, in font sizes: the text is the distance "
+    "between lines ÷ this (3: a blank line above and below)."
 )
 
 
@@ -8187,7 +8273,7 @@ def _rail_text_rows(
     host,
     *,
     seeded: tuple,
-    display_dpi: float,
+    font_dpi: float | None,
     words_filtered: pd.DataFrame,
     font_css,
     disabled: bool,
@@ -8197,16 +8283,22 @@ def _rail_text_rows(
 
     Four captioned rows (`_sub_row`) instead of up to nine that came and went:
 
-    * *Fit* — **Scale to boxes** and the line spacing it divides a box by
-      (greyed while it is off);
+    * *Fit* — **Fit to word boxes** and the line spacing it divides the
+      distance between lines by (greyed while it is off);
     * *Size* — the unit (px / pt) and the size. While the text is fitted to the
       boxes the size is the axis, legend and fallback text's, in px, so the unit
       greys; otherwise it is the reading text's, and a size in points is
-      converted with the dataset DPI (px = pt × DPI ÷ 72);
-    * *Font* — the font family and the *Multilingual* stack;
+      converted with the dataset's DPI (px = pt × DPI ÷ 72), or read as pixels
+      when the dataset's Recording setup has no physical size;
+    * *Font* — the font, from the Recording setup's list, and a box for any
+      other font (greyed unless *Other…* is chosen);
     * *Color* — the text colour, then the plot background: a preset, and a
       colour box showing the colour in use, where any colour picked applies
       at once (#422).
+
+    #422: the words, fonts, units and ranges are the Recording setup's (🗂️ Data
+    → ✏️ Edit dataset), which sets the dataset's own typography; these rows
+    start from it and change only how the figure draws it.
 
     ``disabled`` greys every row while the Text layer is off (UX-97's contract:
     the settings stay readable, and their stored values are untouched).
@@ -8226,19 +8318,21 @@ def _rail_text_rows(
         fit = _sub_row(
             "Fit",
             section=section,
-            section_help="How the reading text is drawn.",
+            section_help="How the reading text is drawn. It starts from the "
+            "dataset's Recording setup; these rows change only this figure.",
             caption_help=tip(
-                "**Scale to boxes**: size the text from the word boxes (the "
-                "distance between lines ÷ line spacing). Spacing: how far apart "
-                "the lines are, in font sizes (3: a blank line above and below). "
-                "Untick to set a fixed size below."
+                "**Fit to word boxes**: size the text from the word boxes — the "
+                "distance between lines ÷ the line spacing. Spacing: "
+                + _LINE_SPACING_HELP[0].lower()
+                + _LINE_SPACING_HELP[1:]
+                + " Off: the size below."
             ),
         )
         fit_col, spacing_cap_col, spacing_col = fit.columns(
             [0.55, 0.2, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
         )
         scale_text_to_boxes = fit_col.checkbox(
-            "Scale to boxes",
+            "Fit to word boxes",
             key="global_scale_text_to_boxes",
             persist_state="session",
             disabled=disabled,
@@ -8258,12 +8352,13 @@ def _rail_text_rows(
         size = _sub_row(
             "Size",
             caption_help=tip(
-                "With **Scale to boxes** on: the size of the axis and legend text. "
-                "Off: the reading text's size, in px or pt (px = pt × DPI ÷ 72)."
+                "Fitted: the size of the axis and legend text. Not fitted: the "
+                "reading text's too, in px or pt (px = pt × DPI ÷ 72; read as px "
+                "when the dataset's Recording setup has no physical size)."
             ),
         )
-        unit_col, size_col = size.columns(
-            [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
+        unit_col, size_col, note_col = size.columns(
+            [0.36, 0.34, 0.3], gap=_LABEL_GAP, vertical_alignment="center"
         )
         use_pt = unit_col.segmented_control(
             "Font unit",
@@ -8277,23 +8372,24 @@ def _rail_text_rows(
         if not scale_text_to_boxes and use_pt:
             stimulus_font_pt = size_col.number_input(
                 "Font size (pt)",
-                min_value=4.0,
-                max_value=144.0,
+                min_value=FONT_PT_RANGE[0],
+                max_value=FONT_PT_RANGE[1],
                 step=0.5,
                 key="global_stimulus_font_pt",
                 persist_state="session",
                 disabled=disabled,
                 label_visibility="collapsed",
             )
-            st.session_state["global_base_font_size"] = int(
-                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            st.session_state["global_base_font_size"] = font_size_px(
+                stimulus_font_pt, "pt", font_dpi
             )
             base_font_size = int(st.session_state["global_base_font_size"])
+            _sub_caption(note_col, f"= {base_font_size} px")
         else:
             base_font_size = size_col.number_input(
                 "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
-                min_value=6,
-                max_value=72,
+                min_value=FONT_PX_RANGE[0],
+                max_value=FONT_PX_RANGE[1],
                 step=1,
                 key="global_base_font_size",
                 persist_state="session",
@@ -8304,28 +8400,18 @@ def _rail_text_rows(
         font = _sub_row(
             "Font",
             caption_help=tip(
-                "The word labels' font: a font name (e.g. 'Courier New') or a CSS "
-                "font stack. **Multilingual** fills in a stack for CJK, Hebrew and "
-                "Arabic."
+                "The reading text's font, from the same list as the dataset's "
+                "Recording setup. A listed font falls back to its family where it "
+                "is not installed; Multilingual is a Noto Sans stack for CJK, "
+                "Hebrew and Arabic. **Other…**: type a font name or a CSS font "
+                "stack."
             ),
         )
-        family_col, stack_col = font.columns(
-            [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+        family_col, other_col = font.columns(
+            [0.62, 0.38], gap=_LABEL_GAP, vertical_alignment="center"
         )
-        font_family = family_col.text_input(
-            "Text font",
-            key="global_font_family",
-            persist_state="session",
-            disabled=disabled,
-            label_visibility="collapsed",
-        )
-        stack_col.button(
-            "Multilingual",
-            on_click=lambda: st.session_state.update(
-                global_font_family=_MULTILINGUAL_FONT_STACK
-            ),
-            disabled=disabled,
-            width="stretch",
+        font_family = _font_rows(
+            family_col, other_col, disabled=disabled, label_visibility="collapsed"
         )
 
         color = _sub_row(
@@ -8512,7 +8598,6 @@ def render_canvas_controls(
     # restores them and every consumer reads the same numbers as before.
     # The wizard's standalone form still shows the width and DPI.
     if bare:
-        monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
         display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
     else:
         monitor_width_mm = field(
@@ -8560,11 +8645,17 @@ def render_canvas_controls(
         )
 
     if bare:
+        # The DPI is read only while a point size is drawn (its widgets' values
+        # are already this run's): the default rerun asks nothing of the setup.
+        ss = st.session_state
+        points = not ss.get("global_scale_text_to_boxes", True) and ss.get(
+            "global_use_stimulus_font_pt"
+        )
         base_font_size, font_family, line_spacing, scale_text_to_boxes = (
             _rail_text_rows(
                 text,
                 seeded=seeded,
-                display_dpi=float(display_dpi),
+                font_dpi=font_dpi(data_choice) if points else None,
                 words_filtered=words_filtered,
                 font_css=font_css,
                 disabled=text_disabled,
@@ -8582,23 +8673,23 @@ def render_canvas_controls(
 
     # --- 🔤 Text & fonts (the wizard's flat form) -------------------------
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
-    # (text height = box_height / line_spacing) and scales with the figure, so it
-    # always fills the real line slot. Untick to fall back to a fixed font size.
-    # Keyed (+ seeded) so the settings file can capture/reapply them.
+    # (text height = line distance / line spacing) and scales with the figure,
+    # so it always fills the real line slot. Untick to fall back to a fixed
+    # font size. Keyed (+ seeded) so the settings file can capture/reapply
+    # them. #422: the rail's words, units and font list.
     scale_text_to_boxes = field(
         text,
         "checkbox",
-        "Scale text to boxes",
+        "Fit to word boxes",
         key="global_scale_text_to_boxes",
         persist_state="session",
-        help="Size text from word-box height. Without boxes, the plot font size "
+        help="Size the text from the word boxes. Without boxes, the font size "
         "is used instead.",
     )
     line_spacing = float(st.session_state.get("global_line_spacing", seeded[4]))
     use_stimulus_font_pt = bool(
         st.session_state.get("global_use_stimulus_font_pt", False)
     )
-    stimulus_font_pt = float(st.session_state.get("global_stimulus_font_pt", 12.0))
     if scale_text_to_boxes:
         line_spacing = field(
             text,
@@ -8609,8 +8700,7 @@ def render_canvas_controls(
             step=0.5,
             key="global_line_spacing",
             persist_state="session",
-            help="How far apart the lines are, in font sizes: the text is the "
-            "distance between lines ÷ this (3: a blank line above and below).",
+            help=_LINE_SPACING_HELP,
         )
     else:
         use_stimulus_font_pt = field(
@@ -8618,25 +8708,24 @@ def render_canvas_controls(
             "segmented_control",
             "Font unit",
             options=[False, True],
-            format_func=lambda use_pt: "Points (pt)" if use_pt else "Pixels (px)",
+            format_func=lambda use_pt: "pt" if use_pt else "px",
             key="global_use_stimulus_font_pt",
             persist_state="session",
-            help="Choose the original stimulus unit. Points are converted with "
-            "the dataset DPI: px = pt × DPI ÷ 72.",
+            help="Points are converted with the dataset DPI: px = pt × DPI ÷ 72.",
         )
         if use_stimulus_font_pt:
             stimulus_font_pt = field(
                 text,
                 "number_input",
                 "Font size (pt)",
-                min_value=4.0,
-                max_value=144.0,
+                min_value=FONT_PT_RANGE[0],
+                max_value=FONT_PT_RANGE[1],
                 step=0.5,
                 key="global_stimulus_font_pt",
                 persist_state="session",
             )
-            st.session_state["global_base_font_size"] = int(
-                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            st.session_state["global_base_font_size"] = font_size_px(
+                stimulus_font_pt, "pt", display_dpi
             )
 
     if not scale_text_to_boxes and use_stimulus_font_pt:
@@ -8646,8 +8735,8 @@ def render_canvas_controls(
             text,
             "number_input",
             "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
-            min_value=6,
-            max_value=72,
+            min_value=FONT_PX_RANGE[0],
+            max_value=FONT_PX_RANGE[1],
             step=1,
             help=(
                 "Axis, legend, and fallback text size."
@@ -8657,25 +8746,8 @@ def render_canvas_controls(
             key="global_base_font_size",
             persist_state="session",
         )
-    text.button(
-        "Use multilingual font stack",
-        on_click=lambda: st.session_state.update(
-            global_font_family=(
-                "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
-                "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
-            )
-        ),
-        help="A CJK/Hebrew/Arabic-capable CSS fallback stack.",
-    )
-    font_family = field(
-        text,
-        "text_input",
-        "Text font",
-        key="global_font_family",
-        persist_state="session",
-        help="Font for the word labels. Use the exact font from your experiment "
-        "(e.g. 'Courier New') or a CSS fallback stack.",
-    )
+    family_col, other_col = text.columns(2, vertical_alignment="bottom")
+    font_family = _font_rows(family_col, other_col, disabled=False)
     if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
         text.caption(
             "↔ Right-to-left script detected — labels are laid out by the browser."

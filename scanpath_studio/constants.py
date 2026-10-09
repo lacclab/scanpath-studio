@@ -897,6 +897,7 @@ SETUP_OVERRIDE_SESSION_KEYS = (
     "global_viewing_distance_mm",
     "global_display_dpi",
     "global_base_font_size",
+    "global_use_stimulus_font_pt",
     "global_font_family",
     "global_line_spacing",
     "global_scale_text_to_boxes",

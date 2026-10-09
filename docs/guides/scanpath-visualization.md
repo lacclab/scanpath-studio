@@ -82,11 +82,15 @@ figure does not draw has no row. Its columns:
 
 - **Show**: draw the legend at all. This is the only place to turn a legend on
   or off.
-- **Position**: **Above**, **Below**, **Left** or **Right** of the plot, or
-  **Inside** one of its four corners. An outside spot makes the figure larger
-  instead of shrinking the plot, so the text stays true to scale. Legends
-  sharing a side line up one after the other.
+- **Position**: one of eight spots (**Top left**, **Top center**, **Top
+  right**, **Left**, **Right**, **Bottom left**, **Bottom center**, **Bottom
+  right**), each **outside** or **inside** the plot. **Left** and **Right** run
+  down that side. An outside spot makes the figure larger instead of shrinking
+  the plot, so the text stays true to scale. Legends sharing a spot stack, the
+  size key included.
 - **Arrangement**: **Stacked** (one item under the other) or **Side by side**.
+  On **Auto**, a legend at the middle of the top or bottom edge is a row and
+  every other one a stack.
 - **Text size**: in px; empty uses the figure's own.
 
 On **Auto** a legend stays where it is drawn by default. The size key's circles

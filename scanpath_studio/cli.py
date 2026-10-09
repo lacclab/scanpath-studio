@@ -914,11 +914,13 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="SPEC",
         help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
         "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
-        "colour categories), size-key; POSITION one of auto, above, below, "
-        "left, right, top-left, top-right, bottom-left, bottom-right (the last "
-        "four inside the plot); ARRANGEMENT stacked or side-by-side; SIZE the "
-        "text size in px — e.g. --legend saccades=right,stacked,14. Whether a "
-        "legend is drawn at all is still its own switch.",
+        "colour categories), size-key; POSITION auto or SPOT-outside / "
+        "SPOT-inside with SPOT one of top-left, top-center, top-right, left, "
+        "right, bottom-left, bottom-center, bottom-right (outside grows the "
+        "figure; left and right run down the side); ARRANGEMENT stacked or "
+        "side-by-side; SIZE the text size in px — e.g. --legend "
+        "saccades=right-outside,stacked,14. Whether a legend is drawn at all is "
+        "still its own switch.",
     )
     viz.add_argument(
         "--saccade-classes",

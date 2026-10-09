@@ -54,7 +54,6 @@ from .constants import (
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
     LEGEND_ARRANGEMENTS,
-    LEGEND_POSITIONS,
     MANUAL_SAMPLE_CHOICE,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
@@ -75,6 +74,7 @@ from .constants import (
     SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     UNIFORM_COLOR_FIELD,
+    canonical_legend_position,
     drift_correction_enabled,
     onestop_regime_for_choice,
     plural,
@@ -1554,13 +1554,22 @@ def _legend_size(value) -> int:
     return max(6, min(72, int(value)))
 
 
+def _legend_position(value) -> str:
+    """A legend's position, an old spelling (``above``, ``top-left`` …) read
+    as the spot it drew at."""
+    position = canonical_legend_position(value)
+    if position is None:
+        raise ValueError(f"not a legend position: {value!r}")
+    return position
+
+
 #: Each legend's three keys (Figure & canvas → Legends), checked the same way
 #: whether they come from a link, a settings file, a design or the cache.
 _LEGEND_STATE_PARSERS = {
     key: parse
     for kind in LEGEND_PARAMS.values()
     for key, parse in (
-        (f"global_legend_{kind}_position", _closed_choice(LEGEND_POSITIONS)),
+        (f"global_legend_{kind}_position", _legend_position),
         (f"global_legend_{kind}_arrangement", _closed_choice(LEGEND_ARRANGEMENTS)),
         (f"global_legend_{kind}_size", _legend_size),
     )

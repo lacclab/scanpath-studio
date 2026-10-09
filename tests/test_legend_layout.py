@@ -69,10 +69,46 @@ class TestTheLayoutValue:
             normalize_legend_layout(bad)
 
     def test_the_spec_text_round_trips(self):
-        spec = parse_legend_spec("right,14,stacked")
-        assert spec == {"position": "right", "arrangement": "stacked", "size": 14}
+        spec = parse_legend_spec("right-outside,14,stacked")
+        assert spec == {
+            "position": "right-outside",
+            "arrangement": "stacked",
+            "size": 14,
+        }
         full = normalize_legend_layout({"saccades": spec})["saccades"]
         assert parse_legend_spec(legend_spec_text(full)) == spec
+
+    def test_every_spot_is_offered_inside_and_outside(self):
+        spots = {
+            "top-left",
+            "top-center",
+            "top-right",
+            "left",
+            "right",
+            "bottom-left",
+            "bottom-center",
+            "bottom-right",
+        }
+        assert set(plots.LEGEND_POSITIONS) == {"auto"} | {
+            f"{spot}-{side}" for spot in spots for side in ("outside", "inside")
+        }
+
+    @pytest.mark.parametrize(
+        ("old", "new"),
+        [
+            ("above", "top-right-outside"),
+            ("below", "bottom-left-outside"),
+            ("left", "left-outside"),
+            ("right", "right-outside"),
+            ("top-left", "top-left-inside"),
+            ("bottom-right", "bottom-right-inside"),
+        ],
+    )
+    def test_an_old_position_reads_as_its_spot(self, old, new):
+        """Links, settings files and scripts written before the eight spots."""
+        assert parse_legend_spec(old)["position"] == new
+        layout = normalize_legend_layout({"colors": {"position": old}})
+        assert layout["colors"]["position"] == new
 
 
 class TestMovingTraceLegends:
@@ -82,7 +118,9 @@ class TestMovingTraceLegends:
         apply_legend_layout(fig, None)
         assert fig.to_dict() == before
 
-    @pytest.mark.parametrize("position", ["above", "below", "left", "right"])
+    @pytest.mark.parametrize(
+        "position", [p for p in plots.LEGEND_POSITIONS if p.endswith("-outside")]
+    )
     def test_an_outside_spot_keeps_the_plot_region(self, position):
         fig = _figure()
         region = _plot_region(fig)
@@ -92,12 +130,61 @@ class TestMovingTraceLegends:
             "legend3"
         }
 
-    def test_inside_spots_do_not_grow_the_figure(self):
+    @pytest.mark.parametrize(
+        "position", [p for p in plots.LEGEND_POSITIONS if p.endswith("-inside")]
+    )
+    def test_inside_spots_do_not_grow_the_figure(self, position):
         fig = _figure()
-        apply_legend_layout(fig, {"saccades": {"position": "bottom-left"}})
+        apply_legend_layout(fig, {"saccades": {"position": position}})
         assert (fig.layout.width, fig.layout.height) == (800, 600)
-        assert fig.layout.legend3.xanchor == "left"
-        assert fig.layout.legend3.yanchor == "bottom"
+        legend = fig.layout.legend3
+        assert 0 <= legend.x <= 1 and 0 <= legend.y <= 1
+
+    @pytest.mark.parametrize(
+        ("position", "xanchor", "yanchor", "x", "y"),
+        [
+            ("top-left-inside", "left", "top", 0, 1),
+            ("top-center-inside", "center", "top", 0.5, 1),
+            ("top-center-outside", "center", "bottom", 0.5, 1),
+            ("bottom-right-outside", "right", "top", 1, 0),
+            ("bottom-center-inside", "center", "bottom", 0.5, 0),
+            ("left-outside", "right", "middle", 0, 0.5),
+            ("left-inside", "left", "middle", 0, 0.5),
+            ("right-outside", "left", "middle", 1, 0.5),
+        ],
+    )
+    def test_each_spot_anchors_its_legend(self, position, xanchor, yanchor, x, y):
+        fig = _figure()
+        apply_legend_layout(fig, {"saccades": {"position": position}})
+        legend = fig.layout.legend3
+        assert (legend.xanchor, legend.yanchor) == (xanchor, yanchor)
+        # An outside spot sits off the plot, on its own edge (past the default
+        # legend, above it); along that edge it is where the spot says.
+        if position.endswith("outside") and yanchor == "middle":
+            assert (legend.x < 0) if x == 0 else (legend.x > 1)
+            assert legend.y == pytest.approx(y)
+        elif position.endswith("outside"):
+            assert (legend.y > 1) if y == 1 else (legend.y < 0)
+            assert legend.x == pytest.approx(x)
+        else:
+            assert legend.x == pytest.approx(x, abs=0.05)
+            assert legend.y == pytest.approx(y, abs=0.05)
+
+    def test_the_sides_run_down_and_the_middles_across(self):
+        """Left and right stack down the side; top and bottom centre make a row."""
+        fig = _figure(comparing=True)
+        apply_legend_layout(
+            fig,
+            {
+                "compare": {"position": "left-outside"},
+                "saccades": {"position": "bottom-center-outside"},
+                "colors": {"position": "right-inside"},
+            },
+            comparing=True,
+        )
+        assert fig.layout.legend2.orientation == "v"
+        assert fig.layout.legend3.orientation == "h"
+        assert fig.layout.legend4.orientation == "v"
 
     def test_arrangement_and_size_reach_the_legend(self):
         fig = _figure()
@@ -118,7 +205,10 @@ class TestMovingTraceLegends:
         fig = _figure(comparing=True)
         apply_legend_layout(
             fig,
-            {"compare": {"position": "left"}, "colors": {"position": "below"}},
+            {
+                "compare": {"position": "left-outside"},
+                "colors": {"position": "bottom-left-outside"},
+            },
             comparing=True,
         )
         by_name = {t.name: t.legend for t in fig.data}
@@ -127,14 +217,24 @@ class TestMovingTraceLegends:
         # The saccade types were not moved: they stay in the default legend.
         assert by_name["forward"] is None
 
-    def test_two_legends_on_one_side_do_not_overlap(self):
+    @pytest.mark.parametrize(
+        ("position", "axis"),
+        [
+            ("right-outside", "x"),
+            ("left-inside", "x"),
+            ("top-center-outside", "y"),
+            ("bottom-right-inside", "y"),
+        ],
+    )
+    def test_two_legends_on_one_spot_stack(self, position, axis):
         fig = _figure(comparing=True)
         apply_legend_layout(
             fig,
-            {"compare": {"position": "right"}, "saccades": {"position": "right"}},
+            {"compare": {"position": position}, "saccades": {"position": position}},
             comparing=True,
         )
-        assert fig.layout.legend2.y != fig.layout.legend3.y
+        first, second = fig.layout.legend2, fig.layout.legend3
+        assert getattr(first, axis) != getattr(second, axis)
 
 
 class TestTheSizeKey:
@@ -163,9 +263,10 @@ class TestTheSizeKey:
     @pytest.mark.parametrize(
         "spec",
         [
-            {"position": "left", "arrangement": "stacked", "size": 18},
-            {"position": "top-left"},
-            {"position": "below", "size": 14},
+            {"position": "left-outside", "arrangement": "stacked", "size": 18},
+            {"position": "top-left-inside"},
+            {"position": "bottom-center-outside", "size": 14},
+            {"position": "right-inside"},
         ],
     )
     def test_the_circles_keep_their_true_size(self, spec):
@@ -174,13 +275,36 @@ class TestTheSizeKey:
         )
 
     def test_its_labels_take_the_text_size(self):
-        fig = self._key({"size_key": {"position": "right", "size": 18}})
+        fig = self._key({"size_key": {"position": "right-outside", "size": 18}})
         assert {a.font.size for a in fig.layout.annotations} == {18}
 
     def test_an_outside_spot_keeps_the_plot_region(self):
-        fig = self._key({"size_key": {"position": "right"}})
+        fig = self._key({"size_key": {"position": "right-outside"}})
         assert _plot_region(fig) == pytest.approx((800, 600))
         assert fig.layout.margin.r > 0
+
+    def test_centre_spots_centre_the_key(self):
+        fig = self._key({"size_key": {"position": "top-center-inside"}})
+        circles = [s for s in fig.layout.shapes if s.type == "circle"]
+        assert {(s.xanchor, s.yanchor) for s in circles} == {(0.5, 1)}
+        left = min(float(s.x0) for s in circles)
+        right = max(float(s.x1) for s in circles)
+        assert left < 0 < right
+
+    def test_it_stacks_past_a_legend_on_its_spot(self):
+        fig = _figure()
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        layout = {
+            "saccades": {"position": "bottom-right-inside"},
+            "size_key": {"position": "bottom-right-inside"},
+        }
+        apply_legend_layout(fig, layout)
+        plots._add_duration_size_key(
+            fig, (8, 24), "sqrt", (50.0, 600.0), legend_layout=layout
+        )
+        circles = [s for s in fig.layout.shapes if s.type == "circle"]
+        # The legend holds the corner; the key sits above it.
+        assert min(float(s.y0) for s in circles) > 20
 
 
 class TestTheBuilders:
@@ -190,8 +314,8 @@ class TestTheBuilders:
         words, fixations = sps.load_sample_data()
         (p1, t1), (p2, t2) = sps.list_trials(words, fixations).iloc[:2].values.tolist()
         layout = {
-            "saccades": {"position": "right"},
-            "size_key": {"position": "top-left"},
+            "saccades": {"position": "right-outside"},
+            "size_key": {"position": "top-left-inside"},
         }
         static = sps.plot_scanpath(
             words,
@@ -212,7 +336,7 @@ class TestTheBuilders:
             fixations,
             (p1, t1),
             (p2, t2),
-            legend_layout={"compare": {"position": "below"}},
+            legend_layout={"compare": {"position": "bottom-center-outside"}},
         )
         assert any(t.legend == "legend2" for t in compare.data)
 
@@ -225,9 +349,13 @@ def _cli_parse(argv):
 
 class TestTheCli:
     def test_a_spec_per_flag(self):
-        assert _cli_parse(["saccades=right,stacked,14", "size-key=below"]) == {
-            "saccades": {"position": "right", "arrangement": "stacked", "size": 14},
-            "size_key": {"position": "below"},
+        assert _cli_parse(["saccades=right-outside,stacked,14", "size-key=below"]) == {
+            "saccades": {
+                "position": "right-outside",
+                "arrangement": "stacked",
+                "size": 14,
+            },
+            "size_key": {"position": "bottom-left-outside"},
         }
 
     def test_a_bad_spec_is_refused(self):
@@ -262,7 +390,7 @@ def _link_round_trip_app():
 class TestTheLink:
     def test_only_moved_legends_travel_and_they_round_trip(self):
         given = {
-            "global_legend_saccades_position": "right",
+            "global_legend_saccades_position": "right-outside",
             "global_legend_saccades_arrangement": "stacked",
             "global_legend_saccades_size": 14,
             "global_legend_compare_position": "auto",
@@ -273,7 +401,9 @@ class TestTheLink:
         at.session_state["_given"] = given
         at.run(timeout=30)
         assert not at.exception, at.exception
-        assert at.session_state["_params"] == {"legend_saccades": "right,stacked,14"}
+        assert at.session_state["_params"] == {
+            "legend_saccades": "right-outside,stacked,14"
+        }
         for key in (
             "global_legend_saccades_position",
             "global_legend_saccades_arrangement",
@@ -297,7 +427,8 @@ class TestStoredValues:
             ("global_legend_saccades_size", 999, 72),
             ("global_legend_saccades_size", 2, 6),
             ("global_legend_saccades_size", None, None),
-            ("global_legend_compare_position", "left", "left"),
+            ("global_legend_compare_position", "left-inside", "left-inside"),
+            ("global_legend_compare_position", "left", "left-outside"),
             ("global_legend_size_key_arrangement", "stacked", "stacked"),
         ],
     )
@@ -333,7 +464,7 @@ class TestStoredValues:
             {"legend_layout": {"saccades": {"position": "right"}}},
         )
         assert set(record["legends"]) == set(plots.LEGEND_KINDS)
-        assert record["legends"]["saccades"]["position"] == "right"
+        assert record["legends"]["saccades"]["position"] == "right-outside"
         assert record["legends"]["compare"]["position"] == "auto"
 
 

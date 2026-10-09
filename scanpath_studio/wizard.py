@@ -1680,12 +1680,12 @@ def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
 
 
 def _row_body(host):
-    """Indent to where the field-mapping pickers start (`_ID_ROW1_W`'s name
+    """Indent to where the field-mapping pickers start (`_MAP_ROW_W`'s name
     column), for a row that has no name of its own — the "Extra fields to
     keep" picker and the "Aggregate character AOIs" toggle both describe the
     table above them rather than naming a new one, so they line up under the
     pickers rather than under the row-name label."""
-    _, body = host.columns([_ID_ROW1_W[0], 1 - _ID_ROW1_W[0]], gap="small")
+    _, body = host.columns([_MAP_ROW_W[0], 1 - _MAP_ROW_W[0]], gap="small")
     return body
 
 
@@ -3006,54 +3006,67 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
-#: UX-55 r4 — `table name | Trial ID | Screen ID | Participant ID | Text ID |
-#: Word/IA ID | Fixation ID-or-Word text` — row 1 of the per-table block, now
-#: merged with what used to be a separate "geometry" section (r3/r4:
-#: identity-vs-description stopped paying for itself once Screen name left the
-#: view and Word/IA id joined the row it already read as identity). The name
-#: column stays narrow for one short word; the six pickers split the rest
-#: evenly — a column name is what has to stay readable, and six is the most
-#: this row fits.
-#: UX-127: the name column widened from 0.09 to 0.135 (and the CSS overlay's
-#: `width` in `styles.py` alongside it) — the file uploader's own "Browse
-#: files" button didn't fit inside the narrower column. The six picker cells
-#: shrink slightly (evenly) to make room.
-#: UX-129: widened again, from 0.135 to 0.155, *without* moving the CSS
-#: overlay's own `width` (still 13.5%, `styles.py`) — that mismatch is now
-#: deliberate. The overlay (and the border-right line on it) still ends at
-#: 13.5% of the block, but this reserved column is wider than that, so the
-#: extra ~2% sits empty between the line and the first picker cell, reading
-#: as breathing room rather than the pickers crowding the divider.
-_ID_ROW1_W = (0.155, 0.1409, 0.1409, 0.1409, 0.1409, 0.1409, 0.1409)
+#: Every mapping line is one grid (2026-10-09): the table's name column, then
+#: four equal picker cells. A table maps on three short lines rather than two
+#: long ones — six pickers to a line left each one too narrow to read the
+#: column name it held. The name column is wider than its uploader overlay
+#: (13.5%, `styles.py`) on purpose (UX-129): the gap reads as breathing room
+#: between the divider and the first picker.
+_MAP_ROW_W = (0.155, *([0.845 / 4] * 4))
 
-#: Row 2 of the Fixations block: X · Y · Timestamp · Duration. Same grid as
-#: row 1 (UX-55 r2) so the two halves of the mapping line up down the page —
-#: four equal picker cells under the name column, since these selects hold
-#: column names rather than short ids.
-_FIX_ROW2_W = (0.155, 0.2113, 0.2113, 0.2113, 0.2113)
+#: What each table maps, line by line. Line 1 is the same for every table —
+#: what identifies a row — so the tables' IDs line up down the page; then the
+#: table's own fields, grouped by what they describe. The word box (a format
+#: radio plus four coordinate selects that lay themselves out) takes a line of
+#: its own, in one wide cell.
+MAP_LINES = {
+    "fix": (
+        ("trial", "participant", "text_id", "screen_id"),
+        ("x", "y", "word_id"),
+        ("timestamp", "duration", "fixation_id"),
+    ),
+    "words": (
+        ("trial", "participant", "text_id", "screen_id"),
+        ("word_id", "text", "line"),
+        ("box",),
+    ),
+    "raw_gaze": (
+        ("trial", "participant", "text_id", "screen_id"),
+        ("x", "y", "timestamp"),
+        ("word_id", "text"),
+    ),
+}
 
-#: Row 2 of the AOI block: the word box (a format radio plus four coordinate
-#: selects that lay themselves out) and, sharing the same line, Line index —
-#: the box gets most of the row, Line index the rest (UX-55 r3).
-_AOI_ROW2_W = (0.155, 0.678, 0.167)
-
-#: AN-32 — rows 3-4 of the AOI block: the reading measures the report brings,
-#: seven to a line under the same name column (thirteen fields on one line
-#: would leave each select a sliver). Shared with the ✏️ Edit dataset grid.
+#: AN-32 — the AOI block's reading measures, seven to a line under the same
+#: name column (thirteen fields on one line would leave each select a
+#: sliver). Shared with the ✏️ Edit dataset grid.
 MEASURE_ROW_W = (0.155, *([0.845 / 7] * 7))
 #: The measures, split into those two lines: durations and the count first,
 #: then the flags, the regression count and the landing measures.
 MEASURE_ROWS = (READING_MEASURE_KEYS[:7], READING_MEASURE_KEYS[7:])
 
-#: Row 2 of the Raw gaze block (UX-113): X · Y · Timestamp — no Duration, raw
-#: gaze has no such concept (unlike row 1, which reuses `_ID_ROW1_W` outright:
-#: same six identity fields, same shape as Fixations/AOI above it).
-_RAW_GAZE_ROW2_W = (0.155, 0.2817, 0.2817, 0.2816)
-
 #: UX-127: the metadata rows' own two-cell grid — same name-column width as
 #: every other table's row 1, one wide cell for the id-column + keep-fields
 #: picker stack (there is nothing to split across several picker cells here).
 _META_ROW_W = (0.155, 0.845)
+
+
+def _map_cells(block, first_row, lines) -> dict:
+    """``{field: cell}`` over one table's mapping lines (`MAP_LINES`).
+
+    ``first_row`` is the line the uploader sits in, already drawn; the others
+    are drawn here, under it, in order — screen order is creation order, so a
+    table's lines stay together whatever fills them first.
+    """
+    cells = dict(zip(lines[0], first_row[1:]))
+    for keys in lines[1:]:
+        row = block.columns(
+            _META_ROW_W if keys == ("box",) else _MAP_ROW_W,
+            gap="small",
+            vertical_alignment="bottom",
+        )
+        cells.update(zip(keys, row[1:]))
+    return cells
 
 
 def _mark_add_attempted() -> None:
@@ -3639,8 +3652,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # resolving `has_fix`/`has_words` and reserving its own feature/keep rows
     # immediately (UX-89: a table's rows stay adjacent, not batched by kind)
     # before the next table's row begins.
-    id_rows = {}
-    feature_rows = {}
+    cells = {}
     extra_rows = {}
     keep_rows = {}
 
@@ -3659,7 +3671,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     fix_block = s2.container(key="wiz_map_block_col_map_fix")
     # #374 F12: which export goes in this row, in EyeLink's own terms.
     fix_note = _row_note(fix_block, ROW_CAPTIONS["fixations"])
-    row_fix = fix_block.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    row_fix = fix_block.columns(_MAP_ROW_W, gap="small", vertical_alignment="center")
     raw_fix = upload_box(
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
         label="Fixations table(s)",
@@ -3674,17 +3686,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     has_fix = not raw_fix.empty
     if has_fix:
-        id_rows["fix"] = row_fix[1:]
-        feature_rows["fix"] = fix_block.columns(
-            _FIX_ROW2_W, gap="small", vertical_alignment="bottom"
-        )
+        cells["fix"] = _map_cells(fix_block, row_fix, MAP_LINES["fix"])
         keep_rows["fix"] = fix_block.container()
 
     s2.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
     words_block = s2.container(key="wiz_map_block_col_map_words")
     words_note = _row_note(words_block, ROW_CAPTIONS["words"])
     row_words = words_block.columns(
-        _ID_ROW1_W, gap="small", vertical_alignment="center"
+        _MAP_ROW_W, gap="small", vertical_alignment="center"
     )
     raw_words = upload_box(
         row_words[0].container(key="wiz_map_upload_col_map_words"),
@@ -3700,10 +3709,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     has_words = not raw_words.empty
     if has_words:
-        id_rows["words"] = row_words[1:]
-        feature_rows["words"] = words_block.columns(
-            _AOI_ROW2_W, gap="small", vertical_alignment="bottom"
-        )
+        cells["words"] = _map_cells(words_block, row_words, MAP_LINES["words"])
         # AN-32: the two measure lines, reserved here so they sit under the
         # box row and above the character-AOI toggle, whatever fills first.
         measure_rows = [
@@ -3740,10 +3746,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # without it, AOI and Raw gaze had no line between them when both were
     # still empty).
     s3.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
-    # Row 1: Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID ·
-    # Word text/label — same six-cell grid, same field order, as the
-    # Fixations/AOI row above.
-    rg_row1 = s3.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
+    # Line 1: the identity line every table opens with (`MAP_LINES`).
+    rg_row1 = s3.columns(_MAP_ROW_W, gap="small", vertical_alignment="center")
     raw_gaze = upload_box(
         rg_row1[0].container(key="wiz_map_upload_col_map_raw_gaze"),
         label="Raw gaze table (optional)",
@@ -3816,12 +3820,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if has_words or has_fix:
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
-        def _cells_for(index: int) -> list:
-            return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
+        def _cells_for(field: str) -> list:
+            return [cells[s][field] for s in ("fix", "words") if s in cells]
 
         id_extras = counts_host
-        # Row 1, in the order the request pins: Trial ID · Screen ID ·
-        # Participant ID · Text ID · Word/IA ID · Fixation ID-or-Word text.
+        # Line 1: Trial ID · Participant ID · Text ID · Screen ID.
         disjoint_trials = _wizard_trial_step(
             s2,
             raw_words,
@@ -3832,7 +3835,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(0),
+            cells=_cells_for("trial"),
         )
         # Screen ID (DATA-21 multipart) — a simple per-table field, not a
         # composite like Trial/Participant/Text, so it goes straight through
@@ -3847,7 +3850,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             ("words", raw_words, WORD_FIELD_SPECS, prop_w, word_schema, has_words),
         )
         for slug, raw, specs, proposal, schema, present in screen_specs:
-            if not present or slug not in id_rows:
+            if not present or slug not in cells:
                 continue
             schema.update(
                 _map_section(
@@ -3855,7 +3858,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     specs,
                     proposal,
                     f"col_map_{slug}",
-                    id_rows[slug][1],
+                    cells[slug]["screen_id"],
                     ["screen_id"],
                 )
             )
@@ -3874,7 +3877,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(2),
+            cells=_cells_for("participant"),
             extras_host=id_extras,
         )
         _wizard_participant_text_step(
@@ -3895,7 +3898,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(3),
+            cells=_cells_for("text_id"),
             extras_host=id_extras,
         )
         # DATA-49: an AOI table with no Participant ID is stimulus-level and
@@ -3908,7 +3911,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # fixation hit; the AOI table's is which AOI a row *is*. Different
         # columns, same slot: both tables read it as identity now.
         for slug, raw, specs, proposal, schema, present in screen_specs:
-            if not present or slug not in id_rows:
+            if not present or slug not in cells:
                 continue
             schema.update(
                 _map_section(
@@ -3916,12 +3919,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     specs,
                     proposal,
                     f"col_map_{slug}",
-                    id_rows[slug][4],
+                    cells[slug]["word_id"],
                     ["word_id"],
                 )
             )
-        # Row 1's last slot differs per table: Fixation ID for Fixations,
-        # Word text/label for AOI.
+        # Each table's own id: Fixation ID for Fixations, Word text/label
+        # for AOI.
         if has_fix:
             fix_schema.update(
                 _map_section(
@@ -3929,7 +3932,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     FIX_FIELD_SPECS,
                     prop_f,
                     "col_map_fix",
-                    id_rows["fix"][5],
+                    cells["fix"]["fixation_id"],
                     ["fixation_id"],
                 )
             )
@@ -3940,51 +3943,45 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     WORD_FIELD_SPECS,
                     prop_w,
                     "col_map_words",
-                    id_rows["words"][5],
+                    cells["words"]["text"],
                     ["text"],
                 )
             )
 
-        # Row 2 of each block: the table's own features, filled into the cells
-        # reserved above so they sit directly under that table's identity row.
+        # The table's own features, filled into the cells reserved above so
+        # they sit directly under that table's identity line.
         # UX-89 also removed the per-block validation warnings that used to
         # print here ("Words/IA — missing Word/IA ID", …): a required field that
         # is empty turns red in place the moment ✅ Add dataset is pressed, and
         # a sentence repeating it below the row was the third copy of the same
         # complaint on a page whose problem is length.
         if has_fix:
-            for cell, key in zip(
-                feature_rows["fix"][1:], ["x", "y", "timestamp", "duration"]
-            ):
+            for key in ("x", "y", "timestamp", "duration"):
                 fix_schema.update(
                     _map_section(
-                        raw_fix, FIX_FIELD_SPECS, prop_f, "col_map_fix", cell, [key]
+                        raw_fix,
+                        FIX_FIELD_SPECS,
+                        prop_f,
+                        "col_map_fix",
+                        cells["fix"][key],
+                        [key],
                     )
                 )
         if has_words:
-            # The box (a format radio plus four coordinate selects that lay
-            # themselves out) and Line index share the row (UX-55 r3).
-            words_row2 = feature_rows["words"]
-            word_schema.update(
-                _map_section(
-                    raw_words,
-                    WORD_FIELD_SPECS,
-                    prop_w,
-                    "col_map_words",
-                    words_row2[1],
-                    ["box"],
+            # Line index beside the word's own ids; the box (a format radio
+            # plus four coordinate selects that lay themselves out) on a line
+            # of its own.
+            for key in ("line", "box"):
+                word_schema.update(
+                    _map_section(
+                        raw_words,
+                        WORD_FIELD_SPECS,
+                        prop_w,
+                        "col_map_words",
+                        cells["words"][key],
+                        [key],
+                    )
                 )
-            )
-            word_schema.update(
-                _map_section(
-                    raw_words,
-                    WORD_FIELD_SPECS,
-                    prop_w,
-                    "col_map_words",
-                    words_row2[2],
-                    ["line"],
-                )
-            )
             # AN-32 — the reading measures, two lines named once. Each is an
             # optional field seeded from its EyeLink name, so an IA report maps
             # them all without a click and a report without them leaves the
@@ -4049,22 +4046,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         else {}
     )
     if not raw_gaze.empty:
-        # Row 2: X · Y · Timestamp — no Duration, raw gaze has no such concept.
-        rg_row2 = s3.columns(_RAW_GAZE_ROW2_W, gap="small", vertical_alignment="bottom")
+        # X · Y · Timestamp — no Duration, raw gaze has no such concept.
+        rg_cells = _map_cells(s3, rg_row1, MAP_LINES["raw_gaze"])
         raw_gaze_schema: dict = {}
-        row1_keys = ["trial", "screen_id", "participant", "text_id", "word_id", "text"]
-        for cell, key in zip(rg_row1[1:], row1_keys):
-            raw_gaze_schema.update(
-                _map_section(
-                    raw_gaze,
-                    RAW_GAZE_FIELD_SPECS,
-                    prop_g,
-                    "col_map_raw_gaze",
-                    cell,
-                    [key],
-                )
-            )
-        for cell, key in zip(rg_row2[1:], ["x", "y", "timestamp"]):
+        for key, cell in rg_cells.items():
             raw_gaze_schema.update(
                 _map_section(
                     raw_gaze,

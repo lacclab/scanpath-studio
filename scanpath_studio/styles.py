@@ -1594,12 +1594,12 @@ def get_app_css() -> str:
         top: 0;
         bottom: 0;
         left: 0;
-        /* UX-127: widened from 9% to match `_ID_ROW1_W`/`_META_ROW_W`'s own
+        /* UX-127: widened from 9% to match `_MAP_ROW_W`/`_META_ROW_W`'s own
            widened first cell in wizard.py (0.09 -> 0.135) — the Browse-files
            button didn't fit at 9%. */
         width: 13.5%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
-        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_ID_ROW1_W`
+        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_MAP_ROW_W`
            (and its row-2/meta siblings) widening from 0.135 to 0.155 — that
            gives the divider room on the picker side, this gives it room on
            the upload side, so the line no longer reads as glued to either

@@ -14691,69 +14691,43 @@ def _apply_remap() -> None:
 
 
 #: UX-104 — the editor's field grid, now the **same blocks the add-dataset
-#: screen draws**: one block per table, its identity line first (what a row
-#: *is*: trial, screen, reader, text, word, and the table's own id) and its
-#: feature line under it, rather than the old grouping which interleaved the
-#: two tables and split a table's own fields three rows apart.
+#: screen draws**: one block per table, read off `wizard.MAP_LINES` line by
+#: line — its identity line first (what a row *is*: trial, reader, text,
+#: screen), then the table's own fields — so the two screens' lines are the
+#: same lines, at the same widths, to the pixel.
 #:
 #: ``(label, widths, fields, extra)`` per rendered line, ``fields`` being
 #: ``("<table>", "<field>")`` pairs and ``extra`` naming a non-mapping control
 #: that belongs under that line (UX-106: the AOI block's char-aggregation
-#: question, which is the add screen's third AOI line). The widths are `wizard._ID_ROW1_W` and its
-#: two row-2 grids, imported rather than restated so the two screens' rows line
-#: up to the pixel. A blank label continues the block above it.
+#: question, under the word box as on the add screen). A blank label continues
+#: the block above it.
 #:
 #: Whatever a table's specs carry beyond these still lands on a trailing *More*
 #: line, so a field can never be dropped by this list falling behind
 #: ``*_FIELD_SPECS``.
 def _edit_rows() -> tuple:
     from scanpath_studio.wizard import (
-        _AOI_ROW2_W,
-        _FIX_ROW2_W,
-        _ID_ROW1_W,
+        _MAP_ROW_W,
+        _META_ROW_W,
+        MAP_LINES,
         MEASURE_ROW_W,
         MEASURE_ROWS,
     )
 
+    def block(table: str, slug: str) -> tuple:
+        return tuple(
+            (
+                _TABLE_LABELS[table] if index == 0 else "",
+                _META_ROW_W if keys == ("box",) else _MAP_ROW_W,
+                tuple((table, key) for key in keys),
+                "aggregate" if keys == ("box",) else "",
+            )
+            for index, keys in enumerate(MAP_LINES[slug])
+        )
+
     return (
-        (
-            "Fixations",
-            _ID_ROW1_W,
-            (
-                ("fixations", "trial"),
-                ("fixations", "screen_id"),
-                ("fixations", "participant"),
-                ("fixations", "text_id"),
-                ("fixations", "word_id"),
-                ("fixations", "fixation_id"),
-            ),
-            "",
-        ),
-        (
-            "",
-            _FIX_ROW2_W,
-            (
-                ("fixations", "x"),
-                ("fixations", "y"),
-                ("fixations", "timestamp"),
-                ("fixations", "duration"),
-            ),
-            "",
-        ),
-        (
-            "Words (interest areas)",
-            _ID_ROW1_W,
-            (
-                ("words", "trial"),
-                ("words", "screen_id"),
-                ("words", "participant"),
-                ("words", "text_id"),
-                ("words", "word_id"),
-                ("words", "text"),
-            ),
-            "",
-        ),
-        ("", _AOI_ROW2_W, (("words", "box"), ("words", "line")), "aggregate"),
+        *block("fixations", "fix"),
+        *block("words", "words"),
         # AN-32 — the reading measures, on the same two lines the add screen
         # gives them. Part of the AOI block, so no block gap above them.
         *(
@@ -14765,20 +14739,7 @@ def _edit_rows() -> tuple:
             )
             for line, keys in enumerate(MEASURE_ROWS)
         ),
-        (
-            "Raw gaze",
-            _ID_ROW1_W,
-            (
-                ("raw_gaze", "trial"),
-                ("raw_gaze", "screen_id"),
-                ("raw_gaze", "participant"),
-                ("raw_gaze", "x"),
-                ("raw_gaze", "y"),
-                ("raw_gaze", "timestamp"),
-            ),
-            "",
-        ),
-        ("", _FIX_ROW2_W, (("raw_gaze", "text"),), ""),
+        *block("raw_gaze", "raw_gaze"),
     )
 
 
@@ -15105,9 +15066,9 @@ def _render_remap_fields(
         if label and drawn and extra != "measures":
             st.markdown('<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True)
         drawn.add(label or "-")
-        row = st.columns(
-            list(widths[: len(live) + 1]), gap="small", vertical_alignment="bottom"
-        )
+        # The line's whole grid, filled from the left, so a line with fewer
+        # fields keeps its cells under the ones above it.
+        row = st.columns(list(widths), gap="small", vertical_alignment="bottom")
         row[0].markdown(
             f'<div class="sps-id-row-name sps-geo-row-name">{label}</div>',
             unsafe_allow_html=True,

@@ -1,0 +1,1 @@
+A repeated reading's generated trial ID no longer merges with a real trial of the same name: when a participant already has a trial `a_r2`, the second reading of `a` is written `a__r2`, so the two stay separate scanpaths.

@@ -10260,18 +10260,28 @@ def _run_app() -> None:
     # and CLI for reproducible headless renders.
     if local_filesystem_enabled():
         with _editor_part(setup_stimulus_slot, "edit_stimulus"):
+            # Each title carries its help as the dotted underline, as every
+            # other field on this screen does, not a `?` icon.
+            root_help = "Local folder containing one image per text or trial."
+            row_label(st, "Image folder", root_help)
             image_root = st.text_input(
                 "Image folder",
                 key="stimulus_image_root",
                 placeholder="/path/to/stimulus-images",
-                help="Local folder containing one image per text or trial.",
+                help=root_help,
+                label_visibility="collapsed",
             ).strip()
+            pattern_help = (
+                "Use the app's field names in braces — {text_id}, {trial_id} or "
+                "{participant_id}. Subfolders work too."
+            )
+            row_label(st, "Filename pattern", pattern_help)
             image_pattern = st.text_input(
                 "Filename pattern",
                 key="stimulus_image_pattern",
                 value="{text_id}.png",
-                help="Use the app's field names in braces — {text_id}, {trial_id} "
-                "or {participant_id}. Subfolders work too.",
+                help=pattern_help,
+                label_visibility="collapsed",
             ).strip()
             if image_root:
                 try:

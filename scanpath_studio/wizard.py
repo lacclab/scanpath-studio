@@ -3005,8 +3005,12 @@ def _wizard_setup_step(
             + ("is" if len(guessed) == 1 else "are")
             + " an estimate or a default. If you know the real "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it* — every figure is drawn to them. You can "
-            "also add the dataset now and change them later."
+            + ", choose *I know it* — every figure is drawn to them."
+            + (
+                " You can also add the dataset now and change them later."
+                if initial is None
+                else ""
+            )
         )
 
     # Publish the snapshot for the save/restore + export writers.

@@ -1317,7 +1317,7 @@ LEGEND_KINDS = ("compare", "saccades", "colors", "size_key")
 LEGEND_KIND_LABELS = {
     "compare": "Compare (A/B)",
     "saccades": "Saccade types",
-    "colors": "Fixation colours",
+    "colors": "Fixation colors",
     "size_key": "Size key",
 }
 #: The eight spots a legend can take around the plot — each corner, the middle

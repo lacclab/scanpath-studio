@@ -165,7 +165,7 @@ class FigureSettings:
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
     #: The legend of a categorical ``color_by`` (and the Highlight entries,
-    #: raw gaze) — Figure & canvas → Legends → Fixation colours → Show.
+    #: raw gaze) — Figure & canvas → Legends → Fixation colors → Show.
     show_color_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
@@ -1925,7 +1925,7 @@ def apply_legend_layout(
     its side by what it holds.
     """
     if not show_colors:
-        # Fixation colours → Show off: the entries stay on the figure's traces
+        # Fixation colors → Show off: the entries stay on the figure's traces
         # (their markers still draw), only their legend lines go.
         for trace in fig.data:
             if _trace_legend_kind(trace, comparing) == "colors":

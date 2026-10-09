@@ -6718,12 +6718,26 @@ def render_plot_controls(
                 ),
                 field_host=_sub_row("Opacity", caption_help=opac_help),
             )
-        # The fixations' own colour bar, after the marker groups — idle unless the colour-by column is
-        # numeric, since a discrete palette has no scale to show.
+        # The fixations' own colour bar, after the marker groups — idle unless
+        # the colour-by column is numeric, since a discrete palette has no
+        # scale to show. #422: the greyed row then says why, and where the
+        # thing on the figure that looks like one is switched — a categorical
+        # colour's legend is the Legends table's, and a greyed, checked *Show*
+        # here read as a bar that could not be removed.
+        if color_by == UNIFORM_COLOR_FIELD:
+            bar_idle = f"{ICONS['warning']} No color bar: the markers are one color."
+        elif raw_cmin is None:
+            bar_idle = (
+                f"{ICONS['warning']} No color bar for **Line** or a categorical "
+                f"color. Its legend is in {ICONS['figure']} **Figure & canvas** ▾ "
+                f"→ **Legends** → **{LEGEND_KIND_LABELS['colors']}**."
+            )
+        else:
+            bar_idle = ""
         _render_colorbar_rows(
             "fixation",
-            disabled=metric_disabled or raw_cmin is None,
-            reason=metric_reason,
+            disabled=metric_disabled or bool(bar_idle),
+            reason=metric_reason or bar_idle,
         )
         # PRE-3: vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"

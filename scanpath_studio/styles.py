@@ -1505,7 +1505,10 @@ def get_app_css() -> str:
     }
 
     /* The dataset name leads the wizard and names the whole thing, so it is set
-       larger than an ordinary field rather than looking like the first of them. */
+       larger than an ordinary field rather than looking like the first of them.
+       Its label is the part's own title, so the box gets the room under that
+       title a label would have taken — it sat pressed against it. */
+    .st-key-wiz_name_box { margin-top: 1rem; }
     .st-key-wiz_name_box input {
         font-size: 1.05rem;
         font-weight: 600;

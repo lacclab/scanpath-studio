@@ -19,7 +19,13 @@ from .constants import (
     SELECTOR_SCREEN_TRACK,
     spoken,
 )
-from .data import frame_fingerprint, stable_id
+from .data import (
+    assign_fingerprint,
+    distinct_key_codes,
+    frame_fingerprint,
+    names_readings,
+    stable_id,
+)
 from .fields import labeled
 from .styles import widen_menu
 
@@ -94,8 +100,6 @@ def combo_source(
     the first frame's, in their order, then each other table's own trials' —
     which is all `build_combo_options` reads.
     """
-    from .data import names_readings
-
     tables = [f for f in (fixations, words, raw_gaze) if f is not None and not f.empty]
     if not tables:
         return raw_gaze if raw_gaze is not None else pd.DataFrame()
@@ -103,13 +107,14 @@ def combo_source(
     if not others:
         return primary
     composite_cols = tuple(st.session_state.get("_composite_trial_columns") or [])
-    combined = _combo_source_union(
-        primary,
-        others,
-        composite_cols,
-        cache_key=(frame_fingerprint(primary), *map(frame_fingerprint, others)),
-    )
-    return primary if combined is None else combined
+    cache_key = (frame_fingerprint(primary), *map(frame_fingerprint, others))
+    combined = _combo_source_union(primary, others, composite_cols, cache_key=cache_key)
+    if combined is None:
+        return primary
+    # A fresh copy per call (`st.cache_data`): named by its inputs, so
+    # `build_combo_options` keys on it without hashing it every rerun.
+    assign_fingerprint(combined, ("combo_source", cache_key, composite_cols))
+    return combined
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -122,19 +127,18 @@ def _combo_source_union(
     """`combo_source`'s identity rows, or ``None`` when no other table adds a
     trial."""
     progress.report()
-    from .data import trial_keys
-
-    # The common answer — the other tables add nothing — costs one
-    # deduplication of two id columns per table. Only a table that does add
-    # trials is deduplicated on every identity column, and only the primary's
-    # rows are kept whole (PERF: three full scans at 5M samples was ~0.8 s).
-    known = trial_keys(_primary)
+    # The common answer — the other tables add nothing — is one lookup over
+    # each table's distinct readings (`distinct_key_codes`, remembered per
+    # frame, so a table the filters or a group already keyed costs nothing).
+    # Only a table that does add trials is deduplicated on every identity
+    # column (PERF: three full scans at 5M samples was ~0.8 s).
+    known = distinct_key_codes(_primary)[1]
     adding = []
     for other in _others:
-        extra = trial_keys(other) - known
-        if extra:
-            adding.append((other, extra))
-            known |= extra
+        extra = distinct_key_codes(other)[1].difference(known, sort=False)
+        if len(extra):
+            adding.append((other, set(extra)))
+            known = known.union(extra, sort=False)
     if not adding:
         return None
     wanted = list(dict.fromkeys([*_COMBO_ID_COLUMNS, *composite_cols]))

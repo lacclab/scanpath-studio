@@ -37,7 +37,6 @@ from scanpath_studio.aggregation import (
     cohort_word_profile,
     distinct_group_labels,
     ensure_fixation_enrichment,
-    group_mask,
     group_mean_difference,
     group_word_difference,
     landing_positions,
@@ -215,11 +214,11 @@ from scanpath_studio.data import (
     coerce_bool_or_na,
     compute_word_metrics,
     derive_trial_index,
+    distinct_key_codes,
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
     filter_to_keys,
-    filter_trials,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
@@ -236,10 +235,12 @@ from scanpath_studio.data import (
     remap_normalized_frame,
     repeat_bases,
     respell_reading,
+    select_trials_cached,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
     trial_filter_conflict_note,
+    trial_filter_params,
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
@@ -2717,24 +2718,17 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
     """
     # BUG-103: each step names its new frames by its inputs and settings, as
     # A's chain in `app._run_app` does, so B's pool is not re-hashed per rerun.
-    words, fixations = filter_trials(
-        source.words,
-        source.fixations,
-        participants=filters["participants"],
-        metadata=filters["metadata"],
-        ranges=filters.get("ranges"),
-        drop_unknown=filters.get("ranges_drop_unknown"),
+    # #412: decided per reading across B's two tables, once per filter change
+    # — in a slot of its own, or A's and B's would evict each other each run.
+    selected = select_trials_cached(
+        source.words, source.fixations, filters, slot="cmp_trial_filters"
     )
+    words, fixations = selected.words, selected.fixations
     assign_derived(
         (words, fixations),
         "filter_trials",
         (source.words, source.fixations),
-        (
-            filters["participants"],
-            filters["metadata"],
-            filters.get("ranges"),
-            tuple(filters.get("ranges_drop_unknown") or ()),
-        ),
+        trial_filter_params(filters),
     )
     selected_keys = filters.get("trial_keys")
     if selected_keys is not None:
@@ -9484,25 +9478,30 @@ def _cohort_reader_ids(
     BUG-112: an AOI-only dataset's cohorts read "0 readers" beside charts drawn
     from theirs; #412: a reading only one table has is the cohort's too, and a
     field only one table carries selects the same readers from both. Read off
-    the tables' distinct readings (cached per frame), not their rows, once
-    ``spec`` is resolved to the reading key (`_resolve_cohort`).
+    the tables' distinct readings (`data.distinct_key_codes`, remembered per
+    frame), not their rows, once ``spec`` is resolved to the reading key
+    (`_resolve_cohort`).
     """
-    tables = [
-        f
-        for f in (fixations, words)
-        if f is not None and not f.empty and {"participant_id", "trial_id"} <= set(f)
-    ]
-    if spec:
-        spec = _resolve_cohort(spec, words, fixations).spec
-    readings: set = set()
-    for frame in tables:
-        readings |= _c_trial_keys(frame, frame_fingerprint(frame))
-    if not readings:
+    readings = None
+    for frame in (fixations, words):
+        if frame is None or frame.empty or not set(_TRIAL_KEY_COLUMNS) <= set(frame):
+            continue
+        keys = distinct_key_codes(frame, _TRIAL_KEY_COLUMNS)[1]
+        readings = keys if readings is None else readings.union(keys, sort=False)
+    if readings is None or readings.empty:
         return set()
-    keys = pd.DataFrame(sorted(readings), columns=list(_TRIAL_KEY_COLUMNS))
     if spec:
-        keys = keys[group_mask(keys, spec)]
-    return set(keys["participant_id"])
+        mask = np.ones(len(readings), dtype=bool)
+        for column, values in _resolve_cohort(spec, words, fixations).spec.items():
+            if not values:
+                continue
+            if column == _TRIAL_KEY_COLUMNS:
+                mask &= readings.isin({tuple(map(str, v)) for v in values})
+            else:  # a participant pick — the one other reading-key constraint
+                level = readings.get_level_values(column)
+                mask &= level.isin({str(v) for v in values})
+        readings = readings[mask]
+    return set(readings.get_level_values("participant_id"))
 
 
 def _cohort_readers(
@@ -9625,12 +9624,12 @@ def _resolve_cohort(spec, words, fixations) -> GroupResolution:
         frame_fingerprint(fixations),
         hashable_key(spec),
     )
-    return frame_cache(
-        "cohort_readings",
-        key,
-        lambda: resolve_group_spec(spec, words, fixations),
-        keep=3,
-    )
+
+    def _build() -> GroupResolution:
+        progress.report()  # a miss is work: the Corpus card may show
+        return resolve_group_spec(spec, words, fixations)
+
+    return frame_cache("cohort_readings", key, _build, keep=3)
 
 
 def _cohort_unavailable(host, cohorts) -> bool:
@@ -11148,9 +11147,11 @@ def render_per_group_tab(
     # corpus-sized frame that nothing else ever saw — and (since PERF-3) parked
     # it in the fingerprint memo for the rest of the run.
     fix_in = apply_group(fixations_filtered, cohort.spec)
-    # BUG-103: all three are new every rerun; each is named by what made it.
-    assign_derived(words_g, "apply_group", words_filtered, spec or {})
-    assign_derived(fix_in, "apply_group", fixations_filtered, spec or {})
+    # BUG-103: all three are new every rerun; each is named by what made it —
+    # both tables, since #412 decides the group's readings across the two.
+    pool = (words_filtered, fixations_filtered)
+    assign_derived(words_g, "apply_group", pool, (0, spec or {}))
+    assign_derived(fix_in, "apply_group", pool, (1, spec or {}))
     fix_g = _c_enrich_fix(
         fix_in,
         words_g,

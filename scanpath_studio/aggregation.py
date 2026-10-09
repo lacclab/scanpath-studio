@@ -1511,20 +1511,22 @@ def on_reading_key(column) -> bool:
 def _composite_mask(frame: pd.DataFrame, columns: tuple, values) -> np.ndarray:
     """Rows whose ``columns`` match one of ``values`` (tuples) as a whole.
 
-    Matched per distinct key rather than per row: the frame is grouped once
-    (~30 ms per million rows) and only its distinct keys are looked up, where a
-    row-level ``MultiIndex.isin`` against thousands of readings took ~140 ms —
-    and a cohort of #412's readings is matched several times a rerun.
+    Matched per distinct key rather than per row: the frame's rows are codes
+    into its distinct keys (`data.distinct_key_codes`, remembered per frame
+    across reruns), so a mask is one lookup per key — a cohort of #412's
+    readings is matched several times a rerun, where a row-level
+    ``MultiIndex.isin`` against thousands of readings took ~140 ms per million
+    rows each time.
     """
-    grouped = frame.groupby(
-        [frame[c].astype(str).rename(c) for c in columns], sort=False, dropna=False
-    )
-    keys = grouped.size().index
+    # Imported here, as in `resolve_group_spec`: `data` carries the app's caches.
+    from .data import distinct_key_codes
+
+    codes, keys = distinct_key_codes(frame, columns)
     if len(columns) == 1:
         allowed = {str(v[0]) if isinstance(v, tuple) else str(v) for v in values}
     else:
         allowed = {tuple(str(part) for part in v) for v in values}
-    return keys.isin(allowed)[grouped.ngroup().to_numpy()]
+    return keys.isin(allowed)[codes]
 
 
 def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFrame:

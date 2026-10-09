@@ -17,6 +17,7 @@ import pytest
 from scanpath_studio import api
 from scanpath_studio.data import (
     TEXT_ID_MAPPED,
+    distinct_key_codes,
     filter_trials,
     raw_gaze_in_pool,
     select_trials,
@@ -173,6 +174,24 @@ class TestDisagreement:
         assert len(_readings(result.fixations)) == 2
 
 
+class TestReadingCodes:
+    """`distinct_key_codes`, which the filters, the groups and the pool share."""
+
+    def test_rows_point_at_their_reading_spelled_as_strings(self):
+        frame = pd.DataFrame({"participant_id": [1, "1", 2], "trial_id": ["a"] * 3})
+        codes, keys = distinct_key_codes(frame)
+        assert list(keys) == [("1", "a"), ("2", "a")]
+        assert [keys[c] for c in codes] == [("1", "a"), ("1", "a"), ("2", "a")]
+
+    def test_a_frame_is_grouped_once(self):
+        frame = _fixations()
+        first = distinct_key_codes(frame)
+        assert distinct_key_codes(frame)[0] is first[0]
+        # Another frame, even one made from it, is never served its codes.
+        other = frame.iloc[:2]
+        assert len(distinct_key_codes(other)[1]) == 1
+
+
 class TestRawGaze:
     def _samples(self) -> pd.DataFrame:
         return pd.DataFrame(
@@ -184,28 +203,35 @@ class TestRawGaze:
             }
         )
 
-    def test_samples_follow_the_readings_the_tables_know(self):
-        words, fixations = _words(difficulty_level=LEVELS), _fixations()
-        result = select_trials(words, fixations, metadata={"difficulty_level": {"Adv"}})
-        kept = raw_gaze_in_pool(
-            self._samples(),
-            words,
-            fixations,
-            result.words,
-            result.fixations,
-            keep_unknown=result.selection.keeps_unknown,
+    def _kept(self, words, fixations, **filters):
+        result = select_trials(words, fixations, **filters)
+        return _readings(
+            raw_gaze_in_pool(
+                self._samples(),
+                words,
+                fixations,
+                result.words,
+                result.fixations,
+                keep_unknown=result.selection.keeps_unknown,
+            )
         )
-        assert _readings(kept) == [("p_adv", "adv")]
-        assert _readings(result.selection.narrow(self._samples())) == [("p_adv", "adv")]
+
+    def test_a_category_leaves_out_a_samples_only_trial(self):
+        """Its samples cannot say it is Adv, so it is not."""
+        kept = self._kept(
+            _words(difficulty_level=LEVELS),
+            _fixations(),
+            metadata={"difficulty_level": {"Adv"}},
+        )
+        assert kept == [("p_adv", "adv")]
 
     def test_a_range_keeps_a_samples_only_trial(self):
-        words = _words(score=[0.2, 0.2, 0.9, 0.9])
-        result = select_trials(words, _fixations(), ranges={"score": (0.0, 0.5)})
-        assert result.selection.keeps_unknown
-        assert _readings(result.selection.narrow(self._samples())) == [
-            ("p_adv", "adv"),
-            ("p_s", "samples_only"),
-        ]
+        kept = self._kept(
+            _words(score=[0.2, 0.2, 0.9, 0.9]),
+            _fixations(),
+            ranges={"score": (0.0, 0.5)},
+        )
+        assert kept == [("p_adv", "adv"), ("p_s", "samples_only")]
 
 
 # -----------------------------------------------------------------------------

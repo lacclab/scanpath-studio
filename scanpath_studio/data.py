@@ -547,6 +547,19 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
     )
 
 
+def forget_frame_cache(slot: str) -> None:
+    """Drop one `frame_cache` slot's entries, when what it holds is no longer
+    wanted — so a cached frame does not outlive its use in session state."""
+    try:
+        store = st.session_state.get(_FRAME_CACHE_KEY)
+    except (RuntimeError, AttributeError, KeyError):
+        return  # No runtime: there is no cache.
+    if store:
+        with _INFLIGHT_LOCK:
+            store.pop(slot, None)
+            store.pop((_EARLIER, slot), None)
+
+
 def clear_frame_cache() -> None:
     """Drop every no-copy frame cache entry (PERF-6).
 
@@ -6104,39 +6117,20 @@ class TrialSelection:
     once per reading, ``(participant_id, trial_id)``, from the tables that
     carry its column, and that one answer is applied to every table.
 
-    ``kept`` are the readings the tables know that the filters keep, ``known``
-    every reading the tables know. A reading none of them knows (one only the
-    raw-gaze samples have) has no value for any filter, so it survives exactly
-    when ``keeps_unknown``: a category never matches a missing value, while a
-    range keeps one unless its *Keep unknown values* is off. ``conflicts`` maps
-    a column to the readings whose two tables disagree about it — one says the
-    reading is in the selection, the other that it is not. They are left out,
-    never decided for one table, and the caller reports them.
+    ``kept`` are the readings the tables know that the filters keep. A reading
+    neither of them knows (one only the raw-gaze samples have) has no value for
+    any filter, so it survives exactly when ``keeps_unknown``
+    (`raw_gaze_in_pool(keep_unknown=)`): a category never matches a missing
+    value, while a range keeps one unless its *Keep unknown values* is off.
+    ``conflicts`` maps a column to the readings whose two tables disagree about
+    it — one says the reading is in the selection, the other that it is not.
+    They are left out, never decided for one table, and the caller reports
+    them.
     """
 
     kept: frozenset
-    known: frozenset
     keeps_unknown: bool = True
     conflicts: dict = field(default_factory=dict)
-
-    def narrow(self, frame: pd.DataFrame | None) -> pd.DataFrame | None:
-        """``frame``'s rows of the readings this selection keeps.
-
-        For a table the selection was not resolved from (raw gaze): a reading
-        the resolving tables know follows their answer, and one they do not
-        survives when ``keeps_unknown``. ``frame`` itself when nothing goes.
-        """
-        if frame is None or frame.empty:
-            return frame
-        if "participant_id" not in frame.columns or "trial_id" not in frame.columns:
-            return frame
-        keys = pd.MultiIndex.from_arrays(
-            [frame["participant_id"].astype(str), frame["trial_id"].astype(str)]
-        )
-        mask = keys.isin(self.kept)
-        if self.keeps_unknown:
-            mask |= ~keys.isin(self.known)
-        return frame if mask.all() else frame[mask]
 
 
 @dataclass(frozen=True)
@@ -6157,21 +6151,67 @@ class TrialFilterResult:
         return self.selection.conflicts if self.selection is not None else {}
 
 
-def _reading_codes(frame: pd.DataFrame) -> tuple[np.ndarray, pd.MultiIndex]:
-    """Each row's reading as a code into the frame's distinct readings.
+#: The columns a reading is keyed by.
+READING_KEY_COLUMNS = ("participant_id", "trial_id")
 
-    One grouping pass (~30 ms per million rows), after which every filter on
-    the frame is a ``bincount`` over the codes rather than another pass over
-    the string ids.
+#: #412 — `distinct_key_codes`' memo, ``(id(frame), columns) → (weak ref,
+#: codes, keys)``. Across reruns, unlike PERF-3's per-run fingerprint memo: the
+#: frames on the rerun path are the same objects run after run (`frame_cache`,
+#: the stored datasets) and are never written in place
+#: (tests/test_frame_immutability.py), so their codes cannot go stale. The weak
+#: ref makes the `id()` key safe — a collected frame's id may be reissued, but
+#: its ref is dead — and dead entries are swept before a live one is evicted.
+_KEY_CODES_MEMO: OrderedDict = OrderedDict()
+_KEY_CODES_LOCK = threading.Lock()
+#: Live frames worth remembering at once: the pool and the filtered pool (two
+#: tables each), Compare's B, a group's frames. The codes are 4 bytes a row.
+_KEY_CODES_MAX = 12
+
+
+def distinct_key_codes(
+    frame: pd.DataFrame, columns: Sequence[str] = READING_KEY_COLUMNS
+) -> tuple[np.ndarray, pd.Index]:
+    """Each row of ``frame`` as a code into its distinct ``columns`` keys (#412).
+
+    Returns ``(codes, keys)``: ``keys[codes[i]]`` is row ``i``'s key, the keys
+    spelled as strings (a ``MultiIndex`` for several columns), as `trial_keys`
+    compares them. One grouping pass on the columns as they are (~30 ms per
+    million rows; stringifying every row first cost 20× that on numeric ids),
+    then a lookup per *distinct* key — so the trial filters, a group's mask
+    and the trial pool each cost a ``bincount`` or an index lookup on a frame
+    whose codes are known. Remembered per frame object across reruns
+    (`_KEY_CODES_MEMO`).
     """
+    columns = tuple(columns)
+    ident = (id(frame), columns)
+    with _KEY_CODES_LOCK:
+        hit = _KEY_CODES_MEMO.get(ident)
+        if hit is not None and hit[0]() is frame:
+            _KEY_CODES_MEMO.move_to_end(ident)
+            return hit[1], hit[2]
     grouped = frame.groupby(
-        [
-            frame["participant_id"].astype(str).rename("participant_id"),
-            frame["trial_id"].astype(str).rename("trial_id"),
-        ],
-        sort=False,
+        [frame[c].rename(c) for c in columns], sort=False, dropna=False
     )
-    return grouped.ngroup().to_numpy(), grouped.size().index
+    codes = grouped.ngroup().to_numpy().astype(np.int32, copy=False)
+    keys = grouped.size().index
+    if isinstance(keys, pd.MultiIndex):
+        keys = pd.MultiIndex.from_arrays(
+            [keys.get_level_values(i).astype(str) for i in range(keys.nlevels)],
+            names=columns,
+        )
+    else:
+        keys = keys.astype(str)
+    if not keys.is_unique:
+        # Two spellings of one id (1 and "1" in an object column) are one key.
+        remap, keys = keys.factorize()
+        codes = remap[codes].astype(np.int32, copy=False)
+    with _KEY_CODES_LOCK:
+        for dead in [k for k, entry in _KEY_CODES_MEMO.items() if entry[0]() is None]:
+            del _KEY_CODES_MEMO[dead]
+        while len(_KEY_CODES_MEMO) >= _KEY_CODES_MAX:
+            _KEY_CODES_MEMO.popitem(last=False)
+        _KEY_CODES_MEMO[ident] = (weakref.ref(frame), codes, keys)
+    return codes, keys
 
 
 def carries_mapped_text(frame: pd.DataFrame) -> bool:
@@ -6261,7 +6301,7 @@ def _resolve_trial_filters(
             rules.append((col, _in_range, col not in dropping, owners))
     if not rules:
         return None
-    codes = {id(f): _reading_codes(f) for f in usable}
+    codes = {id(f): distinct_key_codes(f) for f in usable}
     universe = codes[id(usable[0])][1]
     for f in usable[1:]:
         universe = universe.union(codes[id(f)][1], sort=False)
@@ -6296,7 +6336,6 @@ def _resolve_trial_filters(
         keep &= decided
     selection = TrialSelection(
         kept=frozenset(universe[keep]),
-        known=frozenset(universe),
         keeps_unknown=keeps_unknown,
         conflicts=conflicts,
     )
@@ -6372,6 +6411,60 @@ def filter_trials(
         drop_unknown=drop_unknown,
     )
     return result.words, result.fixations
+
+
+def trial_filter_params(trial_filters: dict) -> tuple:
+    """What `select_trials` reads of a ``controls.read_trial_filters`` result,
+    as ``(participants, metadata, ranges, drop_unknown)``."""
+    return (
+        trial_filters.get("participants"),
+        trial_filters.get("metadata") or {},
+        trial_filters.get("ranges") or {},
+        tuple(trial_filters.get("ranges_drop_unknown") or ()),
+    )
+
+
+def select_trials_cached(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    trial_filters: dict,
+    *,
+    slot: str,
+) -> TrialFilterResult:
+    """`select_trials` over a pool, worked out once per filter change (#412).
+
+    Deciding each filter per reading is a grouping pass over each table, so
+    the answer is kept in the `frame_cache` ``slot`` — one per pool (the
+    app's, Compare's B), or they would evict each other every rerun — and a
+    rerun under the same filters gets the same frames back. With no filter set
+    the frames come back as they are and the slot is emptied, so it does not
+    hold a filtered copy of a pool nobody is narrowing any more.
+    """
+    params = trial_filter_params(trial_filters)
+    participants, metadata, ranges, drop_unknown = params
+    if participants is None and not metadata and not ranges:
+        forget_frame_cache(slot)
+        return TrialFilterResult(words, fixations)
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        hashable_key(params),
+    )
+
+    def _build() -> tuple:
+        progress.report()  # a miss is work: a gated card over it may show
+        result = select_trials(
+            words,
+            fixations,
+            participants=participants,
+            metadata=metadata,
+            ranges=ranges,
+            drop_unknown=drop_unknown,
+        )
+        # A tuple, so `frame_cache` names the two frames by its key.
+        return result.words, result.fixations, result.selection
+
+    return TrialFilterResult(*frame_cache(slot, key, _build))
 
 
 def select_readings(

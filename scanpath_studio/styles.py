@@ -770,6 +770,9 @@ def get_app_css() -> str:
         line-height: 1.45;
         color: inherit;
     }
+    /* #422: values in the app's regular weight (400), like the trial picker
+       above them — at 500 they read bolder than every other value on the
+       page. A value both rows share still steps back, by its colour. */
     .sps-chip-table-wrap table.sps-chip-table th,
     .sps-chip-table-wrap table.sps-chip-table td {
         padding: 0.28rem 0.55rem;
@@ -779,7 +782,7 @@ def get_app_css() -> str:
         text-align: left;
         vertical-align: middle;
         white-space: nowrap;
-        font-weight: 500;
+        font-weight: 400;
     }
     .sps-chip-table-wrap table.sps-chip-table thead th {
         padding-top: 0;
@@ -812,7 +815,6 @@ def get_app_css() -> str:
     }
     .sps-chip-table-wrap table.sps-chip-table td.sps-ct-same,
     .sps-chip-table-wrap table.sps-chip-table td.sps-ct-missing {
-        font-weight: 400;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
     .sps-ct-dot {

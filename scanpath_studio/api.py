@@ -208,6 +208,7 @@ _CANONICAL_OPTION_NAMES = {
     "saccade_color",
     "saccade_style",
     "saccade_width",
+    "saccade_opacity",
     "saccade_color_mode",
     "saccade_class_colors",
     "saccade_type_legend",

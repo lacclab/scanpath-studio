@@ -125,6 +125,8 @@ GLOBAL_ANIM_GRID_STEP_MS = "global_anim_grid_step_ms"
 GLOBAL_ANIM_MAX_FRAMES = "global_anim_max_frames"
 GLOBAL_LINE_SPACING = "global_line_spacing"
 GLOBAL_SACCADE_WIDTH = "global_saccade_width"
+# #422: the saccade lines' and arrows' opacity.
+GLOBAL_SACCADE_OPACITY = "global_saccade_opacity"
 GLOBAL_FIXATION_OPACITY = "global_fixation_opacity"
 GLOBAL_STIMULUS_IMAGE_OPACITY = "global_stimulus_image_opacity"
 GLOBAL_STIMULUS_IMAGE_OFFSET_X = "global_stimulus_image_offset_x"
@@ -625,6 +627,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         "preproc_merge_distance_chars": GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         "saccade_width": GLOBAL_SACCADE_WIDTH,
+        "saccade_opacity": GLOBAL_SACCADE_OPACITY,
         "fixation_opacity": GLOBAL_FIXATION_OPACITY,
         "snap_position": GLOBAL_FIXATION_SNAP_POSITION,
         "stimulus_image_opacity": GLOBAL_STIMULUS_IMAGE_OPACITY,
@@ -855,6 +858,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
     {
         GLOBAL_LINE_SPACING,
         GLOBAL_SACCADE_WIDTH,
+        GLOBAL_SACCADE_OPACITY,
         GLOBAL_ORDER_FONT_SIZE,
         GLOBAL_ANIM_GRID_STEP_MS,
         GLOBAL_ANIM_MAX_FRAMES,
@@ -993,6 +997,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_COLOR,
         GLOBAL_SACCADE_STYLE,
         GLOBAL_SACCADE_WIDTH,
+        GLOBAL_SACCADE_OPACITY,
         GLOBAL_SACCADE_RENDER_MODE,
         GLOBAL_SACCADE_COLOR_MODE,
         GLOBAL_SACCADE_TYPE_LEGEND,

@@ -2003,6 +2003,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("saccade_style", "Solid"), "solid"
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
+        saccade_opacity=viz_settings.get("saccade_opacity", 1.0),
         saccade_color_mode=viz_settings.get("saccade_color_mode", "Uniform"),
         saccade_class_colors=viz_settings.get("saccade_class_colors"),
         saccade_type_legend=viz_settings.get("saccade_type_legend", True),
@@ -4422,6 +4423,7 @@ def _build_studio_config(
             "saccade_width": float(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
+            "saccade_opacity": float(viz_settings.get("saccade_opacity", 1.0)),
             # VIZ-8: colour-by-reading-type mode + per-class palette + legend.
             "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
             "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
@@ -5496,6 +5498,12 @@ def _plan_replay(
         # Where the legends sit is layout only too: applied to the finished
         # figure in `finished_figure`, so moving a legend rebuilds no frame.
         legend_layout=None,
+        # #422: so is the saccades' opacity — a trace attribute no frame
+        # restates — stamped in `finished_figure`, so dragging it rebuilds no
+        # frame. And the replay never reads the static figure's Snap to line.
+        saccade_opacity=1.0,
+        fixation_snap_to_line=False,
+        fixation_snap_position=DEFAULT_SNAP_POSITION,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5618,6 +5626,11 @@ def _build_and_render_animation(
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")
         )
+        # #422: the frames were built at full opacity (`_plan_replay`).
+        fig.update_traces(
+            opacity=animation_settings.saccade_opacity,
+            selector=lambda trace: trace.name in ("saccades", "saccade direction"),
+        )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(
             animation_settings, trial_fixations, anim_inputs["fixations_b"]
@@ -5648,6 +5661,7 @@ def _build_and_render_animation(
         bool(animation_settings.duration_size_legend),
         # Not in `anim_key` (the frames never read it), so the view keys on it.
         repr(normalize_legend_layout(animation_settings.legend_layout)),
+        float(animation_settings.saccade_opacity),
     )
     view = _cached_replay_view(
         clip_inputs,

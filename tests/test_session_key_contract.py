@@ -482,6 +482,7 @@ def _restore_config_app():
             "saccade_color": "#112233",
             "saccade_style": "Solid",
             "saccade_width": 2.0,
+            "saccade_opacity": 0.5,
             "saccade_render_mode": "Arc",
             "saccade_color_mode": "Uniform",
             "saccade_type_legend": True,

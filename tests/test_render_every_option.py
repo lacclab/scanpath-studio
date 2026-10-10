@@ -95,6 +95,7 @@ NON_DEFAULT = {
     "saccade_color": "#123456",
     "saccade_style": "dash",
     "saccade_width": 3.0,
+    "saccade_opacity": 0.5,
     "saccade_color_mode": "By type",
     "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#abcdef"},
     "saccade_type_legend": False,

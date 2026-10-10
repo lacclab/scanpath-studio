@@ -606,6 +606,8 @@ _SHARE_FLOAT_PARAMS = {
     "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
+    # #422: the saccade lines' and arrows' opacity.
+    "saccade_opacity": "global_saccade_opacity",
     "fixation_opacity": "global_fixation_opacity",
     # #422: where on its line a snapped fixation sits, in line heights.
     "snap_position": "global_fixation_snap_position",
@@ -773,6 +775,7 @@ _URL_BOUNDED = {
     "global_heatmap_sigma_px": HEATMAP_SIGMA_BOUNDS,
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
+    "global_saccade_opacity": (0.1, 1.0),
     "global_order_font_size": (6, 72),
     "global_anim_grid_step_ms": (20, 500),
     "global_anim_max_frames": (30, 2000),
@@ -2496,6 +2499,13 @@ def _restore_plot_config(
             SACCADE_WIDTH_BOUNDS[0],
             SACCADE_WIDTH_BOUNDS[1],
             "saccade line width",
+        )
+    if "saccade_opacity" in coloring:
+        put_float(
+            coloring["saccade_opacity"],
+            "global_saccade_opacity",
+            *_URL_BOUNDED["global_saccade_opacity"],
+            "saccade opacity",
         )
     # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
     if "saccade_render_mode" in coloring:

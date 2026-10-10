@@ -162,6 +162,9 @@ class FigureSettings:
     saccade_color: str = SACCADE_COLOR
     saccade_style: str = "solid"
     saccade_width: float = DEFAULT_SACCADE_WIDTH
+    #: #422 — the saccade lines' and direction arrows' opacity, one value for
+    #: the whole figure (both scanpaths in Compare and the co-animation).
+    saccade_opacity: float = 1.0
     saccade_color_mode: str = "Uniform"
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
@@ -3360,8 +3363,11 @@ def _add_saccade_layer(
     visible_classes: Iterable[str] | None = None,
     render_mode: str = "Straight",
     two_way: bool = False,
+    opacity: float = 1.0,
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
+
+    ``opacity`` (#422) is the lines' and the arrowheads' alike.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
     given (the per-fixation reading class from ``measures.classify_saccades``)
@@ -3438,6 +3444,7 @@ def _add_saccade_layer(
                     line=dict(
                         color=palette.get(cls_name, color), width=width, dash=style
                     ),
+                    opacity=opacity,
                     hoverinfo="skip",
                     # VIZ-8: the colour key is optional — hide it (but keep the
                     # coloured sub-traces) when class_legend is off.
@@ -3473,6 +3480,7 @@ def _add_saccade_layer(
                     y=sy,
                     mode="lines",
                     line=dict(color=color, width=width, dash=style),
+                    opacity=opacity,
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccades",
@@ -3503,6 +3511,7 @@ def _add_saccade_layer(
                         color=color,
                         line=dict(width=0),
                     ),
+                    opacity=opacity,
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccade direction",
@@ -4052,6 +4061,7 @@ def _render_scanpath_figure(
             visible_classes=visible_classes,
             render_mode=saccade_render_mode,
             two_way=two_way_saccades,
+            opacity=settings.saccade_opacity,
         ):
             legend_active = True
 
@@ -6206,9 +6216,16 @@ def _render_scanpath_animation(
                     line=dict(
                         color=s["sac_color"], width=s["sac_width"], dash=s["sac_dash"]
                     ),
+                    # #422: on the base trace only — a frame restates the
+                    # line's x/y and style, never its opacity, so it holds.
+                    # Named like the static figure's, which is how the app's
+                    # cached replay finds it to stamp the opacity on afterwards
+                    # (`tabs._build_and_render_animation`).
+                    opacity=settings.saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
+                    name="saccades",
                 )
             )
         else:
@@ -6241,6 +6258,7 @@ def _render_scanpath_animation(
                         color=s["sac_color"],
                         line=dict(width=0),
                     ),
+                    opacity=settings.saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -6777,6 +6795,7 @@ def _add_comparison_fixation_trace(
     show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
+    saccade_opacity: float = 1.0,
     show_order: bool = True,
     order_font_size: int | None = None,
     show_legend: bool = False,
@@ -6800,7 +6819,8 @@ def _add_comparison_fixation_trace(
     Saccades and markers are separate traces (mirroring the single-trial figure)
     so the per-scanpath saccade colour/line-style/line-width and hollow markers
     all apply, and the shared ``show_saccades`` / ``show_saccade_arrows`` /
-    ``show_order`` toggles take effect.
+    ``show_order`` toggles take effect, as does the shared ``saccade_opacity``
+    (#422 — one for both scanpaths, lines and arrows alike).
 
     Fixation colour: by default each scanpath uses its flat per-scanpath colour
     (the A/B cue). When ``color_by`` names a numeric column, the marker **fill** is
@@ -6887,6 +6907,7 @@ def _add_comparison_fixation_trace(
                     line=dict(
                         color=saccade_color, width=saccade_width, dash=saccade_style
                     ),
+                    opacity=saccade_opacity,
                     name=display_name,
                     legendgroup=display_name,
                     showlegend=False,
@@ -6914,6 +6935,7 @@ def _add_comparison_fixation_trace(
                         color=saccade_color,
                         line=dict(width=0),
                     ),
+                    opacity=saccade_opacity,
                     legendgroup=display_name,
                     showlegend=False,
                     hoverinfo="skip",
@@ -7717,6 +7739,7 @@ def _make_split_comparison_figure(
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -8103,6 +8126,7 @@ def _render_comparison_figure(
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,

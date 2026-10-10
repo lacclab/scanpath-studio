@@ -846,6 +846,13 @@ def _render_parser() -> argparse.ArgumentParser:
         f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
     )
     viz.add_argument(
+        "--saccade-opacity",
+        type=float,
+        metavar="O",
+        help="Opacity of the saccade lines and direction arrows, 0.1–1.0 "
+        "(default: 1). A comparison's two scanpaths share it.",
+    )
+    viz.add_argument(
         "--saccade-color-by-type",
         dest="saccade_color_by_type",
         action="store_true",
@@ -1752,6 +1759,7 @@ def _render_parser() -> argparse.ArgumentParser:
 _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
     "fixation_opacity",
+    "saccade_opacity",
     "order_font_size",
     "order_font_color",
     "text_color",

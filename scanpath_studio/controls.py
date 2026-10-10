@@ -705,6 +705,8 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
     "global_saccade_width": DEFAULT_SACCADE_WIDTH,
+    # #422: the saccade lines' and arrows' opacity — fully opaque, as they were.
+    "global_saccade_opacity": 1.0,
     # VIZ-8: colour saccades uniformly, or by reading type (forward / skip /
     # refixation / return sweep / regression). "By type" splits the saccade trace
     # into one colour per class with a small legend; the five class colours are
@@ -5699,6 +5701,7 @@ def _collect_viz_settings(
         saccade_color=ss.get("global_saccade_color", SACCADE_COLOR),
         saccade_style=ss.get("global_saccade_style") or "Solid",
         saccade_width=float(ss.get("global_saccade_width") or DEFAULT_SACCADE_WIDTH),
+        saccade_opacity=float(ss.get("global_saccade_opacity", 1.0)),
         # VIZ-8: colour-by-reading-type mode + the per-class palette + optional
         # colour-key legend.
         saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
@@ -6929,7 +6932,7 @@ def render_plot_controls(
 
     # --- Saccades ---------------------------------------------------------
     # UX-159: laid out like 👁️ Fixations (UX-158) — one *Line* group (colour,
-    # style, width, shape) with a caption per row, then *Direction arrows* as a
+    # style, width, opacity, shape) with a caption per row, then *Direction arrows* as a
     # `label | ☑ Show` row.
     with (
         sac_grp,
@@ -6966,7 +6969,7 @@ def render_plot_controls(
             section=_COMPARE_SCANPATHS[0][1] if comparing else "Line",
             section_help=(
                 _COMPARE_SCANPATH_HELP[0] + " Color, style and width are its "
-                "own; shape and direction arrows are shared."
+                "own; opacity, shape and direction arrows are shared."
                 if comparing
                 else "How saccades are drawn."
             ),
@@ -7072,6 +7075,28 @@ def render_plot_controls(
                 help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
                 field_host=_sub_row("Width", caption_help=width_help),
             )
+        # #422: one opacity for the lines and their arrows, on every figure —
+        # in Compare and the co-animation both scanpaths share it, as they
+        # share Shape below (their own colour, style and width tell them apart).
+        opacity_text = (
+            "Opacity of the saccade lines and direction arrows; lower it to bring "
+            "the fixations forward."
+            + (" Shared by both scanpaths." if comparing else "")
+        )
+        _numeric_slider(
+            st,
+            "Saccade opacity",
+            key="global_saccade_opacity",
+            persist_state="session",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            slider_format="%.2f",
+            help=opacity_text,
+            field_host=_sub_row(
+                "Opacity", caption_help=_layer_gate(False, opacity_text)[1]
+            ),
+        )
         # VIZ-9: "linear reading" schematic — arched saccades. Its paired
         # control, Snap to line (#422), remains under Fixations because it moves
         # fixations. Arcs are a `make_scanpath_figure` feature.

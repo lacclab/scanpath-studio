@@ -1,0 +1,1 @@
+A dataset without fixation onsets (PoTeC) no longer shows a Trial duration of about a second beside a minute of fixations: the chip is left out, and the replay calls its span Total fixation time, played back to back.

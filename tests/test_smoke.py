@@ -193,6 +193,55 @@ class TestPipelineFigures:
         # Never one-per-saccade.
         assert len(fig.data) <= 5, f"Too many traces: {len(fig.data)}"
 
+    @pytest.mark.parametrize("compare", [False, True])
+    def test_layout_shapes_are_validated_about_once(
+        self, normalized_demo, monkeypatch, compare
+    ):
+        """#422: Plotly re-validates every layout shape on each addition — an
+        `add_shape`, or `update_layout(shapes=existing + new)`, which also
+        merges each existing shape into itself — so adding the word boxes, the
+        heatmap rects, the frame and the size key one after another built each
+        shape five or six times: 1.3 s for a PoTeC page with both layers on,
+        5 s for a comparison. The builders now set them in one go; the size
+        key, added after the figure is laid out, costs one more pass."""
+        words, fixations = normalized_demo
+        trials = list(
+            fixations.groupby(["participant_id", "trial_id"]).size().index[:2]
+        )
+        built = 0
+        real_init = go.layout.Shape.__init__
+
+        def counting_init(self, *args, **kwargs):
+            nonlocal built
+            built += 1
+            real_init(self, *args, **kwargs)
+
+        monkeypatch.setattr(go.layout.Shape, "__init__", counting_init)
+        settings = dict(
+            canvas_width=1024,
+            canvas_height=600,
+            base_font_size=14,
+            show_words=True,
+            show_heatmap=True,
+        )
+        if compare:
+            fig = make_comparison_figure(
+                words, fixations, *trials, layout="overlay", **settings
+            )
+        else:
+            pid, tid = trials[0]
+            fig = make_scanpath_figure(
+                words[(words["participant_id"] == pid) & (words["trial_id"] == tid)],
+                fixations[
+                    (fixations["participant_id"] == pid)
+                    & (fixations["trial_id"] == tid)
+                ],
+                **settings,
+            )
+        shapes = len(fig.layout.shapes)
+        assert shapes > 100, "need boxes and heatmap rects for this to mean much"
+        assert built <= 2 * shapes + 10, (built, shapes)
+
     def test_animation_has_frames(self, normalized_demo):
         words, fixations = normalized_demo
         pid = words["participant_id"].iloc[0]

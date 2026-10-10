@@ -232,9 +232,8 @@ class TestDependentConsumers:
 
         words = _tiling_words()
         fixations = _fixation(485.0, timestamp_ms=0.0)  # Robert's trailing space
-        fig = plots.go.Figure()
-        plots._add_word_level_heatmap(
-            fig,
+        shapes = plots._add_word_level_heatmap(
+            plots.go.Figure(),
             words,
             fixations,
             x_field="x",
@@ -245,7 +244,7 @@ class TestDependentConsumers:
             show_colorbars=False,
         )
         outlines = {(s["x0"], s["x1"]) for s in plots.build_word_boxes(words)}
-        rects = {(s.x0, s.x1) for s in fig.layout.shapes if "heatmap" in (s.name or "")}
+        rects = {(s["x0"], s["x1"]) for s in shapes if "heatmap" in s["name"]}
         # The fixation on the space counts towards Robert, and only Robert.
         assert rects == {(358.0, 491.0)}
         assert rects <= outlines
@@ -256,9 +255,8 @@ class TestDependentConsumers:
         from scanpath_studio import plots
 
         words = _tiling_words()
-        fig = plots.go.Figure()
-        plots._add_word_level_heatmap(
-            fig,
+        shapes = plots._add_word_level_heatmap(
+            plots.go.Figure(),
             words,
             _fixation(491.0, timestamp_ms=0.0),
             x_field="x",
@@ -268,7 +266,7 @@ class TestDependentConsumers:
             heatmap_range=None,
             show_colorbars=False,
         )
-        rects = [(s.x0, s.x1) for s in fig.layout.shapes if "heatmap" in (s.name or "")]
+        rects = [(s["x0"], s["x1"]) for s in shapes if "heatmap" in s["name"]]
         assert rects == [(491.0, 662.0)]
 
     def test_the_critical_span_outline_uses_the_experiments_edges(self):

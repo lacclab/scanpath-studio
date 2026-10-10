@@ -307,7 +307,6 @@ from scanpath_studio.plots import (
     _maybe_add_duration_key,
     add_illustration_label,
     animation_clip_frame_ms,
-    animation_playback_ms,
     animation_timeline_summary,
     apply_legend_layout,
     break_at_gaps,
@@ -4115,14 +4114,23 @@ def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
 
 def _trial_duration_ms(trial_fixations: pd.DataFrame) -> float | None:
     """First fixation onset to last fixation offset, in ms — the span the
-    replay's *Trial time* runs over (#374 F8). ``None`` without timestamps."""
+    replay's *Trial time* runs over (#374 F8).
+
+    ``None`` unless the data recorded the onsets — the replay's own rule,
+    `measures.fixation_clock`. A table with no onset column (PoTeC) is numbered
+    0, 1, 2, … by normalization, and that span read as milliseconds was a
+    "trial" of a second beside a minute of fixations (#422); laying the
+    fixations end to end instead would only repeat *Total fixation time*."""
+    from scanpath_studio.measures import fixation_clock
+
     if not {"timestamp_ms", "duration_ms"} <= set(trial_fixations.columns):
         return None
-    start = pd.to_numeric(trial_fixations["timestamp_ms"], errors="coerce")
-    end = start + pd.to_numeric(trial_fixations["duration_ms"], errors="coerce")
-    if end.notna().sum() == 0:
+    ordered = trial_fixations.sort_values("timestamp_ms", kind="stable")
+    onsets, recorded = fixation_clock(ordered)
+    if not recorded:
         return None
-    return float(end.max() - start.min())
+    duration = pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0)
+    return float((onsets + duration.to_numpy(dtype=float)).max())
 
 
 def _summary_rows(
@@ -5002,15 +5010,17 @@ def _render_anim_info(
         grid_step_ms=grid_step_ms,
         max_frames=max_frames,
     )
-    reading_span_ms = summary["reading_span_ms"]
     playback_ms = summary["playback_ms"]
     if dual:
-        span_a = animation_playback_ms([trial_fixations], 1.0)[0]
-        span_b = animation_playback_ms([fixations_b], 1.0)[0]
-        trial = f"**A** {span_a / 1000:.1f} s · **B** {span_b / 1000:.1f} s"
+        span = _replay_span_text(
+            {
+                "A": animation_timeline_summary([trial_fixations], 1.0),
+                "B": animation_timeline_summary([fixations_b], 1.0),
+            }
+        )
     else:
-        trial = f"Trial {reading_span_ms / 1000:.1f} s"
-    timing_host.caption(f"{trial} · Playback {playback_ms / 1000:.1f} s")
+        span = _replay_span_text({"": summary})
+    timing_host.caption(f"{span} · Playback {playback_ms / 1000:.1f} s")
     # The different-texts caveat used to live here too; it is under the
     # figure now (`_different_texts_note`), where it is actually read.
     if dual and (compare_participant, compare_trial) == (
@@ -5035,6 +5045,42 @@ def _render_anim_info(
         )
     frames_host.caption(grid)
     return playback_ms
+
+
+#: What a replay's span is called (#422): the trial's duration only when the
+#: data recorded the fixation onsets. Without them the replay lays the
+#: fixations end to end, and that span is the summed fixation time — the chip
+#: table's *Total fixation time* — not how long the trial took.
+_REPLAY_SPAN_NAMES = {True: "Trial", False: "Fixation time"}
+_NO_ONSETS_NOTE = "no onsets, played back to back"
+
+
+def _replay_span_text(parts: dict[str, dict]) -> str:
+    """The Animate popover's Duration row, before its playback time, from one
+    `animation_timeline_summary` per scanpath keyed by its label — ``{"": s}``
+    for one replay, ``{"A": a, "B": b}`` for a co-animation — each span named
+    for what it measured."""
+    recorded = {
+        label: part["recorded_clock"] is not False for label, part in parts.items()
+    }
+
+    def span(label: str) -> str:
+        return f"{parts[label]['reading_span_ms'] / 1000:.1f} s"
+
+    if len(set(recorded.values())) > 1:
+        # A mix (two datasets): each side's span under its own name.
+        return " · ".join(
+            f"**{label}** {_REPLAY_SPAN_NAMES[rec].lower()} {span(label)}"
+            for label, rec in recorded.items()
+        )
+    rec = all(recorded.values())
+    if list(parts) == [""]:
+        text = f"{_REPLAY_SPAN_NAMES[rec]} {span('')}"
+    else:
+        text = f"{_REPLAY_SPAN_NAMES[rec]} " + " · ".join(
+            f"**{label}** {span(label)}" for label in parts
+        )
+    return text if rec else f"{text} ({_NO_ONSETS_NOTE})"
 
 
 def _apply_preprocessing_caption(fig, participant, trial) -> None:

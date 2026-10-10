@@ -183,13 +183,13 @@ the total.
 ### Add your own data
 
 Upload a fixation report and an interest-area report, here the demo's own
-EyeLink exports: the columns are detected for you, three answers describe the
-recording setup, and the scanpaths are ready.
+EyeLink exports: the columns are detected for you, the recording setup arrives
+filled in (here the screen is set to the demo's 2560×1440), and the scanpaths
+are ready.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/add-your-data_poster.webp" data-autoplay
-       aria-label="Adding a dataset from EyeLink fixation and interest-area
-reports">
+       aria-label="Adding a dataset from EyeLink fixation and interest-area reports">
   <source src="../assets/workflows/add-your-data.mp4" type="video/mp4">
 </video>
 
@@ -210,8 +210,7 @@ Star a trial and tag it, star another, then show only the starred ones.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/favorites_poster.webp" data-autoplay
-       aria-label="Starring and tagging trials, then showing only the starred
-ones">
+       aria-label="Starring and tagging trials, then showing only the starred ones">
   <source src="../assets/workflows/favorites.mp4" type="video/mp4">
 </video>
 
@@ -222,8 +221,7 @@ reading order, and switch to the high-contrast palette.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/plot-controls_poster.webp" data-autoplay
-       aria-label="Coloring regressions apart and adding word boxes, the
-reading order and another palette">
+       aria-label="Coloring regressions apart and adding word boxes, the reading order and another palette">
   <source src="../assets/workflows/plot-controls.mp4" type="video/mp4">
 </video>
 
@@ -234,8 +232,7 @@ added to the scanpath.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/design-presets_poster.webp" data-autoplay
-       aria-label="Switching between the Heatmap, Illustration and Scanpath
-designs">
+       aria-label="Switching between the Heatmap, Illustration and Scanpath designs">
   <source src="../assets/workflows/design-presets.mp4" type="video/mp4">
 </video>
 
@@ -246,8 +243,7 @@ trials that match this one, export and share.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/subtabs_poster.webp" data-autoplay
-       aria-label="The subtabs under the figure: annotations, stimulus and
-context, comparisons, export and share">
+       aria-label="The subtabs under the figure: annotations, stimulus and context, comparisons, export and share">
   <source src="../assets/workflows/subtabs.mp4" type="video/mp4">
 </video>
 
@@ -280,8 +276,7 @@ through the texts together.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/compare_poster.webp" data-autoplay
-       aria-label="Two readers of one text side by side, stepping through the
-texts together">
+       aria-label="Two readers of one text side by side, stepping through the texts together">
   <source src="../assets/workflows/compare.mp4" type="video/mp4">
 </video>
 
@@ -292,8 +287,7 @@ then its distribution in two groups, the Adv and Ele texts.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/corpus-analysis_poster.webp" data-autoplay
-       aria-label="Corpus Analysis: a measure on the stimulus, against
-surprisal, and between two groups">
+       aria-label="Corpus Analysis: a measure on the stimulus, against surprisal, and between two groups">
   <source src="../assets/workflows/corpus-analysis.mp4" type="video/mp4">
 </video>
 

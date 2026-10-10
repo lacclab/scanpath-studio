@@ -590,7 +590,13 @@ def pattern_fields(
     so a trial table's ``font_size`` and a recorded ``font_size`` are both
     reachable, and none of the plain names above changes.
     """
-    fields: dict = dict(combo_row or {})
+    # The trial's row, less its bookkeeping (`_data_order`): a `_` column is the
+    # app's, as `_saved_table_fields` already holds for the tables (#422).
+    fields: dict = {
+        name: value
+        for name, value in (combo_row or {}).items()
+        if not str(name).startswith("_")
+    }
     for table in table_pattern_fields(
         trial_words, trial_fixations, metadata_rows
     ).values():

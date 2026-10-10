@@ -4257,7 +4257,11 @@ def render_pattern_help(host, fields: dict) -> None:
     with host.expander("Available fields", expanded=False):
         st.markdown(
             "Type any of these in a pattern and the trial's own value is "
-            "substituted:\n\n"
+            "substituted. They are the trial's ids and counts, then each "
+            "table's fields that hold one value for the whole trial, as "
+            "`{table.field}`. A field that changes within a trial (a word's "
+            "surprisal, a fixation's duration) has no single value, so it is "
+            "not listed.\n\n"
             + "\n".join(f"- `{{{name}}}`" for name in sorted(plain))
             + "".join(f"\n\n{section}" for section in sections)
             + "\n\nAnything else is left as literal text."
@@ -5616,6 +5620,28 @@ def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
     )
 
 
+def _title_settings_state() -> dict:
+    """What the title / caption fields read of the settings (#422): the layer
+    switches and colour choices `{settings}` names, and the fixation window
+    `{n_fixations}` counts within — straight from session state, gated as
+    `_collect_viz_settings` gates them, without its pass over the whole pool."""
+    ss = st.session_state
+    window = ss.get("single_fix_range")
+    return {
+        "show_words": bool(ss.get("global_show_words")),
+        "show_labels": bool(ss.get("global_show_stimulus", True))
+        and bool(ss.get("global_show_labels")),
+        "show_fix": bool(ss.get("global_show_fix")),
+        "show_saccades": bool(ss.get("global_show_saccades")),
+        "show_heatmap": bool(ss.get("global_show_heatmap")),
+        "color_by": ss.get("global_color_by"),
+        "palette": _active_palette() or CUSTOM_PALETTE,
+        "fix_index_range": (int(window[0]), int(window[1]))
+        if isinstance(window, (tuple, list)) and len(window) == 2
+        else None,
+    }
+
+
 def _collect_viz_settings(
     trial_fixations: pd.DataFrame,
     words: pd.DataFrame | None,
@@ -6184,6 +6210,7 @@ def render_plot_controls(
     slots: dict | None = None,
     has_fixations: bool = True,
     has_words: bool = True,
+    title_fields=None,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -6229,6 +6256,12 @@ def render_plot_controls(
     the VIZ-7 fixation-index window slider (its max is that trial's fixation
     count). When omitted, the slider isn't rendered (e.g. the non-rendering
     Corpus reader, which never windows).
+
+    ``title_fields`` (#422) maps the settings dict to the ``{field}`` values the
+    figure's title and caption render with (`tabs._title_caption_fields` for
+    the selected trial), so the *Available fields* list, the validation and the
+    preview are the figure's. Without it they are read off the selected
+    trial's fixations alone.
     """
     # can re-push the stored values to the browser (BUG-15 — see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
@@ -7978,22 +8011,37 @@ def render_plot_controls(
         # Read only while one is shown: with both off, the greyed boxes ask
         # nothing of the fields (`preview=False`), so the default rerun does no
         # title/caption work at all (PERF-7's rule).
-        _title_caption_fields = (
-            pattern_fields(
-                "p01",
-                "t01",
-                _trial_rows(words, _sel_fix),
-                _sel_fix,
-                {},
-                dataset_name=current_dataset_name(),
-                metadata_rows=_selected_metadata_rows(_sel_fix),
-                # DATA-66: the field list offers the dataset's own names too.
-                column_names=_rail_names(),
-            )
-            if st.session_state.get("global_show_title")
-            or st.session_state.get("global_show_caption")
-            else {}
-        )
+        #
+        # #422: the fields the figure itself renders with — the selected trial,
+        # its `combos` row and the live settings, from `title_fields` — so the
+        # list, the validation and the preview agree with the figure. They used
+        # to be computed for a stand-in trial ("p01" · "t01") without its row,
+        # so the preview showed made-up ids and a field the figure accepts
+        # (`{TRIAL_INDEX}`, a composite id's parts, a reader table's columns)
+        # was refused as unknown.
+        _title_caption_fields = {}
+        if st.session_state.get("global_show_title") or st.session_state.get(
+            "global_show_caption"
+        ):
+            if title_fields is not None:
+                _title_caption_fields = title_fields(_title_settings_state())
+            else:
+                _ids = [
+                    str(_sel_fix[column].iloc[0])
+                    if column in _sel_fix.columns and not _sel_fix.empty
+                    else ""
+                    for column in ("participant_id", "trial_id")
+                ]
+                _title_caption_fields = pattern_fields(
+                    *_ids,
+                    _trial_rows(words, _sel_fix),
+                    _sel_fix,
+                    {},
+                    dataset_name=current_dataset_name(),
+                    metadata_rows=_selected_metadata_rows(_sel_fix),
+                    # DATA-66: the field list offers the dataset's own names too.
+                    column_names=_rail_names(),
+                )
         any_shown = False
         for name, show_key, pattern_key, default, help_text in (
             (

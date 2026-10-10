@@ -37,9 +37,17 @@ Comparison-subtab candidates match the selected trial on
 one chosen field, keep each candidate's own stimulus and the main plot styling,
 exclude the selected trial, and show only trial IDs above their panels.
 `tabs._collect_generations` keys them by the `(participant_id, trial_id)` pair
-through scoring and the caps; the captions, the similarity table's rows and the
+through scoring and paging; the captions, the similarity table's rows and the
 convergence lines are labelled only where drawn, made unique by
 `_distinct_labels` (#412 — ids can contain the ` · ` a label joins them with).
+**#422:** it returns every match, in `_reading_order` (numbers read as numbers);
+the grid draws one page of `_GEN_PAGE_SIZE` (12 — also the bound on figures per
+run) under two native `st.pagination`s kept in step (`_GEN_PAGE_KEYS`,
+`_sync_gen_pages`), reset to page 1 by a new trial/field (`_GEN_PAGE_FOR_KEY`).
+Above the grid, `_render_matches_chip_table` draws the chip table from above the
+plot (`trial_chip_fields`, through `ChipReading.entries` + `_chip_table_html`)
+for the selected trial and the page's matches, rows named as their panels are.
+Scoring (experimental) still ranks at most `_GEN_MAX_SCORE`.
 
 Data Management's **📂 Available datasets** is a focused table since **UX-174**
 (`app.render_dataset_table`): Kind · Dataset · Participants · Texts · Trials ·

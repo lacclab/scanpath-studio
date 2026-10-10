@@ -108,6 +108,8 @@ files, saved designs, `render --legend` / `--no-color-legend` and the API's
   with** can take it from another dataset.
 - **Comparisons** lists other trials that match this one on a field you
   choose: other readings of the same text, or the same participant's other trials.
+  It shows 12 at a time, with a pager for the rest, and a table of the chips
+  from above the plot for this trial and each match on the page.
 
 Side by side, each panel shows its own reading's stimulus image, or none when
 that reading has no image. An uploaded image stands for the first reading's

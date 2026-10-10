@@ -2148,27 +2148,52 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-design_shell {
         position: relative;
     }
+    /* #422 — one inset, 0.6rem, on every side of the open list, and the title
+       row on the same lines: the chevron's glyph starts 0.6rem in (the summary's
+       0.35rem padding plus the glyph's own side bearing), so the cards and the
+       Export / Import row start under it, and 💾 ends where they end. */
     .st-key-scanpath_rail .st-key-design_save {
         position: absolute;
+        /* Centred on the 38px title row: (38 − 30.4) / 2 plus the 1px border. */
         top: 0.3rem;
-        right: 0.4rem;
+        /* The list's inset plus the expander's 1px border. */
+        right: calc(0.6rem + 1px);
         width: auto !important;
         z-index: 3;
     }
     .st-key-scanpath_rail .st-key-design_save button {
         min-height: 1.9rem;
+        height: 1.9rem;
         padding: 0 0.4rem;
     }
     /* Keep the title itself clear of the button it now shares a line with. */
     .st-key-scanpath_rail .st-key-design_shell summary {
-        padding-right: 2.4rem;
+        padding-right: 3.4rem;
+    }
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"] {
+        padding: 0.6rem;
+    }
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"]
+        > [data-testid="stVerticalBlock"] {
+        gap: 0.5rem !important;
+    }
+    /* The app-wide 4px under each block would add to the gap above and to the
+       inset under the last row. */
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"]
+        [data-testid="stLayoutWrapper"] {
+        margin-bottom: 0 !important;
+    }
+    /* Export is a button and Import a popover, which the app draws as a pill;
+       side by side they read as one pair of the cards' shape. */
+    .st-key-scanpath_rail .st-key-design_file_row [data-testid="stPopover"] button {
+        border-radius: 0.5rem;
+        justify-content: center;
     }
     /* One saved design is one bordered card, not three loose buttons: the row's
        own container carries the border, and the controls inside it are borderless
        so the card reads as a single object. */
     .st-key-scanpath_rail [class*="st-key-design_row_"] {
         padding: 0.15rem 0.3rem;
-        margin-bottom: 0.3rem;
         border-radius: 0.5rem;
     }
     .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stHorizontalBlock"] {
@@ -2178,6 +2203,12 @@ def get_app_css() -> str:
         min-height: 1.9rem;
         padding: 0.1rem 0.3rem;
         justify-content: center;
+    }
+    /* #422: a design's name starts at the card's left edge, as a list's names
+       do, rather than floating mid-cell beside its two icons. */
+    .st-key-scanpath_rail [class*="st-key-design_apply_"] button,
+    .st-key-scanpath_rail [class*="st-key-design_apply_"] button > div {
+        justify-content: flex-start;
     }
     /* An icon-only button still carries the label's right margin, which is what
        pushes these two off-center. */

@@ -6146,7 +6146,8 @@ _TRIAL_ID_COLUMN = "@trial_id_shown"
 
 @dataclass(frozen=True)
 class ChipReading:
-    """One row of Compare's A/B table: a reading's own rows and its ids.
+    """One row of a chip table — Compare's A/B table, or the Comparisons
+    subtab's (#422): a reading's own rows and its ids.
 
     ``raw_gaze`` is the reading's samples when the caller already holds them
     (A); ``gaze_samples`` is just their count (B — `_c_gaze_sample_count`)."""
@@ -6154,10 +6155,24 @@ class ChipReading:
     words: pd.DataFrame
     fixations: pd.DataFrame
     participant: str | None
-    trial_shown: str  # `utils.trial_id_shown` — the id as the pickers show it
+    # `utils.trial_id_shown` — the id as the pickers show it; Compare's table
+    # leads with it, the Comparisons subtab's rows are named instead.
+    trial_shown: str = ""
     raw_gaze: pd.DataFrame | None = None
     gaze_samples: int | None = None
     names: ColumnNames | None = None  # DATA-66: its dataset's map, else the open one
+
+    def entries(self, fields) -> list[ChipEntry]:
+        """This reading's chips for ``fields`` (`_trial_chip_entries`)."""
+        return _trial_chip_entries(
+            self.words,
+            self.fixations,
+            self.participant,
+            fields,
+            trial_raw_gaze=self.raw_gaze,
+            gaze_samples=self.gaze_samples,
+            names=self.names,
+        )
 
 
 @st.cache_data(show_spinner=False, max_entries=256)
@@ -6193,15 +6208,7 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     )
     sides = []
     for name, color, reading in zip("AB", colors, (a, b)):
-        entries = _trial_chip_entries(
-            reading.words,
-            reading.fixations,
-            reading.participant,
-            fields,
-            trial_raw_gaze=reading.raw_gaze,
-            gaze_samples=reading.gaze_samples,
-            names=reading.names,
-        )
+        entries = reading.entries(fields)
         trial_id = ChipEntry(_TRIAL_ID_COLUMN, "Trial ID", reading.trial_shown)
         sides.append(
             (name, color, [trial_id, *(e for e in entries if e.col != "trial_id")])
@@ -6209,6 +6216,36 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     st.markdown(
         _chip_table_html(*sides, order=[_TRIAL_ID_COLUMN, *(fields or [])]),
         unsafe_allow_html=True,
+    )
+
+
+def _render_matches_chip_table(fields, rows: list[tuple[str, ChipReading]]) -> None:
+    """The Comparisons subtab's chip table (#422): the selected trial and each
+    match on the page, one row each, named as their panels are, under the
+    fields the ✏️ chips menu picked — the table above the plot, one row per
+    reading, so the matches compare down each column and a value they all
+    share is written quieter."""
+    sides = [(label, None, reading.entries(fields)) for label, reading in rows]
+    if any(entries for _label, _color, entries in sides):
+        st.markdown(
+            _chip_table_html(*sides, order=list(fields or [])),
+            unsafe_allow_html=True,
+        )
+
+
+def _match_gaze_samples(raw_gaze: pd.DataFrame | None, fix: pd.DataFrame):
+    """How many samples a Comparisons match has, on the screen it is drawn on
+    — its gaze-sample chip (#422), cached like Compare's B."""
+    if raw_gaze is None or raw_gaze.empty or fix.empty:
+        return None
+    first = fix.iloc[0]
+    screen = str(first[SCREEN_ID]) if SCREEN_ID in fix.columns else None
+    return _c_gaze_sample_count(
+        raw_gaze,
+        frame_fingerprint(raw_gaze),
+        first["participant_id"],
+        first["trial_id"],
+        screen,
     )
 
 
@@ -8009,6 +8046,8 @@ def render_single_trial_tab(
                     viz_settings=viz_settings,
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
+                    trial_raw_gaze=trial_raw_gaze,
+                    raw_gaze=raw_gaze,
                 )
 
     # PRE-21: absent entirely while drift correction is gated off.
@@ -12207,20 +12246,19 @@ _GEN_COL_EXCLUDE = {
     "word_id",
     "fixation_id",
 }
-# The grid shows at most this many generation panels (readability). When more
-# than this exist they're ranked by similarity to the selected scanpath and the
-# *closest* ones are shown — never an arbitrary label-sorted subset.
-_GEN_MAX_PANELS = 24
-# PRE-21: with similarity gated off there is no ranking, so the 24 cap loses its
-# reason to exist — it was there to keep a *ranked* grid readable, not to bound
-# rendering cost. Raised, but still finite and still stated in the caption, so
-# the grid never silently truncates.
-_GEN_MAX_PANELS_UNRANKED = 60
-# Score at most this many candidates (bounds the NLD cost for a high-cardinality
-# column like participant_id on a big corpus). A safety budget above the grid cap
-# so the "most similar" ranking still sees more candidates than it displays.
-# Dead while similarity is gated off — nothing is scored — which is why
-# `_collect_generations` only applies it when it is on.
+#: #422 — the grid draws one page of matches at a time, and every match is a
+#: figure, so a page is also the most figures the subtab builds in one run —
+#: the hard bound, whatever the match count. 12 fills whole rows at 1–4
+#: columns. The pager reaches the rest.
+_GEN_PAGE_SIZE = 12
+#: The pager above the grid and the one below it; either moves both.
+_GEN_PAGE_KEYS = ("multi_gen_page", "multi_gen_page_end")
+#: The match set the page number belongs to — another trial or field starts
+#: again at page 1.
+_GEN_PAGE_FOR_KEY = "_multi_gen_page_for"
+# Score at most this many matches (bounds the NLD cost for a high-cardinality
+# column like participant_id on a big corpus); the rest follow the ranked ones,
+# unranked. Dead while similarity is gated off — nothing is scored.
 _GEN_MAX_SCORE = 60
 
 
@@ -12336,7 +12374,7 @@ def _collect_generations(
     selected_participant,
     selected_trial,
     differ_col: str | None = None,
-) -> tuple:
+) -> dict[tuple, pd.DataFrame]:
     """Trials matching the selected trial's ``gen_col`` value.
 
     The comparison column is a selector, not a grouping dimension: choosing
@@ -12350,6 +12388,9 @@ def _collect_generations(
     ids may contain the separator a label joins them with, so ``(p1, "t1 ·
     t2")`` and ``("p1 · t1", t2)`` read alike and one replaced the other.
     Labels are made where they are shown (:func:`_reading_labels`).
+
+    Every match, in :func:`_reading_order` — the grid pages through them
+    (#422), so nothing here is cut.
     """
     if (
         gen_col not in fixations_pool.columns
@@ -12357,16 +12398,16 @@ def _collect_generations(
         or fixations_pool.empty
         or trial_fixations.empty
     ):
-        return {}, 0
+        return {}
     pool = fixations_pool
     if SCREEN_ID in trial_fixations.columns and not trial_fixations.empty:
         if SCREEN_ID not in pool.columns:
-            return {}, 0
+            return {}
         active_screen = str(trial_fixations[SCREEN_ID].iloc[0])
         pool = pool[pool[SCREEN_ID].astype(str) == active_screen]
     selected_values = trial_fixations[gen_col].dropna().unique()
     if len(selected_values) != 1:
-        return {}, 0
+        return {}
     pool = pool[pool[gen_col] == selected_values[0]]
     if differ_col is not None and differ_col in trial_fixations.columns:
         own = trial_fixations[differ_col].dropna().unique()
@@ -12386,20 +12427,99 @@ def _collect_generations(
         if group.empty:
             continue
         candidates[reading] = group
-    n_total = len(candidates)
-    # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
-    # similarity happens in the tab, after scoring). Sorted for determinism.
-    # PRE-21: it is a *scoring* budget, so with similarity gated off it would
-    # only drop panels for no reason — the grid's own cap is what applies then.
-    budget = _GEN_MAX_SCORE if similarity_enabled() else _GEN_MAX_PANELS_UNRANKED
-    ordered = sorted(candidates.items(), key=lambda item: _reading_order(item[0]))
-    return dict(ordered[:budget]), n_total
+    return dict(sorted(candidates.items(), key=lambda item: _reading_order(item[0])))
 
 
-def _reading_order(reading: tuple) -> tuple[str, ...]:
+def _all_read_the_selected_text(trial_fixations, frames, text_col) -> bool:
+    """Whether every match reads the selected trial's one text — what the
+    similarity scores need, since they compare word sequences."""
+    if text_col is None:
+        return False
+    own = trial_fixations[text_col].dropna().astype(str).unique()
+    return len(own) == 1 and all(
+        text_col in fix.columns
+        and fix[text_col].dropna().astype(str).nunique() == 1
+        and str(fix[text_col].dropna().astype(str).iloc[0]) == str(own[0])
+        for fix in frames
+    )
+
+
+def _sync_gen_pages(source: str) -> None:
+    """``on_change`` for either pager: the grid has one page, so both show it."""
+    page = st.session_state.get(source)
+    for key in _GEN_PAGE_KEYS:
+        if key != source:
+            st.session_state[key] = page
+
+
+def _gen_page_caption(first: int, last: int, total: int) -> str:
+    """What the grid shows, and how to see the rest (#422)."""
+    if total <= _GEN_PAGE_SIZE:
+        return f"{total} match." if total == 1 else f"{total} matches."
+    span = f"{first}–{last}" if last > first else f"{first}"
+    return f"Showing {span} of {total} matches — pick a page for more."
+
+
+def _render_gen_pager(
+    ranked: list, *, top: bool, match_set: tuple = (), note: str = ""
+) -> list:
+    """The Comparisons grid's page of ``ranked`` (#422), and its pager.
+
+    ``top`` draws the count line with a pager beside it and returns the page's
+    readings; the second call, under the grid, draws only a pager. Each pager
+    moves the other (`_sync_gen_pages`). A new ``match_set`` — another trial,
+    field or screen — starts again at page 1. One page needs no pager.
+    """
+    n_pages = max(1, -(-len(ranked) // _GEN_PAGE_SIZE))
+    if top:
+        match_set = tuple(str(part) for part in match_set)
+        if st.session_state.get(_GEN_PAGE_FOR_KEY) != match_set:
+            st.session_state[_GEN_PAGE_FOR_KEY] = match_set
+            for key in _GEN_PAGE_KEYS:
+                st.session_state.pop(key, None)
+        count_col, pager_host = st.columns([3, 2], vertical_alignment="center")
+    elif n_pages == 1:
+        return ranked
+    else:
+        pager_host = st
+    page = 1
+    if n_pages > 1:
+        key = _GEN_PAGE_KEYS[0 if top else 1]
+        page = pager_host.container(
+            horizontal=True, horizontal_alignment="right"
+        ).pagination(
+            n_pages,
+            key=key,
+            on_change=_sync_gen_pages,
+            args=(key,),
+            persist_state="session",
+        )
+    first = (page - 1) * _GEN_PAGE_SIZE
+    shown = ranked[first : first + _GEN_PAGE_SIZE]
+    if top:
+        count_col.caption(
+            _gen_page_caption(first + 1, first + len(shown), len(ranked)) + note
+        )
+    return shown
+
+
+_DIGIT_RUN = re.compile(r"([0-9]+)")
+
+
+def _reading_order(reading: tuple) -> tuple:
     """A reading's place in the Comparisons grid: by participant, then trial,
-    as text — ids of mixed types, or a missing one, still sort."""
-    return tuple(str(part) for part in reading)
+    as text with its numbers read as numbers (#422) — participant 2 before 10,
+    which matters once the grid pages. Ids of mixed types, or a missing one,
+    still sort, and the text itself breaks a tie (``7`` / ``007``)."""
+
+    def natural(text: str) -> tuple:
+        return tuple(
+            (0, int(run), "") if run[0] in "0123456789" else (1, 0, run)
+            for run in _DIGIT_RUN.split(text)
+            if run
+        )
+
+    return tuple(key for part in map(str, reading) for key in (natural(part), part))
 
 
 def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:
@@ -12511,12 +12631,17 @@ def render_multiple_comparison_tab(
     viz_settings: dict,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    trial_raw_gaze: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> None:
     """Render the **Comparisons** subtab.
 
     Shows other trials whose selected comparison-field value matches the main
     trial. The field decides the set: text id yields other readings of the text,
     participant id yields that reader's other texts, and so on.
+
+    ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
+    filtered pool's, for the chip table's gaze-sample count (#422).
     """
     if trial_words.empty or trial_fixations.empty:
         st.info("This trial lacks word boxes or fixations; pick another.")
@@ -12535,35 +12660,38 @@ def render_multiple_comparison_tab(
     if st.session_state.get("multi_gen_col") not in match_options:
         st.session_state.pop("multi_gen_col", None)
 
-    intro_col, field_col, grid_col = st.columns(
-        [4.6, 3.2, 2.2], gap="medium", vertical_alignment="center"
+    # #422: one `label | field` row whose first label sits in the subtabs' own
+    # label column (`PANEL_LABEL_W`); what *Match field* does is its hover help,
+    # not a caption beside it repeating the same thing.
+    match_label_col, match_col, cols_label_col, cols_col = st.columns(
+        [PANEL_LABEL_W, 0.44, 0.09, 0.27],
+        gap=LABEL_GAP,
+        vertical_alignment="center",
     )
-    with intro_col:
-        st.caption("Show trials matching the selected trial on one field.")
-    with field_col:
-        choice = labeled(
-            st,
-            "selectbox",
-            "Match field",
-            options=match_options,
-            format_func=match_labels.__getitem__,
-            key="multi_gen_col",
-            help="Show trials with the same value as the selected trial.",
-        )
-    with grid_col:
-        n_cols = labeled(
-            st,
-            "slider",
-            "Columns",
-            min_value=1,
-            max_value=4,
-            value=2,
-            key="multi_n_cols",
-            help="Number of panels per row.",
-        )
+    match_help = "Shows the other trials that share the selected trial's value here."
+    row_label(match_label_col, "Match field", match_help)
+    choice = match_col.selectbox(
+        "Match field",
+        options=match_options,
+        format_func=match_labels.__getitem__,
+        key="multi_gen_col",
+        help=match_help,
+        label_visibility="collapsed",
+    )
+    cols_help = "Panels per row."
+    row_label(cols_label_col, "Columns", cols_help)
+    n_cols = cols_col.slider(
+        "Columns",
+        min_value=1,
+        max_value=4,
+        value=2,
+        key="multi_n_cols",
+        help=cols_help,
+        label_visibility="collapsed",
+    )
     gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
-    candidates, n_total = _collect_generations(
+    candidates = _collect_generations(
         fixations_filtered,
         trial_fixations,
         gen_col,
@@ -12574,12 +12702,6 @@ def render_multiple_comparison_tab(
     if not candidates:
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
         return
-    # More scanpaths of this text exist than we score (very high-cardinality
-    # column); the ones we do score are ranked by similarity below.
-    scored_capped = n_total > len(candidates)
-
-    if scored_capped:
-        st.caption(f"Showing the first {len(candidates)} of {n_total} matches.")
 
     # Reuse the user's viz toggles but force a clean, comparable spatial view: the
     # grid is inherently spatial, and a generation frame may lack the selected
@@ -12608,20 +12730,13 @@ def render_multiple_comparison_tab(
             **settings,
         )
 
-    # The full readings feed the spatial figures, the snapshot table, and the
-    # convergence plots (ENG-8 removed the local fixation-index window).
-    sliced_real = trial_fixations
-    sliced_gens = candidates
-
     with st.container():
-        # Score every collected generation against the selected scanpath. The
-        # per-generation NLD annotates each grid panel and orders both the grid and
-        # the table; the full table is shown beneath the grid.
+        # Score the matches against the selected scanpath — at most
+        # `_GEN_MAX_SCORE` of them. The NLD annotates each grid panel and orders
+        # the grid and the table; the full table is shown beneath the grid.
         #
-        # PRE-21: with similarity gated off nothing is scored, so the grid orders
-        # alphabetically by the comparison-column value and shows more panels —
-        # the 24 cap existed to keep the *ranked* grid readable, and there is no
-        # ranking left to keep.
+        # PRE-21: with similarity gated off nothing is scored, and the grid is
+        # in `_reading_order`.
         text_col = next(
             (
                 column
@@ -12630,21 +12745,13 @@ def render_multiple_comparison_tab(
             ),
             None,
         )
-        selected_text_values = (
-            trial_fixations[text_col].dropna().astype(str).unique()
-            if text_col is not None
-            else []
+        # Scoring (experimental) only — the check walks every match.
+        scoring = similarity_enabled() and _all_read_the_selected_text(
+            trial_fixations, candidates.values(), text_col
         )
-        same_text = len(selected_text_values) == 1 and all(
-            text_col in fix.columns
-            and fix[text_col].dropna().astype(str).nunique() == 1
-            and str(fix[text_col].dropna().astype(str).iloc[0])
-            == str(selected_text_values[0])
-            for fix in sliced_gens.values()
-        )
-        scoring = similarity_enabled() and same_text
+        scored = dict(list(candidates.items())[:_GEN_MAX_SCORE]) if scoring else {}
         table = (
-            compute_similarity_table(sliced_real, sliced_gens, trial_words)
+            compute_similarity_table(trial_fixations, scored, trial_words)
             if scoring
             else pd.DataFrame()
         )
@@ -12652,51 +12759,97 @@ def render_multiple_comparison_tab(
             dict(zip(table["Model"], table["NLD"])) if "NLD" in table.columns else {}
         )
 
-        # Rank by similarity (lowest NLD = most similar; unscored/NaN last) and show
-        # the closest _GEN_MAX_PANELS in the grid — never an arbitrary label subset.
+        # Rank by similarity (lowest NLD = most similar; unscored/NaN last).
         # Every key here is a `(participant_id, trial_id)` reading (#412); the
         # labels below are only how it is written.
         if scoring:
             ranked = sorted(
-                sliced_gens,
+                candidates,
                 key=lambda n: (
                     pd.isna(nld_by_gen.get(n)),
                     nld_by_gen.get(n) if pd.notna(nld_by_gen.get(n)) else 0.0,
                 ),
             )
         else:
-            ranked = list(sliced_gens)  # already in `_reading_order`
-        panel_cap = _GEN_MAX_PANELS if scoring else _GEN_MAX_PANELS_UNRANKED
-        grid_names = ranked[:panel_cap]
-        reading_labels = _reading_labels(sliced_gens)
+            ranked = list(candidates)  # already in `_reading_order`
+        reading_labels = _reading_labels(candidates)
+
+        st.markdown("#### Matching trials")
+        # #422: one page of matches at a time — each is a figure.
+        grid_names = _render_gen_pager(
+            ranked,
+            top=True,
+            match_set=(selected_participant, selected_trial, gen_col, differ_col),
+            note=(
+                f" The first {_GEN_MAX_SCORE} are ranked by NLD; the rest follow."
+                if scoring and len(candidates) > _GEN_MAX_SCORE
+                else ""
+            ),
+        )
         captions = _panel_captions(
             choice,
-            {name: sliced_gens[name] for name in grid_names},
+            {name: candidates[name] for name in grid_names},
             text_col,
             reading_labels,
         )
-
-        st.markdown("#### Matching trials")
+        page_words = {
+            name: _comparison_trial_words(words_filtered, candidates[name])
+            for name in grid_names
+        }
+        # #422: the chips above the plot, for the selected trial and the page's
+        # matches — one row each, so they compare down each column.
+        chip_fields = st.session_state.get("trial_chip_fields") or []
+        if chip_fields:
+            count_samples = "@gaze_sample_count" in chip_fields
+            _render_matches_chip_table(
+                chip_fields,
+                [
+                    (
+                        "Selected",
+                        ChipReading(
+                            trial_words,
+                            trial_fixations,
+                            selected_participant,
+                            raw_gaze=trial_raw_gaze,
+                        ),
+                    ),
+                    *(
+                        (
+                            captions[name],
+                            ChipReading(
+                                page_words[name],
+                                candidates[name],
+                                name[0],
+                                gaze_samples=(
+                                    _match_gaze_samples(raw_gaze, candidates[name])
+                                    if count_samples
+                                    else None
+                                ),
+                            ),
+                        )
+                        for name in grid_names
+                    ),
+                ],
+            )
         # Estimate a uniform cell height from the figure aspect + column count so
         # panels line up and don't leave a tall whitespace band below each.
         aspect = float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
-        names = grid_names
-        for start in range(0, len(names), n_cols):
-            row_names = names[start : start + n_cols]
+        for start in range(0, len(grid_names), n_cols):
+            row_names = grid_names[start : start + n_cols]
             grid_cols = st.columns(n_cols)
             for offset, (cell, name) in enumerate(zip(grid_cols, row_names)):
                 with cell:
-                    fix = sliced_gens[name]
+                    fix = candidates[name]
                     nld = nld_by_gen.get(name)
                     trial_label = captions[name]
                     if nld is not None and pd.notna(nld):
                         st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
                         st.caption(f"**{trial_label}**")
-                    words = _comparison_trial_words(words_filtered, fix)
+                    words = page_words[name]
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
@@ -12704,6 +12857,7 @@ def render_multiple_comparison_tab(
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
+        _render_gen_pager(ranked, top=False)
 
         # PRE-21: the scoring half of this panel — the similarity table (where
         # three of the four metrics still read "Not yet computed", the clearest
@@ -12736,8 +12890,8 @@ def render_multiple_comparison_tab(
                 round(float(pd.to_numeric(trial_fixations["y"]).sum()), 3),
                 round(float(pd.to_numeric(trial_fixations["duration_ms"]).sum()), 3),
             )
-        # Convergence covers the grid subset (the shown, most-similar trials),
-        # so it matches the grid and stays bounded on a high-cardinality column.
+        # Convergence covers the page on screen, so it matches the grid and
+        # stays bounded on a high-cardinality column.
         conv_gens = {name: candidates[name] for name in grid_names}
         conv_key = (
             str(selected_participant),

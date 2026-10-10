@@ -75,6 +75,13 @@ ACCENT = "#d55e00"
 #: What *Don't show this again* writes (``tour.TOUR_OPTOUT_COOKIE`` and
 #: ``tour.WIZARD_GUIDE_OPTOUT_COOKIE``): a returning user's browser.
 OPT_OUT_COOKIES = ("sps_tour_optout", "sps_wizard_guide_optout")
+#: What the app shows of the recording machine itself: the Data page's download
+#: folder and its *Saved on this computer* folder. A viewer learns nothing from
+#: the recorder's scratch paths, and they would publish its home folder.
+LOCAL_PATHS_CSS = (
+    ".st-key-data_download_folder, .st-key-data_saved_here "
+    "{ display: none !important; }"
+)
 #: Room below the content, so a short subtab can sit under the header too.
 PAD_CSS = '[data-testid="stMainBlockContainer"] { min-height: 2400px !important; }'
 
@@ -611,12 +618,9 @@ def add_your_data(d: Demo) -> None:
     d.pause(2.2)
     d.upload(uploads.first, words, "interest-area report")
     d.pause(1.6)
-    for label, step in (
-        ("Use a common default (2560×1440)", "screen"),
-        ("Use typical lab values", "distance"),
-        ("Scale to the word boxes", "text size"),
-    ):
-        d.click(page.locator("label").filter(has_text=label), step, hold=0.3)
+    # The recording setup arrives answered (screen estimated from the data, the
+    # text fitted to its boxes); the demo was shown on a 2560×1440 screen.
+    d.click(_button(page, "Common 2560×1440"), "screen 2560×1440", hold=0.6)
     d.click(_button(page, "Add dataset"), "Add dataset", hold=0.4)
     # Up to the new row in the datasets table and its summary, rather than the
     # download folder below them (which names a path on this machine).
@@ -861,7 +865,7 @@ def share_link(d: Demo) -> None:
     d.pause(1.0)
     page.goto(url, wait_until="domcontentloaded")
     d.settle(quiet=1.5)
-    page.add_style_tag(content=HIDE_CSS)
+    page.add_style_tag(content=HIDE_CSS + LOCAL_PATHS_CSS)
     # A new page: draw the bar and the pointer on it again.
     d.hud()
     d.pointer.move(d.pointer.x, d.pointer.y)
@@ -888,7 +892,7 @@ def record_one(browser, url: str, flow: Workflow, frames: Path) -> Path:
     page.goto(url, wait_until="domcontentloaded")
     demo = Demo(page, flow.goal)
     demo.settle(quiet=3.0)
-    page.add_style_tag(content=HIDE_CSS)
+    page.add_style_tag(content=HIDE_CSS + LOCAL_PATHS_CSS)
     demo.pointer.move(*PARK)
     demo.hud()
     cast = Screencast(page, frames)

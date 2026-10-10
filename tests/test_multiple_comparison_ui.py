@@ -484,3 +484,42 @@ def test_either_pager_moves_both(monkeypatch):
     monkeypatch.setattr(tabs.st, "session_state", state)
     tabs._sync_gen_pages("multi_gen_page_end")
     assert state == {"multi_gen_page": 3, "multi_gen_page_end": 3}
+
+
+# --- #422: the chips above the plot, for the selected trial and its matches --
+
+
+def _chip_tables(at) -> list[str]:
+    return [m.value for m in at.markdown if "sps-chip-table" in str(m.value)]
+
+
+def test_the_matches_get_the_chip_table_one_row_each(monkeypatch):
+    import re
+
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    monkeypatch.setattr(tabs, "_GEN_PAGE_SIZE", 2)
+    at = AppTest.from_function(_lookalike_comparisons_app)
+    at.session_state["trial_chip_fields"] = ["participant_id", "@fixation_count"]
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    (table,) = _chip_tables(at)
+    rows = re.findall(r'<th scope="row" class="sps-ct-side">([^<]*)</th>', table)
+    # The selected trial, then the page's matches, named as their panels are.
+    assert rows == ["Selected", "Participant p1", "Participant p1 · t1"]
+    # The chosen fields, as the table above the plot heads them.
+    assert "Number of fixations" in table
+    # Every reading has two fixations: one value they share, written quieter.
+    assert table.count('class="sps-ct-num sps-ct-same">2<') == 3
+
+
+def test_no_chip_fields_no_table():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_lookalike_comparisons_app)
+    at.session_state["trial_chip_fields"] = []
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    assert not _chip_tables(at)

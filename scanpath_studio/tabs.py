@@ -6142,7 +6142,8 @@ _TRIAL_ID_COLUMN = "@trial_id_shown"
 
 @dataclass(frozen=True)
 class ChipReading:
-    """One row of Compare's A/B table: a reading's own rows and its ids.
+    """One row of a chip table — Compare's A/B table, or the Comparisons
+    subtab's (#422): a reading's own rows and its ids.
 
     ``raw_gaze`` is the reading's samples when the caller already holds them
     (A); ``gaze_samples`` is just their count (B — `_c_gaze_sample_count`)."""
@@ -6150,10 +6151,24 @@ class ChipReading:
     words: pd.DataFrame
     fixations: pd.DataFrame
     participant: str | None
-    trial_shown: str  # `utils.trial_id_shown` — the id as the pickers show it
+    # `utils.trial_id_shown` — the id as the pickers show it; Compare's table
+    # leads with it, the Comparisons subtab's rows are named instead.
+    trial_shown: str = ""
     raw_gaze: pd.DataFrame | None = None
     gaze_samples: int | None = None
     names: ColumnNames | None = None  # DATA-66: its dataset's map, else the open one
+
+    def entries(self, fields) -> list[ChipEntry]:
+        """This reading's chips for ``fields`` (`_trial_chip_entries`)."""
+        return _trial_chip_entries(
+            self.words,
+            self.fixations,
+            self.participant,
+            fields,
+            trial_raw_gaze=self.raw_gaze,
+            gaze_samples=self.gaze_samples,
+            names=self.names,
+        )
 
 
 @st.cache_data(show_spinner=False, max_entries=256)
@@ -6189,15 +6204,7 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     )
     sides = []
     for name, color, reading in zip("AB", colors, (a, b)):
-        entries = _trial_chip_entries(
-            reading.words,
-            reading.fixations,
-            reading.participant,
-            fields,
-            trial_raw_gaze=reading.raw_gaze,
-            gaze_samples=reading.gaze_samples,
-            names=reading.names,
-        )
+        entries = reading.entries(fields)
         trial_id = ChipEntry(_TRIAL_ID_COLUMN, "Trial ID", reading.trial_shown)
         sides.append(
             (name, color, [trial_id, *(e for e in entries if e.col != "trial_id")])
@@ -6205,6 +6212,36 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     st.markdown(
         _chip_table_html(*sides, order=[_TRIAL_ID_COLUMN, *(fields or [])]),
         unsafe_allow_html=True,
+    )
+
+
+def _render_matches_chip_table(fields, rows: list[tuple[str, ChipReading]]) -> None:
+    """The Comparisons subtab's chip table (#422): the selected trial and each
+    match on the page, one row each, named as their panels are, under the
+    fields the ✏️ chips menu picked — the table above the plot, one row per
+    reading, so the matches compare down each column and a value they all
+    share is written quieter."""
+    sides = [(label, None, reading.entries(fields)) for label, reading in rows]
+    if any(entries for _label, _color, entries in sides):
+        st.markdown(
+            _chip_table_html(*sides, order=list(fields or [])),
+            unsafe_allow_html=True,
+        )
+
+
+def _match_gaze_samples(raw_gaze: pd.DataFrame | None, fix: pd.DataFrame):
+    """How many samples a Comparisons match has, on the screen it is drawn on
+    — its gaze-sample chip (#422), cached like Compare's B."""
+    if raw_gaze is None or raw_gaze.empty or fix.empty:
+        return None
+    first = fix.iloc[0]
+    screen = str(first[SCREEN_ID]) if SCREEN_ID in fix.columns else None
+    return _c_gaze_sample_count(
+        raw_gaze,
+        frame_fingerprint(raw_gaze),
+        first["participant_id"],
+        first["trial_id"],
+        screen,
     )
 
 
@@ -7968,6 +8005,8 @@ def render_single_trial_tab(
                     viz_settings=viz_settings,
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
+                    trial_raw_gaze=trial_raw_gaze,
+                    raw_gaze=raw_gaze,
                 )
 
     # PRE-21: absent entirely while drift correction is gated off.
@@ -12538,12 +12577,17 @@ def render_multiple_comparison_tab(
     viz_settings: dict,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    trial_raw_gaze: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> None:
     """Render the **Comparisons** subtab.
 
     Shows other trials whose selected comparison-field value matches the main
     trial. The field decides the set: text id yields other readings of the text,
     participant id yields that reader's other texts, and so on.
+
+    ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
+    filtered pool's, for the chip table's gaze-sample count (#422).
     """
     if trial_words.empty or trial_fixations.empty:
         st.info("This trial lacks word boxes or fixations; pick another.")
@@ -12694,15 +12738,53 @@ def render_multiple_comparison_tab(
             text_col,
             reading_labels,
         )
+        page_words = {
+            name: _comparison_trial_words(words_filtered, candidates[name])
+            for name in grid_names
+        }
+        # #422: the chips above the plot, for the selected trial and the page's
+        # matches — one row each, so they compare down each column.
+        chip_fields = st.session_state.get("trial_chip_fields") or []
+        if chip_fields:
+            count_samples = "@gaze_sample_count" in chip_fields
+            _render_matches_chip_table(
+                chip_fields,
+                [
+                    (
+                        "Selected",
+                        ChipReading(
+                            trial_words,
+                            trial_fixations,
+                            selected_participant,
+                            raw_gaze=trial_raw_gaze,
+                        ),
+                    ),
+                    *(
+                        (
+                            captions[name],
+                            ChipReading(
+                                page_words[name],
+                                candidates[name],
+                                name[0],
+                                gaze_samples=(
+                                    _match_gaze_samples(raw_gaze, candidates[name])
+                                    if count_samples
+                                    else None
+                                ),
+                            ),
+                        )
+                        for name in grid_names
+                    ),
+                ],
+            )
         # Estimate a uniform cell height from the figure aspect + column count so
         # panels line up and don't leave a tall whitespace band below each.
         aspect = float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
-        names = grid_names
-        for start in range(0, len(names), n_cols):
-            row_names = names[start : start + n_cols]
+        for start in range(0, len(grid_names), n_cols):
+            row_names = grid_names[start : start + n_cols]
             grid_cols = st.columns(n_cols)
             for offset, (cell, name) in enumerate(zip(grid_cols, row_names)):
                 with cell:
@@ -12713,7 +12795,7 @@ def render_multiple_comparison_tab(
                         st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
                         st.caption(f"**{trial_label}**")
-                    words = _comparison_trial_words(words_filtered, fix)
+                    words = page_words[name]
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(

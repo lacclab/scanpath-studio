@@ -266,6 +266,7 @@ from scanpath_studio.export import (
     bulk_export,
     count_export,
     describe_plan,
+    figure_text_style,
     html_plotlyjs,
     pattern_fields,
     plan_from_counts,
@@ -305,7 +306,9 @@ from scanpath_studio.multipart import (
 from scanpath_studio.plots import (
     COLORBAR_DEFAULTS,
     COMPARE_FILTER_STYLE_KEYS,
+    DESIGN_CHOICE_FIELDS,
     STATIC_FIGURE_OPTIONS,
+    TEXT_STYLE_FIELDS,
     FigureSettings,
     _discard_flagged_fixations,
     _maybe_add_duration_key,
@@ -338,6 +341,10 @@ from scanpath_studio.plots import (
 )
 from scanpath_studio.session_keys import (
     CORPUS_SUBTAB,
+    DESIGN_COLOR_PARAMS,
+    DESIGN_FLOAT_PARAMS,
+    DESIGN_INT_PARAMS,
+    DESIGN_TOGGLE_PARAMS,
     EXPORT_FIGURE_DPI,
     EXPORT_FIGURE_WIDTH,
     EXPORT_FIGURE_WIDTH_UNIT,
@@ -2035,6 +2042,13 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         word_hover_fields=viz_settings.get("word_hover_fields"),
         fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
+        # #422: design choices that used to be fixed. Unset, each is the
+        # builder's own default (the value it always drew with).
+        **{
+            key: viz_settings[key]
+            for key in DESIGN_CHOICE_FIELDS
+            if key in viz_settings
+        },
     )
 
 
@@ -4554,6 +4568,19 @@ def _build_studio_config(
             "background_color": figure_settings.get("background_color"),
             "span_border_color": figure_settings.get("span_border_color", "#000000"),
         },
+        # #422: the design choices that used to be fixed, as the rail holds
+        # them (an Auto box stays ticked, its number kept) so they restore 1:1.
+        "design": {
+            param: st.session_state[key]
+            for group in (
+                DESIGN_TOGGLE_PARAMS,
+                DESIGN_COLOR_PARAMS,
+                DESIGN_INT_PARAMS,
+                DESIGN_FLOAT_PARAMS,
+            )
+            for param, key in group.items()
+            if st.session_state.get(key) is not None
+        },
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
@@ -5301,7 +5328,9 @@ def _apply_title_caption(
     _amend_snippet_title_caption(title, caption)
     if not title and not caption:
         return
-    annotate_figure(fig, title=title, caption=caption)
+    annotate_figure(
+        fig, title=title, caption=caption, **figure_text_style(viz_settings)
+    )
 
 
 #: The auto A/B legend label, written in the pattern language (UX-31). Kept as
@@ -5497,6 +5526,20 @@ class _ReplayPlan:
     key: tuple
 
 
+#: #422 — design choices the replay's frames never read, at their defaults in
+#: the frame key (`_plan_replay`).
+_REPLAY_UNREAD_DESIGN = FigureSettings.defaults(
+    (
+        "show_plot_frame",
+        "plot_frame_color",
+        "heatmap_opacity",
+        "heatmap_colorbar_thickness",
+        "heatmap_colorbar_length",
+        *TEXT_STYLE_FIELDS,
+    )
+)
+
+
 def _plan_replay(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -5590,6 +5633,10 @@ def _plan_replay(
         saccade_opacity=1.0,
         fixation_snap_to_line=False,
         fixation_snap_position=DEFAULT_SNAP_POSITION,
+        # #422: nor does it read the static figure's frame or the heatmap's
+        # opacity, and the title/caption styling is applied to the finished
+        # figure (`annotate_figure`) — pinned, so changing one rebuilds no frame.
+        **_REPLAY_UNREAD_DESIGN,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5731,7 +5778,9 @@ def _build_and_render_animation(
             )
         _annotate_preprocessing(fig, preprocessing)
         if title or caption:
-            annotate_figure(fig, title=title, caption=caption)
+            annotate_figure(
+                fig, title=title, caption=caption, **figure_text_style(viz_settings)
+            )
         return fig
 
     # PERF-16: what goes into the clip — everything in the figure but autoplay,
@@ -5748,6 +5797,9 @@ def _build_and_render_animation(
         # Not in `anim_key` (the frames never read it), so the view keys on it.
         repr(normalize_legend_layout(animation_settings.legend_layout)),
         float(animation_settings.saccade_opacity),
+        # #422: the title/caption styling is pinned out of `anim_key` and
+        # stamped in `finished_figure`, so the view keys on it.
+        tuple(figure_text_style(viz_settings).items()),
     )
     view = _cached_replay_view(
         clip_inputs,
@@ -8058,6 +8110,11 @@ def render_single_trial_tab(
             ):
                 static_settings = render_settings.with_overrides(**extra_settings)
                 build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
+                # #422: the builder never reads the title/caption styling —
+                # `_apply_title_caption` stamps it on the copy after the cache —
+                # so it keys no rebuild.
+                for name in TEXT_STYLE_FIELDS:
+                    build_inputs.pop(name, None)
                 _amend_snippet_settings(static_settings, "static")
                 build_inputs["raw_gaze"] = figure_raw_gaze
                 # Not an option, but the figure's text: a renamed column redraws.

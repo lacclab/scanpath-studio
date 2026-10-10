@@ -174,6 +174,59 @@ GLOBAL_HEATMAP_COLORBAR_ORIENTATION = "global_heatmap_colorbar_orientation"
 GLOBAL_HEATMAP_COLORBAR_TICKANGLE = "global_heatmap_colorbar_tickangle"
 GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE = "global_heatmap_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
+# #422: design choices that used to be fixed. Each one's link param is its key
+# without `global_` (`DESIGN_*_PARAMS`), and the settings file keeps them by
+# the same names in its `design` section.
+GLOBAL_HEATMAP_OPACITY_AUTO = "global_heatmap_opacity_auto"
+GLOBAL_HEATMAP_OPACITY = "global_heatmap_opacity"
+GLOBAL_TITLE_FONT_SIZE = "global_title_font_size"
+GLOBAL_CAPTION_FONT_SIZE = "global_caption_font_size"
+GLOBAL_CAPTION_COLOR = "global_caption_color"
+GLOBAL_SHOW_PLOT_FRAME = "global_show_plot_frame"
+GLOBAL_PLOT_FRAME_COLOR = "global_plot_frame_color"
+GLOBAL_SACCADE_ARROW_SIZE = "global_saccade_arrow_size"
+GLOBAL_FIXATION_OUTLINE_WIDTH = "global_fixation_outline_width"
+GLOBAL_FIXATION_OUTLINE_COLOR = "global_fixation_outline_color"
+GLOBAL_COORDINATE_GRID_FONT_SIZE = "global_coordinate_grid_font_size"
+GLOBAL_FIXATION_COLORBAR_THICKNESS = "global_fixation_colorbar_thickness"
+GLOBAL_FIXATION_COLORBAR_LENGTH_AUTO = "global_fixation_colorbar_length_auto"
+GLOBAL_FIXATION_COLORBAR_LENGTH = "global_fixation_colorbar_length"
+GLOBAL_HEATMAP_COLORBAR_THICKNESS = "global_heatmap_colorbar_thickness"
+GLOBAL_HEATMAP_COLORBAR_LENGTH_AUTO = "global_heatmap_colorbar_length_auto"
+GLOBAL_HEATMAP_COLORBAR_LENGTH = "global_heatmap_colorbar_length"
+DESIGN_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "heatmap_opacity_auto": GLOBAL_HEATMAP_OPACITY_AUTO,
+        "show_plot_frame": GLOBAL_SHOW_PLOT_FRAME,
+        "fixation_colorbar_length_auto": GLOBAL_FIXATION_COLORBAR_LENGTH_AUTO,
+        "heatmap_colorbar_length_auto": GLOBAL_HEATMAP_COLORBAR_LENGTH_AUTO,
+    }
+)
+DESIGN_COLOR_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "caption_color": GLOBAL_CAPTION_COLOR,
+        "plot_frame_color": GLOBAL_PLOT_FRAME_COLOR,
+        "fixation_outline_color": GLOBAL_FIXATION_OUTLINE_COLOR,
+    }
+)
+DESIGN_INT_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "title_font_size": GLOBAL_TITLE_FONT_SIZE,
+        "caption_font_size": GLOBAL_CAPTION_FONT_SIZE,
+        "coordinate_grid_font_size": GLOBAL_COORDINATE_GRID_FONT_SIZE,
+        "fixation_colorbar_thickness": GLOBAL_FIXATION_COLORBAR_THICKNESS,
+        "heatmap_colorbar_thickness": GLOBAL_HEATMAP_COLORBAR_THICKNESS,
+    }
+)
+DESIGN_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "heatmap_opacity": GLOBAL_HEATMAP_OPACITY,
+        "saccade_arrow_size": GLOBAL_SACCADE_ARROW_SIZE,
+        "fixation_outline_width": GLOBAL_FIXATION_OUTLINE_WIDTH,
+        "fixation_colorbar_length": GLOBAL_FIXATION_COLORBAR_LENGTH,
+        "heatmap_colorbar_length": GLOBAL_HEATMAP_COLORBAR_LENGTH,
+    }
+)
 GLOBAL_FIXCLASS_SHORT_MODE = "global_fixclass_short_mode"
 GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS = "global_fixclass_short_threshold_ms"
 GLOBAL_FIXCLASS_SHORT_SYMBOL = "global_fixclass_short_symbol"
@@ -473,6 +526,7 @@ SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
 # bool -> "1"/"0"
 SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_TOGGLE_PARAMS,
         "show_words": GLOBAL_SHOW_WORDS,
         "show_labels": GLOBAL_SHOW_LABELS,
         "show_stimulus": GLOBAL_SHOW_STIMULUS,
@@ -514,6 +568,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
 # string / choice / colour
 SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_COLOR_PARAMS,
         "export_width_unit": EXPORT_FIGURE_WIDTH_UNIT,
         "color_by": GLOBAL_COLOR_BY,
         "heatmap_style": GLOBAL_HEATMAP_STYLE,
@@ -601,6 +656,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
 # int
 SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_INT_PARAMS,
         "export_dpi": EXPORT_FIGURE_DPI,
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
@@ -625,6 +681,7 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 # float
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_FLOAT_PARAMS,
         "export_width": EXPORT_FIGURE_WIDTH,
         "line_spacing": GLOBAL_LINE_SPACING,
         "heatmap_sigma_px": GLOBAL_HEATMAP_SIGMA_PX,
@@ -861,6 +918,8 @@ SHARE_QUERY_PARAMS = (
 # out-of-range value would otherwise crash the widget on render).
 URL_BOUNDED_STATE_KEYS = frozenset(
     {
+        *DESIGN_INT_PARAMS.values(),
+        *DESIGN_FLOAT_PARAMS.values(),
         GLOBAL_LINE_SPACING,
         GLOBAL_SACCADE_WIDTH,
         GLOBAL_SACCADE_OPACITY,
@@ -968,6 +1027,11 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
 # vice versa) means the saved-config format moved.
 PLOT_CONFIG_STATE_KEYS = frozenset(
     {
+        # #422: the `design` section.
+        *DESIGN_TOGGLE_PARAMS.values(),
+        *DESIGN_COLOR_PARAMS.values(),
+        *DESIGN_INT_PARAMS.values(),
+        *DESIGN_FLOAT_PARAMS.values(),
         # Figure & canvas → Legends.
         *LEGEND_STATE_KEYS,
         # layers

@@ -599,6 +599,29 @@ def _restore_config_app():
             "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
         },
         "mode": {"animate": True, "compare": True},
+        # #422 — the design choices that used to be fixed.
+        "design": {
+            "heatmap_opacity_auto": False,
+            "heatmap_opacity": 0.8,
+            "title_font_size": 28,
+            "caption_font_size": 16,
+            "caption_color": "#222222",
+            "show_plot_frame": False,
+            "plot_frame_color": "#999999",
+            "saccade_arrow_size": 18.0,
+            "fixation_outline_width": 1.5,
+            "fixation_outline_color": "#336699",
+            "coordinate_grid_font_size": 12,
+            **{
+                f"{bar}_colorbar_{name}": value
+                for bar in ("fixation", "heatmap")
+                for name, value in (
+                    ("thickness", 20),
+                    ("length_auto", False),
+                    ("length", 0.5),
+                )
+            },
+        },
         "annotations": [],
     }
     before = set(st.session_state.keys())

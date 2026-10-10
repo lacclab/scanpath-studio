@@ -886,6 +886,9 @@ _LAYER_OPTIONS = {
         "heatmap_colorbar_orientation",
         "heatmap_colorbar_tickangle",
         "heatmap_colorbar_tickfont_size",
+        "heatmap_colorbar_thickness",
+        "heatmap_colorbar_length",
+        "heatmap_opacity",
     ),
     "show_saccades": (
         "saccade_color",
@@ -898,9 +901,15 @@ _LAYER_OPTIONS = {
         "show_saccade_arrows",
         # VIZ-9's arcs bend the saccade lines, and nothing else (#422).
         "saccade_render_mode",
+        "saccade_arrow_size",
     ),
-    # #422 — the snap moves the fixations, and only while they are drawn.
-    "show_fixations": ("fixation_snap_to_line",),
+    # #422 — the snap moves the fixations, and only while they are drawn; the
+    # outline is the markers'.
+    "show_fixations": (
+        "fixation_snap_to_line",
+        "fixation_outline_width",
+        "fixation_outline_color",
+    ),
 }
 _STYLED_BY = {
     option: layer for layer, opts in _LAYER_OPTIONS.items() for option in opts
@@ -913,8 +922,18 @@ _FIXATION_SCALE_OPTIONS = frozenset(
         "fixation_colorbar_orientation",
         "fixation_colorbar_tickangle",
         "fixation_colorbar_tickfont_size",
+        "fixation_colorbar_thickness",
+        "fixation_colorbar_length",
     }
 )
+
+#: #422 — an option that styles something only drawn while a switch is on →
+#: that switch, so the snippet leaves the option out while it is off.
+_DRAWN_WITH = {
+    "saccade_arrow_size": "show_saccade_arrows",
+    "plot_frame_color": "show_plot_frame",
+    "coordinate_grid_font_size": "show_coordinate_grid",
+}
 
 
 def _inert(key: str, settings: dict) -> bool:
@@ -925,6 +944,8 @@ def _inert(key: str, settings: dict) -> bool:
 
     layer = _STYLED_BY.get(key)
     if layer is not None and settings.get(layer, True) is False:
+        return True
+    if key in _DRAWN_WITH and not settings.get(_DRAWN_WITH[key], True):
         return True
     if key == "saccade_class_colors":
         return not _classes_coloured(settings)
@@ -1425,6 +1446,17 @@ _CLI_EMITTERS: dict[str, Any] = {
     "saccade_style": _valued("--saccade-style"),
     "saccade_width": _valued("--saccade-width"),
     "saccade_opacity": _valued("--saccade-opacity"),
+    # #422.
+    "saccade_arrow_size": _valued("--saccade-arrow-size"),
+    "heatmap_opacity": _valued("--heatmap-opacity"),
+    "fixation_outline_width": _valued("--fixation-outline-width"),
+    "fixation_outline_color": _valued("--fixation-outline-color"),
+    "show_plot_frame": _flag_when("--no-plot-frame", False),
+    "plot_frame_color": _valued("--plot-frame-color"),
+    "coordinate_grid_font_size": _int_valued("--coordinate-grid-font-size"),
+    "title_font_size": _int_valued("--title-size"),
+    "caption_font_size": _int_valued("--caption-size"),
+    "caption_color": _valued("--caption-color"),
     "saccade_color_mode": _saccade_color_mode,
     "saccade_class_colors": _saccade_class_colors,
     "saccade_type_legend": _flag_when("--no-saccade-type-legend", False),
@@ -1484,6 +1516,11 @@ _CLI_EMITTERS: dict[str, Any] = {
                 f"{bar}_colorbar_tickfont_size",
                 _int_valued(f"--{bar}-colorbar-tickfont-size"),
             ),
+            (
+                f"{bar}_colorbar_thickness",
+                _int_valued(f"--{bar}-colorbar-thickness"),
+            ),
+            (f"{bar}_colorbar_length", _valued(f"--{bar}-colorbar-length")),
         )
     },
     "illustration_text": _valued("--illustration-text"),

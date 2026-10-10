@@ -20,25 +20,42 @@ from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .annotations import has_screen_annotations, known_tags
 from .constants import (
     BACKGROUND_PRESETS,
+    CAPTION_FONT_SIZE_BOUNDS,
+    COLORBAR_LENGTH_BOUNDS,
+    COLORBAR_THICKNESS_BOUNDS,
     COLORSCALES,
     COMPARE_FIXATION_OPACITY,
     CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_CAPTION_COLOR,
+    DEFAULT_CAPTION_FONT_SIZE,
+    DEFAULT_COLORBAR_LENGTH,
+    DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_FIXATION_OUTLINE_COLOR,
+    DEFAULT_FIXATION_OUTLINE_WIDTH,
     DEFAULT_FIXATION_SYMBOL,
+    DEFAULT_GRID_FONT_SIZE,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_HEATMAP_OPACITY,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
+    DEFAULT_PLOT_FRAME_COLOR,
+    DEFAULT_SACCADE_ARROW_SIZE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
+    FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
+    GRID_FONT_SIZE_BOUNDS,
+    HEATMAP_OPACITY_BOUNDS,
     HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -53,6 +70,7 @@ from .constants import (
     RAW_GAZE_LINK_FOR_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    SACCADE_ARROW_SIZE_BOUNDS,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_LABELS,
@@ -64,6 +82,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     SELF_SCALED_HEATMAP_STYLES,
     SNAP_POSITION_BOUNDS,
+    TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
@@ -887,6 +906,11 @@ _VIZ_WIDGET_DEFAULTS = {
             ("orientation", "Vertical"),
             ("tickangle", 0),
             ("tickfont_size", 12),
+            # #422: the bar's own size; its length is automatic until a
+            # fraction is chosen.
+            ("thickness", DEFAULT_COLORBAR_THICKNESS),
+            ("length_auto", True),
+            ("length", DEFAULT_COLORBAR_LENGTH),
         )
     },
     # EXP-5: title/caption on the figure (Figure & canvas group). Off by default;
@@ -896,6 +920,22 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_show_caption": False,
     "global_title_pattern": "",
     "global_caption_pattern": "",
+    # #422: how the title and caption are written.
+    "global_title_font_size": DEFAULT_TITLE_FONT_SIZE,
+    "global_caption_font_size": DEFAULT_CAPTION_FONT_SIZE,
+    "global_caption_color": DEFAULT_CAPTION_COLOR,
+    # #422: the static figure's border round the plot area.
+    "global_show_plot_frame": True,
+    "global_plot_frame_color": DEFAULT_PLOT_FRAME_COLOR,
+    # #422: the coordinate grid's tick labels, in px.
+    "global_coordinate_grid_font_size": DEFAULT_GRID_FONT_SIZE,
+    # #422: the heatmap's opacity — each style's own until a value is chosen.
+    "global_heatmap_opacity_auto": True,
+    "global_heatmap_opacity": DEFAULT_HEATMAP_OPACITY,
+    # #422: the saccades' arrowheads, and the fixation markers' outline.
+    "global_saccade_arrow_size": DEFAULT_SACCADE_ARROW_SIZE,
+    "global_fixation_outline_width": DEFAULT_FIXATION_OUTLINE_WIDTH,
+    "global_fixation_outline_color": DEFAULT_FIXATION_OUTLINE_COLOR,
 }
 
 
@@ -4827,6 +4867,83 @@ def _render_colorbar_rows(bar: str, *, disabled: bool, reason: str | None) -> No
         help=size_help,
         field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
     )
+    # #422: the bar's own size, which used to be fixed — its thickness in px,
+    # and its length as a fraction of the plot's side (Auto: a third of the
+    # height upright, 0.6 of the width lying down).
+    thickness_help = _gated_help("How thick the bar is, in px. Default 14.", reason)
+    _numeric_slider(
+        st,
+        "Color bar thickness",
+        key=f"global_{bar}_colorbar_thickness",
+        persist_state="session",
+        min_value=COLORBAR_THICKNESS_BOUNDS[0],
+        max_value=COLORBAR_THICKNESS_BOUNDS[1],
+        disabled=idle,
+        help=thickness_help,
+        field_host=_sub_row(
+            "Thickness", caption_help=_layer_gate(False, thickness_help)[1]
+        ),
+    )
+    length_help = _gated_help(
+        "How long the bar is, as a share of the plot's side. Auto: a third of "
+        "its height when vertical, 0.6 of its width when horizontal.",
+        reason,
+    )
+    auto_col, length_col = _sub_row(
+        "Length", caption_help=_layer_gate(False, length_help)[1]
+    ).columns([0.4, 0.6], gap=_LABEL_GAP, vertical_alignment="center")
+    auto_length = auto_col.checkbox(
+        "Auto",
+        key=f"global_{bar}_colorbar_length_auto",
+        persist_state="session",
+        disabled=_layer_gate(idle, None)[0],
+        help=length_help,
+    )
+    length_col.number_input(
+        "Color bar length",
+        min_value=COLORBAR_LENGTH_BOUNDS[0],
+        max_value=COLORBAR_LENGTH_BOUNDS[1],
+        step=0.05,
+        format="%.2f",
+        key=f"global_{bar}_colorbar_length",
+        persist_state="session",
+        disabled=_layer_gate(idle or auto_length, None)[0],
+        label_visibility="collapsed",
+    )
+
+
+def _render_marker_outline_row(comparing: bool) -> None:
+    """``Outline | width px | colour`` (#422) under 👁️ Fixations."""
+    outline_help = (
+        "The ring round each filled marker: its width in px (0 draws none) and "
+        "color. Hollow markers are outlined in their own color."
+        + (" Shared by both scanpaths." if comparing else "")
+    )
+    width_col, unit_col, color_col = _sub_row(
+        "Outline", caption_help=_layer_gate(False, outline_help)[1]
+    ).columns([0.5, 0.16, 0.34], gap=_LABEL_GAP, vertical_alignment="center")
+    # Greyed with the rest of 👁️ Fixations while the section is off.
+    off = _layer_gate(False, None)[0]
+    width_col.number_input(
+        "Marker outline width",
+        min_value=FIXATION_OUTLINE_WIDTH_BOUNDS[0],
+        max_value=FIXATION_OUTLINE_WIDTH_BOUNDS[1],
+        step=0.25,
+        format="%.2f",
+        key="global_fixation_outline_width",
+        persist_state="session",
+        disabled=off,
+        help=outline_help,
+        label_visibility="collapsed",
+    )
+    _sub_caption(unit_col, "px")
+    color_col.color_picker(
+        "Marker outline color",
+        key="global_fixation_outline_color",
+        persist_state="session",
+        disabled=off,
+        label_visibility="collapsed",
+    )
 
 
 #: ``colour | opacity slider + box`` inside one ⬚ Word boxes row: the swatch
@@ -5955,8 +6072,51 @@ def _collect_viz_settings(
                     f"{bar}_colorbar_tickfont_size",
                     int(ss.get(f"global_{bar}_colorbar_tickfont_size") or 12),
                 ),
+                # #422: thickness in px; a length only once Auto is unticked.
+                (
+                    f"{bar}_colorbar_thickness",
+                    int(
+                        ss.get(f"global_{bar}_colorbar_thickness")
+                        or DEFAULT_COLORBAR_THICKNESS
+                    ),
+                ),
+                (
+                    f"{bar}_colorbar_length",
+                    None
+                    if ss.get(f"global_{bar}_colorbar_length_auto", True)
+                    else float(
+                        ss.get(f"global_{bar}_colorbar_length")
+                        or DEFAULT_COLORBAR_LENGTH
+                    ),
+                ),
             )
         },
+        # #422: the title's and caption's text styling (drawn only with one).
+        title_font_size=int(
+            ss.get("global_title_font_size") or DEFAULT_TITLE_FONT_SIZE
+        ),
+        caption_font_size=int(
+            ss.get("global_caption_font_size") or DEFAULT_CAPTION_FONT_SIZE
+        ),
+        caption_color=ss.get("global_caption_color") or DEFAULT_CAPTION_COLOR,
+        show_plot_frame=bool(ss.get("global_show_plot_frame", True)),
+        plot_frame_color=ss.get("global_plot_frame_color") or DEFAULT_PLOT_FRAME_COLOR,
+        coordinate_grid_font_size=int(
+            ss.get("global_coordinate_grid_font_size") or DEFAULT_GRID_FONT_SIZE
+        ),
+        heatmap_opacity=(
+            None
+            if ss.get("global_heatmap_opacity_auto", True)
+            else float(ss.get("global_heatmap_opacity", DEFAULT_HEATMAP_OPACITY))
+        ),
+        saccade_arrow_size=float(
+            ss.get("global_saccade_arrow_size") or DEFAULT_SACCADE_ARROW_SIZE
+        ),
+        fixation_outline_width=float(
+            ss.get("global_fixation_outline_width", DEFAULT_FIXATION_OUTLINE_WIDTH)
+        ),
+        fixation_outline_color=ss.get("global_fixation_outline_color")
+        or DEFAULT_FIXATION_OUTLINE_COLOR,
         background_color=background_color,
         compare_style_a=None,
         compare_style_b=None,
@@ -6958,6 +7118,10 @@ def render_plot_controls(
                 ),
                 field_host=_sub_row("Opacity", caption_help=opac_help),
             )
+        # #422: the outline round each filled marker, which used to be a fixed
+        # 0.5 px near-black hairline — one for every figure, both scanpaths of
+        # a comparison included. A hollow marker's ring is its colour.
+        _render_marker_outline_row(comparing)
         # The fixations' own colour bar, after the marker groups — idle unless
         # the colour-by column is numeric, since a discrete palette has no
         # scale to show. #422: the greyed row then says why, and where the
@@ -7355,11 +7519,32 @@ def render_plot_controls(
         # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own (each
         # arrowhead un-masks with the saccade it belongs to), so direction
         # arrows reach all three builders.
-        _check_row(
+        arrows_on, _ = _check_row(
             "Direction arrows",
             key="global_show_saccade_arrows",
             persist_state="session",
             help="An arrowhead on each saccade, pointing in the gaze direction.",
+        )
+        # #422: the arrowheads' size, which used to be a fixed 12 px.
+        arrow_help = (
+            "The arrowheads' size, in px. Default 12."
+            if arrows_on
+            else f"{ICONS['warning']} Used only with **Direction arrows** on."
+        )
+        _numeric_slider(
+            st,
+            "Arrowhead size",
+            key="global_saccade_arrow_size",
+            persist_state="session",
+            min_value=SACCADE_ARROW_SIZE_BOUNDS[0],
+            max_value=SACCADE_ARROW_SIZE_BOUNDS[1],
+            step=1.0,
+            slider_format="%.0f",
+            disabled=not arrows_on,
+            help=arrow_help,
+            field_host=_sub_row(
+                "Arrow size", caption_help=_layer_gate(not arrows_on, arrow_help)[1]
+            ),
         )
 
     # VIZ-31: the Saccades section's *filter* sub-section, the counterpart to the
@@ -7820,6 +8005,37 @@ def render_plot_controls(
                 field_host=_sub_row("Range", caption_help=range_text),
             )
 
+        # #422: one opacity for the heatmap, which each style used to fix —
+        # Auto keeps the style's own.
+        opacity_help = _gated_help(
+            "How opaque the heatmap is. Auto: each style's own — Word boxes "
+            "0.5 (0.35 for a trial with no word boxes), Interpolated 0.45. "
+            "Untick to set one value for every style."
+            + (" Shared by both scanpaths." if comparing else ""),
+            heat_reason,
+        )
+        auto_col, opacity_col = _sub_row(
+            "Opacity", caption_help=_layer_gate(heat_disabled, opacity_help)[1]
+        ).columns([0.4, 0.6], gap=_LABEL_GAP, vertical_alignment="center")
+        auto_opacity = auto_col.checkbox(
+            "Auto",
+            key="global_heatmap_opacity_auto",
+            persist_state="session",
+            disabled=_layer_gate(heat_disabled, None)[0],
+            help=opacity_help,
+        )
+        opacity_col.number_input(
+            "Heatmap opacity",
+            min_value=HEATMAP_OPACITY_BOUNDS[0],
+            max_value=HEATMAP_OPACITY_BOUNDS[1],
+            step=0.05,
+            format="%.2f",
+            key="global_heatmap_opacity",
+            persist_state="session",
+            disabled=_layer_gate(heat_disabled or auto_opacity, None)[0],
+            label_visibility="collapsed",
+        )
+
         if comparing:
             # The per-scanpath groups, after the rows both share.
             for idx, _ in _COMPARE_SCANPATHS:
@@ -8083,6 +8299,31 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
         _sub_caption(unit_col, "px")
+        # #422: the border round the plot area, which was always drawn in
+        # black — the static figure's only (the replay and Compare draw none).
+        frame_off, frame_reason = _mode_gate(animating, comparing, **_static_only)
+        frame_off = frame_off or chart_axes
+        # "Border": the row above is already *Frame* (what the view frames).
+        frame_shown, frame_rest = _check_row(
+            "Border",
+            key="global_show_plot_frame",
+            persist_state="session",
+            disabled=frame_off,
+            help=_gated_help(
+                "A 1 px border round the plot area, in this color.",
+                frame_reason or chart_reason,
+            ),
+        )
+        swatch_col, _ = frame_rest.columns(
+            [0.3, 0.7], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        swatch_col.color_picker(
+            "Border color",
+            key="global_plot_frame_color",
+            persist_state="session",
+            disabled=frame_off or not frame_shown,
+            label_visibility="collapsed",
+        )
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:
         # UX-163: the typography rows always draw, greyed while *Text* is off
@@ -8128,6 +8369,27 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
         _sub_caption(px_col, "px")
+        # #422: the grid's tick labels, which used to be a fixed 18 px.
+        grid_font_help = _gated_help(
+            "The grid's coordinate labels, in px. Default 18."
+            if show_coordinate_grid
+            else f"{ICONS['warning']} Used only with **Grid** on.",
+            chart_reason,
+        )
+        _numeric_slider(
+            st,
+            "Grid label size",
+            key="global_coordinate_grid_font_size",
+            persist_state="session",
+            min_value=GRID_FONT_SIZE_BOUNDS[0],
+            max_value=GRID_FONT_SIZE_BOUNDS[1],
+            disabled=grid_off_disabled,
+            help=grid_font_help,
+            field_host=_sub_row(
+                "Labels",
+                caption_help=_layer_gate(grid_off_disabled, grid_font_help)[1],
+            ),
+        )
 
         # The animation and the comparison figures always plot spatial x/y —
         # only `make_scanpath_figure` takes `x_field`/`y_field`. #422: the
@@ -8305,6 +8567,40 @@ def render_plot_controls(
                 label_visibility="collapsed",
                 preview=shown,
             )
+            # #422: how it is written — its size, and the caption's colour.
+            key_name = name.lower()
+            style_help = (
+                f"The {key_name}'s text size in px"
+                + (", and its color." if name == "Caption" else ".")
+                if shown
+                else f"{ICONS['warning']} Used only with **{name}** on."
+            )
+            size_col, unit_col, color_col = _sub_row(
+                "Size", caption_help=_layer_gate(not shown, style_help)[1]
+            ).columns([0.5, 0.16, 0.34], gap=_LABEL_GAP, vertical_alignment="center")
+            bounds = (
+                TITLE_FONT_SIZE_BOUNDS if name == "Title" else CAPTION_FONT_SIZE_BOUNDS
+            )
+            size_col.number_input(
+                f"{name} size",
+                min_value=bounds[0],
+                max_value=bounds[1],
+                step=1,
+                key=f"global_{key_name}_font_size",
+                persist_state="session",
+                disabled=not shown,
+                help=style_help,
+                label_visibility="collapsed",
+            )
+            _sub_caption(unit_col, "px")
+            if name == "Caption":
+                color_col.color_picker(
+                    "Caption color",
+                    key="global_caption_color",
+                    persist_state="session",
+                    disabled=not shown,
+                    label_visibility="collapsed",
+                )
         if any_shown:
             render_pattern_help(st.container(), _title_caption_fields)
 

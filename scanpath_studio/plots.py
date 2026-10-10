@@ -172,6 +172,7 @@ class FigureSettings:
     saccade_render_mode: str = "Straight"
     #: #422 — move each fixation vertically onto its text line (it keeps its
     #: x), ``fixation_snap_position`` line heights from the line's middle.
+    #: The static figure only, and only while ``show_fixations`` is on.
     fixation_snap_to_line: bool = False
     fixation_snap_position: float = DEFAULT_SNAP_POSITION
     hollow_fixations: bool = False
@@ -3765,13 +3766,17 @@ def _render_scanpath_figure(
 
     # #422 Snap to line (VIZ-9's "linear reading" mode): move each fixation up or
     # down onto its text line, so the saccade layer AND the fixation markers
-    # below draw from the snapped positions. Off by default. The axis ranges
+    # below draw from the snapped positions. Off by default, and only while the
+    # fixations are drawn: it is a Fixations setting, greyed with that layer, so
+    # with the markers off the saccades run between the recorded positions and
+    # nothing is labelled snapped (`illustration_reasons`). The axis ranges
     # above and the heatmaps below keep the RECORDED positions (raw gaze
     # density); only the drawn connectors and markers move — and the Arc
     # headroom just below, which must follow them.
     render_fix = fixations
     if (
         settings.fixation_snap_to_line
+        and show_fixations
         and spatial_axes
         and not fixations.empty
         and not words.empty

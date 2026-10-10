@@ -17,6 +17,53 @@ def test_substantive_transformations_trigger_label_but_cosmetics_do_not():
     )
 
 
+def test_the_snap_and_the_arcs_count_only_on_a_layer_that_is_drawn():
+    """#422: with the Fixations layer off the snap moves nothing, and with the
+    Saccades layer off the arcs bend nothing — so neither labels the figure."""
+    snap_and_arc = {"fixation_snap_to_line": True, "saccade_render_mode": "Arc"}
+    assert illustration_reasons({**snap_and_arc, "show_fixations": False}) == [
+        "schematic saccade arcs"
+    ]
+    assert illustration_reasons({**snap_and_arc, "show_saccades": False}) == [
+        "fixations snapped to lines"
+    ]
+    assert (
+        illustration_reasons(
+            {**snap_and_arc, "show_fixations": False, "show_saccades": False}
+        )
+        == []
+    )
+
+
+def test_the_replay_and_the_comparison_draw_neither():
+    """Only the static figure draws the snap or the arcs (VIZ-9)."""
+    snap_and_arc = {"fixation_snap_to_line": True, "saccade_render_mode": "Arc"}
+    assert illustration_reasons(snap_and_arc, static=False) == []
+    # Other reasons still count there.
+    assert illustration_reasons(
+        {**snap_and_arc, "playback_speed": 2.0}, static=False
+    ) == ["playback speed ×2"]
+
+
+def test_the_api_does_not_label_a_snap_with_the_fixations_off():
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data(names="canonical")
+    pid, tid = api.list_trials(words, fixations).iloc[0]
+    hidden = api.plot_scanpath(
+        words, fixations, pid, tid, show_fixations=False, fixation_snap_to_line=True
+    )
+    shown = api.plot_scanpath(words, fixations, pid, tid, fixation_snap_to_line=True)
+    assert "illustration_reasons" not in (hidden.layout.meta or {})
+    assert shown.layout.meta["illustration_reasons"] == ["fixations snapped to lines"]
+    # The saccades run between the recorded positions, as without the snap.
+    plain = api.plot_scanpath(words, fixations, pid, tid, show_fixations=False)
+    saccades = [
+        next(t for t in fig.data if t.name == "saccades") for fig in (hidden, plain)
+    ]
+    assert list(saccades[0].y) == list(saccades[1].y)
+
+
 def test_manual_label_override():
     assert resolve_label_reasons("Hide", ["fixation subset"]) == []
     assert resolve_label_reasons("Show", []) == ["manual label"]

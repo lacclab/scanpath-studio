@@ -895,9 +895,11 @@ _LAYER_OPTIONS = {
         "saccade_class_colors",
         "saccade_type_legend",
         "show_saccade_arrows",
+        # VIZ-9's arcs bend the saccade lines, and nothing else (#422).
+        "saccade_render_mode",
     ),
-    # #422 — where a snapped fixation sits says nothing while nothing snaps.
-    "fixation_snap_to_line": ("fixation_snap_position",),
+    # #422 — the snap moves the fixations, and only while they are drawn.
+    "show_fixations": ("fixation_snap_to_line",),
 }
 _STYLED_BY = {
     option: layer for layer, opts in _LAYER_OPTIONS.items() for option in opts
@@ -925,6 +927,11 @@ def _inert(key: str, settings: dict) -> bool:
         return True
     if key == "saccade_class_colors":
         return not _classes_coloured(settings)
+    if key == "fixation_snap_position":
+        # Where a snapped fixation sits says nothing while nothing snaps.
+        return not settings.get("fixation_snap_to_line") or _inert(
+            "fixation_snap_to_line", settings
+        )
     if key in ("critical_span_style", "highlight_text_color", "span_border_color"):
         if not settings.get("highlight_column", "x"):
             return True

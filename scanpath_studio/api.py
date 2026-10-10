@@ -2437,7 +2437,8 @@ def plot_scanpath(
     ``fixation_snap_to_line=True`` moves each fixation up or down onto its text
     line, keeping its x — its word's line, else the nearest one — and
     ``fixation_snap_position`` says where on the line, in line heights from its
-    middle (default −0.5, the line's top edge).
+    middle (default −0.5, the line's top edge). It moves the saccades' ends
+    with the markers, and does nothing with ``show_fixations=False``.
 
     ``illustration=True`` applies the Illustration preset (fixations snapped to
     their lines, arced saccades, uniform colors, no heatmap or word boxes);
@@ -2839,6 +2840,8 @@ def animate_scanpath(
 
         reasons = illustration_reasons(
             {**animation_overrides, "playback_speed": playback_speed},
+            # The replay draws neither the snap nor the arcs (#422).
+            static=False,
             fix_index_range=fix_index_range,
             full_fixation_range=full_fix_range,
             # CMP-24: B's own flags and window, when it co-animates.

@@ -7322,8 +7322,14 @@ def render_single_trial_tab(
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
+            # #422: the layers as the figure draws them, under the builders'
+            # names — the snap and the arcs count only on a layer that is on.
+            "show_fixations": figure_settings["show_fixations"],
+            "show_saccades": figure_settings["show_saccades"],
             "playback_speed": playback_speed if animate else 1.0,
         },
+        # …and only on the static figure, the one that draws them.
+        static=not (animate or comparing),
         data_source=st.session_state.get("_active_data_source"),
         synthetic=bool(
             st.session_state.get("_datasets", {})

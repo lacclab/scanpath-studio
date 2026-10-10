@@ -251,7 +251,10 @@ colors. `saccade_classes` is the same split used as a **filter** rather than as
 hue — `saccade_classes=["regression"]` draws a regressions-only figure (the
 hidden classes lose their direction arrows too), and it composes with any
 color mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
-the linear-reading schematic.
+the linear-reading schematic, and `fixation_snap_to_line=True` moves each
+fixation up or down onto its text line, keeping its x, at
+`fixation_snap_position` line heights from the line's middle (default −0.5,
+the top edge).
 
 `heatmap_style` is `"Word boxes"` or `"Interpolated"`;
 `heatmap_metric="counts"` weights by fixation count instead of dwell time;
@@ -269,7 +272,9 @@ density to its own peak and ignores `heatmap_range`.
 `highlight_column` is a boolean words column (OneStop's critical span by
 default); the default is skipped when absent, a column you name must exist.
 
-`fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data.
+`fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data,
+with a margin of `crop_margin` screen pixels on every side (`None`, the default:
+5% of the data's extent on each axis, at least 20 px).
 `show_coordinate_grid=True` overlays zero-anchored monitor-pixel coordinates;
 `coordinate_grid_spacing=None` selects a readable 1/2/5×10ⁿ interval, while a
 positive number pins the major interval in pixels. `background_image` places a

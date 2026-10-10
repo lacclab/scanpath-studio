@@ -51,6 +51,120 @@ def font_pt_to_px(font_pt: float, dpi: float) -> float:
     return float(font_pt) * float(dpi) / 72.0
 
 
+# --- #422 · one font vocabulary for the Recording setup and the rail ----------
+# The dataset's typeface is asked on the add / edit screens' *Font* line and
+# adjusted on 📄 Stimulus → Text; both offer these fonts, in this order, and
+# both size text in the same two units over the same ranges.
+
+#: The fonts offered by name, each with the generic family the browser falls
+#: back to when the font itself is not installed.
+STIMULUS_FONTS = {
+    "Courier New": "monospace",
+    "Consolas": "monospace",
+    "Lucida Console": "monospace",
+    "Menlo": "monospace",
+    "Monaco": "monospace",
+    "DejaVu Sans Mono": "monospace",
+    "Arial": "sans-serif",
+    "Helvetica": "sans-serif",
+    "Verdana": "sans-serif",
+    "Calibri": "sans-serif",
+    "Times New Roman": "serif",
+    "Georgia": "serif",
+}
+#: The choice that draws the generic ``monospace`` (the setup's *Not sure*).
+GENERIC_FONT = "Generic monospace"
+#: The choice that draws a CJK / Hebrew / Arabic-capable Noto Sans stack (PRE-6).
+MULTILINGUAL_FONT = "Multilingual"
+MULTILINGUAL_FONT_STACK = (
+    "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
+    "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
+)
+#: The choice whose font is typed: a font name, or a CSS font stack.
+OTHER_FONT = "Other…"
+#: Every font choice, in the order both screens list them.
+FONT_CHOICES = (GENERIC_FONT, *STIMULUS_FONTS, MULTILINGUAL_FONT, OTHER_FONT)
+_GENERIC_FAMILIES = {"monospace", "sans-serif", "serif", "cursive", "fantasy"}
+_QUOTES = "'\""
+
+#: The two units a font size is given in, and the range each is offered over
+#: (`url_state._URL_BOUNDED` clamps a link's sizes to the same).
+FONT_UNITS = ("px", "pt")
+FONT_PX_RANGE = (6, 72)
+FONT_PT_RANGE = (4.0, 144.0)
+
+
+def stimulus_font_css(name: str) -> str:
+    """``"Courier New"`` → ``"'Courier New', monospace"``: the font, then the
+    generic family it belongs to, so a machine without it still draws close.
+
+    Text that is already a CSS stack (it holds a comma) is kept as given, and
+    nothing named — or a bare generic family — is the generic font."""
+    text = str(name or "").strip()
+    if "," in text:
+        return text
+    text = text.strip(_QUOTES)
+    if not text or text in _GENERIC_FAMILIES:
+        return _DEFAULT_FONT_FAMILY
+    return f"'{text}', {STIMULUS_FONTS.get(text, 'monospace')}"
+
+
+def stimulus_font_name(css: str | None) -> str | None:
+    """The named font a CSS stack starts with, or ``None`` for a generic one."""
+    first = str(css or "").split(",")[0].strip().strip(_QUOTES)
+    return None if not first or first in _GENERIC_FAMILIES else first
+
+
+def font_choice(css: str | None) -> str:
+    """Which of :data:`FONT_CHOICES` draws ``css`` (:data:`OTHER_FONT` when
+    none does exactly)."""
+    text = str(css or "").strip()
+    if not text or text == _DEFAULT_FONT_FAMILY:
+        return GENERIC_FONT
+    if text == MULTILINGUAL_FONT_STACK:
+        return MULTILINGUAL_FONT
+    name = stimulus_font_name(text)
+    if name in STIMULUS_FONTS and text == stimulus_font_css(name):
+        return name
+    return OTHER_FONT
+
+
+def font_choice_css(choice: str, other: str = "") -> str:
+    """The CSS ``font-family`` a choice draws; ``other`` is the typed font of
+    :data:`OTHER_FONT`."""
+    if choice == MULTILINGUAL_FONT:
+        return MULTILINGUAL_FONT_STACK
+    if choice == OTHER_FONT:
+        return stimulus_font_css(other)
+    if choice in STIMULUS_FONTS:
+        return stimulus_font_css(choice)
+    return _DEFAULT_FONT_FAMILY
+
+
+def font_other_text(css: str | None) -> str:
+    """What the typed-font box shows for ``css``: a font's bare name when it is
+    drawn with its own fallback, else the CSS as it is."""
+    text = str(css or "").strip()
+    if not text or text == _DEFAULT_FONT_FAMILY:
+        return ""
+    name = stimulus_font_name(text)
+    if name is not None and text == stimulus_font_css(name):
+        return name
+    return text
+
+
+def font_size_px(size: float, unit: str, dpi: float | None) -> int:
+    """A font size in ``unit`` as whole screen pixels, within :data:`FONT_PX_RANGE`.
+
+    Points convert through ``dpi`` (px = pt × DPI ÷ 72). With no ``dpi`` — the
+    setup's physical size is off — a point size is read as pixels, since a DPI
+    computed from a default width would be a guess."""
+    value = float(size)
+    if unit == "pt" and dpi is not None and dpi > 0 and value > 0:
+        value = font_pt_to_px(value, dpi)
+    return int(min(max(round(value), FONT_PX_RANGE[0]), FONT_PX_RANGE[1]))
+
+
 def pixels_per_degree(
     viewing_distance_mm: float, width_px: float, width_mm: float
 ) -> float:

@@ -316,7 +316,8 @@ class TestBuildShareQuery:
             "global_saccade_color_mode": "By type",
             "global_saccade_class_color_regression": "#010203",
             "global_saccade_render_mode": "Arc",
-            "global_fixation_snap_to_word": True,
+            "global_fixation_snap_to_line": True,
+            "global_fixation_snap_position": 0.25,
             "global_anim_autoplay": False,
             "global_stimulus_image_opacity": 0.5,
             "global_text_color": "#0a0b0c",
@@ -340,6 +341,7 @@ class TestBuildShareQuery:
         assert parsed["saccade_color_regression"] == ["#010203"]
         assert parsed["saccade_render_mode"] == ["Arc"]
         assert parsed["snap_fixations"] == ["1"]
+        assert parsed["snap_position"] == ["0.25"]
         assert parsed["anim_autoplay"] == ["0"]
         assert parsed["stimulus_image_opacity"] == ["0.5"]
         assert parsed["text_color"] == ["#0a0b0c"]
@@ -366,7 +368,8 @@ class TestBuildShareQuery:
         assert ss["global_saccade_color_mode"] == "By type"
         assert ss["global_saccade_class_color_regression"] == "#010203"
         assert ss["global_saccade_render_mode"] == "Arc"
-        assert ss["global_fixation_snap_to_word"] is True
+        assert ss["global_fixation_snap_to_line"] is True
+        assert ss["global_fixation_snap_position"] == 0.25
         assert ss["global_anim_autoplay"] is False
         assert ss["global_stimulus_image_opacity"] == 0.5
         assert ss["global_text_color"] == "#0a0b0c"

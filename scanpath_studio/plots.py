@@ -39,6 +39,7 @@ from .constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
@@ -161,15 +162,22 @@ class FigureSettings:
     saccade_color: str = SACCADE_COLOR
     saccade_style: str = "solid"
     saccade_width: float = DEFAULT_SACCADE_WIDTH
+    #: #422 — the saccade lines' and direction arrows' opacity, one value for
+    #: the whole figure (both scanpaths in Compare and the co-animation).
+    saccade_opacity: float = 1.0
     saccade_color_mode: str = "Uniform"
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
     #: The legend of a categorical ``color_by`` (and the Highlight entries,
-    #: raw gaze) — Figure & canvas → Legends → Fixation colours → Show.
+    #: raw gaze) — Figure & canvas → Legends → Fixation colors → Show.
     show_color_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
-    fixation_snap_to_word: bool = False
+    #: #422 — move each fixation vertically onto its text line (it keeps its
+    #: x), ``fixation_snap_position`` line heights from the line's middle.
+    #: The static figure only, and only while ``show_fixations`` is on.
+    fixation_snap_to_line: bool = False
+    fixation_snap_position: float = DEFAULT_SNAP_POSITION
     hollow_fixations: bool = False
     fixation_opacity: float = 1.0
     fixation_color: str | None = DEFAULT_FIXATION_COLOR
@@ -197,6 +205,10 @@ class FigureSettings:
     #: never sets this.
     show_stimulus_image: bool = False
     fit_to_monitor: bool = False
+    #: #422 — the margin, in screen px, around the data when the view is
+    #: cropped to it (``fit_to_monitor`` off). ``None`` is the automatic one:
+    #: 5% of the data's extent on each axis, at least ``CANVAS_PAD_MIN_PX``.
+    crop_margin: float | None = None
     show_coordinate_grid: bool = False
     coordinate_grid_spacing: float | None = None
     word_heatmap_col: str | None = None
@@ -502,6 +514,7 @@ def _compute_axis_ranges(
     *frames_with_xy: tuple[pd.DataFrame | None, str, str],
     word_frames: Iterable[pd.DataFrame] = (),
     fit_to_monitor: bool = False,
+    crop_margin: float | None = None,
 ) -> tuple[list, list, float | None, float | None, float | None, float | None]:
     """Compute padded x/y ranges from any number of (frame, x_col, y_col) tuples.
 
@@ -515,6 +528,10 @@ def _compute_axis_ranges(
     on-monitor position rather than the view cropping to the data extent. The
     returned data mins/maxs still describe the actual data (they size the
     interpolated heatmap grid), so only the visible window changes.
+
+    Cropped, the data is padded by ``crop_margin`` screen px on every side, or
+    — ``None``, the default — by 5% of its extent on each axis, at least
+    ``CANVAS_PAD_MIN_PX`` (#422 made the margin a setting).
     """
     x_candidates: list = []
     y_candidates: list = []
@@ -548,10 +565,13 @@ def _compute_axis_ranges(
         # Real data mins/maxs are still returned (heatmap-grid extent).
         return [0, canvas_width], [canvas_height, 0], x_min, x_max, y_min, y_max
 
-    x_span = max(x_max - x_min, 1.0)
-    y_span = max(y_max - y_min, 1.0)
-    pad_x = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * x_span)
-    pad_y = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * y_span)
+    if crop_margin is not None:
+        pad_x = pad_y = max(float(crop_margin), 0.0)
+    else:
+        x_span = max(x_max - x_min, 1.0)
+        y_span = max(y_max - y_min, 1.0)
+        pad_x = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * x_span)
+        pad_y = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * y_span)
     x_range = [x_min - pad_x, x_max + pad_x]
     y_range = [y_max + pad_y, y_min - pad_y]
     return x_range, y_range, x_min, x_max, y_min, y_max
@@ -1925,7 +1945,7 @@ def apply_legend_layout(
     its side by what it holds.
     """
     if not show_colors:
-        # Fixation colours → Show off: the entries stay on the figure's traces
+        # Fixation colors → Show off: the entries stay on the figure's traces
         # (their markers still draw), only their legend lines go.
         for trace in fig.data:
             if _trace_legend_kind(trace, comparing) == "colors":
@@ -2064,27 +2084,32 @@ def _add_duration_size_key(
         centres = [(pad + (i + 0.5) * slot, cy) for i in range(n)]
         labels = [(cx, pad + label_px / 2.0, "center") for cx, _ in centres]
     left, bottom, ax, ay = _size_key_anchor(fig, placement["position"], w, h)
+    # Collected and added in one assignment: each `add_shape` re-validates every
+    # shape already on the figure — the word boxes and heatmap rects (#422).
+    circles = []
     for (_, label), size, (cx, cy), (lx, ly, align) in zip(
         refs, sizes, centres, labels
     ):
         r = size / 2.0
-        fig.add_shape(
-            type="circle",
-            xref="paper",
-            yref="paper",
-            xsizemode="pixel",
-            ysizemode="pixel",
-            xanchor=ax,
-            yanchor=ay,
-            x0=left + cx - r,
-            x1=left + cx + r,
-            y0=bottom + cy - r,
-            y1=bottom + cy + r,
-            line=dict(color="#555555", width=1),
-            fillcolor="rgba(120,120,120,0.35)",
-            layer="above",
-            # Rides the fixations layer of a separable export (VIZ-5).
-            name=_shape_layer_tag("fixations"),
+        circles.append(
+            dict(
+                type="circle",
+                xref="paper",
+                yref="paper",
+                xsizemode="pixel",
+                ysizemode="pixel",
+                xanchor=ax,
+                yanchor=ay,
+                x0=left + cx - r,
+                x1=left + cx + r,
+                y0=bottom + cy - r,
+                y1=bottom + cy + r,
+                line=dict(color="#555555", width=1),
+                fillcolor="rgba(120,120,120,0.35)",
+                layer="above",
+                # Rides the fixations layer of a separable export (VIZ-5).
+                name=_shape_layer_tag("fixations"),
+            )
         )
         fig.add_annotation(
             x=ax,
@@ -2102,6 +2127,7 @@ def _add_duration_size_key(
             ),
             name=_SIZE_KEY_NAME,
         )
+    fig.layout.shapes = (*(fig.layout.shapes or ()), *circles)
     _stack_bottom_right(fig)
 
 
@@ -2255,45 +2281,85 @@ def _saccade_segments_by_class(
     return out
 
 
-def _snap_fixations_to_words(
-    fixations: pd.DataFrame, words: pd.DataFrame, x_field: str, y_field: str
+#: The column a snapped copy of the fixations carries its line in, so "color
+#: by line" reads the line a fixation is drawn on rather than guessing it again
+#: from a y the snap may have put on the edge between two lines (#422).
+_SNAP_LINE_COLUMN = "_snap_line"
+
+
+def _snap_fixations_to_lines(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    y_field: str,
+    position: float = DEFAULT_SNAP_POSITION,
 ) -> pd.DataFrame:
-    """Return a copy of ``fixations`` with each fixation moved to the top-centre of
-    the word it lands on (VIZ-9 "linear reading" mode).
+    """A copy of ``fixations`` with each fixation moved up or down onto its
+    text line, keeping its own x (#422, after VIZ-9's snap above the word).
 
-    Fixations with no assigned word keep their raw position. Uses a precomputed
-    ``word_id`` column when present, else assigns via bounding-box containment."""
+    A fixation's line is its word's: the data's own ``word_id`` when the
+    fixations carry one, else the box it lands in (`assign_fixations_to_words`).
+    A fixation on no word takes the line nearest its y, as
+    `measures.assign_fixation_lines` picks it. Lines are the word boxes
+    clustered by height (`measures.cluster_word_lines`), each spanning the mean
+    top to the mean bottom of its boxes. ``position`` places the fixation on
+    that span, in line heights from its middle: 0 centers it, −0.5 is the top
+    edge (the default, where the old snap drew it), +0.5 the bottom edge.
+
+    Render-only: the heatmaps, the axis ranges and every measure keep the
+    recorded positions. A fixation with no line to go to (boxes with no
+    geometry) keeps its recorded y. The line rides in ``_SNAP_LINE_COLUMN``.
+    """
     out = fixations.copy()
-    if "word_id" not in words.columns:
+    if out.empty or words is None or words.empty:
         return out
-    if (
-        "word_id" in out.columns
-        and pd.to_numeric(out["word_id"], errors="coerce").notna().any()
-    ):
-        wid = pd.to_numeric(out["word_id"], errors="coerce")
-    else:
-        from .measures import assign_fixations_to_words
+    from .measures import (
+        assign_fixations_to_words,
+        cluster_word_lines,
+        word_box_bounds,
+    )
 
-        wid = pd.to_numeric(
-            assign_fixations_to_words(out, words)["word_id"], errors="coerce"
+    _, top, _, bottom = word_box_bounds(words)
+    word_lines = cluster_word_lines(words)
+    spans = (
+        pd.DataFrame(
+            {"line": word_lines.to_numpy(), "top": top, "bottom": bottom},
+            index=words.index,
         )
-    # Snap above the middle of the word's box, where its label is drawn (BUG-97).
-    # Render-only: which word a fixation belongs to is still
-    # `assign_fixations_to_words`, against the same boxes.
-    from .measures import word_box_bounds
-
-    x0, _, x1, _ = word_box_bounds(words)
-    # Boxes with no id are no target: `Series.map` matches a NaN key to a NaN
-    # id, so every fixation on no word was snapped onto one (#412).
-    known = words["word_id"].notna().to_numpy()
-    ids = words["word_id"].to_numpy()[known]
-    cx_by_id = dict(zip(ids, ((x0 + x1) / 2.0)[known]))
-    tops = pd.to_numeric(words["y"], errors="coerce").to_numpy()[known]
-    top_by_id = dict(zip(ids, tops))
-    snap_x = wid.map(cx_by_id)
-    snap_y = wid.map(top_by_id)
-    out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
-    out[y_field] = snap_y.where(snap_y.notna(), out[y_field])
+        .dropna()
+        .groupby("line")[["top", "bottom"]]
+        .mean()
+    )
+    if spans.empty:
+        return out
+    spans.index = spans.index.astype(float)
+    line = pd.Series(np.nan, index=out.index, dtype=float)
+    if "word_id" in words.columns:
+        # Boxes with no id are no target: a NaN key would match every fixation
+        # on no word (#412).
+        known = words["word_id"].notna()
+        line_of_word = dict(
+            zip(
+                _word_id_keys(words.loc[known, "word_id"]),
+                word_lines[known].astype(float),
+            )
+        )
+        if "word_id" in out.columns and out["word_id"].notna().any():
+            word = out["word_id"]
+        else:
+            word = assign_fixations_to_words(out, words)["word_id"]
+        on_word = word.notna()
+        line[on_word] = _word_id_keys(word[on_word]).map(line_of_word)
+    middles = (spans["top"] + spans["bottom"]) / 2.0
+    y = pd.to_numeric(out[y_field], errors="coerce").to_numpy(dtype=float)
+    free = line.isna().to_numpy() & np.isfinite(y)
+    if free.any():
+        gaps = np.abs(y[free, None] - middles.to_numpy(dtype=float)[None, :])
+        line[free] = spans.index.to_numpy()[gaps.argmin(axis=1)]
+    snapped = line.map(middles) + float(position) * line.map(
+        spans["bottom"] - spans["top"]
+    )
+    out[y_field] = snapped.where(snapped.notna(), out[y_field])
+    out[_SNAP_LINE_COLUMN] = line.where(snapped.notna())
     return out
 
 
@@ -3315,8 +3381,11 @@ def _add_saccade_layer(
     visible_classes: Iterable[str] | None = None,
     render_mode: str = "Straight",
     two_way: bool = False,
+    opacity: float = 1.0,
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
+
+    ``opacity`` (#422) is the lines' and the arrowheads' alike.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
     given (the per-fixation reading class from ``measures.classify_saccades``)
@@ -3393,6 +3462,7 @@ def _add_saccade_layer(
                     line=dict(
                         color=palette.get(cls_name, color), width=width, dash=style
                     ),
+                    opacity=opacity,
                     hoverinfo="skip",
                     # VIZ-8: the colour key is optional — hide it (but keep the
                     # coloured sub-traces) when class_legend is off.
@@ -3428,6 +3498,7 @@ def _add_saccade_layer(
                     y=sy,
                     mode="lines",
                     line=dict(color=color, width=width, dash=style),
+                    opacity=opacity,
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccades",
@@ -3458,6 +3529,7 @@ def _add_saccade_layer(
                         color=color,
                         line=dict(width=0),
                     ),
+                    opacity=opacity,
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccade direction",
@@ -3653,7 +3725,6 @@ def _render_scanpath_figure(
     saccade_type_legend = settings.saccade_type_legend
     saccade_classes = settings.saccade_classes
     saccade_render_mode = settings.saccade_render_mode
-    fixation_snap_to_word = settings.fixation_snap_to_word
     hollow_fixations = settings.hollow_fixations
     fixation_opacity = settings.fixation_opacity
     fixation_color = settings.fixation_color
@@ -3713,6 +3784,7 @@ def _render_scanpath_figure(
                 (raw_for_range, "x", "y"),
                 word_frames=[words] if not words.empty else [],
                 fit_to_monitor=fit_to_monitor,
+                crop_margin=settings.crop_margin,
             )
         )
     else:
@@ -3720,29 +3792,35 @@ def _render_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
-    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
-    # so the saccade layer AND the fixation markers below draw from the snapped
-    # positions. Off by default. The axis ranges above and the heatmaps below keep
-    # the RECORDED positions (raw gaze density); only the drawn connectors and
-    # markers move — and the Arc headroom just below, which must follow them.
+    # #422 Snap to line (VIZ-9's "linear reading" mode): move each fixation up or
+    # down onto its text line, so the saccade layer AND the fixation markers
+    # below draw from the snapped positions. Off by default, and only while the
+    # fixations are drawn: it is a Fixations setting, greyed with that layer, so
+    # with the markers off the saccades run between the recorded positions and
+    # nothing is labelled snapped (`illustration_reasons`). The axis ranges
+    # above and the heatmaps below keep the RECORDED positions (raw gaze
+    # density); only the drawn connectors and markers move — and the Arc
+    # headroom just below, which must follow them.
     render_fix = fixations
     if (
-        fixation_snap_to_word
+        settings.fixation_snap_to_line
+        and show_fixations
         and spatial_axes
         and not fixations.empty
         and not words.empty
     ):
-        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
+        render_fix = _snap_fixations_to_lines(
+            fixations, words, y_field, settings.fixation_snap_position
+        )
 
     # VIZ-9 arc mode: the saccade arches rise ABOVE the fixations, so reserve
     # headroom at the top of the view (smaller y — the axis is inverted) or a wide
     # top-line saccade's apex gets clipped. Computed from the exact Bézier apex of
     # each segment so it's tight; only in Arc mode, so the default view is
     # unchanged. The apexes come from ``render_fix`` — the coordinates the
-    # connectors are actually drawn from — because Snap to word can both widen a
-    # saccade (two near-edge fixations jump to their words' centres) and lift its
-    # endpoints (to the box tops), so an arc over the recorded positions would
-    # under-reserve and clip the snapped curve.
+    # connectors are actually drawn from — because Snap to line lifts their
+    # endpoints (to a line's top edge, by default), so an arc over the recorded
+    # positions would under-reserve and clip the snapped curve.
     # Whole-monitor view (``fit_to_monitor``): the range still starts as the full
     # screen, and this only ever *grows* it — past the screen's top edge when an
     # arc would reach it — so a schematic arc is never silently cut off; the
@@ -3809,11 +3887,16 @@ def _render_scanpath_figure(
     )
     highlight_text = has_highlight and critical_span_style == "Mark text"
 
+    # Every layout shape the figure draws, in drawing order, set on the figure
+    # once at the end (#422): each `update_layout(shapes=…)` / `add_shape` on a
+    # figure that has shapes re-validates all of them, so adding the boxes, the
+    # heatmap and the frame one after another cost a second on a 150-word page.
+    layout_shapes: list = []
     if spatial_axes and not words.empty:
         # Word-box grid (the "Bounding boxes" layer) and the "Mark border" span
         # overlay are independent: the span borders show even when the boxes are
         # off (then only the span outline is drawn).
-        shapes = (
+        layout_shapes += (
             build_word_boxes(
                 words,
                 color=settings.word_box_color,
@@ -3825,12 +3908,10 @@ def _render_scanpath_figure(
             else []
         )
         if has_highlight and critical_span_style == "Mark border":
-            shapes = shapes + build_critical_span_overlay(
+            layout_shapes += build_critical_span_overlay(
                 words, highlight_column, color=span_border_color
             )
             _add_highlight_key(fig, highlight_column, span_border_color, border=True)
-        if shapes:
-            fig.update_layout(shapes=shapes)
         if show_word_labels:
             _add_word_label_trace(
                 fig,
@@ -3887,7 +3968,7 @@ def _render_scanpath_figure(
                 sigma_px=heatmap_sigma_px,
             )
         elif not words.empty:
-            _add_word_level_heatmap(
+            layout_shapes += _add_word_level_heatmap(
                 fig,
                 words,
                 fixations,
@@ -3925,7 +4006,7 @@ def _render_scanpath_figure(
         if word_heatmap_col is not None and word_heatmap_col in words.columns:
             heatmap_rendered = True
             values = pd.to_numeric(words[word_heatmap_col], errors="coerce").fillna(0.0)
-            _draw_word_value_heatmap(
+            layout_shapes += _draw_word_value_heatmap(
                 fig,
                 words,
                 [float(v) for v in values],
@@ -3944,7 +4025,7 @@ def _render_scanpath_figure(
             )
             if measure in words.columns:
                 heatmap_rendered = True
-                _add_word_measure_heatmap(
+                layout_shapes += _add_word_measure_heatmap(
                     fig,
                     words,
                     measure,
@@ -4002,6 +4083,7 @@ def _render_scanpath_figure(
             visible_classes=visible_classes,
             render_mode=saccade_render_mode,
             two_way=two_way_saccades,
+            opacity=settings.saccade_opacity,
         ):
             legend_active = True
 
@@ -4042,8 +4124,8 @@ def _render_scanpath_figure(
             )
 
     if show_fixations and not fixations.empty:
-        # ``render_fix`` == fixations unless VIZ-9 snap-to-word is on, in which
-        # case the markers, order labels and colour-by-line use the snapped x/y.
+        # ``render_fix`` == fixations unless Snap to line is on, in which case
+        # the markers, order labels and colour-by-line use the snapped y.
         ordered = render_fix.sort_values("timestamp_ms")
         # Fixation classification (PRE-2, viz-only): SHORT / LONG / OUT-OF-BOUNDS,
         # each Off / Highlight / Discard. Apply Discard here — drop those rows from
@@ -4058,11 +4140,16 @@ def _render_scanpath_figure(
         # "Color by line" overrides the chosen color field: each fixation is
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
-        # "line: Line 1", "line: Line 2", …
+        # "line: Line 1", "line: Line 2", …  A snapped fixation is tinted by the
+        # line it was snapped to (#422).
         if color_by_line and spatial_axes and not words.empty:
             from .measures import assign_fixation_lines
 
-            line_ids = assign_fixation_lines(ordered, words)
+            line_ids = (
+                ordered[_SNAP_LINE_COLUMN]
+                if _SNAP_LINE_COLUMN in ordered.columns
+                else assign_fixation_lines(ordered, words)
+            )
             color_data = line_ids.map(
                 lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
             )
@@ -4282,9 +4369,8 @@ def _render_scanpath_figure(
             showticklabels=True, showgrid=True, title=_column_title(y_field)
         )
 
-    shapes = list(fig.layout.shapes) if fig.layout.shapes else []
     if spatial_axes:
-        shapes.append(
+        layout_shapes.append(
             dict(
                 type="rect",
                 x0=x_range[0],
@@ -4330,8 +4416,9 @@ def _render_scanpath_figure(
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
         font=font_settings,
-        shapes=shapes,
     )
+    # One assignment, no merge: nothing else in the build puts a shape on.
+    fig.layout.shapes = (*(fig.layout.shapes or ()), *layout_shapes)
     add_illustration_label(fig, illustration_reasons, text=settings.illustration_text)
     return fig
 
@@ -4419,7 +4506,9 @@ def _add_word_level_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
-) -> None:
+) -> list[dict]:
+    """Tint each word box by the fixations in it; returns the tint rects for
+    the caller to put on the figure (`_draw_word_value_heatmap`)."""
     # Pull the fixation coordinates (and optional weights) into numpy arrays once,
     # then test box membership per word against the arrays. Same O(words × fix)
     # work as before but without rebuilding pandas Series each iteration, and with
@@ -4446,7 +4535,7 @@ def _add_word_level_heatmap(
         )
         word_values.append(val)
 
-    _draw_word_value_heatmap(
+    return _draw_word_value_heatmap(
         fig,
         words,
         word_values,
@@ -4469,7 +4558,7 @@ def _add_word_measure_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
-) -> None:
+) -> list[dict]:
     """Word-box heatmap from a pre-aggregated per-word measure column.
 
     Used for words-only datasets (IA report without a fixation report): the
@@ -4477,7 +4566,7 @@ def _add_word_measure_heatmap(
     with no fixations the dataset's own reading measures (e.g. total fixation
     duration) carry the same information."""
     values = pd.to_numeric(words[measure], errors="coerce").fillna(0.0)
-    _draw_word_value_heatmap(
+    return _draw_word_value_heatmap(
         fig,
         words,
         [float(v) for v in values],
@@ -4503,7 +4592,12 @@ def _draw_word_value_heatmap(
     heatmap_norm: str = "Linear",
     colorbar_title: str,
     colorbar_style: dict | None = None,
-) -> None:
+) -> list[dict]:
+    """Add the heatmap's colour bar to ``fig`` and return its tint rects.
+
+    The rects are returned, not added: the builder sets every layout shape on
+    the figure in one assignment, since each addition re-validates every shape
+    already there (#422)."""
     from plotly.colors import sample_colorscale
 
     from .measures import word_box_bounds
@@ -4515,7 +4609,7 @@ def _draw_word_value_heatmap(
     boxes = zip(*word_box_bounds(words))
     nonzero_rows = [(box, v) for box, v in zip(boxes, word_values) if v > 0]
     if not nonzero_rows:
-        return
+        return []
     vals = [v for _, v in nonzero_rows]
     # Auto starts at 0: an empty word is the bottom of the scale.
     z_min_raw = heatmap_range[0] if heatmap_range else 0.0
@@ -4524,11 +4618,17 @@ def _draw_word_value_heatmap(
     z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
     z_span = max(z_max - z_min, 1e-9)
 
+    positions = [
+        max(
+            0.0,
+            min(1.0, (float(_apply_heatmap_norm(v, heatmap_norm)) - z_min) / z_span),
+        )
+        for v in vals
+    ]
+    # One call for every box: each call looks the scale up by name again.
+    colors = sample_colorscale(heatmap_colorscale, positions)
     heatmap_shapes = []
-    for (x0, y0, x1, y1), v in nonzero_rows:
-        tv = float(_apply_heatmap_norm(v, heatmap_norm))
-        norm = max(0.0, min(1.0, (tv - z_min) / z_span))
-        color = sample_colorscale(heatmap_colorscale, [norm])[0]
+    for ((x0, y0, x1, y1), _v), color in zip(nonzero_rows, colors):
         heatmap_shapes.append(
             dict(
                 type="rect",
@@ -4544,8 +4644,6 @@ def _draw_word_value_heatmap(
                 name=_shape_layer_tag("heatmap"),
             )
         )
-    existing = list(fig.layout.shapes) if fig.layout.shapes else []
-    fig.update_layout(shapes=existing + heatmap_shapes)
     if show_colorbars:
         fig.add_trace(
             go.Scatter(
@@ -4569,6 +4667,7 @@ def _draw_word_value_heatmap(
                 name="heatmap colorbar",
             )
         )
+    return heatmap_shapes
 
 
 def _add_density_heatmap(
@@ -4895,7 +4994,7 @@ def _scanpath_anim_specs(
     does: the duration scale stays shared — one duration is one *fraction* of
     the range on either side — and each side maps that fraction onto its own.
     """
-    from .measures import rebased_fixation_onsets
+    from .measures import fixation_clock
 
     if size_ranges is None:
         size_ranges = [marker_size_range] * len(entries)
@@ -4908,12 +5007,13 @@ def _scanpath_anim_specs(
         # Recorded-timestamp-vs-synthetic-index heuristic (shared with the
         # similarity time-curve): trust recorded timestamps only when they look
         # like real times, else lay fixations back-to-back by their durations.
-        onsets = rebased_fixation_onsets(ordered)
+        onsets, recorded_clock = fixation_clock(ordered)
         specs.append(
             dict(
                 ordered=ordered,
                 dur=dur,
                 onsets=onsets,
+                recorded_clock=recorded_clock,
                 end=float(onsets[-1] + dur.iloc[-1]),
                 color=color,
                 label=label,
@@ -4977,13 +5077,16 @@ def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
     if not specs or reading_span_ms <= 0:
         return [], 0.0, reading_span_ms
-    step = max(step_pref, reading_span_ms / max(cap, 1))
-    frame_times = [
-        min(k * step, reading_span_ms) for k in range(int(reading_span_ms // step) + 1)
-    ]
-    # Land the final frame exactly on the reading end so it reveals everything.
-    if frame_times[-1] < reading_span_ms:
-        frame_times.append(reading_span_ms)
+    # #422: the cap counts every frame, the one at t=0 included, so a limit of
+    # 120 gives at most 120 frames (it used to give 121): `cap` frames span
+    # `cap - 1` steps. Two frames — the start and the end — is the least a
+    # replay can have.
+    step = max(step_pref, reading_span_ms / max(cap - 1, 1))
+    # The steps it takes to reach the end; the tolerance keeps a span that is a
+    # whole number of steps, give or take float rounding, from gaining a step.
+    n_steps = max(math.ceil(reading_span_ms / step - 1e-6), 1)
+    # The final frame lands exactly on the reading end, so it reveals everything.
+    frame_times = [k * step for k in range(n_steps)] + [reading_span_ms]
     return frame_times, step, reading_span_ms
 
 
@@ -5063,8 +5166,13 @@ def animation_timeline_summary(
     the cap *coarsened* the requested step. Silently coarsening is the thing that
     made the old hard-coded behaviour opaque.
 
-    Returns ``{"n_frames", "step_ms", "requested_step_ms", "coarsened",
-    "frame_duration_ms", "reading_span_ms", "playback_ms"}``.
+    Returns ``{"n_frames", "step_ms", "requested_step_ms", "max_frames",
+    "coarsened", "frame_duration_ms", "reading_span_ms", "playback_ms",
+    "recorded_clock"}`` — ``max_frames`` being the limit in force, so a caller
+    can name it. ``recorded_clock`` is ``True`` only when every scanpath plays
+    on its recorded onsets; otherwise ``reading_span_ms`` is (at least partly)
+    summed fixation time, which the side panel must not call a trial duration
+    (#422).
     """
     requested = float(grid_step_ms if grid_step_ms else _ANIM_GRID_STEP_MS)
     specs = _scanpath_anim_specs(
@@ -5079,11 +5187,21 @@ def animation_timeline_summary(
         "n_frames": n_frames,
         "step_ms": float(step),
         "requested_step_ms": requested,
+        "max_frames": int(max_frames if max_frames else _ANIM_MAX_FRAMES),
         "coarsened": bool(n_frames > 1 and step > requested + 1e-6),
         "frame_duration_ms": _anim_frame_duration_ms(frame_step_ms, playback_speed),
         "reading_span_ms": float(reading_span_ms),
         "playback_ms": float(reading_span_ms) / max(playback_speed, 1e-6),
+        "recorded_clock": _recorded_clock(specs),
     }
+
+
+def _recorded_clock(specs) -> bool | None:
+    """Whether the replay's clock is recorded time: ``True`` when every
+    scanpath has its own onsets, ``False`` when none has (their fixations play
+    end to end), ``None`` for a mix — or nothing to play."""
+    flags = {bool(s["recorded_clock"]) for s in specs}
+    return flags.pop() if len(flags) == 1 else None
 
 
 # BUG-93 — the replay's clock. Plotly's own ▶ Play steps a frame on the first
@@ -5579,7 +5697,13 @@ def _animation_play_buttons(frame_duration):
     ]
 
 
-def _animation_time_slider(frame_times, total_ms):
+# The replay readout's name for its clock (#422): a trial's own time only when
+# the data recorded the onsets — fixations laid end to end add up to the
+# fixation time, and a mix of the two is just "time".
+_REPLAY_CLOCK_PREFIX = {True: "Trial time ", False: "Fixation time ", None: "Time "}
+
+
+def _animation_time_slider(frame_times, total_ms, recorded_clock=True):
     """Linear time-scrubber slider (VIZ-11).
 
     Frame times sit on a uniform grid, so the handle moves linearly through
@@ -5604,8 +5728,9 @@ def _animation_time_slider(frame_times, total_ms):
             font=dict(color="rgba(0,0,0,0)"),
             currentvalue=dict(
                 font=dict(size=14, color="#444", family=_REPLAY_UI_FONT),
-                # #374 F23/F8: the trial's own clock, first fixation onward.
-                prefix="Trial time ",
+                # #374 F23/F8: the trial's own clock, first fixation onward —
+                # or, without onsets, the fixation time (#422).
+                prefix=_REPLAY_CLOCK_PREFIX[recorded_clock],
                 visible=True,
                 xanchor="right",
             ),
@@ -5760,6 +5885,7 @@ def _render_scanpath_animation(
         (fixations_b, "x", "y"),
         word_frames=word_frames,
         fit_to_monitor=fit_to_monitor,
+        crop_margin=settings.crop_margin,
     )
 
     # Fix the display size first so word labels are sized in the data->screen
@@ -6151,9 +6277,16 @@ def _render_scanpath_animation(
                     line=dict(
                         color=s["sac_color"], width=s["sac_width"], dash=s["sac_dash"]
                     ),
+                    # #422: on the base trace only — a frame restates the
+                    # line's x/y and style, never its opacity, so it holds.
+                    # Named like the static figure's, which is how the app's
+                    # cached replay finds it to stamp the opacity on afterwards
+                    # (`tabs._build_and_render_animation`).
+                    opacity=settings.saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
+                    name="saccades",
                 )
             )
         else:
@@ -6186,6 +6319,7 @@ def _render_scanpath_animation(
                         color=s["sac_color"],
                         line=dict(width=0),
                     ),
+                    opacity=settings.saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -6308,7 +6442,7 @@ def _render_scanpath_animation(
     frames = []
     n_frames = len(frame_times)
     for k, t in enumerate(frame_times):
-        # UX-169: the card's "120 of 361 frames" — and a cancel checkpoint, so an
+        # UX-169: the card's "120 of 360 frames" — and a cancel checkpoint, so an
         # abandoned build stops within a frame. A no-op outside a card.
         progress.report(k + 1, n_frames, unit="frames")
         traces_in_frame = []
@@ -6415,7 +6549,9 @@ def _render_scanpath_animation(
     )
 
     sliders = (
-        _animation_time_slider(frame_times, reading_span_ms) if frame_times else []
+        _animation_time_slider(frame_times, reading_span_ms, _recorded_clock(specs))
+        if frame_times
+        else []
     )
     updatemenus = (
         _animation_play_buttons(_anim_frame_duration_ms(frame_step_ms, playback_speed))
@@ -6722,6 +6858,7 @@ def _add_comparison_fixation_trace(
     show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
+    saccade_opacity: float = 1.0,
     show_order: bool = True,
     order_font_size: int | None = None,
     show_legend: bool = False,
@@ -6745,7 +6882,8 @@ def _add_comparison_fixation_trace(
     Saccades and markers are separate traces (mirroring the single-trial figure)
     so the per-scanpath saccade colour/line-style/line-width and hollow markers
     all apply, and the shared ``show_saccades`` / ``show_saccade_arrows`` /
-    ``show_order`` toggles take effect.
+    ``show_order`` toggles take effect, as does the shared ``saccade_opacity``
+    (#422 — one for both scanpaths, lines and arrows alike).
 
     Fixation colour: by default each scanpath uses its flat per-scanpath colour
     (the A/B cue). When ``color_by`` names a numeric column, the marker **fill** is
@@ -6832,6 +6970,7 @@ def _add_comparison_fixation_trace(
                     line=dict(
                         color=saccade_color, width=saccade_width, dash=saccade_style
                     ),
+                    opacity=saccade_opacity,
                     name=display_name,
                     legendgroup=display_name,
                     showlegend=False,
@@ -6859,6 +6998,7 @@ def _add_comparison_fixation_trace(
                         color=saccade_color,
                         line=dict(width=0),
                     ),
+                    opacity=saccade_opacity,
                     legendgroup=display_name,
                     showlegend=False,
                     hoverinfo="skip",
@@ -7482,6 +7622,7 @@ def _make_split_comparison_figure(
             (spec["raw_gaze"], "x", "y"),
             word_frames=[spec["trial_words"]] if not spec["trial_words"].empty else [],
             fit_to_monitor=fit_to_monitor,
+            crop_margin=settings.crop_margin,
         )
         panel_ranges.append((x_range, y_range))
     panel_fits = [
@@ -7662,6 +7803,7 @@ def _make_split_comparison_figure(
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -7959,6 +8101,9 @@ def _render_comparison_figure(
         if show_heatmap
         else ([], 0.0, 1.0, "")
     )
+    # Every layout shape, in drawing order, set once at the end — as the static
+    # figure does (#422): each addition re-validates every shape already there.
+    layout_shapes: list = []
 
     if show_heatmap:
         reference_words = next(
@@ -7969,9 +8114,8 @@ def _render_comparison_figure(
             ),
             pd.DataFrame(),
         )
-        existing = list(fig.layout.shapes) if fig.layout.shapes else []
         for index, half in enumerate(("left", "right")):
-            existing.extend(
+            layout_shapes.extend(
                 _comparison_heatmap_shapes(
                     reference_words,
                     heatmap_maps[index],
@@ -7982,7 +8126,6 @@ def _render_comparison_figure(
                     half=half,
                 )
             )
-        fig.update_layout(shapes=existing)
         if show_heatmap_colorbar and any(heatmap_maps):
             for trace in _comparison_heatmap_colorbar_traces(
                 trial_specs,
@@ -8004,6 +8147,7 @@ def _render_comparison_figure(
             spec["trial_words"] for spec in trial_specs if not spec["trial_words"].empty
         ],
         fit_to_monitor=fit_to_monitor,
+        crop_margin=settings.crop_margin,
     )
 
     # Both trials are overlaid on one shared canvas, so one display scale sizes
@@ -8048,6 +8192,7 @@ def _render_comparison_figure(
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -8065,16 +8210,12 @@ def _render_comparison_figure(
             category_colors=category_colors[_idx],
         )
         if show_words and draws_stimulus[_idx]:
-            existing = list(fig.layout.shapes) if fig.layout.shapes else []
-            fig.update_layout(
-                shapes=existing
-                + build_word_boxes(
-                    spec["trial_words"],
-                    color=spec["box_color"],
-                    fill_color=spec["box_fill_color"],
-                    fill_opacity=settings.word_box_fill_opacity,
-                    line_opacity=settings.word_box_line_opacity,
-                )
+            layout_shapes += build_word_boxes(
+                spec["trial_words"],
+                color=spec["box_color"],
+                fill_color=spec["box_fill_color"],
+                fill_opacity=settings.word_box_fill_opacity,
+                line_opacity=settings.word_box_line_opacity,
             )
         if show_word_labels and draws_stimulus[_idx]:
             _add_word_label_trace(
@@ -8097,8 +8238,7 @@ def _render_comparison_figure(
 
     _add_category_legend(fig, category_legend, category_label or "")
 
-    shapes = list(fig.layout.shapes) if fig.layout.shapes else []
-    shapes.append(
+    layout_shapes.append(
         dict(
             type="rect",
             x0=x_range[0],
@@ -8185,8 +8325,8 @@ def _render_comparison_figure(
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
         font=font_settings,
-        shapes=shapes,
     )
+    fig.layout.shapes = (*(fig.layout.shapes or ()), *layout_shapes)
     return fig
 
 
@@ -9275,7 +9415,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_type_legend",
         "saccade_classes",
         "saccade_render_mode",
-        "fixation_snap_to_word",
+        "fixation_snap_to_line",
+        "fixation_snap_position",
         "span_border_color",
         "word_heatmap_col",
         "word_heatmap_title",

@@ -232,9 +232,8 @@ class TestDependentConsumers:
 
         words = _tiling_words()
         fixations = _fixation(485.0, timestamp_ms=0.0)  # Robert's trailing space
-        fig = plots.go.Figure()
-        plots._add_word_level_heatmap(
-            fig,
+        shapes = plots._add_word_level_heatmap(
+            plots.go.Figure(),
             words,
             fixations,
             x_field="x",
@@ -245,7 +244,7 @@ class TestDependentConsumers:
             show_colorbars=False,
         )
         outlines = {(s["x0"], s["x1"]) for s in plots.build_word_boxes(words)}
-        rects = {(s.x0, s.x1) for s in fig.layout.shapes if "heatmap" in (s.name or "")}
+        rects = {(s["x0"], s["x1"]) for s in shapes if "heatmap" in s["name"]}
         # The fixation on the space counts towards Robert, and only Robert.
         assert rects == {(358.0, 491.0)}
         assert rects <= outlines
@@ -256,9 +255,8 @@ class TestDependentConsumers:
         from scanpath_studio import plots
 
         words = _tiling_words()
-        fig = plots.go.Figure()
-        plots._add_word_level_heatmap(
-            fig,
+        shapes = plots._add_word_level_heatmap(
+            plots.go.Figure(),
             words,
             _fixation(491.0, timestamp_ms=0.0),
             x_field="x",
@@ -268,7 +266,7 @@ class TestDependentConsumers:
             heatmap_range=None,
             show_colorbars=False,
         )
-        rects = [(s.x0, s.x1) for s in fig.layout.shapes if "heatmap" in (s.name or "")]
+        rects = [(s["x0"], s["x1"]) for s in shapes if "heatmap" in s["name"]]
         assert rects == [(491.0, 662.0)]
 
     def test_the_critical_span_outline_uses_the_experiments_edges(self):
@@ -320,17 +318,20 @@ class TestTheGlyphsStayWhereTheStimulusHadThem:
         (trace,) = [t for t in fig.data if t.name == "words"]
         assert trace.x[0] == pytest.approx(424.5)
 
-    def test_snapping_a_fixation_lands_on_the_box_centre(self):
-        """Render-only, like the label, and on the same point: the
-        linear-reading schematic puts the dot above the word's label."""
+    def test_snapping_a_fixation_keeps_its_x(self):
+        """#422: render-only, like the label, and vertical only — the
+        linear-reading schematic moves the dot onto its line (the top edge by
+        default) and leaves it where it landed along the line."""
         from scanpath_studio import plots
 
         words = _tiling_words()
-        out = plots._snap_fixations_to_words(
-            _fixation(400.0, word_id=0), words, "x", "y"
-        )
-        assert out["x"].iloc[0] == pytest.approx(424.5)
+        out = plots._snap_fixations_to_lines(_fixation(400.0, word_id=0), words, "y")
+        assert out["x"].iloc[0] == pytest.approx(400.0)
         assert out["y"].iloc[0] == pytest.approx(100.0)
+        middle = plots._snap_fixations_to_lines(
+            _fixation(400.0, word_id=0), words, "y", position=0.0
+        )
+        assert middle["y"].iloc[0] == pytest.approx(115.0)
 
     def test_a_landing_on_the_trailing_space_is_not_clipped(self):
         """#BUG-83: the fraction is over the experiment's box.

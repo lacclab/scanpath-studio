@@ -83,7 +83,7 @@ print(embed(fig, legend=saccade_class_legend()))  # markdown-exec: hide
 
 ## A linear-reading schematic
 
-One sentence's fixations snapped above the words they landed on, with the
+One sentence's fixations snapped up or down onto their text lines, with the
 saccades arced over the text. It no longer shows exact positions, so the figure
 labels itself an *Illustration*.
 
@@ -93,7 +93,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
-    fixation_snap_to_word=True,
+    fixation_snap_to_line=True,
     saccade_render_mode="Arc",
     fix_index_range=(124, 139),
 )

@@ -770,6 +770,9 @@ def get_app_css() -> str:
         line-height: 1.45;
         color: inherit;
     }
+    /* #422: values in the app's regular weight (400), like the trial picker
+       above them — at 500 they read bolder than every other value on the
+       page. A value both rows share still steps back, by its colour. */
     .sps-chip-table-wrap table.sps-chip-table th,
     .sps-chip-table-wrap table.sps-chip-table td {
         padding: 0.28rem 0.55rem;
@@ -779,7 +782,7 @@ def get_app_css() -> str:
         text-align: left;
         vertical-align: middle;
         white-space: nowrap;
-        font-weight: 500;
+        font-weight: 400;
     }
     .sps-chip-table-wrap table.sps-chip-table thead th {
         padding-top: 0;
@@ -812,7 +815,6 @@ def get_app_css() -> str:
     }
     .sps-chip-table-wrap table.sps-chip-table td.sps-ct-same,
     .sps-chip-table-wrap table.sps-chip-table td.sps-ct-missing {
-        font-weight: 400;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
     .sps-ct-dot {
@@ -977,6 +979,37 @@ def get_app_css() -> str:
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"] p {
         margin-bottom: 0;
+    }
+    /* #422 — a switch's `help` is hover text on the switch itself: on
+       Animate, what it greys; on a greyed layer, why. Streamlit draws `help`
+       as a `?` button after the label, which UX-80/UX-103 cleared off these
+       rows (and which "Word boxes" has no room for). So the tooltip's hover
+       target is stretched over the whole switch — the <label>, already
+       `position: relative` — and the `?` is not drawn. A click still flips
+       the switch: the target is a plain span inside the <label>, while the
+       `?` button, interactive content that would swallow the click, takes no
+       pointer events. It stays focusable, and shows while it has focus. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"]
+        > span:has(> [data-testid="stTooltipIcon"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipIcon"] {
+        display: contents;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] {
+        position: absolute;
+        inset: 0;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] button {
+        opacity: 0;
+        pointer-events: none;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"]
+        button:focus-visible {
+        opacity: 1;
     }
     /* The divider is drawn on the popover's SLOT — the row's own child — and not
        on the button, which is the obvious place and does not work. A trigger
@@ -1406,6 +1439,15 @@ def get_app_css() -> str:
     @keyframes sps-tip-in {
         from { opacity: 0; }
         to { opacity: 1; }
+    }
+    /* #422 — above the title instead, where the box that clips it (a rail
+       popover, the page) has no room below: `app._FIELD_TIP_PLACEMENT_SCRIPT`
+       sets the class on hover. Opened below there, a popover's last rows made
+       it scroll while the tip showed, and a scrollbar that takes room shook
+       the whole popover. */
+    .sps-fhelp.sps-tip-up::after {
+        top: auto;
+        bottom: calc(100% + 0.3rem);
     }
 
     /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses
@@ -1898,10 +1940,12 @@ def get_app_css() -> str:
         padding-top: 0.4rem;
         border-top: 1px solid rgba(128, 128, 128, 0.28);
     }
-    /* The first block in a section needs no rule — the expander's own header is
-       the boundary. */
-    [data-testid="stExpander"] [data-testid="stVerticalBlock"]
-        > div:first-child .sps-rail-subhead {
+    /* #422 — the block that opens a popover (Screen & framing in Figure &
+       canvas, Fixations in Filters & highlights) needs no rule above it: the
+       popover's own edge is the boundary. `_rail_subsection(first=True)` marks
+       it, since the popover body is drawn apart from the rail row's keyed
+       container, and its first child differs between the two popovers. */
+    .sps-rail-subhead.sps-rail-subhead-first {
         border-top: none;
         padding-top: 0;
         margin-top: 0.1rem;
@@ -2005,10 +2049,23 @@ def get_app_css() -> str:
     /* Section dividers default to 32px top+bottom margin — far too airy for the
        narrow rail. Tighten them so the sections sit close together. */
     .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
-    /* The palette divider meets the first bordered layer card; leave a small
-       extra pause so the rule and the Fixations border do not crowd together. */
+    /* #422 — the palette divider sits midway between the Palette box and the
+       Fixations card, ~0.55rem from each, instead of a rem below the box and
+       half that above the card. Its own margins are zeroed — the rule's, and
+       its markdown wrapper's (Streamlit's -1rem that cancels a paragraph's
+       margin, which with the rule's margins made the space lopsided) — so the
+       rail's gap and the app-wide 0.25rem under each block set the space
+       above it; the 0.2rem below makes up for the layer rows sitting a little
+       closer than other blocks do. */
+    .st-key-scanpath_rail .st-key-palette_layers_divider > div,
+    .st-key-scanpath_rail .st-key-palette_layers_divider
+        [data-testid="stMarkdownContainer"],
+    .st-key-scanpath_rail .st-key-palette_layers_divider hr {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
     .st-key-scanpath_rail .st-key-palette_layers_divider {
-        margin-bottom: 0.4rem !important;
+        margin-bottom: 0.2rem !important;
     }
     /* Plot-rail triggers need enough height for their labels and switch tracks;
        the app-wide compact button treatment otherwise leaves them cramped. */
@@ -2020,8 +2077,9 @@ def get_app_css() -> str:
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
     }
+    /* #422: the presets' height, not 3rem — one line of label needs no more. */
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
-        min-height: 3rem;
+        min-height: 2.6rem;
     }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
@@ -2079,8 +2137,17 @@ def get_app_css() -> str:
         padding-top: 0.45rem;
         margin-bottom: 0.05rem;
     }
-    .st-key-scanpath_rail .st-key-quick_views_grid > [data-testid="stVerticalBlock"] {
-        gap: 0.15rem !important;
+    /* #422 — the grid's two rows are as far apart as its two columns
+       (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
+       app-wide 0.25rem under each block, twice over. The key sits on the
+       vertical block itself, so the rule names it, not a child of it. */
+    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"] {
+        gap: 0.4rem !important;
+    }
+    .st-key-scanpath_rail .st-key-quick_views_grid > div,
+    .st-key-scanpath_rail .st-key-quick_views_grid [data-testid="stColumn"]
+        [data-testid="stVerticalBlock"] > div {
+        margin-bottom: 0 !important;
     }
     /* VIZ-39 — 🎨 My designs. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
@@ -2090,27 +2157,52 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-design_shell {
         position: relative;
     }
+    /* #422 — one inset, 0.6rem, on every side of the open list, and the title
+       row on the same lines: the chevron's glyph starts 0.6rem in (the summary's
+       0.35rem padding plus the glyph's own side bearing), so the cards and the
+       Export / Import row start under it, and 💾 ends where they end. */
     .st-key-scanpath_rail .st-key-design_save {
         position: absolute;
+        /* Centred on the 38px title row: (38 − 30.4) / 2 plus the 1px border. */
         top: 0.3rem;
-        right: 0.4rem;
+        /* The list's inset plus the expander's 1px border. */
+        right: calc(0.6rem + 1px);
         width: auto !important;
         z-index: 3;
     }
     .st-key-scanpath_rail .st-key-design_save button {
         min-height: 1.9rem;
+        height: 1.9rem;
         padding: 0 0.4rem;
     }
     /* Keep the title itself clear of the button it now shares a line with. */
     .st-key-scanpath_rail .st-key-design_shell summary {
-        padding-right: 2.4rem;
+        padding-right: 3.4rem;
+    }
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"] {
+        padding: 0.6rem;
+    }
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"]
+        > [data-testid="stVerticalBlock"] {
+        gap: 0.5rem !important;
+    }
+    /* The app-wide 4px under each block would add to the gap above and to the
+       inset under the last row. */
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"]
+        [data-testid="stLayoutWrapper"] {
+        margin-bottom: 0 !important;
+    }
+    /* Export is a button and Import a popover, which the app draws as a pill;
+       side by side they read as one pair of the cards' shape. */
+    .st-key-scanpath_rail .st-key-design_file_row [data-testid="stPopover"] button {
+        border-radius: 0.5rem;
+        justify-content: center;
     }
     /* One saved design is one bordered card, not three loose buttons: the row's
        own container carries the border, and the controls inside it are borderless
        so the card reads as a single object. */
     .st-key-scanpath_rail [class*="st-key-design_row_"] {
         padding: 0.15rem 0.3rem;
-        margin-bottom: 0.3rem;
         border-radius: 0.5rem;
     }
     .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stHorizontalBlock"] {
@@ -2120,6 +2212,12 @@ def get_app_css() -> str:
         min-height: 1.9rem;
         padding: 0.1rem 0.3rem;
         justify-content: center;
+    }
+    /* #422: a design's name starts at the card's left edge, as a list's names
+       do, rather than floating mid-cell beside its two icons. */
+    .st-key-scanpath_rail [class*="st-key-design_apply_"] button,
+    .st-key-scanpath_rail [class*="st-key-design_apply_"] button > div {
+        justify-content: flex-start;
     }
     /* An icon-only button still carries the label's right margin, which is what
        pushes these two off-center. */
@@ -2212,7 +2310,7 @@ def get_app_css() -> str:
        the rail (`plot_reset_footer`), full width like every other trigger there,
        so neither the two-column header nor the query that patched it remains.
        Keep the heading a single element: a second column here is what broke. */
-    .st-key-plot_reset_footer { margin-top: 0.35rem; }
+    .st-key-plot_reset_footer { margin-top: 0.15rem; }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on

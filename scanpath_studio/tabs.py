@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import html
+import itertools
 import json
 import pickle
 import re
@@ -116,6 +118,7 @@ from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
     CITATION,
     DATASET_EDITOR_OPEN_KEY,
+    DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
@@ -126,6 +129,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -307,7 +311,6 @@ from scanpath_studio.plots import (
     _maybe_add_duration_key,
     add_illustration_label,
     animation_clip_frame_ms,
-    animation_playback_ms,
     animation_timeline_summary,
     apply_legend_layout,
     break_at_gaps,
@@ -1951,6 +1954,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
         heatmap_sigma_px=viz_settings.get("heatmap_sigma_px"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        crop_margin=viz_settings.get("crop_margin"),
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
@@ -2002,6 +2006,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("saccade_style", "Solid"), "solid"
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
+        saccade_opacity=viz_settings.get("saccade_opacity", 1.0),
         saccade_color_mode=viz_settings.get("saccade_color_mode", "Uniform"),
         saccade_class_colors=viz_settings.get("saccade_class_colors"),
         saccade_type_legend=viz_settings.get("saccade_type_legend", True),
@@ -2009,7 +2014,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         # VIZ-31: the reading-class filter (None / a full list = draw them all).
         saccade_classes=viz_settings.get("saccade_classes"),
         saccade_render_mode=viz_settings.get("saccade_render_mode", "Straight"),
-        fixation_snap_to_word=viz_settings.get("fixation_snap_to_word", False),
+        fixation_snap_to_line=viz_settings.get("fixation_snap_to_line", False),
+        fixation_snap_position=viz_settings.get(
+            "fixation_snap_position", DEFAULT_SNAP_POSITION
+        ),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
@@ -4115,14 +4123,23 @@ def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
 
 def _trial_duration_ms(trial_fixations: pd.DataFrame) -> float | None:
     """First fixation onset to last fixation offset, in ms — the span the
-    replay's *Trial time* runs over (#374 F8). ``None`` without timestamps."""
+    replay's *Trial time* runs over (#374 F8).
+
+    ``None`` unless the data recorded the onsets — the replay's own rule,
+    `measures.fixation_clock`. A table with no onset column (PoTeC) is numbered
+    0, 1, 2, … by normalization, and that span read as milliseconds was a
+    "trial" of a second beside a minute of fixations (#422); laying the
+    fixations end to end instead would only repeat *Total fixation time*."""
+    from scanpath_studio.measures import fixation_clock
+
     if not {"timestamp_ms", "duration_ms"} <= set(trial_fixations.columns):
         return None
-    start = pd.to_numeric(trial_fixations["timestamp_ms"], errors="coerce")
-    end = start + pd.to_numeric(trial_fixations["duration_ms"], errors="coerce")
-    if end.notna().sum() == 0:
+    ordered = trial_fixations.sort_values("timestamp_ms", kind="stable")
+    onsets, recorded = fixation_clock(ordered)
+    if not recorded:
         return None
-    return float(end.max() - start.min())
+    duration = pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0)
+    return float((onsets + duration.to_numpy(dtype=float)).max())
 
 
 def _summary_rows(
@@ -4329,6 +4346,13 @@ def _build_studio_config(
             "coordinate_grid_spacing": float(
                 st.session_state.get("global_coordinate_grid_spacing", 100.0)
             ),
+            # #422: Crop to data's margin (applies while cropping).
+            "crop_margin_auto": bool(
+                st.session_state.get("global_crop_margin_auto", True)
+            ),
+            "crop_margin_px": float(
+                st.session_state.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX)
+            ),
         },
         "layers": {
             "words": figure_settings["show_words"],
@@ -4418,6 +4442,7 @@ def _build_studio_config(
             "saccade_width": float(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
+            "saccade_opacity": float(viz_settings.get("saccade_opacity", 1.0)),
             # VIZ-8: colour-by-reading-type mode + per-class palette + legend.
             "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
             "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
@@ -4429,10 +4454,13 @@ def _build_studio_config(
             "saccade_classes": list(
                 viz_settings.get("saccade_classes") or SACCADE_CLASS_ORDER
             ),
-            # VIZ-9: linear-reading mode (arced saccades + snap fixations).
+            # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
             "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
-            "fixation_snap_to_word": bool(
-                viz_settings.get("fixation_snap_to_word", False)
+            "fixation_snap_to_line": bool(
+                viz_settings.get("fixation_snap_to_line", False)
+            ),
+            "fixation_snap_position": float(
+                viz_settings.get("fixation_snap_position", DEFAULT_SNAP_POSITION)
             ),
             # PRE-3 drift correction (ENG-23): saved as the picker's own
             # spelling ("Off" or a title-cased algorithm) so it restores 1:1.
@@ -4966,12 +4994,18 @@ _ANIM_DEFAULT_SPEED = 1.0
 _ANIM_QUALITY_PRESETS = {
     # Fast enough for trial browsing and compact GIF/MP4 drafts.
     "Coarse": (300, 120),
-    # High-fidelity review/export: noticeably smoother than the old 100 ms grid.
+    # #422: the grid a fresh session, the API and `render` start on
+    # (`global_anim_grid_step_ms` / `global_anim_max_frames`'s defaults), named
+    # so a first look at the menu does not find *Custom* already picked.
+    "Standard": (100, 360),
+    # High-fidelity review/export: noticeably smoother than the 100 ms grid.
     "Fine": (40, 900),
 }
 
 
-def _render_anim_info_box(
+def _render_anim_info(
+    timing_host,
+    frames_host,
     trial_fixations: pd.DataFrame,
     fixations_b: pd.DataFrame | None,
     selected_participant: str,
@@ -4982,9 +5016,13 @@ def _render_anim_info_box(
     grid_step_ms: float | None = None,
     max_frames: int | None = None,
 ) -> float:
-    """Render the animation reading-time / playback info box (+ overlay caveats),
-    shown in the side panel under the Animate toggle. Returns the playback
-    duration in ms; the box deliberately omits a redundant fixation count."""
+    """Write the replay's timing and frame count into the Animate popover.
+
+    ``timing_host`` is the *Replay* group's Duration row: how long the reading
+    took and how long its replay plays at this speed (#422 moved it there from a
+    box under *Frames*, since it follows from the speed, not the frames).
+    ``frames_host`` sits under *Frames* and says what the grid produced.
+    Returns the playback duration in ms."""
     dual = fixations_b is not None and not fixations_b.empty
     summary = animation_timeline_summary(
         [trial_fixations] + ([fixations_b] if dual else []),
@@ -4992,45 +5030,77 @@ def _render_anim_info_box(
         grid_step_ms=grid_step_ms,
         max_frames=max_frames,
     )
-    reading_span_ms = summary["reading_span_ms"]
     playback_ms = summary["playback_ms"]
     if dual:
-        span_a = animation_playback_ms([trial_fixations], 1.0)[0]
-        span_b = animation_playback_ms([fixations_b], 1.0)[0]
-        st.info(
-            f"Trial duration **A** {span_a / 1000:.1f}s · **B** "
-            f"{span_b / 1000:.1f}s · Playback ×{playback_speed:g}: "
-            f"{playback_ms / 1000:.1f}s"
-        )
-        # The different-texts caveat used to live here too; it is under the
-        # figure now (`_different_texts_note`), where it is actually read.
-        if (compare_participant, compare_trial) == (
-            selected_participant,
-            selected_trial,
-        ):
-            st.caption(
-                f"{ICONS['warning']} Scanpath B is the same trial as scanpath A."
-            )
-    # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
-    # coarsening the step used to be invisible, which is the whole reason the
-    # setting felt arbitrary. UX-30 folded it INTO the box below rather than
-    # leaving it as a second, detached caption at the foot of the popover: the
-    # frame count is part of the same "what will this replay be like?" answer.
-    grid = (
-        f"**{summary['n_frames']}** frames · one every "
-        f"{summary['step_ms']:.0f} ms of reading"
-    )
-    if summary["coarsened"]:
-        grid += ". Spacing was widened automatically to stay within the frame limit."
-    if not dual:
-        st.info(
-            f"Trial duration: {reading_span_ms / 1000:.1f}s · "
-            f"Playback ×{playback_speed:g}: {playback_ms / 1000:.1f}s\n\n"
-            f"{grid}"
+        span = _replay_span_text(
+            {
+                "A": animation_timeline_summary([trial_fixations], 1.0),
+                "B": animation_timeline_summary([fixations_b], 1.0),
+            }
         )
     else:
-        st.caption(grid)
+        span = _replay_span_text({"": summary})
+    timing_host.caption(f"{span} · Playback {playback_ms / 1000:.1f} s")
+    # The different-texts caveat used to live here too; it is under the
+    # figure now (`_different_texts_note`), where it is actually read.
+    if dual and (compare_participant, compare_trial) == (
+        selected_participant,
+        selected_trial,
+    ):
+        timing_host.caption(
+            f"{ICONS['warning']} Scanpath B is the same trial as scanpath A."
+        )
+    # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
+    # coarsening the step used to be invisible, which is the whole reason the
+    # setting felt arbitrary. #422: and say which control decided it, in the
+    # controls' own numbers, so the result never reads as contradicting them.
+    grid = (
+        f"**{summary['n_frames']}** frames, one every "
+        f"{summary['step_ms']:.0f} ms of reading."
+    )
+    if summary["coarsened"]:
+        grid += (
+            f" The {summary['max_frames']}-frame limit widened it "
+            f"from {summary['requested_step_ms']:.0f} ms."
+        )
+    frames_host.caption(grid)
     return playback_ms
+
+
+#: What a replay's span is called (#422): the trial's duration only when the
+#: data recorded the fixation onsets. Without them the replay lays the
+#: fixations end to end, and that span is the summed fixation time — the chip
+#: table's *Total fixation time* — not how long the trial took.
+_REPLAY_SPAN_NAMES = {True: "Trial", False: "Fixation time"}
+_NO_ONSETS_NOTE = "no onsets, played back to back"
+
+
+def _replay_span_text(parts: dict[str, dict]) -> str:
+    """The Animate popover's Duration row, before its playback time, from one
+    `animation_timeline_summary` per scanpath keyed by its label — ``{"": s}``
+    for one replay, ``{"A": a, "B": b}`` for a co-animation — each span named
+    for what it measured."""
+    recorded = {
+        label: part["recorded_clock"] is not False for label, part in parts.items()
+    }
+
+    def span(label: str) -> str:
+        return f"{parts[label]['reading_span_ms'] / 1000:.1f} s"
+
+    if len(set(recorded.values())) > 1:
+        # A mix (two datasets): each side's span under its own name.
+        return " · ".join(
+            f"**{label}** {_REPLAY_SPAN_NAMES[rec].lower()} {span(label)}"
+            for label, rec in recorded.items()
+        )
+    rec = all(recorded.values())
+    if list(parts) == [""]:
+        text = f"{_REPLAY_SPAN_NAMES[rec]} {span('')}"
+    else:
+        text = f"{_REPLAY_SPAN_NAMES[rec]} " + " · ".join(
+            f"**{label}** {span(label)}" for label in parts
+        )
+    return text if rec else f"{text} ({_NO_ONSETS_NOTE})"
 
 
 def _apply_preprocessing_caption(fig, participant, trial) -> None:
@@ -5127,6 +5197,35 @@ def _rendered_title_caption(
     # row costs a mask over the whole `combos` frame, and it was previously
     # built eagerly as an argument to this call, i.e. on every rerun, for a
     # function that usually returns before reading it.
+    fields = _title_caption_fields(
+        viz_settings,
+        trial_words,
+        trial_fixations,
+        participant,
+        trial,
+        combo_row=combo_row,
+        dataset_name=dataset_name,
+        compare_row=compare_row,
+    )
+    return (
+        render_pattern(title_pattern, fields) if title_pattern else "",
+        render_pattern(caption_pattern, fields) if caption_pattern else "",
+    )
+
+
+def _title_caption_fields(
+    viz_settings: dict,
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    participant: str,
+    trial: str,
+    combo_row: dict | Callable[[], dict | None] | None = None,
+    dataset_name: str | None = None,
+    compare_row: dict | None = None,
+) -> dict:
+    """Every ``{field}`` the figure's title / caption can name, with this
+    trial's values — what `_rendered_title_caption` renders with, and (#422)
+    what the rail's *Available fields* list, validation and preview show."""
     if callable(combo_row):
         combo_row = combo_row()
     settings_summary_input = {
@@ -5138,7 +5237,7 @@ def _rendered_title_caption(
         "color_by": viz_settings.get("color_by"),
         "palette": viz_settings.get("palette"),
     }
-    fields = pattern_fields(
+    return pattern_fields(
         participant,
         trial,
         trial_words,
@@ -5156,10 +5255,6 @@ def _rendered_title_caption(
         metadata_rows=_metadata_mod.pattern_rows(
             participant, trial, (combo_row or {}).get("text_id")
         ),
-    )
-    return (
-        render_pattern(title_pattern, fields) if title_pattern else "",
-        render_pattern(caption_pattern, fields) if caption_pattern else "",
     )
 
 
@@ -5489,6 +5584,12 @@ def _plan_replay(
         # Where the legends sit is layout only too: applied to the finished
         # figure in `finished_figure`, so moving a legend rebuilds no frame.
         legend_layout=None,
+        # #422: so is the saccades' opacity — a trace attribute no frame
+        # restates — stamped in `finished_figure`, so dragging it rebuilds no
+        # frame. And the replay never reads the static figure's Snap to line.
+        saccade_opacity=1.0,
+        fixation_snap_to_line=False,
+        fixation_snap_position=DEFAULT_SNAP_POSITION,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5611,6 +5712,11 @@ def _build_and_render_animation(
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")
         )
+        # #422: the frames were built at full opacity (`_plan_replay`).
+        fig.update_traces(
+            opacity=animation_settings.saccade_opacity,
+            selector=lambda trace: trace.name in ("saccades", "saccade direction"),
+        )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(
             animation_settings, trial_fixations, anim_inputs["fixations_b"]
@@ -5641,6 +5747,7 @@ def _build_and_render_animation(
         bool(animation_settings.duration_size_legend),
         # Not in `anim_key` (the frames never read it), so the view keys on it.
         repr(normalize_legend_layout(animation_settings.legend_layout)),
+        float(animation_settings.saccade_opacity),
     )
     view = _cached_replay_view(
         clip_inputs,
@@ -6142,7 +6249,8 @@ _TRIAL_ID_COLUMN = "@trial_id_shown"
 
 @dataclass(frozen=True)
 class ChipReading:
-    """One row of Compare's A/B table: a reading's own rows and its ids.
+    """One row of a chip table — Compare's A/B table, or the Comparisons
+    subtab's (#422): a reading's own rows and its ids.
 
     ``raw_gaze`` is the reading's samples when the caller already holds them
     (A); ``gaze_samples`` is just their count (B — `_c_gaze_sample_count`)."""
@@ -6150,10 +6258,24 @@ class ChipReading:
     words: pd.DataFrame
     fixations: pd.DataFrame
     participant: str | None
-    trial_shown: str  # `utils.trial_id_shown` — the id as the pickers show it
+    # `utils.trial_id_shown` — the id as the pickers show it; Compare's table
+    # leads with it, the Comparisons subtab's rows are named instead.
+    trial_shown: str = ""
     raw_gaze: pd.DataFrame | None = None
     gaze_samples: int | None = None
     names: ColumnNames | None = None  # DATA-66: its dataset's map, else the open one
+
+    def entries(self, fields) -> list[ChipEntry]:
+        """This reading's chips for ``fields`` (`_trial_chip_entries`)."""
+        return _trial_chip_entries(
+            self.words,
+            self.fixations,
+            self.participant,
+            fields,
+            trial_raw_gaze=self.raw_gaze,
+            gaze_samples=self.gaze_samples,
+            names=self.names,
+        )
 
 
 @st.cache_data(show_spinner=False, max_entries=256)
@@ -6189,15 +6311,7 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     )
     sides = []
     for name, color, reading in zip("AB", colors, (a, b)):
-        entries = _trial_chip_entries(
-            reading.words,
-            reading.fixations,
-            reading.participant,
-            fields,
-            trial_raw_gaze=reading.raw_gaze,
-            gaze_samples=reading.gaze_samples,
-            names=reading.names,
-        )
+        entries = reading.entries(fields)
         trial_id = ChipEntry(_TRIAL_ID_COLUMN, "Trial ID", reading.trial_shown)
         sides.append(
             (name, color, [trial_id, *(e for e in entries if e.col != "trial_id")])
@@ -6205,6 +6319,36 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     st.markdown(
         _chip_table_html(*sides, order=[_TRIAL_ID_COLUMN, *(fields or [])]),
         unsafe_allow_html=True,
+    )
+
+
+def _render_matches_chip_table(fields, rows: list[tuple[str, ChipReading]]) -> None:
+    """The Comparisons subtab's chip table (#422): the selected trial and each
+    match on the page, one row each, named as their panels are, under the
+    fields the ✏️ chips menu picked — the table above the plot, one row per
+    reading, so the matches compare down each column and a value they all
+    share is written quieter."""
+    sides = [(label, None, reading.entries(fields)) for label, reading in rows]
+    if any(entries for _label, _color, entries in sides):
+        st.markdown(
+            _chip_table_html(*sides, order=list(fields or [])),
+            unsafe_allow_html=True,
+        )
+
+
+def _match_gaze_samples(raw_gaze: pd.DataFrame | None, fix: pd.DataFrame):
+    """How many samples a Comparisons match has, on the screen it is drawn on
+    — its gaze-sample chip (#422), cached like Compare's B."""
+    if raw_gaze is None or raw_gaze.empty or fix.empty:
+        return None
+    first = fix.iloc[0]
+    screen = str(first[SCREEN_ID]) if SCREEN_ID in fix.columns else None
+    return _c_gaze_sample_count(
+        raw_gaze,
+        frame_fingerprint(raw_gaze),
+        first["participant_id"],
+        first["trial_id"],
+        screen,
     )
 
 
@@ -6565,6 +6709,14 @@ def render_single_trial_tab(
                     key="single_animate",
                     persist_state="session",
                     wrap=True,
+                    # #422 (in place of #374 F23's caption under this row): why
+                    # the layer rows below grey out, on the switch that does
+                    # it. `styles.py` draws no `?` for it: the whole switch is
+                    # the hover target.
+                    help="Replay the reading fixation by fixation. The replay "
+                    "draws its own fixations and has no heatmap or raw gaze, so "
+                    "the Fixations, Heatmap and Raw gaze switches are greyed "
+                    "while it is on.",
                 )
                 # VIZ-45: the replay is built from fixations, so a trial with none
                 # draws the static figure (its raw gaze, its text) instead of
@@ -6576,7 +6728,7 @@ def render_single_trial_tab(
                 # open shows nothing. Off, every control inside is greyed instead
                 # (`anim_gate`), which is the same "your value is kept" contract the
                 # rail's own mode gating uses. Disabled or not, the body always runs,
-                # which is what keeps `playback_speed` / `anim_info_slot` defined.
+                # which is what keeps `playback_speed` / `anim_frames_slot` defined.
                 anim_disabled = not animate
                 anim_gate = (
                     ""
@@ -6595,170 +6747,197 @@ def render_single_trial_tab(
                 # across reruns and drop the open state. See `_rail_section`
                 # in controls.py for the full diagnosis; this row predates
                 # that helper but shares its exact shape and its exposure.
-                with st.popover(
-                    # BUG-108: named for screen readers; `styles.py` clips the
-                    # label off screen, so the chevron is all that is drawn.
-                    "Replay settings",
-                    width="content",
-                    key="split_mode_animate_popover",
-                    help="Replay settings. Playback controls appear above the plot.",
+                # UX-164: the rail popovers' layout (UX-158) — a *Replay*
+                # group (speed, autoplay, duration) and a *Frames* group (the
+                # smoothness preset, the spacing and the limit, and what they
+                # give this trial), in place of five full-width rows, a
+                # divider, and two that came and went with Custom.
+                with (
+                    st.popover(
+                        # BUG-108: named for screen readers; `styles.py` clips the
+                        # label off screen, so the chevron is all that is drawn.
+                        "Replay settings",
+                        width="content",
+                        key="split_mode_animate_popover",
+                        help="Replay settings. Playback controls appear above the plot.",
+                    ),
+                    _popover_rows("animate"),
                 ):
-                    # UX-164: the rail popovers' layout (UX-158) — a *Replay*
-                    # group (speed, autoplay) and a *Frames* group (the
-                    # smoothness preset and, greyed unless it is Custom, the
-                    # spacing and the limit), in place of five full-width rows,
-                    # a divider, and two that came and went with Custom.
-                    with _popover_rows("animate"):
-                        st.session_state.setdefault(
-                            "single_playback_speed", _ANIM_DEFAULT_SPEED
-                        )
-                        playback_speed = _sub_row(
-                            "Speed",
-                            section="Replay",
-                            section_help="How the replay plays.",
-                            caption_help=_gated_help(
-                                "Playback speed relative to the recorded fixation "
-                                "timings.",
-                                anim_gate,
-                            ),
-                        ).select_slider(
-                            "Playback speed",
-                            options=_ANIM_SPEED_OPTIONS,
-                            format_func=lambda x: _ANIM_SPEED_LABELS[
-                                _ANIM_SPEED_OPTIONS.index(x)
-                            ],
-                            key="single_playback_speed",
-                            persist_state="session",
-                            disabled=anim_disabled,
-                            label_visibility="collapsed",
-                        )
-                        # VIZ-10: start the replay automatically on load (at the speed
-                        # above). Off → the figure waits on the ▶ Play button.
+                    st.session_state.setdefault(
+                        "single_playback_speed", _ANIM_DEFAULT_SPEED
+                    )
+                    playback_speed = _sub_row(
+                        "Speed",
+                        section="Replay",
+                        section_help="How the replay plays.",
+                        caption_help=_gated_help(
+                            "Playback speed relative to the recorded fixation timings.",
+                            anim_gate,
+                        ),
+                    ).select_slider(
+                        "Playback speed",
+                        options=_ANIM_SPEED_OPTIONS,
+                        format_func=lambda x: _ANIM_SPEED_LABELS[
+                            _ANIM_SPEED_OPTIONS.index(x)
+                        ],
+                        key="single_playback_speed",
+                        persist_state="session",
+                        disabled=anim_disabled,
+                        label_visibility="collapsed",
+                    )
+                    # VIZ-10: start the replay automatically on load (at the speed
+                    # above). Off → the figure waits on the ▶ Play button.
+                    _sub_row(
+                        "Autoplay",
+                        caption_help=_gated_help(
+                            "Start playing when the plot loads.", anim_gate
+                        ),
+                    ).checkbox(
+                        "On load",
+                        key="global_anim_autoplay",
+                        persist_state="session",
+                        disabled=anim_disabled,
+                    )
+                    # #422: how long the trial and its replay are belongs to
+                    # *Replay*, under the speed it follows from. Filled later
+                    # (`_render_anim_info`), once scanpath B is known; drawn
+                    # only while there is a replay to time.
+                    anim_timing_slot = (
                         _sub_row(
-                            "Autoplay",
-                            caption_help=_gated_help(
-                                "Start playing when the plot loads.", anim_gate
-                            ),
-                        ).checkbox(
-                            "On load",
-                            key="global_anim_autoplay",
-                            persist_state="session",
-                            disabled=anim_disabled,
+                            "Duration",
+                            caption_help="How long the trial's reading "
+                            "took, and how long its replay plays at the "
+                            "speed above.",
                         )
+                        if animate
+                        else None
+                    )
 
-                        # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
-                        # against frame count, which is what export size and render time
-                        # are made of. It used to be decided for the user in two module
-                        # constants, and the cap coarsened the grid silently.
-                        def _apply_anim_quality() -> None:
-                            preset = _ANIM_QUALITY_PRESETS.get(
-                                st.session_state.get("global_anim_quality")
-                            )
-                            if preset is not None:
-                                (
-                                    st.session_state["global_anim_grid_step_ms"],
-                                    st.session_state["global_anim_max_frames"],
-                                ) = preset
-
-                        current_grid = (
-                            int(st.session_state.get("global_anim_grid_step_ms", 100)),
-                            int(st.session_state.get("global_anim_max_frames", 360)),
+                    # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
+                    # against frame count, which is what export size and render time
+                    # are made of. It used to be decided for the user in two module
+                    # constants, and the cap coarsened the grid silently.
+                    def _apply_anim_quality() -> None:
+                        preset = _ANIM_QUALITY_PRESETS.get(
+                            st.session_state.get("global_anim_quality")
                         )
-                        matched_quality = next(
+                        if preset is not None:
                             (
-                                name
-                                for name, values in _ANIM_QUALITY_PRESETS.items()
-                                if values == current_grid
-                            ),
-                            None,
-                        )
-                        # UX-30: gating the sliders behind Custom means picking Custom on
-                        # the segmented control has to be "sticky" even while the grid
-                        # still equals a Coarse/Fine preset exactly (the state right after
-                        # switching, before either slider is touched) — otherwise this
-                        # same re-inference would immediately snap it back to that preset's
-                        # name and grey the sliders that were just enabled. Only fall back
-                        # to inferring Coarse/Fine here when the mode isn't already Custom;
-                        # a grid matching no preset at all is unambiguous either way.
-                        previous_quality = st.session_state.get("global_anim_quality")
-                        if matched_quality is None:
-                            st.session_state["global_anim_quality"] = "Custom"
-                        elif previous_quality != "Custom":
-                            st.session_state["global_anim_quality"] = matched_quality
+                                st.session_state["global_anim_grid_step_ms"],
+                                st.session_state["global_anim_max_frames"],
+                            ) = preset
+
+                    current_grid = (
+                        int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                        int(st.session_state.get("global_anim_max_frames", 360)),
+                    )
+                    matched_quality = next(
+                        (
+                            name
+                            for name, values in _ANIM_QUALITY_PRESETS.items()
+                            if values == current_grid
+                        ),
+                        None,
+                    )
+                    # UX-30: picking Custom on the segmented control has to be
+                    # "sticky" even while the grid still equals a preset
+                    # exactly (the state right after switching, before
+                    # either slider is touched) — otherwise this re-inference
+                    # would snap it straight back to that preset's name. Only
+                    # infer a preset when the mode isn't already Custom; a
+                    # grid matching no preset is unambiguous either way.
+                    previous_quality = st.session_state.get("global_anim_quality")
+                    if matched_quality is None:
+                        st.session_state["global_anim_quality"] = "Custom"
+                    elif previous_quality != "Custom":
+                        st.session_state["global_anim_quality"] = matched_quality
+                    # #422: written for someone meeting the replay for the
+                    # first time — what a frame is, what each control does
+                    # and what more of them costs — with the presets' own
+                    # numbers, so the help cannot drift from them.
+                    presets_help = " ".join(
+                        f"{name}: a frame every {step} ms, at most {cap}."
+                        for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
+                    )
+                    _sub_row(
+                        "Quality",
+                        section="Frames",
+                        section_help="The replay is a run of still frames, each "
+                        "showing the scanpath up to that moment of the reading. "
+                        "More frames play smoother but take longer to build and "
+                        "export.",
+                        caption_help=_gated_help(
+                            f"{presets_help} Moving a slider below makes it Custom.",
+                            anim_gate,
+                        ),
+                    ).segmented_control(
+                        "Animation smoothness",
+                        options=[*_ANIM_QUALITY_PRESETS, "Custom"],
+                        key="global_anim_quality",
+                        persist_state="session",
+                        on_change=_apply_anim_quality,
+                        disabled=anim_disabled,
+                        label_visibility="collapsed",
+                    )
+
+                    def _mark_anim_quality_custom() -> None:
+                        st.session_state["global_anim_quality"] = "Custom"
+
+                    # #422: the two sliders are live whatever the preset —
+                    # a preset only sets them, and moving one makes it
+                    # Custom — so there is no Custom click before a drag.
+                    step_help = _gated_help(
+                        "Reading time between frames. Smaller plays smoother.",
+                        anim_gate,
+                    )
+                    _numeric_slider(
+                        st,
+                        "Frame every (ms)",
+                        key="global_anim_grid_step_ms",
+                        persist_state="session",
+                        min_value=20,
+                        max_value=500,
+                        step=10,
+                        slider_format="%d ms",
+                        number_format="%d",
+                        on_change=_mark_anim_quality_custom,
+                        disabled=anim_disabled,
+                        help=step_help,
+                        field_host=_sub_row("Every", caption_help=step_help),
+                    )
+                    limit_help = _gated_help(
+                        "The most frames a replay gets. A trial too long for "
+                        "that many at the spacing above gets wider spacing "
+                        "instead.",
+                        anim_gate,
+                    )
+                    _numeric_slider(
+                        st,
+                        "Frame limit",
+                        key="global_anim_max_frames",
+                        persist_state="session",
+                        min_value=30,
+                        max_value=2000,
+                        step=10,
+                        slider_format="%d frames",
+                        number_format="%d",
+                        on_change=_mark_anim_quality_custom,
+                        disabled=anim_disabled,
+                        help=limit_help,
+                        field_host=_sub_row("Limit", caption_help=limit_help),
+                    )
+                    # Filled later, once the selected comparison trial is
+                    # known: what the two controls above give this trial,
+                    # said beside them.
+                    anim_frames_slot = (
                         _sub_row(
-                            "Quality",
-                            section="Frames",
-                            section_help="How often the replay samples the scanpath.",
-                            caption_help=_gated_help(
-                                "Fine is smoother; Coarse renders faster. Custom sets "
-                                "the spacing and the limit below.",
-                                anim_gate,
-                            ),
-                        ).segmented_control(
-                            "Animation smoothness",
-                            options=["Coarse", "Fine", "Custom"],
-                            key="global_anim_quality",
-                            persist_state="session",
-                            on_change=_apply_anim_quality,
-                            disabled=anim_disabled,
-                            label_visibility="collapsed",
+                            "Result",
+                            caption_help="What the spacing and the limit "
+                            "give this trial.",
                         )
-
-                        def _mark_anim_quality_custom() -> None:
-                            st.session_state["global_anim_quality"] = "Custom"
-
-                        grid_idle = (
-                            anim_disabled
-                            or st.session_state["global_anim_quality"] != "Custom"
-                        )
-                        step_help = _gated_help(
-                            "Time between frames. Smaller is smoother (Custom only).",
-                            anim_gate,
-                        )
-                        _numeric_slider(
-                            st,
-                            "Frame every (ms)",
-                            key="global_anim_grid_step_ms",
-                            persist_state="session",
-                            min_value=20,
-                            max_value=500,
-                            step=10,
-                            slider_format="%d ms",
-                            number_format="%d",
-                            on_change=_mark_anim_quality_custom,
-                            disabled=grid_idle,
-                            help=step_help,
-                            field_host=_sub_row("Every", caption_help=step_help),
-                        )
-                        max_help = _gated_help(
-                            "Maximum replay frames; long trials are spaced "
-                            "automatically (Custom only).",
-                            anim_gate,
-                        )
-                        _numeric_slider(
-                            st,
-                            "Max frames",
-                            key="global_anim_max_frames",
-                            persist_state="session",
-                            min_value=30,
-                            max_value=2000,
-                            step=10,
-                            on_change=_mark_anim_quality_custom,
-                            disabled=grid_idle,
-                            help=max_help,
-                            field_host=_sub_row("Max", caption_help=max_help),
-                        )
-                    # Filled later, once the selected comparison trial is known.
-                    # Creating the slot here keeps the resulting frame count beside
-                    # the smoothness control that determines it.
-                    anim_info_slot = st.container()
-            if animate:
-                # #374 F23: why the layer rows below are greyed, said where it
-                # is read without hovering each one.
-                st.caption(
-                    "Replay draws its own fixations; Heatmap and Raw gaze are off "
-                    "while it runs."
-                )
+                        if animate
+                        else None
+                    )
             # Compare is a view mode (toggle here); the second-trial selector renders
             # above the chips in the plot column (compare_slot below), mirroring the
             # main trial picker (CMP-1).
@@ -6986,6 +7165,23 @@ def render_single_trial_tab(
                 )
             )
             st.session_state["_resolved_animating"] = bool(animate)
+        # PERF-7: the selected trial's `combos` row, masked at most **once**
+        # per rerun and only if something asks — the rail's title / caption
+        # fields (#422), the snippet publish, the static branch's
+        # `_apply_title_caption` and two inside `_render_comparison_figure`.
+        # Its only consumer is the title/caption pattern, unset by default,
+        # whose renderers early-return before reading the row, so the thunk
+        # keeps the default path free of the scan (~3.9 ms on a 60k-row
+        # `combos`, on every widget toggle).
+        _combo_row_memo: list = []
+
+        def primary_combo_row() -> dict | None:
+            if not _combo_row_memo:
+                _combo_row_memo.append(
+                    _combo_row(combos, selected_participant, selected_trial)
+                )
+            return _combo_row_memo[0]
+
         # The visualization controls moved out of the sidebar into this rail
         # (host=rail) so they sit beside the plot they drive.
         viz_settings = render_plot_controls(
@@ -7013,6 +7209,16 @@ def render_single_trial_tab(
             # than in a panel of its own. `app.main` passes it in already bound to the
             # frames + data source, since those are app-side concerns.
             canvas_renderer=canvas_renderer,
+            # #422: the title / caption fields the figure renders with — its
+            # fixations within the fixation window, as `{n_fixations}` counts.
+            title_fields=lambda settings: _title_caption_fields(
+                settings,
+                trial_words,
+                _slice_fix_range(trial_fixations, settings.get("fix_index_range")),
+                selected_participant,
+                selected_trial,
+                combo_row=primary_combo_row,
+            ),
         )
         # BUG-24: the scoped reset closes the rail, below every control it
         # resets, rather than sharing the heading row. It is last in creation
@@ -7315,8 +7521,14 @@ def render_single_trial_tab(
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
+            # #422: the layers as the figure draws them, under the builders'
+            # names — the snap and the arcs count only on a layer that is on.
+            "show_fixations": figure_settings["show_fixations"],
+            "show_saccades": figure_settings["show_saccades"],
             "playback_speed": playback_speed if animate else 1.0,
         },
+        # …and only on the static figure, the one that draws them.
+        static=not (animate or comparing),
         data_source=st.session_state.get("_active_data_source"),
         synthetic=bool(
             st.session_state.get("_datasets", {})
@@ -7534,15 +7746,6 @@ def render_single_trial_tab(
     # consumer is the title/caption pattern, unset by default, whose renderer
     # early-returns before reading the row, so the thunk is what keeps the
     # default path free of the scan entirely rather than merely down to one.
-    _combo_row_memo: list = []
-
-    def primary_combo_row() -> dict | None:
-        if not _combo_row_memo:
-            _combo_row_memo.append(
-                _combo_row(combos, selected_participant, selected_trial)
-            )
-        return _combo_row_memo[0]
-
     _snippet_title, _snippet_caption = _rendered_title_caption(
         viz_settings,
         trial_words,
@@ -7628,37 +7831,39 @@ def render_single_trial_tab(
         ),
     )
 
-    # Animation info box, in its slot inside the rail's Playback popover.
-    if animate and not fig_fixations.empty and anim_info_slot is not None:
-        with anim_info_slot:
-            # VIZ-25: quote the same timeline the replay draws. The animation
-            # builder drops Discard-mode fixation classes internally; apply the
-            # shared classifier here too so the info box cannot count hidden rows.
-            info_fixations = _discard_flagged_fixations(
-                fig_fixations,
-                trial_words,
-                viz_settings.get("fixation_flags"),
+    # The replay's timing and frame count, in their slots inside the rail's
+    # Animate popover.
+    if animate and not fig_fixations.empty and anim_timing_slot is not None:
+        # VIZ-25: quote the same timeline the replay draws. The animation
+        # builder drops Discard-mode fixation classes internally; apply the
+        # shared classifier here too so the info cannot count hidden rows.
+        info_fixations = _discard_flagged_fixations(
+            fig_fixations,
+            trial_words,
+            viz_settings.get("fixation_flags"),
+        )
+        info_compare_fix = (
+            _discard_flagged_fixations(
+                fig_compare_fix,
+                compare_meta["words"],
+                figure_settings.get("fixation_flags_b"),
             )
-            info_compare_fix = (
-                _discard_flagged_fixations(
-                    fig_compare_fix,
-                    compare_meta["words"],
-                    figure_settings.get("fixation_flags_b"),
-                )
-                if dual_anim
-                else None
-            )
-            _render_anim_info_box(
-                info_fixations,
-                info_compare_fix,
-                selected_participant,
-                selected_trial,
-                compare_participant,
-                compare_trial,
-                playback_speed,
-                grid_step_ms=viz_settings.get("anim_grid_step_ms"),
-                max_frames=viz_settings.get("anim_max_frames"),
-            )
+            if dual_anim
+            else None
+        )
+        _render_anim_info(
+            anim_timing_slot,
+            anim_frames_slot,
+            info_fixations,
+            info_compare_fix,
+            selected_participant,
+            selected_trial,
+            compare_participant,
+            compare_trial,
+            playback_speed,
+            grid_step_ms=viz_settings.get("anim_grid_step_ms"),
+            max_frames=viz_settings.get("anim_max_frames"),
+        )
 
     with plot_slot:
         if not animate:
@@ -7968,6 +8173,8 @@ def render_single_trial_tab(
                     viz_settings=viz_settings,
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
+                    trial_raw_gaze=trial_raw_gaze,
+                    raw_gaze=raw_gaze,
                 )
 
     # PRE-21: absent entirely while drift correction is gated off.
@@ -10718,6 +10925,7 @@ def render_per_text_tab(
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
             fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+            crop_margin=viz_settings.get("crop_margin"),
             word_heatmap_col="value",
             word_heatmap_title=measure.axis_label,
         )
@@ -12166,20 +12374,19 @@ _GEN_COL_EXCLUDE = {
     "word_id",
     "fixation_id",
 }
-# The grid shows at most this many generation panels (readability). When more
-# than this exist they're ranked by similarity to the selected scanpath and the
-# *closest* ones are shown — never an arbitrary label-sorted subset.
-_GEN_MAX_PANELS = 24
-# PRE-21: with similarity gated off there is no ranking, so the 24 cap loses its
-# reason to exist — it was there to keep a *ranked* grid readable, not to bound
-# rendering cost. Raised, but still finite and still stated in the caption, so
-# the grid never silently truncates.
-_GEN_MAX_PANELS_UNRANKED = 60
-# Score at most this many candidates (bounds the NLD cost for a high-cardinality
-# column like participant_id on a big corpus). A safety budget above the grid cap
-# so the "most similar" ranking still sees more candidates than it displays.
-# Dead while similarity is gated off — nothing is scored — which is why
-# `_collect_generations` only applies it when it is on.
+#: #422 — the grid draws one page of matches at a time, and every match is a
+#: figure, so a page is also the most figures the subtab builds in one run —
+#: the hard bound, whatever the match count. 12 fills whole rows at 1–4
+#: columns. The pager reaches the rest.
+_GEN_PAGE_SIZE = 12
+#: The pager above the grid and the one below it; either moves both.
+_GEN_PAGE_KEYS = ("multi_gen_page", "multi_gen_page_end")
+#: The match set the page number belongs to — another trial or field starts
+#: again at page 1.
+_GEN_PAGE_FOR_KEY = "_multi_gen_page_for"
+# Score at most this many matches (bounds the NLD cost for a high-cardinality
+# column like participant_id on a big corpus); the rest follow the ranked ones,
+# unranked. Dead while similarity is gated off — nothing is scored.
 _GEN_MAX_SCORE = 60
 
 
@@ -12295,7 +12502,7 @@ def _collect_generations(
     selected_participant,
     selected_trial,
     differ_col: str | None = None,
-) -> tuple:
+) -> dict[tuple, pd.DataFrame]:
     """Trials matching the selected trial's ``gen_col`` value.
 
     The comparison column is a selector, not a grouping dimension: choosing
@@ -12309,6 +12516,9 @@ def _collect_generations(
     ids may contain the separator a label joins them with, so ``(p1, "t1 ·
     t2")`` and ``("p1 · t1", t2)`` read alike and one replaced the other.
     Labels are made where they are shown (:func:`_reading_labels`).
+
+    Every match, in :func:`_reading_order` — the grid pages through them
+    (#422), so nothing here is cut.
     """
     if (
         gen_col not in fixations_pool.columns
@@ -12316,16 +12526,16 @@ def _collect_generations(
         or fixations_pool.empty
         or trial_fixations.empty
     ):
-        return {}, 0
+        return {}
     pool = fixations_pool
     if SCREEN_ID in trial_fixations.columns and not trial_fixations.empty:
         if SCREEN_ID not in pool.columns:
-            return {}, 0
+            return {}
         active_screen = str(trial_fixations[SCREEN_ID].iloc[0])
         pool = pool[pool[SCREEN_ID].astype(str) == active_screen]
     selected_values = trial_fixations[gen_col].dropna().unique()
     if len(selected_values) != 1:
-        return {}, 0
+        return {}
     pool = pool[pool[gen_col] == selected_values[0]]
     if differ_col is not None and differ_col in trial_fixations.columns:
         own = trial_fixations[differ_col].dropna().unique()
@@ -12345,20 +12555,119 @@ def _collect_generations(
         if group.empty:
             continue
         candidates[reading] = group
-    n_total = len(candidates)
-    # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
-    # similarity happens in the tab, after scoring). Sorted for determinism.
-    # PRE-21: it is a *scoring* budget, so with similarity gated off it would
-    # only drop panels for no reason — the grid's own cap is what applies then.
-    budget = _GEN_MAX_SCORE if similarity_enabled() else _GEN_MAX_PANELS_UNRANKED
-    ordered = sorted(candidates.items(), key=lambda item: _reading_order(item[0]))
-    return dict(ordered[:budget]), n_total
+    return dict(sorted(candidates.items(), key=lambda item: _reading_order(item[0])))
 
 
-def _reading_order(reading: tuple) -> tuple[str, ...]:
+def _all_read_the_selected_text(trial_fixations, frames, text_col) -> bool:
+    """Whether every match reads the selected trial's one text — what the
+    similarity scores need, since they compare word sequences."""
+    if text_col is None:
+        return False
+    own = trial_fixations[text_col].dropna().astype(str).unique()
+    return len(own) == 1 and all(
+        text_col in fix.columns
+        and fix[text_col].dropna().astype(str).nunique() == 1
+        and str(fix[text_col].dropna().astype(str).iloc[0]) == str(own[0])
+        for fix in frames
+    )
+
+
+def _sync_gen_pages(source: str) -> None:
+    """``on_change`` for either pager: the grid has one page, so both show it."""
+    page = st.session_state.get(source)
+    for key in _GEN_PAGE_KEYS:
+        if key != source:
+            st.session_state[key] = page
+
+
+def _gen_page_caption(first: int, last: int, total: int) -> str:
+    """What the grid shows, and how to see the rest (#422)."""
+    if total <= _GEN_PAGE_SIZE:
+        return f"{total} match." if total == 1 else f"{total} matches."
+    span = f"{first}–{last}" if last > first else f"{first}"
+    return f"Showing {span} of {total} matches — pick a page for more."
+
+
+def _render_gen_pager(
+    ranked: list, *, top: bool, match_set: tuple = (), note: str = ""
+) -> list:
+    """The Comparisons grid's page of ``ranked`` (#422), and its pager.
+
+    ``top`` draws the count line with a pager beside it and returns the page's
+    readings; the second call, under the grid, draws only a pager. Each pager
+    moves the other (`_sync_gen_pages`). A new ``match_set`` — another trial,
+    field or screen — starts again at page 1. One page needs no pager.
+    """
+    n_pages = max(1, -(-len(ranked) // _GEN_PAGE_SIZE))
+    if top:
+        match_set = tuple(str(part) for part in match_set)
+        if st.session_state.get(_GEN_PAGE_FOR_KEY) != match_set:
+            st.session_state[_GEN_PAGE_FOR_KEY] = match_set
+            for key in _GEN_PAGE_KEYS:
+                st.session_state.pop(key, None)
+        count_col, pager_host = st.columns([3, 2], vertical_alignment="center")
+    elif n_pages == 1:
+        return ranked
+    else:
+        pager_host = st
+    page = 1
+    if n_pages > 1:
+        key = _GEN_PAGE_KEYS[0 if top else 1]
+        page = pager_host.container(
+            horizontal=True, horizontal_alignment="right"
+        ).pagination(
+            n_pages,
+            key=key,
+            on_change=_sync_gen_pages,
+            args=(key,),
+            persist_state="session",
+        )
+    first = (page - 1) * _GEN_PAGE_SIZE
+    shown = ranked[first : first + _GEN_PAGE_SIZE]
+    if top:
+        count_col.caption(
+            _gen_page_caption(first + 1, first + len(shown), len(ranked)) + note
+        )
+    return shown
+
+
+_DIGIT_RUN = re.compile(r"([0-9]+)")
+
+
+def _reading_order(reading: tuple) -> tuple:
     """A reading's place in the Comparisons grid: by participant, then trial,
-    as text — ids of mixed types, or a missing one, still sort."""
-    return tuple(str(part) for part in reading)
+    as text with its numbers read as numbers (#422) — participant 2 before 10,
+    which matters once the grid pages. Ids of mixed types, or a missing one,
+    still sort, and the text itself breaks a tie (``7`` / ``007``)."""
+
+    return tuple(
+        key for part in map(str, reading) for key in (_natural_key(part), part)
+    )
+
+
+#: Ids longer than this are split afresh each time rather than remembered, so
+#: the process-wide memo below stays small whatever a dataset's ids look like.
+_NATURAL_KEY_MEMO_MAX_LEN = 128
+
+
+def _natural_key(text: str) -> tuple:
+    """``text`` split into runs of digits (compared as numbers) and the rest.
+    Remembered for ordinary ids: the grid re-sorts every match on each rerun,
+    and the ids repeat."""
+    if len(text) <= _NATURAL_KEY_MEMO_MAX_LEN:
+        return _natural_key_memo(text)
+    return _split_natural(text)
+
+
+def _split_natural(text: str) -> tuple:
+    return tuple(
+        (0, int(run), "") if run[0] in "0123456789" else (1, 0, run)
+        for run in _DIGIT_RUN.split(text)
+        if run
+    )
+
+
+_natural_key_memo = functools.lru_cache(maxsize=16384)(_split_natural)
 
 
 def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:
@@ -12470,12 +12779,17 @@ def render_multiple_comparison_tab(
     viz_settings: dict,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    trial_raw_gaze: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> None:
     """Render the **Comparisons** subtab.
 
     Shows other trials whose selected comparison-field value matches the main
     trial. The field decides the set: text id yields other readings of the text,
     participant id yields that reader's other texts, and so on.
+
+    ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
+    filtered pool's, for the chip table's gaze-sample count (#422).
     """
     if trial_words.empty or trial_fixations.empty:
         st.info("This trial lacks word boxes or fixations; pick another.")
@@ -12494,35 +12808,38 @@ def render_multiple_comparison_tab(
     if st.session_state.get("multi_gen_col") not in match_options:
         st.session_state.pop("multi_gen_col", None)
 
-    intro_col, field_col, grid_col = st.columns(
-        [4.6, 3.2, 2.2], gap="medium", vertical_alignment="center"
+    # #422: one `label | field` row whose first label sits in the subtabs' own
+    # label column (`PANEL_LABEL_W`); what *Match field* does is its hover help,
+    # not a caption beside it repeating the same thing.
+    match_label_col, match_col, cols_label_col, cols_col = st.columns(
+        [PANEL_LABEL_W, 0.44, 0.09, 0.27],
+        gap=LABEL_GAP,
+        vertical_alignment="center",
     )
-    with intro_col:
-        st.caption("Show trials matching the selected trial on one field.")
-    with field_col:
-        choice = labeled(
-            st,
-            "selectbox",
-            "Match field",
-            options=match_options,
-            format_func=match_labels.__getitem__,
-            key="multi_gen_col",
-            help="Show trials with the same value as the selected trial.",
-        )
-    with grid_col:
-        n_cols = labeled(
-            st,
-            "slider",
-            "Columns",
-            min_value=1,
-            max_value=4,
-            value=2,
-            key="multi_n_cols",
-            help="Number of panels per row.",
-        )
+    match_help = "Shows the other trials that share the selected trial's value here."
+    row_label(match_label_col, "Match field", match_help)
+    choice = match_col.selectbox(
+        "Match field",
+        options=match_options,
+        format_func=match_labels.__getitem__,
+        key="multi_gen_col",
+        help=match_help,
+        label_visibility="collapsed",
+    )
+    cols_help = "Panels per row."
+    row_label(cols_label_col, "Columns", cols_help)
+    n_cols = cols_col.slider(
+        "Columns",
+        min_value=1,
+        max_value=4,
+        value=2,
+        key="multi_n_cols",
+        help=cols_help,
+        label_visibility="collapsed",
+    )
     gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
-    candidates, n_total = _collect_generations(
+    candidates = _collect_generations(
         fixations_filtered,
         trial_fixations,
         gen_col,
@@ -12533,12 +12850,6 @@ def render_multiple_comparison_tab(
     if not candidates:
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
         return
-    # More scanpaths of this text exist than we score (very high-cardinality
-    # column); the ones we do score are ranked by similarity below.
-    scored_capped = n_total > len(candidates)
-
-    if scored_capped:
-        st.caption(f"Showing the first {len(candidates)} of {n_total} matches.")
 
     # Reuse the user's viz toggles but force a clean, comparable spatial view: the
     # grid is inherently spatial, and a generation frame may lack the selected
@@ -12567,20 +12878,13 @@ def render_multiple_comparison_tab(
             **settings,
         )
 
-    # The full readings feed the spatial figures, the snapshot table, and the
-    # convergence plots (ENG-8 removed the local fixation-index window).
-    sliced_real = trial_fixations
-    sliced_gens = candidates
-
     with st.container():
-        # Score every collected generation against the selected scanpath. The
-        # per-generation NLD annotates each grid panel and orders both the grid and
-        # the table; the full table is shown beneath the grid.
+        # Score the matches against the selected scanpath — at most
+        # `_GEN_MAX_SCORE` of them. The NLD annotates each grid panel and orders
+        # the grid and the table; the full table is shown beneath the grid.
         #
-        # PRE-21: with similarity gated off nothing is scored, so the grid orders
-        # alphabetically by the comparison-column value and shows more panels —
-        # the 24 cap existed to keep the *ranked* grid readable, and there is no
-        # ranking left to keep.
+        # PRE-21: with similarity gated off nothing is scored, and the grid is
+        # in `_reading_order`.
         text_col = next(
             (
                 column
@@ -12589,21 +12893,20 @@ def render_multiple_comparison_tab(
             ),
             None,
         )
-        selected_text_values = (
-            trial_fixations[text_col].dropna().astype(str).unique()
-            if text_col is not None
-            else []
+        # Scoring (experimental) only, and only the matches it would score:
+        # the check is a Python loop, so walking every match cost a rerun
+        # seconds on a large corpus.
+        head = (
+            dict(itertools.islice(candidates.items(), _GEN_MAX_SCORE))
+            if similarity_enabled()
+            else {}
         )
-        same_text = len(selected_text_values) == 1 and all(
-            text_col in fix.columns
-            and fix[text_col].dropna().astype(str).nunique() == 1
-            and str(fix[text_col].dropna().astype(str).iloc[0])
-            == str(selected_text_values[0])
-            for fix in sliced_gens.values()
+        scoring = bool(head) and _all_read_the_selected_text(
+            trial_fixations, head.values(), text_col
         )
-        scoring = similarity_enabled() and same_text
+        scored = head if scoring else {}
         table = (
-            compute_similarity_table(sliced_real, sliced_gens, trial_words)
+            compute_similarity_table(trial_fixations, scored, trial_words)
             if scoring
             else pd.DataFrame()
         )
@@ -12611,51 +12914,97 @@ def render_multiple_comparison_tab(
             dict(zip(table["Model"], table["NLD"])) if "NLD" in table.columns else {}
         )
 
-        # Rank by similarity (lowest NLD = most similar; unscored/NaN last) and show
-        # the closest _GEN_MAX_PANELS in the grid — never an arbitrary label subset.
+        # Rank by similarity (lowest NLD = most similar; unscored/NaN last).
         # Every key here is a `(participant_id, trial_id)` reading (#412); the
         # labels below are only how it is written.
         if scoring:
             ranked = sorted(
-                sliced_gens,
+                candidates,
                 key=lambda n: (
                     pd.isna(nld_by_gen.get(n)),
                     nld_by_gen.get(n) if pd.notna(nld_by_gen.get(n)) else 0.0,
                 ),
             )
         else:
-            ranked = list(sliced_gens)  # already in `_reading_order`
-        panel_cap = _GEN_MAX_PANELS if scoring else _GEN_MAX_PANELS_UNRANKED
-        grid_names = ranked[:panel_cap]
-        reading_labels = _reading_labels(sliced_gens)
+            ranked = list(candidates)  # already in `_reading_order`
+        reading_labels = _reading_labels(candidates)
+
+        st.markdown("#### Matching trials")
+        # #422: one page of matches at a time — each is a figure.
+        grid_names = _render_gen_pager(
+            ranked,
+            top=True,
+            match_set=(selected_participant, selected_trial, gen_col, differ_col),
+            note=(
+                f" The first {_GEN_MAX_SCORE} are ranked by NLD; the rest follow."
+                if scoring and len(candidates) > _GEN_MAX_SCORE
+                else ""
+            ),
+        )
         captions = _panel_captions(
             choice,
-            {name: sliced_gens[name] for name in grid_names},
+            {name: candidates[name] for name in grid_names},
             text_col,
             reading_labels,
         )
-
-        st.markdown("#### Matching trials")
+        page_words = {
+            name: _comparison_trial_words(words_filtered, candidates[name])
+            for name in grid_names
+        }
+        # #422: the chips above the plot, for the selected trial and the page's
+        # matches — one row each, so they compare down each column.
+        chip_fields = st.session_state.get("trial_chip_fields") or []
+        if chip_fields:
+            count_samples = "@gaze_sample_count" in chip_fields
+            _render_matches_chip_table(
+                chip_fields,
+                [
+                    (
+                        "Selected",
+                        ChipReading(
+                            trial_words,
+                            trial_fixations,
+                            selected_participant,
+                            raw_gaze=trial_raw_gaze,
+                        ),
+                    ),
+                    *(
+                        (
+                            captions[name],
+                            ChipReading(
+                                page_words[name],
+                                candidates[name],
+                                name[0],
+                                gaze_samples=(
+                                    _match_gaze_samples(raw_gaze, candidates[name])
+                                    if count_samples
+                                    else None
+                                ),
+                            ),
+                        )
+                        for name in grid_names
+                    ),
+                ],
+            )
         # Estimate a uniform cell height from the figure aspect + column count so
         # panels line up and don't leave a tall whitespace band below each.
         aspect = float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
-        names = grid_names
-        for start in range(0, len(names), n_cols):
-            row_names = names[start : start + n_cols]
+        for start in range(0, len(grid_names), n_cols):
+            row_names = grid_names[start : start + n_cols]
             grid_cols = st.columns(n_cols)
             for offset, (cell, name) in enumerate(zip(grid_cols, row_names)):
                 with cell:
-                    fix = sliced_gens[name]
+                    fix = candidates[name]
                     nld = nld_by_gen.get(name)
                     trial_label = captions[name]
                     if nld is not None and pd.notna(nld):
                         st.caption(f"**{trial_label}** · NLD {nld:.2f}")
                     else:
                         st.caption(f"**{trial_label}**")
-                    words = _comparison_trial_words(words_filtered, fix)
+                    words = page_words[name]
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
@@ -12663,6 +13012,7 @@ def render_multiple_comparison_tab(
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
+        _render_gen_pager(ranked, top=False)
 
         # PRE-21: the scoring half of this panel — the similarity table (where
         # three of the four metrics still read "Not yet computed", the clearest
@@ -12695,8 +13045,8 @@ def render_multiple_comparison_tab(
                 round(float(pd.to_numeric(trial_fixations["y"]).sum()), 3),
                 round(float(pd.to_numeric(trial_fixations["duration_ms"]).sum()), 3),
             )
-        # Convergence covers the grid subset (the shown, most-similar trials),
-        # so it matches the grid and stays bounded on a high-cardinality column.
+        # Convergence covers the page on screen, so it matches the grid and
+        # stays bounded on a high-cardinality column.
         conv_gens = {name: candidates[name] for name in grid_names}
         conv_key = (
             str(selected_participant),
@@ -14821,6 +15171,9 @@ def _apply_remap() -> None:
                 "global_monitor_width_mm": setup.monitor_width_mm,
                 "global_viewing_distance_mm": setup.viewing_distance_mm,
                 "global_base_font_size": setup.base_font_size,
+                # #422: the setup's size is in px; a point size left on
+                # would replace it.
+                "global_use_stimulus_font_pt": False,
                 "global_font_family": setup.font_family,
                 "global_line_spacing": setup.line_spacing,
                 "global_scale_text_to_boxes": setup.scale_text_to_boxes,

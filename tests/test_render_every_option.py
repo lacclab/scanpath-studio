@@ -82,7 +82,8 @@ NON_DEFAULT = {
         },
         "size_key": {"position": "top-left-inside"},
     },
-    "fixation_snap_to_word": True,
+    "fixation_snap_to_line": True,
+    "fixation_snap_position": 0.25,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
     # CMP-24 — the co-animation's B flags (`--compare-fixation-flag`).
     "fixation_flags_b": {"long": {"mode": "Highlight", "threshold_ms": 700.0}},
@@ -94,6 +95,7 @@ NON_DEFAULT = {
     "saccade_color": "#123456",
     "saccade_style": "dash",
     "saccade_width": 3.0,
+    "saccade_opacity": 0.5,
     "saccade_color_mode": "By type",
     "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#abcdef"},
     "saccade_type_legend": False,
@@ -107,6 +109,7 @@ NON_DEFAULT = {
     "span_border_color": "#555555",
     "background_color": "#fafafa",
     "fit_to_monitor": False,
+    "crop_margin": 30.0,
     "show_coordinate_grid": True,
     "coordinate_grid_spacing": 250.0,
     "line_spacing": 2.5,
@@ -312,6 +315,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
         (["--no-full-monitor"], "fit_to_monitor", False),
+        (["--crop-margin", "30"], "crop_margin", 30.0),
         (["--no-fixation-colorbar"], "show_fixation_colorbar", False),
         (
             ["--fixation-colorbar-orientation", "horizontal"],

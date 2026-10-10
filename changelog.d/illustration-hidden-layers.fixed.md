@@ -1,0 +1,1 @@
+The Illustration label no longer names snapped fixations while the Fixations layer is off, or saccade arcs while Saccades is off, and names neither in Animate or Compare, which draw neither; with the fixations off, the saccades run between the recorded positions.

@@ -1158,7 +1158,7 @@ The glyph run inside a word's box — where its letters are.
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. Measured against OneStop's own Experiment Builder screens: each tiling box is centered on its word, half a space either side, so the run's `x` start is half an advance early there; the label and snap use the box center, the landing measures do not. |
+| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. Measured against OneStop's own Experiment Builder screens: each tiling box is centered on its word, half a space either side, so the run's `x` start is half an advance early there; the label uses the box center, the landing measures do not. |
 | **Code** | `scanpath_studio/measures.py:word_glyph_span` |
 | **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py` |

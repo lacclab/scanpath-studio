@@ -22,7 +22,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
     store.update(
         {
             "global_saccade_render_mode": "Straight",
-            "global_fixation_snap_to_word": False,
+            "global_fixation_snap_to_line": False,
             "global_saccade_color_mode": "By type",
             "global_fixation_opacity": 0.45,
             # Animate is a render mode, not a quick-view owner. It must survive
@@ -36,7 +36,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
     assert controls._active_quick_view() == "illustration"
     assert store["global_saccade_render_mode"] == "Arc"
-    assert store["global_fixation_snap_to_word"] is True
+    assert store["global_fixation_snap_to_line"] is True
     assert store["global_saccade_color_mode"] == "Uniform"
     assert store["global_fixation_opacity"] == 1.0
     assert store["single_animate"] is True
@@ -45,7 +45,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
     assert controls._active_quick_view() == "scanpath"
     assert store["global_saccade_render_mode"] == "Straight"
-    assert store["global_fixation_snap_to_word"] is False
+    assert store["global_fixation_snap_to_line"] is False
     assert store["global_saccade_color_mode"] == "Uniform"
     assert store["global_fixation_opacity"] == 0.7
     assert store["single_animate"] is True
@@ -81,7 +81,7 @@ def test_leaving_illustration_does_not_leak_an_intervening_edit(monkeypatch):
 
     assert store["global_fixation_opacity"] == 0.7
     assert store["global_saccade_render_mode"] == "Straight"
-    assert store["global_fixation_snap_to_word"] is False
+    assert store["global_fixation_snap_to_line"] is False
     assert controls._active_quick_view() == "heatmap"
 
 
@@ -322,12 +322,20 @@ def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
 
 @pytest.mark.timeout(180)
 def test_animate_says_why_layers_are_greyed():
-    """#374 F23: the reason is on screen under the Animate row, not only in
-    each greyed row's tooltip."""
+    """#422 (in place of #374 F23's caption under the Animate row): the reason
+    is the switches' hover text — Animate says what it greys, and each greyed
+    switch says why, only while it is greyed."""
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
     at.run()
-    reason = "Replay draws its own fixations"
-    assert not any(reason in c.value for c in at.caption)
+    assert "Heatmap and Raw gaze switches are greyed" in (
+        at.toggle(key="single_animate").help
+    )
+    greyed = ("global_show_fix", "global_show_heatmap", "global_show_raw_gaze")
+    assert not any(at.toggle(key=key).help for key in greyed)
     at.toggle(key="single_animate").set_value(True).run()
     assert not at.exception
-    assert any(reason in c.value for c in at.caption)
+    assert not any("Replay draws its own fixations" in c.value for c in at.caption)
+    for key in greyed:
+        toggle = at.toggle(key=key)
+        assert toggle.disabled, key
+        assert toggle.help.startswith("Greyed while Animate is on"), key

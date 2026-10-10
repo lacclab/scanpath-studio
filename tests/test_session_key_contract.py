@@ -482,6 +482,7 @@ def _restore_config_app():
             "saccade_color": "#112233",
             "saccade_style": "Solid",
             "saccade_width": 2.0,
+            "saccade_opacity": 0.5,
             "saccade_render_mode": "Arc",
             "saccade_color_mode": "Uniform",
             "saccade_type_legend": True,
@@ -490,7 +491,8 @@ def _restore_config_app():
             # VIZ-31 reading-class filter — a real subset, since the reader
             # validates the names against the classes this build knows.
             "saccade_classes": ["forward", "regression"],
-            "fixation_snap_to_word": True,
+            "fixation_snap_to_line": True,
+            "fixation_snap_position": 0.25,
             "drift_correction": "Warp",
             "drift_connectors": True,
             "fixation_symbol": "circle",
@@ -534,6 +536,8 @@ def _restore_config_app():
             "coordinate_grid": True,
             "coordinate_grid_auto": False,
             "coordinate_grid_spacing": 250.0,
+            "crop_margin_auto": False,
+            "crop_margin_px": 40.0,
         },
         "text": {
             "scale_text_to_boxes": True,

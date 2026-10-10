@@ -41,6 +41,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
@@ -845,6 +846,13 @@ def _render_parser() -> argparse.ArgumentParser:
         f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
     )
     viz.add_argument(
+        "--saccade-opacity",
+        type=float,
+        metavar="O",
+        help="Opacity of the saccade lines and direction arrows, 0.1–1.0 "
+        "(default: 1). A comparison's two scanpaths share it.",
+    )
+    viz.add_argument(
         "--saccade-color-by-type",
         dest="saccade_color_by_type",
         action="store_true",
@@ -960,8 +968,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "--snap-fixations",
         dest="snap_fixations",
         action="store_true",
-        help="Snap each fixation above the word it lands on instead of its raw "
-        "gaze point.",
+        help="Move each fixation up or down onto its text line (its word's, else "
+        "the nearest); it keeps its x. --snap-position says where on the line.",
+    )
+    viz.add_argument(
+        "--snap-position",
+        dest="snap_position",
+        type=float,
+        metavar="LINES",
+        help="Where on its line a snapped fixation sits, in line heights from the "
+        "line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge "
+        f"(default: {DEFAULT_SNAP_POSITION:g}). Used with --snap-fixations.",
     )
     viz.add_argument(
         "--illustration",
@@ -1247,8 +1264,9 @@ def _render_parser() -> argparse.ArgumentParser:
         "--line-spacing",
         type=float,
         metavar="N",
-        help="Line slots each word box stands for, which sizes the reading text "
-        "(default: 3 — OneStop's one blank line above and below).",
+        help="How far apart the lines are, in font sizes: the reading text is "
+        "the distance between lines ÷ N (default: 3, a blank line above and "
+        "below).",
     )
     viz.add_argument(
         "--no-scale-text-to-boxes",
@@ -1292,6 +1310,14 @@ def _render_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Frame the axes on the data instead of the whole --canvas monitor "
         "(the app's Crop to data).",
+    )
+    viz.add_argument(
+        "--crop-margin",
+        type=float,
+        metavar="PX",
+        help="The margin around the data, in screen px, when cropping to it "
+        "(default: 5%% of the data's extent, at least 20 px). Implies "
+        "--crop-to-data.",
     )
     viz.add_argument(
         "--no-fixation-colorbar",
@@ -1543,8 +1569,9 @@ def _render_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="With --animate: cap the frame count at N (default: 360). A long "
-        "trial coarsens the grid to stay under it.",
+        help="With --animate: at most N frames, the first included (default: "
+        "360). A trial too long for that many at --anim-grid-step-ms gets a "
+        "wider step instead.",
     )
     # EXP-7: the same reproduction snippet the app's 🔗 Share subtab shows,
     # for the invocation you just typed. Chiefly a *translation*: "I have this
@@ -1742,6 +1769,7 @@ def _render_parser() -> argparse.ArgumentParser:
 _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
     "fixation_opacity",
+    "saccade_opacity",
     "order_font_size",
     "order_font_color",
     "text_color",
@@ -1752,6 +1780,7 @@ _DIRECT_OPTION_FLAGS = (
     "word_hover_measure",
     "x_field",
     "y_field",
+    "crop_margin",
     "fixation_colorbar_tickangle",
     "fixation_colorbar_tickfont_size",
     "heatmap_colorbar_tickangle",
@@ -2066,7 +2095,8 @@ _OPTION_FLAG_NAMES = {
     "background_image_origin": "--stimulus-image-origin",
     "background_image_opacity": "--stimulus-image-opacity",
     "saccade_render_mode": "--saccade-arcs",
-    "fixation_snap_to_word": "--snap-fixations",
+    "fixation_snap_to_line": "--snap-fixations",
+    "fixation_snap_position": "--snap-position",
     "heatmap_sigma_px": "--heatmap-sigma",
     "saccade_class_colors": "--saccade-type-color",
     "saccade_color_mode": "--saccade-color-by-type",
@@ -2767,6 +2797,8 @@ def render(argv: list[str]) -> None:
     canvas = _parse_canvas(args.canvas)
     if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
+    if args.crop_margin is not None and args.crop_margin < 0:
+        raise SystemExit("--crop-margin must be zero or more pixels.")
     if args.animate and args.output and not args.output.lower().endswith(".html"):
         raise SystemExit(
             "--animate writes interactive HTML — use a .html output. For GIF or "
@@ -3269,7 +3301,9 @@ def render(argv: list[str]) -> None:
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
     if args.snap_fixations:
-        overrides["fixation_snap_to_word"] = True
+        overrides["fixation_snap_to_line"] = True
+    if args.snap_position is not None:
+        overrides["fixation_snap_position"] = args.snap_position
     if args.illustration:
         preset = dict(
             show_words=False,
@@ -3282,7 +3316,7 @@ def render(argv: list[str]) -> None:
             color_by=UNIFORM_COLOR_FIELD,
             saccade_color_mode="Uniform",
             saccade_render_mode="Arc",
-            fixation_snap_to_word=True,
+            fixation_snap_to_line=True,
             fixation_opacity=1.0,
         )
         # BUG-85 review: an explicit flag wins over the preset, as it does over
@@ -3329,6 +3363,9 @@ def render(argv: list[str]) -> None:
     for key, flipped in _SWITCH_OPTION_FLAGS.items():
         if getattr(args, key) == flipped:
             overrides[key] = flipped
+    if args.crop_margin is not None:
+        # #422: a margin is only drawn around a cropped view.
+        overrides["fit_to_monitor"] = False
     if args.marker_duration_range:
         overrides["marker_duration_range"] = tuple(args.marker_duration_range)
     if args.fixation_color_range:

@@ -1,0 +1,1 @@
+Saccades have an Opacity: it fades the saccade lines and their direction arrows on the static figure, the replay and both scanpaths of a comparison (render --saccade-opacity, saccade_opacity on a link and in the API).

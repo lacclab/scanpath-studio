@@ -891,11 +891,16 @@ _LAYER_OPTIONS = {
         "saccade_color",
         "saccade_style",
         "saccade_width",
+        "saccade_opacity",
         "saccade_color_mode",
         "saccade_class_colors",
         "saccade_type_legend",
         "show_saccade_arrows",
+        # VIZ-9's arcs bend the saccade lines, and nothing else (#422).
+        "saccade_render_mode",
     ),
+    # #422 — the snap moves the fixations, and only while they are drawn.
+    "show_fixations": ("fixation_snap_to_line",),
 }
 _STYLED_BY = {
     option: layer for layer, opts in _LAYER_OPTIONS.items() for option in opts
@@ -923,6 +928,11 @@ def _inert(key: str, settings: dict) -> bool:
         return True
     if key == "saccade_class_colors":
         return not _classes_coloured(settings)
+    if key == "fixation_snap_position":
+        # Where a snapped fixation sits says nothing while nothing snaps.
+        return not settings.get("fixation_snap_to_line") or _inert(
+            "fixation_snap_to_line", settings
+        )
     if key in ("critical_span_style", "highlight_text_color", "span_border_color"):
         if not settings.get("highlight_column", "x"):
             return True
@@ -1414,13 +1424,15 @@ _CLI_EMITTERS: dict[str, Any] = {
     "saccade_color": _valued("--saccade-color"),
     "saccade_style": _valued("--saccade-style"),
     "saccade_width": _valued("--saccade-width"),
+    "saccade_opacity": _valued("--saccade-opacity"),
     "saccade_color_mode": _saccade_color_mode,
     "saccade_class_colors": _saccade_class_colors,
     "saccade_type_legend": _flag_when("--no-saccade-type-legend", False),
     "show_color_legend": _flag_when("--no-color-legend", False),
     "saccade_classes": _comma_list("--saccade-classes"),
     "saccade_render_mode": _flag_when("--saccade-arcs", "Arc"),
-    "fixation_snap_to_word": _flag_when("--snap-fixations", True),
+    "fixation_snap_to_line": _flag_when("--snap-fixations", True),
+    "fixation_snap_position": _valued("--snap-position"),
     "background_image": _valued("--stimulus-image"),
     "background_image_size": _pair("--stimulus-image-size", "x"),
     "background_image_origin": _pair("--stimulus-image-origin", ","),
@@ -1451,6 +1463,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     # true only while the figure *was* fitted; one that wasn't reproduced
     # framed on the monitor anyway.
     "fit_to_monitor": _flag_when("--no-full-monitor", False),
+    "crop_margin": _valued("--crop-margin"),
     **{
         key: emitter
         for bar in ("fixation", "heatmap")

@@ -1,0 +1,1 @@
+When the X / Y fields can't be changed (Animate, Compare), their hover says why and how to get them back; on non-screen axes Crop to data and the grid grey out with a reason, since they have nothing to act on.

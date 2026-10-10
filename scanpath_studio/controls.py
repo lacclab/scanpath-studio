@@ -22,8 +22,10 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     COMPARE_FIXATION_OPACITY,
+    CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
@@ -829,6 +831,9 @@ _VIZ_WIDGET_DEFAULTS = {
     # available while Auto is on so switching back does not lose it.
     "global_show_coordinate_grid": False,
     "global_coordinate_grid_auto": True,
+    # #422: Crop to data's margin — automatic until a number is chosen.
+    "global_crop_margin_auto": True,
+    "global_crop_margin_px": DEFAULT_CROP_MARGIN_PX,
     "global_coordinate_grid_spacing": 100.0,
     "global_order_font_color": "#111111",
     "global_order_font_size": 10,
@@ -4297,7 +4302,11 @@ def render_pattern_help(host, fields: dict) -> None:
     with host.expander("Available fields", expanded=False):
         st.markdown(
             "Type any of these in a pattern and the trial's own value is "
-            "substituted:\n\n"
+            "substituted. They are the trial's ids and counts, then each "
+            "table's fields that hold one value for the whole trial, as "
+            "`{table.field}`. A field that changes within a trial (a word's "
+            "surprisal, a fixation's duration) has no single value, so it is "
+            "not listed.\n\n"
             + "\n".join(f"- `{{{name}}}`" for name in sorted(plain))
             + "".join(f"\n\n{section}" for section in sections)
             + "\n\nAnything else is left as literal text."
@@ -5595,6 +5604,116 @@ def _collect_legend_layout(ss) -> dict | None:
     return layout or None
 
 
+#: The background choice that means "the colour in ``global_bg_custom``".
+BG_CUSTOM_CHOICE = "Custom…"
+#: Every value ``global_bg_choice`` can hold: the presets, then Custom….
+BG_CHOICES = (*BACKGROUND_PRESETS, BG_CUSTOM_CHOICE)
+#: #422 — the shadow behind the background swatch. The swatch always shows the
+#: colour the figure is drawn on (a preset's, or the custom one), so picking a
+#: colour in it simply applies it; only that pick writes the two wire keys.
+_BG_SWATCH_KEY = "rail_bg_swatch"
+
+
+def shadow_widget_key(name: str, value) -> str:
+    """The key a shadow widget showing ``value`` is drawn under (#422).
+
+    A shadow shows a value derived from wire keys it does not own, and writes
+    them only from its own ``on_change``. Inside a popover (#374 F9) a browser
+    that once showed the widget keeps sending back the value it last showed, so
+    a shadow re-seeded under one fixed key could take that stale value for a
+    pick and write it back over a change made elsewhere (a link, a settings
+    file, a design, another dataset). So, like the fixation window's slider,
+    the widget moves to a fresh key whenever ``value`` changed without it: a
+    widget the browser has never seen has nothing old to send back. Returns
+    the key to draw under; its value is already ``value``."""
+    ss = st.session_state
+    gen_key = f"_{name}_gen"
+    generation = int(ss.get(gen_key) or 0)
+    widget_key = f"_{name}__w{generation}"
+    if widget_key not in ss or ss[widget_key] != value:
+        ss.pop(widget_key, None)
+        generation += 1
+        ss[gen_key] = generation
+        widget_key = f"_{name}__w{generation}"
+        ss[widget_key] = value
+    return widget_key
+
+
+def resolved_background_color(state) -> str:
+    """The figure's background colour from ``global_bg_choice`` /
+    ``global_bg_custom``: a preset's colour, or the custom one."""
+    choice = state.get("global_bg_choice", BG_CHOICES[0])
+    if choice == BG_CUSTOM_CHOICE:
+        return str(state.get("global_bg_custom") or DEFAULT_BACKGROUND_COLOR)
+    return BACKGROUND_PRESETS.get(choice, BACKGROUND_PRESETS[BG_CHOICES[0]])
+
+
+def _apply_background_swatch(widget_key: str) -> None:
+    """A colour picked in the swatch becomes the background (#422).
+
+    A colour that is a preset's selects that preset; any other is stored as
+    the custom colour and selects *Custom…*. Both keys are written through
+    (#374 F9): the selectbox beside the swatch sits in the same popover."""
+    if _shadow_key_missing(widget_key):  # BUG-18
+        return
+    picked = str(st.session_state[widget_key])
+    preset = next(
+        (
+            name
+            for name, value in BACKGROUND_PRESETS.items()
+            if value.lower() == picked.lower()
+        ),
+        None,
+    )
+    if preset is None:
+        write_through("global_bg_custom", picked)
+    write_through("global_bg_choice", preset or BG_CUSTOM_CHOICE)
+
+
+def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
+    """The background's colour box: it shows the colour in use, and a colour
+    picked in it is applied at once (#422).
+
+    It used to be the *Custom…* colour's own picker, greyed until *Custom…* was
+    chosen in the selectbox beside it — a box that did nothing until you found
+    the other control. It is a shadow now (`shadow_widget_key`), derived every
+    run from the wire keys, so links, settings files and presets move it and
+    only a pick writes them."""
+    widget_key = shadow_widget_key(
+        _BG_SWATCH_KEY, resolved_background_color(st.session_state)
+    )
+    return host.color_picker(
+        label,
+        key=widget_key,
+        on_change=_apply_background_swatch,
+        args=(widget_key,),
+        disabled=disabled,
+        **kwargs,
+    )
+
+
+def _title_settings_state() -> dict:
+    """What the title / caption fields read of the settings (#422): the layer
+    switches and colour choices `{settings}` names, and the fixation window
+    `{n_fixations}` counts within — straight from session state, gated as
+    `_collect_viz_settings` gates them, without its pass over the whole pool."""
+    ss = st.session_state
+    window = ss.get("single_fix_range")
+    return {
+        "show_words": bool(ss.get("global_show_words")),
+        "show_labels": bool(ss.get("global_show_stimulus", True))
+        and bool(ss.get("global_show_labels")),
+        "show_fix": bool(ss.get("global_show_fix")),
+        "show_saccades": bool(ss.get("global_show_saccades")),
+        "show_heatmap": bool(ss.get("global_show_heatmap")),
+        "color_by": ss.get("global_color_by"),
+        "palette": _active_palette() or CUSTOM_PALETTE,
+        "fix_index_range": (int(window[0]), int(window[1]))
+        if isinstance(window, (tuple, list)) and len(window) == 2
+        else None,
+    }
+
+
 def _collect_viz_settings(
     trial_fixations: pd.DataFrame,
     words: pd.DataFrame | None,
@@ -5673,16 +5792,9 @@ def _collect_viz_settings(
         candidate = ss.get("global_highlight_column")
         highlight_column = candidate if candidate in highlight_options else None
 
-    # Background colour comes from the Experimental Setup picker (read here so it
-    # flows into the figure via viz_settings).
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    bg_choice = ss.get("global_bg_choice", bg_options[0])
-    if bg_choice == "Custom…":
-        background_color = ss.get("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
-    else:
-        background_color = BACKGROUND_PRESETS.get(
-            bg_choice, BACKGROUND_PRESETS[bg_options[0]]
-        )
+    # Background colour comes from 📄 Stimulus → Text's Color row (read here so
+    # it flows into the figure via viz_settings).
+    background_color = resolved_background_color(ss)
 
     return dict(
         show_words=bool(ss.get("global_show_words")),
@@ -5744,6 +5856,14 @@ def _collect_viz_settings(
             for bar in ("fixation", "heatmap")
         },
         fit_to_monitor=bool(ss.get("global_fit_to_monitor")),
+        # #422: a margin only while cropping; `None` is the automatic one.
+        crop_margin_auto=bool(ss.get("global_crop_margin_auto", True)),
+        crop_margin=(
+            None
+            if bool(ss.get("global_fit_to_monitor"))
+            or bool(ss.get("global_crop_margin_auto", True))
+            else float(ss.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX))
+        ),
         show_coordinate_grid=bool(ss.get("global_show_coordinate_grid")),
         coordinate_grid_auto=bool(ss.get("global_coordinate_grid_auto", True)),
         coordinate_grid_spacing=(
@@ -6202,6 +6322,7 @@ def render_plot_controls(
     slots: dict | None = None,
     has_fixations: bool = True,
     has_words: bool = True,
+    title_fields=None,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -6247,6 +6368,12 @@ def render_plot_controls(
     the VIZ-7 fixation-index window slider (its max is that trial's fixation
     count). When omitted, the slider isn't rendered (e.g. the non-rendering
     Corpus reader, which never windows).
+
+    ``title_fields`` (#422) maps the settings dict to the ``{field}`` values the
+    figure's title and caption render with (`tabs._title_caption_fields` for
+    the selected trial), so the *Available fields* list, the validation and the
+    preview are the figure's. Without it they are read off the selected
+    trial's fixations alone.
     """
     # can re-push the stored values to the browser (BUG-15 — see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
@@ -7299,7 +7426,9 @@ def render_plot_controls(
             "Text",
             key="global_show_labels",
             persist_state="session",
-            help="Draw the reading text.",
+            help="Draw the reading text. Its font and size start from the "
+            "dataset's Recording setup (Data page); the rows below change only "
+            "this figure.",
         )
         # UX-81: the typography that draws this text lives beside the layer
         # that draws it. Reserved here and filled by the single
@@ -7349,7 +7478,7 @@ def render_plot_controls(
             persist_state="session",
             on_change=_on_span_toggle,
             help="Mark the words where the chosen true/false column is true "
-            "(OneStop: its answer span).",
+            "(e.g. a target span).",
         )
         span_off_disabled, _ = _layer_gate(not span_on, None)
         if highlight_options:
@@ -7875,6 +8004,21 @@ def render_plot_controls(
     # framing switch, the grid and the colour bar become `label | ☑ Show | …`
     # rows carrying what they govern (greyed while off), the monitor size and
     # the two axis fields one row each.
+    # #422: the static figure takes any X / Y field, but only screen x / y is a
+    # screen. On other axes it draws a plain chart of the fixations, so the
+    # framing and the grid have nothing to act on: they grey, saying why.
+    # (Animate and Compare always plot x / y, whatever the fields say.)
+    chart_axes = not (animating or comparing) and (
+        st.session_state.get("global_x_field", "x"),
+        st.session_state.get("global_y_field", "y"),
+    ) != ("x", "y")
+    chart_reason = (
+        f"{ICONS['warning']} The axes are not screen x / y, so the plot is a "
+        "chart: set **Axes** back to x / y to use this."
+        if chart_axes
+        else ""
+    )
+
     with screen_group, _popover_rows("fig_screen"):
         # The box reads "crop", the wire key "fit to monitor" — its inverse. The
         # box is a shadow re-seeded from the key every run, so links, configs and
@@ -7895,9 +8039,50 @@ def render_plot_controls(
             on_change=_apply_crop,
             check_label="Crop to data",
             check_share=0.6,
-            help="Off: show the whole monitor. On: zoom to the fixations and word "
-            "boxes, plus a 5% margin.",
+            disabled=chart_axes,
+            help=_gated_help(
+                "Off: show the whole monitor. On: zoom to the fixations and word "
+                "boxes, plus the margin below.",
+                chart_reason,
+            ),
         )
+        # #422: the crop's margin, which used to be fixed — automatic (5% of
+        # the data's extent, at least 20 px), or a number of screen px. Greyed,
+        # not hidden, while the whole monitor is shown.
+        cropping = not st.session_state.get("global_fit_to_monitor", True)
+        margin_off, margin_help = _layer_gate(
+            chart_axes or not cropping,
+            _gated_help(
+                "Space around the data when cropping. Auto: 5% of its width and "
+                "height, at least 20 px. Untick to set it in screen px.",
+                chart_reason
+                or (
+                    ""
+                    if cropping
+                    else f"{ICONS['warning']} Used only with **Crop to data** on."
+                ),
+            ),
+        )
+        auto_col, margin_col, unit_col = _sub_row(
+            "Margin", caption_help=margin_help
+        ).columns([0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center")
+        automatic_margin = auto_col.checkbox(
+            "Auto",
+            key="global_crop_margin_auto",
+            persist_state="session",
+            disabled=margin_off,
+        )
+        margin_col.number_input(
+            "Crop margin (px)",
+            min_value=CROP_MARGIN_BOUNDS[0],
+            max_value=CROP_MARGIN_BOUNDS[1],
+            step=10.0,
+            key="global_crop_margin_px",
+            persist_state="session",
+            disabled=margin_off or automatic_margin,
+            label_visibility="collapsed",
+        )
+        _sub_caption(unit_col, "px")
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:
         # UX-163: the typography rows always draw, greyed while *Text* is off
@@ -7915,10 +8100,14 @@ def render_plot_controls(
             "Grid",
             key="global_show_coordinate_grid",
             persist_state="session",
-            help="A grid of screen coordinates, in monitor pixels. Auto picks the "
-            "interval; untick it to set the major interval (px).",
+            disabled=chart_axes,
+            help=_gated_help(
+                "A grid of screen coordinates, in monitor pixels. Auto picks the "
+                "interval; untick it to set the major interval (px).",
+                chart_reason,
+            ),
         )
-        grid_off_disabled, _ = _layer_gate(not show_coordinate_grid, None)
+        grid_off_disabled, _ = _layer_gate(chart_axes or not show_coordinate_grid, None)
         auto_col, spacing_col, px_col = grid_rest.columns(
             [0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center"
         )
@@ -7941,17 +8130,20 @@ def render_plot_controls(
         _sub_caption(px_col, "px")
 
         # The animation and the comparison figures always plot spatial x/y —
-        # only `make_scanpath_figure` takes `x_field`/`y_field`.
-        axis_disabled, axis_reason = _mode_gate(animating, comparing, **_static_only)
+        # only `make_scanpath_figure` takes `x_field`/`y_field`. #422: the
+        # greyed fields' hover says so, and what turns them back on.
+        axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
+        modes = " and ".join(
+            name for name, on in (("Animate", animating), ("Compare", comparing)) if on
+        )
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
-            _gated_help(
-                "The fixation columns on the X and Y axes. Only x / y (screen "
-                "position) is fully supported; with any other field the plot "
-                "shows fixation markers only — no word boxes, text, saccades, "
-                "heatmap or coordinate grid.",
-                axis_reason,
-            ),
+            f"{ICONS['warning']} {modes} always plots screen x / y. Turn "
+            f"**{modes}** off to choose other fields; yours are kept."
+            if axis_disabled
+            else "The fixation fields on the X and Y axes. Any but x / y draws a "
+            "chart of the fixations alone: no text, word boxes, saccades, heatmap "
+            "or grid.",
         )
         label_w = _label_w()
         rest = 1.0 - label_w
@@ -7961,7 +8153,7 @@ def render_plot_controls(
             vertical_alignment="center",
         )
         _row_label(axes_cols[0], "Axes", axis_help)
-        _sub_caption(axes_cols[1], "X")
+        _sub_caption(axes_cols[1], "X", axis_help if axis_disabled else None)
         axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
         axes_cols[2].selectbox(
             "X axis field",
@@ -7970,9 +8162,10 @@ def render_plot_controls(
             key="global_x_field",
             persist_state="session",
             disabled=axis_disabled,
+            help=axis_help,
             label_visibility="collapsed",
         )
-        _sub_caption(axes_cols[3], "Y")
+        _sub_caption(axes_cols[3], "Y", axis_help if axis_disabled else None)
         axes_cols[4].selectbox(
             "Y axis field",
             options=numeric_fields,
@@ -7980,12 +8173,10 @@ def render_plot_controls(
             key="global_y_field",
             persist_state="session",
             disabled=axis_disabled,
+            help=axis_help,
             label_visibility="collapsed",
         )
-        if (
-            st.session_state.get("global_x_field", "x"),
-            st.session_state.get("global_y_field", "y"),
-        ) != ("x", "y"):
+        if chart_axes:
             st.caption(
                 f"{ICONS['warning']} Limited support: the plot shows fixation "
                 "markers only — no word boxes, text, saccades, heatmap or "
@@ -8045,22 +8236,37 @@ def render_plot_controls(
         # Read only while one is shown: with both off, the greyed boxes ask
         # nothing of the fields (`preview=False`), so the default rerun does no
         # title/caption work at all (PERF-7's rule).
-        _title_caption_fields = (
-            pattern_fields(
-                "p01",
-                "t01",
-                _trial_rows(words, _sel_fix),
-                _sel_fix,
-                {},
-                dataset_name=current_dataset_name(),
-                metadata_rows=_selected_metadata_rows(_sel_fix),
-                # DATA-66: the field list offers the dataset's own names too.
-                column_names=_rail_names(),
-            )
-            if st.session_state.get("global_show_title")
-            or st.session_state.get("global_show_caption")
-            else {}
-        )
+        #
+        # #422: the fields the figure itself renders with — the selected trial,
+        # its `combos` row and the live settings, from `title_fields` — so the
+        # list, the validation and the preview agree with the figure. They used
+        # to be computed for a stand-in trial ("p01" · "t01") without its row,
+        # so the preview showed made-up ids and a field the figure accepts
+        # (`{TRIAL_INDEX}`, a composite id's parts, a reader table's columns)
+        # was refused as unknown.
+        _title_caption_fields = {}
+        if st.session_state.get("global_show_title") or st.session_state.get(
+            "global_show_caption"
+        ):
+            if title_fields is not None:
+                _title_caption_fields = title_fields(_title_settings_state())
+            else:
+                _ids = [
+                    str(_sel_fix[column].iloc[0])
+                    if column in _sel_fix.columns and not _sel_fix.empty
+                    else ""
+                    for column in ("participant_id", "trial_id")
+                ]
+                _title_caption_fields = pattern_fields(
+                    *_ids,
+                    _trial_rows(words, _sel_fix),
+                    _sel_fix,
+                    {},
+                    dataset_name=current_dataset_name(),
+                    metadata_rows=_selected_metadata_rows(_sel_fix),
+                    # DATA-66: the field list offers the dataset's own names too.
+                    column_names=_rail_names(),
+                )
         any_shown = False
         for name, show_key, pattern_key, default, help_text in (
             (

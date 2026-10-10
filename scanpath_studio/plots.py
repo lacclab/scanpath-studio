@@ -205,6 +205,10 @@ class FigureSettings:
     #: never sets this.
     show_stimulus_image: bool = False
     fit_to_monitor: bool = False
+    #: #422 — the margin, in screen px, around the data when the view is
+    #: cropped to it (``fit_to_monitor`` off). ``None`` is the automatic one:
+    #: 5% of the data's extent on each axis, at least ``CANVAS_PAD_MIN_PX``.
+    crop_margin: float | None = None
     show_coordinate_grid: bool = False
     coordinate_grid_spacing: float | None = None
     word_heatmap_col: str | None = None
@@ -510,6 +514,7 @@ def _compute_axis_ranges(
     *frames_with_xy: tuple[pd.DataFrame | None, str, str],
     word_frames: Iterable[pd.DataFrame] = (),
     fit_to_monitor: bool = False,
+    crop_margin: float | None = None,
 ) -> tuple[list, list, float | None, float | None, float | None, float | None]:
     """Compute padded x/y ranges from any number of (frame, x_col, y_col) tuples.
 
@@ -523,6 +528,10 @@ def _compute_axis_ranges(
     on-monitor position rather than the view cropping to the data extent. The
     returned data mins/maxs still describe the actual data (they size the
     interpolated heatmap grid), so only the visible window changes.
+
+    Cropped, the data is padded by ``crop_margin`` screen px on every side, or
+    — ``None``, the default — by 5% of its extent on each axis, at least
+    ``CANVAS_PAD_MIN_PX`` (#422 made the margin a setting).
     """
     x_candidates: list = []
     y_candidates: list = []
@@ -556,10 +565,13 @@ def _compute_axis_ranges(
         # Real data mins/maxs are still returned (heatmap-grid extent).
         return [0, canvas_width], [canvas_height, 0], x_min, x_max, y_min, y_max
 
-    x_span = max(x_max - x_min, 1.0)
-    y_span = max(y_max - y_min, 1.0)
-    pad_x = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * x_span)
-    pad_y = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * y_span)
+    if crop_margin is not None:
+        pad_x = pad_y = max(float(crop_margin), 0.0)
+    else:
+        x_span = max(x_max - x_min, 1.0)
+        y_span = max(y_max - y_min, 1.0)
+        pad_x = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * x_span)
+        pad_y = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * y_span)
     x_range = [x_min - pad_x, x_max + pad_x]
     y_range = [y_max + pad_y, y_min - pad_y]
     return x_range, y_range, x_min, x_max, y_min, y_max
@@ -3772,6 +3784,7 @@ def _render_scanpath_figure(
                 (raw_for_range, "x", "y"),
                 word_frames=[words] if not words.empty else [],
                 fit_to_monitor=fit_to_monitor,
+                crop_margin=settings.crop_margin,
             )
         )
     else:
@@ -5872,6 +5885,7 @@ def _render_scanpath_animation(
         (fixations_b, "x", "y"),
         word_frames=word_frames,
         fit_to_monitor=fit_to_monitor,
+        crop_margin=settings.crop_margin,
     )
 
     # Fix the display size first so word labels are sized in the data->screen
@@ -7608,6 +7622,7 @@ def _make_split_comparison_figure(
             (spec["raw_gaze"], "x", "y"),
             word_frames=[spec["trial_words"]] if not spec["trial_words"].empty else [],
             fit_to_monitor=fit_to_monitor,
+            crop_margin=settings.crop_margin,
         )
         panel_ranges.append((x_range, y_range))
     panel_fits = [
@@ -8132,6 +8147,7 @@ def _render_comparison_figure(
             spec["trial_words"] for spec in trial_specs if not spec["trial_words"].empty
         ],
         fit_to_monitor=fit_to_monitor,
+        crop_margin=settings.crop_margin,
     )
 
     # Both trials are overlaid on one shared canvas, so one display scale sizes

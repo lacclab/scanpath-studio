@@ -1,0 +1,1 @@
+Crop to data's margin can be set: Figure & canvas → Screen & framing → Margin (Auto keeps the old 5% margin, or set it in screen px), also as a link setting, render --crop-margin PX and the API's crop_margin.

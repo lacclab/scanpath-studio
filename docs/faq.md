@@ -17,7 +17,9 @@ setup** (**Screen → I know it**). *Estimate from my data* only gives a lower b
 
 Text is drawn to scale from the word boxes and the recording screen size. Set
 the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
-`canvas_size=(2560, 1440)`.
+`canvas_size=(2560, 1440)`. If it is still off, set the line spacing (how far
+apart the lines are, in font sizes) under **Recording setup → Text size → Fit
+to word boxes**, or `line_spacing=` in Python.
 
 ### A column was detected wrongly
 

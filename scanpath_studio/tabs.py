@@ -116,6 +116,7 @@ from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
     CITATION,
     DATASET_EDITOR_OPEN_KEY,
+    DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
@@ -1951,6 +1952,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
         heatmap_sigma_px=viz_settings.get("heatmap_sigma_px"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        crop_margin=viz_settings.get("crop_margin"),
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
@@ -4342,6 +4344,13 @@ def _build_studio_config(
             "coordinate_grid_spacing": float(
                 st.session_state.get("global_coordinate_grid_spacing", 100.0)
             ),
+            # #422: Crop to data's margin (applies while cropping).
+            "crop_margin_auto": bool(
+                st.session_state.get("global_crop_margin_auto", True)
+            ),
+            "crop_margin_px": float(
+                st.session_state.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX)
+            ),
         },
         "layers": {
             "words": figure_settings["show_words"],
@@ -5186,6 +5195,35 @@ def _rendered_title_caption(
     # row costs a mask over the whole `combos` frame, and it was previously
     # built eagerly as an argument to this call, i.e. on every rerun, for a
     # function that usually returns before reading it.
+    fields = _title_caption_fields(
+        viz_settings,
+        trial_words,
+        trial_fixations,
+        participant,
+        trial,
+        combo_row=combo_row,
+        dataset_name=dataset_name,
+        compare_row=compare_row,
+    )
+    return (
+        render_pattern(title_pattern, fields) if title_pattern else "",
+        render_pattern(caption_pattern, fields) if caption_pattern else "",
+    )
+
+
+def _title_caption_fields(
+    viz_settings: dict,
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    participant: str,
+    trial: str,
+    combo_row: dict | Callable[[], dict | None] | None = None,
+    dataset_name: str | None = None,
+    compare_row: dict | None = None,
+) -> dict:
+    """Every ``{field}`` the figure's title / caption can name, with this
+    trial's values — what `_rendered_title_caption` renders with, and (#422)
+    what the rail's *Available fields* list, validation and preview show."""
     if callable(combo_row):
         combo_row = combo_row()
     settings_summary_input = {
@@ -5197,7 +5235,7 @@ def _rendered_title_caption(
         "color_by": viz_settings.get("color_by"),
         "palette": viz_settings.get("palette"),
     }
-    fields = pattern_fields(
+    return pattern_fields(
         participant,
         trial,
         trial_words,
@@ -5215,10 +5253,6 @@ def _rendered_title_caption(
         metadata_rows=_metadata_mod.pattern_rows(
             participant, trial, (combo_row or {}).get("text_id")
         ),
-    )
-    return (
-        render_pattern(title_pattern, fields) if title_pattern else "",
-        render_pattern(caption_pattern, fields) if caption_pattern else "",
     )
 
 
@@ -7129,6 +7163,23 @@ def render_single_trial_tab(
                 )
             )
             st.session_state["_resolved_animating"] = bool(animate)
+        # PERF-7: the selected trial's `combos` row, masked at most **once**
+        # per rerun and only if something asks — the rail's title / caption
+        # fields (#422), the snippet publish, the static branch's
+        # `_apply_title_caption` and two inside `_render_comparison_figure`.
+        # Its only consumer is the title/caption pattern, unset by default,
+        # whose renderers early-return before reading the row, so the thunk
+        # keeps the default path free of the scan (~3.9 ms on a 60k-row
+        # `combos`, on every widget toggle).
+        _combo_row_memo: list = []
+
+        def primary_combo_row() -> dict | None:
+            if not _combo_row_memo:
+                _combo_row_memo.append(
+                    _combo_row(combos, selected_participant, selected_trial)
+                )
+            return _combo_row_memo[0]
+
         # The visualization controls moved out of the sidebar into this rail
         # (host=rail) so they sit beside the plot they drive.
         viz_settings = render_plot_controls(
@@ -7156,6 +7207,16 @@ def render_single_trial_tab(
             # than in a panel of its own. `app.main` passes it in already bound to the
             # frames + data source, since those are app-side concerns.
             canvas_renderer=canvas_renderer,
+            # #422: the title / caption fields the figure renders with — its
+            # fixations within the fixation window, as `{n_fixations}` counts.
+            title_fields=lambda settings: _title_caption_fields(
+                settings,
+                trial_words,
+                _slice_fix_range(trial_fixations, settings.get("fix_index_range")),
+                selected_participant,
+                selected_trial,
+                combo_row=primary_combo_row,
+            ),
         )
         # BUG-24: the scoped reset closes the rail, below every control it
         # resets, rather than sharing the heading row. It is last in creation
@@ -7683,15 +7744,6 @@ def render_single_trial_tab(
     # consumer is the title/caption pattern, unset by default, whose renderer
     # early-returns before reading the row, so the thunk is what keeps the
     # default path free of the scan entirely rather than merely down to one.
-    _combo_row_memo: list = []
-
-    def primary_combo_row() -> dict | None:
-        if not _combo_row_memo:
-            _combo_row_memo.append(
-                _combo_row(combos, selected_participant, selected_trial)
-            )
-        return _combo_row_memo[0]
-
     _snippet_title, _snippet_caption = _rendered_title_caption(
         viz_settings,
         trial_words,
@@ -10871,6 +10923,7 @@ def render_per_text_tab(
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
             fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+            crop_margin=viz_settings.get("crop_margin"),
             word_heatmap_col="value",
             word_heatmap_title=measure.axis_label,
         )
@@ -15089,6 +15142,9 @@ def _apply_remap() -> None:
                 "global_monitor_width_mm": setup.monitor_width_mm,
                 "global_viewing_distance_mm": setup.viewing_distance_mm,
                 "global_base_font_size": setup.base_font_size,
+                # #422: the setup's size is in px; a point size left on
+                # would replace it.
+                "global_use_stimulus_font_pt": False,
                 "global_font_family": setup.font_family,
                 "global_line_spacing": setup.line_spacing,
                 "global_scale_text_to_boxes": setup.scale_text_to_boxes,

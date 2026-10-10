@@ -154,6 +154,9 @@ GLOBAL_FIT_TO_MONITOR = "global_fit_to_monitor"
 GLOBAL_SHOW_COORDINATE_GRID = "global_show_coordinate_grid"
 GLOBAL_COORDINATE_GRID_AUTO = "global_coordinate_grid_auto"
 GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
+# #422: Crop to data's margin — automatic, or a number of screen px.
+GLOBAL_CROP_MARGIN_AUTO = "global_crop_margin_auto"
+GLOBAL_CROP_MARGIN_PX = "global_crop_margin_px"
 # EXP-5: title/caption on the figure (moved here from being Export-only).
 GLOBAL_SHOW_TITLE = "global_show_title"
 GLOBAL_SHOW_CAPTION = "global_show_caption"
@@ -494,6 +497,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_caption": GLOBAL_SHOW_CAPTION,
         "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
+        "crop_margin_auto": GLOBAL_CROP_MARGIN_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
         "show_stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
@@ -635,6 +639,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "stimulus_image_offset_y": GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         "stimulus_image_scale": GLOBAL_STIMULUS_IMAGE_SCALE,
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
+        "crop_margin": GLOBAL_CROP_MARGIN_PX,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
         "word_box_line_opacity": GLOBAL_WORD_BOX_LINE_OPACITY,
@@ -874,6 +879,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_COORDINATE_GRID_SPACING,
+        GLOBAL_CROP_MARGIN_PX,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
         GLOBAL_WORD_BOX_LINE_OPACITY,
@@ -979,6 +985,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SHOW_COORDINATE_GRID,
         GLOBAL_COORDINATE_GRID_AUTO,
         GLOBAL_COORDINATE_GRID_SPACING,
+        GLOBAL_CROP_MARGIN_AUTO,
+        GLOBAL_CROP_MARGIN_PX,
         GLOBAL_ANIM_AUTOPLAY,
         # coloring
         GLOBAL_PALETTE,

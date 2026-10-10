@@ -1463,6 +1463,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     # true only while the figure *was* fitted; one that wasn't reproduced
     # framed on the monitor anyway.
     "fit_to_monitor": _flag_when("--no-full-monitor", False),
+    "crop_margin": _valued("--crop-margin"),
     **{
         key: emitter
         for bar in ("fixation", "heatmap")

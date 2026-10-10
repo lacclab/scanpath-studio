@@ -46,6 +46,7 @@ from .constants import (
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     COLORSCALES,
+    CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
@@ -431,6 +432,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
+    # #422: Crop to data's margin — automatic, or the px below.
+    "crop_margin_auto": "global_crop_margin_auto",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
     # EXP-5: title and caption on the figure — each off by default. The one
@@ -622,6 +625,7 @@ _SHARE_FLOAT_PARAMS = {
     "stimulus_image_offset_y": "global_stimulus_image_offset_y",
     "stimulus_image_scale": "global_stimulus_image_scale",
     "coordinate_grid_spacing": "global_coordinate_grid_spacing",
+    "crop_margin": "global_crop_margin_px",
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
@@ -789,6 +793,7 @@ _URL_BOUNDED = {
     "global_stimulus_image_offset_y": (-5000.0, 5000.0),
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
+    "global_crop_margin_px": CROP_MARGIN_BOUNDS,
     # UX-86 put raw gaze's style on the link without its bounds (BUG-69), so
     # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
@@ -2869,6 +2874,17 @@ def _restore_plot_config(
             10.0,
             5000.0,
             "coordinate grid spacing",
+        )
+    # #422: Crop to data's margin. Additive (ENG-11): a config saved before it
+    # says nothing, and the margin stays as it is.
+    if "crop_margin_auto" in axes:
+        put("global_crop_margin_auto", bool(axes["crop_margin_auto"]))
+    if axes.get("crop_margin_px") is not None:
+        put_float(
+            axes["crop_margin_px"],
+            "global_crop_margin_px",
+            *CROP_MARGIN_BOUNDS,
+            "crop margin",
         )
 
     text = section("text")

@@ -407,8 +407,14 @@ BACKGROUND_PRESETS = {
     "Black": "#000000",
 }
 
+#: Crop to data's automatic margin: 5% of the data's extent on each axis, at
+#: least this many screen px (`plots._compute_axis_ranges`).
 CANVAS_PAD_MIN_PX = 20.0
 CANVAS_PAD_FRACTION = 0.05
+#: #422 — Crop to data's own margin, in screen px: where the box starts once
+#: *Auto* is unticked, and the range a link or settings file is held to.
+DEFAULT_CROP_MARGIN_PX = 50.0
+CROP_MARGIN_BOUNDS = (0.0, 2000.0)
 
 
 # --- BUG-101 · the Plotly config every figure is drawn with --------------------
@@ -902,6 +908,7 @@ SETUP_OVERRIDE_SESSION_KEYS = (
     "global_viewing_distance_mm",
     "global_display_dpi",
     "global_base_font_size",
+    "global_use_stimulus_font_pt",
     "global_font_family",
     "global_line_spacing",
     "global_scale_text_to_boxes",

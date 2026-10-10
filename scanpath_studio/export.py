@@ -590,7 +590,13 @@ def pattern_fields(
     so a trial table's ``font_size`` and a recorded ``font_size`` are both
     reachable, and none of the plain names above changes.
     """
-    fields: dict = dict(combo_row or {})
+    # The trial's row, less its bookkeeping (`_data_order`): a `_` column is the
+    # app's, as `_saved_table_fields` already holds for the tables (#422).
+    fields: dict = {
+        name: value
+        for name, value in (combo_row or {}).items()
+        if not str(name).startswith("_")
+    }
     for table in table_pattern_fields(
         trial_words, trial_fixations, metadata_rows
     ).values():
@@ -1189,6 +1195,8 @@ def _plot_config_dict(
             "coordinate_grid": bool(settings.get("show_coordinate_grid", False)),
             "coordinate_grid_auto": settings.get("coordinate_grid_spacing") is None,
             "coordinate_grid_spacing": settings.get("coordinate_grid_spacing"),
+            "crop_margin_auto": settings.get("crop_margin") is None,
+            "crop_margin_px": settings.get("crop_margin"),
         },
         "layers": {
             "words": settings.get("show_words"),

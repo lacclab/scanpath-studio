@@ -536,6 +536,8 @@ def _restore_config_app():
             "coordinate_grid": True,
             "coordinate_grid_auto": False,
             "coordinate_grid_spacing": 250.0,
+            "crop_margin_auto": False,
+            "crop_margin_px": 40.0,
         },
         "text": {
             "scale_text_to_boxes": True,

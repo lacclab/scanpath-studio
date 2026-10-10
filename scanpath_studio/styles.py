@@ -1929,10 +1929,12 @@ def get_app_css() -> str:
         padding-top: 0.4rem;
         border-top: 1px solid rgba(128, 128, 128, 0.28);
     }
-    /* The first block in a section needs no rule — the expander's own header is
-       the boundary. */
-    [data-testid="stExpander"] [data-testid="stVerticalBlock"]
-        > div:first-child .sps-rail-subhead {
+    /* #422 — the block that opens a popover (Screen & framing in Figure &
+       canvas, Fixations in Filters & highlights) needs no rule above it: the
+       popover's own edge is the boundary. `_rail_subsection(first=True)` marks
+       it, since the popover body is drawn apart from the rail row's keyed
+       container, and its first child differs between the two popovers. */
+    .sps-rail-subhead.sps-rail-subhead-first {
         border-top: none;
         padding-top: 0;
         margin-top: 0.1rem;

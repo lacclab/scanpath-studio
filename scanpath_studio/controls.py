@@ -6024,7 +6024,7 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
     return value, body
 
 
-def _rail_subsection(host, label: str, *, note: str = ""):
+def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
     """A named block inside the rail's Filters & highlights section (UX-72).
 
     **Scope, after UX-74 was reverted.** That item flattened *every* section's
@@ -6037,11 +6037,15 @@ def _rail_subsection(host, label: str, *, note: str = ""):
     ``note`` renders under the label — a block has no trigger, so the sentence a
     popover carried as a tooltip (what the filter does, and why it is inert in
     Animate or Compare) goes here instead.
+
+    ``first`` marks the block that opens its popover: it draws no rule above
+    its label (#422), since the popover's own edge is the boundary there.
     """
     # A line opening with `<div` is a raw HTML block, where the label's
     # `ICONS` shortcode would print as text (UX-138).
+    first_class = " sps-rail-subhead-first" if first else ""
     host.markdown(
-        f'<div class="sps-rail-subhead">{icons_to_html(label)}</div>',
+        f'<div class="sps-rail-subhead{first_class}">{icons_to_html(label)}</div>',
         unsafe_allow_html=True,
     )
     box = host.container()
@@ -6906,6 +6910,7 @@ def render_plot_controls(
             filter_fix_slot,
             f"{ICONS['fixations']} Fixations{ab}{_fixation_filter_badge()}",
             note=_flag_reason,
+            first=True,
         ),
         _layer_off(
             f"{ICONS['fixations']} Fixations",
@@ -7729,7 +7734,9 @@ def render_plot_controls(
     #
     # The three containers are created up front so each block keeps its place in
     # this file while landing in the right group.
-    screen_group = _rail_subsection(figure_grp, f"{ICONS['screen']} Screen & framing")
+    screen_group = _rail_subsection(
+        figure_grp, f"{ICONS['screen']} Screen & framing", first=True
+    )
     axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
     labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
     hover = _rail_subsection(figure_grp, f"{ICONS['hover']} Hover")

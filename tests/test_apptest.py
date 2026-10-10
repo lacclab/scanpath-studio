@@ -4771,10 +4771,12 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
+        # #422: the first block opens the popover, so it draws no rule above it.
         assert (
-            "_rail_subsection(figure_grp, f\"{ICONS['screen']} Screen & framing\")"
-            in control_source
-        )
+            "_rail_subsection(\n"
+            "        figure_grp, f\"{ICONS['screen']} Screen & framing\", first=True\n"
+            "    )"
+        ) in control_source
         assert (
             "_rail_subsection(figure_grp, f\"{ICONS['axes']} Axes & grid\")"
             in control_source

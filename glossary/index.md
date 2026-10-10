@@ -28,7 +28,7 @@ Canvas : The recorded screen in pixels, such as 2560 × 1440 — the coordinate 
 
 True to scale : Text and fixations drawn at their recorded on-screen positions, with each word label sized from the word boxes ([`disp.true_scale`](https://lacclab.github.io/scanpath-studio/computations/#disp-true-scale)).
 
-Recording setup : How the text was shown: the screen resolution (the canvas), the monitor's size and viewing distance, and the text size, each marked measured, estimated or assumed. Size and distance give pixels per degree of visual angle ([`geom.pixels_per_degree`](https://lacclab.github.io/scanpath-studio/computations/#geom-pixels-per-degree)).
+Recording setup : How the text was shown: the screen resolution (the canvas), the monitor's physical width, and the text size, each marked measured, estimated or assumed. The width gives the DPI that turns a font size in points into pixels.
 
 Screen : One of several displays a single trial was read over — the pages of a long text, or its comprehension-question screens. Each screen keeps its own coordinate space and is never merged with another ([Data format](https://lacclab.github.io/scanpath-studio/data-format/index.md)).
 

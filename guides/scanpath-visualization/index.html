@@ -1809,7 +1809,9 @@
 <h2 id="choose-a-trial">Choose a trial<a class="headerlink" href="#choose-a-trial" title="Permanent link">&para;</a></h2>
 <p>Pick a trial above the plot. The <strong>filter funnel</strong> beside it narrows the list
 by text, participant, condition or annotation, and <strong>⇅</strong> sorts it. A trial with
-several screens gets a second navigator to move between them.</p>
+several screens gets a second navigator to move between them. When several
+participants have the same trial ID, each reading is in the list on its own,
+with its participant in brackets, <code>3 [p2]</code>.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
 <p>The <strong><span class="sps-icon" data-icon="tune" aria-hidden="true"></span> Plot controls</strong> rail starts with <strong><span class="sps-icon" data-icon="movie" aria-hidden="true"></span> Animate</strong>, <strong><span class="sps-icon" data-icon="compare" aria-hidden="true"></span> Compare</strong>, four
 design presets and a palette. Below them, each section is one line: a switch,
@@ -1888,31 +1890,40 @@ a blink column in your fixations (<code>is_blink</code>, <code>blink</code>, <co
 For saccades, choose which reading types are drawn: hide everything but
 regressions, for example. Filtering changes only the figure, never your data.</p>
 <h2 id="place-the-legends">Place the legends<a class="headerlink" href="#place-the-legends" title="Permanent link">&para;</a></h2>
-<p><strong><span class="sps-icon" data-icon="aspect_ratio" aria-hidden="true"></span> Figure &amp; canvas → <span class="sps-icon" data-icon="legend_toggle" aria-hidden="true"></span> Legends</strong> has a
-row for each legend the figure can draw: <strong>Compare (A/B)</strong>, <strong>Saccade types</strong>,
-<strong>Fixation colours</strong> (a categorical <strong>Color by</strong>, and the Highlight entries) and
-the duration <strong>Size key</strong>. Each row sets where the legend goes, how its items
-run and its text size:</p>
+<p><strong><span class="sps-icon" data-icon="aspect_ratio" aria-hidden="true"></span> Figure &amp; canvas → <span class="sps-icon" data-icon="legend_toggle" aria-hidden="true"></span> Legends</strong> is a
+table with a row for each legend the current figure draws: <strong>Compare (A/B)</strong>
+while comparing, <strong>Saccade types</strong> when saccades are coloured by type,
+<strong>Fixation colors</strong> for a categorical <strong>Color by</strong>, a Highlight filter or raw
+gaze, and the duration <strong>Size key</strong> on a fixed marker scale. A legend the
+figure does not draw has no row. Its columns:</p>
 <ul>
-<li><strong>Spot</strong>: <strong>Above</strong>, <strong>Below</strong>, <strong>Left</strong> or <strong>Right</strong> of the plot, or
-  <strong>Inside</strong> one of its four corners. An outside spot makes the figure larger
-  instead of shrinking the plot, so the text stays true to scale. Legends
-  sharing a side line up one after the other.</li>
-<li><strong>Arrangement</strong>: <strong>Stacked</strong> (one item under the other) or <strong>Side by side</strong>.</li>
-<li><strong>Size</strong>: the text size in px; empty uses the figure's own.</li>
+<li><strong>Show</strong>: draw the legend at all. This is the only place to turn a legend on
+  or off.</li>
+<li><strong>Position</strong>: one of eight spots (<strong>Top left</strong>, <strong>Top center</strong>, <strong>Top
+  right</strong>, <strong>Left</strong>, <strong>Right</strong>, <strong>Bottom left</strong>, <strong>Bottom center</strong>, <strong>Bottom
+  right</strong>), each <strong>outside</strong> or <strong>inside</strong> the plot. <strong>Left</strong> and <strong>Right</strong> run
+  down that side. An outside spot makes the figure larger instead of shrinking
+  the plot, so the text stays true to scale. Legends sharing a spot stack, the
+  size key included.</li>
+<li><strong>Arrangement</strong>: <strong>Stacked</strong> (one item under the other) or <strong>Side by side</strong>.
+  On <strong>Auto</strong>, a legend at the middle of the top or bottom edge is a row and
+  every other one a stack.</li>
+<li><strong>Text size</strong>: in px; empty uses the figure's own.</li>
 </ul>
-<p>On <strong>Auto</strong> a legend stays where it is drawn by default. These rows only place a
-legend: whether it is drawn at all is still its own switch, under its layer. The
-size key's circles keep the true marker sizes wherever it goes; its <strong>Size</strong>
-sets the labels. Share links, settings files, saved designs, <code>render --legend</code>
-and the API's <code>legend_layout</code> all carry the placement.</p>
+<p>On <strong>Auto</strong> a legend stays where it is drawn by default. The size key's circles
+keep the true marker sizes wherever it goes; its <strong>Text size</strong> sets the labels.
+Compare's A/B label patterns stay under <strong>Compare ▾</strong>. Share links, settings
+files, saved designs, <code>render --legend</code> / <code>--no-color-legend</code> and the API's
+<code>legend_layout</code> / <code>show_color_legend</code> all carry these.</p>
 <h2 id="replay-and-compare">Replay and compare<a class="headerlink" href="#replay-and-compare" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Animate</strong> replays the trial; its <strong>▾</strong> sets the speed.</li>
 <li><strong>Compare</strong> adds a second reading, overlaid or side by side. <strong>Compare
   with</strong> can take it from another dataset.</li>
 <li><strong>Comparisons</strong> lists other trials that match this one on a field you
-  choose: other readings of the same text, or the same participant's other trials.</li>
+  choose: other readings of the same text, or the same participant's other trials.
+  It shows 12 at a time, with a pager for the rest, and a table of the chips
+  from above the plot for this trial and each match on the page.</li>
 </ul>
 <p>Side by side, each panel shows its own reading's stimulus image, or none when
 that reading has no image. An uploaded image stands for the first reading's
@@ -1944,7 +1955,7 @@ overlay.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 19:39:08 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 10, 2026 01:15:22 UTC">October 10, 2026</span>
   </span>
 
     

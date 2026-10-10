@@ -25,7 +25,7 @@ Raw gaze can be the only table, too. Its samples are drawn as recorded, and for 
 
 ## Participant metadata
 
-Attach a table of **one row per participant** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on **Data Management → Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By participant* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions.
+Attach a table of **one row per participant** — native language, age, a comprehension score, a group label. When you upload your own data it is one of the **Metadata** uploaders in part 2 of the setup wizard; for the demo, a public corpus, or a dataset you added earlier, the same uploader is on **Data Management → Edit dataset** under **Metadata → Participants**. Its columns then behave like fields in the data: they filter trials (the filter funnel's *By participant* section), show up as chips above the plot, sort the trial picker, group cohorts in Corpus Analysis, appear in the dataset's inspection tables, and travel with exports and saved sessions. A table split across files — one per session, one per lab — can be uploaded as several files at once: they are stacked into one table, matching columns by name. The same holds for the trial and text tables.
 
 ```
 participant_id,native_language,age,comprehension
@@ -39,7 +39,7 @@ Three rules are worth knowing:
 - **Nothing is guessed.** The join is reported before anything uses it: participants in your data with no row, rows describing participants you did not load, and duplicate rows. Duplicates that *disagree* are dropped and named rather than resolved by taking the first one, so the field reads as missing. Duplicates that do not disagree are combined: each field keeps the one value the rows hold, so one row's age and another's language both survive.
 - **A missing participant is missing, not excluded.** Attaching a table that forgets someone never removes them from the pool. A numeric range keeps the participants with no value too, unless you untick **Keep unknown values** under it; the line under the box says how many participants that concerns. An infinite value counts as no value. The same choice sits under every numeric trial filter, for the trial and text tables as well.
 
-Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render` and [`load_participant_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
+Headless, it is a `--participant-metadata FILE…` flag on `scanpath-studio render` and [`load_participant_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 
 ## Trial metadata
 
@@ -55,20 +55,21 @@ t02,A,2,0
 
 Join reporting and duplicate handling are as for the participant table.
 
-Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and [`load_trial_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
+Headless, it is `--trial-metadata FILE…` on `scanpath-studio render` and [`load_trial_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 
 ## Text metadata
 
 The third grain: a table of **one row per text** — a genre, a difficulty rating, a stimulus-level comprehension score. It attaches beside the other two (under **Metadata → Texts** in the wizard and on **Edit dataset**), keyed by text id alone — never by participant, since a text is a stimulus rather than something one participant owns — and, like the trial table, the id may be built from several columns. Its columns behave like fields in the data in the same way, travel with exports (`metadata/texts.csv`) and saved sessions, and follow the same join rules.
 
-Headless, it is `--text-metadata FILE` on `scanpath-studio render` and [`load_text_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
+Headless, it is `--text-metadata FILE…` on `scanpath-studio render` and [`load_text_metadata()`](https://lacclab.github.io/scanpath-studio/api/index.md) in the Python API.
 
 ## Flexible loading
 
 - **Many files per table** — pass several paths or a glob; they're concatenated, each row tagged with its `source_file` (e.g. one file per participant or text).
 - **Stimulus-level word boxes** — a words table with no participant column is one set of boxes per text, and every reading in the fixations gets a copy of its text's boxes. Each reading finds them by its own trial ID, then (for a repeated reading, whose trial ID ends in `_r2`) by the trial ID it had before that suffix, then by its **Text ID**, for example when the trial ID includes the participant. A Text ID that the words table gives to more than one of its trials is not used. The Text ID route needs a Text ID mapped for the fixations (auto-detected or picked, even when its values equal the trial IDs); without one, their Text ID is only a copy of the trial ID and is never used to find boxes. A trial-ID match always stands; when both tables map a Text ID and a reading's disagrees with the one on the boxes its trial ID found, you get a warning naming an example. If no reading finds any boxes, the add-dataset screen stops with a message (the Python API and CLI raise the same error) rather than adding a dataset with no word boxes; a multi-screen dataset stops the same way when any screen a participant looked at has no boxes. When some readings find none, the screen, the API and the CLI warn with the counts. When it works, the screen says how the words attached.
-- **Text ID falls back to the trial ID** when it isn't mapped. A repeated reading takes its first reading's trial ID (without the `_r2`), so per-text grouping counts a re-reading as the same text.
-- **AOI-only fixations** — fixations with a word/IA id but no x/y are placed at the matching word-box centers.
+- **Repeated readings** — when a participant has one trial ID more than once, told apart by a `TRIAL_INDEX` column, the later readings get `_r2`, `_r3` …, so each stays a trial of its own. When that participant already has a trial spelled that way (a recorded `a_r2` beside two readings of `a`), the repeat is written `a__r2` instead, with one more `_` while that is taken too, so two readings never merge.
+- **Text ID falls back to the trial ID** when it isn't mapped. A repeated reading takes its first reading's trial ID (without the suffix), so per-text grouping counts a re-reading as the same text.
+- **AOI-only fixations** — fixations with a word/IA id but no x/y are placed at the matching word-box centers. Word/IA ids are read as numbers: a fixation whose id is blank or not a number matches no box and stays off the plot, and when the fixations map no x/y and their Word/IA ID column holds no numbers at all (`w1`, `w2` …), the dataset is refused with a message saying so — on the add-dataset screen, and as an error from the Python API and CLI — rather than loaded with nothing to draw.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial ID* to several columns (e.g. participant + paragraph + repeated-reading) and a combined unique id is built on the fly: the values joined with `_`. A `_` inside a value is written `\_` (and a `\` as `\\`), so `block_A` + `B` (`block\_A_B`) and `block` + `A_B` (`block_A\_B`) stay two trials. Values without either character join exactly as before. Participant and Text ID mappings compose the same way. A dataset saved on this computer before this spelling keeps the ids it was saved with. A link, an annotations file or a script that names a trial by the old spelling still finds it, unless two trials shared that old id.
 
 ## Multipart logical trials

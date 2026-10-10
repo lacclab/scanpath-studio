@@ -2229,11 +2229,13 @@ tables are in different coordinate frames — a different origin, unit or offset
 (<a href="../data-format/#tables">Data format → Units</a>). If the alignment is right but
 the figure is framed or sized wrongly, the recording screen size is: set the
 resolution of the monitor used in the experiment under <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management → <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset → Recording
-setup</strong>. <em>Estimate from my data</em> only gives a lower bound.</p>
+setup</strong> (<strong>Screen → I know it</strong>). <em>Estimate from my data</em> only gives a lower bound.</p>
 <h3 id="the-text-is-too-big-or-too-small">The text is too big or too small<a class="headerlink" href="#the-text-is-too-big-or-too-small" title="Permanent link">&para;</a></h3>
 <p>Text is drawn to scale from the word boxes and the recording screen size. Set
 the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
-<code>canvas_size=(2560, 1440)</code>.</p>
+<code>canvas_size=(2560, 1440)</code>. If it is still off, set the line spacing (how far
+apart the lines are, in font sizes) under <strong>Recording setup → Text size → Fit
+to word boxes</strong>, or <code>line_spacing=</code> in Python.</p>
 <h3 id="a-column-was-detected-wrongly">A column was detected wrongly<a class="headerlink" href="#a-column-was-detected-wrongly" title="Permanent link">&para;</a></h3>
 <p>The app guesses columns from their names. Pick the right one under
 <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management → <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> Edit dataset</strong>, or pass <code>word_schema</code> / <code>fix_schema</code> to
@@ -2241,7 +2243,8 @@ the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
 <h3 id="can-i-load-only-one-table">Can I load only one table?<a class="headerlink" href="#can-i-load-only-one-table" title="Permanent link">&para;</a></h3>
 <p>Yes. A Words table alone shows the text and any reading measures it carries; a
 fixations table alone shows gaze positions without text. Most features need
-both.</p>
+both. The same holds trial by trial: when the two tables cover different
+trials, every trial either one has is listed, and drawn with what it has.</p>
 <h3 id="can-i-open-potec-or-onestop-in-the-online-demo">Can I open PoTeC or OneStop in the online demo?<a class="headerlink" href="#can-i-open-potec-or-onestop-in-the-online-demo" title="Permanent link">&para;</a></h3>
 <p>No. The online demo has only the bundled demo data, and it doesn't download
 corpora. In the desktop app or a pip install, each public corpus downloads
@@ -2328,7 +2331,7 @@ note the version you used and install that one:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 19:39:08 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 10, 2026 01:15:22 UTC">October 10, 2026</span>
   </span>
 
     

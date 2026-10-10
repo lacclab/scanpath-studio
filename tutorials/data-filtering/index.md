@@ -6,6 +6,8 @@ This workflow finds trials unsuitable for an analysis or publication and leaves 
 
 Load the dataset, then open the **filter funnel** beside the trial picker: it holds the text and participant pickers together with the condition and annotation filters. Start with broad dataset fields such as participant, condition, correctness, or repeated-reading status. Use the ⇅ trial-ordering popover to surface unusually short or long trials.
 
+A condition filter decides each trial as a whole, from whichever table holds the field: a difficulty level recorded only in your Words table narrows the fixations too. A trial whose Words and Fixations tables give it different values is left out, and a warning above the plot names it.
+
 If the pool becomes empty, the app names the filter that emptied it and offers to clear just that one.
 
 ## 2. Review candidate trials

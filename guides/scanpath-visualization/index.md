@@ -11,7 +11,7 @@ The Scanpath view draws one reading on the screen it was recorded on.
 
 ## Choose a trial
 
-Pick a trial above the plot. The **filter funnel** beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. A trial with several screens gets a second navigator to move between them.
+Pick a trial above the plot. The **filter funnel** beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. A trial with several screens gets a second navigator to move between them. When several participants have the same trial ID, each reading is in the list on its own, with its participant in brackets, `3 [p2]`.
 
 ## Control the layers
 
@@ -38,19 +38,20 @@ Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the s
 
 ## Place the legends
 
-**Figure & canvas → Legends** has a row for each legend the figure can draw: **Compare (A/B)**, **Saccade types**, **Fixation colours** (a categorical **Color by**, and the Highlight entries) and the duration **Size key**. Each row sets where the legend goes, how its items run and its text size:
+**Figure & canvas → Legends** is a table with a row for each legend the current figure draws: **Compare (A/B)** while comparing, **Saccade types** when saccades are coloured by type, **Fixation colors** for a categorical **Color by**, a Highlight filter or raw gaze, and the duration **Size key** on a fixed marker scale. A legend the figure does not draw has no row. Its columns:
 
-- **Spot**: **Above**, **Below**, **Left** or **Right** of the plot, or **Inside** one of its four corners. An outside spot makes the figure larger instead of shrinking the plot, so the text stays true to scale. Legends sharing a side line up one after the other.
-- **Arrangement**: **Stacked** (one item under the other) or **Side by side**.
-- **Size**: the text size in px; empty uses the figure's own.
+- **Show**: draw the legend at all. This is the only place to turn a legend on or off.
+- **Position**: one of eight spots (**Top left**, **Top center**, **Top right**, **Left**, **Right**, **Bottom left**, **Bottom center**, **Bottom right**), each **outside** or **inside** the plot. **Left** and **Right** run down that side. An outside spot makes the figure larger instead of shrinking the plot, so the text stays true to scale. Legends sharing a spot stack, the size key included.
+- **Arrangement**: **Stacked** (one item under the other) or **Side by side**. On **Auto**, a legend at the middle of the top or bottom edge is a row and every other one a stack.
+- **Text size**: in px; empty uses the figure's own.
 
-On **Auto** a legend stays where it is drawn by default. These rows only place a legend: whether it is drawn at all is still its own switch, under its layer. The size key's circles keep the true marker sizes wherever it goes; its **Size** sets the labels. Share links, settings files, saved designs, `render --legend` and the API's `legend_layout` all carry the placement.
+On **Auto** a legend stays where it is drawn by default. The size key's circles keep the true marker sizes wherever it goes; its **Text size** sets the labels. Compare's A/B label patterns stay under **Compare ▾**. Share links, settings files, saved designs, `render --legend` / `--no-color-legend` and the API's `legend_layout` / `show_color_legend` all carry these.
 
 ## Replay and compare
 
 - **Animate** replays the trial; its **▾** sets the speed.
 - **Compare** adds a second reading, overlaid or side by side. **Compare with** can take it from another dataset.
-- **Comparisons** lists other trials that match this one on a field you choose: other readings of the same text, or the same participant's other trials.
+- **Comparisons** lists other trials that match this one on a field you choose: other readings of the same text, or the same participant's other trials. It shows 12 at a time, with a pager for the rest, and a table of the chips from above the plot for this trial and each match on the page.
 
 Side by side, each panel shows its own reading's stimulus image, or none when that reading has no image. An uploaded image stands for the first reading's page, so the second shows it only when it reads the same text on the same screen.
 

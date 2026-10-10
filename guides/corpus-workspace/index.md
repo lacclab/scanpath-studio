@@ -18,7 +18,7 @@ The address bar names the open view (`?corpus_subtab=Per+participant`), so a boo
 
 Choose a measure, how to aggregate it, and the spread to show. A line under the measure says what it is, its unit, and what each plotted value is (one word, one participant's mean, …), with a link to its definition; a line under the spread says whether it shows how values vary (SD, IQR) or how precisely the center is known (SEM, bootstrap CI). Set a minimum number of participants per word so sparse words don't look like stable estimates.
 
-**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare a second group**, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too.
+**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare a second group**, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too. A group is a set of whole trials, whichever table holds its field: its word and fixation measures come from the same trials. A trial whose Words and Fixations tables disagree about the field is left out, and the page says so.
 
 ## From summary to evidence
 

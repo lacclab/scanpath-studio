@@ -1898,7 +1898,9 @@ under <strong>Metadata → Participants</strong>. Its columns then behave like f
 data: they filter trials (the filter funnel's <em>By participant</em> section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
-sessions.</p>
+sessions. A table split across files — one per session, one per lab — can be
+uploaded as several files at once: they are stacked into one table, matching
+columns by name. The same holds for the trial and text tables.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>participant_id,native_language,age,comprehension
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>p01,Hebrew,24,0.83
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>p02,English,31,0.91
@@ -1920,7 +1922,7 @@ sessions.</p>
   counts as no value. The same choice sits under every numeric trial filter,
   for the trial and text tables as well.</li>
 </ul>
-<p>Headless, it is a <code>--participant-metadata FILE</code> flag on <code>scanpath-studio render</code>
+<p>Headless, it is a <code>--participant-metadata FILE…</code> flag on <code>scanpath-studio render</code>
 and <a href="../api/"><code>load_participant_metadata()</code></a> in the Python API.</p>
 <h2 id="trial-metadata">Trial metadata<a class="headerlink" href="#trial-metadata" title="Permanent link">&para;</a></h2>
 <p>The same idea one grain down: a table of <strong>one row per trial</strong> — a list
@@ -1946,7 +1948,7 @@ reads the same text twice — and that table attaches headlessly only, with
 <code>--trial-metadata-reader-column</code> on the CLI or <code>participant_column=</code> in the
 Python API.</p>
 <p>Join reporting and duplicate handling are as for the participant table.</p>
-<p>Headless, it is <code>--trial-metadata FILE</code> on <code>scanpath-studio render</code> and
+<p>Headless, it is <code>--trial-metadata FILE…</code> on <code>scanpath-studio render</code> and
 <a href="../api/"><code>load_trial_metadata()</code></a> in the Python API.</p>
 <h2 id="text-metadata">Text metadata<a class="headerlink" href="#text-metadata" title="Permanent link">&para;</a></h2>
 <p>The third grain: a table of <strong>one row per text</strong> — a genre, a difficulty rating,
@@ -1957,7 +1959,7 @@ participant owns — and, like the trial table, the id may be built from several
 columns. Its columns behave like fields in the data in the same way, travel with
 exports (<code>metadata/texts.csv</code>) and saved sessions, and follow the same join
 rules.</p>
-<p>Headless, it is <code>--text-metadata FILE</code> on <code>scanpath-studio render</code> and
+<p>Headless, it is <code>--text-metadata FILE…</code> on <code>scanpath-studio render</code> and
 <a href="../api/"><code>load_text_metadata()</code></a> in the Python API.</p>
 <h2 id="flexible-loading">Flexible loading<a class="headerlink" href="#flexible-loading" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1981,11 +1983,22 @@ rules.</p>
   same way when any screen a participant looked at has no boxes. When some readings
   find none, the screen, the API and the CLI warn with the counts. When it
   works, the screen says how the words attached.</li>
+<li><strong>Repeated readings</strong> — when a participant has one trial ID more than once,
+  told apart by a <code>TRIAL_INDEX</code> column, the later readings get <code>_r2</code>, <code>_r3</code> …,
+  so each stays a trial of its own. When that participant already has a trial
+  spelled that way (a recorded <code>a_r2</code> beside two readings of <code>a</code>), the repeat
+  is written <code>a__r2</code> instead, with one more <code>_</code> while that is taken too, so two
+  readings never merge.</li>
 <li><strong>Text ID falls back to the trial ID</strong> when it isn't mapped. A repeated
-  reading takes its first reading's trial ID (without the <code>_r2</code>), so per-text
+  reading takes its first reading's trial ID (without the suffix), so per-text
   grouping counts a re-reading as the same text.</li>
 <li><strong><abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-only fixations</strong> — fixations with a word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> id but no x/y are placed at
-  the matching word-box centers.</li>
+  the matching word-box centers. Word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> ids are read as numbers: a fixation
+  whose id is blank or not a number matches no box and stays off the plot, and
+  when the fixations map no x/y and their Word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> ID column holds no numbers at
+  all (<code>w1</code>, <code>w2</code> …), the dataset is refused with a message saying so — on the
+  add-dataset screen, and as an error from the Python API and CLI — rather than
+  loaded with nothing to draw.</li>
 <li><strong>Composite trial ids</strong> — when no single column identifies a trial, map <em>Trial
   ID</em> to several columns (e.g. participant + paragraph + repeated-reading) and a
   combined unique id is built on the fly: the values joined with <code>_</code>. A <code>_</code>
@@ -2100,7 +2113,7 @@ the measures you mapped, too. Definitions are in
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 15:41:39 UTC">October 9, 2026</span>
   </span>
 
     

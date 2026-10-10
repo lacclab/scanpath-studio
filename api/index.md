@@ -44,7 +44,7 @@ print(words[columns].head(3))
 ### scanpath_studio.api.load_scanpath_data
 
 ```
-load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = '{text_id}.png', keep_columns: Iterable[str] | None = None, names: str = NAMES_SOURCE) -> ScanpathData
+load_scanpath_data(words: TablesLike | None = None, fixations: TablesLike | None = None, *, word_schema: dict | None = None, fix_schema: dict | None = None, trial_parts_manifest: dict | None = None, image_root: str | Path | None = None, image_pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN, keep_columns: Iterable[str] | None = None, names: str = NAMES_SOURCE) -> ScanpathData
 ```
 
 Load and normalize a words table and/or a fixations table.
@@ -57,7 +57,9 @@ The columns keep the names your files give them: `CURRENT_FIX_DURATION`, not `du
 
 Normalization keeps the mapped fields and the recognized optional ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the rest. `keep_columns` names further columns of your own to carry through under their own names — a pupil size, a detection confidence — from whichever table has them, so a figure can color, hover or plot by them (the app's *Extra fields to keep*; `render --keep-columns` on the command line).
 
-Returns the normalized `(words, fixations)` frames the plotting functions expect. Raises `ValueError` if a required field can't be found — the message names the canonical field, the column names auto-detection looked for, and the columns the table actually has — and `data.StimulusJoinError` (a `ValueError`) when a stimulus-level words table shares neither a trial id nor a `text_id` with any trial (or, multipart, with every screen a trial has fixations on).
+`image_root` is a local folder of stimulus images, one page per trial (or screen), matched to each row by `image_pattern`, whose `{placeholders}` name the rows' canonical columns (`"{text_id}.png"`, `"{participant_id}/{trial_id}.png"`). A match fills that row's `image_path`, and a row without one keeps the `image_path` it had. A folder that does not exist, or a pattern that is absolute or climbs out of it, raises `ValueError`. `show_stimulus_image=True` draws the page under the figure (plot_scanpath and the other builders); attach_stimulus_images does the same matching for frames that are already loaded, such as a corpus loader's.
+
+Returns the normalized `(words, fixations)` frames the plotting functions expect. Raises `ValueError` if a required field can't be found — the message names the canonical field, the column names auto-detection looked for, and the columns the table actually has — and `data.StimulusJoinError` (a `ValueError`) when a stimulus-level words table shares neither a trial id nor a `text_id` with any trial (or, multipart, with every screen a trial has fixations on), and `data.UnplacedFixationsError` (a `ValueError`) when the fixations map no x/y and their word/AOI ID column holds no numbers, so none could be placed.
 
 ### scanpath_studio.api.ScanpathData
 
@@ -76,6 +78,25 @@ load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData
 Return the bundled OneStop demo, normalized and ready to plot: two participants, twelve trials each, every one of them with fixations. Under the demo's own column names; `names="canonical"` for the internal ones (see load_scanpath_data).
 
 The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
+
+### scanpath_studio.api.attach_stimulus_images
+
+```
+attach_stimulus_images(words: DataFrame | None, fixations: DataFrame | None, image_root: str | Path, image_pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN) -> ScanpathData
+```
+
+Fill `image_path` from a folder of stimulus images, on frames already loaded.
+
+load_scanpath_data's `image_root` / `image_pattern`, for frames that came from somewhere else. The corpus loaders take no folder::
+
+```
+words, fixations = sps.attach_stimulus_images(
+    *sps.load_potec("data/PoTeC"), "pages/", "{text_id}.png"
+)
+sps.plot_scanpath(words, fixations, show_stimulus_image=True)
+```
+
+The rules are `load_scanpath_data`'s: the placeholders name the rows' canonical columns, a row the pattern finds no file for keeps the `image_path` it had, and a folder that does not exist, or a pattern that is absolute or climbs out of it, raises `ValueError`. Either table may be `None`. Returns new frames under the names they came in; the ones passed in are not modified.
 
 ### scanpath_studio.api.load_raw_gaze
 
@@ -112,7 +133,7 @@ load_participant_metadata(table: TablesLike, *, id_column: str | None = None, pa
 
 Load a participant-level metadata table.
 
-`table` is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with **one row per participant**: an id column plus anything known about them (`native_language`, `age`, a comprehension score). `id_column` defaults to the first recognized spelling (`participant_id`, `subject`, `RECORDING_SESSION_LABEL`, …).
+`table` is a DataFrame, or a path/glob to a CSV/TSV/Parquet/Excel file — or a list of them, stacked into one table — with **one row per participant**: an id column plus anything known about them (`native_language`, `age`, a comprehension score). `id_column` defaults to the first recognized spelling (`participant_id`, `subject`, `RECORDING_SESSION_LABEL`, …).
 
 Pass `participants` — a normalized frame or a list of ids — to have the join validated against the data you actually loaded; the returned object's `.report` then names the participants missing from either side.
 
@@ -128,7 +149,7 @@ load_trial_metadata(table: TablesLike, *, id_column: str | None = None, particip
 
 Load a trial-level metadata table.
 
-The sibling of load_participant_metadata, one grain down: `table` has **one row per trial** — a trial-id column plus anything known about that trial (a list name, a condition, a per-trial comprehension score).
+The sibling of load_participant_metadata, one grain down: `table` has **one row per trial** — a trial-id column plus anything known about that trial (a list name, a condition, a per-trial comprehension score). Several files, as a list or a glob, are stacked into one table.
 
 **The key is yours to state, and it changes what the table means.** Keyed by trial id alone, a row describes a *text*, and every trial of it inherits that row; pass `participant_column` to key by participant **and** trial, so a row describes one *trial*. Nothing in a file says which world a corpus is in, so this is never inferred — unlike `id_column`, which defaults to the first recognized spelling (`trial_id`, `item_id`, `TRIAL_INDEX`, …).
 
@@ -146,7 +167,7 @@ load_text_metadata(table: TablesLike, *, id_column: str | list[str] | None = Non
 
 Load a text-level metadata table — the third grain.
 
-`table` has **one row per text** — a text-id column plus anything known about that text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like load_participant_metadata: never keyed by participant, since a text is a stimulus rather than something one participant owns. `id_column` defaults to the first recognized spelling (`text_id`, `paragraph_id`, `stimulus_id`, …) and may be several columns to build a composite id, the same way the uploaded data's own Text ID mapping does.
+`table` has **one row per text** — a text-id column plus anything known about that text (genre, difficulty, a stimulus-level comprehension score). Flat grain, like load_participant_metadata: never keyed by participant, since a text is a stimulus rather than something one participant owns. Several files, as a list or a glob, are stacked into one table. `id_column` defaults to the first recognized spelling (`text_id`, `paragraph_id`, `stimulus_id`, …) and may be several columns to build a composite id, the same way the uploaded data's own Text ID mapping does.
 
 Pass `texts` — a normalized fixations/words frame, or any iterable of text ids — to have the join validated against the data you actually loaded; the returned `.report` then names the texts missing from either side.
 
@@ -252,7 +273,7 @@ list_trials(words: DataFrame | None = None, fixations: DataFrame | None = None, 
 
 One row per plottable trial: its participant id and trial id.
 
-Trials present in both frames when both are loaded; for single-report datasets (words-only or fixations-only), trials from whichever frame has data. `raw_gaze` (a frame from load_raw_gaze) adds the trials that only its samples cover — every trial, for a dataset recorded as raw gaze alone (pass `None` for `words` and `fixations` then). The id columns take the names the frames carry.
+Every trial **any** table has — the words, the fixations or `raw_gaze` (a frame from load_raw_gaze) — once, however many of them have it: the app's trial picker, `render --list-trials` and the export bundle list the same set (#412). A trial a table lacks plots without that layer: a trial with words but no fixations draws its text alone, one with fixations but no words its scanpath over no word boxes. Pass `None` for a table the dataset does not have — both `words` and `fixations` for a dataset recorded as raw gaze alone. Sorted by participant, then trial; the id columns take the names the frames carry.
 
 ### scanpath_studio.api.list_parts
 
@@ -297,7 +318,11 @@ Build one trial's scanpath figure (by default the app's Scanpath design).
 
 `title` / `caption` stamp a title/caption band onto the figure without shrinking the plot area, like the app's *Title & labels* — literal text here, not the app's `{trial_id}`-style pattern, since the caller already knows which trial this is.
 
-`illustration=True` applies the Illustration preset (snapped fixations, arced saccades, uniform colors, no heatmap or word boxes); keywords you pass still win. `illustration_label` is `"auto"` (label the figure when it no longer shows the data as recorded), `"show"` or `"hide"`. `palette=` (`"default"`, `"print"` or `"high-contrast"`, or the app's names) sets a group of colors at once; a color you pass explicitly wins.
+`fixation_snap_to_line=True` moves each fixation up or down onto its text line, keeping its x — its word's line, else the nearest one — and `fixation_snap_position` says where on the line, in line heights from its middle (default −0.5, the line's top edge). It moves the saccades' ends with the markers, and does nothing with `show_fixations=False`.
+
+`illustration=True` applies the Illustration preset (fixations snapped to their lines, arced saccades, uniform colors, no heatmap or word boxes); keywords you pass still win. `illustration_label` is `"auto"` (label the figure when it no longer shows the data as recorded), `"show"` or `"hide"`. `palette=` (`"default"`, `"print"` or `"high-contrast"`, or the app's names) sets a group of colors at once; a color you pass explicitly wins.
+
+`show_stimulus_image=True` draws the trial's own stimulus page under the scanpath, as the app's 📄 Stimulus → image does: the `image_path` its rows carry (from `load_scanpath_data(image_root=…)` or attach_stimulus_images; the bundled demo ships its pages), placed at its `image_x` / `image_y`. A `background_image=` you pass wins. A trial with no readable page (a PNG) draws none and raises a `UserWarning` saying so.
 
 Remaining keywords override the app's defaults and are forwarded to `plots.make_scanpath_figure` (e.g. `show_heatmap=True`, `color_by="pass_index"`, `x_field="order_in_trial"`); an unknown keyword raises a `TypeError` naming the closest valid options, and figure_options lists them all with their defaults (`choices=True` adds the values each enumerated option takes; a value is matched ignoring case, spaces, `-` and `_`, and any other value raises a `ValueError`). A `color_by` / `highlight_column` naming a column the trial's table doesn't have raises a `ValueError` naming the closest ones, rather than drawing without it.
 
@@ -316,6 +341,8 @@ Same trial selection, canvas and column-name semantics as plot_scanpath (`column
 With `autoplay` (default `True`) the saved interactive HTML auto-starts the replay on load *at `playback_speed`* — save_figure honors the marker the builder stamps on the figure. Pass `autoplay=False` to save a figure that opens paused (press ▶ Play to run it). Autoplay only affects the interactive HTML; a GIF/MP4 always plays from its first frame.
 
 When `playback_speed` is not `1`, the automatic Illustration label says the replay timing was changed. `illustration_label` accepts `"auto"`, `"show"`, or `"hide"` like plot_scanpath.
+
+`show_stimulus_image=True` draws the trial's own stimulus page under the replay, as plot_scanpath does. A co-animation draws one page, under the text it draws: B's when `compare_stimulus="b"`, else A's.
 
 In a co-animation `fix_index_range` windows A only (the app's rule — A's slider never cuts B), `fix_index_range_b` windows B, and `fixation_flags_b` gives B flags of its own (`None`: A's `fixation_flags`, or the `fixation_flags` of `style_b` when it names some).
 
@@ -349,7 +376,7 @@ The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(par
 
 `setup` / `setup_b` are `experimental_setup.SetupSnapshot` values — what the gate reads. `canvas_size` covers A when you only have a resolution; omit both and the canvas is read off the data.
 
-**Stimulus images.** `background_image` is A's page. A split layout draws B's panel over `background_image_b` (with `background_image_size_b` / `background_image_origin_b`) and over nothing without it — never A's, since sharing a dataset says nothing about sharing a page.
+**Stimulus images.** `background_image` is A's page. A split layout draws B's panel over `background_image_b` (with `background_image_size_b` / `background_image_origin_b`) and over nothing without it — never A's, since sharing a dataset says nothing about sharing a page. `show_stimulus_image=True` takes each reading's own page from its rows, as plot_scanpath does: a split layout draws A's and B's, each in its own panel, and an overlay draws the page of the text it draws — B's for `compare_stimulus="b"`, else A's. An image passed explicitly wins.
 
 `compare_stimulus` picks whose word boxes and text an **overlay** draws — `"both"` (default), `"a"` or `"b"`. Two datasets' AOIs coincide only when the text is identical. Split layouts ignore it; each panel owns its own stimulus.
 
@@ -475,17 +502,23 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `background_image_origin_b`       | `None`                                         | —                                                                                                        | `--stimulus-image-origin-b`                               | compare          |
 | `background_image_size`           | `None`                                         | —                                                                                                        | `--stimulus-image-size`                                   | all three        |
 | `background_image_size_b`         | `None`                                         | —                                                                                                        | `--stimulus-image-size-b`                                 | compare          |
+| `caption_color`                   | `'#555555'`                                    | —                                                                                                        | `--caption-color`                                         | all three        |
+| `caption_font_size`               | `13`                                           | —                                                                                                        | `--caption-size`                                          | all three        |
 | `color_by`                        | `'(uniform)'`                                  | —                                                                                                        | `--color-by`                                              | all three        |
 | `color_by_line`                   | `False`                                        | —                                                                                                        | `--color-by-line`                                         | all three        |
 | `compare_stimulus`                | `'both'`                                       | `'both'`, `'a'`, `'b'`                                                                                   | `--compare-stimulus`                                      | animate          |
 | `connector_y`                     | `None`                                         | —                                                                                                        | —                                                         | plot, compare    |
+| `coordinate_grid_font_size`       | `18`                                           | —                                                                                                        | `--coordinate-grid-font-size`                             | all three        |
 | `coordinate_grid_spacing`         | `None`                                         | —                                                                                                        | `--coordinate-grid-spacing`                               | all three        |
 | `critical_span_style`             | `'Mark text'`                                  | `'Mark text'`, `'Mark border'`, `'None'`                                                                 | `--critical-span-style`                                   | plot, compare    |
+| `crop_margin`                     | `None`                                         | —                                                                                                        | `--crop-margin`                                           | all three        |
 | `duration_size_legend`            | `True`                                         | —                                                                                                        | `--no-duration-size-legend`                               | all three        |
 | `fit_to_monitor`                  | `True`                                         | —                                                                                                        | `--no-full-monitor`                                       | all three        |
 | `fixation_color`                  | `'#0072B2'`                                    | —                                                                                                        | `--fixation-color`                                        | all three        |
 | `fixation_color_range`            | `None`                                         | —                                                                                                        | `--fixation-color-range`                                  | all three        |
+| `fixation_colorbar_length`        | `None`                                         | —                                                                                                        | `--fixation-colorbar-length`                              | all three        |
 | `fixation_colorbar_orientation`   | `'Vertical'`                                   | `'Vertical'`, `'Horizontal'`                                                                             | `--fixation-colorbar-orientation`                         | all three        |
+| `fixation_colorbar_thickness`     | `14`                                           | —                                                                                                        | `--fixation-colorbar-thickness`                           | all three        |
 | `fixation_colorbar_tickangle`     | `0`                                            | —                                                                                                        | `--fixation-colorbar-tickangle`                           | all three        |
 | `fixation_colorbar_tickfont_size` | `12`                                           | —                                                                                                        | `--fixation-colorbar-tickfont-size`                       | all three        |
 | `fixation_colorscale`             | `'Blues'`                                      | —                                                                                                        | `--fixation-colorscale`                                   | all three        |
@@ -493,15 +526,21 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `fixation_flags_b`                | `None`                                         | —                                                                                                        | `--compare-fixation-flag`                                 | animate          |
 | `fixation_hover_fields`           | `['order_in_trial', 'duration_ms', 'word_id']` | —                                                                                                        | `--fixation-hover-fields`                                 | all three        |
 | `fixation_opacity`                | `0.7`                                          | —                                                                                                        | `--fixation-opacity`                                      | all three        |
-| `fixation_snap_to_word`           | `False`                                        | —                                                                                                        | `--snap-fixations`                                        | plot, compare    |
+| `fixation_outline_color`          | `'#111111'`                                    | —                                                                                                        | `--fixation-outline-color`                                | all three        |
+| `fixation_outline_width`          | `0.5`                                          | —                                                                                                        | `--fixation-outline-width`                                | all three        |
+| `fixation_snap_position`          | `-0.5`                                         | —                                                                                                        | `--snap-position`                                         | plot, compare    |
+| `fixation_snap_to_line`           | `False`                                        | —                                                                                                        | `--snap-fixations`                                        | plot, compare    |
 | `fixation_symbol`                 | `'circle'`                                     | `'circle'`, `'square'`, `'diamond'`, `'triangle-up'`, `'cross'`, `'x'`, `'star'`, `'hexagon'`, `'heart'` | `--fixation-symbol`                                       | all three        |
 | `fixations_b`                     | `None`                                         | —                                                                                                        | —                                                         | animate          |
+| `heatmap_colorbar_length`         | `None`                                         | —                                                                                                        | `--heatmap-colorbar-length`                               | all three        |
 | `heatmap_colorbar_orientation`    | `'Vertical'`                                   | `'Vertical'`, `'Horizontal'`                                                                             | `--heatmap-colorbar-orientation`                          | all three        |
+| `heatmap_colorbar_thickness`      | `14`                                           | —                                                                                                        | `--heatmap-colorbar-thickness`                            | all three        |
 | `heatmap_colorbar_tickangle`      | `0`                                            | —                                                                                                        | `--heatmap-colorbar-tickangle`                            | all three        |
 | `heatmap_colorbar_tickfont_size`  | `12`                                           | —                                                                                                        | `--heatmap-colorbar-tickfont-size`                        | all three        |
 | `heatmap_colorscale`              | `'Blues'`                                      | —                                                                                                        | `--heatmap-colorscale`                                    | plot, compare    |
 | `heatmap_metric`                  | `'duration_ms'`                                | —                                                                                                        | `--heatmap-metric`                                        | plot, compare    |
 | `heatmap_norm`                    | `'Linear'`                                     | `'Linear'`, `'Log'`                                                                                      | `--heatmap-norm`                                          | plot, compare    |
+| `heatmap_opacity`                 | `None`                                         | —                                                                                                        | `--heatmap-opacity`                                       | plot, compare    |
 | `heatmap_range`                   | `None`                                         | —                                                                                                        | `--heatmap-range`                                         | plot, compare    |
 | `heatmap_sigma_px`                | `None`                                         | —                                                                                                        | `--heatmap-sigma`                                         | plot, compare    |
 | `heatmap_style`                   | `'Word boxes'`                                 | `'Word boxes'`, `'Interpolated'`                                                                         | `--heatmap-style`                                         | plot, compare    |
@@ -519,18 +558,22 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `marker_size_scale`               | `'sqrt'`                                       | `'sqrt'`, `'linear'`, `'log'`, `'relative'`                                                              | `--marker-size-scale`                                     | all three        |
 | `order_font_color`                | `'#111111'`                                    | —                                                                                                        | `--order-font-color`                                      | all three        |
 | `order_font_size`                 | `10`                                           | —                                                                                                        | `--order-font-size`                                       | all three        |
+| `plot_frame_color`                | `'#000000'`                                    | —                                                                                                        | `--plot-frame-color`                                      | plot, compare    |
 | `raw_gaze_color`                  | `'#888888'`                                    | —                                                                                                        | `--raw-gaze-color`                                        | all three        |
 | `raw_gaze_marker_size`            | `4.0`                                          | —                                                                                                        | `--raw-gaze-marker-size`                                  | all three        |
 | `raw_gaze_opacity`                | `0.6`                                          | —                                                                                                        | `--raw-gaze-opacity`                                      | all three        |
+| `saccade_arrow_size`              | `12.0`                                         | —                                                                                                        | `--saccade-arrow-size`                                    | all three        |
 | `saccade_class_colors`            | `None`                                         | —                                                                                                        | `--saccade-type-color`                                    | plot, compare    |
 | `saccade_classes`                 | `list` (see `figure_options()`)                | —                                                                                                        | `--saccade-classes`                                       | plot, compare    |
 | `saccade_color`                   | `'#CC79A7'`                                    | —                                                                                                        | `--saccade-color`                                         | all three        |
 | `saccade_color_mode`              | `'Uniform'`                                    | `'Uniform'`, `'Forward / regression'`, `'By type'`                                                       | `--saccade-color-by-type`, `--saccade-color-by-direction` | plot, compare    |
+| `saccade_opacity`                 | `1.0`                                          | —                                                                                                        | `--saccade-opacity`                                       | all three        |
 | `saccade_render_mode`             | `'Straight'`                                   | `'Straight'`, `'Arc'`                                                                                    | `--saccade-arcs`                                          | plot, compare    |
 | `saccade_style`                   | `'solid'`                                      | `'solid'`, `'dash'`, `'dot'`, `'dashdot'`                                                                | `--saccade-style`                                         | all three        |
 | `saccade_type_legend`             | `True`                                         | —                                                                                                        | `--no-saccade-type-legend`                                | plot, compare    |
 | `saccade_width`                   | `2.0`                                          | —                                                                                                        | `--saccade-width`                                         | all three        |
 | `scale_text_to_boxes`             | `True`                                         | —                                                                                                        | `--no-scale-text-to-boxes`                                | all three        |
+| `show_color_legend`               | `True`                                         | —                                                                                                        | `--no-color-legend`                                       | all three        |
 | `show_connectors`                 | `False`                                        | —                                                                                                        | —                                                         | plot, compare    |
 | `show_coordinate_grid`            | `False`                                        | —                                                                                                        | `--coordinate-grid`                                       | all three        |
 | `show_fixation_colorbar`          | `True`                                         | —                                                                                                        | `--no-fixation-colorbar`                                  | all three        |
@@ -539,15 +582,18 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `show_heatmap_colorbar`           | `True`                                         | —                                                                                                        | `--no-heatmap-colorbar`                                   | all three        |
 | `show_legend`                     | `True`                                         | —                                                                                                        | `--no-compare-legend`                                     | animate, compare |
 | `show_order`                      | `False`                                        | —                                                                                                        | `--no-fixation-index`, `--fixation-index`                 | all three        |
+| `show_plot_frame`                 | `True`                                         | —                                                                                                        | `--no-plot-frame`                                         | plot, compare    |
 | `show_raw_gaze`                   | `False`                                        | —                                                                                                        | `--raw-gaze`, `--no-raw-gaze`                             | plot, compare    |
 | `show_saccade_arrows`             | `False`                                        | —                                                                                                        | `--saccade-arrows`                                        | all three        |
 | `show_saccades`                   | `True`                                         | —                                                                                                        | `--no-saccades`                                           | all three        |
+| `show_stimulus_image`             | `False`                                        | —                                                                                                        | `--show-stimulus-image`                                   | all three        |
 | `show_word_labels`                | `True`                                         | —                                                                                                        | `--no-text`                                               | all three        |
 | `show_words`                      | `False`                                        | —                                                                                                        | `--no-word-boxes`, `--word-boxes`                         | all three        |
 | `span_border_color`               | `'#000000'`                                    | —                                                                                                        | `--span-border-color`                                     | plot, compare    |
 | `style_a`                         | `None`                                         | —                                                                                                        | `--style-a`                                               | animate, compare |
 | `style_b`                         | `None`                                         | —                                                                                                        | `--style-b`                                               | animate, compare |
 | `text_color`                      | `'#000000'`                                    | —                                                                                                        | `--text-color`                                            | all three        |
+| `title_font_size`                 | `20`                                           | —                                                                                                        | `--title-size`                                            | all three        |
 | `word_box_color`                  | `'#6c757d'`                                    | —                                                                                                        | `--word-box-color`                                        | all three        |
 | `word_box_fill_color`             | `'#646464'`                                    | —                                                                                                        | `--word-box-fill-color`                                   | all three        |
 | `word_box_fill_opacity`           | `0.05`                                         | —                                                                                                        | `--word-box-fill-opacity`                                 | all three        |

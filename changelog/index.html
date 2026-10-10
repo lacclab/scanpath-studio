@@ -1518,6 +1518,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#0380-2026-10-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.38.0 — 2026-10-10
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#0371-2026-10-07" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1757,6 +1768,17 @@
     <span class="md-ellipsis">
       
         Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#0380-2026-10-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.38.0 — 2026-10-10
       
     </span>
   </a>
@@ -2015,9 +2037,86 @@ behind each line, and the releases before 0.28.0, are in
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>.
 <em>Unreleased</em> is what is on <code>main</code> and not yet on PyPI.</p>
 <p><h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="0380-2026-10-10">0.38.0 — 2026-10-10<a class="headerlink" href="#0380-2026-10-10" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>
 <ul>
+<li>Recording setup asks which font the text was shown in, on the add and edit screens, so word labels can be drawn in the experiment's own typeface. (<a href="https://github.com/lacclab/scanpath-studio/issues/399">#399</a>)</li>
 <li>Export only the screens you pick from trials that span several screens: Screens in the Export bundle, render --screens, and the screens argument of api.render_parent_trial. (<a href="https://github.com/lacclab/scanpath-studio/issues/402">#402</a>)</li>
+<li>The README's <em>See it in action</em> and the docs Gallery's <em>The app at work</em> show thirteen tasks in the app — adding your own data, finding and starring trials, styling the plot, replaying, comparing, Corpus Analysis, exporting and sharing — each recorded with its clicks counted; <code>scripts/record_workflow_demos.py</code> re-records them. (<a href="https://github.com/lacclab/scanpath-studio/issues/409">#409</a>)</li>
+<li>The welcome tour, tutorial and setup guide cards can be dragged by their title, and folded to a small tab that reopens where it was left. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>Participant, trial and text metadata tables can each be uploaded as several files, stacked into one table; the CLI's --participant-metadata, --trial-metadata and --text-metadata take several files too. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>The Comparisons subtab has the chip table from above the plot: the selected trial and each match on the page, one row each, under the fields picked in the chips menu. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Crop to data's margin can be set: Figure &amp; canvas → Screen &amp; framing → Margin (Auto keeps the old 5% margin, or set it in screen px), also as a link setting, render --crop-margin PX and the API's crop_margin. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Saccades have an Opacity: it fades the saccade lines and their direction arrows on the static figure, the replay and both scanpaths of a comparison (render --saccade-opacity, saccade_opacity on a link and in the API). (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Seven figure choices that were fixed are now yours to set: the heatmap's opacity, the title's and caption's text size and the caption's colour, the border round the plot, the saccade arrowheads' size, the fixation markers' outline, the coordinate grid's label size, and each colour bar's thickness and length — in the rail, the link, the settings file, <code>render</code> and the API. (<a href="https://github.com/lacclab/scanpath-studio/issues/424">#424</a>)</li>
+</ul>
+<p><strong>Changed</strong></p>
+<ul>
+<li>The chip table spans the plot column, with headers at the size of the selector labels. (<a href="https://github.com/lacclab/scanpath-studio/issues/405">#405</a>)</li>
+<li>The Scanpath plot sizes itself to the window so the subtab bar under it (Annotations … Export) stays on screen without scrolling. (<a href="https://github.com/lacclab/scanpath-studio/issues/405">#405</a>)</li>
+<li>The Legends table has column titles and a Show checkbox per row (each legend's only on/off switch), and lists only the legends the figure draws; the fixation-colour legend can now be hidden. (<a href="https://github.com/lacclab/scanpath-studio/issues/407">#407</a>)</li>
+<li>Legends take one of eight spots (each corner, the middle of the top and bottom edges, or down the left or right side), each inside or outside the plot, and legends sharing a spot stack; positions spelled the old way still work. (<a href="https://github.com/lacclab/scanpath-studio/issues/410">#410</a>)</li>
+<li>Each dataset's row on the Data Management page now has its own Edit button beside Remove, replacing the one under the dataset's description. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>Each table's column mapping on the add and edit screens is three short lines of at most four fields, instead of two long ones, so column names are no longer cut off. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>The add and edit screens' Recording setup starts filled in with the answers that invent nothing — the screen estimated from your data, physical size off, text sized to the word boxes — labels how each value is known, asks for the real values while any are estimates, and no longer holds up Add dataset. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>The setup guide no longer narrows the add-dataset screen, which now keeps its full width. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>Recording setup's <em>Visual angle</em> line is now <em>Physical size</em>: it asks only for the monitor's width, which converts a point-sized font to pixels, and no longer for a viewing distance nothing used. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>The add-dataset screen opens its upload part with Start from: from scratch, from a dataset you added before (its mapping, kept fields and recording setup, copied without a file), or from a saved setup file, with Undo. It replaces the Restore a saved setup popover. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>The add and edit screens' Name, Description and switch help is on the field's dotted-underlined title, like every mapping field, instead of a ? icon. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>Before a file is uploaded, each table on the add-dataset screen says what it holds and what it needs, and offers a larger drop area; a file that can't be read is reported beside the row, where it no longer hides the file's remove button. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>More space between the add-dataset screen's first heading and the dataset name. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>When the Words and Fixations tables cover different trials, the trial picker, list_trials, render --list-trials and the export bundle all list every trial either table has, once, and each draws with the tables it has; list_trials used to list only the trials both tables had, and the picker dropped the trials only the Words table had. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>Each dataset keeps its own stimulus-image folder and filename pattern: they are saved with it, asked for on the add screen, and wait for Save changes on Edit dataset, instead of carrying over to the next dataset and disappearing on restart. (<a href="https://github.com/lacclab/scanpath-studio/issues/417">#417</a>)</li>
+<li>The Share subtab's code names a dataset's own stimulus page with show_stimulus_image=True (and the image folder it came from) instead of a path on this computer, and an overlay or co-animation that draws scanpath B's text now draws B's stimulus page instead of A's. (<a href="https://github.com/lacclab/scanpath-studio/issues/420">#420</a>)</li>
+<li>When the X / Y fields can't be changed (Animate, Compare), their hover says why and how to get them back; on non-screen axes Crop to data and the grid grey out with a reason, since they have nothing to act on. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The background's color box shows the color in use, and a color picked in it applies at once, without choosing Custom first. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The chip table's values are in the app's regular weight, like the trial picker above them, instead of a bolder one. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Comparisons subtab drops the caption that repeated Match field; what the field does is its hover help, on one label and field row. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Comparisons grid shows its matches 12 at a time, in number order (participant 2 before 10), with a pager above and below it, so every match can be seen, not just the first 60. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Save current design dialog fills in a name, My design 1, then 2 and on, so a design can be saved without naming it. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The rail's help text no longer names one corpus: line spacing and the Highlight row are described in general terms. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Fonts read the same on Recording setup and Stimulus → Text: one font list (now with Multilingual), sizes in px or pt on both, Fit to word boxes with its line spacing on both, and a point size read as pixels when the dataset has no physical size. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Plot controls rail is shorter: the design presets sit as close as their columns, the line under Palette sits midway between it and Fixations, and Reset visualization is the presets' height. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The note under Animate is gone; hovering the Animate switch says what it greys, and hovering a greyed rail switch (Fixations, Heatmap, Raw gaze, or one with nothing to draw) says why. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Animate menu shows the trial's duration and its playback time under Replay, beside the speed they follow from. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Animate menu's Frames group explains what a frame is, keeps its spacing and limit sliders live under every preset, names the default grid Standard, and says under Result which of the two decided this trial's frames. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Snap above words is now Snap to line: a snapped fixation keeps its x and moves only up or down onto its text line, and a Position slider sets where on the line it sits (render --snap-position, snap_position on a link, fixation_snap_to_line and fixation_snap_position in the API). (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+</ul>
+<p><strong>Removed</strong></p>
+<ul>
+<li>The add-dataset screen no longer offers Download example tables. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>Figure &amp; canvas and Filters &amp; highlights no longer draw a line above their first group. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The API's fixation_snap_to_word option is gone; fixation_snap_to_line replaces it. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+</ul>
+<p><strong>Fixed</strong></p>
+<ul>
+<li>Scanpath B's row reads Dataset B · Trial B · Screen B, and its screen picker is the same width as A's. (<a href="https://github.com/lacclab/scanpath-studio/issues/405">#405</a>)</li>
+<li>The setup guide no longer scrolls a part of the Add-dataset screen under the top bar, the screen's own header bar stays on screen as you scroll, and on a narrow window the fields under the guide card can be scrolled clear of it. (<a href="https://github.com/lacclab/scanpath-studio/issues/406">#406</a>)</li>
+<li>On a narrow window, or with the plot controls open beside it, the trial picker rows compress and then wrap onto a second line instead of running over the plot controls. (<a href="https://github.com/lacclab/scanpath-studio/issues/408">#408</a>)</li>
+<li>An added dataset's font is its own: opening another dataset no longer draws it in the font chosen for the last one. (<a href="https://github.com/lacclab/scanpath-studio/issues/411">#411</a>)</li>
+<li>A ZIP with a README or other non-table file beside the data now uploads: only the table files in it are read. (<a href="https://github.com/lacclab/scanpath-studio/issues/414">#414</a>)</li>
+<li>A save to the recovery cache that fails part-way (a full disk, a closed app) no longer brings back a mix of old and new tables, metadata and settings: the next launch restores the last complete save. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>On the command line, render -t no longer picks the first participant of a trial id several participants share; it asks for -p, as the app and the API do. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>Corpus Analysis groups defined on a field only one table has (a difficulty level on the Words table, say) now hold the same trials in every measure and count: each group's fixation measures no longer pool every fixation, a field neither table has makes the group unavailable instead of selecting everyone, and a trial the two tables disagree on is left out with a note. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>The Comparisons subtab no longer drops a matching trial whose participant and trial IDs read the same as another's once joined (such as <code>p1</code> · <code>t1 · t2</code> and <code>p1 · t1</code> · <code>t2</code>): each gets its own panel and its own row in the similarity table. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>An export bundle's file-name pattern can no longer give a trial's file the name of the bundle's README, index.csv, columns.json, a metadata or a combined table: that file gets the next free name (README-2.md), so every file in the ZIP is the one index.csv lists. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>The Text ID you map is used even when a table also has a unique_paragraph_id column, so such a table no longer fails to join its fixations or groups them under the wrong text. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>A repeated reading's generated trial ID no longer merges with a real trial of the same name: when a participant already has a trial <code>a_r2</code>, the second reading of <code>a</code> is written <code>a__r2</code>, so the two stay separate scanpaths. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>The trial picker lists every participant's reading when participants share a Trial ID (each labelled with its participant, such as <code>3 [p2]</code>), a link naming a participant opens that participant's reading, and a link or saved selection that names only a shared Trial ID says it is ambiguous instead of opening the first participant's. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>A trial filter on a field only one table has (a difficulty level on the Words table, say) now narrows every table, so an excluded trial no longer stays in the trial picker through its fixations; a trial whose Words and Fixations tables disagree about the field is left out, and a warning names it. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>Fixations with no X/Y whose Word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> IDs are text (w1, w2) are no longer all drawn on the first word: adding such a dataset is blocked with a message saying why, and a blank or unreadable Word/<abbr title="Interest area: EyeLink's name for an AOI">IA</abbr> ID never places a fixation on a box. (<a href="https://github.com/lacclab/scanpath-studio/issues/416">#416</a>)</li>
+<li>The Setup help and Cancel buttons on the Add and Edit dataset screens are no longer clipped at the top when the page is scrolled. (<a href="https://github.com/lacclab/scanpath-studio/issues/419">#419</a>)</li>
+<li>The headless stimulus-image folder now draws: show_stimulus_image=True on plot_scanpath, animate_scanpath and compare_scanpaths (render --show-stimulus-image) draws each trial's own page, and the new api.attach_stimulus_images matches a folder of pages to frames already loaded, the corpus loaders' included. (<a href="https://github.com/lacclab/scanpath-studio/issues/420">#420</a>)</li>
+<li>Cancel in the Save current design dialog closes it whatever the name field holds, and drops the draft name. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Turning word boxes on, changing their colors and changing the heatmap's color bar no longer pause the plot for a second or more on a long page: the figure with word boxes and a heatmap builds about 15 times faster, and an overlay comparison about 20 times faster. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Fixations color bar row, greyed when the color is one color, Line or a categorical column, now says why on hover, and where the legend a categorical color gets is switched off (Figure &amp; canvas, Legends). (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The Illustration label no longer names snapped fixations while the Fixations layer is off, or saccade arcs while Saccades is off, and names neither in Animate or Compare, which draw neither; with the fixations off, the saccades run between the recorded positions. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>My designs has even margins: its list, the save button and Export / Import line up on both sides, with no extra space at the bottom, and design names start at the left of their cards. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>A dataset without fixation onsets (PoTeC) no longer shows a Trial duration of about a second beside a minute of fixations: the chip is left out, and the replay calls its span Total fixation time, played back to back. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>A plot-control popover no longer shakes while the pointer rests on its last rows: a field's tooltip opens above its title when there is no room below. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>A replay's frame limit is now exact: a limit of 120 gives at most 120 frames, not 121, in the app, the API and render --anim-max-frames. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>The title and caption's Available fields, their check and their preview now use the selected trial and the fields the figure renders with: the preview shows the trial's real ids, the trial's own fields such as TRIAL_INDEX are listed and accepted, and the list says which fields it leaves out and why. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
+<li>Picking a word-box fill color now shows it: a fill fainter than 0.15 opacity is raised to 0.20, and a color picked in a plot-controls popover is kept when you close the popover by clicking the page. (<a href="https://github.com/lacclab/scanpath-studio/issues/423">#423</a>)</li>
 </ul>
 <h2 id="0371-2026-10-07">0.37.1 — 2026-10-07<a class="headerlink" href="#0371-2026-10-07" title="Permanent link">&para;</a></h2>
 <p><strong>Added</strong></p>

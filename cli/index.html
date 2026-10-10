@@ -2159,7 +2159,7 @@ B's frames directly.</p>
 </tr>
 <tr>
 <td>set display geometry</td>
-<td><code>--canvas WIDTHxHEIGHT</code></td>
+<td><code>--canvas WIDTHxHEIGHT</code>; <code>--crop-to-data</code> frames the data instead of the whole monitor, with <code>--crop-margin PX</code> around it (default: 5% of its extent, at least 20 px)</td>
 </tr>
 <tr>
 <td>color fixations</td>
@@ -2178,8 +2178,12 @@ B's frames directly.</p>
 <td><code>--stimulus-image PATH</code></td>
 </tr>
 <tr>
-<td>resolve per-trial images</td>
-<td><code>--image-root DIR --image-pattern '{text_id}.png'</code></td>
+<td>draw each trial's own stimulus page</td>
+<td><code>--show-stimulus-image</code> — the <code>image_path</code> the trial's rows carry (<code>--sample</code> ships its pages)</td>
+</tr>
+<tr>
+<td>match pages from a folder</td>
+<td><code>--image-root DIR --image-pattern '{text_id}.png'</code> fills each row's <code>image_path</code>; add <code>--show-stimulus-image</code> to draw it</td>
 </tr>
 <tr>
 <td>use a smoothed (Gaussian) heatmap</td>
@@ -2453,7 +2457,7 @@ in the app, and <code>check_for_updates()</code> in the <a href="../api/#version
 <h2 id="full-reference">Full reference<a class="headerlink" href="#full-reference" title="Permanent link">&para;</a></h2>
 <p>Generated from the parsers the commands themselves use, so every flag is here
 with the default and help <code>--help</code> prints.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.37.1 — visualize eye-tracking-while-reading scanpaths
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.38.0 — visualize eye-tracking-while-reading scanpaths
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>usage:
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  scanpath-studio                  launch the interactive app (Streamlit)
@@ -2596,7 +2600,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--image-root</code></td>
 <td><code>DIR</code></td>
 <td>—</td>
-<td>Local stimulus-image folder. Files are matched per row using <code>--image-pattern</code>.</td>
+<td>Local stimulus-image folder. Files are matched per row using <code>--image-pattern</code> and fill its image_path; add <code>--show-stimulus-image</code> to draw them. Works with every input, <code>--sample</code> and the corpora included.</td>
 </tr>
 <tr>
 <td><code>--image-pattern</code></td>
@@ -2660,15 +2664,15 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--participant-metadata</code></td>
-<td><code>FILE</code></td>
+<td><code>FILE [FILE ...]</code></td>
 <td>—</td>
-<td>Participant-level metadata table: one row per participant, an id column plus anything known about them. The join is validated and reported against the loaded participants, and the fields are added to <code>--list-trials</code> output.</td>
+<td>Participant-level metadata table: one row per participant, an id column plus anything known about them. Several files (or a glob) are stacked into one table. The join is validated and reported against the loaded participants, and the fields are added to <code>--list-trials</code> output.</td>
 </tr>
 <tr>
 <td><code>--trial-metadata</code></td>
-<td><code>FILE</code></td>
+<td><code>FILE [FILE ...]</code></td>
 <td>—</td>
-<td>Trial-level metadata table: one row per trial, a trial-id column plus anything known about it. Validated and reported the same way, and its fields are added to <code>--list-trials</code> output.</td>
+<td>Trial-level metadata table: one row per trial, a trial-id column plus anything known about it. Several files (or a glob) are stacked into one table. Validated and reported the same way, and its fields are added to <code>--list-trials</code> output.</td>
 </tr>
 <tr>
 <td><code>--trial-metadata-participant-column</code>, <code>--trial-metadata-reader-column</code></td>
@@ -2678,9 +2682,9 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--text-metadata</code></td>
-<td><code>FILE</code></td>
+<td><code>FILE [FILE ...]</code></td>
 <td>—</td>
-<td>Text-level metadata table: one row per text, a text-id column plus anything known about it. Validated and reported the same way, and its fields are added to <code>--list-trials</code> output. Never keyed by participant: a text is a stimulus, not something one participant owns.</td>
+<td>Text-level metadata table: one row per text, a text-id column plus anything known about it. Several files (or a glob) are stacked into one table. Validated and reported the same way, and its fields are added to <code>--list-trials</code> output. Never keyed by participant: a text is a stimulus, not something one participant owns.</td>
 </tr>
 </tbody>
 </table>
@@ -2786,6 +2790,18 @@ with the default and help <code>--help</code> prints.</p>
 <td>Saccade line width in px, 0.5–10 (default: 2).</td>
 </tr>
 <tr>
+<td><code>--saccade-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Opacity of the saccade lines and direction arrows, 0.1–1.0 (default: 1). A comparison's two scanpaths share it.</td>
+</tr>
+<tr>
+<td><code>--saccade-arrow-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Size of the <code>--saccade-arrows</code> arrowheads, 4–40 px (default: 12).</td>
+</tr>
+<tr>
 <td><code>--saccade-color-by-type</code></td>
 <td>switch</td>
 <td>—</td>
@@ -2802,6 +2818,12 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>CLASS=COLOR</code></td>
 <td>—</td>
 <td>Override a reading-type color, e.g. <code>--saccade-type-color</code> regression=#000000 (repeatable; classes: forward, skip, refixation, return_sweep, regression). Implies <code>--saccade-color-by-type</code>, unless <code>--saccade-color-by-direction</code> is given — then it recolors that two-way split (its forward and regression colors).</td>
+</tr>
+<tr>
+<td><code>--no-color-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the fixation-colour legend: the categories of a categorical <code>--color-by</code> and the highlighted fixations' entries (the markers still draw). Shows by default.</td>
 </tr>
 <tr>
 <td><code>--no-saccade-type-legend</code></td>
@@ -2837,7 +2859,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--legend</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key; POSITION one of auto, above, below, left, right, top-left, top-right, bottom-left, bottom-right (the last four inside the plot); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
+<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key; POSITION auto or SPOT-outside / SPOT-inside with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right (outside grows the figure; left and right run down the side); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right-outside,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
 </tr>
 <tr>
 <td><code>--saccade-classes</code></td>
@@ -2855,7 +2877,13 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--snap-fixations</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Snap each fixation above the word it lands on instead of its raw gaze point.</td>
+<td>Move each fixation up or down onto its text line (its word's, else the nearest); it keeps its x. <code>--snap-position</code> says where on the line.</td>
+</tr>
+<tr>
+<td><code>--snap-position</code></td>
+<td><code>LINES</code></td>
+<td>—</td>
+<td>Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge (default: -0.5). Used with <code>--snap-fixations</code>.</td>
 </tr>
 <tr>
 <td><code>--illustration</code></td>
@@ -2930,6 +2958,12 @@ with the default and help <code>--help</code> prints.</p>
 <td>Heatmap color scaling: linear (default) or log — log compresses heavy-tailed dwell times so a few hot words don't wash out the rest.</td>
 </tr>
 <tr>
+<td><code>--heatmap-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes 0.5, or 0.35 with no word boxes; interpolated 0.45).</td>
+</tr>
+<tr>
 <td><code>--fixation-colorscale</code></td>
 <td><code>NAME</code></td>
 <td>—</td>
@@ -2978,6 +3012,12 @@ with the default and help <code>--help</code> prints.</p>
 <td>Pin the major coordinate-grid interval in pixels. Implies <code>--coordinate-grid</code>; omit for automatic 1/2/5×10ⁿ spacing.</td>
 </tr>
 <tr>
+<td><code>--coordinate-grid-font-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Size of the coordinate grid's labels, 6–36 px (default: 18).</td>
+</tr>
+<tr>
 <td><code>--stimulus-image</code></td>
 <td><code>PATH</code></td>
 <td>—</td>
@@ -3002,10 +3042,28 @@ with the default and help <code>--help</code> prints.</p>
 <td>Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to dim a busy image so the fixations / saccades / word boxes read over it.</td>
 </tr>
 <tr>
+<td><code>--show-stimulus-image</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Draw each trial's own stimulus page under the scanpath: the image_path its rows carry (from <code>--image-root</code>, or a dataset that ships its pages, like <code>--sample</code>), placed at its image_x / image_y. <code>--stimulus-image</code> PATH wins.</td>
+</tr>
+<tr>
 <td><code>--fixation-opacity</code></td>
 <td><code>O</code></td>
 <td>—</td>
 <td>Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).</td>
+</tr>
+<tr>
+<td><code>--fixation-outline-width</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Outline round each filled fixation marker, 0–5 px; 0 draws none (default: 0.5).</td>
+</tr>
+<tr>
+<td><code>--fixation-outline-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of that outline (default: #111111).</td>
 </tr>
 <tr>
 <td><code>--hollow-fixations</code></td>
@@ -3068,10 +3126,22 @@ with the default and help <code>--help</code> prints.</p>
 <td>Plot background color (default: #ffffff).</td>
 </tr>
 <tr>
+<td><code>--no-plot-frame</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Leave out the border round the plot area.</td>
+</tr>
+<tr>
+<td><code>--plot-frame-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of the border round the plot area (default: #000000).</td>
+</tr>
+<tr>
 <td><code>--line-spacing</code></td>
 <td><code>N</code></td>
 <td>—</td>
-<td>Line slots each word box stands for, which sizes the reading text (default: 3 — OneStop's one blank line above and below).</td>
+<td>How far apart the lines are, in font sizes: the reading text is the distance between lines ÷ N (default: 3, a blank line above and below).</td>
 </tr>
 <tr>
 <td><code>--no-scale-text-to-boxes</code></td>
@@ -3116,6 +3186,12 @@ with the default and help <code>--help</code> prints.</p>
 <td>Frame the axes on the data instead of the whole <code>--canvas</code> monitor (the app's Crop to data).</td>
 </tr>
 <tr>
+<td><code>--crop-margin</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
+</tr>
+<tr>
 <td><code>--no-fixation-colorbar</code></td>
 <td>switch</td>
 <td>—</td>
@@ -3140,6 +3216,18 @@ with the default and help <code>--help</code> prints.</p>
 <td>Fixation color bar: tick-label size (default: 12).</td>
 </tr>
 <tr>
+<td><code>--fixation-colorbar-thickness</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Fixation color bar: thickness, 4–40 px (default: 14).</td>
+</tr>
+<tr>
+<td><code>--fixation-colorbar-length</code></td>
+<td><code>F</code></td>
+<td>—</td>
+<td>Fixation color bar: length as a share of the plot's side, 0.1–1.0 (default: a third of its height upright, 0.6 of its width lying down).</td>
+</tr>
+<tr>
 <td><code>--no-heatmap-colorbar</code></td>
 <td>switch</td>
 <td>—</td>
@@ -3162,6 +3250,18 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>PX</code></td>
 <td>—</td>
 <td>Heatmap color bar: tick-label size (default: 12).</td>
+</tr>
+<tr>
+<td><code>--heatmap-colorbar-thickness</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Heatmap color bar: thickness, 4–40 px (default: 14).</td>
+</tr>
+<tr>
+<td><code>--heatmap-colorbar-length</code></td>
+<td><code>F</code></td>
+<td>—</td>
+<td>Heatmap color bar: length as a share of the plot's side, 0.1–1.0 (default: a third of its height upright, 0.6 of its width lying down).</td>
 </tr>
 <tr>
 <td><code>--raw-gaze</code></td>
@@ -3290,6 +3390,24 @@ with the default and help <code>--help</code> prints.</p>
 <td>Caption band stamped on the figure; off by default.</td>
 </tr>
 <tr>
+<td><code>--title-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Size of the <code>--title</code> text, 8–48 px (default: 20).</td>
+</tr>
+<tr>
+<td><code>--caption-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Size of the <code>--caption</code> text, 6–36 px (default: 13).</td>
+</tr>
+<tr>
+<td><code>--caption-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of the <code>--caption</code> text (default: #555555).</td>
+</tr>
+<tr>
 <td><code>--separable-layers</code></td>
 <td>switch</td>
 <td>—</td>
@@ -3317,7 +3435,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--anim-max-frames</code></td>
 <td><code>N</code></td>
 <td>—</td>
-<td>With <code>--animate</code>: cap the frame count at N (default: 360). A long trial coarsens the grid to stay under it.</td>
+<td>With <code>--animate</code>: at most N frames, the first included (default: 360). A trial too long for that many at <code>--anim-grid-step-ms</code> gets a wider step instead.</td>
 </tr>
 <tr>
 <td><code>--print-code</code></td>
@@ -3522,7 +3640,7 @@ with the default and help <code>--help</code> prints.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 20:31:36 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 10, 2026 01:15:22 UTC">October 10, 2026</span>
   </span>
 
     

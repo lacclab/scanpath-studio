@@ -2040,7 +2040,7 @@ are carried through when present.</p>
 </tr>
 <tr>
 <td><code>x</code>, <code>y</code></td>
-<td>Fixation location in screen px. <strong>Required unless</strong> <code>word_id</code> is given — <abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-sequence data is placed at word-box centers.</td>
+<td>Fixation location in screen px. <strong>Required unless</strong> <code>word_id</code> is given — <abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-sequence data is placed at word-box centers, so its word ids must be numbers.</td>
 </tr>
 <tr>
 <td><code>duration_ms</code></td>
@@ -2118,6 +2118,12 @@ here, so both frames come back under one synthetic participant: <code>list_trial
 <p>Ready-made public corpora have their own loaders — <code>sps.load_potec(dir)</code> and
 <code>sps.load_onestop(dir)</code> — which return the same normalized pair. See
 <a href="../onestop/">OneStop</a>.</p>
+<p>The two tables need not cover the same trials. <code>sps.list_trials(words,
+fixations)</code> lists every trial either table has, once — the set the app's trial
+picker, <code>render --list-trials</code> and the export bundle list too. A trial with
+words but no fixations plots its text alone, and one with fixations but no
+words its scanpath without word boxes; <code>animate_scanpath</code> and
+<code>compare_scanpaths</code> need fixations and say so.</p>
 <p>A raw-gaze table is loaded with <code>load_raw_gaze(path_or_frame)</code> (columns
 auto-detected; <code>raw_gaze_schema=</code> overrides), or <code>load_sample_raw_gaze()</code> for
 the demo's. Passing it as <code>plot_scanpath(raw_gaze=…)</code> filters it to the trial
@@ -2207,7 +2213,10 @@ colors. <code>saccade_classes</code> is the same split used as a <strong>filter<
 hue — <code>saccade_classes=["regression"]</code> draws a regressions-only figure (the
 hidden classes lose their direction arrows too), and it composes with any
 color mode; naming every class is a no-op. <code>saccade_render_mode="Arc"</code> draws
-the linear-reading schematic.</p>
+the linear-reading schematic, and <code>fixation_snap_to_line=True</code> moves each
+fixation up or down onto its text line, keeping its x, at
+<code>fixation_snap_position</code> line heights from the line's middle (default −0.5,
+the top edge).</p>
 <p><code>heatmap_style</code> is <code>"Word boxes"</code> or <code>"Interpolated"</code>;
 <code>heatmap_metric="counts"</code> weights by fixation count instead of dwell time;
 <code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times. Interpolated blurs the
@@ -2221,11 +2230,20 @@ to put every trial on the same scale. The <code>"Interpolated"</code> style scal
 density to its own peak and ignores <code>heatmap_range</code>.</p>
 <p><code>highlight_column</code> is a boolean words column (OneStop's critical span by
 default); the default is skipped when absent, a column you name must exist.</p>
-<p><code>fit_to_monitor=True</code> frames the whole <code>canvas_size</code>; <code>False</code> crops to the data.
+<p><code>fit_to_monitor=True</code> frames the whole <code>canvas_size</code>; <code>False</code> crops to the data,
+with a margin of <code>crop_margin</code> screen pixels on every side (<code>None</code>, the default:
+5% of the data's extent on each axis, at least 20 px).
 <code>show_coordinate_grid=True</code> overlays zero-anchored monitor-pixel coordinates;
 <code>coordinate_grid_spacing=None</code> selects a readable 1/2/5×10ⁿ interval, while a
 positive number pins the major interval in pixels. <code>background_image</code> places a
-stimulus screenshot under the scanpath at data coordinates.</p>
+stimulus screenshot under the scanpath at data coordinates.
+<code>show_stimulus_image=True</code> draws each trial's own page instead: the
+<code>image_path</code> its rows carry, at its <code>image_x</code> / <code>image_y</code>. The bundled demo
+ships its pages; for your own data, load with
+<code>load_scanpath_data(..., image_root="pages/", image_pattern="{text_id}.png")</code>,
+or match a folder to frames you already have with
+<code>attach_stimulus_images(words, fixations, "pages/")</code>. A trial with no readable
+page draws none and raises a <code>UserWarning</code>.</p>
 <p><code>palette=</code> is a shorthand that sets a whole group of colors at once —
 <code>"default"</code> (colorblind-safe), <code>"print"</code> (grayscale) or <code>"high-contrast"</code>; the
 app's own palette names work too (<code>constants.PALETTES</code>). Anything you pass explicitly still wins over it, and an
@@ -2315,6 +2333,11 @@ raising. Every flag is in the <a href="../cli/">CLI reference</a>.</p>
 <td><abbr title="Area of interest: here, a word's bounding box">AOI</abbr>-sequence fixations with no matching word boxes.</td>
 <td>Supply the words table whose <code>word_id</code>s match.</td>
 </tr>
+<tr>
+<td><code>Fixations: the Word/IA ID column … holds no numbers</code></td>
+<td><code>data.UnplacedFixationsError</code>: the fixations map no <code>x</code>/<code>y</code> and their word ids are text (<code>w1</code>), so none can be placed.</td>
+<td>Map <code>x</code> and <code>y</code> in <code>fix_schema</code>, or give both tables numeric word ids.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="gif-mp4-of-a-replay">GIF / MP4 of a replay<a class="headerlink" href="#gif-mp4-of-a-replay" title="Permanent link">&para;</a></h2>
@@ -2360,7 +2383,7 @@ what the replay does — the reading time over <code>playback_speed</code> — u
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 7, 2026 00:14:54 UTC">October 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 10, 2026 01:15:22 UTC">October 10, 2026</span>
   </span>
 
     

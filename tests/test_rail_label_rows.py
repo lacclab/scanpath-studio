@@ -270,10 +270,10 @@ def test_a_tooltip_with_no_room_below_opens_upward():
 
 
 def test_fixation_controls_drop_the_linear_reading_subheading():
-    """The snap setting remains compatible, without a redundant mini-heading."""
+    """The snap setting keeps its row, without a redundant mini-heading."""
     source = (Path(APP_SCRIPT).parent / "scanpath_studio" / "controls.py").read_text()
     assert 'st.caption("Linear-reading schematic")' not in source
-    assert '"global_fixation_snap_to_word"' in source
+    assert '"global_fixation_snap_to_line"' in source
 
 
 @pytest.mark.timeout(180)

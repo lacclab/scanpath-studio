@@ -289,6 +289,11 @@ SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
 #: The Interpolated heatmap's fixed blur σ (px): the box's limits and default.
 HEATMAP_SIGMA_BOUNDS = (1.0, 500.0)
 DEFAULT_HEATMAP_SIGMA_PX = 20.0
+#: #422 — Snap to line: where on its text line a snapped fixation sits, in
+#: line heights from the line's middle (negative = up). −0.5 is the line's top
+#: edge, where VIZ-9's snap above the word drew it; the default keeps that look.
+DEFAULT_SNAP_POSITION = -0.5
+SNAP_POSITION_BOUNDS = (-2.0, 2.0)
 
 # VIZ-8 · colour saccades by reading type. Each saccade (the segment from one
 # fixation to the next) is classified into one of these reading-schematic

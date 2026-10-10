@@ -251,7 +251,10 @@ colors. `saccade_classes` is the same split used as a **filter** rather than as
 hue — `saccade_classes=["regression"]` draws a regressions-only figure (the
 hidden classes lose their direction arrows too), and it composes with any
 color mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
-the linear-reading schematic.
+the linear-reading schematic, and `fixation_snap_to_line=True` moves each
+fixation up or down onto its text line, keeping its x, at
+`fixation_snap_position` line heights from the line's middle (default −0.5,
+the top edge).
 
 `heatmap_style` is `"Word boxes"` or `"Interpolated"`;
 `heatmap_metric="counts"` weights by fixation count instead of dwell time;

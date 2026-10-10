@@ -6,8 +6,8 @@ from scanpath_studio.plots import add_illustration_label
 
 def test_substantive_transformations_trigger_label_but_cosmetics_do_not():
     assert illustration_reasons({"fixation_color": "#ff00ff"}) == []
-    assert illustration_reasons({"fixation_snap_to_word": True}) == [
-        "fixations snapped to words"
+    assert illustration_reasons({"fixation_snap_to_line": True}) == [
+        "fixations snapped to lines"
     ]
     assert "schematic saccade arcs" in illustration_reasons(
         {"saccade_render_mode": "Arc"}

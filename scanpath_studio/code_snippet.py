@@ -896,6 +896,8 @@ _LAYER_OPTIONS = {
         "saccade_type_legend",
         "show_saccade_arrows",
     ),
+    # #422 — where a snapped fixation sits says nothing while nothing snaps.
+    "fixation_snap_to_line": ("fixation_snap_position",),
 }
 _STYLED_BY = {
     option: layer for layer, opts in _LAYER_OPTIONS.items() for option in opts
@@ -1420,7 +1422,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "show_color_legend": _flag_when("--no-color-legend", False),
     "saccade_classes": _comma_list("--saccade-classes"),
     "saccade_render_mode": _flag_when("--saccade-arcs", "Arc"),
-    "fixation_snap_to_word": _flag_when("--snap-fixations", True),
+    "fixation_snap_to_line": _flag_when("--snap-fixations", True),
+    "fixation_snap_position": _valued("--snap-position"),
     "background_image": _valued("--stimulus-image"),
     "background_image_size": _pair("--stimulus-image-size", "x"),
     "background_image_origin": _pair("--stimulus-image-origin", ","),

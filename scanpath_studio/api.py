@@ -214,7 +214,8 @@ _CANONICAL_OPTION_NAMES = {
     "show_color_legend",
     "saccade_classes",
     "saccade_render_mode",
-    "fixation_snap_to_word",
+    "fixation_snap_to_line",
+    "fixation_snap_position",
     "fixation_color",
     "fixation_symbol",
     "fixation_opacity",
@@ -2433,9 +2434,14 @@ def plot_scanpath(
     text here, not the app's ``{trial_id}``-style pattern, since the caller
     already knows which trial this is.
 
-    ``illustration=True`` applies the Illustration preset (snapped fixations,
-    arced saccades, uniform colors, no heatmap or word boxes); keywords you pass
-    still win. ``illustration_label`` is ``"auto"`` (label the figure when it no
+    ``fixation_snap_to_line=True`` moves each fixation up or down onto its text
+    line, keeping its x — its word's line, else the nearest one — and
+    ``fixation_snap_position`` says where on the line, in line heights from its
+    middle (default −0.5, the line's top edge).
+
+    ``illustration=True`` applies the Illustration preset (fixations snapped to
+    their lines, arced saccades, uniform colors, no heatmap or word boxes);
+    keywords you pass still win. ``illustration_label`` is ``"auto"`` (label the figure when it no
     longer shows the data as recorded), ``"show"`` or ``"hide"``. ``palette=``
     (``"default"``, ``"print"`` or ``"high-contrast"``, or the app's names) sets
     a group of colors at once; a color you pass explicitly wins.
@@ -2477,7 +2483,7 @@ def plot_scanpath(
             "color_by": UNIFORM_COLOR_FIELD,
             "saccade_color_mode": "Uniform",
             "saccade_render_mode": "Arc",
-            "fixation_snap_to_word": True,
+            "fixation_snap_to_line": True,
             "fixation_opacity": 1.0,
             **figure_overrides,
         }

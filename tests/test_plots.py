@@ -491,7 +491,7 @@ class TestHeatmapNormalization:
 
 
 class TestLinearReadingView:
-    """VIZ-9: arced saccades + fixations snapped above their word."""
+    """VIZ-9: arced saccades + fixations snapped onto their line (#422)."""
 
     def _trial(self):
         words = pd.DataFrame(
@@ -573,22 +573,55 @@ class TestLinearReadingView:
         assert len(s.x) == 3
         assert len(a.x) > 10
 
-    def test_snap_moves_fixations_to_word_top_centre(self):
+    def test_snap_moves_fixations_onto_their_line_only_vertically(self):
         words, fix = self._trial()
         base = make_scanpath_figure(
-            words, fix, **self._kwargs(fixation_snap_to_word=False)
+            words, fix, **self._kwargs(fixation_snap_to_line=False)
         )
         snapped = make_scanpath_figure(
-            words, fix, **self._kwargs(fixation_snap_to_word=True)
+            words, fix, **self._kwargs(fixation_snap_to_line=True)
         )
         raw = next(t for t in base.data if t.mode == "markers")
         snap = next(t for t in snapped.data if t.mode == "markers")
         assert list(raw.x) == [120.0, 320.0]  # raw gaze x (off the word centre)
         assert list(raw.y) == [75.0, 225.0]  # raw gaze y
-        # Snapped to each word's top-centre: x = word centre (140/340, NOT the raw
-        # 120/320), y = word top edge (50/200, NOT the raw 75/225).
-        assert list(snap.x) == [140.0, 340.0]
+        # #422: x stays the recorded x; y goes to each line's top edge (50/200,
+        # NOT the raw 75/225) — the default position, −0.5 line heights.
+        assert list(snap.x) == [120.0, 320.0]
         assert list(snap.y) == [50.0, 200.0]
+
+    def test_a_snapped_fixation_is_colored_by_the_line_it_is_on(self):
+        # Touching lines (0–40, 40–80): the second fixation snaps to y 40, as
+        # near the first line's middle as its own, so guessing its line again
+        # from y named the wrong one. It is tinted by the line it snapped to.
+        words, fix = self._trial()
+        words = words.assign(x=[100, 100], y=[0, 40])
+        fix = fix.assign(x=[120.0, 120.0], y=[10.0, 60.0])
+        fig = make_scanpath_figure(
+            words,
+            fix,
+            **self._kwargs(fixation_snap_to_line=True, color_by="line"),
+        )
+        snap = next(t for t in fig.data if t.mode == "markers")
+        assert list(snap.y) == [0.0, 40.0]
+        first, second = snap.marker.color
+        assert first != second
+
+    @pytest.mark.parametrize(
+        ("position", "ys"),
+        [(0.0, [70.0, 220.0]), (0.5, [90.0, 240.0]), (-1.0, [30.0, 180.0])],
+    )
+    def test_snap_position_moves_up_and_down_the_line(self, position, ys):
+        # Line height 40, middles 70 / 220: y = middle + position × 40.
+        words, fix = self._trial()
+        fig = make_scanpath_figure(
+            words,
+            fix,
+            **self._kwargs(fixation_snap_to_line=True, fixation_snap_position=position),
+        )
+        snap = next(t for t in fig.data if t.mode == "markers")
+        assert list(snap.x) == [120.0, 320.0]
+        assert list(snap.y) == ys
 
     def test_arc_mode_reserves_headroom_so_apex_is_not_clipped(self):
         import numpy as np

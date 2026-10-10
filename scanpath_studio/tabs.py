@@ -126,6 +126,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -2009,7 +2010,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         # VIZ-31: the reading-class filter (None / a full list = draw them all).
         saccade_classes=viz_settings.get("saccade_classes"),
         saccade_render_mode=viz_settings.get("saccade_render_mode", "Straight"),
-        fixation_snap_to_word=viz_settings.get("fixation_snap_to_word", False),
+        fixation_snap_to_line=viz_settings.get("fixation_snap_to_line", False),
+        fixation_snap_position=viz_settings.get(
+            "fixation_snap_position", DEFAULT_SNAP_POSITION
+        ),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
@@ -4429,10 +4433,13 @@ def _build_studio_config(
             "saccade_classes": list(
                 viz_settings.get("saccade_classes") or SACCADE_CLASS_ORDER
             ),
-            # VIZ-9: linear-reading mode (arced saccades + snap fixations).
+            # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
             "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
-            "fixation_snap_to_word": bool(
-                viz_settings.get("fixation_snap_to_word", False)
+            "fixation_snap_to_line": bool(
+                viz_settings.get("fixation_snap_to_line", False)
+            ),
+            "fixation_snap_position": float(
+                viz_settings.get("fixation_snap_position", DEFAULT_SNAP_POSITION)
             ),
             # PRE-3 drift correction (ENG-23): saved as the picker's own
             # spelling ("Off" or a title-cased algorithm) so it restores 1:1.

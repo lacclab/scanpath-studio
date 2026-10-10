@@ -935,15 +935,23 @@ class TestTextWordIds:
 
     def test_snapping_skips_a_box_with_no_id(self):
         """VIZ-9's linear-reading snap looked boxes up by id through
-        `Series.map`, which matches a NaN key to a NaN id too."""
+        `Series.map`, which matches a NaN key to a NaN id too. #422's snap to
+        line keeps that rule: a fixation on no word takes the line nearest its
+        y, never the line of the box with no id."""
         from scanpath_studio import plots
 
-        words = normalize_words(self._words(ids=(np.nan, 1)), self.WORD_SCHEMA)
+        # The id-less box is on the lower line (y 100), word 1 on the upper (0).
+        words = normalize_words(
+            self._words(ids=(np.nan, 1)).assign(y=[100, 0]), self.WORD_SCHEMA
+        )
         fixations = pd.DataFrame(
             {"x": [300.0, 110.0], "y": [40.0, 5.0], "word_id": [np.nan, 1.0]}
         )
-        snapped = plots._snap_fixations_to_words(fixations, words, "x", "y")
-        assert snapped["x"].tolist() == [300.0, 125.0]
+        snapped = plots._snap_fixations_to_lines(fixations, words, "y")
+        assert snapped["x"].tolist() == [300.0, 110.0]
+        # Both on the upper line's top edge: the first by nearness, the second
+        # by its word.
+        assert snapped["y"].tolist() == [0.0, 0.0]
 
 
 class TestRowsWithoutIdentity:

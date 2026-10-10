@@ -241,7 +241,8 @@ def test_render_keeps_the_v0_33_colorbar_flags(tmp_path, monkeypatch, flags, exp
 
 
 def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
-    # VIZ-9: --saccade-arcs / --snap-fixations reach the figure builder.
+    # VIZ-9: --saccade-arcs / --snap-fixations (#422: + --snap-position) reach
+    # the figure builder.
     from scanpath_studio import api
 
     captured = {}
@@ -258,12 +259,15 @@ def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
             "--sample",
             "--saccade-arcs",
             "--snap-fixations",
+            "--snap-position",
+            "0.25",
             "-o",
             str(tmp_path / "x.html"),
         ]
     )
     assert captured["saccade_render_mode"] == "Arc"
-    assert captured["fixation_snap_to_word"] is True
+    assert captured["fixation_snap_to_line"] is True
+    assert captured["fixation_snap_position"] == 0.25
 
 
 def test_render_saccade_type_color_rejects_bad_class(tmp_path):

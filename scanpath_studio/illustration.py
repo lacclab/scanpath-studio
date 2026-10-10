@@ -36,8 +36,8 @@ def illustration_reasons(
     "derived from raw gaze" reason it used to carry named a derivation that
     never happened."""
     reasons: list[str] = []
-    if settings.get("fixation_snap_to_word"):
-        reasons.append("fixations snapped to words")
+    if settings.get("fixation_snap_to_line"):
+        reasons.append("fixations snapped to lines")
     if settings.get("saccade_render_mode") == "Arc":
         reasons.append("schematic saccade arcs")
     algorithm = settings.get("align_algorithm", "Off")

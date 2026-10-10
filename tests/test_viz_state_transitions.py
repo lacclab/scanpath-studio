@@ -22,7 +22,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
     store.update(
         {
             "global_saccade_render_mode": "Straight",
-            "global_fixation_snap_to_word": False,
+            "global_fixation_snap_to_line": False,
             "global_saccade_color_mode": "By type",
             "global_fixation_opacity": 0.45,
             # Animate is a render mode, not a quick-view owner. It must survive
@@ -36,7 +36,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
     assert controls._active_quick_view() == "illustration"
     assert store["global_saccade_render_mode"] == "Arc"
-    assert store["global_fixation_snap_to_word"] is True
+    assert store["global_fixation_snap_to_line"] is True
     assert store["global_saccade_color_mode"] == "Uniform"
     assert store["global_fixation_opacity"] == 1.0
     assert store["single_animate"] is True
@@ -45,7 +45,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
     assert controls._active_quick_view() == "scanpath"
     assert store["global_saccade_render_mode"] == "Straight"
-    assert store["global_fixation_snap_to_word"] is False
+    assert store["global_fixation_snap_to_line"] is False
     assert store["global_saccade_color_mode"] == "Uniform"
     assert store["global_fixation_opacity"] == 0.7
     assert store["single_animate"] is True
@@ -81,7 +81,7 @@ def test_leaving_illustration_does_not_leak_an_intervening_edit(monkeypatch):
 
     assert store["global_fixation_opacity"] == 0.7
     assert store["global_saccade_render_mode"] == "Straight"
-    assert store["global_fixation_snap_to_word"] is False
+    assert store["global_fixation_snap_to_line"] is False
     assert controls._active_quick_view() == "heatmap"
 
 

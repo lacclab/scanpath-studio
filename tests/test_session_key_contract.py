@@ -490,7 +490,8 @@ def _restore_config_app():
             # VIZ-31 reading-class filter — a real subset, since the reader
             # validates the names against the classes this build knows.
             "saccade_classes": ["forward", "regression"],
-            "fixation_snap_to_word": True,
+            "fixation_snap_to_line": True,
+            "fixation_snap_position": 0.25,
             "drift_correction": "Warp",
             "drift_connectors": True,
             "fixation_symbol": "circle",

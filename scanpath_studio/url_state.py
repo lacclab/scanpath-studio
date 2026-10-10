@@ -72,6 +72,7 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SETUP_OVERRIDE_SESSION_KEYS,
+    SNAP_POSITION_BOUNDS,
     SYNTHETIC_CHOICE,
     UNIFORM_COLOR_FIELD,
     canonical_legend_position,
@@ -411,7 +412,10 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_color_legend": "global_show_color_legend",
     # The fixed duration scale's size key (default on, so always emitted).
     "duration_size_legend": "global_duration_size_legend",
-    "snap_fixations": "global_fixation_snap_to_word",
+    # #422: Snap to line (its *Position* is a float below). The param kept its
+    # name when the snap moved from "above the word" to "onto the line", so an
+    # older link that snapped still snaps.
+    "snap_fixations": "global_fixation_snap_to_line",
     # PRE-3 / ENG-23: the drift-correction connector layer. Its algorithm rides
     # in `_SHARE_VALUE_PARAMS` below — both, or a shared corrected view reopens
     # uncorrected.
@@ -603,6 +607,8 @@ _SHARE_FLOAT_PARAMS = {
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
     "fixation_opacity": "global_fixation_opacity",
+    # #422: where on its line a snapped fixation sits, in line heights.
+    "snap_position": "global_fixation_snap_position",
     # The Interpolated heatmap's fixed blur σ (px); its Auto switch is a toggle.
     "heatmap_sigma_px": "global_heatmap_sigma_px",
     # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
@@ -773,6 +779,7 @@ _URL_BOUNDED = {
     "global_marker_size_range": (4, 40),
     "global_marker_duration_range": MARKER_DURATION_BOUNDS,
     "global_fixation_opacity": (0.1, 1.0),
+    "global_fixation_snap_position": SNAP_POSITION_BOUNDS,
     "global_stimulus_image_opacity": (0.1, 1.0),
     # VIZ-4: image-alignment nudge — clamp a hand-crafted link to sane ranges.
     "global_stimulus_image_offset_x": (-5000.0, 5000.0),
@@ -1736,6 +1743,9 @@ def sanitize_session_value(key: str, value):
 #   v6 -> v7 : the fixations' and the heatmap's colour bars got their own
 #              settings, and title and caption their own switch; each shared
 #              value moves to both (`_migrate_config_6_to_7`).
+#   v7 -> v8 : #422 — "Snap above words" became Snap to line
+#              (`coloring.fixation_snap_to_word` → `fixation_snap_to_line`),
+#              so a file that snapped still snaps (`_migrate_config_7_to_8`).
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1744,7 +1754,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 7
+PLOT_CONFIG_SCHEMA = 8
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1897,6 +1907,23 @@ def _migrate_config_6_to_7(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_7_to_8(config: dict) -> dict:
+    """#422: "Snap above words" became Snap to line. The old switch moved a
+    fixation onto its word, sideways too; the new one moves it only up or down,
+    onto its line, and draws it where the old one did vertically by default
+    (its position, absent here, falls back to that). Without this an old file
+    that snapped restored unsnapped, silently."""
+    migrated = dict(config)
+    coloring = migrated.get("coloring")
+    if isinstance(coloring, dict) and "fixation_snap_to_word" in coloring:
+        coloring = dict(coloring)
+        coloring.setdefault(
+            "fixation_snap_to_line", coloring.pop("fixation_snap_to_word")
+        )
+        migrated["coloring"] = coloring
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -1906,6 +1933,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     4: _migrate_config_4_to_5,
     5: _migrate_config_5_to_6,
     6: _migrate_config_6_to_7,
+    7: _migrate_config_7_to_8,
 }
 
 
@@ -2469,7 +2497,7 @@ def _restore_plot_config(
             SACCADE_WIDTH_BOUNDS[1],
             "saccade line width",
         )
-    # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
+    # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
     if "saccade_render_mode" in coloring:
         put_valid(
             coloring["saccade_render_mode"] in ("Straight", "Arc"),
@@ -2477,8 +2505,15 @@ def _restore_plot_config(
             coloring["saccade_render_mode"],
             "saccade line shape",
         )
-    if "fixation_snap_to_word" in coloring:
-        put("global_fixation_snap_to_word", bool(coloring["fixation_snap_to_word"]))
+    if "fixation_snap_to_line" in coloring:
+        put("global_fixation_snap_to_line", bool(coloring["fixation_snap_to_line"]))
+    if "fixation_snap_position" in coloring:
+        put_float(
+            coloring["fixation_snap_position"],
+            "global_fixation_snap_position",
+            *SNAP_POSITION_BOUNDS,
+            "snap position",
+        )
     # PRE-3 / ENG-23: vertical drift correction. Validated like the deep link —
     # an algorithm the build no longer ships must not reach the selectbox.
     # PRE-21: and skipped entirely while the feature is gated off, silently, for

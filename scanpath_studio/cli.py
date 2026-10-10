@@ -41,6 +41,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
@@ -960,8 +961,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "--snap-fixations",
         dest="snap_fixations",
         action="store_true",
-        help="Snap each fixation above the word it lands on instead of its raw "
-        "gaze point.",
+        help="Move each fixation up or down onto its text line (its word's, else "
+        "the nearest); it keeps its x. --snap-position says where on the line.",
+    )
+    viz.add_argument(
+        "--snap-position",
+        dest="snap_position",
+        type=float,
+        metavar="LINES",
+        help="Where on its line a snapped fixation sits, in line heights from the "
+        "line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge "
+        f"(default: {DEFAULT_SNAP_POSITION:g}). Used with --snap-fixations.",
     )
     viz.add_argument(
         "--illustration",
@@ -2066,7 +2076,8 @@ _OPTION_FLAG_NAMES = {
     "background_image_origin": "--stimulus-image-origin",
     "background_image_opacity": "--stimulus-image-opacity",
     "saccade_render_mode": "--saccade-arcs",
-    "fixation_snap_to_word": "--snap-fixations",
+    "fixation_snap_to_line": "--snap-fixations",
+    "fixation_snap_position": "--snap-position",
     "heatmap_sigma_px": "--heatmap-sigma",
     "saccade_class_colors": "--saccade-type-color",
     "saccade_color_mode": "--saccade-color-by-type",
@@ -3269,7 +3280,9 @@ def render(argv: list[str]) -> None:
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
     if args.snap_fixations:
-        overrides["fixation_snap_to_word"] = True
+        overrides["fixation_snap_to_line"] = True
+    if args.snap_position is not None:
+        overrides["fixation_snap_position"] = args.snap_position
     if args.illustration:
         preset = dict(
             show_words=False,
@@ -3282,7 +3295,7 @@ def render(argv: list[str]) -> None:
             color_by=UNIFORM_COLOR_FIELD,
             saccade_color_mode="Uniform",
             saccade_render_mode="Arc",
-            fixation_snap_to_word=True,
+            fixation_snap_to_line=True,
             fixation_opacity=1.0,
         )
         # BUG-85 review: an explicit flag wins over the preset, as it does over

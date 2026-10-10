@@ -1195,6 +1195,8 @@ def _plot_config_dict(
             "coordinate_grid": bool(settings.get("show_coordinate_grid", False)),
             "coordinate_grid_auto": settings.get("coordinate_grid_spacing") is None,
             "coordinate_grid_spacing": settings.get("coordinate_grid_spacing"),
+            "crop_margin_auto": settings.get("crop_margin") is None,
+            "crop_margin_px": settings.get("crop_margin"),
         },
         "layers": {
             "words": settings.get("show_words"),

@@ -22,8 +22,10 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     COMPARE_FIXATION_OPACITY,
+    CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
@@ -823,6 +825,9 @@ _VIZ_WIDGET_DEFAULTS = {
     # available while Auto is on so switching back does not lose it.
     "global_show_coordinate_grid": False,
     "global_coordinate_grid_auto": True,
+    # #422: Crop to data's margin — automatic until a number is chosen.
+    "global_crop_margin_auto": True,
+    "global_crop_margin_px": DEFAULT_CROP_MARGIN_PX,
     "global_coordinate_grid_spacing": 100.0,
     "global_order_font_color": "#111111",
     "global_order_font_size": 10,
@@ -5784,6 +5789,14 @@ def _collect_viz_settings(
             for bar in ("fixation", "heatmap")
         },
         fit_to_monitor=bool(ss.get("global_fit_to_monitor")),
+        # #422: a margin only while cropping; `None` is the automatic one.
+        crop_margin_auto=bool(ss.get("global_crop_margin_auto", True)),
+        crop_margin=(
+            None
+            if bool(ss.get("global_fit_to_monitor"))
+            or bool(ss.get("global_crop_margin_auto", True))
+            else float(ss.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX))
+        ),
         show_coordinate_grid=bool(ss.get("global_show_coordinate_grid")),
         coordinate_grid_auto=bool(ss.get("global_coordinate_grid_auto", True)),
         coordinate_grid_spacing=(
@@ -7854,10 +7867,47 @@ def render_plot_controls(
             disabled=chart_axes,
             help=_gated_help(
                 "Off: show the whole monitor. On: zoom to the fixations and word "
-                "boxes, plus a 5% margin.",
+                "boxes, plus the margin below.",
                 chart_reason,
             ),
         )
+        # #422: the crop's margin, which used to be fixed — automatic (5% of
+        # the data's extent, at least 20 px), or a number of screen px. Greyed,
+        # not hidden, while the whole monitor is shown.
+        cropping = not st.session_state.get("global_fit_to_monitor", True)
+        margin_off, margin_help = _layer_gate(
+            chart_axes or not cropping,
+            _gated_help(
+                "Space around the data when cropping. Auto: 5% of its width and "
+                "height, at least 20 px. Untick to set it in screen px.",
+                chart_reason
+                or (
+                    ""
+                    if cropping
+                    else f"{ICONS['warning']} Used only with **Crop to data** on."
+                ),
+            ),
+        )
+        auto_col, margin_col, unit_col = _sub_row(
+            "Margin", caption_help=margin_help
+        ).columns([0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center")
+        automatic_margin = auto_col.checkbox(
+            "Auto",
+            key="global_crop_margin_auto",
+            persist_state="session",
+            disabled=margin_off,
+        )
+        margin_col.number_input(
+            "Crop margin (px)",
+            min_value=CROP_MARGIN_BOUNDS[0],
+            max_value=CROP_MARGIN_BOUNDS[1],
+            step=10.0,
+            key="global_crop_margin_px",
+            persist_state="session",
+            disabled=margin_off or automatic_margin,
+            label_visibility="collapsed",
+        )
+        _sub_caption(unit_col, "px")
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:
         # UX-163: the typography rows always draw, greyed while *Text* is off

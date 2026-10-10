@@ -107,6 +107,7 @@ NON_DEFAULT = {
     "span_border_color": "#555555",
     "background_color": "#fafafa",
     "fit_to_monitor": False,
+    "crop_margin": 30.0,
     "show_coordinate_grid": True,
     "coordinate_grid_spacing": 250.0,
     "line_spacing": 2.5,
@@ -312,6 +313,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
         (["--no-full-monitor"], "fit_to_monitor", False),
+        (["--crop-margin", "30"], "crop_margin", 30.0),
         (["--no-fixation-colorbar"], "show_fixation_colorbar", False),
         (
             ["--fixation-colorbar-orientation", "horizontal"],

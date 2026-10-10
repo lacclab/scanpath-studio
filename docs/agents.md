@@ -269,7 +269,9 @@ density to its own peak and ignores `heatmap_range`.
 `highlight_column` is a boolean words column (OneStop's critical span by
 default); the default is skipped when absent, a column you name must exist.
 
-`fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data.
+`fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data,
+with a margin of `crop_margin` screen pixels on every side (`None`, the default:
+5% of the data's extent on each axis, at least 20 px).
 `show_coordinate_grid=True` overlays zero-anchored monitor-pixel coordinates;
 `coordinate_grid_spacing=None` selects a readable 1/2/5×10ⁿ interval, while a
 positive number pins the major interval in pixels. `background_image` places a

@@ -1295,6 +1295,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "(the app's Crop to data).",
     )
     viz.add_argument(
+        "--crop-margin",
+        type=float,
+        metavar="PX",
+        help="The margin around the data, in screen px, when cropping to it "
+        "(default: 5%% of the data's extent, at least 20 px). Implies "
+        "--crop-to-data.",
+    )
+    viz.add_argument(
         "--no-fixation-colorbar",
         dest="show_fixation_colorbar",
         action="store_false",
@@ -1753,6 +1761,7 @@ _DIRECT_OPTION_FLAGS = (
     "word_hover_measure",
     "x_field",
     "y_field",
+    "crop_margin",
     "fixation_colorbar_tickangle",
     "fixation_colorbar_tickfont_size",
     "heatmap_colorbar_tickangle",
@@ -2768,6 +2777,8 @@ def render(argv: list[str]) -> None:
     canvas = _parse_canvas(args.canvas)
     if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
+    if args.crop_margin is not None and args.crop_margin < 0:
+        raise SystemExit("--crop-margin must be zero or more pixels.")
     if args.animate and args.output and not args.output.lower().endswith(".html"):
         raise SystemExit(
             "--animate writes interactive HTML — use a .html output. For GIF or "
@@ -3330,6 +3341,9 @@ def render(argv: list[str]) -> None:
     for key, flipped in _SWITCH_OPTION_FLAGS.items():
         if getattr(args, key) == flipped:
             overrides[key] = flipped
+    if args.crop_margin is not None:
+        # #422: a margin is only drawn around a cropped view.
+        overrides["fit_to_monitor"] = False
     if args.marker_duration_range:
         overrides["marker_duration_range"] = tuple(args.marker_duration_range)
     if args.fixation_color_range:

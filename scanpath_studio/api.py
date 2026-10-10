@@ -221,6 +221,7 @@ _CANONICAL_OPTION_NAMES = {
     "background_color",
     "color_by_line",
     "fit_to_monitor",
+    "crop_margin",
     "show_coordinate_grid",
     "coordinate_grid_spacing",
     "line_spacing",

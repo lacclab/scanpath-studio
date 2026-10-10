@@ -116,6 +116,7 @@ from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
     CITATION,
     DATASET_EDITOR_OPEN_KEY,
+    DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
@@ -1951,6 +1952,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
         heatmap_sigma_px=viz_settings.get("heatmap_sigma_px"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        crop_margin=viz_settings.get("crop_margin"),
         show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
         coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
@@ -4328,6 +4330,13 @@ def _build_studio_config(
             ),
             "coordinate_grid_spacing": float(
                 st.session_state.get("global_coordinate_grid_spacing", 100.0)
+            ),
+            # #422: Crop to data's margin (applies while cropping).
+            "crop_margin_auto": bool(
+                st.session_state.get("global_crop_margin_auto", True)
+            ),
+            "crop_margin_px": float(
+                st.session_state.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX)
             ),
         },
         "layers": {
@@ -10761,6 +10770,7 @@ def render_per_text_tab(
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
             fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+            crop_margin=viz_settings.get("crop_margin"),
             word_heatmap_col="value",
             word_heatmap_title=measure.axis_label,
         )

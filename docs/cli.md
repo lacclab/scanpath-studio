@@ -197,7 +197,7 @@ B's frames directly.
 | add a layer | `--word-boxes`, `--fixation-index`, `--heatmap` (the default is the app's Scanpath design) |
 | hide a layer | `--no-text`, `--no-fixations`, `--no-saccades` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honored, and the rest are named in a warning |
-| set display geometry | `--canvas WIDTHxHEIGHT` |
+| set display geometry | `--canvas WIDTHxHEIGHT`; `--crop-to-data` frames the data instead of the whole monitor, with `--crop-margin PX` around it (default: 5% of its extent, at least 20 px) |
 | color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honored by `--animate` and `--compare-with` too) |

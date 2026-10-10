@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import html
+import itertools
 import json
 import pickle
 import re
@@ -12638,14 +12640,21 @@ def _reading_order(reading: tuple) -> tuple:
     which matters once the grid pages. Ids of mixed types, or a missing one,
     still sort, and the text itself breaks a tie (``7`` / ``007``)."""
 
-    def natural(text: str) -> tuple:
-        return tuple(
-            (0, int(run), "") if run[0] in "0123456789" else (1, 0, run)
-            for run in _DIGIT_RUN.split(text)
-            if run
-        )
+    return tuple(
+        key for part in map(str, reading) for key in (_natural_key(part), part)
+    )
 
-    return tuple(key for part in map(str, reading) for key in (natural(part), part))
+
+@functools.lru_cache(maxsize=65536)
+def _natural_key(text: str) -> tuple:
+    """``text`` split into runs of digits (compared as numbers) and the rest,
+    remembered: the grid re-sorts every match on each rerun, and the ids
+    repeat."""
+    return tuple(
+        (0, int(run), "") if run[0] in "0123456789" else (1, 0, run)
+        for run in _DIGIT_RUN.split(text)
+        if run
+    )
 
 
 def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:
@@ -12871,11 +12880,18 @@ def render_multiple_comparison_tab(
             ),
             None,
         )
-        # Scoring (experimental) only — the check walks every match.
-        scoring = similarity_enabled() and _all_read_the_selected_text(
-            trial_fixations, candidates.values(), text_col
+        # Scoring (experimental) only, and only the matches it would score:
+        # the check is a Python loop, so walking every match cost a rerun
+        # seconds on a large corpus.
+        head = (
+            dict(itertools.islice(candidates.items(), _GEN_MAX_SCORE))
+            if similarity_enabled()
+            else {}
         )
-        scored = dict(list(candidates.items())[:_GEN_MAX_SCORE]) if scoring else {}
+        scoring = bool(head) and _all_read_the_selected_text(
+            trial_fixations, head.values(), text_col
+        )
+        scored = head if scoring else {}
         table = (
             compute_similarity_table(trial_fixations, scored, trial_words)
             if scoring

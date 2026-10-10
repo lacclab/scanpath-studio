@@ -12645,16 +12645,29 @@ def _reading_order(reading: tuple) -> tuple:
     )
 
 
-@functools.lru_cache(maxsize=65536)
+#: Ids longer than this are split afresh each time rather than remembered, so
+#: the process-wide memo below stays small whatever a dataset's ids look like.
+_NATURAL_KEY_MEMO_MAX_LEN = 128
+
+
 def _natural_key(text: str) -> tuple:
-    """``text`` split into runs of digits (compared as numbers) and the rest,
-    remembered: the grid re-sorts every match on each rerun, and the ids
-    repeat."""
+    """``text`` split into runs of digits (compared as numbers) and the rest.
+    Remembered for ordinary ids: the grid re-sorts every match on each rerun,
+    and the ids repeat."""
+    if len(text) <= _NATURAL_KEY_MEMO_MAX_LEN:
+        return _natural_key_memo(text)
+    return _split_natural(text)
+
+
+def _split_natural(text: str) -> tuple:
     return tuple(
         (0, int(run), "") if run[0] in "0123456789" else (1, 0, run)
         for run in _DIGIT_RUN.split(text)
         if run
     )
+
+
+_natural_key_memo = functools.lru_cache(maxsize=16384)(_split_natural)
 
 
 def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:

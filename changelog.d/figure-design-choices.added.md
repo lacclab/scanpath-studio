@@ -1,0 +1,1 @@
+Seven figure choices that were fixed are now yours to set: the heatmap's opacity, the title's and caption's text size and the caption's colour, the border round the plot, the saccade arrowheads' size, the fixation markers' outline, the coordinate grid's label size, and each colour bar's thickness and length — in the rail, the link, the settings file, `render` and the API.

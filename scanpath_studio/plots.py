@@ -30,16 +30,25 @@ from .constants import (
     COMPARISON_PALETTE,
     CURRENT_FIX_COLOR,
     CURRENT_FIX_OUTLINE,
+    DEFAULT_CAPTION_COLOR,
+    DEFAULT_CAPTION_FONT_SIZE,
+    DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_FIXATION_OUTLINE_COLOR,
+    DEFAULT_FIXATION_OUTLINE_WIDTH,
     DEFAULT_FIXATION_SYMBOL,
+    DEFAULT_GRID_FONT_SIZE,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
+    DEFAULT_PLOT_FRAME_COLOR,
+    DEFAULT_SACCADE_ARROW_SIZE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    DEFAULT_TITLE_FONT_SIZE,
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
@@ -119,6 +128,9 @@ class FigureSettings:
     show_saccade_arrows: bool = False
     heatmap_style: str = "Word boxes"
     heatmap_norm: str = "Linear"
+    #: #422 — the heatmap's opacity; ``None`` keeps each style's own
+    #: (`heatmap_style_opacity`).
+    heatmap_opacity: float | None = None
     #: The Interpolated heatmap's Gaussian σ in px; ``None`` picks it from the
     #: data (`interpolated_sigma_px`).
     heatmap_sigma_px: float | None = None
@@ -145,10 +157,17 @@ class FigureSettings:
     fixation_colorbar_orientation: str = "Vertical"
     fixation_colorbar_tickangle: int = 0
     fixation_colorbar_tickfont_size: int = 12
+    #: #422 — the bar's thickness in px, and its length as a fraction of the
+    #: plot's side (``None``: a third of the height upright, 0.6 of the width
+    #: lying down).
+    fixation_colorbar_thickness: int = DEFAULT_COLORBAR_THICKNESS
+    fixation_colorbar_length: float | None = None
     show_heatmap_colorbar: bool = True
     heatmap_colorbar_orientation: str = "Vertical"
     heatmap_colorbar_tickangle: int = 0
     heatmap_colorbar_tickfont_size: int = 12
+    heatmap_colorbar_thickness: int = DEFAULT_COLORBAR_THICKNESS
+    heatmap_colorbar_length: float | None = None
     fixation_color_range: tuple[float, float] | None = None
     heatmap_range: tuple[float, float] | None = None
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE
@@ -165,6 +184,8 @@ class FigureSettings:
     #: #422 — the saccade lines' and direction arrows' opacity, one value for
     #: the whole figure (both scanpaths in Compare and the co-animation).
     saccade_opacity: float = 1.0
+    #: #422 — the direction arrowheads' size, in px.
+    saccade_arrow_size: float = DEFAULT_SACCADE_ARROW_SIZE
     saccade_color_mode: str = "Uniform"
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
@@ -180,6 +201,11 @@ class FigureSettings:
     fixation_snap_position: float = DEFAULT_SNAP_POSITION
     hollow_fixations: bool = False
     fixation_opacity: float = 1.0
+    #: #422 — the outline round each filled fixation marker (0 draws none). A
+    #: hollow marker's ring and a comparison's metric-coloured ring are their
+    #: scanpath's colour, so they keep their own.
+    fixation_outline_width: float = DEFAULT_FIXATION_OUTLINE_WIDTH
+    fixation_outline_color: str = DEFAULT_FIXATION_OUTLINE_COLOR
     fixation_color: str | None = DEFAULT_FIXATION_COLOR
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL
     text_color: str = WORD_LABEL_COLOR
@@ -209,8 +235,13 @@ class FigureSettings:
     #: cropped to it (``fit_to_monitor`` off). ``None`` is the automatic one:
     #: 5% of the data's extent on each axis, at least ``CANVAS_PAD_MIN_PX``.
     crop_margin: float | None = None
+    #: #422 — the static figure's border round the plot area.
+    show_plot_frame: bool = True
+    plot_frame_color: str = DEFAULT_PLOT_FRAME_COLOR
     show_coordinate_grid: bool = False
     coordinate_grid_spacing: float | None = None
+    #: #422 — the grid's tick labels, in px.
+    coordinate_grid_font_size: int = DEFAULT_GRID_FONT_SIZE
     word_heatmap_col: str | None = None
     word_heatmap_title: str | None = None
     word_hover_measure: str | None = "total_fixation_duration_ms"
@@ -221,6 +252,11 @@ class FigureSettings:
     illustration_reasons: Sequence[str] | None = None
     #: The Illustration label's text; empty writes "Illustration · <reasons>".
     illustration_text: str = ""
+    #: #422 — how the export title and caption are written
+    #: (`export.annotate_figure`); they draw only when a title / caption is set.
+    title_font_size: int = DEFAULT_TITLE_FONT_SIZE
+    caption_font_size: int = DEFAULT_CAPTION_FONT_SIZE
+    caption_color: str = DEFAULT_CAPTION_COLOR
     playback_speed: float = 1.0
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
@@ -676,11 +712,20 @@ def coordinate_grid_ticks(
 
 _GRID_LEFT_RESERVE_PX = 52
 _GRID_BOTTOM_RESERVE_PX = 36
-_GRID_TICK_FONT_PX = 18  # remains legible after true-scale responsive downscaling
+_GRID_TICK_FONT_PX = DEFAULT_GRID_FONT_SIZE  # legible after true-scale downscaling
+
+
+def _grid_reserves(show: bool, font_px: float = _GRID_TICK_FONT_PX) -> tuple[int, int]:
+    """The (left, bottom) margin the coordinate grid's tick labels take: the
+    default's, grown in step with a larger tick font (#422)."""
+    if not show:
+        return 0, 0
+    grow = max(1.0, float(font_px) / _GRID_TICK_FONT_PX)
+    return round(_GRID_LEFT_RESERVE_PX * grow), round(_GRID_BOTTOM_RESERVE_PX * grow)
 
 
 def _coordinate_grid_axis_options(
-    ticks: CoordinateGridTicks, *, axis: str
+    ticks: CoordinateGridTicks, *, axis: str, font_size: float = _GRID_TICK_FONT_PX
 ) -> dict[str, Any]:
     """Plotly axis options for one restrained major/minor coordinate grid."""
     values = ticks.x_values if axis == "x" else ticks.y_values
@@ -695,7 +740,7 @@ def _coordinate_grid_axis_options(
         ticklen=4,
         tickwidth=1,
         tickcolor="#667085",
-        tickfont=dict(size=_GRID_TICK_FONT_PX, color="#475467"),
+        tickfont=dict(size=font_size, color="#475467"),
         gridcolor="rgba(71,84,103,0.22)",
         gridwidth=1,
         zeroline=True,
@@ -721,6 +766,7 @@ def _apply_coordinate_grid_axes(
     y_range: Sequence[float],
     rendered_width: int,
     rendered_height: int,
+    font_size: float = _GRID_TICK_FONT_PX,
 ) -> None:
     """Mutate spatial axis dicts only when the optional grid is enabled."""
     if not show:
@@ -732,8 +778,8 @@ def _apply_coordinate_grid_axes(
         rendered_width=rendered_width,
         rendered_height=rendered_height,
     )
-    xaxis.update(_coordinate_grid_axis_options(ticks, axis="x"))
-    yaxis.update(_coordinate_grid_axis_options(ticks, axis="y"))
+    xaxis.update(_coordinate_grid_axis_options(ticks, axis="x", font_size=font_size))
+    yaxis.update(_coordinate_grid_axis_options(ticks, axis="y", font_size=font_size))
 
 
 # Cap the *fixed* render size so the true-to-scale plot (rendered at exactly
@@ -782,6 +828,25 @@ def _fit_display_size(
 
 #: The two colour bars' settings (fixations', heatmap's) and their defaults —
 #: the one list the app's settings dicts and saved config copy them by.
+#: #422 — the title/caption styling: `export.annotate_figure` reads it, never a
+#: builder, so a figure cache keys no rebuild on it.
+TEXT_STYLE_FIELDS = ("title_font_size", "caption_font_size", "caption_color")
+
+#: #422 — the design choices that used to be fixed, outside the colour bars'
+#: (which `COLORBAR_DEFAULTS` carries).
+DESIGN_CHOICE_FIELDS = (
+    "heatmap_opacity",
+    "saccade_arrow_size",
+    "fixation_outline_width",
+    "fixation_outline_color",
+    "show_plot_frame",
+    "plot_frame_color",
+    "coordinate_grid_font_size",
+    "title_font_size",
+    "caption_font_size",
+    "caption_color",
+)
+
 COLORBAR_DEFAULTS: dict = {
     f.name: f.default
     for f in fields(FigureSettings)
@@ -828,6 +893,7 @@ def _decoration_margins(
     colorbar_below: bool = False,
     bottom: int = 0,
     coordinate_grid: bool = False,
+    coordinate_grid_font_size: float = _GRID_TICK_FONT_PX,
 ) -> dict:
     """Grow a spatial figure so a right/bottom colorbar + top legend sit in
     reserved margin instead of stealing space from the equal-aspect plot region.
@@ -842,8 +908,7 @@ def _decoration_margins(
     right = _COLORBAR_RESERVE_PX if colorbar_right else 0
     cb_bottom = _COLORBAR_BOTTOM_PX if colorbar_below else 0
     top = _LEGEND_RESERVE_PX if legend else 0
-    left = _GRID_LEFT_RESERVE_PX if coordinate_grid else 0
-    grid_bottom = _GRID_BOTTOM_RESERVE_PX if coordinate_grid else 0
+    left, grid_bottom = _grid_reserves(coordinate_grid, coordinate_grid_font_size)
     return {
         "width": fitted_w + left + right,
         "height": fitted_h + top + bottom + cb_bottom + grid_bottom,
@@ -866,9 +931,13 @@ def _colorbar_dict(
     orientation: str = "Vertical",
     tickangle: int = 0,
     tickfont_size: int = 12,
+    thickness: int = DEFAULT_COLORBAR_THICKNESS,
+    length: float | None = None,
 ) -> dict:
     """A styled Plotly colorbar dict (vertical right / horizontal below), with
-    rotatable, sizable tick labels and a slim bar."""
+    rotatable, sizable tick labels and a slim bar. ``thickness`` is in px;
+    ``length`` a fraction of the plot's side, ``None`` the orientation's own
+    (#422)."""
     horizontal = orientation == "Horizontal"
     cb = dict(
         title=dict(
@@ -876,7 +945,7 @@ def _colorbar_dict(
             side="top" if horizontal else "right",
             font=dict(size=max(10, int(tickfont_size) + 1)),
         ),
-        thickness=14,
+        thickness=int(thickness),
         tickangle=int(tickangle),
         tickfont=dict(size=int(tickfont_size)),
         outlinewidth=0,
@@ -889,7 +958,7 @@ def _colorbar_dict(
             y=-0.04,
             yanchor="top",
             lenmode="fraction",
-            len=0.6,
+            len=0.6 if length is None else float(length),
         )
     else:
         cb.update(
@@ -898,7 +967,7 @@ def _colorbar_dict(
             y=0.5,
             yanchor="middle",
             lenmode="fraction",
-            len=COLORBAR_LEN_FRACTION,
+            len=COLORBAR_LEN_FRACTION if length is None else float(length),
         )
     return cb
 
@@ -1430,6 +1499,9 @@ def _glyph_scatter_traces(
     return _glyph_layer_traces(x, y, _glyph_layers(marker, glyph, len(x)), **top)
 
 
+_DEFAULT_OUTLINES = frozenset({FIX_MARKER_OUTLINE, DEFAULT_FIXATION_OUTLINE_COLOR})
+
+
 def _glyph_layers(marker: dict, glyph: str, n: int) -> list[dict]:
     """What :func:`_glyph_scatter_traces` draws, bottom first, minus positions.
 
@@ -1460,7 +1532,13 @@ def _glyph_layers(marker: dict, glyph: str, n: int) -> list[dict]:
         elif color is not None and not isinstance(color, str):
             color = list(color)
         outline = line.get("color")
-        if isinstance(outline, str) and outline != FIX_MARKER_OUTLINE:
+        # A glyph skips the default hairline (either spelling, #422) and an
+        # outline whose width is 0; any other outline is a ring behind it.
+        if (
+            isinstance(outline, str)
+            and outline.lower() not in _DEFAULT_OUTLINES
+            and float(line.get("width") or 0) > 0
+        ):
             layers.append((glyph, outline, sizes + _GLYPH_OUTLINE_PX))
         layers.append((glyph, color, sizes))
     opacity = float(marker.get("opacity", 1.0))
@@ -3382,10 +3460,12 @@ def _add_saccade_layer(
     render_mode: str = "Straight",
     two_way: bool = False,
     opacity: float = 1.0,
+    arrow_size: float = DEFAULT_SACCADE_ARROW_SIZE,
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
 
-    ``opacity`` (#422) is the lines' and the arrowheads' alike.
+    ``opacity`` (#422) is the lines' and the arrowheads' alike; ``arrow_size``
+    the arrowheads' size in px.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
     given (the per-fixation reading class from ``measures.classify_saccades``)
@@ -3523,7 +3603,7 @@ def _add_saccade_layer(
                     mode="markers",
                     marker=dict(
                         symbol="arrow",
-                        size=12,
+                        size=arrow_size,
                         angle=aang,
                         angleref="up",
                         color=color,
@@ -3742,6 +3822,8 @@ def _render_scanpath_figure(
     colorbar_orientation = settings.fixation_colorbar_orientation
     colorbar_tickangle = settings.fixation_colorbar_tickangle
     colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
+    colorbar_thickness = settings.fixation_colorbar_thickness
+    colorbar_length = settings.fixation_colorbar_length
     line_spacing = settings.line_spacing
     scale_text_to_boxes = settings.scale_text_to_boxes
     background_image = settings.background_image
@@ -3771,6 +3853,8 @@ def _render_scanpath_figure(
         orientation=settings.heatmap_colorbar_orientation,
         tickangle=settings.heatmap_colorbar_tickangle,
         tickfont_size=settings.heatmap_colorbar_tickfont_size,
+        thickness=settings.heatmap_colorbar_thickness,
+        length=settings.heatmap_colorbar_length,
     )
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
 
@@ -3965,6 +4049,7 @@ def _render_scanpath_figure(
                 show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
+                opacity=settings.heatmap_opacity,
                 sigma_px=heatmap_sigma_px,
             )
         elif not words.empty:
@@ -3980,6 +4065,7 @@ def _render_scanpath_figure(
                 show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
+                opacity=settings.heatmap_opacity,
             )
         else:
             _add_density_heatmap(
@@ -3997,6 +4083,7 @@ def _render_scanpath_figure(
                 show_colorbars=show_heatmap_colorbar,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
+                opacity=settings.heatmap_opacity,
             )
     elif spatial_axes and show_heatmap and not words.empty:
         # Words-only dataset (no fixation report): fall back to the words
@@ -4016,6 +4103,7 @@ def _render_scanpath_figure(
                 heatmap_norm=heatmap_norm,
                 colorbar_title=_plotly_literal(word_heatmap_title or "Value"),
                 colorbar_style=cb_style,
+                opacity=settings.heatmap_opacity,
             )
         else:
             measure = (
@@ -4034,6 +4122,7 @@ def _render_scanpath_figure(
                     show_colorbars=show_heatmap_colorbar,
                     heatmap_norm=heatmap_norm,
                     colorbar_style=cb_style,
+                    opacity=settings.heatmap_opacity,
                 )
 
     # Saccade lines + optional direction arrowheads (drawn before the fixation
@@ -4084,6 +4173,7 @@ def _render_scanpath_figure(
             render_mode=saccade_render_mode,
             two_way=two_way_saccades,
             opacity=settings.saccade_opacity,
+            arrow_size=settings.saccade_arrow_size,
         ):
             legend_active = True
 
@@ -4183,12 +4273,18 @@ def _render_scanpath_figure(
                 orientation=colorbar_orientation,
                 tickangle=colorbar_tickangle,
                 tickfont_size=colorbar_tickfont_size,
+                thickness=colorbar_thickness,
+                length=colorbar_length,
             )
             if show_colorbars and is_numeric_color
             else None,
             cmin=fixation_color_range[0] if fixation_color_range else None,
             cmax=fixation_color_range[1] if fixation_color_range else None,
-            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+            # #422: the outline's width (0 = none) and colour.
+            line=dict(
+                color=settings.fixation_outline_color,
+                width=settings.fixation_outline_width,
+            ),
         )
         # Marker alpha (VIZ-6): lower it so overlapping fixations show through.
         # Always set it (even at 1.0) so the slider is authoritative — Plotly's
@@ -4278,7 +4374,11 @@ def _render_scanpath_figure(
                     marker=dict(
                         size=10,
                         color=color,
-                        line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+                        # #422: the markers' own outline.
+                        line=dict(
+                            color=settings.fixation_outline_color,
+                            width=settings.fixation_outline_width,
+                        ),
                     ),
                     name=category
                     if color_label == "line"
@@ -4356,6 +4456,7 @@ def _render_scanpath_figure(
             yaxis_cfg,
             show=show_coordinate_grid,
             spacing=coordinate_grid_spacing,
+            font_size=settings.coordinate_grid_font_size,
             x_range=x_range,
             y_range=y_range,
             rendered_width=fitted_w,
@@ -4369,7 +4470,7 @@ def _render_scanpath_figure(
             showticklabels=True, showgrid=True, title=_column_title(y_field)
         )
 
-    if spatial_axes:
+    if spatial_axes and settings.show_plot_frame:
         layout_shapes.append(
             dict(
                 type="rect",
@@ -4377,7 +4478,7 @@ def _render_scanpath_figure(
                 y0=y_range[1],
                 x1=x_range[1],
                 y1=y_range[0],
-                line=dict(color="#000000", width=1),
+                line=dict(color=settings.plot_frame_color, width=1),
                 fillcolor="rgba(0,0,0,0)",
                 # VIZ-5: the plot border is its own layer (a registration guide).
                 name=_shape_layer_tag("frame"),
@@ -4398,6 +4499,7 @@ def _render_scanpath_figure(
             ),
             legend=legend_active,
             coordinate_grid=show_coordinate_grid,
+            coordinate_grid_font_size=settings.coordinate_grid_font_size,
         )
         if spatial_axes
         else {"width": fitted_w, "height": fitted_h, "margin": dict(l=0, r=0, t=0, b=0)}
@@ -4493,6 +4595,16 @@ def _heatmap_title(base: str, norm: str) -> str:
     return f"{base} (log)" if norm == "Log" else base
 
 
+#: Each heatmap style's own opacity, kept while ``heatmap_opacity`` is unset
+#: (#422). "Density" is the Word boxes style drawn without word boxes.
+HEATMAP_STYLE_OPACITY = {"Word boxes": 0.5, "Density": 0.35, "Interpolated": 0.45}
+
+
+def heatmap_style_opacity(style: str, opacity: float | None = None) -> float:
+    """The heatmap's opacity: ``opacity`` when set, else ``style``'s own."""
+    return HEATMAP_STYLE_OPACITY[style] if opacity is None else float(opacity)
+
+
 def _add_word_level_heatmap(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -4506,6 +4618,7 @@ def _add_word_level_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
+    opacity: float | None = None,
 ) -> list[dict]:
     """Tint each word box by the fixations in it; returns the tint rects for
     the caller to put on the figure (`_draw_word_value_heatmap`)."""
@@ -4545,6 +4658,7 @@ def _add_word_level_heatmap(
         heatmap_norm=heatmap_norm,
         colorbar_title="Fixation count" if weights is None else _WORD_DWELL_TITLE,
         colorbar_style=colorbar_style,
+        opacity=opacity,
     )
 
 
@@ -4558,6 +4672,7 @@ def _add_word_measure_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
+    opacity: float | None = None,
 ) -> list[dict]:
     """Word-box heatmap from a pre-aggregated per-word measure column.
 
@@ -4578,6 +4693,7 @@ def _add_word_measure_heatmap(
         if measure == "n_fixations"
         else _WORD_DWELL_TITLE,
         colorbar_style=colorbar_style,
+        opacity=opacity,
     )
 
 
@@ -4592,6 +4708,7 @@ def _draw_word_value_heatmap(
     heatmap_norm: str = "Linear",
     colorbar_title: str,
     colorbar_style: dict | None = None,
+    opacity: float | None = None,
 ) -> list[dict]:
     """Add the heatmap's colour bar to ``fig`` and return its tint rects.
 
@@ -4638,7 +4755,7 @@ def _draw_word_value_heatmap(
                 y1=y1,
                 line=dict(width=0),
                 fillcolor=color,
-                opacity=0.5,
+                opacity=heatmap_style_opacity("Word boxes", opacity),
                 layer="below",
                 # VIZ-5: word-box heatmap rects belong to the heatmap layer.
                 name=_shape_layer_tag("heatmap"),
@@ -4686,6 +4803,7 @@ def _add_density_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
+    opacity: float | None = None,
 ) -> None:
     # A 40×40 count/duration grid drawn as a go.Heatmap (rather than
     # go.Histogram2d) so the colour mapping can go through _apply_heatmap_norm
@@ -4726,7 +4844,7 @@ def _add_density_heatmap(
             y=(y_edges[:-1] + y_edges[1:]) / 2.0,
             z=z,
             colorscale=heatmap_colorscale,
-            opacity=0.35,
+            opacity=heatmap_style_opacity("Density", opacity),
             showscale=show_colorbars,
             colorbar=_colorbar_dict(
                 _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
@@ -4820,7 +4938,6 @@ def interpolated_sigma_px(x_span: float, y_span: float) -> float:
     return max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
 
 
-_INTERP_OPACITY = 0.45
 _INTERP_FLOOR_FRAC = 0.02  # cells below this fraction of the peak render transparent
 _INTERP_MIN_CELLS = 10  # cells along the narrower axis, at least
 _INTERP_MIN_SPAN_PX = 2.0 * _INTERP_MIN_SIGMA_PX  # narrower than this is widened
@@ -4853,6 +4970,7 @@ def _add_interpolated_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: dict | None = None,
+    opacity: float | None = None,
     sigma_px: float | None = None,
     title: str | None = None,
 ) -> None:
@@ -4926,7 +5044,7 @@ def _add_interpolated_heatmap(
             y=(y_edges[:-1] + y_edges[1:]) / 2.0,
             z=z,
             colorscale=heatmap_colorscale,
-            opacity=_INTERP_OPACITY,
+            opacity=heatmap_style_opacity("Interpolated", opacity),
             showscale=show_colorbars,
             # z is a Gaussian-smoothed density in arbitrary (weighted) units, not
             # the per-word counts/ms the `heatmap_range` slider is calibrated for,
@@ -5844,6 +5962,8 @@ def _render_scanpath_animation(
     colorbar_orientation = settings.fixation_colorbar_orientation
     colorbar_tickangle = settings.fixation_colorbar_tickangle
     colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
+    colorbar_thickness = settings.fixation_colorbar_thickness
+    colorbar_length = settings.fixation_colorbar_length
     saccade_color = settings.saccade_color
     saccade_style = settings.saccade_style
     saccade_width = settings.saccade_width
@@ -6069,6 +6189,8 @@ def _render_scanpath_animation(
                             orientation=colorbar_orientation,
                             tickangle=colorbar_tickangle,
                             tickfont_size=colorbar_tickfont_size,
+                            thickness=colorbar_thickness,
+                            length=colorbar_length,
                         )
                         if bar
                         else None,
@@ -6108,6 +6230,8 @@ def _render_scanpath_animation(
                         orientation=colorbar_orientation,
                         tickangle=colorbar_tickangle,
                         tickfont_size=colorbar_tickfont_size,
+                        thickness=colorbar_thickness,
+                        length=colorbar_length,
                     )
                 specs[0]["marker_extra"] = dict(
                     colorscale=fixation_colorscale,
@@ -6132,7 +6256,11 @@ def _render_scanpath_animation(
             # dict as text instead, so the symbol here only needs to be valid.
             symbol=_marker_symbol(fixation_symbol),
             color=colors if colors is not None else s["color"],
-            line=s["marker_line"] or dict(color=FIX_MARKER_OUTLINE, width=0.5),
+            line=s["marker_line"]
+            or dict(
+                color=settings.fixation_outline_color,
+                width=settings.fixation_outline_width,
+            ),
             **s["marker_extra"],
         )
         # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
@@ -6313,7 +6441,7 @@ def _render_scanpath_animation(
                     mode="markers",
                     marker=dict(
                         symbol="arrow",
-                        size=12,
+                        size=settings.saccade_arrow_size,
                         angle=arrow_angle,
                         angleref="up",
                         color=s["sac_color"],
@@ -6579,8 +6707,9 @@ def _render_scanpath_animation(
     )
     top_reserve = _CONTROLS_MARGIN_PX
     bottom_reserve = _COLORBAR_BOTTOM_PX if horizontal_colorbar else 0
-    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
-    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
+    grid_left, grid_bottom = _grid_reserves(
+        show_coordinate_grid, settings.coordinate_grid_font_size
+    )
     # Stimulus-page background image (MultiplEYE) — same layout image as
     # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
     # and persisting across frames (a layout image, not per-frame data). Lets the
@@ -6617,6 +6746,7 @@ def _render_scanpath_animation(
         yaxis,
         show=show_coordinate_grid,
         spacing=coordinate_grid_spacing,
+        font_size=settings.coordinate_grid_font_size,
         x_range=x_range,
         y_range=y_range,
         rendered_width=fitted_w,
@@ -6859,6 +6989,9 @@ def _add_comparison_fixation_trace(
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     saccade_opacity: float = 1.0,
+    saccade_arrow_size: float = DEFAULT_SACCADE_ARROW_SIZE,
+    outline_width: float = DEFAULT_FIXATION_OUTLINE_WIDTH,
+    outline_color: str = DEFAULT_FIXATION_OUTLINE_COLOR,
     show_order: bool = True,
     order_font_size: int | None = None,
     show_legend: bool = False,
@@ -6992,7 +7125,7 @@ def _add_comparison_fixation_trace(
                     mode="markers",
                     marker=dict(
                         symbol="arrow",
-                        size=12,
+                        size=saccade_arrow_size,
                         angle=aang,
                         angleref="up",
                         color=saccade_color,
@@ -7065,7 +7198,7 @@ def _add_comparison_fixation_trace(
             size=sizes,
             symbol=symbol,
             color=fix_color,
-            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+            line=dict(color=outline_color, width=outline_width),
         )
     # Per-scanpath marker alpha (VIZ-6): always set it (even 1.0) so the control
     # overrides Plotly's ~0.7 default for variable-size scatter markers.
@@ -7290,8 +7423,10 @@ def _comparison_heatmap_shapes(
     half: str | None = None,
     xref: str | None = None,
     yref: str | None = None,
+    opacity: float | None = None,
 ) -> list[dict]:
-    """Tint full word boxes or their left/right half on a shared scale."""
+    """Tint full word boxes or their left/right half on a shared scale, at the
+    single figure's word-box heatmap opacity unless ``opacity`` is given."""
     if words.empty or not values:
         return []
     from plotly.colors import sample_colorscale
@@ -7322,7 +7457,7 @@ def _comparison_heatmap_shapes(
             y1=y1,
             line=dict(width=0),
             fillcolor=sample_colorscale(heatmap_colorscale, [position])[0],
-            opacity=0.55,
+            opacity=heatmap_style_opacity("Word boxes", opacity),
             layer="below",
             name=_shape_layer_tag("heatmap"),
         )
@@ -7452,10 +7587,14 @@ def _make_split_comparison_figure(
     colorbar_orientation = settings.fixation_colorbar_orientation
     colorbar_tickangle = settings.fixation_colorbar_tickangle
     colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
+    colorbar_thickness = settings.fixation_colorbar_thickness
+    colorbar_length = settings.fixation_colorbar_length
     heat_cb_style = dict(
         orientation=settings.heatmap_colorbar_orientation,
         tickangle=settings.heatmap_colorbar_tickangle,
         tickfont_size=settings.heatmap_colorbar_tickfont_size,
+        thickness=settings.heatmap_colorbar_thickness,
+        length=settings.heatmap_colorbar_length,
     )
     text_color = settings.text_color
     highlight_column = settings.highlight_column
@@ -7479,6 +7618,8 @@ def _make_split_comparison_figure(
         orientation=colorbar_orientation,
         tickangle=colorbar_tickangle,
         tickfont_size=colorbar_tickfont_size,
+        thickness=colorbar_thickness,
+        length=colorbar_length,
     )
     is_stacked = orientation == "stacked"
     # Per-panel canvas: B falls back to A's, so a same-dataset comparison is
@@ -7666,8 +7807,9 @@ def _make_split_comparison_figure(
     )
     bottom_px = _COLORBAR_BOTTOM_PX if reserves["colorbar_below"] else 0
     right_px = _COLORBAR_RESERVE_PX if reserves["colorbar_right"] else 0
-    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
-    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
+    grid_left, grid_bottom = _grid_reserves(
+        show_coordinate_grid, settings.coordinate_grid_font_size
+    )
     # The t band was the (now-removed) title; keep a slim band only for the
     # optional legend.
     top_px = _compare_legend_font(base_font_size)["size"] + 14
@@ -7754,6 +7896,7 @@ def _make_split_comparison_figure(
                     z_max=heatmap_max,
                     xref=xref,
                     yref=yref,
+                    opacity=settings.heatmap_opacity,
                 )
             )
 
@@ -7804,6 +7947,9 @@ def _make_split_comparison_figure(
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             saccade_opacity=settings.saccade_opacity,
+            saccade_arrow_size=settings.saccade_arrow_size,
+            outline_width=settings.fixation_outline_width,
+            outline_color=settings.fixation_outline_color,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -7868,6 +8014,7 @@ def _make_split_comparison_figure(
             yaxis,
             show=show_coordinate_grid,
             spacing=coordinate_grid_spacing,
+            font_size=settings.coordinate_grid_font_size,
             x_range=x_range,
             y_range=y_range,
             rendered_width=panel_display_w,
@@ -7971,10 +8118,14 @@ def _render_comparison_figure(
     colorbar_orientation = settings.fixation_colorbar_orientation
     colorbar_tickangle = settings.fixation_colorbar_tickangle
     colorbar_tickfont_size = settings.fixation_colorbar_tickfont_size
+    colorbar_thickness = settings.fixation_colorbar_thickness
+    colorbar_length = settings.fixation_colorbar_length
     heat_cb_style = dict(
         orientation=settings.heatmap_colorbar_orientation,
         tickangle=settings.heatmap_colorbar_tickangle,
         tickfont_size=settings.heatmap_colorbar_tickfont_size,
+        thickness=settings.heatmap_colorbar_thickness,
+        length=settings.heatmap_colorbar_length,
     )
     text_color = settings.text_color
     highlight_column = settings.highlight_column
@@ -8034,6 +8185,8 @@ def _render_comparison_figure(
         orientation=colorbar_orientation,
         tickangle=colorbar_tickangle,
         tickfont_size=colorbar_tickfont_size,
+        thickness=colorbar_thickness,
+        length=colorbar_length,
     )
     overrides = (style_a, style_b)
     # Stimulus-page background image (VIZ-4/23), UNDER both scanpaths.
@@ -8124,6 +8277,7 @@ def _render_comparison_figure(
                     z_min=heatmap_min,
                     z_max=heatmap_max,
                     half=half,
+                    opacity=settings.heatmap_opacity,
                 )
             )
         if show_heatmap_colorbar and any(heatmap_maps):
@@ -8193,6 +8347,9 @@ def _render_comparison_figure(
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             saccade_opacity=settings.saccade_opacity,
+            saccade_arrow_size=settings.saccade_arrow_size,
+            outline_width=settings.fixation_outline_width,
+            outline_color=settings.fixation_outline_color,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -8273,8 +8430,9 @@ def _render_comparison_figure(
         )["colorbar_below"]
         else 0
     )
-    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
-    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
+    grid_left, grid_bottom = _grid_reserves(
+        show_coordinate_grid, settings.coordinate_grid_font_size
+    )
     xaxis = dict(
         showticklabels=False,
         showgrid=False,
@@ -8300,6 +8458,7 @@ def _render_comparison_figure(
         yaxis,
         show=show_coordinate_grid,
         spacing=coordinate_grid_spacing,
+        font_size=settings.coordinate_grid_font_size,
         x_range=x_range,
         y_range=y_range,
         rendered_width=fitted_w,
@@ -9417,6 +9576,10 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_render_mode",
         "fixation_snap_to_line",
         "fixation_snap_position",
+        # #422 — the replay draws no frame and no heatmap.
+        "show_plot_frame",
+        "plot_frame_color",
+        "heatmap_opacity",
         "span_border_color",
         "word_heatmap_col",
         "word_heatmap_title",

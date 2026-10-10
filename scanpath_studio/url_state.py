@@ -45,12 +45,18 @@ from .constants import (
     _VIEW_SCANPATH,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
+    CAPTION_FONT_SIZE_BOUNDS,
+    COLORBAR_LENGTH_BOUNDS,
+    COLORBAR_THICKNESS_BOUNDS,
     COLORSCALES,
     CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
+    GRID_FONT_SIZE_BOUNDS,
+    HEATMAP_OPACITY_BOUNDS,
     HEATMAP_SIGMA_BOUNDS,
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
@@ -67,6 +73,7 @@ from .constants import (
     ONESTOP_VARIANT_LABELS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
+    SACCADE_ARROW_SIZE_BOUNDS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR_MODES,
@@ -75,6 +82,7 @@ from .constants import (
     SETUP_OVERRIDE_SESSION_KEYS,
     SNAP_POSITION_BOUNDS,
     SYNTHETIC_CHOICE,
+    TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
     canonical_legend_position,
     drift_correction_enabled,
@@ -396,7 +404,60 @@ def _cmp_style_params(*fields: str) -> dict[str, str]:
     }
 
 
+# #422: the design choices that used to be fixed — link param → (session key,
+# bounds). The param is the key without `global_`; the settings file's `design`
+# section keeps them under the same names. Bounds `None` is a switch, "color" a
+# colour; an int pair is a whole number.
+_DESIGN_PARAMS = {
+    "heatmap_opacity_auto": ("global_heatmap_opacity_auto", None),
+    "heatmap_opacity": ("global_heatmap_opacity", HEATMAP_OPACITY_BOUNDS),
+    "title_font_size": ("global_title_font_size", TITLE_FONT_SIZE_BOUNDS),
+    "caption_font_size": ("global_caption_font_size", CAPTION_FONT_SIZE_BOUNDS),
+    "caption_color": ("global_caption_color", "color"),
+    "show_plot_frame": ("global_show_plot_frame", None),
+    "plot_frame_color": ("global_plot_frame_color", "color"),
+    "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
+    "fixation_outline_width": (
+        "global_fixation_outline_width",
+        FIXATION_OUTLINE_WIDTH_BOUNDS,
+    ),
+    "fixation_outline_color": ("global_fixation_outline_color", "color"),
+    "coordinate_grid_font_size": (
+        "global_coordinate_grid_font_size",
+        GRID_FONT_SIZE_BOUNDS,
+    ),
+    **{
+        f"{bar}_colorbar_{name}": (f"global_{bar}_colorbar_{name}", bounds)
+        for bar in ("fixation", "heatmap")
+        for name, bounds in (
+            ("thickness", COLORBAR_THICKNESS_BOUNDS),
+            ("length_auto", None),
+            ("length", COLORBAR_LENGTH_BOUNDS),
+        )
+    },
+}
+
+
+def _design_params(kind: str) -> dict[str, str]:
+    """The `_DESIGN_PARAMS` of one share group: "toggle", "color", "int" or
+    "float" — param → session key."""
+
+    def kind_of(bounds) -> str:
+        if bounds is None:
+            return "toggle"
+        if bounds == "color":
+            return "color"
+        return "int" if all(isinstance(b, int) for b in bounds) else "float"
+
+    return {
+        param: key
+        for param, (key, bounds) in _DESIGN_PARAMS.items()
+        if kind_of(bounds) == kind
+    }
+
+
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
+    **_design_params("toggle"),
     "preproc_enabled": "global_preproc_enabled",
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
     "show_words": "global_show_words",
@@ -454,6 +515,7 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_chips": "single_show_chips",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    **_design_params("color"),
     # #374 F28: Export → Current figure's print size (only while a width is set).
     "export_width_unit": "export_figure_width_unit",
     "preproc_short_policy": "global_preproc_short_policy",
@@ -557,6 +619,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
 #: `_parse_hex_color` rather than `str` (BUG-69).
 _SHARE_COLOR_PARAMS = (
+    *_design_params("color"),
     "fixation_color",
     "saccade_color",
     "raw_gaze_color",
@@ -581,6 +644,7 @@ _SHARE_COLOR_PARAMS = (
     ),
 )
 _SHARE_INT_PARAMS = {
+    **_design_params("int"),
     "export_dpi": "export_figure_dpi",
     "order_font_size": "global_order_font_size",
     # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
@@ -604,6 +668,7 @@ _SHARE_INT_PARAMS = {
     "cmp_b_fixclass_long_threshold_ms": "cmp1_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
+    **_design_params("float"),
     "export_width": "export_figure_width",
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
     "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
@@ -774,6 +839,11 @@ _MARKER_BOUNDS = (4, 40)
 # colour ranges aren't here — the rail's slider widens to hold them, and its
 # number boxes are unbounded.)
 _URL_BOUNDED = {
+    **{
+        key: bounds
+        for key, bounds in _DESIGN_PARAMS.values()
+        if bounds is not None and bounds != "color"
+    },
     "global_preproc_short_threshold_ms": (1.0, 500.0),
     "global_preproc_merge_distance_chars": (0.25, 10.0),
     "global_heatmap_sigma_px": HEATMAP_SIGMA_BOUNDS,
@@ -3000,6 +3070,29 @@ def _restore_plot_config(
     sbc = highlighting.get("span_border_color")
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)
+
+    # #422: the design choices that used to be fixed. Additive (ENG-11): a
+    # file saved before them has no `design` section and changes none of them.
+    design = section("design")
+    for name, (state_key, bounds) in _DESIGN_PARAMS.items():
+        if name not in design:
+            continue
+        value = design[name]
+        label = name.replace("_", " ")
+        if bounds is None:
+            put(state_key, bool(value))
+        elif bounds == "color":
+            put_valid(
+                isinstance(value, str)
+                and re.fullmatch(r"#[0-9A-Fa-f]{6}", value) is not None,
+                state_key,
+                value,
+                label,
+            )
+        elif all(isinstance(b, int) for b in bounds):
+            put_int(value, state_key, *bounds, label)
+        else:
+            put_float(value, state_key, *bounds, label)
 
     # VIZ-43 — raw gaze's own style. The section's `available` / `points`
     # describe the trial the config was saved on, not a setting. Absent in a

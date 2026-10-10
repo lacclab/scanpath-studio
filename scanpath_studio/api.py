@@ -69,7 +69,7 @@ from .constants import (  # noqa: E402
     palette_settings,
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
-from .export import annotate_figure  # noqa: E402
+from .export import annotate_figure, figure_text_style  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
     apply_trial_parts_manifest,
@@ -235,6 +235,21 @@ _CANONICAL_OPTION_NAMES = {
     "show_stimulus_image",
     "word_hover_fields",
     "fixation_hover_fields",
+    # #422 — design choices that used to be fixed.
+    "fixation_colorbar_thickness",
+    "fixation_colorbar_length",
+    "heatmap_colorbar_thickness",
+    "heatmap_colorbar_length",
+    "heatmap_opacity",
+    "saccade_arrow_size",
+    "fixation_outline_width",
+    "fixation_outline_color",
+    "show_plot_frame",
+    "plot_frame_color",
+    "coordinate_grid_font_size",
+    "title_font_size",
+    "caption_font_size",
+    "caption_color",
 }
 
 CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
@@ -2585,7 +2600,9 @@ def plot_scanpath(
         settings=render_settings,
         raw_gaze=raw_gaze,
     )
-    annotate_figure(fig, title=title, caption=caption)
+    annotate_figure(
+        fig, title=title, caption=caption, **figure_text_style(render_settings)
+    )
     return fig
 
 
@@ -2880,7 +2897,9 @@ def animate_scanpath(
         animation_overrides.get("illustration_reasons"),
         text=render_settings.illustration_text,
     )
-    annotate_figure(fig, title=title, caption=caption)
+    annotate_figure(
+        fig, title=title, caption=caption, **figure_text_style(render_settings)
+    )
     return fig
 
 
@@ -3569,7 +3588,9 @@ def compare_scanpaths(
         settings=render_settings,
         raw_gaze=merged_raw,
     )
-    annotate_figure(fig, title=title, caption=caption)
+    annotate_figure(
+        fig, title=title, caption=caption, **figure_text_style(render_settings)
+    )
     return fig
 
 

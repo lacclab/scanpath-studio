@@ -416,6 +416,39 @@ CANVAS_PAD_FRACTION = 0.05
 DEFAULT_CROP_MARGIN_PX = 50.0
 CROP_MARGIN_BOUNDS = (0.0, 2000.0)
 
+# --- #422 · design choices that used to be fixed --------------------------------
+# Each default is the value the figure always drew with; each `*_BOUNDS` is the
+# range the rail, a link, a settings file and `render` hold it to.
+#: The heatmap's opacity once set by hand; unset, each style keeps its own
+#: (`plots.HEATMAP_STYLE_OPACITY`). The rail's box starts from Word boxes'.
+DEFAULT_HEATMAP_OPACITY = 0.5
+HEATMAP_OPACITY_BOUNDS = (0.05, 1.0)
+#: The export title and caption (`export.annotate_figure`), in px.
+DEFAULT_TITLE_FONT_SIZE = 20
+TITLE_FONT_SIZE_BOUNDS = (8, 48)
+DEFAULT_CAPTION_FONT_SIZE = 13
+CAPTION_FONT_SIZE_BOUNDS = (6, 36)
+DEFAULT_CAPTION_COLOR = "#555555"
+#: The static figure's border round the plot area.
+DEFAULT_PLOT_FRAME_COLOR = "#000000"
+#: The saccades' direction arrowheads, in px.
+DEFAULT_SACCADE_ARROW_SIZE = 12.0
+SACCADE_ARROW_SIZE_BOUNDS = (4.0, 40.0)
+#: The outline round a filled fixation marker; a width of 0 draws none. The
+#: colour is `FIX_MARKER_OUTLINE`, spelt out for a colour picker.
+DEFAULT_FIXATION_OUTLINE_WIDTH = 0.5
+FIXATION_OUTLINE_WIDTH_BOUNDS = (0.0, 5.0)
+DEFAULT_FIXATION_OUTLINE_COLOR = "#111111"
+#: The coordinate grid's tick labels, in px.
+DEFAULT_GRID_FONT_SIZE = 18
+GRID_FONT_SIZE_BOUNDS = (6, 36)
+#: A colour bar's thickness in px, and its length as a fraction of the plot's
+#: side (unset: a third of the height upright, 0.6 of the width lying down).
+DEFAULT_COLORBAR_THICKNESS = 14
+COLORBAR_THICKNESS_BOUNDS = (4, 40)
+DEFAULT_COLORBAR_LENGTH = 0.33
+COLORBAR_LENGTH_BOUNDS = (0.1, 1.0)
+
 
 # --- BUG-101 · the Plotly config every figure is drawn with --------------------
 # plotly.js 3 defaults `showSendToCloud` to true: the modebar's "Share chart…"

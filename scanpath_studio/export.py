@@ -52,10 +52,13 @@ from .column_names import (
 )
 from .constants import (
     CITATION,
+    DEFAULT_CAPTION_COLOR,
+    DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
+    DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
     ICONS,
     PLOTLY_CONFIG,
@@ -883,27 +886,39 @@ def resolve_export_path(
 # un-shrunk size, then no longer match their boxes. Same constraint the animation
 # transport controls hit; same fix: grow the figure by exactly what the band
 # takes, so the plot region is untouched.
-_TITLE_BAND_PX = 46
-_CAPTION_LINE_PX = 22
+# The bands follow the text's size (#422): at the default 20 px title and 13 px
+# caption they are the 46 px band and 22 px lines they always were.
+_TITLE_BAND_PAD_PX = 26
+_CAPTION_LINE_FACTOR = 22 / 13
 _CAPTION_PAD_PX = 12
 
 
-def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
+def annotate_figure(
+    fig,
+    *,
+    title: str = "",
+    caption: str = "",
+    title_font_size: float = DEFAULT_TITLE_FONT_SIZE,
+    caption_font_size: float = DEFAULT_CAPTION_FONT_SIZE,
+    caption_color: str = DEFAULT_CAPTION_COLOR,
+) -> None:
     """Stamp ``title`` / ``caption`` onto ``fig`` in place, without shrinking it.
 
     The figure grows by the height of each band and its margin grows to match, so
     the plotting area — and therefore the true-to-scale text — is byte-identical
     to the untitled figure. Both are drawn as written: ``<b>`` in a title shows
-    as ``<b>``, and only a real newline starts a new caption line.
+    as ``<b>``, and only a real newline starts a new caption line. The sizes are
+    in px (#422); each band grows with its text.
     """
     if not title and not caption:
         return
     margin = fig.layout.margin
     height = fig.layout.height
     if title:
-        fig.layout.margin.t = (margin.t or 0) + _TITLE_BAND_PX
+        band = round(float(title_font_size)) + _TITLE_BAND_PAD_PX
+        fig.layout.margin.t = (margin.t or 0) + band
         if height:
-            height += _TITLE_BAND_PX
+            height += band
             fig.layout.height = height
         fig.update_layout(
             title=dict(
@@ -913,12 +928,13 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
                 y=1.0,
                 yanchor="top",
                 pad=dict(t=14),
-                font=dict(size=20),
+                font=dict(size=int(title_font_size)),
             )
         )
     if caption:
         original_bottom = fig.layout.margin.b or 0
-        band = _CAPTION_LINE_PX * (caption.count("\n") + 1) + _CAPTION_PAD_PX
+        line_px = round(float(caption_font_size) * _CAPTION_LINE_FACTOR)
+        band = line_px * (caption.count("\n") + 1) + _CAPTION_PAD_PX
         fig.layout.margin.b = original_bottom + band
         if height:
             fig.layout.height = height + band
@@ -935,8 +951,26 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
             yshift=-(original_bottom + _CAPTION_PAD_PX // 2),
             showarrow=False,
             align="left",
-            font=dict(size=13, color="#555555"),
+            font=dict(size=int(caption_font_size), color=caption_color),
         )
+
+
+def figure_text_style(settings) -> dict:
+    """``annotate_figure``'s text styling (#422) from a ``FigureSettings`` or a
+    settings mapping (the app's ``viz_settings``); what is missing is the
+    default."""
+    if isinstance(settings, Mapping):
+        get = settings.get
+    else:
+
+        def get(name, default):
+            return getattr(settings, name, default)
+
+    return dict(
+        title_font_size=int(get("title_font_size", DEFAULT_TITLE_FONT_SIZE)),
+        caption_font_size=int(get("caption_font_size", DEFAULT_CAPTION_FONT_SIZE)),
+        caption_color=str(get("caption_color", DEFAULT_CAPTION_COLOR)),
+    )
 
 
 # DATA-16 (security audit S4). Columns that hold a filesystem path from the
@@ -3014,7 +3048,12 @@ def bulk_export(
                     # EXP-2: stamp the title/caption BEFORE measuring the output
                     # size — the bands grow the figure, and rendering at the
                     # pre-title size would crop them off.
-                    annotate_figure(fig, title=title, caption=caption)
+                    annotate_figure(
+                        fig,
+                        title=title,
+                        caption=caption,
+                        **figure_text_style(render_settings),
+                    )
                 except Exception as exc:
                     fig = None
                     # Its formats, and its layer set when one was asked for.

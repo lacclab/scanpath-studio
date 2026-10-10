@@ -853,6 +853,12 @@ def _render_parser() -> argparse.ArgumentParser:
         "(default: 1). A comparison's two scanpaths share it.",
     )
     viz.add_argument(
+        "--saccade-arrow-size",
+        type=float,
+        metavar="PX",
+        help="Size of the --saccade-arrows arrowheads, 4–40 px (default: 12).",
+    )
+    viz.add_argument(
         "--saccade-color-by-type",
         dest="saccade_color_by_type",
         action="store_true",
@@ -1091,6 +1097,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "heavy-tailed dwell times so a few hot words don't wash out the rest.",
     )
     viz.add_argument(
+        "--heatmap-opacity",
+        type=float,
+        metavar="O",
+        help="Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes "
+        "0.5, or 0.35 with no word boxes; interpolated 0.45).",
+    )
+    viz.add_argument(
         "--fixation-colorscale",
         metavar="NAME",
         type=_colorscale_name,
@@ -1148,6 +1161,12 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Pin the major coordinate-grid interval in pixels. Implies "
         "--coordinate-grid; omit for automatic 1/2/5×10ⁿ spacing.",
     )
+    viz.add_argument(
+        "--coordinate-grid-font-size",
+        type=int,
+        metavar="PX",
+        help="Size of the coordinate grid's labels, 6–36 px (default: 18).",
+    )
     # VIZ-4: overlay an image stimulus (a screenshot of the reading screen) under
     # the scanpath. The API already supports background_image*; these expose it on
     # the CLI. Works with --animate too.
@@ -1200,6 +1219,18 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="O",
         help="Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping "
         "fixations show through).",
+    )
+    viz.add_argument(
+        "--fixation-outline-width",
+        type=float,
+        metavar="PX",
+        help="Outline round each filled fixation marker, 0–5 px; 0 draws none "
+        "(default: 0.5).",
+    )
+    viz.add_argument(
+        "--fixation-outline-color",
+        metavar="COLOR",
+        help="Color of that outline (default: #111111).",
     )
     viz.add_argument(
         "--hollow-fixations",
@@ -1259,6 +1290,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "--background-color",
         metavar="COLOR",
         help="Plot background color (default: #ffffff).",
+    )
+    viz.add_argument(
+        "--no-plot-frame",
+        dest="show_plot_frame",
+        action="store_false",
+        help="Leave out the border round the plot area.",
+    )
+    viz.add_argument(
+        "--plot-frame-color",
+        metavar="COLOR",
+        help="Color of the border round the plot area (default: #000000).",
     )
     viz.add_argument(
         "--line-spacing",
@@ -1343,6 +1385,19 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Fixation color bar: tick-label size (default: 12).",
     )
     viz.add_argument(
+        "--fixation-colorbar-thickness",
+        type=int,
+        metavar="PX",
+        help="Fixation color bar: thickness, 4–40 px (default: 14).",
+    )
+    viz.add_argument(
+        "--fixation-colorbar-length",
+        type=float,
+        metavar="F",
+        help="Fixation color bar: length as a share of the plot's side, 0.1–1.0 "
+        "(default: a third of its height upright, 0.6 of its width lying down).",
+    )
+    viz.add_argument(
         "--no-heatmap-colorbar",
         dest="show_heatmap_colorbar",
         action="store_false",
@@ -1364,6 +1419,19 @@ def _render_parser() -> argparse.ArgumentParser:
         type=int,
         metavar="PX",
         help="Heatmap color bar: tick-label size (default: 12).",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-thickness",
+        type=int,
+        metavar="PX",
+        help="Heatmap color bar: thickness, 4–40 px (default: 14).",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-length",
+        type=float,
+        metavar="F",
+        help="Heatmap color bar: length as a share of the plot's side, 0.1–1.0 "
+        "(default: a third of its height upright, 0.6 of its width lying down).",
     )
     # v0.33.0's shared colour-bar flags, kept so a script written for it still
     # runs (round 9) but not listed: `--colorbars` asked for what is now the
@@ -1532,6 +1600,25 @@ def _render_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="TEXT",
         help="Caption band stamped on the figure; off by default.",
+    )
+    viz.add_argument(
+        "--title-size",
+        dest="title_font_size",
+        type=int,
+        metavar="PX",
+        help="Size of the --title text, 8–48 px (default: 20).",
+    )
+    viz.add_argument(
+        "--caption-size",
+        dest="caption_font_size",
+        type=int,
+        metavar="PX",
+        help="Size of the --caption text, 6–36 px (default: 13).",
+    )
+    viz.add_argument(
+        "--caption-color",
+        metavar="COLOR",
+        help="Color of the --caption text (default: #555555).",
     )
     viz.add_argument(
         "--separable-layers",
@@ -1785,6 +1872,20 @@ _DIRECT_OPTION_FLAGS = (
     "fixation_colorbar_tickfont_size",
     "heatmap_colorbar_tickangle",
     "heatmap_colorbar_tickfont_size",
+    # #422.
+    "fixation_colorbar_thickness",
+    "fixation_colorbar_length",
+    "heatmap_colorbar_thickness",
+    "heatmap_colorbar_length",
+    "heatmap_opacity",
+    "saccade_arrow_size",
+    "fixation_outline_width",
+    "fixation_outline_color",
+    "plot_frame_color",
+    "coordinate_grid_font_size",
+    "title_font_size",
+    "caption_font_size",
+    "caption_color",
     "illustration_text",
     "word_box_color",
     "word_box_line_opacity",
@@ -1814,6 +1915,7 @@ _SWITCH_OPTION_FLAGS = {
     "fit_to_monitor": False,
     "duration_size_legend": False,
     "show_stimulus_image": True,
+    "show_plot_frame": False,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.

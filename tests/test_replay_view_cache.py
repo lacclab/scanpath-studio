@@ -234,3 +234,24 @@ class TestTheExportReadsTheView:
         assert _render(speed=2.0).signature != base
         assert _render(title_pattern="Reading {participant_id}").signature != base
         assert _render().signature == base
+
+
+class TestTheTitleStyleIsAViewOfTheSameFrames:
+    """#422: the title/caption styling is stamped on the cached replay, so a
+    new size is a new view — never a stale one, and never a new set of frames."""
+
+    def test_a_new_title_size_is_a_new_view(self, page, monkeypatch):
+        builds = []
+        real = tabs.build_scanpath_replay
+
+        def build(*args, **kwargs):
+            builds.append(1)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(tabs, "build_scanpath_replay", build)
+        plain = _render(title_pattern="A title")
+        bigger = _render(title_pattern="A title", title_font_size=32)
+        assert bigger.signature != plain.signature
+        assert bigger.figure().layout.title.font.size == 32
+        assert plain.figure().layout.title.font.size == 20
+        assert len(builds) == 1

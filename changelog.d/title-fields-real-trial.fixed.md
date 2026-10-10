@@ -1,1 +1,0 @@
-The title and caption's Available fields, their check and their preview now use the selected trial and the fields the figure renders with: the preview shows the trial's real ids, the trial's own fields such as TRIAL_INDEX are listed and accepted, and the list says which fields it leaves out and why.

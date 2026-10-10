@@ -1,1 +1,0 @@
-The trial picker lists every participant's reading when participants share a Trial ID (each labelled with its participant, such as `3 [p2]`), a link naming a participant opens that participant's reading, and a link or saved selection that names only a shared Trial ID says it is ambiguous instead of opening the first participant's.

@@ -1,1 +1,0 @@
-Snap above words is now Snap to line: a snapped fixation keeps its x and moves only up or down onto its text line, and a Position slider sets where on the line it sits (render --snap-position, snap_position on a link, fixation_snap_to_line and fixation_snap_position in the API).

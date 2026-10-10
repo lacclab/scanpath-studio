@@ -1,1 +1,0 @@
-The Fixations color bar row, greyed when the color is one color, Line or a categorical column, now says why on hover, and where the legend a categorical color gets is switched off (Figure & canvas, Legends).

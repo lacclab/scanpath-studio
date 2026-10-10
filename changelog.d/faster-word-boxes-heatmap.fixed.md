@@ -1,1 +1,0 @@
-Turning word boxes on, changing their colors and changing the heatmap's color bar no longer pause the plot for a second or more on a long page: the figure with word boxes and a heatmap builds about 15 times faster, and an overlay comparison about 20 times faster.

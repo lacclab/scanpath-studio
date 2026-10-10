@@ -1,1 +1,0 @@
-Legends take one of eight spots (each corner, the middle of the top and bottom edges, or down the left or right side), each inside or outside the plot, and legends sharing a spot stack; positions spelled the old way still work.

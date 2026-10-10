@@ -7783,6 +7783,21 @@ def render_plot_controls(
     # framing switch, the grid and the colour bar become `label | ☑ Show | …`
     # rows carrying what they govern (greyed while off), the monitor size and
     # the two axis fields one row each.
+    # #422: the static figure takes any X / Y field, but only screen x / y is a
+    # screen. On other axes it draws a plain chart of the fixations, so the
+    # framing and the grid have nothing to act on: they grey, saying why.
+    # (Animate and Compare always plot x / y, whatever the fields say.)
+    chart_axes = not (animating or comparing) and (
+        st.session_state.get("global_x_field", "x"),
+        st.session_state.get("global_y_field", "y"),
+    ) != ("x", "y")
+    chart_reason = (
+        f"{ICONS['warning']} The axes are not screen x / y, so the plot is a "
+        "chart: set **Axes** back to x / y to use this."
+        if chart_axes
+        else ""
+    )
+
     with screen_group, _popover_rows("fig_screen"):
         # The box reads "crop", the wire key "fit to monitor" — its inverse. The
         # box is a shadow re-seeded from the key every run, so links, configs and
@@ -7803,8 +7818,12 @@ def render_plot_controls(
             on_change=_apply_crop,
             check_label="Crop to data",
             check_share=0.6,
-            help="Off: show the whole monitor. On: zoom to the fixations and word "
-            "boxes, plus a 5% margin.",
+            disabled=chart_axes,
+            help=_gated_help(
+                "Off: show the whole monitor. On: zoom to the fixations and word "
+                "boxes, plus a 5% margin.",
+                chart_reason,
+            ),
         )
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:
@@ -7823,10 +7842,14 @@ def render_plot_controls(
             "Grid",
             key="global_show_coordinate_grid",
             persist_state="session",
-            help="A grid of screen coordinates, in monitor pixels. Auto picks the "
-            "interval; untick it to set the major interval (px).",
+            disabled=chart_axes,
+            help=_gated_help(
+                "A grid of screen coordinates, in monitor pixels. Auto picks the "
+                "interval; untick it to set the major interval (px).",
+                chart_reason,
+            ),
         )
-        grid_off_disabled, _ = _layer_gate(not show_coordinate_grid, None)
+        grid_off_disabled, _ = _layer_gate(chart_axes or not show_coordinate_grid, None)
         auto_col, spacing_col, px_col = grid_rest.columns(
             [0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center"
         )
@@ -7849,17 +7872,20 @@ def render_plot_controls(
         _sub_caption(px_col, "px")
 
         # The animation and the comparison figures always plot spatial x/y —
-        # only `make_scanpath_figure` takes `x_field`/`y_field`.
-        axis_disabled, axis_reason = _mode_gate(animating, comparing, **_static_only)
+        # only `make_scanpath_figure` takes `x_field`/`y_field`. #422: the
+        # greyed fields' hover says so, and what turns them back on.
+        axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
+        modes = " and ".join(
+            name for name, on in (("Animate", animating), ("Compare", comparing)) if on
+        )
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
-            _gated_help(
-                "The fixation columns on the X and Y axes. Only x / y (screen "
-                "position) is fully supported; with any other field the plot "
-                "shows fixation markers only — no word boxes, text, saccades, "
-                "heatmap or coordinate grid.",
-                axis_reason,
-            ),
+            f"{ICONS['warning']} {modes} always plots screen x / y. Turn "
+            f"**{modes}** off to choose other fields; yours are kept."
+            if axis_disabled
+            else "The fixation fields on the X and Y axes. Any but x / y draws a "
+            "chart of the fixations alone: no text, word boxes, saccades, heatmap "
+            "or grid.",
         )
         label_w = _label_w()
         rest = 1.0 - label_w
@@ -7869,7 +7895,7 @@ def render_plot_controls(
             vertical_alignment="center",
         )
         _row_label(axes_cols[0], "Axes", axis_help)
-        _sub_caption(axes_cols[1], "X")
+        _sub_caption(axes_cols[1], "X", axis_help if axis_disabled else None)
         axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
         axes_cols[2].selectbox(
             "X axis field",
@@ -7878,9 +7904,10 @@ def render_plot_controls(
             key="global_x_field",
             persist_state="session",
             disabled=axis_disabled,
+            help=axis_help,
             label_visibility="collapsed",
         )
-        _sub_caption(axes_cols[3], "Y")
+        _sub_caption(axes_cols[3], "Y", axis_help if axis_disabled else None)
         axes_cols[4].selectbox(
             "Y axis field",
             options=numeric_fields,
@@ -7888,12 +7915,10 @@ def render_plot_controls(
             key="global_y_field",
             persist_state="session",
             disabled=axis_disabled,
+            help=axis_help,
             label_visibility="collapsed",
         )
-        if (
-            st.session_state.get("global_x_field", "x"),
-            st.session_state.get("global_y_field", "y"),
-        ) != ("x", "y"):
+        if chart_axes:
             st.caption(
                 f"{ICONS['warning']} Limited support: the plot shows fixation "
                 "markers only — no word boxes, text, saccades, heatmap or "

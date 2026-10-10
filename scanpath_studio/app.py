@@ -76,6 +76,7 @@ from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
     filter_keys,
 )
+from scanpath_studio.color_picker_commit import render_color_picker_commit
 from scanpath_studio.column_names import (
     ACTIVE_COLUMN_NAMES_KEY,
     ColumnNames,
@@ -9845,6 +9846,8 @@ def _run_app() -> None:
         # UX-196: a cut-off dropdown label shows in full on hover. Unconditional,
         # so it never moves the view's index (UX-167).
         render_truncation_tooltips()
+        # #422: a color picked in a rail popover survives a click on the page.
+        render_color_picker_commit()
         # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
         # renders at the bottom of this function, so serving it here is what keeps
         # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since

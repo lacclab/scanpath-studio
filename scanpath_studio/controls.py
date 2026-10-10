@@ -4806,6 +4806,31 @@ def _box_opacity(
 _LINE_OPACITY_HELP = "Outline opacity; 0 hides it."
 _FILL_OPACITY_HELP = "How strongly the fill shows; 0 draws outlines only."
 
+#: #422: the fill is drawn at its own opacity, 0.05 by default — a tint, under
+#: which a picked colour barely shows. So picking a fill colour while the
+#: opacity is below `_FILL_SHOWS_FROM` raises it to `_FILL_PICKED_OPACITY`,
+#: still light enough for the text, fixations and image to read through.
+_FILL_SHOWS_FROM = 0.15
+_FILL_PICKED_OPACITY = 0.2
+_FILL_PICK_NOTE = (
+    f"Picking a color raises an opacity under {_FILL_SHOWS_FROM:.2f} to "
+    f"{_FILL_PICKED_OPACITY:.2f}, so it shows."
+)
+
+
+def _show_picked_fill() -> None:
+    """A fill colour pick's callback: make the colour visible (see above).
+
+    Through `write_through`: the opacity slider sits in the same popover, and
+    a pick can be committed as that popover closes (#374 F9)."""
+    key = "global_word_box_fill_opacity"
+    try:
+        opacity = float(st.session_state.get(key, WORD_BOX_FILL_OPACITY))
+    except (TypeError, ValueError):
+        opacity = WORD_BOX_FILL_OPACITY
+    if opacity < _FILL_SHOWS_FROM:
+        write_through(key, _FILL_PICKED_OPACITY)
+
 
 def _compare_follow_color_picker(
     host,
@@ -4834,6 +4859,8 @@ def _compare_follow_color_picker(
             return
         picked = st.session_state[pick_key]
         st.session_state[key] = "" if picked.lower() == follow.lower() else picked
+        if part == "box_fill":
+            _show_picked_fill()
 
     disabled, tip = _layer_gate(disabled, help)
     host.color_picker(
@@ -7617,7 +7644,7 @@ def render_plot_controls(
         box_section_help = "How each word's box (as given in the data) is drawn."
         fill_text = (
             "Keep its opacity low so the text, fixations and image under the "
-            "boxes still read; 0 draws outlines only."
+            f"boxes still read; 0 draws outlines only. {_FILL_PICK_NOTE}"
         )
         if comparing and not animating:
             _render_compare_box_groups(
@@ -7660,6 +7687,7 @@ def render_plot_controls(
                 "Fill color",
                 key="global_word_box_fill_color",
                 persist_state="session",
+                on_change=_show_picked_fill,
                 disabled=fill_disabled,
                 help=fill_help,
                 label_visibility="collapsed",

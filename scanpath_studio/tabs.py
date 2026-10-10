@@ -12462,10 +12462,23 @@ def _render_gen_pager(
     return shown
 
 
-def _reading_order(reading: tuple) -> tuple[str, ...]:
+_DIGIT_RUN = re.compile(r"([0-9]+)")
+
+
+def _reading_order(reading: tuple) -> tuple:
     """A reading's place in the Comparisons grid: by participant, then trial,
-    as text — ids of mixed types, or a missing one, still sort."""
-    return tuple(str(part) for part in reading)
+    as text with its numbers read as numbers (#422) — participant 2 before 10,
+    which matters once the grid pages. Ids of mixed types, or a missing one,
+    still sort, and the text itself breaks a tie (``7`` / ``007``)."""
+
+    def natural(text: str) -> tuple:
+        return tuple(
+            (0, int(run), "") if run[0] in "0123456789" else (1, 0, run)
+            for run in _DIGIT_RUN.split(text)
+            if run
+        )
+
+    return tuple(key for part in map(str, reading) for key in (natural(part), part))
 
 
 def _distinct_labels(labels: dict, qualify: Callable[[Hashable, str], str]) -> dict:

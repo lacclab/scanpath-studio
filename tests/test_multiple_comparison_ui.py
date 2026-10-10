@@ -489,6 +489,21 @@ def test_either_pager_moves_both(monkeypatch):
 # --- #422: the chips above the plot, for the selected trial and its matches --
 
 
+def test_matches_are_in_number_order():
+    from scanpath_studio.tabs import _reading_order
+
+    readings = [("10", "t"), ("2", "t"), ("1", "t2"), ("1", "t10"), ("007", "t")]
+    assert sorted(readings, key=_reading_order) == [
+        ("1", "t2"),
+        ("1", "t10"),
+        ("2", "t"),
+        ("007", "t"),
+        ("10", "t"),
+    ]
+    # Mixed types, a missing id and a non-ASCII digit still sort.
+    sorted([(1, None), ("²x", "a"), (float("nan"), "b")], key=_reading_order)
+
+
 def _chip_tables(at) -> list[str]:
     return [m.value for m in at.markdown if "sps-chip-table" in str(m.value)]
 

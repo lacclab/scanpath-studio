@@ -39,6 +39,7 @@ from .constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
@@ -161,15 +162,22 @@ class FigureSettings:
     saccade_color: str = SACCADE_COLOR
     saccade_style: str = "solid"
     saccade_width: float = DEFAULT_SACCADE_WIDTH
+    #: #422 — the saccade lines' and direction arrows' opacity, one value for
+    #: the whole figure (both scanpaths in Compare and the co-animation).
+    saccade_opacity: float = 1.0
     saccade_color_mode: str = "Uniform"
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
     #: The legend of a categorical ``color_by`` (and the Highlight entries,
-    #: raw gaze) — Figure & canvas → Legends → Fixation colours → Show.
+    #: raw gaze) — Figure & canvas → Legends → Fixation colors → Show.
     show_color_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
-    fixation_snap_to_word: bool = False
+    #: #422 — move each fixation vertically onto its text line (it keeps its
+    #: x), ``fixation_snap_position`` line heights from the line's middle.
+    #: The static figure only, and only while ``show_fixations`` is on.
+    fixation_snap_to_line: bool = False
+    fixation_snap_position: float = DEFAULT_SNAP_POSITION
     hollow_fixations: bool = False
     fixation_opacity: float = 1.0
     fixation_color: str | None = DEFAULT_FIXATION_COLOR
@@ -1925,7 +1933,7 @@ def apply_legend_layout(
     its side by what it holds.
     """
     if not show_colors:
-        # Fixation colours → Show off: the entries stay on the figure's traces
+        # Fixation colors → Show off: the entries stay on the figure's traces
         # (their markers still draw), only their legend lines go.
         for trace in fig.data:
             if _trace_legend_kind(trace, comparing) == "colors":
@@ -2261,45 +2269,85 @@ def _saccade_segments_by_class(
     return out
 
 
-def _snap_fixations_to_words(
-    fixations: pd.DataFrame, words: pd.DataFrame, x_field: str, y_field: str
+#: The column a snapped copy of the fixations carries its line in, so "color
+#: by line" reads the line a fixation is drawn on rather than guessing it again
+#: from a y the snap may have put on the edge between two lines (#422).
+_SNAP_LINE_COLUMN = "_snap_line"
+
+
+def _snap_fixations_to_lines(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    y_field: str,
+    position: float = DEFAULT_SNAP_POSITION,
 ) -> pd.DataFrame:
-    """Return a copy of ``fixations`` with each fixation moved to the top-centre of
-    the word it lands on (VIZ-9 "linear reading" mode).
+    """A copy of ``fixations`` with each fixation moved up or down onto its
+    text line, keeping its own x (#422, after VIZ-9's snap above the word).
 
-    Fixations with no assigned word keep their raw position. Uses a precomputed
-    ``word_id`` column when present, else assigns via bounding-box containment."""
+    A fixation's line is its word's: the data's own ``word_id`` when the
+    fixations carry one, else the box it lands in (`assign_fixations_to_words`).
+    A fixation on no word takes the line nearest its y, as
+    `measures.assign_fixation_lines` picks it. Lines are the word boxes
+    clustered by height (`measures.cluster_word_lines`), each spanning the mean
+    top to the mean bottom of its boxes. ``position`` places the fixation on
+    that span, in line heights from its middle: 0 centers it, −0.5 is the top
+    edge (the default, where the old snap drew it), +0.5 the bottom edge.
+
+    Render-only: the heatmaps, the axis ranges and every measure keep the
+    recorded positions. A fixation with no line to go to (boxes with no
+    geometry) keeps its recorded y. The line rides in ``_SNAP_LINE_COLUMN``.
+    """
     out = fixations.copy()
-    if "word_id" not in words.columns:
+    if out.empty or words is None or words.empty:
         return out
-    if (
-        "word_id" in out.columns
-        and pd.to_numeric(out["word_id"], errors="coerce").notna().any()
-    ):
-        wid = pd.to_numeric(out["word_id"], errors="coerce")
-    else:
-        from .measures import assign_fixations_to_words
+    from .measures import (
+        assign_fixations_to_words,
+        cluster_word_lines,
+        word_box_bounds,
+    )
 
-        wid = pd.to_numeric(
-            assign_fixations_to_words(out, words)["word_id"], errors="coerce"
+    _, top, _, bottom = word_box_bounds(words)
+    word_lines = cluster_word_lines(words)
+    spans = (
+        pd.DataFrame(
+            {"line": word_lines.to_numpy(), "top": top, "bottom": bottom},
+            index=words.index,
         )
-    # Snap above the middle of the word's box, where its label is drawn (BUG-97).
-    # Render-only: which word a fixation belongs to is still
-    # `assign_fixations_to_words`, against the same boxes.
-    from .measures import word_box_bounds
-
-    x0, _, x1, _ = word_box_bounds(words)
-    # Boxes with no id are no target: `Series.map` matches a NaN key to a NaN
-    # id, so every fixation on no word was snapped onto one (#412).
-    known = words["word_id"].notna().to_numpy()
-    ids = words["word_id"].to_numpy()[known]
-    cx_by_id = dict(zip(ids, ((x0 + x1) / 2.0)[known]))
-    tops = pd.to_numeric(words["y"], errors="coerce").to_numpy()[known]
-    top_by_id = dict(zip(ids, tops))
-    snap_x = wid.map(cx_by_id)
-    snap_y = wid.map(top_by_id)
-    out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
-    out[y_field] = snap_y.where(snap_y.notna(), out[y_field])
+        .dropna()
+        .groupby("line")[["top", "bottom"]]
+        .mean()
+    )
+    if spans.empty:
+        return out
+    spans.index = spans.index.astype(float)
+    line = pd.Series(np.nan, index=out.index, dtype=float)
+    if "word_id" in words.columns:
+        # Boxes with no id are no target: a NaN key would match every fixation
+        # on no word (#412).
+        known = words["word_id"].notna()
+        line_of_word = dict(
+            zip(
+                _word_id_keys(words.loc[known, "word_id"]),
+                word_lines[known].astype(float),
+            )
+        )
+        if "word_id" in out.columns and out["word_id"].notna().any():
+            word = out["word_id"]
+        else:
+            word = assign_fixations_to_words(out, words)["word_id"]
+        on_word = word.notna()
+        line[on_word] = _word_id_keys(word[on_word]).map(line_of_word)
+    middles = (spans["top"] + spans["bottom"]) / 2.0
+    y = pd.to_numeric(out[y_field], errors="coerce").to_numpy(dtype=float)
+    free = line.isna().to_numpy() & np.isfinite(y)
+    if free.any():
+        gaps = np.abs(y[free, None] - middles.to_numpy(dtype=float)[None, :])
+        line[free] = spans.index.to_numpy()[gaps.argmin(axis=1)]
+    snapped = line.map(middles) + float(position) * line.map(
+        spans["bottom"] - spans["top"]
+    )
+    out[y_field] = snapped.where(snapped.notna(), out[y_field])
+    out[_SNAP_LINE_COLUMN] = line.where(snapped.notna())
     return out
 
 
@@ -3321,8 +3369,11 @@ def _add_saccade_layer(
     visible_classes: Iterable[str] | None = None,
     render_mode: str = "Straight",
     two_way: bool = False,
+    opacity: float = 1.0,
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
+
+    ``opacity`` (#422) is the lines' and the arrowheads' alike.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
     given (the per-fixation reading class from ``measures.classify_saccades``)
@@ -3399,6 +3450,7 @@ def _add_saccade_layer(
                     line=dict(
                         color=palette.get(cls_name, color), width=width, dash=style
                     ),
+                    opacity=opacity,
                     hoverinfo="skip",
                     # VIZ-8: the colour key is optional — hide it (but keep the
                     # coloured sub-traces) when class_legend is off.
@@ -3434,6 +3486,7 @@ def _add_saccade_layer(
                     y=sy,
                     mode="lines",
                     line=dict(color=color, width=width, dash=style),
+                    opacity=opacity,
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccades",
@@ -3464,6 +3517,7 @@ def _add_saccade_layer(
                         color=color,
                         line=dict(width=0),
                     ),
+                    opacity=opacity,
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccade direction",
@@ -3659,7 +3713,6 @@ def _render_scanpath_figure(
     saccade_type_legend = settings.saccade_type_legend
     saccade_classes = settings.saccade_classes
     saccade_render_mode = settings.saccade_render_mode
-    fixation_snap_to_word = settings.fixation_snap_to_word
     hollow_fixations = settings.hollow_fixations
     fixation_opacity = settings.fixation_opacity
     fixation_color = settings.fixation_color
@@ -3726,29 +3779,35 @@ def _render_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
-    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
-    # so the saccade layer AND the fixation markers below draw from the snapped
-    # positions. Off by default. The axis ranges above and the heatmaps below keep
-    # the RECORDED positions (raw gaze density); only the drawn connectors and
-    # markers move — and the Arc headroom just below, which must follow them.
+    # #422 Snap to line (VIZ-9's "linear reading" mode): move each fixation up or
+    # down onto its text line, so the saccade layer AND the fixation markers
+    # below draw from the snapped positions. Off by default, and only while the
+    # fixations are drawn: it is a Fixations setting, greyed with that layer, so
+    # with the markers off the saccades run between the recorded positions and
+    # nothing is labelled snapped (`illustration_reasons`). The axis ranges
+    # above and the heatmaps below keep the RECORDED positions (raw gaze
+    # density); only the drawn connectors and markers move — and the Arc
+    # headroom just below, which must follow them.
     render_fix = fixations
     if (
-        fixation_snap_to_word
+        settings.fixation_snap_to_line
+        and show_fixations
         and spatial_axes
         and not fixations.empty
         and not words.empty
     ):
-        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
+        render_fix = _snap_fixations_to_lines(
+            fixations, words, y_field, settings.fixation_snap_position
+        )
 
     # VIZ-9 arc mode: the saccade arches rise ABOVE the fixations, so reserve
     # headroom at the top of the view (smaller y — the axis is inverted) or a wide
     # top-line saccade's apex gets clipped. Computed from the exact Bézier apex of
     # each segment so it's tight; only in Arc mode, so the default view is
     # unchanged. The apexes come from ``render_fix`` — the coordinates the
-    # connectors are actually drawn from — because Snap to word can both widen a
-    # saccade (two near-edge fixations jump to their words' centres) and lift its
-    # endpoints (to the box tops), so an arc over the recorded positions would
-    # under-reserve and clip the snapped curve.
+    # connectors are actually drawn from — because Snap to line lifts their
+    # endpoints (to a line's top edge, by default), so an arc over the recorded
+    # positions would under-reserve and clip the snapped curve.
     # Whole-monitor view (``fit_to_monitor``): the range still starts as the full
     # screen, and this only ever *grows* it — past the screen's top edge when an
     # arc would reach it — so a schematic arc is never silently cut off; the
@@ -4011,6 +4070,7 @@ def _render_scanpath_figure(
             visible_classes=visible_classes,
             render_mode=saccade_render_mode,
             two_way=two_way_saccades,
+            opacity=settings.saccade_opacity,
         ):
             legend_active = True
 
@@ -4051,8 +4111,8 @@ def _render_scanpath_figure(
             )
 
     if show_fixations and not fixations.empty:
-        # ``render_fix`` == fixations unless VIZ-9 snap-to-word is on, in which
-        # case the markers, order labels and colour-by-line use the snapped x/y.
+        # ``render_fix`` == fixations unless Snap to line is on, in which case
+        # the markers, order labels and colour-by-line use the snapped y.
         ordered = render_fix.sort_values("timestamp_ms")
         # Fixation classification (PRE-2, viz-only): SHORT / LONG / OUT-OF-BOUNDS,
         # each Off / Highlight / Discard. Apply Discard here — drop those rows from
@@ -4067,11 +4127,16 @@ def _render_scanpath_figure(
         # "Color by line" overrides the chosen color field: each fixation is
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
-        # "line: Line 1", "line: Line 2", …
+        # "line: Line 1", "line: Line 2", …  A snapped fixation is tinted by the
+        # line it was snapped to (#422).
         if color_by_line and spatial_axes and not words.empty:
             from .measures import assign_fixation_lines
 
-            line_ids = assign_fixation_lines(ordered, words)
+            line_ids = (
+                ordered[_SNAP_LINE_COLUMN]
+                if _SNAP_LINE_COLUMN in ordered.columns
+                else assign_fixation_lines(ordered, words)
+            )
             color_data = line_ids.map(
                 lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
             )
@@ -6198,9 +6263,16 @@ def _render_scanpath_animation(
                     line=dict(
                         color=s["sac_color"], width=s["sac_width"], dash=s["sac_dash"]
                     ),
+                    # #422: on the base trace only — a frame restates the
+                    # line's x/y and style, never its opacity, so it holds.
+                    # Named like the static figure's, which is how the app's
+                    # cached replay finds it to stamp the opacity on afterwards
+                    # (`tabs._build_and_render_animation`).
+                    opacity=settings.saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
+                    name="saccades",
                 )
             )
         else:
@@ -6233,6 +6305,7 @@ def _render_scanpath_animation(
                         color=s["sac_color"],
                         line=dict(width=0),
                     ),
+                    opacity=settings.saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -6771,6 +6844,7 @@ def _add_comparison_fixation_trace(
     show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
+    saccade_opacity: float = 1.0,
     show_order: bool = True,
     order_font_size: int | None = None,
     show_legend: bool = False,
@@ -6794,7 +6868,8 @@ def _add_comparison_fixation_trace(
     Saccades and markers are separate traces (mirroring the single-trial figure)
     so the per-scanpath saccade colour/line-style/line-width and hollow markers
     all apply, and the shared ``show_saccades`` / ``show_saccade_arrows`` /
-    ``show_order`` toggles take effect.
+    ``show_order`` toggles take effect, as does the shared ``saccade_opacity``
+    (#422 — one for both scanpaths, lines and arrows alike).
 
     Fixation colour: by default each scanpath uses its flat per-scanpath colour
     (the A/B cue). When ``color_by`` names a numeric column, the marker **fill** is
@@ -6881,6 +6956,7 @@ def _add_comparison_fixation_trace(
                     line=dict(
                         color=saccade_color, width=saccade_width, dash=saccade_style
                     ),
+                    opacity=saccade_opacity,
                     name=display_name,
                     legendgroup=display_name,
                     showlegend=False,
@@ -6908,6 +6984,7 @@ def _add_comparison_fixation_trace(
                         color=saccade_color,
                         line=dict(width=0),
                     ),
+                    opacity=saccade_opacity,
                     legendgroup=display_name,
                     showlegend=False,
                     hoverinfo="skip",
@@ -7711,6 +7788,7 @@ def _make_split_comparison_figure(
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -8098,6 +8176,7 @@ def _render_comparison_figure(
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
@@ -9320,7 +9399,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_type_legend",
         "saccade_classes",
         "saccade_render_mode",
-        "fixation_snap_to_word",
+        "fixation_snap_to_line",
+        "fixation_snap_position",
         "span_border_color",
         "word_heatmap_col",
         "word_heatmap_title",

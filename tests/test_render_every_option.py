@@ -82,7 +82,8 @@ NON_DEFAULT = {
         },
         "size_key": {"position": "top-left-inside"},
     },
-    "fixation_snap_to_word": True,
+    "fixation_snap_to_line": True,
+    "fixation_snap_position": 0.25,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
     # CMP-24 — the co-animation's B flags (`--compare-fixation-flag`).
     "fixation_flags_b": {"long": {"mode": "Highlight", "threshold_ms": 700.0}},
@@ -94,6 +95,7 @@ NON_DEFAULT = {
     "saccade_color": "#123456",
     "saccade_style": "dash",
     "saccade_width": 3.0,
+    "saccade_opacity": 0.5,
     "saccade_color_mode": "By type",
     "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#abcdef"},
     "saccade_type_legend": False,

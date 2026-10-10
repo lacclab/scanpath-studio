@@ -78,7 +78,7 @@ regressions, for example. Filtering changes only the figure, never your data.
 **:material/aspect_ratio: Figure & canvas → :material/legend_toggle: Legends** is a
 table with a row for each legend the current figure draws: **Compare (A/B)**
 while comparing, **Saccade types** when saccades are coloured by type,
-**Fixation colours** for a categorical **Color by**, a Highlight filter or raw
+**Fixation colors** for a categorical **Color by**, a Highlight filter or raw
 gaze, and the duration **Size key** on a fixed marker scale. A legend the
 figure does not draw has no row. Its columns:
 

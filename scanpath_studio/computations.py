@@ -1393,8 +1393,8 @@ REGISTER: tuple[Computation, ...] = (
             "across it and mirrors an RTL one. Measured against "
             "OneStop's own Experiment Builder screens: each tiling box is "
             "centered on its word, half a space either side, so the run's "
-            "`x` start is half an advance early there; the label and snap "
-            "use the box center, the landing measures do not."
+            "`x` start is half an advance early there; the label uses the box "
+            "center, the landing measures do not."
         ),
         tiers="A",
         status=STATUS_PARTIAL,

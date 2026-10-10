@@ -126,6 +126,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -2001,6 +2002,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("saccade_style", "Solid"), "solid"
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
+        saccade_opacity=viz_settings.get("saccade_opacity", 1.0),
         saccade_color_mode=viz_settings.get("saccade_color_mode", "Uniform"),
         saccade_class_colors=viz_settings.get("saccade_class_colors"),
         saccade_type_legend=viz_settings.get("saccade_type_legend", True),
@@ -2008,7 +2010,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         # VIZ-31: the reading-class filter (None / a full list = draw them all).
         saccade_classes=viz_settings.get("saccade_classes"),
         saccade_render_mode=viz_settings.get("saccade_render_mode", "Straight"),
-        fixation_snap_to_word=viz_settings.get("fixation_snap_to_word", False),
+        fixation_snap_to_line=viz_settings.get("fixation_snap_to_line", False),
+        fixation_snap_position=viz_settings.get(
+            "fixation_snap_position", DEFAULT_SNAP_POSITION
+        ),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
@@ -4426,6 +4431,7 @@ def _build_studio_config(
             "saccade_width": float(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
+            "saccade_opacity": float(viz_settings.get("saccade_opacity", 1.0)),
             # VIZ-8: colour-by-reading-type mode + per-class palette + legend.
             "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
             "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
@@ -4437,10 +4443,13 @@ def _build_studio_config(
             "saccade_classes": list(
                 viz_settings.get("saccade_classes") or SACCADE_CLASS_ORDER
             ),
-            # VIZ-9: linear-reading mode (arced saccades + snap fixations).
+            # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
             "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
-            "fixation_snap_to_word": bool(
-                viz_settings.get("fixation_snap_to_word", False)
+            "fixation_snap_to_line": bool(
+                viz_settings.get("fixation_snap_to_line", False)
+            ),
+            "fixation_snap_position": float(
+                viz_settings.get("fixation_snap_position", DEFAULT_SNAP_POSITION)
             ),
             # PRE-3 drift correction (ENG-23): saved as the picker's own
             # spelling ("Off" or a title-cased algorithm) so it restores 1:1.
@@ -5539,6 +5548,12 @@ def _plan_replay(
         # Where the legends sit is layout only too: applied to the finished
         # figure in `finished_figure`, so moving a legend rebuilds no frame.
         legend_layout=None,
+        # #422: so is the saccades' opacity — a trace attribute no frame
+        # restates — stamped in `finished_figure`, so dragging it rebuilds no
+        # frame. And the replay never reads the static figure's Snap to line.
+        saccade_opacity=1.0,
+        fixation_snap_to_line=False,
+        fixation_snap_position=DEFAULT_SNAP_POSITION,
         # CMP-24: B's flags only matter to a replay that draws B — the same rule
         # as `fixations_b` below, so a lone replay's key never carries them.
         **({} if dual else {"fixation_flags_b": None}),
@@ -5661,6 +5676,11 @@ def _build_and_render_animation(
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")
         )
+        # #422: the frames were built at full opacity (`_plan_replay`).
+        fig.update_traces(
+            opacity=animation_settings.saccade_opacity,
+            selector=lambda trace: trace.name in ("saccades", "saccade direction"),
+        )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(
             animation_settings, trial_fixations, anim_inputs["fixations_b"]
@@ -5691,6 +5711,7 @@ def _build_and_render_animation(
         bool(animation_settings.duration_size_legend),
         # Not in `anim_key` (the frames never read it), so the view keys on it.
         repr(normalize_legend_layout(animation_settings.legend_layout)),
+        float(animation_settings.saccade_opacity),
     )
     view = _cached_replay_view(
         clip_inputs,
@@ -7437,8 +7458,14 @@ def render_single_trial_tab(
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
+            # #422: the layers as the figure draws them, under the builders'
+            # names — the snap and the arcs count only on a layer that is on.
+            "show_fixations": figure_settings["show_fixations"],
+            "show_saccades": figure_settings["show_saccades"],
             "playback_speed": playback_speed if animate else 1.0,
         },
+        # …and only on the static figure, the one that draws them.
+        static=not (animate or comparing),
         data_source=st.session_state.get("_active_data_source"),
         synthetic=bool(
             st.session_state.get("_datasets", {})

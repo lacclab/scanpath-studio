@@ -55,7 +55,10 @@ GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
 GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
-GLOBAL_FIXATION_SNAP_TO_WORD = "global_fixation_snap_to_word"
+# #422: Snap to line and where on the line (it replaced "Snap above words",
+# `global_fixation_snap_to_word` — see `LEGACY_SESSION_KEYS`).
+GLOBAL_FIXATION_SNAP_TO_LINE = "global_fixation_snap_to_line"
+GLOBAL_FIXATION_SNAP_POSITION = "global_fixation_snap_position"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
@@ -122,6 +125,8 @@ GLOBAL_ANIM_GRID_STEP_MS = "global_anim_grid_step_ms"
 GLOBAL_ANIM_MAX_FRAMES = "global_anim_max_frames"
 GLOBAL_LINE_SPACING = "global_line_spacing"
 GLOBAL_SACCADE_WIDTH = "global_saccade_width"
+# #422: the saccade lines' and arrows' opacity.
+GLOBAL_SACCADE_OPACITY = "global_saccade_opacity"
 GLOBAL_FIXATION_OPACITY = "global_fixation_opacity"
 GLOBAL_STIMULUS_IMAGE_OPACITY = "global_stimulus_image_opacity"
 GLOBAL_STIMULUS_IMAGE_OFFSET_X = "global_stimulus_image_offset_x"
@@ -475,7 +480,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "saccade_type_legend": GLOBAL_SACCADE_TYPE_LEGEND,
         "show_color_legend": GLOBAL_SHOW_COLOR_LEGEND,
         "duration_size_legend": GLOBAL_DURATION_SIZE_LEGEND,
-        "snap_fixations": GLOBAL_FIXATION_SNAP_TO_WORD,
+        "snap_fixations": GLOBAL_FIXATION_SNAP_TO_LINE,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
@@ -622,7 +627,9 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         "preproc_merge_distance_chars": GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         "saccade_width": GLOBAL_SACCADE_WIDTH,
+        "saccade_opacity": GLOBAL_SACCADE_OPACITY,
         "fixation_opacity": GLOBAL_FIXATION_OPACITY,
+        "snap_position": GLOBAL_FIXATION_SNAP_POSITION,
         "stimulus_image_opacity": GLOBAL_STIMULUS_IMAGE_OPACITY,
         "stimulus_image_offset_x": GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         "stimulus_image_offset_y": GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
@@ -851,12 +858,14 @@ URL_BOUNDED_STATE_KEYS = frozenset(
     {
         GLOBAL_LINE_SPACING,
         GLOBAL_SACCADE_WIDTH,
+        GLOBAL_SACCADE_OPACITY,
         GLOBAL_ORDER_FONT_SIZE,
         GLOBAL_ANIM_GRID_STEP_MS,
         GLOBAL_ANIM_MAX_FRAMES,
         GLOBAL_MARKER_SIZE_RANGE,
         GLOBAL_MARKER_DURATION_RANGE,
         GLOBAL_FIXATION_OPACITY,
+        GLOBAL_FIXATION_SNAP_POSITION,
         GLOBAL_STIMULUS_IMAGE_OPACITY,
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
@@ -928,7 +937,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 7
+PLOT_CONFIG_SCHEMA_VERSION = 8
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -988,6 +997,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_COLOR,
         GLOBAL_SACCADE_STYLE,
         GLOBAL_SACCADE_WIDTH,
+        GLOBAL_SACCADE_OPACITY,
         GLOBAL_SACCADE_RENDER_MODE,
         GLOBAL_SACCADE_COLOR_MODE,
         GLOBAL_SACCADE_TYPE_LEGEND,
@@ -998,7 +1008,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP,
         GLOBAL_SACCADE_CLASS_COLOR_REGRESSION,
         GLOBAL_SACCADE_CLASSES,
-        GLOBAL_FIXATION_SNAP_TO_WORD,
+        GLOBAL_FIXATION_SNAP_TO_LINE,
+        GLOBAL_FIXATION_SNAP_POSITION,
         GLOBAL_ALIGN_ALGORITHM,
         GLOBAL_ALIGN_CONNECTORS,
         GLOBAL_ILLUSTRATION_LABEL,
@@ -1150,6 +1161,8 @@ LEGACY_SESSION_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
             GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         ),
+        # #422: "Snap above words" became Snap to line.
+        "global_fixation_snap_to_word": (GLOBAL_FIXATION_SNAP_TO_LINE,),
     }
 )
 

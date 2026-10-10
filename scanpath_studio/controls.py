@@ -34,6 +34,7 @@ from .constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
     HEATMAP_SIGMA_BOUNDS,
@@ -60,6 +61,7 @@ from .constants import (
     SACCADE_DIRECTION_CLASSES,
     SACCADE_WIDTH_BOUNDS,
     SELF_SCALED_HEATMAP_STYLES,
+    SNAP_POSITION_BOUNDS,
     UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
     WORD_BOX_FILL_COLOR,
@@ -176,7 +178,7 @@ def _label_w() -> float:
 
 #: The rail popovers' label column (UX-158 for 👁️ Fixations, UX-159 for the
 #: rest): with titles kept short, this much of the ~28rem body holds the
-#: longest of them ("Snap above words", "Direction arrows") and brings every
+#: longest of them ("Fixation index", "Direction arrows") and brings every
 #: field closer to its title than the rail's default split does.
 _POPOVER_LABEL_W = 0.3
 
@@ -703,6 +705,8 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
     "global_saccade_width": DEFAULT_SACCADE_WIDTH,
+    # #422: the saccade lines' and arrows' opacity — fully opaque, as they were.
+    "global_saccade_opacity": 1.0,
     # VIZ-8: colour saccades uniformly, or by reading type (forward / skip /
     # refixation / return sweep / regression). "By type" splits the saccade trace
     # into one colour per class with a small legend; the five class colours are
@@ -741,9 +745,11 @@ _VIZ_WIDGET_DEFAULTS = {
     # circuits, so the common case pays nothing.
     "global_saccade_classes": list(SACCADE_CLASS_ORDER),
     # VIZ-9 "linear reading" mode: draw saccades as upward arcs (`Arc`) instead of
-    # straight connectors, and/or snap each fixation above the word it lands on.
+    # straight connectors, and/or (#422) snap each fixation up or down onto its
+    # text line, at a position on it in line heights.
     "global_saccade_render_mode": "Straight",
-    "global_fixation_snap_to_word": False,
+    "global_fixation_snap_to_line": False,
+    "global_fixation_snap_position": DEFAULT_SNAP_POSITION,
     "global_illustration_label": "Auto",
     "global_illustration_text": "",
     # VIZ-10: autoplay the animated replay on load (default on). The toggle lives
@@ -1113,7 +1119,7 @@ def _saccade_filter_badge(key: str = "global_saccade_classes") -> str:
 # state and restores it exactly when selected again.
 _ILLUSTRATION_OVERRIDE_KEYS = (
     "global_saccade_render_mode",
-    "global_fixation_snap_to_word",
+    "global_fixation_snap_to_line",
     "global_saccade_color_mode",
     "global_fixation_opacity",
 )
@@ -1438,7 +1444,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_words": False,
         "global_show_raw_gaze": False,
         "global_saccade_render_mode": "Arc",
-        "global_fixation_snap_to_word": True,
+        "global_fixation_snap_to_line": True,
         "global_saccade_color_mode": "Uniform",
         "global_fixation_opacity": 1.0,
     },
@@ -5756,6 +5762,7 @@ def _collect_viz_settings(
         saccade_color=ss.get("global_saccade_color", SACCADE_COLOR),
         saccade_style=ss.get("global_saccade_style") or "Solid",
         saccade_width=float(ss.get("global_saccade_width") or DEFAULT_SACCADE_WIDTH),
+        saccade_opacity=float(ss.get("global_saccade_opacity", 1.0)),
         # VIZ-8: colour-by-reading-type mode + the per-class palette + optional
         # colour-key legend.
         saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
@@ -5779,9 +5786,12 @@ def _collect_viz_settings(
             for cls_name in SACCADE_CLASS_ORDER
             if cls_name in set(ss.get("global_saccade_classes") or SACCADE_CLASS_ORDER)
         ],
-        # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
+        # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
         saccade_render_mode=ss.get("global_saccade_render_mode") or "Straight",
-        fixation_snap_to_word=bool(ss.get("global_fixation_snap_to_word")),
+        fixation_snap_to_line=bool(ss.get("global_fixation_snap_to_line")),
+        fixation_snap_position=float(
+            ss.get("global_fixation_snap_position", DEFAULT_SNAP_POSITION)
+        ),
         illustration_label=ss.get("global_illustration_label") or "Auto",
         illustration_text=str(ss.get("global_illustration_text") or ""),
         # VIZ-10: autoplay the animated replay on load (default on).
@@ -6296,7 +6306,7 @@ def render_plot_controls(
         key="viz_view_illustration",
         type="primary" if _active == "illustration" else "secondary",
         width="stretch",
-        help="A clean schematic: fixations snapped above words, arced "
+        help="A clean schematic: fixations snapped onto their lines, arced "
         "saccades, one saccade color, opaque markers.",
         on_click=_apply_view_preset,
         args=("illustration",),
@@ -6821,12 +6831,26 @@ def render_plot_controls(
                 ),
                 field_host=_sub_row("Opacity", caption_help=opac_help),
             )
-        # The fixations' own colour bar, after the marker groups — idle unless the colour-by column is
-        # numeric, since a discrete palette has no scale to show.
+        # The fixations' own colour bar, after the marker groups — idle unless
+        # the colour-by column is numeric, since a discrete palette has no
+        # scale to show. #422: the greyed row then says why, and where the
+        # thing on the figure that looks like one is switched — a categorical
+        # colour's legend is the Legends table's, and a greyed, checked *Show*
+        # here read as a bar that could not be removed.
+        if color_by == UNIFORM_COLOR_FIELD:
+            bar_idle = f"{ICONS['warning']} No color bar: the markers are one color."
+        elif raw_cmin is None:
+            bar_idle = (
+                f"{ICONS['warning']} No color bar for **Line** or a categorical "
+                f"color. Its legend is in {ICONS['figure']} **Figure & canvas** ▾ "
+                f"→ **Legends** → **{LEGEND_KIND_LABELS['colors']}**."
+            )
+        else:
+            bar_idle = ""
         _render_colorbar_rows(
             "fixation",
-            disabled=metric_disabled or raw_cmin is None,
-            reason=metric_reason,
+            disabled=metric_disabled or bool(bar_idle),
+            reason=metric_reason or bar_idle,
         )
         # PRE-3: vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"
@@ -6937,23 +6961,45 @@ def render_plot_controls(
             help=_tip,
             label_visibility="collapsed",
         )
-        # "Snap above words" is the fixation half of VIZ-9 (its
-        # partner is Saccades → Style → Line shape → Arc). Keep the control
-        # for saved-view compatibility, but do not give it a separate
-        # "Linear-reading schematic" heading in this already compact panel.
-        # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
-        # unlike the drift correction — hence its own gate. UX-156 moved it to the
-        # bottom of the panel: it is a schematic mode, not marker styling.
-        _labeled(
-            st,
-            "checkbox",
-            "Snap above words",
-            key="global_fixation_snap_to_word",
+        # #422 Snap to line, the fixation half of VIZ-9 (its partner is
+        # ↗️ Saccades ▾ → Shape → Arc). It replaced "Snap above words", which
+        # moved a fixation onto its word sideways too: a fixation now keeps
+        # its x and moves only up or down, onto its line, *Position* line
+        # heights from the line's middle (−0.5, the top edge, by default —
+        # where the old snap drew it). Still `make_scanpath_figure`-only,
+        # unlike the drift correction — hence its own gate. UX-156 put it at
+        # the bottom of the panel: it is a schematic mode, not marker styling.
+        snapped, _ = _check_row(
+            "Snap",
+            key="global_fixation_snap_to_line",
+            check_label="To line",
+            check_share=0.4,
             persist_state="session",
             disabled=static_disabled,
             help=_gated_help(
-                "Draw each fixation above its word, not at its recorded position.",
+                "Move each fixation up or down onto its text line; it keeps its "
+                "x. The line is its word's, else the nearest one.",
                 static_reason,
+            ),
+        )
+        position_help = _gated_help(
+            "Where on its line a snapped fixation sits, in line heights: 0 is "
+            "the middle, −0.5 the top edge, 0.5 the bottom edge.",
+            static_reason,
+        )
+        _numeric_slider(
+            st,
+            "Snap position",
+            key="global_fixation_snap_position",
+            persist_state="session",
+            min_value=SNAP_POSITION_BOUNDS[0],
+            max_value=SNAP_POSITION_BOUNDS[1],
+            step=0.05,
+            slider_format="%.2f",
+            disabled=static_disabled or not snapped,
+            help=position_help,
+            field_host=_sub_row(
+                "Position", caption_help=_layer_gate(False, position_help)[1]
             ),
         )
 
@@ -6990,7 +7036,7 @@ def render_plot_controls(
 
     # --- Saccades ---------------------------------------------------------
     # UX-159: laid out like 👁️ Fixations (UX-158) — one *Line* group (colour,
-    # style, width, shape) with a caption per row, then *Direction arrows* as a
+    # style, width, opacity, shape) with a caption per row, then *Direction arrows* as a
     # `label | ☑ Show` row.
     with (
         sac_grp,
@@ -7027,7 +7073,7 @@ def render_plot_controls(
             section=_COMPARE_SCANPATHS[0][1] if comparing else "Line",
             section_help=(
                 _COMPARE_SCANPATH_HELP[0] + " Color, style and width are its "
-                "own; shape and direction arrows are shared."
+                "own; opacity, shape and direction arrows are shared."
                 if comparing
                 else "How saccades are drawn."
             ),
@@ -7133,15 +7179,37 @@ def render_plot_controls(
                 help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
                 field_host=_sub_row("Width", caption_help=width_help),
             )
+        # #422: one opacity for the lines and their arrows, on every figure —
+        # in Compare and the co-animation both scanpaths share it, as they
+        # share Shape below (their own colour, style and width tell them apart).
+        opacity_text = (
+            "Opacity of the saccade lines and direction arrows; lower it to bring "
+            "the fixations forward."
+            + (" Shared by both scanpaths." if comparing else "")
+        )
+        _numeric_slider(
+            st,
+            "Saccade opacity",
+            key="global_saccade_opacity",
+            persist_state="session",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            slider_format="%.2f",
+            help=opacity_text,
+            field_host=_sub_row(
+                "Opacity", caption_help=_layer_gate(False, opacity_text)[1]
+            ),
+        )
         # VIZ-9: "linear reading" schematic — arched saccades. Its paired
-        # control, "Snap above words", remains under Fixations because it moves
+        # control, Snap to line (#422), remains under Fixations because it moves
         # fixations. Arcs are a `make_scanpath_figure` feature.
         shape_disabled, shape_help = _layer_gate(
             class_disabled,
             _gated_help(
                 "Straight connectors, or upward **arcs** over the text (the "
                 f"classic linear-reading diagram). Pairs with {ICONS['fixations']} Fixations ▾ → "
-                "**Snap above words**.",
+                "**Snap** → **To line**.",
                 class_reason,
             ),
         )

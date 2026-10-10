@@ -560,6 +560,69 @@ _IFRAME_CLICK_CLOSES_POPOVER_SCRIPT = """
 """
 
 
+#: #422: a field title's tooltip (`fields.row_label`, `styles.py`'s
+#: `.sps-fhelp::after`) opens below the title, and on a popover's last rows it
+#: ran past the popover's bottom edge. That made the popover scrollable while
+#: it showed; where scrollbars take room (a Mac with a mouse, most of Windows)
+#: the scrollbar narrowed the rows, the title slid out from under the pointer,
+#: the tooltip closed, the scrollbar went, and round again — the rail's
+#: popovers shook for as long as the pointer rested there. This opens a tooltip
+#: upward (`.sps-tip-up`) when the box that clips it — the popover, or the page
+#: — has no room for it below and more room above. A tooltip drawn above the
+#: title can never make that box scrollable, since nothing scrolls above its
+#: top. Installed in the parent's realm once per page load, like the scripts
+#: above.
+_FIELD_TIP_PLACEMENT_SCRIPT = """
+<script>
+(function () {
+    function install() {
+        var GAP = 6;
+        function clipRect(el) {
+            for (var box = el.parentElement; box && box !== document.body;
+                    box = box.parentElement) {
+                if (getComputedStyle(box).overflowY !== "visible") {
+                    return box.getBoundingClientRect();
+                }
+            }
+            return null;
+        }
+        function place(tip) {
+            var view = document.documentElement.clientHeight;
+            var clip = clipRect(tip);
+            var top = Math.max(clip ? clip.top : 0, 0);
+            var bottom = Math.min(clip ? clip.bottom : view, view);
+            var r = tip.getBoundingClientRect();
+            var height = parseFloat(getComputedStyle(tip, "::after").height);
+            if (!(height > 0)) { height = 80; }
+            var below = bottom - r.bottom;
+            var above = r.top - top;
+            tip.classList.toggle(
+                "sps-tip-up", below < height + GAP && above > below
+            );
+        }
+        function onEnter(ev) {
+            var tip = ev.target instanceof Element
+                && ev.target.closest(".sps-fhelp");
+            if (tip) { place(tip); }
+        }
+        document.addEventListener("mouseover", onEnter, true);
+        document.addEventListener("focusin", onEnter, true);
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsFieldTipPlacementInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsFieldTipPlacementInstalled = true;
+    } catch (e) {
+        /* Not same-origin: the tooltips open below their titles, as before. */
+    }
+})();
+</script>
+"""
+
+
 #: #374 F19: what a screen reader announces. Streamlit sets a widget's
 #: ``aria-label`` to its label string as written, so a switch labelled
 #: ``:material/movie: Animate`` was announced with the shortcode, and the
@@ -655,6 +718,7 @@ def configure_page() -> None:
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
     embed_html_iframe(_A11Y_NAMES_SCRIPT, height=0)
+    embed_html_iframe(_FIELD_TIP_PLACEMENT_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the

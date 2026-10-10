@@ -1,1 +1,0 @@
-The setup guide no longer scrolls a part of the Add-dataset screen under the top bar, the screen's own header bar stays on screen as you scroll, and on a narrow window the fields under the guide card can be scrolled clear of it.

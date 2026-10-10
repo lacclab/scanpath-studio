@@ -1,1 +1,0 @@
-Participant, trial and text metadata tables can each be uploaded as several files, stacked into one table; the CLI's --participant-metadata, --trial-metadata and --text-metadata take several files too.

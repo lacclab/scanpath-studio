@@ -1,1 +1,0 @@
-Before a file is uploaded, each table on the add-dataset screen says what it holds and what it needs, and offers a larger drop area; a file that can't be read is reported beside the row, where it no longer hides the file's remove button.

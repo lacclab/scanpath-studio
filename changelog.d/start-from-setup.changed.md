@@ -1,1 +1,0 @@
-The add-dataset screen opens its upload part with Start from: from scratch, from a dataset you added before (its mapping, kept fields and recording setup, copied without a file), or from a saved setup file, with Undo. It replaces the Restore a saved setup popover.

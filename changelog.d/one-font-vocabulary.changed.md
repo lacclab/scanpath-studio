@@ -1,1 +1,0 @@
-Fonts read the same on Recording setup and Stimulus → Text: one font list (now with Multilingual), sizes in px or pt on both, Fit to word boxes with its line spacing on both, and a point size read as pixels when the dataset has no physical size.

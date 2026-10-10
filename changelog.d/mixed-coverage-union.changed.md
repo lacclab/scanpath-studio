@@ -1,1 +1,0 @@
-When the Words and Fixations tables cover different trials, the trial picker, list_trials, render --list-trials and the export bundle all list every trial either table has, once, and each draws with the tables it has; list_trials used to list only the trials both tables had, and the picker dropped the trials only the Words table had.

@@ -6698,17 +6698,19 @@ def _render_scanpath_animation(
         )
     fig.frames = frames
 
-    shapes.append(
-        dict(
-            type="rect",
-            x0=x_range[0],
-            y0=y_range[1],
-            x1=x_range[1],
-            y1=y_range[0],
-            line=dict(color="#000000", width=1),
-            fillcolor="rgba(0,0,0,0)",
+    if settings.show_plot_frame:
+        shapes.append(
+            dict(
+                type="rect",
+                x0=x_range[0],
+                y0=y_range[1],
+                x1=x_range[1],
+                y1=y_range[0],
+                line=dict(color=settings.plot_frame_color, width=1),
+                fillcolor="rgba(0,0,0,0)",
+                name=_shape_layer_tag("frame"),
+            )
         )
-    )
 
     sliders = (
         _animation_time_slider(frame_times, reading_span_ms, _recorded_clock(specs))
@@ -7947,19 +7949,21 @@ def _make_split_comparison_figure(
                 box["yref"] = yref
                 all_shapes.append(box)
 
-        all_shapes.append(
-            dict(
-                type="rect",
-                xref=xref,
-                yref=yref,
-                x0=x_range[0],
-                y0=y_range[1],
-                x1=x_range[1],
-                y1=y_range[0],
-                line=dict(color="#000000", width=1),
-                fillcolor="rgba(0,0,0,0)",
+        if settings.show_plot_frame:
+            all_shapes.append(
+                dict(
+                    type="rect",
+                    xref=xref,
+                    yref=yref,
+                    x0=x_range[0],
+                    y0=y_range[1],
+                    x1=x_range[1],
+                    y1=y_range[0],
+                    line=dict(color=settings.plot_frame_color, width=1),
+                    fillcolor="rgba(0,0,0,0)",
+                    name=_shape_layer_tag("frame"),
+                )
             )
-        )
 
         # Under the scanpath, as on the single-trial figure.
         _add_comparison_raw_gaze_trace(
@@ -8429,17 +8433,19 @@ def _render_comparison_figure(
 
     _add_category_legend(fig, category_legend, category_label or "")
 
-    layout_shapes.append(
-        dict(
-            type="rect",
-            x0=x_range[0],
-            y0=y_range[1],
-            x1=x_range[1],
-            y1=y_range[0],
-            line=dict(color="#000000", width=1),
-            fillcolor="rgba(0,0,0,0)",
+    if settings.show_plot_frame:
+        layout_shapes.append(
+            dict(
+                type="rect",
+                x0=x_range[0],
+                y0=y_range[1],
+                x1=x_range[1],
+                y1=y_range[0],
+                line=dict(color=settings.plot_frame_color, width=1),
+                fillcolor="rgba(0,0,0,0)",
+                name=_shape_layer_tag("frame"),
+            )
         )
-    )
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # The title + top A/B legend get reserved space above the plot so they don't
@@ -9610,9 +9616,7 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_render_mode",
         "fixation_snap_to_line",
         "fixation_snap_position",
-        # #422 — the replay draws no frame and no heatmap.
-        "show_plot_frame",
-        "plot_frame_color",
+        # #422 — the replay draws no heatmap.
         "heatmap_opacity",
         "span_border_color",
         "word_heatmap_col",

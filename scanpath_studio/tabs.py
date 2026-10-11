@@ -5530,8 +5530,6 @@ class _ReplayPlan:
 #: the frame key (`_plan_replay`).
 _REPLAY_UNREAD_DESIGN = FigureSettings.defaults(
     (
-        "show_plot_frame",
-        "plot_frame_color",
         "heatmap_opacity",
         "heatmap_colorbar_thickness",
         "heatmap_colorbar_length",

@@ -2045,7 +2045,7 @@ def _default_legend_height(fig: go.Figure) -> float:
     return h + (rows - 1) * (h - 10.0)
 
 
-def _content_top_inset(fig: go.Figure) -> float:
+def _content_top_inset(fig: go.Figure, x_span: tuple | None = None) -> float:
     """How far, in px, the topmost thing drawn sits below the plot's top edge.
 
     The plot region reaches past the text (the screen, or a margin of padding
@@ -2054,10 +2054,19 @@ def _content_top_inset(fig: go.Figure) -> float:
     highest word box, label, fixation or saccade — a marker's or a label's top,
     not its centre, or a legend's background washed out the top of the highest
     fixation. 0 for a figure of several panels, without a fixed y range, or
-    whose content reaches the edge.
+    whose content reaches the edge. ``x_span`` (paper ``(lo, hi)``) counts only
+    what lies under that stretch of the plot.
     """
     if getattr(fig, "_grid_ref", None) is not None:
         return 0.0
+    x_range = fig.layout.xaxis.range
+    if x_span is not None and (not x_range or x_range[0] == x_range[1]):
+        x_span = None
+
+    def x_paper(xs: pd.Series) -> pd.Series:
+        x0, x1 = float(x_range[0]), float(x_range[1])
+        return (xs - x0) / (x1 - x0)
+
     y_range = fig.layout.yaxis.range
     if not y_range or y_range[0] == y_range[1]:
         return 0.0
@@ -2080,6 +2089,12 @@ def _content_top_inset(fig: go.Figure) -> float:
         if y is None:
             continue
         ys = pd.to_numeric(pd.Series(list(y)), errors="coerce")
+        if x_span is not None:
+            x = getattr(trace, "x", None)
+            if x is None or len(x) != len(ys):
+                continue
+            xp = x_paper(pd.to_numeric(pd.Series(list(x)), errors="coerce"))
+            ys = ys.where((xp >= x_span[0]) & (xp <= x_span[1]))
         mode = str(getattr(trace, "mode", "") or "")
         above = pd.Series(0.0, index=ys.index)
         if "markers" in mode and trace.marker is not None:
@@ -2104,9 +2119,16 @@ def _content_top_inset(fig: go.Figure) -> float:
     for shape in fig.layout.shapes or ():
         if shape.yref not in (None, "y") or str(shape.name or "").endswith("frame"):
             continue
+        if x_span is not None:
+            if shape.xref not in (None, "x"):
+                continue
+            ends = x_paper(pd.to_numeric(pd.Series([shape.x0, shape.x1])))
+            if ends.max() < x_span[0] or ends.min() > x_span[1]:
+                continue
         reach(pd.to_numeric(pd.Series([shape.y0, shape.y1]), errors="coerce"), 0.0)
     if top is None:
-        return 0.0
+        # Nothing at all under that stretch: it is empty to the bottom.
+        return float(plot_h) if x_span is not None else 0.0
     return float((1.0 - min(1.0, top)) * plot_h)
 
 
@@ -2277,7 +2299,12 @@ def _add_duration_size_key(
         cy = pad + label_px + biggest / 2.0
         centres = [(pad + (i + 0.5) * slot, cy) for i in range(n)]
         labels = [(cx, pad + label_px / 2.0, "center") for cx, _ in centres]
-    left, bottom, ax, ay = _size_key_anchor(fig, placement["position"], w, h)
+    # What under the key must stay clear of the content: its lowest label's
+    # text, not the box's own padding.
+    clear = min(y for _x, y, _align in labels) - label_font / 2.0
+    left, bottom, ax, ay = _size_key_anchor(
+        fig, placement["position"], w, h, clear=clear
+    )
     # Collected and added in one assignment: each `add_shape` re-validates every
     # shape already on the figure — the word boxes and heatmap rects (#422).
     circles = []
@@ -2327,7 +2354,9 @@ def _add_duration_size_key(
     _stack_bottom_right(fig)
 
 
-def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple:
+def _size_key_anchor(
+    fig: go.Figure, position: str, w: float, h: float, *, clear: float = 8.0
+) -> tuple:
     """``(left, bottom, anchor_x, anchor_y)``: where the size key's box goes.
 
     ``left`` / ``bottom`` are px from the paper anchor to the box's bottom-left
@@ -2336,10 +2365,25 @@ def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple
     Inside, the key keeps to the plot's edge: its own padding is its gap.
     """
     gap = 0.0 if not _spot_parts(position)[2] else float(_LEGEND_GAP_PX)
-    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap, pad=8.0)
+    pad = 8.0
+    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap, pad=pad)
     left = at["dx"] - {"left": 0.0, "center": w / 2.0, "right": w}[at["xanchor"]]
     bottom = at["dy"] - {"bottom": 0.0, "middle": h / 2.0, "top": h}[at["yanchor"]]
+    edge, _along, outside = _spot_parts(position)
+    if edge == "top" and outside:
+        # Down toward what is under the key itself, by up to `_SIZE_KEY_DROP_PX`,
+        # its labels' text (``clear`` px above the box's bottom) stopping just
+        # over the top of the highest thing beneath them.
+        plot_w, _plot_h, _margin = _plot_px(fig)
+        span = (at["x"] + left / plot_w, at["x"] + (left + w) / plot_w)
+        lowest = -_content_top_inset(fig, span) - clear + 2.0
+        bottom -= min(max(bottom - lowest, 0.0), _SIZE_KEY_DROP_PX)
     return left, bottom, at["x"], at["y"]
+
+
+#: How far the size key above the plot may come down past the legend row's
+#: centre toward the content under it.
+_SIZE_KEY_DROP_PX = 10.0
 
 
 # VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight

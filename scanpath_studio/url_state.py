@@ -3188,6 +3188,7 @@ def _restore_plot_config(
                     continue
                 if entry[name] is None:
                     st.session_state.pop(f"cmp{idx}_{name}", None)
+                    restore.applied += 1
                 else:
                     put_float(
                         entry[name],

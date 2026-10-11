@@ -112,11 +112,13 @@ class TestTheLayoutValue:
 
 
 class TestMovingTraceLegends:
-    def test_auto_leaves_the_figure_untouched(self):
+    def test_auto_leaves_the_figure_untouched_but_its_text_black(self):
         fig = _figure()
         before = fig.to_dict()
         apply_legend_layout(fig, None)
-        assert fig.to_dict() == before
+        after = fig.to_dict()
+        assert after["layout"].pop("legend") == {"font": {"color": "#000000"}}
+        assert after == before
 
     @pytest.mark.parametrize(
         "position", [p for p in plots.LEGEND_POSITIONS if p.endswith("-outside")]

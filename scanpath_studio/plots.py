@@ -1689,16 +1689,22 @@ def _settings_size_scale(settings: FigureSettings) -> dict:
 def _duration_key_references(duration_range) -> list[tuple[float, str]]:
     """The durations a size key draws, each with its label.
 
-    The two bounds (labelled ``≤`` / ``≥``, because everything beyond them
-    clamps) plus the round values 100/200/400/800/1600 ms that fall strictly
-    between them — at most three of those, so the key stays compact."""
+    The lower bound (labelled ``≤``, because everything below it clamps) plus
+    the round values 100/200/400/800/1600 ms that fall strictly between the
+    bounds — at most three of those, so the key stays compact. The upper
+    bound's circle, the largest, is left out: it dwarfed the rest of the key.
+    It is drawn only when nothing falls between the bounds, so the key always
+    shows two sizes."""
     lo, hi = _duration_bounds(duration_range)
     inner = [d for d in (100, 200, 400, 800, 1600) if lo < d < hi][:3]
     if not inner and hi - lo > 2:
         inner = [round((lo + hi) / 2)]
     refs = [(lo, f"≤{lo:g}")]
     refs += [(float(d), f"{d:g}") for d in inner]
-    refs.append((hi, f"≥{hi:g} ms"))
+    if len(refs) < 2:
+        refs.append((hi, f"≥{hi:g}"))
+    last_d, last_label = refs[-1]
+    refs[-1] = (last_d, f"{last_label} ms")
     return refs
 
 
@@ -1753,6 +1759,8 @@ _LEGEND_AUTO_POSITION = "top-right-outside"
 _COLORS_LEGEND_META = "legend:colors"
 _LEGEND_IDS = {"compare": "legend2", "saccades": "legend3", "colors": "legend4"}
 _LEGEND_GAP_PX = 8
+#: Every legend's text: entries, group titles and the size key's labels.
+LEGEND_TEXT_COLOR = "#000000"
 #: Spots whose legend reads as a row by default; the rest stack.
 _ROW_SPOTS = ("top-center", "bottom-center")
 
@@ -1922,6 +1930,9 @@ class _LegendSlots:
         self.base = dict(margin)
         self.top_start = top_start
         self.used: dict = {}
+        # The first legend's height on each outside edge, which a size key on
+        # that edge is centred against.
+        self.rows: dict = {}
 
     @classmethod
     def of(cls, fig: go.Figure) -> _LegendSlots:
@@ -1933,7 +1944,14 @@ class _LegendSlots:
         return slots
 
     def place(
-        self, fig: go.Figure, position: str, w: float, h: float, *, gap: float
+        self,
+        fig: go.Figure,
+        position: str,
+        w: float,
+        h: float,
+        *,
+        gap: float,
+        pad: float = 0.0,
     ) -> dict:
         """Claim a ``w`` x ``h`` px box at ``position``; return where it goes.
 
@@ -1941,17 +1959,27 @@ class _LegendSlots:
         on it (``xanchor`` / ``yanchor``), and a px offset from that point
         (``dx`` / ``dy``, y up). An outside spot grows the figure on its side
         so the plot region keeps its size.
+
+        ``pad`` is empty space inside the box along its edges (the size key's);
+        given, a box first on an outside top or bottom spot is centred on the
+        legend already on that edge — it moves toward the plot by up to the gap
+        plus that padding — so the two read as one row.
         """
         _plot_w, _plot_h, margin = _plot_px(fig)
         edge, along, outside = _spot_parts(position)
         used = self.used.get(position, 0.0)
         out = {"dx": 0.0, "dy": 0.0}
         if edge in ("top", "bottom"):
+            row = self.rows.get(edge)
+            if outside and not used and pad and row is not None:
+                used = -min(max((h - row) / 2.0, 0.0), gap + pad)
+            elif outside and not used and not pad:
+                self.rows.setdefault(edge, h)
             out["x"] = {"left": 0.0, "center": 0.5, "right": 1.0}[along]
             out["xanchor"] = along
             if not outside and along != "center":
                 out["dx"] = gap if along == "left" else -gap
-            self.used[position] = used + h + gap
+            self.used[position] = max(used, 0.0) + h + gap
             if edge == "top":
                 out["y"] = 1.0
                 if outside:
@@ -2028,6 +2056,9 @@ def apply_legend_layout(
         for trace in fig.data:
             if _trace_legend_kind(trace, comparing) == "colors":
                 trace.showlegend = False
+    # Every legend's text is black, the default one's included (the template's
+    # is a grey-blue).
+    fig.update_layout(legend_font_color=LEGEND_TEXT_COLOR)
     specs = normalize_legend_layout(layout)
     moved = {
         kind
@@ -2090,8 +2121,9 @@ def apply_legend_layout(
             # A grouped legend gives each group a column of its own, so the
             # saccade types would still stack; "normal" runs them as one row.
             cfg["traceorder"] = "normal"
+        cfg["font"] = {"color": LEGEND_TEXT_COLOR}
         if spec["size"]:
-            cfg["font"] = {"size": font_px}
+            cfg["font"]["size"] = font_px
         fig.update_layout({_LEGEND_IDS[kind]: cfg})
     return fig
 
@@ -2142,7 +2174,7 @@ def _add_duration_size_key(
     ]
     label_font = float(placement["size"] or 10)
     label_px = 1.6 * label_font
-    biggest = float(size_range[1])
+    biggest = max(sizes)
     pad = 8.0
     n = len(refs)
     # The key's own box, in px, origin bottom-left and y up: where each circle's
@@ -2201,7 +2233,9 @@ def _add_duration_size_key(
             xanchor=align,
             yanchor="middle",
             font=dict(
-                size=label_font, color="#444444", family=font_family or FONT_FAMILY
+                size=label_font,
+                color=LEGEND_TEXT_COLOR,
+                family=font_family or FONT_FAMILY,
             ),
             name=_SIZE_KEY_NAME,
         )
@@ -2218,7 +2252,7 @@ def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple
     Inside, the key keeps to the plot's edge: its own padding is its gap.
     """
     gap = 0.0 if not _spot_parts(position)[2] else float(_LEGEND_GAP_PX)
-    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap)
+    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap, pad=8.0)
     left = at["dx"] - {"left": 0.0, "center": w / 2.0, "right": w}[at["xanchor"]]
     bottom = at["dy"] - {"bottom": 0.0, "middle": h / 2.0, "top": h}[at["yanchor"]]
     return left, bottom, at["x"], at["y"]
@@ -3098,7 +3132,7 @@ def _add_highlight_key(
         text=text,
         showarrow=False,
         align="left",
-        font=dict(size=12, color="#444444"),
+        font=dict(size=12, color=LEGEND_TEXT_COLOR),
         bgcolor="rgba(255,255,255,0.75)",
         name=_HIGHLIGHT_KEY_NAME,
     )

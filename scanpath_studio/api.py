@@ -3325,11 +3325,14 @@ def compare_scanpaths(
     ``fix_color``, ``marker_size_range``, ``opacity``, ``hollow``,
     ``saccade_color``, ``saccade_style``, ``saccade_width``, ``box_color`` —
     the outline of that reading's word boxes, its ``fix_color`` when left out —
-    ``box_fill_color``, their fill, ``word_box_fill_color`` when left out — and
-    ``raw_gaze_color``, that reading's raw-gaze samples, its ``fix_color`` when
-    left out. These three are this figure's only: the co-animation draws one set
-    of boxes, in ``word_box_color`` / ``word_box_fill_color``, and no raw gaze,
-    and ignores them. ``heatmap_colorscale`` gives that reading's word-box
+    ``box_fill_color``, their fill, ``word_box_fill_color`` when left out —
+    ``box_line_opacity`` / ``box_fill_opacity``, their outline's and fill's
+    opacity (0–1; 0 hides it), ``word_box_line_opacity`` /
+    ``word_box_fill_opacity`` when left out — and ``raw_gaze_color``, that
+    reading's raw-gaze samples, its ``fix_color`` when left out. These are this
+    figure's only: the co-animation draws one set of boxes, in
+    ``word_box_color`` / ``word_box_fill_color`` at the figure's opacities, and
+    no raw gaze, and ignores them. ``heatmap_colorscale`` gives that reading's word-box
     heatmap its own color scale (``heatmap_colorscale`` when left out) on the
     range both share; when A's and B's differ, each gets its own color bar.
 

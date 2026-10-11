@@ -706,7 +706,9 @@ _SHARE_FLOAT_PARAMS = {
     "viewing_distance_mm": "global_viewing_distance_mm",
     "display_dpi": "global_display_dpi",
     "stimulus_font_pt": "global_stimulus_font_pt",
-    **_cmp_style_params("saccade_width", "opacity"),
+    **_cmp_style_params(
+        "saccade_width", "opacity", "box_line_opacity", "box_fill_opacity"
+    ),
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
@@ -900,6 +902,11 @@ _URL_BOUNDED = {
     "export_figure_dpi": PRINT_DPI_BOUNDS,
     "global_stimulus_font_pt": (4.0, 144.0),
     **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
+    **{
+        f"cmp{i}_box_{part}_opacity": (0.0, 1.0)
+        for i in (0, 1)
+        for part in ("line", "fill")
+    },
     **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
     **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
 }
@@ -3174,6 +3181,21 @@ def _restore_plot_config(
                 bf == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bf)
             ):
                 put(f"cmp{idx}_box_fill_color", bf)
+            # The word-box opacities: null follows the figure's again.
+            for part in ("line", "fill"):
+                name = f"box_{part}_opacity"
+                if name not in entry:
+                    continue
+                if entry[name] is None:
+                    st.session_state.pop(f"cmp{idx}_{name}", None)
+                else:
+                    put_float(
+                        entry[name],
+                        f"cmp{idx}_{name}",
+                        0.0,
+                        1.0,
+                        f"scanpath {idx + 1} word box {part} opacity",
+                    )
             # And for the raw-gaze samples: follow the fixation colour.
             rg = entry.get("raw_gaze_color")
             if isinstance(rg, str) and (

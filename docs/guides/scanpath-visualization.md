@@ -32,7 +32,7 @@ and a **▾** with its settings.
 | :material/blur_on: Fixations | markers: size, color, order |
 | :material/arrow_outward: Saccades | lines and arrows, colored by direction or reading type |
 | :material/article: Stimulus | text, span highlight, stimulus image, font and background |
-| :material/crop_square: Word boxes | each word's interest area: outline color and opacity; fill color and opacity |
+| :material/crop_square: Word boxes | each word's interest area: outline color and opacity; fill color and opacity. In Compare, each scanpath has its own, the figure's until you set one |
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |
 | :material/filter_list: Filters & highlights | which fixations and saccades are drawn |

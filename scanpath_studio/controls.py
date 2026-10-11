@@ -4555,6 +4555,10 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_box_color": "",
                 # The word-box fill; empty follows `global_word_box_fill_color`.
                 f"cmp{idx}_box_fill_color": "",
+                # The word-box outline's and fill's opacity; absent follows the
+                # figure's `global_word_box_{line,fill}_opacity`.
+                f"cmp{idx}_box_line_opacity": None,
+                f"cmp{idx}_box_fill_opacity": None,
                 # The raw-gaze samples; empty follows `cmp{idx}_fix_color`.
                 f"cmp{idx}_raw_gaze_color": "",
                 # The heatmap's colour scale; empty follows the figure's.
@@ -4586,6 +4590,8 @@ def _seed_compare_styles() -> None:
                 "_label_pattern",
                 "_box_color",
                 "_box_fill_color",
+                "_box_line_opacity",
+                "_box_fill_opacity",
                 "_raw_gaze_color",
                 "_heatmap_colorscale",
             )
@@ -4984,14 +4990,21 @@ _FILL_PICK_NOTE = (
 )
 
 
-def _show_picked_fill() -> None:
+def _show_picked_fill(key: str = "global_word_box_fill_opacity") -> None:
     """A fill colour pick's callback: make the colour visible (see above).
 
+    ``key`` is the opacity the fill is drawn at — in Compare, the scanpath's
+    own ``cmp{idx}_box_fill_opacity``, which follows the figure's while unset.
     Through `write_through`: the opacity slider sits in the same popover, and
     a pick can be committed as that popover closes (#374 F9)."""
-    key = "global_word_box_fill_opacity"
     try:
-        opacity = float(st.session_state.get(key, WORD_BOX_FILL_OPACITY))
+        opacity = float(
+            st.session_state.get(key)
+            if st.session_state.get(key) is not None
+            else st.session_state.get(
+                "global_word_box_fill_opacity", WORD_BOX_FILL_OPACITY
+            )
+        )
     except (TypeError, ValueError):
         opacity = WORD_BOX_FILL_OPACITY
     if opacity < _FILL_SHOWS_FROM:
@@ -5026,7 +5039,7 @@ def _compare_follow_color_picker(
         picked = st.session_state[pick_key]
         st.session_state[key] = "" if picked.lower() == follow.lower() else picked
         if part == "box_fill":
-            _show_picked_fill()
+            _show_picked_fill(f"cmp{idx}_box_fill_opacity")
 
     disabled, tip = _layer_gate(disabled, help)
     host.color_picker(
@@ -5044,6 +5057,48 @@ def _compare_fix_color(idx: int) -> str:
     return st.session_state.get(f"cmp{idx}_fix_color") or compare_palette_color(idx)
 
 
+def _compare_follow_opacity(
+    host, idx: int, part: str, *, label: str, help: str
+) -> None:
+    """One scanpath's word-box ``part`` opacity (``"line"`` / ``"fill"``),
+    ``cmp{idx}_box_{part}_opacity``.
+
+    A shadow like `_compare_follow_color_picker`: the slider shows the opacity
+    drawn — the figure's ``global_word_box_{part}_opacity`` until one is set
+    here — and only a change writes the override; setting the figure's value
+    again goes back to following it."""
+    key = f"cmp{idx}_box_{part}_opacity"
+    defaults = {"line": WORD_BOX_LINE_OPACITY, "fill": WORD_BOX_FILL_OPACITY}
+    follow = float(
+        st.session_state.get(f"global_word_box_{part}_opacity", defaults[part])
+    )
+    pick_key = f"{key}__pick"
+    own = st.session_state.get(key)
+    st.session_state[pick_key] = float(own) if own is not None else follow
+
+    def _apply() -> None:
+        if _shadow_key_missing(pick_key):  # BUG-18
+            return
+        picked = float(st.session_state[pick_key])
+        if abs(picked - follow) < 1e-9:
+            st.session_state.pop(key, None)
+        else:
+            st.session_state[key] = picked
+
+    _numeric_slider(
+        st,
+        f"{_COMPARE_SCANPATHS[idx][1]} — {label}",
+        key=pick_key,
+        min_value=0.0,
+        max_value=1.0,
+        step=0.01,
+        number_format="%.2f",
+        help=help,
+        on_change=_apply,
+        field_host=host,
+    )
+
+
 def _render_compare_box_groups(fill_help: str) -> None:
     """The word boxes per scanpath, for the static comparison — laid out like
     the Fixations popover's Compare groups: scanpath A's group (its *Line* and
@@ -5051,8 +5106,8 @@ def _render_compare_box_groups(fill_help: str) -> None:
 
     Each reading's boxes are outlined in its own colour — its fixation colour
     until one is picked here, so A and B stay apart by default — and filled in
-    its own, the figure's fill until one is picked. The two opacities are
-    shared by both readings and sit on A's rows."""
+    its own, the figure's fill until one is picked. Each row's opacity is that
+    scanpath's too, the figure's until one is set."""
     figure_fill = (
         st.session_state.get("global_word_box_fill_color") or WORD_BOX_FILL_COLOR
     )
@@ -5063,7 +5118,7 @@ def _render_compare_box_groups(fill_help: str) -> None:
             section=name,
             section_help=_COMPARE_SCANPATH_HELP[idx]
             + (
-                " Line and fill colors are its own; the opacities are shared."
+                " Its line and fill colors and opacities are its own."
                 if idx == 0
                 else ""
             ),
@@ -5090,22 +5145,22 @@ def _render_compare_box_groups(fill_help: str) -> None:
             help=this_fill_help,
             what="word box fill",
         )
-        # One outline and one fill opacity for both readings, on A's rows.
-        if idx == 0:
-            _box_opacity(
-                line_opacity_col,
-                key="global_word_box_line_opacity",
-                persist_state="session",
-                label="Line opacity",
-                help=f"{_LINE_OPACITY_HELP} Applies to both scanpaths' outlines.",
-            )
-            _box_opacity(
-                fill_opacity_col,
-                key="global_word_box_fill_opacity",
-                persist_state="session",
-                label="Fill opacity",
-                help=f"{_FILL_OPACITY_HELP} Applies to both scanpaths' fills.",
-            )
+        # Each reading's own outline and fill opacity.
+        _compare_follow_opacity(
+            line_opacity_col,
+            idx,
+            "line",
+            label="word box line opacity",
+            help=f"{name}'s outline opacity; 0 hides it. Defaults to the figure's.",
+        )
+        _compare_follow_opacity(
+            fill_opacity_col,
+            idx,
+            "fill",
+            label="word box fill opacity",
+            help=f"{name}'s fill opacity; 0 draws outlines only. Defaults to "
+            "the figure's.",
+        )
 
 
 def _compare_heatmap_colorscale_row(
@@ -5214,6 +5269,9 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 box_fill_color=(
                     st.session_state.get(f"cmp{idx}_box_fill_color") or None
                 ),
+                # None (absent) draws at the figure's word-box opacities.
+                box_line_opacity=st.session_state.get(f"cmp{idx}_box_line_opacity"),
+                box_fill_opacity=st.session_state.get(f"cmp{idx}_box_fill_opacity"),
                 # None colours the samples in `fix_color`.
                 raw_gaze_color=(
                     st.session_state.get(f"cmp{idx}_raw_gaze_color") or None

@@ -72,6 +72,8 @@ from .constants import (
 )
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
+    COMPARE_IDENTITY_STATE_KEY,
+    COMPARE_SOURCE_STATE_KEY,
     DESIGN_PRESETS,
     PLOT_CONFIG_STATE_KEYS,
     SINGLE_COMPARE_LAYOUT,
@@ -177,6 +179,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_PLAYBACK_SPEED,
+    # Scanpath B itself — its dataset and its trial, as A's `single_trial_id`
+    # is kept: a refresh in Compare must not swap B for the first candidate.
+    COMPARE_SOURCE_STATE_KEY,
+    COMPARE_IDENTITY_STATE_KEY,
     *compare_state_keys(0),
     *compare_state_keys(1),
     # UX-174 r2 — the descriptions the user wrote: their own words, like the
@@ -1097,6 +1103,11 @@ def _restorable_session(stored: Any) -> dict:
                     for name, setup in value.items()
                     if isinstance(setup, dict)
                 }
+            continue
+        if key == COMPARE_IDENTITY_STATE_KEY:
+            # ``[participant_id, trial_id]`` in JSON; the picker reads a tuple.
+            if isinstance(value, (list, tuple)) and len(value) == 2:
+                clean[key] = tuple(str(v) for v in value)
             continue
         if key == SETUP_OVERRIDE_FOR_KEY:
             if isinstance(value, str):

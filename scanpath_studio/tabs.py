@@ -340,6 +340,7 @@ from scanpath_studio.plots import (
     set_replay_clock,
 )
 from scanpath_studio.session_keys import (
+    COMPARE_IDENTITY_STATE_KEY,
     CORPUS_SUBTAB,
     DESIGN_COLOR_PARAMS,
     DESIGN_FLOAT_PARAMS,
@@ -2480,7 +2481,7 @@ def _order_compare_options(
 #: CMP-13: scanpath B remembered as ``(participant_id, trial_id)``. The picker's
 #: own key holds a *label*, which is rebuilt relative to A every run, so it is
 #: not a stable name for a trial — see ``_render_compare_selector``.
-_COMPARE_IDENTITY_KEY = "_compare_selected_identity"
+_COMPARE_IDENTITY_KEY = COMPARE_IDENTITY_STATE_KEY
 
 #: Key prefix for scanpath B's own filter set (CMP-8 §5.2). Must be one of
 #: ``controls.FILTER_PREFIXES`` — that registry is what stops A's "Clear filters"
@@ -3149,6 +3150,8 @@ def _render_compare_selector(
     )
     if current not in labels:
         remembered = st.session_state.get(_COMPARE_IDENTITY_KEY)
+        if isinstance(remembered, list):  # as the recovery cache stores it
+            remembered = tuple(str(v) for v in remembered)
         if isinstance(remembered, tuple) and remembered in identity_to_label:
             current = identity_to_label[remembered]
         elif remembered is not None and current is not None:

@@ -503,6 +503,10 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+#: CMP-13: scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
+#: own key holds a label rebuilt relative to A, so this is B's stable name. Kept
+#: in the recovery cache with ``cmp_dataset``, so a refresh keeps B's trial.
+COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
 #: VIZ-40 (UX-135) — VIZ-7's fixation-index window on the wire. Its own constant
 #: because two frozen groupings name it: the encoding group
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says

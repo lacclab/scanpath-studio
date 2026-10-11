@@ -8299,10 +8299,9 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
         _sub_caption(unit_col, "px")
-        # #422: the border round the plot area, which was always drawn in
-        # black — the static figure's only (the replay and Compare draw none).
-        frame_off, frame_reason = _mode_gate(animating, comparing, **_static_only)
-        frame_off = frame_off or chart_axes
+        # #422: the border round the plot area (each panel's, in Compare's
+        # side-by-side and stacked layouts), which was always drawn in black.
+        frame_off, frame_reason = chart_axes, None
         # "Border": the row above is already *Frame* (what the view frames).
         frame_shown, frame_rest = _check_row(
             "Border",

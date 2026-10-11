@@ -593,3 +593,28 @@ class TestOnlyTheLegendsDrawnGetARow:
 
     def test_a_relative_scale_has_no_size_key(self):
         assert "size_key" not in _drawn({"global_marker_size_scale": "relative"})
+
+
+class TestTheContentTop:
+    """A legend above the plot stands on the top of the highest marker, not its
+    centre — its background washed out the top of that fixation."""
+
+    @staticmethod
+    def _inset(size):
+        fig = go.Figure(
+            go.Scatter(x=[100], y=[100], mode="markers", marker={"size": size})
+        )
+        fig.update_layout(
+            width=800,
+            height=600,
+            margin=dict(l=0, r=0, t=0, b=0),
+            yaxis={"range": [600, 0]},
+        )
+        return plots._content_top_inset(fig)
+
+    def test_a_markers_radius_counts(self):
+        assert self._inset(0) == pytest.approx(100)
+        assert self._inset(40) == pytest.approx(80)
+
+    def test_a_marker_at_the_edge_leaves_no_inset(self):
+        assert self._inset(400) == 0

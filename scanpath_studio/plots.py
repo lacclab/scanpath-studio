@@ -2050,9 +2050,11 @@ def _content_top_inset(fig: go.Figure) -> float:
 
     The plot region reaches past the text (the screen, or a margin of padding
     round the text), so a legend placed on the plot's edge floated well above
-    the text. Legends above the plot sit on this line instead: the highest
-    word box, label, fixation or saccade. 0 for a figure of several panels,
-    without a fixed y range, or whose content reaches the edge.
+    the text. Legends above the plot sit on this line instead: the top of the
+    highest word box, label, fixation or saccade — a marker's or a label's top,
+    not its centre, or a legend's background washed out the top of the highest
+    fixation. 0 for a figure of several panels, without a fixed y range, or
+    whose content reaches the edge.
     """
     if getattr(fig, "_grid_ref", None) is not None:
         return 0.0
@@ -2060,25 +2062,52 @@ def _content_top_inset(fig: go.Figure) -> float:
     if not y_range or y_range[0] == y_range[1]:
         return 0.0
     r0, r1 = float(y_range[0]), float(y_range[1])
-    values: list = []
+    _plot_w, plot_h, _margin = _plot_px(fig)
+    top = None
+
+    def reach(ys: pd.Series, above_px) -> None:
+        nonlocal top
+        paper = (ys - r0) / (r1 - r0) + above_px / plot_h
+        paper = paper[paper.notna()]
+        if not paper.empty:
+            highest = float(paper.max())
+            top = highest if top is None else max(top, highest)
+
     for trace in fig.data:
         if getattr(trace, "yaxis", None) not in (None, "y"):
             continue
         y = getattr(trace, "y", None)
-        if y is not None:
-            values.append(pd.to_numeric(pd.Series(list(y)), errors="coerce"))
+        if y is None:
+            continue
+        ys = pd.to_numeric(pd.Series(list(y)), errors="coerce")
+        mode = str(getattr(trace, "mode", "") or "")
+        above = pd.Series(0.0, index=ys.index)
+        if "markers" in mode and trace.marker is not None:
+            size = trace.marker.size
+            if size is not None:
+                sizes = pd.to_numeric(
+                    pd.Series(
+                        list(size)
+                        if isinstance(size, (list, tuple)) or hasattr(size, "tolist")
+                        else [size] * len(ys)
+                    ),
+                    errors="coerce",
+                ).fillna(0.0)
+                if len(sizes) == len(ys):
+                    sizes.index = ys.index
+                    above = above.combine(sizes / 2.0, max)
+        if "text" in mode and trace.textfont is not None:
+            font = trace.textfont.size
+            if isinstance(font, (int, float)):
+                above = above.clip(lower=float(font) / 2.0)
+        reach(ys, above)
     for shape in fig.layout.shapes or ():
         if shape.yref not in (None, "y") or str(shape.name or "").endswith("frame"):
             continue
-        values.append(pd.to_numeric(pd.Series([shape.y0, shape.y1]), errors="coerce"))
-    if not values:
+        reach(pd.to_numeric(pd.Series([shape.y0, shape.y1]), errors="coerce"), 0.0)
+    if top is None:
         return 0.0
-    ys = pd.concat(values).dropna()
-    if ys.empty:
-        return 0.0
-    paper = ((ys - r0) / (r1 - r0)).clip(0.0, 1.0)
-    _plot_w, plot_h, _margin = _plot_px(fig)
-    return float((1.0 - paper.max()) * plot_h)
+    return float((1.0 - min(1.0, top)) * plot_h)
 
 
 def apply_legend_layout(

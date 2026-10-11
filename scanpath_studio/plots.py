@@ -1925,10 +1925,14 @@ class _LegendSlots:
     it still has entries. An inside spot stacks in toward the plot's middle.
     """
 
-    def __init__(self, fig: go.Figure, *, top_start: float = 0.0) -> None:
+    def __init__(
+        self, fig: go.Figure, *, top_start: float = 0.0, inset: float | None = None
+    ) -> None:
         _plot_w, _plot_h, margin = _plot_px(fig)
         self.base = dict(margin)
-        self.top_start = top_start
+        # Above the plot, legends stand on the content's top, not the edge.
+        self.inset = _content_top_inset(fig) if inset is None else inset
+        self.top_start = top_start - self.inset
         self.used: dict = {}
         # The first legend's height on each outside edge, which a size key on
         # that edge is centred against.
@@ -2028,12 +2032,53 @@ def _default_legend_entries(fig: go.Figure) -> list:
 
 def _default_legend_height(fig: go.Figure) -> float:
     """The default legend's height above the plot (0 once it is empty), so a
-    legend moved above the plot sits beyond it rather than over it."""
+    legend moved above the plot sits beyond it rather than over it. A row too
+    long for the plot's width wraps, and is counted as the rows it takes."""
     names = _default_legend_entries(fig)
     if not names:
         return 0.0
-    font_px = float((fig.layout.font and fig.layout.font.size) or 12)
-    return _legend_extent(names, font_px, True)[1]
+    legend_font = fig.layout.legend.font.size if fig.layout.legend.font else None
+    font_px = float(legend_font or (fig.layout.font and fig.layout.font.size) or 12)
+    w, h = _legend_extent(names, font_px, True)
+    plot_w, _plot_h, _margin = _plot_px(fig)
+    rows = max(1, math.ceil(w / plot_w))
+    return h + (rows - 1) * (h - 10.0)
+
+
+def _content_top_inset(fig: go.Figure) -> float:
+    """How far, in px, the topmost thing drawn sits below the plot's top edge.
+
+    The plot region reaches past the text (the screen, or a margin of padding
+    round the text), so a legend placed on the plot's edge floated well above
+    the text. Legends above the plot sit on this line instead: the highest
+    word box, label, fixation or saccade. 0 for a figure of several panels,
+    without a fixed y range, or whose content reaches the edge.
+    """
+    if getattr(fig, "_grid_ref", None) is not None:
+        return 0.0
+    y_range = fig.layout.yaxis.range
+    if not y_range or y_range[0] == y_range[1]:
+        return 0.0
+    r0, r1 = float(y_range[0]), float(y_range[1])
+    values: list = []
+    for trace in fig.data:
+        if getattr(trace, "yaxis", None) not in (None, "y"):
+            continue
+        y = getattr(trace, "y", None)
+        if y is not None:
+            values.append(pd.to_numeric(pd.Series(list(y)), errors="coerce"))
+    for shape in fig.layout.shapes or ():
+        if shape.yref not in (None, "y") or str(shape.name or "").endswith("frame"):
+            continue
+        values.append(pd.to_numeric(pd.Series([shape.y0, shape.y1]), errors="coerce"))
+    if not values:
+        return 0.0
+    ys = pd.concat(values).dropna()
+    if ys.empty:
+        return 0.0
+    paper = ((ys - r0) / (r1 - r0)).clip(0.0, 1.0)
+    _plot_w, plot_h, _margin = _plot_px(fig)
+    return float((1.0 - paper.max()) * plot_h)
 
 
 def apply_legend_layout(
@@ -2065,8 +2110,6 @@ def apply_legend_layout(
         for kind in ("compare", "saccades", "colors")
         if _legend_is_moved(specs[kind])
     }
-    if not moved:
-        return fig
     names: dict = {kind: [] for kind in moved}
     titled: set = set()
     for trace in fig.data:
@@ -2082,20 +2125,32 @@ def apply_legend_layout(
             names[kind].append(title)
         if trace.name:
             names[kind].append(trace.name)
-    # The default legend's strip above the plot: when every entry has moved out
-    # of it and the strip is exactly that reserve — the single-trial figures'
-    # and the Compare overlay's (a title is added later, in a band of its own)
-    # — it is handed back. The side-by-side and stacked layouts keep theirs:
-    # their panels' names sit in it.
-    _plot_w, _plot_h, margin = _plot_px(fig)
+    # The legends above the plot stand on the top of what is drawn — the text,
+    # the boxes, the fixations — rather than on the plot's edge, which can sit
+    # well above it. The default legend is lowered onto that line, and its
+    # strip above the plot (exactly that reserve on the single-trial figures
+    # and the Compare overlay; a title is added later, in a band of its own)
+    # shrinks to what still pokes out of the plot. The side-by-side and stacked
+    # layouts keep theirs: their panels' names sit in it.
+    plot_w, plot_h, margin = _plot_px(fig)
+    inset = _content_top_inset(fig)
+    default_h = _default_legend_height(fig)
+    if default_h and inset and fig.layout.legend.yanchor == "bottom":
+        fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
     if (
-        not _default_legend_entries(fig)
-        and margin["t"] in (_LEGEND_RESERVE_PX, _OVERLAY_TOP_PX)
+        margin["t"] in (_LEGEND_RESERVE_PX, _OVERLAY_TOP_PX)
         and getattr(fig, "_grid_ref", None) is None
     ):
-        _grow(fig, "t", -margin["t"])
-    slots = _LegendSlots(fig, top_start=_default_legend_height(fig))
+        needed = max(0.0, default_h + _LEGEND_GAP_PX - inset) if default_h else 0.0
+        if needed < margin["t"]:
+            _grow(fig, "t", needed - margin["t"])
+            if default_h:
+                _plot_w, plot_h, _margin = _plot_px(fig)
+                fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
+    slots = _LegendSlots(fig, top_start=default_h, inset=inset)
     fig._sps_legend_slots = slots
+    if not moved:
+        return fig
     base_font = float((fig.layout.font and fig.layout.font.size) or 12)
     for kind in ("compare", "saccades", "colors"):
         if kind not in moved or not names[kind]:

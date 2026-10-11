@@ -112,13 +112,13 @@ class TestTheLayoutValue:
 
 
 class TestMovingTraceLegends:
-    def test_auto_leaves_the_figure_untouched_but_its_text_black(self):
+    def test_auto_moves_no_entry_and_blackens_the_text(self):
         fig = _figure()
-        before = fig.to_dict()
+        before = [t.legend for t in fig.data]
         apply_legend_layout(fig, None)
-        after = fig.to_dict()
-        assert after["layout"].pop("legend") == {"font": {"color": "#000000"}}
-        assert after == before
+        assert [t.legend for t in fig.data] == before
+        assert fig.layout.legend.font.color == "#000000"
+        assert "legend2" not in fig.to_dict()["layout"]
 
     @pytest.mark.parametrize(
         "position", [p for p in plots.LEGEND_POSITIONS if p.endswith("-outside")]
@@ -138,7 +138,9 @@ class TestMovingTraceLegends:
     def test_inside_spots_do_not_grow_the_figure(self, position):
         fig = _figure()
         apply_legend_layout(fig, {"saccades": {"position": position}})
-        assert (fig.layout.width, fig.layout.height) == (800, 600)
+        # The plot keeps its size; only the default legend's strip can shrink.
+        assert _plot_region(fig) == pytest.approx((800, 540))
+        assert fig.layout.width == 800 and fig.layout.height <= 600
         legend = fig.layout.legend3
         assert 0 <= legend.x <= 1 and 0 <= legend.y <= 1
 
@@ -256,9 +258,30 @@ class TestTheEmptyLegendStrip:
             (p2, t2),
             legend_layout={"compare": {"position": "right-outside"}},
         )
-        assert kept.layout.margin.t > 0
         assert moved.layout.margin.t == 0
         assert _plot_region(moved) == pytest.approx(_plot_region(kept))
+
+    def test_legends_above_stand_on_the_text_not_the_plot_edge(self):
+        """The plot reaches past the text; a legend above it sits just over
+        the topmost word or fixation instead of floating at the plot's edge."""
+        import scanpath_studio as sps
+
+        words, fixations = sps.load_sample_data()
+        (p1, t1), (p2, t2) = sps.list_trials(words, fixations).iloc[:2].values.tolist()
+        fig = sps.compare_scanpaths(
+            words,
+            fixations,
+            (p1, t1),
+            (p2, t2),
+            legend_layout={"compare": {"position": "top-left-outside"}},
+        )
+        inset = plots._content_top_inset(fig)
+        assert inset > 0
+        _w, plot_h = _plot_region(fig)
+        # The legend's bottom is a gap above the content's top, inside the plot.
+        expected = 1.0 + (plots._LEGEND_GAP_PX - inset) / plot_h
+        assert fig.layout.legend2.y == pytest.approx(expected)
+        assert fig.layout.legend2.y < 1
 
 
 class TestTheSizeKey:

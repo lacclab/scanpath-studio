@@ -1,23 +1,19 @@
 # Usage stats
 
-## 2026-10-07
+## 2026-10-12
 
-- PyPI: last_day 94 / last 7 days 458 / last 30 days 737. Without mirrors (UTC days up to yesterday): last 7 days 458 vs previous 7 days 312 (+146).
-- PyPI top OS (30d): Linux 59, Darwin 33, Windows 1. Top Python (30d): 3.11 51, 3.12 34, 3.14 7. Latest version 0.34.0, uploaded 2026-10-06 (1 days ago).
-- Desktop bundles (v0.34.0): ScanpathStudio-linux-x86_64.tar.gz 0 (+0), ScanpathStudio-macos-arm64.dmg 0 (+0), ScanpathStudio-windows-x86_64.zip 1 (+0). All-time across releases: 35.
-- Repo: 8 stars (+0) / 0 forks (+0) / 0 watchers (+0) / 28 open issues (+1).
-- Traffic, last 14 days: 542 views (74 uniques), 6097 clones (826 uniques).
-- Top referrers: github.com (12), lacclab.github.io (11), Google (3). Top paths: /lacclab/scanpath-studio (50), /lacclab/scanpath-studio/issues (36), /lacclab/scanpath-studio/tree/main (24).
-- Flags: new release v0.34.0.
+- PyPI: last_day 20 / last 7 days 673 / last 30 days 737. Without mirrors (UTC days up to yesterday): last 7 days 673 vs previous 7 days 332 (+341).
+- PyPI top OS (30d): Linux 102, Darwin 60, Windows 1. Top Python (30d): 3.11 90, 3.12 59, 3.14 12. Latest version 0.38.0, uploaded 2026-10-10 (2 days ago).
+- Desktop bundles (v0.38.0): ScanpathStudio-linux-x86_64.tar.gz 0 (+0), ScanpathStudio-macos-arm64.dmg 1 (+1), ScanpathStudio-windows-x86_64-setup.exe 0 (+0), ScanpathStudio-windows-x86_64.zip 0 (+0). All-time across releases: 55 (+20).
+- Repo: 8 (+0) stars / 0 (+0) forks / 0 (+0) watchers / 32 (+4) open issues.
+- Traffic, last 14 days: 264 views (28 uniques), 6150 clones (835 uniques).
+- Top referrers: lacclab.github.io (12), Google (5), github.com (3). Top paths: /lacclab/scanpath-studio (39), /lacclab/scanpath-studio/issues (21), /lacclab/scanpath-studio/pulls (12).
+- Flags: new PyPI version 0.38.0; new release v0.35.0, v0.36.0, v0.37.0, v0.37.1, v0.38.0
 
 ## Last 30 days
 
 | date | PyPI downloads | views | uniques | clones | unique clones |
 |---|---|---|---|---|---|
-| 2026-09-08 | 5 |  |  |  |  |
-| 2026-09-09 | 14 |  |  |  |  |
-| 2026-09-10 | 4 |  |  |  |  |
-| 2026-09-11 | 2 |  |  |  |  |
 | 2026-09-12 | 1 |  |  |  |  |
 | 2026-09-13 | 2 |  |  |  |  |
 | 2026-09-14 | 12 |  |  |  |  |
@@ -43,4 +39,8 @@
 | 2026-10-04 | 93 | 3 | 3 | 353 | 94 |
 | 2026-10-05 | 47 | 6 | 4 | 51 | 25 |
 | 2026-10-06 | 94 | 74 | 5 | 892 | 162 |
-| 2026-10-07 |  |  |  |  |  |
+| 2026-10-07 | 307 | 45 | 7 | 866 | 164 |
+| 2026-10-08 | 25 | 7 | 4 | 279 | 91 |
+| 2026-10-09 | 11 | 4 | 1 | 296 | 67 |
+| 2026-10-10 | 169 | 7 | 1 | 161 | 56 |
+| 2026-10-11 | 20 | 2 | 2 | 137 | 29 |

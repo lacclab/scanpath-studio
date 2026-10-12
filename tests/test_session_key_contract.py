@@ -460,6 +460,8 @@ def _restore_config_app():
         "label_pattern": "{participant_id} · {trial_id}",
         "box_color": "#333333",
         "box_fill_color": "#444444",
+        "box_line_opacity": 0.6,
+        "box_fill_opacity": 0.3,
         "raw_gaze_color": "#555555",
         "heatmap_colorscale": "Blues",
     }

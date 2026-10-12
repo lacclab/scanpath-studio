@@ -49,6 +49,8 @@ STYLES_SENT = {
     "cmp0_label_pattern": "A: {trial_id}",
     "cmp0_box_color": "#cc6600",
     "cmp0_box_fill_color": "#ccee00",
+    "cmp0_box_line_opacity": 0.6,
+    "cmp0_box_fill_opacity": 0.0,
     "cmp0_raw_gaze_color": "#ee0011",
     "cmp0_heatmap_colorscale": "Blues",
     "cmp1_fix_color": "#0000aa",
@@ -61,6 +63,8 @@ STYLES_SENT = {
     "cmp1_label_pattern": "B: {participant_id}",
     "cmp1_box_color": "#6600cc",
     "cmp1_box_fill_color": "#00eecc",
+    "cmp1_box_line_opacity": 0.25,
+    "cmp1_box_fill_opacity": 0.4,
     "cmp1_raw_gaze_color": "#1100ee",
     "cmp1_heatmap_colorscale": "Greens",
     # CMP-24 — B's own filters ride the same group.

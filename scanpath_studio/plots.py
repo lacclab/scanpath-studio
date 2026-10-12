@@ -7021,7 +7021,11 @@ def _comparison_scanpath_style(
             {
                 k: v
                 for k, v in override.items()
-                if v or (k in COMPARE_FILTER_STYLE_KEYS and v is not None)
+                if v
+                or (
+                    k in COMPARE_FILTER_STYLE_KEYS | COMPARE_BOX_OPACITY_STYLE_KEYS
+                    and v is not None
+                )
             }
         )
     return base
@@ -7032,6 +7036,10 @@ def _comparison_scanpath_style(
 #: ``fixation_flags`` / ``saccade_classes`` apply to a scanpath whose style names
 #: none, so one setting filters both and a style entry overrides it per side.
 COMPARE_FILTER_STYLE_KEYS = frozenset({"fixation_flags", "saccade_classes"})
+#: A scanpath's own word-box opacities, which follow the figure's
+#: ``word_box_line_opacity`` / ``word_box_fill_opacity`` until named. 0 is kept:
+#: it hides that scanpath's outline or fill.
+COMPARE_BOX_OPACITY_STYLE_KEYS = frozenset({"box_line_opacity", "box_fill_opacity"})
 
 
 def _visible_saccade_classes(classes: Iterable[str] | None) -> set[str] | None:
@@ -7874,6 +7882,14 @@ def _make_split_comparison_figure(
                 box_fill_color=(
                     style.get("box_fill_color") or settings.word_box_fill_color
                 ),
+                # Its outline's and fill's opacity: the figure's unless the
+                # style names one (0 is a real answer: hidden).
+                box_line_opacity=style.get(
+                    "box_line_opacity", settings.word_box_line_opacity
+                ),
+                box_fill_opacity=style.get(
+                    "box_fill_opacity", settings.word_box_fill_opacity
+                ),
                 # Its raw-gaze samples: the scanpath's own colour unless its
                 # style names one (`raw_gaze_color`).
                 raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
@@ -8069,8 +8085,8 @@ def _make_split_comparison_figure(
                 trial_words,
                 color=spec["box_color"],
                 fill_color=spec["box_fill_color"],
-                fill_opacity=settings.word_box_fill_opacity,
-                line_opacity=settings.word_box_line_opacity,
+                fill_opacity=spec["box_fill_opacity"],
+                line_opacity=spec["box_line_opacity"],
             ):
                 box = dict(box)
                 box["xref"] = xref
@@ -8399,6 +8415,14 @@ def _render_comparison_figure(
                 box_fill_color=(
                     style.get("box_fill_color") or settings.word_box_fill_color
                 ),
+                # Its outline's and fill's opacity: the figure's unless the
+                # style names one (0 is a real answer: hidden).
+                box_line_opacity=style.get(
+                    "box_line_opacity", settings.word_box_line_opacity
+                ),
+                box_fill_opacity=style.get(
+                    "box_fill_opacity", settings.word_box_fill_opacity
+                ),
                 # Its raw-gaze samples: the scanpath's own colour unless its
                 # style names one (`raw_gaze_color`).
                 raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
@@ -8537,8 +8561,8 @@ def _render_comparison_figure(
                 spec["trial_words"],
                 color=spec["box_color"],
                 fill_color=spec["box_fill_color"],
-                fill_opacity=settings.word_box_fill_opacity,
-                line_opacity=settings.word_box_line_opacity,
+                fill_opacity=spec["box_fill_opacity"],
+                line_opacity=spec["box_line_opacity"],
             )
         if show_word_labels and draws_stimulus[_idx]:
             _add_word_label_trace(

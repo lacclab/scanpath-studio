@@ -159,7 +159,12 @@ NON_DEFAULT = {
     "label_a": "A",
     "label_b": "B",
     "style_a": {"fix_color": "#aa0000", "opacity": 0.5},
-    "style_b": {"saccade_style": "dot", "hollow": True},
+    "style_b": {
+        "saccade_style": "dot",
+        "hollow": True,
+        "box_line_opacity": 0.25,
+        "box_fill_opacity": 0,
+    },
     "background_image_b": "page_b.png",
     "background_image_size_b": (1000, 700),
     "background_image_origin_b": (5.0, 6.0),
@@ -466,7 +471,9 @@ def test_the_comparison_flags_reach_compare_scanpaths(monkeypatch, tmp_path):
             "--style-a",
             "opacity=0.5,marker_size_range=6:18,hollow=true",
             "--style-b",
-            "saccade_color=#00aa00,saccade_width=2.5",
+            "saccade_color=#00aa00,saccade_width=2.5,box_line_opacity=0.25",
+            "--style-b",
+            "box_fill_opacity=0",
             "--stimulus-image-b",
             str(image),
             "--stimulus-image-size-b",
@@ -483,7 +490,12 @@ def test_the_comparison_flags_reach_compare_scanpaths(monkeypatch, tmp_path):
         "marker_size_range": (6, 18),
         "hollow": True,
     }
-    assert seen["style_b"] == {"saccade_color": "#00aa00", "saccade_width": 2.5}
+    assert seen["style_b"] == {
+        "saccade_color": "#00aa00",
+        "saccade_width": 2.5,
+        "box_line_opacity": 0.25,
+        "box_fill_opacity": 0.0,
+    }
     assert seen["background_image_b"] == str(image)
     assert seen["background_image_size_b"] == (800, 600)
     assert seen["background_image_origin_b"] == (10.0, 20.0)

@@ -151,9 +151,11 @@ word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), 
 a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`,
 `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`;
 `box_color` outlines that scanpath's word boxes, its `fix_color` when left out,
-`box_fill_color` fills them, `--word-box-fill-color` when left out, and
+`box_fill_color` fills them, `--word-box-fill-color` when left out,
+`box_line_opacity` / `box_fill_opacity` (0–1) are their outline's and fill's
+opacity, `--word-box-line-opacity` / `--word-box-fill-opacity` when left out, and
 `raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out —
-all three static comparison only, the `--animate` co-animation draws one set of
+all of these static comparison only, the `--animate` co-animation draws one set of
 boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that
 scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared,
 and two different scales get a color bar each), `saccade_style` (`solid`, `dash`,

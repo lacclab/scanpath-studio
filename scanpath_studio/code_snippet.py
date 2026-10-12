@@ -1349,6 +1349,8 @@ _STYLE_SPEC_KEYS = (
     "saccade_width",
     "marker_size_range",
     "opacity",
+    "box_line_opacity",
+    "box_fill_opacity",
     "hollow",
 )
 

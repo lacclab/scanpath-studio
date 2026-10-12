@@ -26,7 +26,7 @@ scanpath_studio/
 ├─ menu.py          UX-38 → UX-100: what replaced the sidebar. `render_nav` draws Streamlit's native `st.navigation(position="top")` — three **views** (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management) plus ❓ Help's **action** entries (Tutorials / FAQ / About / Debug), which arm a dialog and bounce the router back so the modal opens over the current view — and returns the active view. `render_top_menu` is left with the title row and the main-area `notices` slot; ⚙️ Configure and 🧹 Preprocessing became sections of the Data page (DATA-26), and UX-179 retired the 💾 Session entry, moving its blocks to where each is used. Nothing in the app writes to `st.sidebar`
 ├─ session_keys.py   the session-state keys / URL params that are a wire format (share links + saved configs), as constants + frozen groupings — pinned by tests/test_session_key_contract.py so a rename fails a test instead of a user's old link (ENG-6)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
-├─ wizard_shell.py   DATA-22 + UX-53 → UX-129: the add screen's **three**-part registry (`STEPS`: name → data → setup, linear and not navigable — there is nothing to map until a file is read), drawn by `part()` as a numbered one-line headline whose explanation is hover-only. UX-135 added the ✏️ Edit dataset screen's own registry beside it (`EDITOR_STEPS` + `numbered()`, which renumbers over the parts that actually render, since two of the five are conditional). No column/frame knowledge
+├─ wizard_shell.py   DATA-22 + UX-53 → UX-129: the add screen's **three**-part registry (`STEPS`: name → data → setup, linear and not navigable — there is nothing to map until a file is read; #417 added an optional fourth, stimulus images, drawn only on a local install), drawn by `part()` as a numbered one-line headline whose explanation is hover-only. UX-135 added the ✏️ Edit dataset screen's own registry beside it (`EDITOR_STEPS` + `numbered()`, which renumbers over the parts that actually render, since two of the six are conditional; its first four are the add screen's). No column/frame knowledge
 ├─ dataset_table.py  UX-174: the pure row model behind 📂 Available datasets — `DatasetRow` (a grouped count, or its reason: Not loaded / Not reported / Not applicable / Unknown; and its Status: Ready / Needs download / Needs setup — BUG-113), `sort_rows` (numeric, gaps last), `filter_rows`, `row_record`, and `DATASET_COUNT_FIELDS`. `app.render_dataset_table` draws it
 ├─ experimental_setup.py  pure display-geometry conversions + `SetupSnapshot` — one dataset's screen/typography with a per-group `Provenance` (measured/estimated/assumed/skipped)
 ├─ compare_source.py  CMP-8: the *second* dataset a comparison draws scanpath B from — a widget-free readiness gate + loader (`secondary_dataset_options` / `load_secondary_dataset` → `SecondaryDataset`)
@@ -42,7 +42,11 @@ scanpath_studio/
 ├─ fields.py         the `label | field` row primitive shared by the plot rail, the wizard and the Scanpath subtabs — its own module because `controls` cannot supply it to the panels that import `controls`
 ├─ html_embed.py     same-origin HTML iframe helper shared by plots, tours and Share (`st.iframe`, not the deprecated components embed) + ENG-64's `plotlyjs_script`/`plotlyjs_src`: the figure iframes load the installed plotly's own `plotly.min.js` from the app's server, not cdn.plot.ly
 ├─ crash_report.py  what an uncaught error shows: `run_app` runs the app (its import included) inside `guarded`, which draws a "this is a bug — report it" note with the bug-report / Q&A links above the traceback. Every entry script calls it: `streamlit_app.py` (Cloud, tests) and `streamlit_entry.py` (what `scanpath-studio run` and the desktop app launch — not `app.py`, whose own imports a guard inside it could not cover). Every `@st.dialog` / `@st.fragment` also carries `@guarded()`, since Streamlit calls one directly when it reruns on its own (a test enforces it); widget callbacks run before the script and are not covered
+├─ build_info.py     #139: which build this is — `__version__` is the hand-set `__release__` at a release, else a PEP 440 build (`0.35.0.post3+g8f18219`) from `git describe` in a checkout of this repo, a desktop bundle's `_build.json` stamp, or a `pip install git+…`'s `direct_url.json`; plus `install_kind` (desktop / checkout / vcs / uv-tool / pipx / uv / pip). Never raises, no network
+├─ updates.py        #139: *Check for updates* — GitHub's latest release (`latest_release`) compared with the build (`check_for_updates` → `UpdateCheck`: up_to_date / update_available / ahead / error), with the update command per install kind (`update_command`) or the desktop archive (`desktop_archive`). Asked only on a click (About), `version --check` or `api.check_for_updates`; stdlib + packaging, never raises
+├─ desktop_update.py #385: the desktop app's own *Update & restart* — `refusal` (frozen only; newer, not a pre-release; sha256 digest; not translocated; install writable; same-volume state folder; disk; macOS Developer ID team), `download` (repo release URLs only, sha256-checked), `stage` (dmg → codesign/Team ID/spctl; zip; tar `filter="data"`), `self_test` (`--selfcheck`), `start_swap` (detached sh/PowerShell helper swapping the payload entries — `Contents`, or the executable + `_internal` so `unins000.*` survive — relaunch, roll back after `BOOT_TIMEOUT_S`), and the launcher's `note_start`/`note_boot`; stdlib + packaging, no Streamlit
 ├─ easter_egg.py     UX-39: triple-click the title, googly eyes. Browser-only on purpose — no session key, no rerun, nothing to expose on the other three surfaces
+├─ color_picker_commit.py  #422: a color picked inside a popover is sent even when a click on the page closes the popover (which otherwise unmounts the picker before it sends). Browser-only, installed once into the parent document like the truncation tooltips
 ├─ progress.py       UX-165: a Streamlit-free progress hook — loaders and builders `report()` counts, the orchestrator `step_to()`s; a no-op without a task, and the cancel checkpoint (`Cancelled`) with one
 ├─ loading.py        UX-165: loading cards drawn hidden by the script thread and revealed + refreshed by a timer thread (the `st.spinner` pattern); `card()` for a region, `Page` for the page skeleton + dataset card, `run_scope()` around each run, Cancel buttons that restore the previous choice
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
@@ -66,14 +70,14 @@ scanpath_studio/
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state` back the Data page's *Saved on this computer* section (`app._render_saved_here_section`, UX-179), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
-├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source), and DATA-67's example import pair (`example_import_zip`: AOI + fixation CSVs and a README) behind the add wizard's **Download example tables**
+├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source), and DATA-67's example import pair (`example_import_tables`: an AOI and a fixation table that map with no manual pick)
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
-├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache)
-├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache
+├─ api.py            headless public API (load/normalize, attach_stimulus_images (#420), plot_scanpath, animate_scanpath, compare_scanpaths, save_figure, figure_code, cache_status/clear_cache, version_info/check_for_updates (#139))
+├─ cli.py            console entry: `run` launches the app; `render` builds figures headless via api.py, `analyze` writes the tabular family (held back without `SCANPATH_EXPERIMENTAL=1`), `corpus` renders a corpus figure from a tidy CSV, `check` runs the Data page's data checks, `cache` inspects/clears the recovery cache, `version [--check]` prints the build and checks for a newer release (#139)
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
-├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
+├─ __init__.py       exposes __release__ (the hand-set release), __version__ (the exact build, lazily — build_info.py), main(), and lazy re-exports of the api.py surface
 ├─ onestop_shard.py  one-shot prep: shard the ~15 GB OneStop lacclab CSVs into per-pid Parquet
 ├─ update_sample_data.py regenerate the bundled demo subset (+ synthesized raw-gaze overlay) from the full OneStop CSVs
 └─ sample_data/      bundled demo corpus (CSV + Parquet)
@@ -188,6 +192,10 @@ and JSON export/import per dataset on 🗂️ Data → Annotations (the Export b
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,
 correctness) and by annotation state (favorites / tags) before `build_combo_options`.
+A condition or range is decided **per reading** `(participant_id, trial_id)`
+from whichever table carries its column and applied to every table, raw gaze
+included (#412, `data.select_trials` → `TrialSelection`); a reading the two
+tables disagree on is left out and reported, never decided for one table.
 
 ### Where the work is tracked
 
@@ -377,13 +385,15 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
 1. `python scripts/changelog_fragments.py release <version>` writes the
    `changelog.d/` fragments into a `CHANGELOG.md` section and deletes them
    (ENG-86).
-2. Bump `__version__` in `scanpath_studio/__init__.py` — the single source of
-   truth; `pyproject.toml` reads it dynamically (`[tool.setuptools.dynamic]`).
+2. Bump `__release__` in `scanpath_studio/__init__.py` — the single source of
+   truth for the release number; `pyproject.toml` reads it dynamically
+   (`[tool.setuptools.dynamic]`). `__version__` is worked out from it at
+   runtime (#139).
 3. Bump `version` + `date-released` in `CITATION.cff` to match
    (`tests/test_citation.py` enforces version parity).
 4. Commit on a branch and land it through a PR — `main` is protected. Once it
    has merged, tag the merge commit on `main` with `v<version>` and push the
-   tag (`publish.yml` refuses a tag that does not match `__version__`, ENG-62).
+   tag (`publish.yml` refuses a tag that does not match `__release__`, ENG-62).
 5. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
    publishes via PyPI Trusted Publishing (requires `pypi` environment set up
    on GitHub with the project name `scanpath-studio`).

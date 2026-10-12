@@ -54,7 +54,11 @@ GLOBAL_SHOW_ORDER = "global_show_order"
 GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
-GLOBAL_FIXATION_SNAP_TO_WORD = "global_fixation_snap_to_word"
+GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
+# #422: Snap to line and where on the line (it replaced "Snap above words",
+# `global_fixation_snap_to_word` — see `LEGACY_SESSION_KEYS`).
+GLOBAL_FIXATION_SNAP_TO_LINE = "global_fixation_snap_to_line"
+GLOBAL_FIXATION_SNAP_POSITION = "global_fixation_snap_position"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
@@ -121,6 +125,8 @@ GLOBAL_ANIM_GRID_STEP_MS = "global_anim_grid_step_ms"
 GLOBAL_ANIM_MAX_FRAMES = "global_anim_max_frames"
 GLOBAL_LINE_SPACING = "global_line_spacing"
 GLOBAL_SACCADE_WIDTH = "global_saccade_width"
+# #422: the saccade lines' and arrows' opacity.
+GLOBAL_SACCADE_OPACITY = "global_saccade_opacity"
 GLOBAL_FIXATION_OPACITY = "global_fixation_opacity"
 GLOBAL_STIMULUS_IMAGE_OPACITY = "global_stimulus_image_opacity"
 GLOBAL_STIMULUS_IMAGE_OFFSET_X = "global_stimulus_image_offset_x"
@@ -131,6 +137,15 @@ GLOBAL_MARKER_SIZE_RANGE = "global_marker_size_range"
 GLOBAL_MARKER_SIZE_SCALE = "global_marker_size_scale"
 GLOBAL_MARKER_DURATION_RANGE = "global_marker_duration_range"
 GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
+# 📐 Figure & canvas → Legends: where each legend sits. One key per legend and
+# part, ``global_legend_<kind>_{position,arrangement,size}``, for the kinds in
+# `constants.LEGEND_KINDS` (spelled out here, as everything in this file is).
+LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key")
+LEGEND_STATE_KEYS = frozenset(
+    f"global_legend_{kind}_{part}"
+    for kind in LEGEND_KIND_NAMES
+    for part in ("position", "arrangement", "size")
+)
 GLOBAL_FIXATION_COLOR_RANGE = "global_fixation_color_range"
 GLOBAL_HEATMAP_COLOR_RANGE = "global_heatmap_color_range"
 GLOBAL_SHOW_STIMULUS_IMAGE = "global_show_stimulus_image"
@@ -139,6 +154,9 @@ GLOBAL_FIT_TO_MONITOR = "global_fit_to_monitor"
 GLOBAL_SHOW_COORDINATE_GRID = "global_show_coordinate_grid"
 GLOBAL_COORDINATE_GRID_AUTO = "global_coordinate_grid_auto"
 GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
+# #422: Crop to data's margin — automatic, or a number of screen px.
+GLOBAL_CROP_MARGIN_AUTO = "global_crop_margin_auto"
+GLOBAL_CROP_MARGIN_PX = "global_crop_margin_px"
 # EXP-5: title/caption on the figure (moved here from being Export-only).
 GLOBAL_SHOW_TITLE = "global_show_title"
 GLOBAL_SHOW_CAPTION = "global_show_caption"
@@ -156,6 +174,59 @@ GLOBAL_HEATMAP_COLORBAR_ORIENTATION = "global_heatmap_colorbar_orientation"
 GLOBAL_HEATMAP_COLORBAR_TICKANGLE = "global_heatmap_colorbar_tickangle"
 GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE = "global_heatmap_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
+# #422: design choices that used to be fixed. Each one's link param is its key
+# without `global_` (`DESIGN_*_PARAMS`), and the settings file keeps them by
+# the same names in its `design` section.
+GLOBAL_HEATMAP_OPACITY_AUTO = "global_heatmap_opacity_auto"
+GLOBAL_HEATMAP_OPACITY = "global_heatmap_opacity"
+GLOBAL_TITLE_FONT_SIZE = "global_title_font_size"
+GLOBAL_CAPTION_FONT_SIZE = "global_caption_font_size"
+GLOBAL_CAPTION_COLOR = "global_caption_color"
+GLOBAL_SHOW_PLOT_FRAME = "global_show_plot_frame"
+GLOBAL_PLOT_FRAME_COLOR = "global_plot_frame_color"
+GLOBAL_SACCADE_ARROW_SIZE = "global_saccade_arrow_size"
+GLOBAL_FIXATION_OUTLINE_WIDTH = "global_fixation_outline_width"
+GLOBAL_FIXATION_OUTLINE_COLOR = "global_fixation_outline_color"
+GLOBAL_COORDINATE_GRID_FONT_SIZE = "global_coordinate_grid_font_size"
+GLOBAL_FIXATION_COLORBAR_THICKNESS = "global_fixation_colorbar_thickness"
+GLOBAL_FIXATION_COLORBAR_LENGTH_AUTO = "global_fixation_colorbar_length_auto"
+GLOBAL_FIXATION_COLORBAR_LENGTH = "global_fixation_colorbar_length"
+GLOBAL_HEATMAP_COLORBAR_THICKNESS = "global_heatmap_colorbar_thickness"
+GLOBAL_HEATMAP_COLORBAR_LENGTH_AUTO = "global_heatmap_colorbar_length_auto"
+GLOBAL_HEATMAP_COLORBAR_LENGTH = "global_heatmap_colorbar_length"
+DESIGN_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "heatmap_opacity_auto": GLOBAL_HEATMAP_OPACITY_AUTO,
+        "show_plot_frame": GLOBAL_SHOW_PLOT_FRAME,
+        "fixation_colorbar_length_auto": GLOBAL_FIXATION_COLORBAR_LENGTH_AUTO,
+        "heatmap_colorbar_length_auto": GLOBAL_HEATMAP_COLORBAR_LENGTH_AUTO,
+    }
+)
+DESIGN_COLOR_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "caption_color": GLOBAL_CAPTION_COLOR,
+        "plot_frame_color": GLOBAL_PLOT_FRAME_COLOR,
+        "fixation_outline_color": GLOBAL_FIXATION_OUTLINE_COLOR,
+    }
+)
+DESIGN_INT_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "title_font_size": GLOBAL_TITLE_FONT_SIZE,
+        "caption_font_size": GLOBAL_CAPTION_FONT_SIZE,
+        "coordinate_grid_font_size": GLOBAL_COORDINATE_GRID_FONT_SIZE,
+        "fixation_colorbar_thickness": GLOBAL_FIXATION_COLORBAR_THICKNESS,
+        "heatmap_colorbar_thickness": GLOBAL_HEATMAP_COLORBAR_THICKNESS,
+    }
+)
+DESIGN_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
+    {
+        "heatmap_opacity": GLOBAL_HEATMAP_OPACITY,
+        "saccade_arrow_size": GLOBAL_SACCADE_ARROW_SIZE,
+        "fixation_outline_width": GLOBAL_FIXATION_OUTLINE_WIDTH,
+        "fixation_colorbar_length": GLOBAL_FIXATION_COLORBAR_LENGTH,
+        "heatmap_colorbar_length": GLOBAL_HEATMAP_COLORBAR_LENGTH,
+    }
+)
 GLOBAL_FIXCLASS_SHORT_MODE = "global_fixclass_short_mode"
 GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS = "global_fixclass_short_threshold_ms"
 GLOBAL_FIXCLASS_SHORT_SYMBOL = "global_fixclass_short_symbol"
@@ -196,6 +267,9 @@ EXPORT_FIGURE_DPI = "export_figure_dpi"
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
 # widget keys, seeded before the picker renders.
 SINGLE_SELECT_TRIAL_MODE = "single_select_trial_mode"
+#: The picked reading — ``utils.reading_key(participant, trial)`` since #412. A
+#: trial id alone (a recovery cache from before) still reopens its trial when
+#: one reader has it (`url_state._settle_picker_selection`).
 SINGLE_TRIAL_ID = "single_trial_id"
 #: #374 — one-shot: the trial a link or settings file chose, so the per-dataset
 #: trial memory never takes it for one carried over (`utils.select_trial`).
@@ -263,6 +337,9 @@ CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 CMP_BOX_COLOR = "cmp{idx}_box_color"
 # The word-box fill override ("" = the figure's `global_word_box_fill_color`).
 CMP_BOX_FILL_COLOR = "cmp{idx}_box_fill_color"
+# The word-box outline's / fill's opacity (absent = the figure's).
+CMP_BOX_LINE_OPACITY = "cmp{idx}_box_line_opacity"
+CMP_BOX_FILL_OPACITY = "cmp{idx}_box_fill_opacity"
 # The raw-gaze sample colour override ("" = the scanpath's own fixation colour).
 CMP_RAW_GAZE_COLOR = "cmp{idx}_raw_gaze_color"
 # The heatmap colour-scale override ("" = the figure's `global_heatmap_colorscale`).
@@ -429,6 +506,10 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+#: CMP-13: scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
+#: own key holds a label rebuilt relative to A, so this is B's stable name. Kept
+#: in the recovery cache with ``cmp_dataset``, so a refresh keeps B's trial.
+COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
 #: VIZ-40 (UX-135) — VIZ-7's fixation-index window on the wire. Its own constant
 #: because two frozen groupings name it: the encoding group
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
@@ -441,6 +522,8 @@ PENDING_COMPARE_STATE_KEY = "_pending_compare"
 #: B's own screen navigator, seeded by `cmp_screen=` and by a settings file's
 #: `selection.compare.screen_id` (schema 6).
 SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
+#: Scanpath A's screen of a multipart trial (`tabs._render_screen_navigator`).
+SINGLE_SCREEN_ID = "single_screen_id"
 
 # ---------------------------------------------------------------------------
 # Frozen groupings — `url_key -> session_state key`, one mapping per encoding.
@@ -452,6 +535,7 @@ SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
 # bool -> "1"/"0"
 SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_TOGGLE_PARAMS,
         "show_words": GLOBAL_SHOW_WORDS,
         "show_labels": GLOBAL_SHOW_LABELS,
         "show_stimulus": GLOBAL_SHOW_STIMULUS,
@@ -460,8 +544,9 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_saccades": GLOBAL_SHOW_SACCADES,
         "show_saccade_arrows": GLOBAL_SHOW_SACCADE_ARROWS,
         "saccade_type_legend": GLOBAL_SACCADE_TYPE_LEGEND,
+        "show_color_legend": GLOBAL_SHOW_COLOR_LEGEND,
         "duration_size_legend": GLOBAL_DURATION_SIZE_LEGEND,
-        "snap_fixations": GLOBAL_FIXATION_SNAP_TO_WORD,
+        "snap_fixations": GLOBAL_FIXATION_SNAP_TO_LINE,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
@@ -475,6 +560,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_caption": GLOBAL_SHOW_CAPTION,
         "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
+        "crop_margin_auto": GLOBAL_CROP_MARGIN_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
         "show_stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
@@ -491,6 +577,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
 # string / choice / colour
 SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_COLOR_PARAMS,
         "export_width_unit": EXPORT_FIGURE_WIDTH_UNIT,
         "color_by": GLOBAL_COLOR_BY,
         "heatmap_style": GLOBAL_HEATMAP_STYLE,
@@ -578,6 +665,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
 # int
 SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_INT_PARAMS,
         "export_dpi": EXPORT_FIGURE_DPI,
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
@@ -602,18 +690,22 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 # float
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
+        **DESIGN_FLOAT_PARAMS,
         "export_width": EXPORT_FIGURE_WIDTH,
         "line_spacing": GLOBAL_LINE_SPACING,
         "heatmap_sigma_px": GLOBAL_HEATMAP_SIGMA_PX,
         "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         "preproc_merge_distance_chars": GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         "saccade_width": GLOBAL_SACCADE_WIDTH,
+        "saccade_opacity": GLOBAL_SACCADE_OPACITY,
         "fixation_opacity": GLOBAL_FIXATION_OPACITY,
+        "snap_position": GLOBAL_FIXATION_SNAP_POSITION,
         "stimulus_image_opacity": GLOBAL_STIMULUS_IMAGE_OPACITY,
         "stimulus_image_offset_x": GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         "stimulus_image_offset_y": GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         "stimulus_image_scale": GLOBAL_STIMULUS_IMAGE_SCALE,
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
+        "crop_margin": GLOBAL_CROP_MARGIN_PX,
         "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
         "word_box_line_opacity": GLOBAL_WORD_BOX_LINE_OPACITY,
@@ -625,7 +717,9 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
         "display_dpi": GLOBAL_DISPLAY_DPI,
         "stimulus_font_pt": GLOBAL_STIMULUS_FONT_PT,
-        **_compare_style_params("saccade_width", "opacity"),
+        **_compare_style_params(
+            "saccade_width", "opacity", "box_line_opacity", "box_fill_opacity"
+        ),
     }
 )
 
@@ -758,6 +852,8 @@ COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
             "label_pattern",
             "box_color",
             "box_fill_color",
+            "box_line_opacity",
+            "box_fill_opacity",
             "raw_gaze_color",
             "heatmap_colorscale",
         ),
@@ -779,8 +875,16 @@ URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 # one public corpus that still travels under its own older token. EXP-19's two
 # groups are here because they are emitted only when they differ from the
 # recipient's own defaults — see `SETUP_PARAMS` above.
+# Each legend's placement as one param, ``legend_<kind>=SPOT[,ARRANGEMENT][,SIZE]``
+# (`plots.parse_legend_spec`, the spelling `render --legend` takes), written only
+# for a legend moved off Auto — so they are optional, below.
+LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
+    {f"legend_{kind}": kind for kind in LEGEND_KIND_NAMES}
+)
+
 URL_OPTIONAL_PARAMS = frozenset(
     {
+        *LEGEND_PARAMS,
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
@@ -827,14 +931,18 @@ SHARE_QUERY_PARAMS = (
 # out-of-range value would otherwise crash the widget on render).
 URL_BOUNDED_STATE_KEYS = frozenset(
     {
+        *DESIGN_INT_PARAMS.values(),
+        *DESIGN_FLOAT_PARAMS.values(),
         GLOBAL_LINE_SPACING,
         GLOBAL_SACCADE_WIDTH,
+        GLOBAL_SACCADE_OPACITY,
         GLOBAL_ORDER_FONT_SIZE,
         GLOBAL_ANIM_GRID_STEP_MS,
         GLOBAL_ANIM_MAX_FRAMES,
         GLOBAL_MARKER_SIZE_RANGE,
         GLOBAL_MARKER_DURATION_RANGE,
         GLOBAL_FIXATION_OPACITY,
+        GLOBAL_FIXATION_SNAP_POSITION,
         GLOBAL_STIMULUS_IMAGE_OPACITY,
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
@@ -843,6 +951,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_COORDINATE_GRID_SPACING,
+        GLOBAL_CROP_MARGIN_PX,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
         GLOBAL_WORD_BOX_LINE_OPACITY,
@@ -868,7 +977,13 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         EXPORT_FIGURE_DPI,
         *(
             template.format(idx=idx)
-            for template in (CMP_SACCADE_WIDTH, CMP_MARKER_SIZE_RANGE, CMP_OPACITY)
+            for template in (
+                CMP_SACCADE_WIDTH,
+                CMP_MARKER_SIZE_RANGE,
+                CMP_OPACITY,
+                CMP_BOX_LINE_OPACITY,
+                CMP_BOX_FILL_OPACITY,
+            )
             for _side, idx in COMPARE_STYLE_SIDES
         ),
     }
@@ -906,7 +1021,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 7
+PLOT_CONFIG_SCHEMA_VERSION = 8
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -921,6 +1036,8 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_LABEL_PATTERN,
         CMP_BOX_COLOR,
         CMP_BOX_FILL_COLOR,
+        CMP_BOX_LINE_OPACITY,
+        CMP_BOX_FILL_OPACITY,
         CMP_RAW_GAZE_COLOR,
         CMP_HEATMAP_COLORSCALE,
     }
@@ -931,6 +1048,13 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
 # vice versa) means the saved-config format moved.
 PLOT_CONFIG_STATE_KEYS = frozenset(
     {
+        # #422: the `design` section.
+        *DESIGN_TOGGLE_PARAMS.values(),
+        *DESIGN_COLOR_PARAMS.values(),
+        *DESIGN_INT_PARAMS.values(),
+        *DESIGN_FLOAT_PARAMS.values(),
+        # Figure & canvas → Legends.
+        *LEGEND_STATE_KEYS,
         # layers
         GLOBAL_SHOW_WORDS,
         GLOBAL_SHOW_LABELS,
@@ -946,6 +1070,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SHOW_COORDINATE_GRID,
         GLOBAL_COORDINATE_GRID_AUTO,
         GLOBAL_COORDINATE_GRID_SPACING,
+        GLOBAL_CROP_MARGIN_AUTO,
+        GLOBAL_CROP_MARGIN_PX,
         GLOBAL_ANIM_AUTOPLAY,
         # coloring
         GLOBAL_PALETTE,
@@ -964,16 +1090,19 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_COLOR,
         GLOBAL_SACCADE_STYLE,
         GLOBAL_SACCADE_WIDTH,
+        GLOBAL_SACCADE_OPACITY,
         GLOBAL_SACCADE_RENDER_MODE,
         GLOBAL_SACCADE_COLOR_MODE,
         GLOBAL_SACCADE_TYPE_LEGEND,
+        GLOBAL_SHOW_COLOR_LEGEND,
         GLOBAL_SACCADE_CLASS_COLOR_FORWARD,
         GLOBAL_SACCADE_CLASS_COLOR_SKIP,
         GLOBAL_SACCADE_CLASS_COLOR_REFIXATION,
         GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP,
         GLOBAL_SACCADE_CLASS_COLOR_REGRESSION,
         GLOBAL_SACCADE_CLASSES,
-        GLOBAL_FIXATION_SNAP_TO_WORD,
+        GLOBAL_FIXATION_SNAP_TO_LINE,
+        GLOBAL_FIXATION_SNAP_POSITION,
         GLOBAL_ALIGN_ALGORITHM,
         GLOBAL_ALIGN_CONNECTORS,
         GLOBAL_ILLUSTRATION_LABEL,
@@ -1125,6 +1254,8 @@ LEGACY_SESSION_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
             GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         ),
+        # #422: "Snap above words" became Snap to line.
+        "global_fixation_snap_to_word": (GLOBAL_FIXATION_SNAP_TO_LINE,),
     }
 )
 

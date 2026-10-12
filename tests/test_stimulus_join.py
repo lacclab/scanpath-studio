@@ -1027,3 +1027,103 @@ class TestRepeatBases:
             {"participant_id": ["r1", "r1", "r2"], "trial_id": ["a", "a_r2", "a_r2"]}
         )
         assert data_module.repeat_bases(fixations) == {("r1", "a_r2"): "a"}
+
+
+class TestRepeatIdsNeverMeetARealTrial:
+    """#412: a repeat's generated id used to be written without looking at the
+    participant's other trials, so two readings of `a` beside a recorded trial
+    `a_r2` gave `a`, `a_r2`, `a_r2` — two readings merged into one scanpath."""
+
+    def _fixations(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "participant_id": ["p", "p", "p"],
+                "trial_id": ["a", "a", "a_r2"],
+                "TRIAL_INDEX": [1, 2, 3],
+                "x": [10, 20, 30],
+                "y": [10, 10, 10],
+                "duration_ms": [100, 100, 100],
+                "timestamp_ms": [0, 0, 0],
+            }
+        )
+
+    _SCHEMA = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "text_id": None,
+        "duration": "duration_ms",
+        "x": "x",
+        "y": "y",
+    }
+
+    def test_three_readings_stay_three(self):
+        normalized = normalize_fixations(self._fixations(), self._SCHEMA)
+        assert normalized["trial_id"].tolist() == ["a", "a__r2", "a_r2"]
+        keys = normalized[["participant_id", "trial_id"]].drop_duplicates()
+        assert len(keys) == 3
+        # The repeat still names what it re-read, for the stimulus join.
+        assert normalized[data_module.BASE_TRIAL_ID].tolist() == ["a", "a", "a_r2"]
+        # A repeat with no collision keeps its `_r2` exactly.
+        plain = normalize_fixations(self._fixations().iloc[:2], self._SCHEMA)
+        assert plain["trial_id"].tolist() == ["a", "a_r2"]
+
+    def test_the_separator_lengthens_until_it_is_free(self):
+        """Never onto a recorded id, nor onto another repeat's plain `_rN`:
+        `a_`'s repeat is `a__r2`, so `a`'s cannot be."""
+        fixations = _fix(
+            ["p"] * 6,
+            ["a_", "a_", "a", "a", "a_r2", "b"],
+            ["x"] * 6,
+            TRIAL_INDEX=[1, 2, 3, 4, 5, 6],
+        )
+        out = normalize_fixations(fixations, _FIX_SCHEMA)["trial_id"].tolist()
+        assert out == ["a_", "a__r2", "a", "a___r2", "a_r2", "b"]
+        assert len(set(out)) == len(out)
+
+    def test_each_participant_is_checked_on_its_own(self):
+        """Another reader's `a_r2` is no collision."""
+        fixations = _fix(
+            ["p", "p", "q"], ["a", "a", "a_r2"], ["x"] * 3, TRIAL_INDEX=[1, 2, 1]
+        )
+        out = normalize_fixations(fixations, _FIX_SCHEMA)["trial_id"].tolist()
+        assert out == ["a", "a_r2", "a_r2"]
+
+    def test_words_and_fixations_agree_and_keep_their_own_boxes(self):
+        """Per-reader AOI rows go through the same respelling, so each reading
+        keeps the boxes recorded with it after harmonization."""
+        words = _aoi(["a", "a", "a_r2"], ["a", "a", "a_r2"], ["one", "two", "three"])
+        words = words.assign(subj="p", TRIAL_INDEX=[1, 2, 3])
+        fixations = _fix(
+            ["p"] * 3, ["a", "a", "a_r2"], ["a", "a", "a_r2"], TRIAL_INDEX=[1, 2, 3]
+        )
+        w, f = sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={**_EDGE_SCHEMA, "trial": "trial", "participant": "subj"},
+            fix_schema=_FIX_SCHEMA,
+            names="canonical",
+        )
+        assert set(f["trial_id"]) == {"a", "a__r2", "a_r2"}
+        assert set(w["trial_id"]) == set(f["trial_id"])
+        assert _boxes(w, "p", "a") == ["one"]
+        assert _boxes(w, "p", "a__r2") == ["two"]
+        assert _boxes(w, "p", "a_r2") == ["three"]
+
+    def test_a_stimulus_table_still_reaches_the_repeat(self):
+        """The respelled repeat joins the text it re-read by `_base_trial_id`;
+        the recorded `a_r2` keeps its own boxes."""
+        words = _aoi(["a", "a_r2"], ["a", "a_r2"], ["first", "other"])
+        fixations = _fix(
+            ["p"] * 3, ["a", "a", "a_r2"], ["a", "a", "a_r2"], TRIAL_INDEX=[1, 2, 3]
+        )
+        w, f = sps.load_scanpath_data(
+            words=words,
+            fixations=fixations,
+            word_schema={**_EDGE_SCHEMA, "trial": "trial"},
+            fix_schema=_FIX_SCHEMA,
+            names="canonical",
+        )
+        assert set(f["trial_id"]) == {"a", "a__r2", "a_r2"}
+        assert _boxes(w, "p", "a") == ["first"]
+        assert _boxes(w, "p", "a__r2") == ["first"]
+        assert _boxes(w, "p", "a_r2") == ["other"]

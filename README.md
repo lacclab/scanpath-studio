@@ -20,7 +20,7 @@ for a paper.
 ## Get started
 
 - **As a desktop app**, the easiest way to work with your own data:
-  [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) ·
+  [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe) ·
   [macOS (Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) ·
   [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz).
 - **With pip** (Python 3.11–3.14):
@@ -60,6 +60,28 @@ The app has three views: 🗺️ **Scanpath** for one trial at a time, 📊 **Co
 Analysis** for the whole dataset, and 🗂️ **Data Management** for loading and configuring
 datasets. The [feature guides](https://lacclab.github.io/scanpath-studio/guides/)
 walk through each one.
+
+## See it in action
+
+One task each, recorded in the app on the bundled demo. The bar at the top
+counts the clicks as they happen and names each step.
+
+| | |
+|:---:|:---:|
+| ![Adding a dataset from EyeLink fixation and interest-area reports](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/add-your-data.gif) | ![Narrowing the trials by condition and participant](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/trial-filtering.gif) |
+| **Add your own data:** EyeLink's fixation and interest-area reports, their columns detected for you | **Find trials:** narrow them by condition and participant, then step through what is left |
+| ![Starring and tagging trials, then showing only the starred ones](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/favorites.gif) | ![Coloring regressions apart and adding word boxes, the reading order and another palette](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/plot-controls.gif) |
+| **Star and tag trials,** then show only the starred ones | **Style the plot:** regressions in their own color, word boxes, the reading order, a palette |
+| ![Switching between the Heatmap, Illustration and Scanpath designs](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/design-presets.gif) | ![The subtabs under the figure: annotations, stimulus and context, comparisons, export and share](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/subtabs.gif) |
+| **Ready-made designs:** Heatmap, Illustration, Scanpath, then a heatmap on top | **Under the figure:** annotations, the stimulus and its context, matching trials, export, share |
+| ![Replaying a reading, sped up to four times real time](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/replay.gif) | ![Rendering the replay to a GIF and downloading it](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/replay-export.gif) |
+| **Replay the reading** fixation by fixation, here at ×4 | **Save the replay as a GIF** for a talk |
+| ![Two readers of one text side by side, stepping through the texts together](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/compare.gif) | ![Corpus Analysis: a measure on the stimulus, against surprisal, and between two groups](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/corpus-analysis.gif) |
+| **Compare two readers** of a text side by side, stepping through the texts together | **Corpus Analysis:** a measure on the stimulus, against surprisal, and between two groups |
+| ![Exporting the figure 180 mm wide at 300 dpi](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/export-figure.gif) | ![Exporting every trial's figures and tables as one zip](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/export-bundle.gif) |
+| **Export a figure for a paper,** 180 mm wide at 300 dpi | **Export every trial,** figures and tables, as one zip |
+| ![Copying a link that reopens the same trial and design](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/share-link.gif) | |
+| **Share a link** that reopens the same trial and design, or the code that redraws it | |
 
 ## Your data
 

@@ -66,8 +66,17 @@ def test_a_cached_session_or_design_moves_the_renamed_keys():
     assert out["global_show_caption"] is False
 
 
+def test_a_cached_snap_above_words_becomes_snap_to_line():
+    """#422: a recovery-cache session or a saved design that snapped still
+    snaps."""
+    from scanpath_studio.session_keys import rename_legacy_keys
+
+    out = rename_legacy_keys({"global_fixation_snap_to_word": True})
+    assert out == {"global_fixation_snap_to_line": True}
+
+
 def test_the_schema_7_migration_moves_the_shared_settings():
-    from scanpath_studio.url_state import _migrate_plot_config
+    from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA, _migrate_plot_config
 
     migrated, note = _migrate_plot_config(
         {
@@ -77,7 +86,7 @@ def test_the_schema_7_migration_moves_the_shared_settings():
         }
     )
     assert note is None
-    assert migrated["schema"] == 7
+    assert migrated["schema"] == PLOT_CONFIG_SCHEMA
     assert migrated["coloring"] == {
         "show_fixation_colorbar": True,
         "show_heatmap_colorbar": True,

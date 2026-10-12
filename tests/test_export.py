@@ -1237,6 +1237,137 @@ class TestInventory:
         assert "- 1 trial" in readme
 
 
+class TestTheBundlesOwnFilesKeepTheirNames:
+    """#412 — a valid path pattern could name a trial's file `README.md` (or
+    `index.csv`, `columns.json`, a metadata or combined table): the bundle then
+    held two members of that name, a reader opened the plot config as the
+    README, and the inventory pointed at whichever one it met. The trial's file
+    now takes the next free name, and each member is the file its row says."""
+
+    @staticmethod
+    def _bundle(combos, words, fixations, settings, pattern):
+        import warnings
+
+        from scanpath_studio.column_names import ColumnNames, SourceName
+
+        options = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_plot_config=True,
+            include_analysis_family=True,
+            include_annotations=True,
+            table_format="csv",
+            path_pattern=pattern,
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            data, progress = bulk_export(
+                combos,
+                words,
+                fixations,
+                canvas_width=800,
+                canvas_height=400,
+                base_font_size=14,
+                font_family="monospace",
+                x_field="x",
+                y_field="y",
+                settings={
+                    **settings,
+                    "participant_metadata": pd.DataFrame(
+                        {"participant_id": ["p1"], "age": [30]}
+                    ),
+                },
+                options=options,
+                annotation_records=[
+                    {
+                        "participant_id": "p1",
+                        "trial_id": "t1",
+                        "star": True,
+                        "tags": [],
+                        "note": "",
+                    }
+                ],
+                annotation_dataset="Pilot",
+                column_names={
+                    "fixations": ColumnNames({"x": SourceName(("CURRENT_FIX_X",))})
+                },
+            )
+        assert progress.errors == []
+        assert not [w for w in caught if "Duplicate name" in str(w.message)]
+        return zipfile.ZipFile(io.BytesIO(data))
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "README.md",
+            "index.csv",
+            "columns.json",
+            "run_config.json",
+            "annotations.json",
+            "metadata/participants.csv",
+            "aggregate/all_reader_summary.csv",
+            "readme.md",
+            "metadata",
+            "README.md/{artifact}.{ext}",
+            "{artifact}.{ext}",
+        ],
+    )
+    def test_every_member_is_unique_and_is_what_the_inventory_says(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings, pattern
+    ):
+        from scanpath_studio.annotations import file_dataset
+        from scanpath_studio.export import INVENTORY_COLUMNS
+
+        with self._bundle(
+            minimal_combos, minimal_words, minimal_fixations, base_settings, pattern
+        ) as zf:
+            names = zf.namelist()
+            folded = [name.casefold() for name in names]
+            # Unique — even unpacked where case does not count — and no file
+            # has the name of a folder another member sits in.
+            assert len(set(folded)) == len(folded)
+            assert not [a for a in folded for b in folded if b.startswith(a + "/")]
+            index = pd.read_csv(
+                io.BytesIO(zf.read("index.csv")), dtype=str, keep_default_na=False
+            )
+            assert tuple(index.columns) == INVENTORY_COLUMNS
+            written = index[index["status"] == "written"]
+            assert sorted(written["path"]) == sorted(set(names) - {"index.csv"})
+            by_artifact = written.groupby("artifact")["path"].apply(list).to_dict()
+
+            def text(path):
+                return zf.read(path).decode("utf-8")
+
+            # The bundle's own files are where the README says they are…
+            assert by_artifact["readme"] == ["README.md"]
+            assert text("README.md").startswith("# Bulk export")
+            assert by_artifact["columns"] == ["columns.json"]
+            assert "tables" in json.loads(text("columns.json"))
+            assert by_artifact["run_config"] == ["run_config.json"]
+            assert "generated_at" in json.loads(text("run_config.json"))
+            assert by_artifact["annotations"] == ["annotations.json"]
+            assert file_dataset(text("annotations.json")) == "Pilot"
+            assert by_artifact["participant_metadata"] == ["metadata/participants.csv"]
+            assert "age" in pd.read_csv(zf.open("metadata/participants.csv")).columns
+            assert by_artifact["reader_summary"] == ["aggregate/all_reader_summary.csv"]
+            # …and every trial's file is the one its row describes.
+            configs = by_artifact["plot_config"]
+            assert len(configs) == 2
+            for path in configs:
+                row = written[written["path"] == path].iloc[0]
+                selection = json.loads(text(path))["selection"]
+                assert selection["trial_id"] == row["trial_id"]
+
+    def test_the_readme_says_why_a_name_has_a_number(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        with self._bundle(
+            minimal_combos, minimal_words, minimal_fixations, base_settings, "README.md"
+        ) as zf:
+            assert "README-2.md" in zf.namelist()
+            assert "`-2`, `-3` … added to its name" in zf.read("README.md").decode()
+
+
 class TestExportPlan:
     """What Build export will write, said before it runs — and Stop."""
 

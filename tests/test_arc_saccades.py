@@ -195,7 +195,7 @@ class TestArcFigureSmoke:
 
 
 # ---------------------------------------------------------------------------
-# Arc + Snap to word: the headroom follows the coordinates the arc is drawn from
+# Arc + Snap to line: the headroom follows the coordinates the arc is drawn from
 # ---------------------------------------------------------------------------
 
 
@@ -271,20 +271,21 @@ class TestSnappedArcFitsTheView:
 
     def test_wide_boxes_near_shared_edge(self):
         # The review's repro: two 250-px boxes, fixations 2 px apart at their
-        # shared edge, snapped 250 px apart at the box centres.
+        # shared edge. #422: the snap keeps their x and lifts both to the line's
+        # top edge.
         words, fix = _snap_trial(
             [100.0, 350.0], [100.0, 100.0], [250.0, 250.0], [349.0, 351.0], [110, 110]
         )
-        fig = _arc_figure(words, fix, fixation_snap_to_word=True)
+        fig = _arc_figure(words, fix, fixation_snap_to_line=True)
         assert _curve_top(fig) >= _view_top(fig)
 
     def test_different_endpoint_heights(self):
-        # Two lines of wide words: the snap lifts each endpoint to its box top
-        # and widens the jump, so the steep arc crests above the higher one.
+        # Two lines of wide words: the snap lifts each endpoint to its line's top
+        # edge, so the steep arc crests above the higher one.
         words, fix = _snap_trial(
             [50.0, 450.0], [100.0, 160.0], [300.0, 300.0], [345.0, 455.0], [118, 178]
         )
-        fig = _arc_figure(words, fix, fixation_snap_to_word=True)
+        fig = _arc_figure(words, fix, fixation_snap_to_line=True)
         assert _curve_top(fig) >= _view_top(fig)
 
     def test_unsnapped_arc_is_unchanged(self):
@@ -302,30 +303,31 @@ class TestSnappedArcFitsTheView:
             min(_view_top(straight), apex - margin), abs=0.5
         )
 
-    def test_unassigned_fixations_keep_their_recorded_position(self):
-        # word_id NaN: the snap leaves the fixation where it was, so the arc and
-        # its headroom are the unsnapped ones.
+    def test_unassigned_fixations_take_the_nearest_line(self):
+        # word_id NaN and outside every box: #422 snaps each onto the line
+        # nearest its y (here the one line, top edge 100) and keeps its x; the
+        # arc's headroom follows the snapped ends.
         words, fix = _snap_trial(
             [100.0, 350.0],
             [100.0, 100.0],
             [250.0, 250.0],
             [20.0, 700.0],
-            [110, 110],
+            [130, 150],
             word_ids=[np.nan, np.nan],
         )
-        snapped = _arc_figure(words, fix, fixation_snap_to_word=True)
-        unsnapped = _arc_figure(words, fix)
-        assert list(snapped.layout.yaxis.range) == list(unsnapped.layout.yaxis.range)
-        assert _curve_top(snapped) == pytest.approx(_curve_top(unsnapped))
+        snapped = _arc_figure(words, fix, fixation_snap_to_line=True)
+        markers = next(t for t in snapped.data if t.name == "Fixations")
+        assert list(markers.x) == [20.0, 700.0]
+        assert list(markers.y) == pytest.approx([100.0, 100.0])
         assert _curve_top(snapped) >= _view_top(snapped)
 
     def test_whole_monitor_shows_the_screen_and_never_clips_the_arc(self):
         # Words on the screen's first line: the snapped arc rises past the top
         # edge, so the whole-monitor view grows above 0 instead of cutting it.
         words, fix = _snap_trial(
-            [0.0, 400.0], [10.0, 10.0], [400.0, 400.0], [395.0, 405.0], [20, 20]
+            [0.0, 400.0], [10.0, 10.0], [400.0, 400.0], [100.0, 700.0], [20, 20]
         )
-        fig = _arc_figure(words, fix, fixation_snap_to_word=True, fit_to_monitor=True)
+        fig = _arc_figure(words, fix, fixation_snap_to_line=True, fit_to_monitor=True)
         assert fig.layout.yaxis.range[0] == 600
         assert _view_top(fig) < 0
         assert _curve_top(fig) >= _view_top(fig)

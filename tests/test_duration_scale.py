@@ -328,11 +328,11 @@ def test_the_key_labels_the_bounds_and_round_durations(sample, contrasting_trial
     words, fixations = sample
     pid, tid = contrasting_trials[0]
     fig = sps.plot_scanpath(words, fixations, pid, tid)
-    assert _key_labels(fig) == ["≤50", "100", "200", "400", "≥600 ms"]
+    assert _key_labels(fig) == ["≤50", "100", "200", "400 ms"]
     circles = [s for s in fig.layout.shapes if s.type == "circle"]
     diameters = [s.x1 - s.x0 for s in circles]
     assert diameters == pytest.approx(
-        list(_compute_marker_sizes(pd.Series([50, 100, 200, 400, 600])))
+        list(_compute_marker_sizes(pd.Series([50, 100, 200, 400])))
     )
     assert all(s.xsizemode == "pixel" and s.ysizemode == "pixel" for s in circles)
 
@@ -369,7 +369,8 @@ def test_the_illustration_stamp_sits_above_the_key(sample, contrasting_trials):
 
     words, fixations = sample
     pid, tid = contrasting_trials[0]
-    key_top = HI_SIZE + 8 + 16  # pad + label row + the largest circle
+    # pad + label row + the largest circle drawn (400 ms; 600 ms has none).
+    key_top = float(_compute_marker_sizes(pd.Series([50, 400]))[1]) + 8 + 16
 
     # Key first, stamp after.
     fig = sps.plot_scanpath(words, fixations, pid, tid)
@@ -396,7 +397,7 @@ def test_an_older_settings_file_keeps_the_relative_scale():
     old = {"schema": 4, "sizing": {"marker_size_range": [8, 24]}, "layers": {}}
     migrated, note = _migrate_plot_config(old)
     assert note is None
-    assert migrated["schema"] == PLOT_CONFIG_SCHEMA == 7
+    assert migrated["schema"] == PLOT_CONFIG_SCHEMA == 8
     assert migrated["sizing"]["marker_size_scale"] == "relative"
     assert "marker_size_scale" not in old["sizing"]  # the caller's dict is untouched
     # A schema-1 file walks the whole chain to the same answer.

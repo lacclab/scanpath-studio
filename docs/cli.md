@@ -151,9 +151,11 @@ word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), 
 a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`,
 `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`;
 `box_color` outlines that scanpath's word boxes, its `fix_color` when left out,
-`box_fill_color` fills them, `--word-box-fill-color` when left out, and
+`box_fill_color` fills them, `--word-box-fill-color` when left out,
+`box_line_opacity` / `box_fill_opacity` (0–1) are their outline's and fill's
+opacity, `--word-box-line-opacity` / `--word-box-fill-opacity` when left out, and
 `raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out —
-all three static comparison only, the `--animate` co-animation draws one set of
+all of these static comparison only, the `--animate` co-animation draws one set of
 boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that
 scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared,
 and two different scales get a color bar each), `saccade_style` (`solid`, `dash`,
@@ -170,7 +172,7 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
 
 `--animate --compare-with` replays **both** scanpaths on one clock, the same dual
 co-animation the app renders with Animate and Compare both on.
-`--compare-with` cannot be combined with `--all-screens`: a comparison
+`--compare-with` cannot be combined with `--all-screens` or `--screens`: a comparison
 is a single figure of two trials, each drawn from one screen. Pick A's with
 `--screen` and B's with `--compare-screen`; B's is looked up in B's own trial,
 so it can be a later page, or a page of the second dataset.
@@ -197,12 +199,13 @@ B's frames directly.
 | add a layer | `--word-boxes`, `--fixation-index`, `--heatmap` (the default is the app's Scanpath design) |
 | hide a layer | `--no-text`, `--no-fixations`, `--no-saccades` |
 | animate | `--animate` and optionally `--playback-speed X`; every styling flag the replay can draw (`api.figure_options("animation")`) is honored, and the rest are named in a warning |
-| set display geometry | `--canvas WIDTHxHEIGHT` |
+| set display geometry | `--canvas WIDTHxHEIGHT`; `--crop-to-data` frames the data instead of the whole monitor, with `--crop-margin PX` around it (default: 5% of its extent, at least 20 px) |
 | color fixations | `--color-by FIELD` — a column of your own too, once `--keep-columns COLUMN…` carries it through loading |
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; honored by `--animate` and `--compare-with` too) |
 | add the stimulus image | `--stimulus-image PATH` |
-| resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
+| draw each trial's own stimulus page | `--show-stimulus-image` — the `image_path` the trial's rows carry (`--sample` ships its pages) |
+| match pages from a folder | `--image-root DIR --image-pattern '{text_id}.png'` fills each row's `image_path`; add `--show-stimulus-image` to draw it |
 | use a smoothed (Gaussian) heatmap | `--heatmap-style interpolated --heatmap-sigma 20` (σ in px; omit it for the automatic σ) |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
 | export editable layers | `--separable-layers` |
@@ -284,6 +287,8 @@ or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic
 `__screen-001-<id>` file per screen of the selected parent trial.
+`--screens Title,Paragraph` writes only the screens named, each still numbered
+by its place in the trial.
 
 ## Recovery cache
 
@@ -305,6 +310,29 @@ with the app closed. `SCANPATH_STUDIO_PERSIST=0` turns caching
 off wherever it is set, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
 moves the folder. Hosted deployments never cache. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
+
+## Version and updates
+
+`scanpath-studio --version` prints the version. `version` says which build it
+is and how it was installed; `--check` also asks GitHub whether a newer release
+is out and prints the command that updates your install — the only time the
+command uses the network:
+
+```bash
+scanpath-studio version           # the build, and how it was installed
+scanpath-studio version --check   # …and whether a newer release is out
+```
+
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three
+commits after 0.35.0, at commit `8f18219`. The same check is
+**:material/help: Help → :material/info: About → :material/update: Check for updates**
+in the app, and `check_for_updates()` in the [API](api.md#version-and-updates).
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("version"))
+```
 
 ## Full reference
 
@@ -333,4 +361,4 @@ print(cli_help())
     print(cli_reference("cache"))
     ```
 
-`corpus` and `check` are listed in full in their own sections above.
+`corpus`, `check` and `version` are listed in full in their own sections above.

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import pytest
 
+from scanpath_studio.utils import reading_key
+
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
@@ -175,9 +177,9 @@ class TestPlotConfigRestore:
         assert ss["global_canvas_height"] == 1080
         assert ss["global_x_field"] == "x"
         assert ss["global_y_field"] == "y"
-        # selection (none/Trial mode → single_trial_id holds the option value)
+        # selection: single_trial_id holds the reading's option value (#412)
         assert ss["single_select_trial_mode"] == "Trial"
-        assert ss["single_trial_id"] == "t2"
+        assert ss["single_trial_id"] == reading_key("p1", "t2")
         assert ss["_skipped"] == []
 
     def test_a_settings_file_leaves_the_column_mapping_alone(self):
@@ -206,6 +208,7 @@ class TestPlotConfigRestore:
             stimulus_image_offset_y=-40.0,
             stimulus_image_scale=1.5,
             saccade_render_mode="Arc",
+            # Snap to line's key before schema 8 (#422) — migrated on read.
             fixation_snap_to_word=True,
             saccade_style="Dashed",
             saccade_width=4.0,
@@ -287,7 +290,7 @@ class TestPlotConfigRestore:
         assert ss["global_saccade_style"] == "Dashed"
         assert ss["global_saccade_width"] == 4.0
         assert ss["global_saccade_render_mode"] == "Arc"
-        assert ss["global_fixation_snap_to_word"] is True
+        assert ss["global_fixation_snap_to_line"] is True
         assert ss["global_stimulus_image_opacity"] == 0.4
         assert ss["global_stimulus_image_offset_x"] == 25.0
         assert ss["global_stimulus_image_offset_y"] == -40.0
@@ -345,11 +348,20 @@ class TestPlotConfigRestore:
             # trial `t1` is not a stand-in for p9's.
             ({"participant_id": "p9", "trial_id": "t1"}, None, "participant p9's"),
             # No reader named and only one reader has `t2`: that reading.
-            ({"trial_id": "t2"}, "t2", None),
-            ({"participant_id": "", "trial_id": "t2"}, "t2", None),
+            ({"trial_id": "t2"}, reading_key("p1", "t2"), None),
+            (
+                {"participant_id": "", "trial_id": "t2"},
+                reading_key("p1", "t2"),
+                None,
+            ),
             # No reader named, and two readers have `t1`: reported, not guessed.
             ({"trial_id": "t1"}, None, "belongs to 2 participants"),
-            ({"participant_id": "p2", "trial_id": "t1"}, "t1", None),
+            # Named, the second reader of a shared id is that reader's (#412).
+            (
+                {"participant_id": "p2", "trial_id": "t1"},
+                reading_key("p2", "t1"),
+                None,
+            ),
         ],
     )
     def test_a_selection_restores_only_the_reading_it_names(
@@ -577,7 +589,8 @@ def test_build_studio_config_includes_provenance_and_round_trips():
             "saccade_color_mode": "By type",
             "saccade_class_colors": {"regression": "#010203"},
             "saccade_render_mode": "Arc",
-            "fixation_snap_to_word": True,
+            "fixation_snap_to_line": True,
+            "fixation_snap_position": 0.25,
             "hollow_fixations": True,
         },
         base_font_size=16,
@@ -604,7 +617,8 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["coloring"]["saccade_color_mode"] == "By type"
     assert cfg["coloring"]["saccade_class_colors"]["regression"] == "#010203"
     assert cfg["coloring"]["saccade_render_mode"] == "Arc"
-    assert cfg["coloring"]["fixation_snap_to_word"] is True
+    assert cfg["coloring"]["fixation_snap_to_line"] is True
+    assert cfg["coloring"]["fixation_snap_position"] == 0.25
     assert cfg["coloring"]["hollow_fixations"] is True
     assert cfg["text"]["font_family"] == "Courier New"
     assert cfg["text"]["text_color"] == "#010203"
@@ -759,6 +773,20 @@ class TestConfigMigration:
         assert migrated["layers"] == {"words": True}
         assert migrated["future_only"] == 1
 
+    def test_a_schema_7_snap_above_words_still_snaps(self):
+        """#422: "Snap above words" became Snap to line, so a file that
+        snapped restores snapped rather than silently unsnapped."""
+        from scanpath_studio.url_state import _migrate_plot_config
+
+        migrated, note = _migrate_plot_config(
+            {"schema": 7, "coloring": {"fixation_snap_to_word": True}}
+        )
+        assert note is None
+        assert migrated["coloring"] == {"fixation_snap_to_line": True}
+        # A file that never snapped gains nothing.
+        untouched, _ = _migrate_plot_config({"schema": 7, "coloring": {}})
+        assert untouched["coloring"] == {}
+
     def test_migration_chain_walks_each_step(self, monkeypatch):
         # Prove the loop applies migrations in sequence, not just the first step.
         from scanpath_studio import url_state
@@ -792,12 +820,12 @@ class TestConfigMigration:
         assert note is not None
         assert migrated["schema"] == 1  # couldn't advance past the gap
 
-    def test_schema_constant_is_six(self):
+    def test_schema_constant_is_pinned(self):
         # Pin the current version so a bump is a deliberate, reviewed change that
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 7
+        assert PLOT_CONFIG_SCHEMA == 8
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the

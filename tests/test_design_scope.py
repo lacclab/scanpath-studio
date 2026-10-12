@@ -36,6 +36,12 @@ NOT_A_DESIGN_SETTING = {
     "cmp1_box_fill_color__pick",
     "cmp0_raw_gaze_color__pick",
     "cmp1_raw_gaze_color__pick",
+    # Likewise the per-scanpath word-box opacities: shadows of
+    # `cmp{idx}_box_{line,fill}_opacity`.
+    "cmp0_box_line_opacity__pick",
+    "cmp1_box_line_opacity__pick",
+    "cmp0_box_fill_opacity__pick",
+    "cmp1_box_fill_opacity__pick",
 }
 
 B_FILTERS = {

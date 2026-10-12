@@ -415,6 +415,46 @@ def test_a_numeric_colour_bar_survives_the_heart():
     assert (bars[0].marker.cmin, bars[0].marker.cmax) == (100.0, 300.0)
 
 
+# --- #422: the fixations' Color bar row says why it is greyed -----------------
+
+
+def _color_bar_tip(at: AppTest) -> str:
+    """The Color bar title's tooltip in the 👁️ Fixations popover — the first
+    of the two (the heatmap's follows it)."""
+    return next(m.value for m in at.markdown if 'data-tip="Color bar' in m.value)
+
+
+@pytest.mark.parametrize(
+    ("color_by", "says"),
+    [
+        ("(uniform)", "the markers are one color"),
+        ("line", "Figure &amp; canvas ▾ → Legends → Fixation colors"),
+        ("eye", "Figure &amp; canvas ▾ → Legends → Fixation colors"),
+    ],
+)
+def test_a_greyed_color_bar_row_says_why_and_where(color_by, says):
+    at = _rail(global_color_by=color_by, global_show_fixation_colorbar=True)
+    show = at.checkbox(key="global_show_fixation_colorbar")
+    assert show.disabled
+    assert says in _color_bar_tip(at)
+    # Nothing a Show box could hide: no bar is drawn.
+    fig = _static(at)
+    assert not any(t.marker is not None and t.marker.showscale for t in fig.data)
+
+
+def test_the_color_bar_show_box_drives_the_bar_for_a_numeric_column():
+    at = _rail(global_color_by="duration_ms", global_show_fixation_colorbar=True)
+    show = at.checkbox(key="global_show_fixation_colorbar")
+    assert not show.disabled
+    assert "No color bar" not in _color_bar_tip(at)
+    assert any(t.marker is not None and t.marker.showscale for t in _static(at).data)
+    show.uncheck()
+    _rerun(at)
+    assert not any(
+        t.marker is not None and t.marker.showscale for t in _static(at).data
+    )
+
+
 # --- Color by offers the dataset's other numeric columns ----------------------
 
 

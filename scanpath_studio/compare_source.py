@@ -466,6 +466,15 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
         composite = ()
     if fixations is None or fixations.empty:
         return None
+    from scanpath_studio import app
+
+    if app.local_filesystem_enabled():
+        # #417 — B draws its own dataset's stimulus images, kept in a slot of
+        # their own so they and A's do not evict each other on every run.
+        images = app.with_dataset_stimulus_images(
+            name, words, fixations, slot="cmp_stimulus_images"
+        )
+        words, fixations = images.words, images.fixations
     combos, _, _ = build_combo_options_for(fixations, composite)
     return SecondaryDataset(
         name=name,

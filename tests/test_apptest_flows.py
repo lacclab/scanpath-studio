@@ -664,11 +664,12 @@ class TestBulkExportFlow:
 
         monkeypatch.setattr(tabs, "bulk_export", capturing)
         at = _boot(subtab=SUBTAB_EXPORT)
-        choice = at.checkbox(key="export_html_self_contained")
-        assert choice.value is False
-        choice.set_value(True)
         at.radio(key="bulk_export_scope").set_value("This trial")
         at.pills(key="bulk_export_figfmts").set_value(["HTML"])
+        at.run(timeout=60)
+        choice = at.checkbox(key="bulk_export_html_self_contained")
+        assert choice.value is False
+        choice.set_value(True)
         at.run(timeout=60)
         next(b for b in at.button if b.label == "Build export").click()
         at.run(timeout=120)

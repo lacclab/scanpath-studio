@@ -180,3 +180,43 @@ class TestTheSnapIsWireFormat:
         assert _FONT_SNAP_RESTORE_KEY.startswith("_")
         assert _FONT_SNAP_RESTORE_KEY not in set(sk.SHARE_PARAMS.values())
         assert _FONT_SNAP_RESTORE_KEY not in set(sk.PLOT_CONFIG_STATE_KEYS)
+
+
+class TestAnAddedDatasetsFont:
+    """The add and edit screens' *Font* answer belongs to that dataset: opening
+    another dataset must not draw it in the first one's font."""
+
+    @staticmethod
+    def _add(session, name, font):
+        setup = {"font_family": font} if font else {}
+        session.setdefault("_datasets", {})[name] = {"setup": setup}
+
+    def test_each_added_dataset_draws_its_own_font(self, session):
+        self._add(session, "Mine A", "'Courier New', monospace")
+        self._add(session, "Mine B", "'Consolas', monospace")
+        _seed("Mine A", _WORDS)
+        assert session["global_font_family"] == "'Courier New', monospace"
+        _seed("Mine B", _WORDS)
+        assert session["global_font_family"] == "'Consolas', monospace"
+        _seed("Mine A", _WORDS)
+        assert session["global_font_family"] == "'Courier New', monospace"
+
+    def test_leaving_it_puts_the_previous_font_back(self, session):
+        from scanpath_studio.constants import DEMO_CHOICE, FONT_FAMILY
+
+        self._add(session, "Mine", "'Courier New', monospace")
+        _seed(DEMO_CHOICE, _WORDS)
+        assert session["global_font_family"] == FONT_FAMILY
+        _seed("Mine", _WORDS)
+        assert session["global_font_family"] == "'Courier New', monospace"
+        _seed(DEMO_CHOICE, _WORDS)
+        assert session["global_font_family"] == FONT_FAMILY
+
+    def test_one_with_no_font_answer_draws_the_default(self, session):
+        from scanpath_studio.constants import FONT_FAMILY
+
+        self._add(session, "Mine A", "'Courier New', monospace")
+        self._add(session, "Old", None)
+        _seed("Mine A", _WORDS)
+        _seed("Old", _WORDS)
+        assert session["global_font_family"] == FONT_FAMILY

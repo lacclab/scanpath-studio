@@ -95,8 +95,9 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
-def start_app(port: int) -> subprocess.Popen:
-    env = {**os.environ, "SCANPATH_STUDIO_PERSIST": "0"}
+def start_app(port: int, env: dict[str, str] | None = None) -> subprocess.Popen:
+    """The app on ``port``, with the recovery cache off unless ``env`` says otherwise."""
+    env = {**os.environ, "SCANPATH_STUDIO_PERSIST": "0", **(env or {})}
     proc = subprocess.Popen(
         [
             sys.executable,

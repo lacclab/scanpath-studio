@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio.tabs import _CMP_SORT_DEFAULT, _order_compare_options
-from scanpath_studio.utils import SAME_TEXT_MARKER, TRIAL_SORT_DEFAULT
+from scanpath_studio.utils import SAME_TEXT_MARKER, TRIAL_SORT_DEFAULT, reading_key
 
 
 @pytest.fixture
@@ -23,12 +23,18 @@ def options():
 
 @pytest.fixture
 def sort_keys():
+    # Keyed by reading, as `trial_sort_keys` gives them (#412).
+    diff, same, long = (
+        reading_key("p3", "c-diff"),
+        reading_key("p2", "c-same"),
+        reading_key("p4", "c-long"),
+    )
     return {
         "Fixations (n)": pd.Series(
-            {"c-diff": 6, "c-same": 4, "c-long": 8, "c-other": 2}
+            {diff: 6, same: 4, long: 8, reading_key("p5", "c-other"): 2}
         ),
         # Missing values must remain last even for a descending sort.
-        "Reading time (s)": pd.Series({"c-diff": 1.2, "c-same": 0.8, "c-long": 3.5}),
+        "Reading time (s)": pd.Series({diff: 1.2, same: 0.8, long: 3.5}),
     }
 
 
@@ -58,6 +64,13 @@ class TestOrderCompareOptions:
             options, "Reading time (s)", sort_keys, descending=True
         )
         assert _ids(ordered) == ["c-long", "c-diff", "c-same", "c-other"]
+
+    def test_readers_of_one_trial_id_sort_by_their_own_values(self):
+        """#412: B's candidates are readings, so a shared id is two of them."""
+        options = [("p1", "t", "t [p1]", ""), ("p2", "t", "t [p2]", "")]
+        keys = {"n": pd.Series({reading_key("p1", "t"): 5, reading_key("p2", "t"): 1})}
+        ordered = _order_compare_options(options, "n", keys)
+        assert [option[0] for option in ordered] == ["p2", "p1"]
 
     def test_single_candidate_is_untouched(self, options, sort_keys):
         assert (

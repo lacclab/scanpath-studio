@@ -42,11 +42,12 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import pandas as pd
 import streamlit as st
@@ -63,11 +64,19 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-from scanpath_studio import dataset_table, loading, progress, wizard_shell
+from scanpath_studio import (
+    dataset_table,
+    desktop_update,
+    loading,
+    progress,
+    wizard_shell,
+)
 from scanpath_studio import metadata as metadata_mod
+from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
     filter_keys,
 )
+from scanpath_studio.color_picker_commit import render_color_picker_commit
 from scanpath_studio.column_names import (
     ACTIVE_COLUMN_NAMES_KEY,
     ColumnNames,
@@ -80,7 +89,6 @@ from scanpath_studio.constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     AUTHOR_CHOICE,
-    BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
     BENCHMARK_SHORT_SUFFIX,
     BENCHMARK_WIP_SUFFIX,
@@ -95,9 +103,11 @@ from scanpath_studio.constants import (
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
     DATASET_SETUP_OVERRIDES_KEY,
+    DATASET_STIMULUS_IMAGES_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     DEMO_CHOICE,
     DOWNLOAD_DIR_ENV,
     DOWNLOAD_DIR_KEY,
@@ -121,7 +131,6 @@ from scanpath_studio.constants import (
     RAW_GAZE_SNAP_RESTORE_KEY,
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
-    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -141,21 +150,26 @@ from scanpath_studio.constants import (
 )
 from scanpath_studio.controls import (
     _LABEL_GAP,
+    BG_CHOICES,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
     _labeled,
     _pin,
+    _shadow_key_missing,
     _sub_caption,
     _sub_row,
+    background_swatch,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
     has_active_trial_filters,
     read_trial_filters,
     reassert_pending_writes,
+    shadow_widget_key,
     unique_field_labels,
     viz_settings_from_state,
+    write_through,
 )
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.data import (
@@ -188,6 +202,7 @@ from scanpath_studio.data import (
     load_onestop_server_bundle,
     load_sample_data,
     load_sample_raw_gaze,
+    match_stimulus_images,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
@@ -205,9 +220,12 @@ from scanpath_studio.data import (
     read_tables,
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
-    resolve_stimulus_image_paths,
+    select_trials_cached,
     stamp_source,
+    stimulus_image_source,
     text_ids,
+    trial_filter_conflict_note,
+    trial_filter_params,
     trial_identity_warning,
     trial_keys,
     trial_mapping_columns,
@@ -236,10 +254,19 @@ from scanpath_studio.debug_log import (
 )
 from scanpath_studio.easter_egg import render_easter_egg
 from scanpath_studio.experimental_setup import (
+    FONT_CHOICES,
+    FONT_PT_RANGE,
+    FONT_PX_RANGE,
+    OTHER_FONT,
     Provenance,
     SetupSnapshot,
-    font_pt_to_px,
+    font_choice,
+    font_choice_css,
+    font_other_text,
+    font_size_px,
+    stimulus_font_css,
 )
+from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
     close_open_popovers,
@@ -325,6 +352,7 @@ from scanpath_studio.url_state import (
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _render_share_body,
+    _settle_picker_selection,
     apply_pending_preprocessing,
     corpus_choice_for_slug,
     link_dataset_notice,
@@ -544,6 +572,69 @@ _IFRAME_CLICK_CLOSES_POPOVER_SCRIPT = """
 """
 
 
+#: #422: a field title's tooltip (`fields.row_label`, `styles.py`'s
+#: `.sps-fhelp::after`) opens below the title, and on a popover's last rows it
+#: ran past the popover's bottom edge. That made the popover scrollable while
+#: it showed; where scrollbars take room (a Mac with a mouse, most of Windows)
+#: the scrollbar narrowed the rows, the title slid out from under the pointer,
+#: the tooltip closed, the scrollbar went, and round again — the rail's
+#: popovers shook for as long as the pointer rested there. This opens a tooltip
+#: upward (`.sps-tip-up`) when the box that clips it — the popover, or the page
+#: — has no room for it below and more room above. A tooltip drawn above the
+#: title can never make that box scrollable, since nothing scrolls above its
+#: top. Installed in the parent's realm once per page load, like the scripts
+#: above.
+_FIELD_TIP_PLACEMENT_SCRIPT = """
+<script>
+(function () {
+    function install() {
+        var GAP = 6;
+        function clipRect(el) {
+            for (var box = el.parentElement; box && box !== document.body;
+                    box = box.parentElement) {
+                if (getComputedStyle(box).overflowY !== "visible") {
+                    return box.getBoundingClientRect();
+                }
+            }
+            return null;
+        }
+        function place(tip) {
+            var view = document.documentElement.clientHeight;
+            var clip = clipRect(tip);
+            var top = Math.max(clip ? clip.top : 0, 0);
+            var bottom = Math.min(clip ? clip.bottom : view, view);
+            var r = tip.getBoundingClientRect();
+            var height = parseFloat(getComputedStyle(tip, "::after").height);
+            if (!(height > 0)) { height = 80; }
+            var below = bottom - r.bottom;
+            var above = r.top - top;
+            tip.classList.toggle(
+                "sps-tip-up", below < height + GAP && above > below
+            );
+        }
+        function onEnter(ev) {
+            var tip = ev.target instanceof Element
+                && ev.target.closest(".sps-fhelp");
+            if (tip) { place(tip); }
+        }
+        document.addEventListener("mouseover", onEnter, true);
+        document.addEventListener("focusin", onEnter, true);
+    }
+    try {
+        var host = window.parent;
+        if (host.__spsFieldTipPlacementInstalled) { return; }
+        var script = host.document.createElement("script");
+        script.textContent = "(" + install.toString() + ")();";
+        host.document.head.appendChild(script);
+        host.__spsFieldTipPlacementInstalled = true;
+    } catch (e) {
+        /* Not same-origin: the tooltips open below their titles, as before. */
+    }
+})();
+</script>
+"""
+
+
 #: #374 F19: what a screen reader announces. Streamlit sets a widget's
 #: ``aria-label`` to its label string as written, so a switch labelled
 #: ``:material/movie: Animate`` was announced with the shortcode, and the
@@ -639,6 +730,7 @@ def configure_page() -> None:
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
     embed_html_iframe(_A11Y_NAMES_SCRIPT, height=0)
+    embed_html_iframe(_FIELD_TIP_PLACEMENT_SCRIPT, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the
@@ -1337,6 +1429,12 @@ def _arm_about() -> None:
     st.session_state["_about_dialog_requested"] = True
 
 
+#: #139 — the last *Check for updates* answer, shown under the button until the
+#: dialog is opened again. A plain session key, not in the recovery cache's
+#: allowlist, so it is never written to disk.
+_UPDATE_CHECK_KEY = "_about_update_check"
+
+
 def maybe_show_about() -> None:
     """Open the About dialog if the ❓ Help menu button armed it.
 
@@ -1346,6 +1444,7 @@ def maybe_show_about() -> None:
     rerun (including the ~10 s plot embeds).
     """
     if st.session_state.pop("_about_dialog_requested", False):
+        st.session_state.pop(_UPDATE_CHECK_KEY, None)
         _about_dialog()
 
 
@@ -1353,7 +1452,7 @@ def maybe_show_about() -> None:
 @guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
-    from scanpath_studio import __version__
+    from scanpath_studio import __release__, __version__
 
     # The button that opened this sits inside the ❓ Help popover, whose open
     # state is client-side — without this it floats on top of the modal.
@@ -1370,15 +1469,17 @@ def _about_dialog() -> None:
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
         f"url = {{{CITATION['url']}}},\n"
-        f"version = {{{__version__}}},\n"
+        f"version = {{{__release__}}},\n"
         "year = {2026}\n"
         "}"
     )
     st.markdown(
+        f"**Scanpath Studio** v{__version__} — interactive visualization of eye "
+        "movements in reading."
+    )
+    _render_build_and_updates()
+    st.markdown(
         f"""
-**Scanpath Studio** v{__version__} — interactive visualization of eye
-movements in reading.
-
 Developed by [Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-harram-32b547292/),
@@ -1442,6 +1543,183 @@ and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
 
         _arm_debug()
         st.rerun()
+
+
+def _update_check_offered() -> bool:
+    """#139: *Check for updates* only where updating means something — a local
+    run or the desktop app, i.e. a server on loopback alone. The hosted demo
+    runs the `stable` branch, and its visitors have nothing to update."""
+    return server_bound_to_loopback()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _latest_release_cached() -> update_check.Release:
+    """GitHub's latest release, kept ten minutes: a second click, or a second
+    session on this machine, doesn't spend another of the 60 anonymous requests
+    an hour. A failure raises, and `st.cache_data` keeps no failed result."""
+    return update_check.latest_release()
+
+
+def _build_info():
+    """This process's build (a seam the About tests pin)."""
+    from scanpath_studio.build_info import build_info
+
+    return build_info()
+
+
+#: #394: how long About goes on saying how the last update ended.
+LAST_UPDATE_SHOWN_S = 7 * 24 * 3600
+
+
+def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None:
+    """#385: the outcome the update helper left behind, across the restart.
+
+    Said only of the build that is running: a record that names neither
+    ``current`` version — a later install by hand — says nothing, and neither
+    does one older than ``LAST_UPDATE_SHOWN_S``.
+    """
+    if last.at is not None and time.time() - last.at > LAST_UPDATE_SHOWN_S:
+        return
+    because = f": {last.reason}" if last.reason else ""
+    if last.status == "updated":
+        if last.version == current:
+            st.caption(f"Updated from v{last.previous}.")
+    elif last.previous == current:
+        # This build is the one that stayed.
+        st.warning(
+            f"The update to v{last.version} didn't go through{because}. "
+            f"This is still v{last.previous}.",
+            icon=ICONS["warning"],
+        )
+    elif last.version == current:
+        # A double failure kept the new version's files in place.
+        st.warning(
+            f"The update to v{last.version} didn't finish cleanly{because}. If "
+            f"something misbehaves, download v{last.version} again from the "
+            "release page.",
+            icon=ICONS["warning"],
+        )
+
+
+def _render_build_and_updates() -> None:
+    """#139: which build this is, and — on a local run — *Check for updates*."""
+    info = _build_info()
+    if info.version != info.release:
+        st.caption(info.describe())
+    # #385: how the desktop app's last update ended — None anywhere else.
+    last = desktop_update.last_result()
+    if last is not None:
+        _render_last_update(last, info.version)
+    if not _update_check_offered():
+        return
+    if st.button(
+        "Check for updates",
+        icon=ICONS["update"],
+        key="about_check_updates",
+        help="Asks GitHub for the latest release — the only time the app goes "
+        "online for this.",
+    ):
+        # One opaque request of at most 5 s inside a dialog: a spinner, not a
+        # UX-165 loading card.
+        with st.spinner("Asking GitHub…"):
+            st.session_state[_UPDATE_CHECK_KEY] = update_check.check_for_updates(
+                latest=_latest_release_cached
+            )
+    result = st.session_state.get(_UPDATE_CHECK_KEY)
+    if result is not None:
+        _render_update_result(result)
+
+
+def _render_update_result(result: update_check.UpdateCheck) -> None:
+    """One *Check for updates* answer: the sentence, then what to do about it."""
+    if result.status == "up_to_date":
+        st.success(result.message, icon=ICONS["success"])
+        return
+    if result.status == "ahead":
+        st.info(result.message, icon=ICONS["info"])
+        return
+    if result.status == "error":
+        st.warning(result.message, icon=ICONS["warning"])
+        return
+    st.info(result.message, icon=ICONS["update"])
+    if result.install_kind == "desktop":
+        _render_desktop_update(result)
+    elif result.command:
+        st.code(result.command, language="bash")
+        st.caption("Then restart the app.")
+    if result.latest is not None:
+        st.markdown(f"[What's new in v{result.latest.version}]({result.latest.url}) ↗")
+
+
+def _render_desktop_update(result: update_check.UpdateCheck) -> None:
+    """#385: **Update & restart** when this app can update itself, and the
+    download either way — beside the button, or instead of it with the reason."""
+    install = desktop_update.current_install()
+    reason = desktop_update.refusal(result, install)
+    clicked = False
+    if reason is None:
+        clicked = st.button(
+            "Update & restart",
+            type="primary",
+            icon=ICONS["update"],
+            key="about_update_restart",
+            help="Downloads the new version, checks and tests it, then restarts "
+            "into it. Your datasets and settings come back with it.",
+        )
+    else:
+        st.caption(reason)
+    if result.download is not None:
+        label = (
+            "Download instead"
+            if reason is None
+            else f"Download {result.download.name} ({human_size(result.download.size)})"
+        )
+        st.link_button(label, result.download.url, icon=ICONS["download"])
+    if clicked:
+        _run_desktop_update(result, install)
+
+
+def _stop_desktop_update(task_key: tuple) -> None:
+    """#385: Cancel on the update card — the download stops at its next chunk."""
+    progress.cancel(task_key)
+
+
+def _run_desktop_update(
+    result: update_check.UpdateCheck, install: desktop_update.Install
+) -> None:
+    """Download, check and test under a card, then hand over to the helper and quit."""
+    task_key = ("desktop_update", loading.session_id())
+    try:
+        with loading.card(
+            st.empty(),
+            key="desktop_update",
+            title=f"Updating to v{result.latest.version}",
+            steps=desktop_update.STEPS,
+            step_list=True,
+            task_key=task_key,
+            cancel=loading.Cancel(
+                "Cancel update", _stop_desktop_update, args=(task_key,)
+            ),
+        ):
+            plan = desktop_update.prepare(result, install)
+            # Its handshake (up to HANDSHAKE_TIMEOUT_S) is the card's last
+            # step, Restarting, and Cancel still stops it there.
+            desktop_update.start_swap(plan)
+            # At once: the helper is waiting for this process to quit, and a
+            # rerun (a click on Cancel, now too late) would stop this script
+            # at its next Streamlit call, before a later exit_soon.
+            desktop_update.exit_soon()
+    except desktop_update.UpdateFailed as error:
+        message = str(error)
+        if "nothing was changed" not in message.lower():
+            message += " Nothing was changed."
+        st.error(message, icon=ICONS["error"])
+        return
+    st.success(
+        f"Restarting into v{plan.version}. A new window opens when it's ready "
+        "(on Windows that can take a minute or two); you can close this one.",
+        icon=ICONS["update"],
+    )
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------
@@ -1631,6 +1909,25 @@ def data_root() -> Path | None:
     """The configured allow-root for corpus paths, or ``None`` if unset."""
     raw = os.environ.get(DATA_ROOT_ENV, "").strip()
     return Path(raw).expanduser().resolve() if raw else None
+
+
+def active_stimulus_folder() -> tuple[str, str] | None:
+    """``(folder, pattern)``: the local folder the open dataset's stimulus pages
+    are matched from (#417), or ``None``. The Share subtab's code snippet
+    hands it to `api.attach_stimulus_images`, so a snippet that writes
+    ``show_stimulus_image=True`` finds the same pages (#420). The dataset is
+    the one `_run_app` attaches images for — the demo while it stands in for a
+    missing corpus. A machine-local path, so ``None`` wherever local folders
+    are not the user's own."""
+    if not local_filesystem_enabled():
+        return None
+    owner = (
+        DEMO_CHOICE
+        if st.session_state.get(_PLACEHOLDER_SHOWN_KEY)
+        else st.session_state.get("data_source_choice")
+    )
+    source = dataset_stimulus_images(owner)
+    return (source["folder"], source["pattern"]) if source else None
 
 
 def _resolve_data_dir(root: str) -> str:
@@ -2499,7 +2796,7 @@ def mark_wip_if_benchmark(choice: str) -> str:
     """``choice`` with the (WIP) marker when it names a harmonised corpus.
 
     The marker has to reach **every** picker that offers these corpora, not just
-    the data-source one: Compare's *Scanpath B from* selectbox can load a corpus
+    the data-source one: Compare's *Dataset B* selectbox can load a corpus
     as scanpath B, and a user who only ever meets it there would publish a
     comparison against an unfinished feature without being told. Display-only in
     both places, and the same predicate decides both.
@@ -3120,6 +3417,7 @@ _FONT_SNAP_KEYS = (
     "global_base_font_size",
     "global_font_family",
     "global_scale_text_to_boxes",
+    "global_use_stimulus_font_pt",
 )
 _FONT_SNAP_RESTORE_KEY = "_font_snap_restore"
 
@@ -4488,6 +4786,7 @@ def _read_uploaded_frame(
     container=None,
     kind: str | None = None,
     label_visibility: str = "visible",
+    messages=None,
 ) -> pd.DataFrame:
     """Render one upload box and return its (concatenated) frame.
 
@@ -4504,8 +4803,14 @@ def _read_uploaded_frame(
     Streamlit's own label + native (~1s) help tooltip. The widget still gets the
     real ``uploader_label``/``upload_help`` as its accessible name and help; only
     where they are drawn changes.
+
+    ``messages`` is where a file the readers refuse, or a large-upload warning,
+    is said — the add screen's wide side of the row. Drawn in the uploader's own
+    narrow column, an error pushed the file chip, and with it the ✕ that removes
+    the file, out of sight.
     """
     host = container if container is not None else st.container()
+    messages = messages if messages is not None else host
     uploaded = host.file_uploader(
         uploader_label,
         type=_UPLOAD_TYPES,
@@ -4529,14 +4834,14 @@ def _read_uploaded_frame(
         str(getattr(st.context, "url", "") or "")
     ):
         mb = uploaded_files_total_bytes(uploaded) / (1024 * 1024)
-        host.warning(
+        messages.warning(
             f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
             "parsing a corpus this large can exhaust memory and crash the app. "
             f"For big corpora, use the [desktop app]({CITATION['desktop_url']}) "
             "or `pip install scanpath-studio`, or upload a subset (e.g. a few "
             "participants)."
         )
-        if not host.checkbox(
+        if not messages.checkbox(
             "Load it anyway",
             key=f"{state_prefix}_load_large",
             help="Parse this large upload regardless. Safe on a local machine "
@@ -4560,9 +4865,9 @@ def _read_uploaded_frame(
         st.session_state.pop(f"{state_prefix}_header", None)
         files = uploaded if multi else [uploaded]
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
-        host.error(
+        messages.error(
             f"Couldn't read **{names}**: {exc}. Check it is a table file with one "
-            "header row."
+            "header row, or remove it with the ✕ on its chip."
         )
         return pd.DataFrame()
     # BUG-103: this upload's own ID, before the wizard derives anything from it.
@@ -5775,12 +6080,18 @@ def render_description_field(host, token: str) -> None:
     key = _description_field_key(token)
     if key not in st.session_state:
         st.session_state[key] = dataset_description(token)[0]
+    help_text = (
+        f"Shown under the dataset's name on the {ICONS['view_data']} Data "
+        f"Management page. Saved with **{ICONS['confirm']} Save changes**."
+    )
+    # The title carries its help as the dotted underline, not a `?` icon.
+    row_label(host, "Description", help_text)
     host.text_area(
         "Description",
         key=key,
         placeholder="What this dataset is — the participants, the texts, the language.",
-        help=f"Shown under the dataset's name on the {ICONS['view_data']} Data "
-        f"Management page. Saved with **{ICONS['confirm']} Save changes**.",
+        help=help_text,
+        label_visibility="collapsed",
         height=80,
         # Streamlit 1.65: read only by Save changes / Cancel, so typing needs
         # no rerun.
@@ -5788,6 +6099,246 @@ def render_description_field(host, token: str) -> None:
         # A draft outlives a visit to another view while the editor is open.
         persist_state="session",
     )
+
+
+def dataset_stimulus_images(token: str | None) -> dict[str, str] | None:
+    """The folder of stimulus images ``token`` was pointed at, as
+    ``{"folder", "pattern"}``, or ``None`` when it has none (#417).
+
+    Saved by the add screen and ✏️ Edit dataset (`DATASET_STIMULUS_IMAGES_KEY`)
+    for any kind of dataset, so opening a dataset brings its own images and
+    no other dataset's.
+    """
+    if not token:
+        return None
+    own = st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {}
+    return stimulus_image_source(own.get(token))
+
+
+def set_dataset_stimulus_images(token: str, folder: str, pattern: str) -> None:
+    """Store ``folder`` + ``pattern`` as ``token``'s stimulus images; a blank
+    folder forgets them."""
+    own = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
+    source = stimulus_image_source({"folder": folder, "pattern": pattern})
+    if source is None:
+        own.pop(token, None)
+    else:
+        own[token] = source
+    st.session_state[DATASET_STIMULUS_IMAGES_KEY] = own
+
+
+def _stimulus_field_keys(token: str) -> tuple[str, str]:
+    slug = _dataset_row_slug(token)
+    return f"dataset_stimulus_folder_{slug}", f"dataset_stimulus_pattern_{slug}"
+
+
+def _stimulus_images_draft(token: str) -> dict[str, str] | None:
+    """The folder and pattern typed on the open editor, as the source they
+    would save (``{}`` for none), if they differ from what is saved — ``None``
+    when they do not, or the fields have not drawn."""
+    folder_key, pattern_key = _stimulus_field_keys(token)
+    if folder_key not in st.session_state:
+        return None
+    typed = stimulus_image_source(
+        {
+            "folder": st.session_state.get(folder_key),
+            "pattern": st.session_state.get(pattern_key),
+        }
+    )
+    if typed == dataset_stimulus_images(token):
+        return None
+    return typed or {}
+
+
+def render_stimulus_images_fields(
+    host, folder_key: str, pattern_key: str, *, saved: dict | None = None
+) -> tuple[str, str]:
+    """*Stimulus images*' two fields — the folder and the filename pattern —
+    seeded from ``saved`` (a dataset's stored source) the first time they draw.
+
+    The add screen and ✏️ Edit dataset ask the same question, so they draw it
+    the same way; returns what is typed now.
+    """
+    if folder_key not in st.session_state:
+        st.session_state[folder_key] = (saved or {}).get("folder", "")
+    if pattern_key not in st.session_state:
+        st.session_state[pattern_key] = (saved or {}).get(
+            "pattern", DEFAULT_STIMULUS_IMAGE_PATTERN
+        )
+    # Each title carries its help as the dotted underline, as every other
+    # field on these screens does, not a `?` icon.
+    folder_help = (
+        "A folder on this computer with one screenshot per text or trial, drawn "
+        "under the scanpath. Saved with the dataset; never put on a share link."
+    )
+    row_label(host, "Image folder", folder_help)
+    folder = host.text_input(
+        "Image folder",
+        key=folder_key,
+        placeholder="/path/to/stimulus-images",
+        help=folder_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    pattern_help = (
+        "Use the app's field names in braces — {text_id}, {trial_id} or "
+        "{participant_id}. Subfolders work too."
+    )
+    row_label(host, "Filename pattern", pattern_help)
+    pattern = host.text_input(
+        "Filename pattern",
+        key=pattern_key,
+        help=pattern_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    return str(folder or "").strip(), str(pattern or "").strip()
+
+
+class StimulusImages(NamedTuple):
+    """A dataset's frames with its stimulus images attached (#417): how many
+    rows its folder found an image for, or why the pattern was refused."""
+
+    words: pd.DataFrame | None
+    fixations: pd.DataFrame | None
+    found: int = 0
+    problem: str | None = None
+
+
+def _attach_stimulus_images(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    folder: str,
+    pattern: str,
+) -> StimulusImages:
+    """The frames with what ``folder`` + ``pattern`` find, or the frames
+    themselves when it finds nothing — so nothing downstream is rebuilt for a
+    folder that is empty, missing or unplugged — and why not, when the
+    pattern is refused."""
+    progress.report()  # UX-165: a gated loading card shows for this build
+    try:
+        matches = [
+            match_stimulus_images(frame, folder, pattern)
+            for frame in (words, fixations)
+        ]
+    except ValueError as exc:
+        return StimulusImages(words, fixations, 0, str(exc))
+    found = sum(match.found for match in matches)
+    if not found:
+        return StimulusImages(words, fixations)
+    out = tuple(
+        match.apply(frame) if match.found else frame
+        for frame, match in zip((words, fixations), matches, strict=True)
+    )
+    # Named by what was found, not by when the folder last changed: a stray
+    # file in it re-checks the folder without making every cache downstream
+    # miss, and two checks that find the same files give the same frames.
+    assign_derived(
+        out,
+        "stimulus_images",
+        (words, fixations),
+        (folder, pattern, tuple(match.signature for match in matches)),
+    )
+    return StimulusImages(*out, found, None)
+
+
+def _stimulus_folder_stamp(folder: str) -> int | None:
+    """When ``folder`` last changed, so a file added to it is found on the
+    next run (the resolution is cached by it)."""
+    try:
+        return Path(folder).expanduser().stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _stimulus_images_cached(
+    slot: str,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    folder: str,
+    pattern: str,
+    *,
+    keep: int = 1,
+) -> StimulusImages:
+    """`_attach_stimulus_images`, kept per frames + folder + pattern.
+
+    The folder's own timestamp is in the key, so an image added to it is found
+    on the next run (one added inside a subfolder waits for a restart or
+    another change). A refused pattern is kept too, with its reason, rather
+    than tried again on every run.
+    """
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        folder,
+        pattern,
+        _stimulus_folder_stamp(folder),
+    )
+    return frame_cache(
+        slot,
+        key,
+        lambda: _attach_stimulus_images(words, fixations, folder, pattern),
+        keep=keep,
+    )
+
+
+def with_dataset_stimulus_images(
+    token: str | None,
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    *,
+    slot: str = "stimulus_images",
+) -> StimulusImages:
+    """``words`` and ``fixations`` with ``token``'s own stimulus images
+    attached (#417), or as they are when it has none.
+
+    The open dataset's (`slot` ``"stimulus_images"``, two kept so switching
+    back is instant, as for the normalized frames) and Compare's B's
+    (``"cmp_stimulus_images"``) each have a slot of their own, or the two would
+    evict each other on every run.
+    """
+    source = dataset_stimulus_images(token)
+    if source is None:
+        return StimulusImages(words, fixations)
+    return _stimulus_images_cached(
+        slot,
+        words,
+        fixations,
+        source["folder"],
+        source["pattern"],
+        keep=2 if slot == "stimulus_images" else 1,
+    )
+
+
+def render_stimulus_images_preview(
+    host,
+    folder: str,
+    pattern: str,
+    frames: tuple[pd.DataFrame | None, pd.DataFrame | None],
+    *,
+    saved: StimulusImages | None = None,
+) -> None:
+    """How many rows of ``frames`` the folder and pattern find an image for,
+    or why they cannot be used.
+
+    ``saved`` is the open dataset's own resolution when the fields show what
+    is saved — its count, without looking again. Otherwise the count is kept
+    per frames + folder + pattern, so typing elsewhere on the screen does not
+    probe the folder again.
+    """
+    source = stimulus_image_source({"folder": folder, "pattern": pattern})
+    if source is None:
+        return
+    if not Path(source["folder"]).expanduser().is_dir():
+        host.caption(f"{ICONS['warning']} There is no folder at this path.")
+        return
+    result = saved or _stimulus_images_cached(
+        "stimulus_images_preview", *frames, source["folder"], source["pattern"]
+    )
+    if result.problem:
+        host.error(f"Couldn't use this folder or pattern: {result.problem}")
+        return
+    host.caption(f"Found an image in this folder for {plural(result.found, 'row')}.")
 
 
 def _render_dataset_overview(token: str, *, registry: dict) -> None:
@@ -5802,7 +6353,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     published-vs-loaded table, and a coordinate badge for every dataset. The
     table's Status already says whether its numbers are published or loaded.
 
-    Editing it is ✏️ **Edit dataset**, under the overview (UX-178).
+    Editing it is the ✏️ on the dataset's row (UX-178).
     """
     about = dataset_about(token, registry)
     text, own = dataset_description(token, registry)
@@ -5865,39 +6416,13 @@ def _annotation_trial_labels(combos: pd.DataFrame | None) -> dict[str, str] | No
 def render_dataset_inspection_head(token: str) -> None:
     """*What's in the `<name>` dataset* and the overview under it.
 
-    ✏️ **Edit dataset** is not on this line: it is drawn by
-    :func:`render_dataset_edit_button`, below the description and checks and
-    above the inspection subtabs.
+    ✏️ **Edit** is not here: it is on the dataset's row of 📂 Available
+    datasets, beside Remove (`_render_dataset_table_row`).
     """
     # #374 F30: the name alone — "the `Dataset 1` dataset" said it twice.
     label = _dataset_display_name(token).replace("*", r"\*")
     st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
-
-
-def render_dataset_edit_button(token: str) -> None:
-    """✏️ **Edit dataset**, between the dataset's overview and its subtabs.
-
-    UX-178: the section's one action is a button of its own, not a link-weight
-    one beside the description, so it reads as editing the whole dataset — its
-    name, its description and its setup, all on the screen it opens. It does
-    not apply to the add-dataset wizard's pending dataset or to the authoring
-    canvas, which are not rows of the table.
-    """
-    if token in (UPLOAD_CHOICE, AUTHOR_CHOICE):
-        return
-    st.button(
-        "Edit dataset",
-        icon=ICONS["edit"],
-        key="dataset_edit_btn",
-        on_click=_edit_open_dataset,
-        args=(token,),
-        help="Open the authoring editor — change the text, drag fixations, "
-        "or edit their timing."
-        if token == MANUAL_SAMPLE_CHOICE
-        else "Its name, description, column mapping, recording setup, "
-        "location and metadata tables.",
-    )
 
 
 def _builtin_name_draft(token: str) -> str | None:
@@ -5951,6 +6476,11 @@ def render_name_field(host, token: str) -> None:
         st.session_state[EDITOR_NAME_FIELD_KEY] = st.session_state.get(
             EDITOR_PENDING_NAME_KEY
         ) or _dataset_display_name(token)
+    help_text = (
+        "Shown in the list of datasets and the dataset picker. Saved with "
+        f"**{ICONS['confirm']} Save changes**."
+    )
+    row_label(host, "Name", help_text)
     host.text_input(
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
@@ -5958,8 +6488,8 @@ def render_name_field(host, token: str) -> None:
         # An upload stages its name on change; a built-in's is read only by
         # Save changes / Cancel, so it needs no rerun (Streamlit 1.65).
         on_change=_stage_upload_name if uploaded else "ignore",
-        help="Shown in the list of datasets and the dataset picker. Saved with "
-        f"**{ICONS['confirm']} Save changes**.",
+        help=help_text,
+        label_visibility="collapsed",
         # A draft outlives a visit to another view while the editor is open.
         persist_state="session",
     )
@@ -6015,7 +6545,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         "A Trial ID that doesn't fully identify one reading concatenates several "
         "into one scanpath — which renders perfectly happily, as an ordinary "
         "scanpath with a lot of regressions. The full evidence is under "
-        f"{ICONS['view_data']} Data Management → **Edit dataset** → **4 · Trial "
+        f"{ICONS['view_data']} Data Management → **Edit dataset** → **Trial "
         "identity**."
     )
     edit_col, keep_col = st.columns(2, gap="small")
@@ -6033,7 +6563,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         key="trial_identity_alert_keep",
         width="stretch",
         help=f"Dismiss. Nothing changes; the verdict stays under {ICONS['view_data']} "
-        "Data Management → Edit dataset → 4 · Trial identity.",
+        "Data Management → Edit dataset → Trial identity.",
     ):
         st.rerun(scope="app")
     if asked_by == "add":
@@ -6053,6 +6583,9 @@ _EDITOR_LEAVE_PENDING_KEY = "_dataset_editor_leave_pending"
 #: another row is a way out of the editor too, and goes through the same
 #: confirmation; ✕ Leave then opens this dataset.
 _EDITOR_LEAVE_TARGET_KEY = "_dataset_editor_leave_target"
+#: Set when that click was the row's ✏️ rather than the row itself: ✕ Leave
+#: then raises the editor on the dataset it opens.
+_EDITOR_LEAVE_EDIT_KEY = "_dataset_editor_leave_edit"
 #: UX-197 — set by whatever opens the editor, popped by its bar: the editor
 #: opens under the table, so the page is brought down to it once.
 _EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
@@ -6155,15 +6688,16 @@ def hold_editor_staging(token: str) -> None:
 
 
 def editor_staging_dirty() -> bool:
-    """Whether the open editor's name, description or metadata tables differ
-    from what it opened on — the part of an edit `tabs.dataset_editor_is_dirty`
-    does not see."""
+    """Whether the open editor's name, description, stimulus images or
+    metadata tables differ from what it opened on — the part of an edit
+    `tabs.dataset_editor_is_dirty` does not see."""
     snapshot = st.session_state.get(_EDITOR_SNAPSHOT_KEY)
     if not isinstance(snapshot, dict):
         return False
     token = str(snapshot.get("token") or "")
     return bool(
         _description_draft(token) is not None
+        or _stimulus_images_draft(token) is not None
         or _builtin_name_draft(token) is not None
         or _metadata_grains_changed(snapshot)
     )
@@ -6171,14 +6705,14 @@ def editor_staging_dirty() -> bool:
 
 def _editor_is_dirty() -> bool:
     """Whether ✕ Cancel would lose anything (UX-107): the mapping, setup and
-    uploads (`tabs.dataset_editor_is_dirty`), or the name, description and
-    metadata tables."""
+    uploads (`tabs.dataset_editor_is_dirty`), or the name, description,
+    stimulus images and metadata tables."""
     return dataset_editor_is_dirty() or editor_staging_dirty()
 
 
 def commit_editor_staging(token: str) -> None:
-    """✅ Save changes' share of the edit: the description, a built-in's name,
-    and the metadata tables as they now stand.
+    """✅ Save changes' share of the edit: the description, the stimulus
+    images, a built-in's name, and the metadata tables as they now stand.
 
     Called by both Saves — an upload's (`tabs._apply_remap`, before it re-keys
     the dataset under a new name) and a built-in's — once they know the save
@@ -6186,18 +6720,25 @@ def commit_editor_staging(token: str) -> None:
     """
     if (text := _description_draft(token)) is not None:
         set_dataset_description(token, text)
+    if (images := _stimulus_images_draft(token)) is not None:
+        set_dataset_stimulus_images(
+            token, images.get("folder", ""), images.get("pattern", "")
+        )
     if token not in (st.session_state.get("_datasets") or {}):
         _apply_builtin_name(token)
-    _drop_description_drafts()
+    _drop_editor_drafts()
     # Kept, not restored: what is attached now is what was saved.
     st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
 
 
-def _drop_description_drafts() -> None:
+def _drop_editor_drafts() -> None:
+    """Drop the description and stimulus-image fields the editor typed into,
+    so the next edit seeds them from what is saved."""
     for key in [
         k
         for k in list(st.session_state)
-        if isinstance(k, str) and k.startswith("dataset_description_")
+        if isinstance(k, str)
+        and k.startswith(("dataset_description_", "dataset_stimulus_"))
     ]:
         st.session_state.pop(key, None)
 
@@ -6243,6 +6784,7 @@ def _close_dataset_editor() -> None:
     st.session_state.pop(FOCUS_MAPPING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_EDIT_KEY, None)
     # Anything typed into the editor and not saved goes with it — including a
     # table uploaded to fill a missing half, which is only a *pending* attach
     # until ✅ Save changes runs.
@@ -6264,8 +6806,8 @@ def _close_dataset_editor() -> None:
 
 
 def _discard_editor_staging() -> None:
-    """Drop the editor's description drafts; park its metadata restore."""
-    _drop_description_drafts()
+    """Drop the editor's drafts; park its metadata restore."""
+    _drop_editor_drafts()
     snapshot = st.session_state.pop(_EDITOR_SNAPSHOT_KEY, None)
     if isinstance(snapshot, dict) and _metadata_grains_changed(snapshot):
         st.session_state[_EDITOR_RESTORE_KEY] = snapshot
@@ -6289,6 +6831,21 @@ def _ask_leave_dataset_editor() -> None:
 def _dismiss_leave_dataset_editor() -> None:
     st.session_state.pop(_EDITOR_LEAVE_PENDING_KEY, None)
     st.session_state.pop(_EDITOR_LEAVE_TARGET_KEY, None)
+    st.session_state.pop(_EDITOR_LEAVE_EDIT_KEY, None)
+
+
+def _leave_dataset_editor() -> None:
+    """✕ Leave: drop the edit, then open the dataset a row asked for, if any —
+    with its editor raised when the row's ✏️ asked (`_EDITOR_LEAVE_EDIT_KEY`)."""
+    target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
+    edit_target = st.session_state.get(_EDITOR_LEAVE_EDIT_KEY)
+    _close_dataset_editor()
+    if target:
+        # Through the pre-widget seam only: this runs from a button's return
+        # value, after the picker has instantiated in this run.
+        st.session_state["_pending_source_choice"] = target
+        if edit_target:
+            _edit_open_dataset(target)
 
 
 @st.dialog("Leave without saving?", on_dismiss=_dismiss_leave_dataset_editor)
@@ -6322,12 +6879,7 @@ def _leave_dataset_editor_dialog() -> None:
         type="primary",
         width="stretch",
     ):
-        target = st.session_state.get(_EDITOR_LEAVE_TARGET_KEY)
-        _close_dataset_editor()
-        if target:
-            # Through the pre-widget seam only: this is a button's return
-            # value, after the picker has instantiated in this run.
-            st.session_state["_pending_source_choice"] = target
+        _leave_dataset_editor()
         st.rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
@@ -6408,7 +6960,9 @@ _DATASET_KIND_W = 92
 _DATASET_NAME_W = 280
 _DATASET_COUNT_W = 96
 _DATASET_STATUS_W = 156  # BUG-113: fits the "Needs download" badge
-_DATASET_ACTIONS_W = 40
+#: ✏️ Edit and 🗑 Remove, each an icon of `_DATASET_ICON_W`.
+_DATASET_ICON_W = 32
+_DATASET_ACTIONS_W = 72
 
 
 def _dataset_row_slug(token: str) -> str:
@@ -6634,15 +7188,35 @@ def _edit_open_dataset(token: str) -> None:
         _edit_manual_sample()
         return
     if not st.session_state.get(DATASET_EDITOR_OPEN_KEY):
-        # UX-178 — the Name and Description fields are seeded on open; whatever
-        # an editor left behind without Cancel or Save (a switch of dataset,
-        # say) is not this edit's. An edit already open keeps its drafts.
+        # UX-178 — the Name and Description fields (and #417's image fields)
+        # are seeded on open; whatever an editor left behind without Cancel or
+        # Save (a switch of dataset, say) is not this edit's. An edit already
+        # open keeps its drafts.
         st.session_state.pop(EDITOR_NAME_FIELD_KEY, None)
         st.session_state.pop(EDITOR_PENDING_NAME_KEY, None)
-        _drop_description_drafts()
+        _drop_editor_drafts()
     st.session_state[FOCUS_MAPPING_KEY] = token
     st.session_state[DATASET_EDITOR_OPEN_KEY] = True
     st.session_state[_EDITOR_SCROLL_KEY] = True
+
+
+def _edit_dataset_row(token: str) -> None:
+    """✏️ on a row of 📂 Available datasets: open that dataset, editor raised.
+
+    The editor edits the open dataset, so another row is opened first, the way
+    a click on it would (`_open_dataset_row`) — the unreachable-dataset note
+    and the open editor's *Leave without saving?* included. When that prompt
+    is up, ✕ Leave raises the editor on this dataset (`_EDITOR_LEAVE_EDIT_KEY`).
+    """
+    st.session_state[_TABLE_NEEDS_APP_RERUN] = True
+    if token != st.session_state.get("data_source_choice"):
+        _open_dataset_row(token)
+        if st.session_state.get(_UNREACHABLE_DATASET_KEY) == token:
+            return
+        if st.session_state.get(_EDITOR_LEAVE_TARGET_KEY) == token:
+            st.session_state[_EDITOR_LEAVE_EDIT_KEY] = True
+            return
+    _edit_open_dataset(token)
 
 
 def _arm_dataset_row(pending_key: str, token: str) -> None:
@@ -6889,15 +7463,30 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         horizontal=True,
         horizontal_alignment="right",
         vertical_alignment="center",
+        gap="xsmall",
+    )
+    # Every dataset can be edited — its name, description, setup and
+    # metadata; the hand-drawn sample on its authoring canvas.
+    actions.button(
+        f"Edit {row.name}",
+        icon=ICONS["edit"],
+        key=f"dataset_row_edit_{slug}",
+        type="tertiary",
+        on_click=_edit_dataset_row,
+        args=(row.token,),
+        help="Open the authoring editor — change the text, drag fixations, or "
+        "edit their timing."
+        if row.token == MANUAL_SAMPLE_CHOICE
+        else f"Edit {row.name}: its name, description, column mapping, "
+        "recording setup, location and metadata tables.",
     )
     # Only a dataset you added can be removed. For the demo, a public corpus
     # or a local bundle, Remove only hid the row for the rest of the session —
     # nothing was deleted and nothing could bring it back — so they offer none.
-    # The empty cell keeps the columns lined up — drawn with a space in it, as
-    # the header's is, because an empty container is not drawn at all and the
-    # row's numbers then sat right of an added dataset's (#374 F30).
+    # Edit keeps the cell drawn, so the columns still line up (#374 F30); the
+    # spacer holds Remove's place so every row's Edit sits in one column.
     if row.token not in set(st.session_state.get("_data_source_uploaded") or []):
-        actions.markdown(
+        actions.container(key=f"dsc_noremove_{slug}", width=_DATASET_ICON_W).markdown(
             '<span aria-hidden="true">&nbsp;</span>', unsafe_allow_html=True
         )
         return
@@ -7021,21 +7610,6 @@ def render_dataset_table(
         _unreachable_dataset_dialog(unreachable)
     if note := st.session_state.pop("_dataset_table_note", None):
         box.success(note)
-
-
-def _rows_with_local_images(frame: pd.DataFrame) -> int:
-    """How many rows of ``frame`` name a stimulus image that exists on disk.
-
-    One ``os.path.isfile`` per **distinct** path rather than per row. The whole
-    point of `data.resolve_stimulus_image_paths` probing once per placeholder
-    tuple is lost if the caption it feeds then re-stats every row of a
-    multi-million-row corpus.
-    """
-    paths = None if frame is None else frame.get("image_path")
-    if paths is None or paths.empty:
-        return 0
-    counts = paths.dropna().astype(str).value_counts()
-    return int(sum(rows for path, rows in counts.items() if os.path.isfile(path)))
 
 
 def resolve_source_monitor(
@@ -7192,6 +7766,8 @@ def setup_override_session_values(snapshot: SetupSnapshot) -> dict:
             2,
         ),
         "global_base_font_size": int(snapshot.base_font_size),
+        # #422: the setup's size is in px, so the figure's point size is off.
+        "global_use_stimulus_font_pt": False,
         "global_font_family": str(snapshot.font_family),
         "global_line_spacing": float(snapshot.line_spacing),
         "global_scale_text_to_boxes": bool(snapshot.scale_text_to_boxes),
@@ -7214,19 +7790,37 @@ def _apply_setup_override(
 ) -> None:
     """Write ``snapshot`` onto the figure as ``token``'s setup, remembering what
     it replaced. ``skip`` — keys a share link just seeded, which win."""
+    _apply_dataset_values(token, setup_override_session_values(snapshot), skip)
+
+
+def _apply_dataset_values(
+    token: str, values: Mapping, skip: frozenset = frozenset()
+) -> None:
+    """Write ``values`` (``global_*`` setup keys) onto the figure as dataset
+    ``token``'s own, remembering what they replaced so leaving it puts that
+    back (`_restore_setup_override_stash`)."""
     if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != token:
         # The first override of a run of them keeps the pre-override state.
         st.session_state.setdefault(
             SETUP_OVERRIDE_RESTORE_KEY,
-            {
-                key: None if key in skip else st.session_state.get(key)
-                for key in SETUP_OVERRIDE_SESSION_KEYS
-            },
+            {key: None if key in skip else st.session_state.get(key) for key in values},
         )
-    for key, value in setup_override_session_values(snapshot).items():
+    for key, value in values.items():
         if key not in skip:
             st.session_state[key] = value
     st.session_state[SETUP_OVERRIDE_FOR_KEY] = token
+
+
+def upload_font_family(name: str | None) -> str | None:
+    """The typeface an added dataset was set up with (the add and edit
+    screens' *Font* question), or ``None`` when ``name`` is no added dataset.
+    One set up before that question, or answered *I don't know*, has the
+    default font."""
+    stored = (st.session_state.get("_datasets") or {}).get(name) if name else None
+    if not isinstance(stored, dict):
+        return None
+    setup = stored.get("setup") if isinstance(stored.get("setup"), dict) else {}
+    return str(SetupSnapshot.from_dict(setup, fallback=SetupSnapshot()).font_family)
 
 
 def save_dataset_setup_override(token: str, payload: dict | None) -> None:
@@ -7533,8 +8127,10 @@ def seed_canvas_state(
                 },
             )
             snapped = {
-                "global_base_font_size": int(min(max(round(font_px), 6), 72)),
+                "global_base_font_size": font_size_px(font_px, "px", None),
                 "global_scale_text_to_boxes": False,
+                # #422: the size is in px — a point size left on would replace it.
+                "global_use_stimulus_font_pt": False,
             }
             if font_css:
                 snapped["global_font_family"] = font_css
@@ -7566,6 +8162,17 @@ def seed_canvas_state(
         and (override := dataset_setup_override(override_token)) is not None
     ):
         _apply_setup_override(override_token, override, frozenset(from_link))
+    # An added dataset's font is its own in the same way: entering it draws the
+    # text in the font it was set up with, and leaving it puts back the font the
+    # figure had — or every dataset opened after it would inherit it.
+    elif (
+        override_token
+        and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != override_token
+        and (font := upload_font_family(override_token)) is not None
+    ):
+        _apply_dataset_values(
+            override_token, {"global_font_family": font}, frozenset(from_link)
+        )
 
     # The remaining widget defaults. Each of these used to be `setdefault`ed
     # inline, immediately above its own widget; seeding them here is what lets a
@@ -7582,8 +8189,7 @@ def seed_canvas_state(
     # share-link / saved-config wire format, so this is not cosmetic. Pinned by
     # `test_canvas_settings_survive_a_corpus_analysis_round_trip`.
     ss = st.session_state
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    if ss.get("global_bg_choice") not in bg_options:
+    if ss.get("global_bg_choice") not in BG_CHOICES:
         ss.pop("global_bg_choice", None)
     # One table drives both the pin and the read-back. `_pin` swallows the
     # StreamlitAPIException raised when a key's widget was already built earlier
@@ -7598,11 +8204,10 @@ def seed_canvas_state(
         "global_line_spacing": float(DEFAULT_LINE_SPACING),
         "global_font_family": FONT_FAMILY,
         "global_text_color": WORD_LABEL_COLOR,
-        "global_bg_choice": bg_options[0],
-        # Pinned here as well as in the render path: its picker exists only while
-        # the choice is "Custom…", so it is the one key with no other keeper —
-        # without this a custom background is lost the first time the user opens
-        # Corpus Analysis and the choice silently falls back to a preset.
+        "global_bg_choice": BG_CHOICES[0],
+        # No widget owns this key (the swatch is a shadow of it, #422), so it is
+        # pinned here: without this a custom background is lost the first time
+        # the user opens Corpus Analysis and the choice falls back to a preset.
         "global_bg_custom": DEFAULT_BACKGROUND_COLOR,
     }
 
@@ -7627,19 +8232,10 @@ def seed_canvas_state(
     if not _resolved("global_scale_text_to_boxes") and _resolved(
         "global_use_stimulus_font_pt"
     ):
-        ss["global_base_font_size"] = int(
-            min(
-                max(
-                    round(
-                        font_pt_to_px(
-                            float(_resolved("global_stimulus_font_pt")),
-                            float(ss.get("global_display_dpi", 96.0)),
-                        )
-                    ),
-                    6,
-                ),
-                72,
-            )
+        ss["global_base_font_size"] = font_size_px(
+            float(_resolved("global_stimulus_font_pt")),
+            "pt",
+            font_dpi(data_choice),
         )
     return (
         int(_resolved("global_canvas_width")),
@@ -7651,11 +8247,90 @@ def seed_canvas_state(
     )
 
 
-#: The CSS stack UX-163's *Multilingual* button writes into the text font — a
-#: CJK / Hebrew / Arabic-capable fallback (PRE-6).
-_MULTILINGUAL_FONT_STACK = (
-    "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
-    "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
+def font_dpi(data_choice: str | None = None) -> float | None:
+    """The DPI a point size converts through on the figure (#422).
+
+    The dataset's — or ``None`` when its Recording setup has no physical size,
+    where a point size is read as pixels, exactly as that screen reads it: a
+    DPI derived from the default monitor width would be a guess."""
+    snapshot = active_setup_snapshot(data_choice)
+    if snapshot is not None and snapshot.geometry_provenance is Provenance.SKIPPED:
+        return None
+    return float(st.session_state.get("global_display_dpi", 96.0))
+
+
+#: #422 — the Font row's two shadows of `global_font_family` (the choice, and
+#: the typed font of *Other…*), derived every run (`controls.shadow_widget_key`,
+#: F9-safe). The flag keeps *Other…* chosen while its box is still to be filled
+#: in; the font they were derived from tells a pick here from a change made
+#: elsewhere (a link, a settings file, a dataset's own font).
+_FONT_CHOICE_KEY = "rail_font_choice"
+_FONT_OTHER_KEY = "rail_font_other"
+_FONT_OTHER_OPEN_KEY = "_rail_font_other_open"
+_FONT_SEEDED_FROM_KEY = "_rail_font_seeded_from"
+
+
+def _apply_font_choice(widget_key: str) -> None:
+    """A font picked in the list becomes the text's font; *Other…* waits for
+    the font to be typed in the box beside it."""
+    if _shadow_key_missing(widget_key):  # BUG-18
+        return
+    choice = st.session_state[widget_key]
+    st.session_state[_FONT_OTHER_OPEN_KEY] = choice == OTHER_FONT
+    if choice != OTHER_FONT:
+        write_through("global_font_family", font_choice_css(choice))
+
+
+def _apply_font_other(widget_key: str) -> None:
+    """A font typed under *Other…*: a name (drawn with a monospace fallback)
+    or a whole CSS font stack."""
+    if _shadow_key_missing(widget_key):  # BUG-18
+        return
+    write_through("global_font_family", stimulus_font_css(st.session_state[widget_key]))
+
+
+def _font_rows(choice_host, other_host, *, disabled: bool, **kwargs) -> str:
+    """The font list and the box for *Other…*, over `global_font_family`.
+
+    The list is the Recording setup's (`experimental_setup.FONT_CHOICES`), so
+    the dataset's font and the figure's are picked from the same names. The box
+    is greyed, not hidden, unless *Other…* is chosen. Returns the font drawn.
+    """
+    ss = st.session_state
+    css = str(ss.get("global_font_family") or FONT_FAMILY)
+    if ss.get(_FONT_SEEDED_FROM_KEY) != css:
+        ss[_FONT_OTHER_OPEN_KEY] = False
+        ss[_FONT_SEEDED_FROM_KEY] = css
+    choice = OTHER_FONT if ss.get(_FONT_OTHER_OPEN_KEY) else font_choice(css)
+    choice_key = shadow_widget_key(_FONT_CHOICE_KEY, choice)
+    other_key = shadow_widget_key(
+        _FONT_OTHER_KEY, font_other_text(css) if choice == OTHER_FONT else ""
+    )
+    choice_host.selectbox(
+        "Text font",
+        FONT_CHOICES,
+        key=choice_key,
+        on_change=_apply_font_choice,
+        args=(choice_key,),
+        disabled=disabled,
+        **kwargs,
+    )
+    other_host.text_input(
+        "Other font",
+        key=other_key,
+        on_change=_apply_font_other,
+        args=(other_key,),
+        placeholder="Font name or CSS stack",
+        disabled=disabled or choice != OTHER_FONT,
+        **kwargs,
+    )
+    return css
+
+
+#: The help both forms give the line spacing.
+_LINE_SPACING_HELP = (
+    "How far apart the lines are, in font sizes: the text is the distance "
+    "between lines ÷ this (3: a blank line above and below)."
 )
 
 
@@ -7663,7 +8338,7 @@ def _rail_text_rows(
     host,
     *,
     seeded: tuple,
-    display_dpi: float,
+    font_dpi: float | None,
     words_filtered: pd.DataFrame,
     font_css,
     disabled: bool,
@@ -7673,15 +8348,22 @@ def _rail_text_rows(
 
     Four captioned rows (`_sub_row`) instead of up to nine that came and went:
 
-    * *Fit* — **Scale to boxes** and the line spacing it divides a box by
-      (greyed while it is off);
+    * *Fit* — **Fit to word boxes** and the line spacing it divides the
+      distance between lines by (greyed while it is off);
     * *Size* — the unit (px / pt) and the size. While the text is fitted to the
       boxes the size is the axis, legend and fallback text's, in px, so the unit
       greys; otherwise it is the reading text's, and a size in points is
-      converted with the dataset DPI (px = pt × DPI ÷ 72);
-    * *Font* — the font family and the *Multilingual* stack;
-    * *Color* — the text colour, then the plot background (and its custom
-      colour, greyed unless *Custom…* is picked).
+      converted with the dataset's DPI (px = pt × DPI ÷ 72), or read as pixels
+      when the dataset's Recording setup has no physical size;
+    * *Font* — the font, from the Recording setup's list, and a box for any
+      other font (greyed unless *Other…* is chosen);
+    * *Color* — the text colour, then the plot background: a preset, and a
+      colour box showing the colour in use, where any colour picked applies
+      at once (#422).
+
+    #422: the words, fonts, units and ranges are the Recording setup's (🗂️ Data
+    → ✏️ Edit dataset), which sets the dataset's own typography; these rows
+    start from it and change only how the figure draws it.
 
     ``disabled`` greys every row while the Text layer is off (UX-97's contract:
     the settings stay readable, and their stored values are untouched).
@@ -7701,18 +8383,21 @@ def _rail_text_rows(
         fit = _sub_row(
             "Fit",
             section=section,
-            section_help="How the reading text is drawn.",
+            section_help="How the reading text is drawn. It starts from the "
+            "dataset's Recording setup; these rows change only this figure.",
             caption_help=tip(
-                "**Scale to boxes**: size the text from the word-box height (box "
-                "height ÷ line spacing). Spacing: how many text lines one box "
-                "spans (OneStop: 3). Untick to set a fixed size below."
+                "**Fit to word boxes**: size the text from the word boxes — the "
+                "distance between lines ÷ the line spacing. Spacing: "
+                + _LINE_SPACING_HELP[0].lower()
+                + _LINE_SPACING_HELP[1:]
+                + " Off: the size below."
             ),
         )
         fit_col, spacing_cap_col, spacing_col = fit.columns(
             [0.55, 0.2, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
         )
         scale_text_to_boxes = fit_col.checkbox(
-            "Scale to boxes",
+            "Fit to word boxes",
             key="global_scale_text_to_boxes",
             persist_state="session",
             disabled=disabled,
@@ -7732,12 +8417,13 @@ def _rail_text_rows(
         size = _sub_row(
             "Size",
             caption_help=tip(
-                "With **Scale to boxes** on: the size of the axis and legend text. "
-                "Off: the reading text's size, in px or pt (px = pt × DPI ÷ 72)."
+                "Fitted: the size of the axis and legend text. Not fitted: the "
+                "reading text's too, in px or pt (px = pt × DPI ÷ 72; read as px "
+                "when the dataset's Recording setup has no physical size)."
             ),
         )
-        unit_col, size_col = size.columns(
-            [0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center"
+        unit_col, size_col, note_col = size.columns(
+            [0.36, 0.34, 0.3], gap=_LABEL_GAP, vertical_alignment="center"
         )
         use_pt = unit_col.segmented_control(
             "Font unit",
@@ -7751,23 +8437,24 @@ def _rail_text_rows(
         if not scale_text_to_boxes and use_pt:
             stimulus_font_pt = size_col.number_input(
                 "Font size (pt)",
-                min_value=4.0,
-                max_value=144.0,
+                min_value=FONT_PT_RANGE[0],
+                max_value=FONT_PT_RANGE[1],
                 step=0.5,
                 key="global_stimulus_font_pt",
                 persist_state="session",
                 disabled=disabled,
                 label_visibility="collapsed",
             )
-            st.session_state["global_base_font_size"] = int(
-                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            st.session_state["global_base_font_size"] = font_size_px(
+                stimulus_font_pt, "pt", font_dpi
             )
             base_font_size = int(st.session_state["global_base_font_size"])
+            _sub_caption(note_col, f"= {base_font_size} px")
         else:
             base_font_size = size_col.number_input(
                 "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
-                min_value=6,
-                max_value=72,
+                min_value=FONT_PX_RANGE[0],
+                max_value=FONT_PX_RANGE[1],
                 step=1,
                 key="global_base_font_size",
                 persist_state="session",
@@ -7778,37 +8465,26 @@ def _rail_text_rows(
         font = _sub_row(
             "Font",
             caption_help=tip(
-                "The word labels' font: a font name (e.g. 'Courier New') or a CSS "
-                "font stack. **Multilingual** fills in a stack for CJK, Hebrew and "
-                "Arabic."
+                "The reading text's font, from the same list as the dataset's "
+                "Recording setup. A listed font falls back to its family where it "
+                "is not installed; Multilingual is a Noto Sans stack for CJK, "
+                "Hebrew and Arabic. **Other…**: type a font name or a CSS font "
+                "stack."
             ),
         )
-        family_col, stack_col = font.columns(
-            [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+        family_col, other_col = font.columns(
+            [0.62, 0.38], gap=_LABEL_GAP, vertical_alignment="center"
         )
-        font_family = family_col.text_input(
-            "Text font",
-            key="global_font_family",
-            persist_state="session",
-            disabled=disabled,
-            label_visibility="collapsed",
-        )
-        stack_col.button(
-            "Multilingual",
-            on_click=lambda: st.session_state.update(
-                global_font_family=_MULTILINGUAL_FONT_STACK
-            ),
-            disabled=disabled,
-            width="stretch",
+        font_family = _font_rows(
+            family_col, other_col, disabled=disabled, label_visibility="collapsed"
         )
 
-        # Seeded rather than given a `value=`: restored pre-widget by a deep
-        # link / saved config (BUG-17). `seed_canvas_state` pins it too, so a
-        # custom background survives the runs this picker is greyed.
-        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
         color = _sub_row(
             "Color",
-            caption_help=tip("The reading text's color, and the plot background."),
+            caption_help=tip(
+                "The reading text's color, then the plot background: pick a "
+                "preset, or any color in the box beside it."
+            ),
         )
         text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
             [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
@@ -7821,19 +8497,18 @@ def _rail_text_rows(
             label_visibility="collapsed",
         )
         _sub_caption(bg_cap_col, "Background")
-        bg_choice = bg_col.selectbox(
+        bg_col.selectbox(
             "Plot background",
-            options=list(BACKGROUND_PRESETS.keys()) + ["Custom…"],
+            options=BG_CHOICES,
             key="global_bg_choice",
             persist_state="session",
             disabled=disabled,
             label_visibility="collapsed",
         )
-        bg_custom_col.color_picker(
-            "Custom background color",
-            key="global_bg_custom",
-            persist_state="session",
-            disabled=disabled or bg_choice != "Custom…",
+        background_swatch(
+            bg_custom_col,
+            label="Background color",
+            disabled=disabled,
             label_visibility="collapsed",
         )
 
@@ -7974,8 +8649,10 @@ def render_canvas_controls(
             persist_state="session",
         )
     # DATA-2: physical setup values live beside the pixel canvas they explain.
-    # They are persisted with the plot config and immediately yield a px/degree
-    # scale for downstream saccade/reporting work.
+    # The width gives the DPI the point-size font converts through. The viewing
+    # distance is not asked for (2026-10-09): only px/degree reads it, and
+    # nothing in this release draws in degrees. `global_viewing_distance_mm`
+    # still rides links and configs, pinned by `seed_canvas_state`.
     #
     # **UX-81 — in the rail these three are not drawn at all.** They are
     # experiment facts, and the 🗂️ Data page's Recording setup (#DATA-22) already
@@ -7984,9 +8661,8 @@ def render_canvas_controls(
     # are not widget-owned any more: `seed_canvas_state` pins all three on every
     # run (including the derived DPI), so a share link or saved config still
     # restores them and every consumer reads the same numbers as before.
-    # The wizard's standalone form still shows them: that *is* where they are set.
+    # The wizard's standalone form still shows the width and DPI.
     if bare:
-        monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
         display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
     else:
         monitor_width_mm = field(
@@ -8000,17 +8676,6 @@ def render_canvas_controls(
             key="global_monitor_width_mm",
             persist_state="session",
             help="Width of the visible display area, not the diagonal size.",
-        )
-        field(
-            screen,
-            "number_input",
-            "Viewing distance (mm)",
-            min_value=100.0,
-            max_value=3000.0,
-            step=10.0,
-            key="global_viewing_distance_mm",
-            persist_state="session",
-            help="Eye-to-screen distance during the experiment.",
         )
         derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
         display_dpi = field(
@@ -8045,11 +8710,17 @@ def render_canvas_controls(
         )
 
     if bare:
+        # The DPI is read only while a point size is drawn (its widgets' values
+        # are already this run's): the default rerun asks nothing of the setup.
+        ss = st.session_state
+        points = not ss.get("global_scale_text_to_boxes", True) and ss.get(
+            "global_use_stimulus_font_pt"
+        )
         base_font_size, font_family, line_spacing, scale_text_to_boxes = (
             _rail_text_rows(
                 text,
                 seeded=seeded,
-                display_dpi=float(display_dpi),
+                font_dpi=font_dpi(data_choice) if points else None,
                 words_filtered=words_filtered,
                 font_css=font_css,
                 disabled=text_disabled,
@@ -8067,23 +8738,23 @@ def render_canvas_controls(
 
     # --- 🔤 Text & fonts (the wizard's flat form) -------------------------
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
-    # (text height = box_height / line_spacing) and scales with the figure, so it
-    # always fills the real line slot. Untick to fall back to a fixed font size.
-    # Keyed (+ seeded) so the settings file can capture/reapply them.
+    # (text height = line distance / line spacing) and scales with the figure,
+    # so it always fills the real line slot. Untick to fall back to a fixed
+    # font size. Keyed (+ seeded) so the settings file can capture/reapply
+    # them. #422: the rail's words, units and font list.
     scale_text_to_boxes = field(
         text,
         "checkbox",
-        "Scale text to boxes",
+        "Fit to word boxes",
         key="global_scale_text_to_boxes",
         persist_state="session",
-        help="Size text from word-box height. Without boxes, the plot font size "
+        help="Size the text from the word boxes. Without boxes, the font size "
         "is used instead.",
     )
     line_spacing = float(st.session_state.get("global_line_spacing", seeded[4]))
     use_stimulus_font_pt = bool(
         st.session_state.get("global_use_stimulus_font_pt", False)
     )
-    stimulus_font_pt = float(st.session_state.get("global_stimulus_font_pt", 12.0))
     if scale_text_to_boxes:
         line_spacing = field(
             text,
@@ -8094,7 +8765,7 @@ def render_canvas_controls(
             step=0.5,
             key="global_line_spacing",
             persist_state="session",
-            help="Line slots represented by each word box. OneStop uses 3.",
+            help=_LINE_SPACING_HELP,
         )
     else:
         use_stimulus_font_pt = field(
@@ -8102,25 +8773,24 @@ def render_canvas_controls(
             "segmented_control",
             "Font unit",
             options=[False, True],
-            format_func=lambda use_pt: "Points (pt)" if use_pt else "Pixels (px)",
+            format_func=lambda use_pt: "pt" if use_pt else "px",
             key="global_use_stimulus_font_pt",
             persist_state="session",
-            help="Choose the original stimulus unit. Points are converted with "
-            "the dataset DPI: px = pt × DPI ÷ 72.",
+            help="Points are converted with the dataset DPI: px = pt × DPI ÷ 72.",
         )
         if use_stimulus_font_pt:
             stimulus_font_pt = field(
                 text,
                 "number_input",
                 "Font size (pt)",
-                min_value=4.0,
-                max_value=144.0,
+                min_value=FONT_PT_RANGE[0],
+                max_value=FONT_PT_RANGE[1],
                 step=0.5,
                 key="global_stimulus_font_pt",
                 persist_state="session",
             )
-            st.session_state["global_base_font_size"] = int(
-                min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+            st.session_state["global_base_font_size"] = font_size_px(
+                stimulus_font_pt, "pt", display_dpi
             )
 
     if not scale_text_to_boxes and use_stimulus_font_pt:
@@ -8130,8 +8800,8 @@ def render_canvas_controls(
             text,
             "number_input",
             "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
-            min_value=6,
-            max_value=72,
+            min_value=FONT_PX_RANGE[0],
+            max_value=FONT_PX_RANGE[1],
             step=1,
             help=(
                 "Axis, legend, and fallback text size."
@@ -8141,25 +8811,8 @@ def render_canvas_controls(
             key="global_base_font_size",
             persist_state="session",
         )
-    text.button(
-        "Use multilingual font stack",
-        on_click=lambda: st.session_state.update(
-            global_font_family=(
-                "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
-                "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
-            )
-        ),
-        help="A CJK/Hebrew/Arabic-capable CSS fallback stack.",
-    )
-    font_family = field(
-        text,
-        "text_input",
-        "Text font",
-        key="global_font_family",
-        persist_state="session",
-        help="Font for the word labels. Use the exact font from your experiment "
-        "(e.g. 'Courier New') or a CSS fallback stack.",
-    )
+    family_col, other_col = text.columns(2, vertical_alignment="bottom")
+    font_family = _font_rows(family_col, other_col, disabled=False)
     if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
         text.caption(
             "↔ Right-to-left script detected — labels are laid out by the browser."
@@ -8196,33 +8849,17 @@ def render_canvas_controls(
 
     # Plot background lives here (Experimental Setup) rather than under
     # Visualization; render_plot_controls reads the chosen value from session state.
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
     field(
         text,
         "selectbox",
         "Plot background",
-        options=bg_options,
+        options=BG_CHOICES,
         key="global_bg_choice",
         persist_state="session",
         help="Background of the plotting area (and exported figures).",
     )
-    if st.session_state.get("global_bg_choice") == "Custom…":
-        # Seed rather than pass `value=`: this key is restored pre-widget by a
-        # deep link / saved config, and a keyed widget given both logs Streamlit's
-        # "default value but also had its value set" warning (BUG-17).
-        # This picker exists only while the choice is "Custom…", so it typically
-        # FIRST mounts on a later run — the BUG-15 case, now handled by the
-        # widget's own `persist_state="session"` (ENG-36) rather than by
-        # re-asserting the value from Python on every run.
-        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
-        field(
-            text,
-            "color_picker",
-            "Custom background color",
-            display="Custom color",
-            key="global_bg_custom",
-            persist_state="session",
-        )
+    # #422: the colour in use, and any colour picked here applies at once.
+    background_swatch(text, label="Background color")
 
     return (
         int(canvas_width),
@@ -9329,6 +9966,8 @@ def _run_app() -> None:
         # UX-196: a cut-off dropdown label shows in full on hover. Unconditional,
         # so it never moves the view's index (UX-167).
         render_truncation_tooltips()
+        # #422: a color picked in a rail popover survives a click on the page.
+        render_color_picker_commit()
         # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
         # renders at the bottom of this function, so serving it here is what keeps
         # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
@@ -9487,24 +10126,25 @@ def _run_app() -> None:
     # the mapping form. Filled from `tabs._render_column_mapping_section`, which
     # is handed this slot: it is the same renderer either way, only re-hosted.
     setup_recording_slot = editor_page.container(key="tutorial_recording_setup")
+    # VIZ-14: local stimulus-image paths. #417 — the add screen's part 4, so
+    # the editor's part 4 too: the two screens share their first four parts,
+    # and only the questions that need the finished dataset come after.
+    setup_stimulus_slot = editor_page.container(key="tutorial_stimulus_images")
     # UX-52 round 3 — the VAL-7 trial-identity verdict is its own section, not a
     # `#####` item inside "What's in this dataset" (the user's call). It carries
     # a *verdict* — sometimes a warning — and the fix it names is a change to the
-    # Trial ID mapping directly above it, so it belongs at the same level as the
-    # thing it judges rather than buried under the counts.
+    # Trial ID mapping, so it belongs at the same level as the thing it judges
+    # rather than buried under the counts.
     # Keyed → the `.st-key-…` selector the "Load and verify a dataset" tutorial
     # spotlights, alongside its siblings above and below.
     setup_identity_slot = editor_page.container(key="tutorial_trial_identity")
-    # VIZ-14: local stimulus-image paths, after the questions that describe the
-    # data itself.
-    setup_stimulus_slot = editor_page.container(key="tutorial_stimulus_images")
     setup_preproc_slot = editor_page.container(key="tutorial_preprocessing")
     # UX-106 — the editor's own foot: ✅ Save changes, under everything it
     # saves, the way ✅ Add dataset sits under the whole add screen. Reserved
     # last so it lands after preprocessing; filled at the end of the run.
     editor_footer_slot = editor_page.container(key="dataset_editor_footer")
 
-    # UX-135 — which of the editor's five parts are on screen this run, and so
+    # UX-135 — which of the editor's six parts are on screen this run, and so
     # what each one is numbered. Two are conditional (stimulus images need a
     # local filesystem; preprocessing is behind PRE-22's flag), and a screen
     # reading 1 · 2 · 3 · 5 looks like a section that failed to render rather
@@ -9989,40 +10629,24 @@ def _run_app() -> None:
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
-    # adding an image_path column to their data. This intentionally stays out
-    # of public deployments and share links because it contains machine-local
-    # filesystem information; the same resolver is available through the API
-    # and CLI for reproducible headless renders.
+    # adding an image_path column to their data. #417 — from the folder saved
+    # with the open dataset (the add screen's and ✏️ Edit dataset's *Stimulus
+    # images*), resolved before filtering and plotting so every view draws it.
+    # It stays out of public deployments and share links because it is
+    # machine-local filesystem information; the same resolver is available
+    # through the API and CLI for reproducible headless renders.
+    # The demo standing in for a missing corpus draws the demo's own folder,
+    # not the corpus' (the annotations follow the same rule).
+    images_owner = (
+        DEMO_CHOICE if st.session_state.get(_PLACEHOLDER_SHOWN_KEY) else _dataset_owner
+    )
+    images_unresolved = (words_df, fixations_df)
+    stimulus_images = StimulusImages(words_df, fixations_df)
     if local_filesystem_enabled():
-        with _editor_part(setup_stimulus_slot, "edit_stimulus"):
-            image_root = st.text_input(
-                "Image folder",
-                key="stimulus_image_root",
-                placeholder="/path/to/stimulus-images",
-                help="Local folder containing one image per text or trial.",
-            ).strip()
-            image_pattern = st.text_input(
-                "Filename pattern",
-                key="stimulus_image_pattern",
-                value="{text_id}.png",
-                help="Use the app's field names in braces — {text_id}, {trial_id} "
-                "or {participant_id}. Subfolders work too.",
-            ).strip()
-            if image_root:
-                try:
-                    words_df = resolve_stimulus_image_paths(
-                        words_df, image_root, image_pattern
-                    )
-                    fixations_df = resolve_stimulus_image_paths(
-                        fixations_df, image_root, image_pattern
-                    )
-                    found = sum(
-                        _rows_with_local_images(frame)
-                        for frame in (words_df, fixations_df)
-                    )
-                    st.caption(f"Found a local image for {plural(int(found), 'row')}.")
-                except ValueError as exc:
-                    st.error(f"Couldn't use this folder or pattern: {exc}")
+        stimulus_images = with_dataset_stimulus_images(
+            images_owner, words_df, fixations_df
+        )
+        words_df, fixations_df = stimulus_images.words, stimulus_images.fixations
 
     # Optional raw gaze: the Upload source already mapped + normalized it above;
     # every other source loads it here (bundled demo sample, OneStop uploader).
@@ -10170,25 +10794,25 @@ def _run_app() -> None:
     # is on. `assign_derived` names them by their inputs and settings, so the
     # caches downstream are keyed without hashing the whole pool each time.
     pool = (words_df, fixations_df)
-    words_df, fixations_df = filter_trials(
-        words_df,
-        fixations_df,
-        participants=trial_filters["participants"],
-        metadata=trial_filters["metadata"],
-        ranges=trial_filters.get("ranges"),
-        drop_unknown=trial_filters.get("ranges_drop_unknown"),
+    selected = select_trials_cached(
+        words_df, fixations_df, trial_filters, slot="trial_filters"
     )
+    words_df, fixations_df = selected.words, selected.fixations
     assign_derived(
         (words_df, fixations_df),
         "filter_trials",
         pool,
-        (
-            trial_filters["participants"],
-            trial_filters["metadata"],
-            trial_filters.get("ranges"),
-            tuple(trial_filters.get("ranges_drop_unknown") or ()),
-        ),
+        trial_filter_params(trial_filters),
     )
+    if selected.conflicts:
+        # #412: a reading whose two tables disagree about a filtered field is
+        # left out of the pool, never decided for one table — and said so.
+        menu.notices.warning(
+            trial_filter_conflict_note(
+                selected.conflicts, active_all(st.session_state).label
+            ),
+            icon=ICONS["warning"],
+        )
     # DATA-29: a trial-grain metadata narrowing is already `(participant_id,
     # trial_id)` keys, so it applies through `filter_to_keys` rather than
     # `filter_trials` — the table is never broadcast onto the frames, which is
@@ -10276,6 +10900,9 @@ def _run_app() -> None:
             fixations_all,
             words_filtered,
             fixations_filtered,
+            # #412: a trial only the samples have has no value for a condition
+            # the other two tables decided, so a category leaves it out.
+            keep_unknown=selected.selection is None or selected.selection.keeps_unknown,
         )
         if raw_gaze_filtered.empty:
             # Informational, not an error: the loaded raw-gaze samples just
@@ -10341,6 +10968,10 @@ def _run_app() -> None:
     # reported, never replaced by another reader's trial of the same name.
     if missed := _apply_pending_trial_selection(combos):
         menu.notices.warning(missed, icon=ICONS["warning"])
+    # #412: a trial id alone left in the picker's key by an older version names
+    # its reading — or, when several readers share the id, none, which is said.
+    if ambiguous := _settle_picker_selection(combos):
+        menu.notices.warning(ambiguous, icon=ICONS["warning"])
 
     # Restore settings from an uploaded settings file BEFORE the rail widgets
     # render, so they pick up the saved values (see _apply_url_preset for the
@@ -10488,12 +11119,34 @@ def _run_app() -> None:
                 words=words_all,
                 fixations=fixations_all,
             )
+        if local_filesystem_enabled():
+            # #417 — the headline on every Data-page run, like the other parts;
+            # the fields only while the editor is open, since they are seeded
+            # from the open dataset and wait for ✅ Save changes.
+            images_body = _editor_part(setup_stimulus_slot, "edit_stimulus")
+            if editing:
+                images_token = str(
+                    st.session_state.get("data_source_choice") or data_choice
+                )
+                folder_key, pattern_key = _stimulus_field_keys(images_token)
+                saved_images = dataset_stimulus_images(images_token)
+                folder, pattern = render_stimulus_images_fields(
+                    images_body, folder_key, pattern_key, saved=saved_images
+                )
+                typed = stimulus_image_source({"folder": folder, "pattern": pattern})
+                # What is saved was already looked up for the figures; a draft
+                # is tried on the frames as they came, before any folder.
+                render_stimulus_images_preview(
+                    images_body,
+                    folder,
+                    pattern,
+                    images_unresolved,
+                    saved=stimulus_images
+                    if typed == saved_images and images_owner == images_token
+                    else None,
+                )
         with _editor_part(setup_identity_slot, "edit_identity"):
             render_trial_identity_section()
-        # ``setup_stimulus_slot`` is filled earlier because its values resolve
-        # image paths before filtering and plotting; its reserved position is
-        # what puts it after Trial identity on screen regardless (creation order
-        # is screen order, so where a slot is *filled* need not agree).
         with setup_metadata_slot:
             # UX-130 r2: the *add screen's* three metadata rows, not three
             # side-by-side panels. UX-114 put them in one row of three columns
@@ -10573,8 +11226,8 @@ def _run_app() -> None:
             # the corpus home link, the coordinate-provenance sentence and a
             # six-row published-vs-loaded table, all standing between the user
             # and the counts they came for. UX-174 r2 put Rename on the heading
-            # and Edit on the description line, off the table's rows; Edit now
-            # sits under the overview, above the subtabs.
+            # and Edit on the description line, off the table's rows; Edit is
+            # back on the rows now, beside Remove.
             render_dataset_inspection_head(active_token)
             # DATA-67 — what the dataset supports, before any trial filter:
             # the first thing a newly added dataset's overview answers.
@@ -10586,7 +11239,6 @@ def _run_app() -> None:
             render_data_health(
                 words_all, fixations_all, raw_gaze_all, filtered=trials_filtered
             )
-            render_dataset_edit_button(active_token)
             # Keyed wrapper → the stable `.st-key-…` selector the "Load and
             # verify a dataset" tutorial spotlights (it kept its name across the
             # move off the Scanpath subtab bar).

@@ -197,7 +197,7 @@ Place a fixation with no x/y at its word box's center.
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Missing & edge cases** | No matching word box ⇒ the fixation keeps no coordinates. |
+| **Missing & edge cases** | No matching word box, or no word id (blank, or not a number) ⇒ the fixation keeps no coordinates — a missing id never matches a box with none. No x/y mapped and a Word/IA ID column with no numbers at all ⇒ UnplacedFixationsError, never an empty figure (#412). |
 | **Precedence & caveats** | Only when x/y are absent; recorded coordinates always win. |
 | **Code** | `scanpath_studio/data.py:harmonize_frames` |
 | **Consumers** | UI, API, CLI |
@@ -1158,7 +1158,7 @@ The glyph run inside a word's box — where its letters are.
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. Measured against OneStop's own Experiment Builder screens: each tiling box is centered on its word, half a space either side, so the run's `x` start is half an advance early there; the label and snap use the box center, the landing measures do not. |
+| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. Measured against OneStop's own Experiment Builder screens: each tiling box is centered on its word, half a space either side, so the run's `x` start is half an advance early there; the label uses the box center, the landing measures do not. |
 | **Code** | `scanpath_studio/measures.py:word_glyph_span` |
 | **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py` |
@@ -1200,7 +1200,7 @@ Screen coordinates, drawn the way the screen is.
 
 One line of text fills its share of the recorded line pitch.
 
-**Formula.** A word label's font is `1/line_spacing` of the line pitch (the median line-to-line distance of the word boxes), capped so the words fit their box widths (`plots._width_fit_font`; the smaller wins), in data pixels converted at the figure's display scale. The figure is drawn at its exact pixel size and scaled as one block.
+**Formula.** A word label's font is `1/line_spacing` of the line pitch (the median line-to-line distance of the word boxes), capped so the words fit their box widths (`plots._width_fit_font`; the smaller wins), in data pixels converted at the figure's display scale. When the boxes are monospace words padded alike — half the gap to each neighbour — the font is read off them instead: one character cell is the slope of box width over word length (`plots._padded_monospace_font`), over the font's advance. The figure is drawn at its exact pixel size and scaled as one block.
 
 | | |
 | --- | --- |

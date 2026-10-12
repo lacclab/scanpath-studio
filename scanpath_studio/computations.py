@@ -267,7 +267,12 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/data.py:harmonize_frames",
         unit="px",
         precedence="Only when x/y are absent; recorded coordinates always win.",
-        missing="No matching word box ⇒ the fixation keeps no coordinates.",
+        missing=(
+            "No matching word box, or no word id (blank, or not a number) ⇒ the "
+            "fixation keeps no coordinates — a missing id never matches a box "
+            "with none. No x/y mapped and a Word/IA ID column with no numbers "
+            "at all ⇒ UnplacedFixationsError, never an empty figure (#412)."
+        ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _CLI),
@@ -1388,8 +1393,8 @@ REGISTER: tuple[Computation, ...] = (
             "across it and mirrors an RTL one. Measured against "
             "OneStop's own Experiment Builder screens: each tiling box is "
             "centered on its word, half a space either side, so the run's "
-            "`x` start is half an advance early there; the label and snap "
-            "use the box center, the landing measures do not."
+            "`x` start is half an advance early there; the label uses the box "
+            "center, the landing measures do not."
         ),
         tiers="A",
         status=STATUS_PARTIAL,
@@ -1457,8 +1462,12 @@ REGISTER: tuple[Computation, ...] = (
             "A word label's font is `1/line_spacing` of the line pitch (the median "
             "line-to-line distance of the word boxes), capped so the words fit "
             "their box widths (`plots._width_fit_font`; the smaller wins), in "
-            "data pixels converted at the figure's display scale. The figure is "
-            "drawn at its exact pixel size and scaled as one block."
+            "data pixels converted at the figure's display scale. When the "
+            "boxes are monospace words padded alike — half the gap to each "
+            "neighbour — the font is read off them instead: one character cell "
+            "is the slope of box width over word length "
+            "(`plots._padded_monospace_font`), over the font's advance. The "
+            "figure is drawn at its exact pixel size and scaled as one block."
         ),
         code="scanpath_studio/tabs.py:_render_true_scale_chart",
         # The spatial plot must stay on this path: `st.plotly_chart` loses the

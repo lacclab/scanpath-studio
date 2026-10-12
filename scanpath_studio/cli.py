@@ -41,6 +41,8 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_SACCADE_WIDTH,
+    DEFAULT_SNAP_POSITION,
+    DEFAULT_STIMULUS_IMAGE_PATTERN,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
     SACCADE_CLASS_COLORS,
@@ -261,8 +263,18 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
     ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
     second comparison dataset, which has no mapping flag of its own."""
     from .api import SchemaError
-    from .data import StimulusJoinError
+    from .data import StimulusJoinError, UnplacedFixationsError
 
+    if isinstance(exc, UnplacedFixationsError):
+        # #412: the fix is the fixations' mapping — X and Y, on this command line.
+        message = str(exc).replace("`", "'")
+        if not schema_flags:
+            return message
+        return (
+            f"{message}\nOn the command line, map them with --fix-schema: the "
+            "fixations' full mapping as JSON (or a path to a .json file), with "
+            '"x" and "y" naming its columns.'
+        )
     if isinstance(exc, StimulusJoinError):
         # DATA-49: the fix is a mapping, and here a mapping is a flag.
         message = str(exc).replace("`", "'")
@@ -500,11 +512,12 @@ def _render_parser() -> argparse.ArgumentParser:
         "--image-root",
         metavar="DIR",
         help="Local stimulus-image folder. Files are matched per row using "
-        "--image-pattern.",
+        "--image-pattern and fill its image_path; add --show-stimulus-image to "
+        "draw them. Works with every input, --sample and the corpora included.",
     )
     src.add_argument(
         "--image-pattern",
-        default="{text_id}.png",
+        default=DEFAULT_STIMULUS_IMAGE_PATTERN,
         metavar="PATTERN",
         help="Relative filename pattern with row placeholders, for example "
         "'{text_id}.png' or '{participant_id}/{trial_id}.png'.",
@@ -631,8 +644,10 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
+        nargs="+",
         help="Participant-level metadata table: one row per participant, an "
-        "id column plus anything known about them. The join is validated and "
+        "id column plus anything known about them. Several files (or a glob) "
+        "are stacked into one table. The join is validated and "
         "reported against the loaded participants, and the fields are added to "
         "--list-trials output.",
     )
@@ -640,8 +655,10 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--trial-metadata",
         metavar="FILE",
+        nargs="+",
         help="Trial-level metadata table: one row per trial, a "
-        "trial-id column plus anything known about it. Validated and reported "
+        "trial-id column plus anything known about it. Several files (or a "
+        "glob) are stacked into one table. Validated and reported "
         "the same way, and its fields are added to --list-trials output.",
     )
     src.add_argument(
@@ -658,8 +675,10 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--text-metadata",
         metavar="FILE",
+        nargs="+",
         help="Text-level metadata table: one row per text, a text-id column "
-        "plus anything known about it. Validated and reported the same way, "
+        "plus anything known about it. Several files (or a glob) are stacked "
+        "into one table. Validated and reported the same way, "
         "and its fields are added to --list-trials output. Never keyed by "
         "participant: a text is a stimulus, not something one participant owns.",
     )
@@ -690,6 +709,12 @@ def _render_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Render every screen of the selected parent trial. Screen ids are "
         "inserted before the output extension.",
+    )
+    parser.add_argument(
+        "--screens",
+        metavar="ID[,ID...]",
+        help="Like --all-screens, but only these screens of the parent trial "
+        "(comma-separated screen ids, e.g. Title,Paragraph); see --list-parts.",
     )
     parser.add_argument(
         "--screen-transition",
@@ -821,6 +846,19 @@ def _render_parser() -> argparse.ArgumentParser:
         f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
     )
     viz.add_argument(
+        "--saccade-opacity",
+        type=float,
+        metavar="O",
+        help="Opacity of the saccade lines and direction arrows, 0.1–1.0 "
+        "(default: 1). A comparison's two scanpaths share it.",
+    )
+    viz.add_argument(
+        "--saccade-arrow-size",
+        type=float,
+        metavar="PX",
+        help="Size of the --saccade-arrows arrowheads, 4–40 px (default: 12).",
+    )
+    viz.add_argument(
         "--saccade-color-by-type",
         dest="saccade_color_by_type",
         action="store_true",
@@ -845,6 +883,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "return_sweep, regression). Implies --saccade-color-by-type, unless "
         "--saccade-color-by-direction is given — then it recolors that two-way "
         "split (its forward and regression colors).",
+    )
+    viz.add_argument(
+        "--no-color-legend",
+        dest="show_color_legend",
+        action="store_false",
+        help="Hide the fixation-colour legend: the categories of a categorical "
+        "--color-by and the highlighted fixations' entries (the markers still "
+        "draw). Shows by default.",
     )
     viz.add_argument(
         "--no-saccade-type-legend",
@@ -885,13 +931,28 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="fixation_flags",
         action="append",
         metavar="SPEC",
-        help="The app's Flag fixations, repeatable. SPEC is "
+        help="The app's Filters & highlights for fixations, repeatable. SPEC is "
         "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
         "CATEGORY one of short, long, oob (outside every word box), blink and "
         "MODE one of off, highlight, discard — e.g. --fixation-flag "
         "short=discard,threshold_ms=80. discard drops those fixations from the "
         "drawing only; measures and exports are untouched. threshold_ms applies "
         "to short/long only.",
+    )
+    viz.add_argument(
+        "--legend",
+        dest="legend_layout",
+        action="append",
+        metavar="SPEC",
+        help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
+        "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
+        "colour categories), size-key; POSITION auto or SPOT-outside / "
+        "SPOT-inside with SPOT one of top-left, top-center, top-right, left, "
+        "right, bottom-left, bottom-center, bottom-right (outside grows the "
+        "figure; left and right run down the side); ARRANGEMENT stacked or "
+        "side-by-side; SIZE the text size in px — e.g. --legend "
+        "saccades=right-outside,stacked,14. Whether a legend is drawn at all is "
+        "still its own switch.",
     )
     viz.add_argument(
         "--saccade-classes",
@@ -913,8 +974,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "--snap-fixations",
         dest="snap_fixations",
         action="store_true",
-        help="Snap each fixation above the word it lands on instead of its raw "
-        "gaze point.",
+        help="Move each fixation up or down onto its text line (its word's, else "
+        "the nearest); it keeps its x. --snap-position says where on the line.",
+    )
+    viz.add_argument(
+        "--snap-position",
+        dest="snap_position",
+        type=float,
+        metavar="LINES",
+        help="Where on its line a snapped fixation sits, in line heights from the "
+        "line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge "
+        f"(default: {DEFAULT_SNAP_POSITION:g}). Used with --snap-fixations.",
     )
     viz.add_argument(
         "--illustration",
@@ -1027,6 +1097,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "heavy-tailed dwell times so a few hot words don't wash out the rest.",
     )
     viz.add_argument(
+        "--heatmap-opacity",
+        type=float,
+        metavar="O",
+        help="Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes "
+        "0.5, or 0.35 with no word boxes; interpolated 0.45).",
+    )
+    viz.add_argument(
         "--fixation-colorscale",
         metavar="NAME",
         type=_colorscale_name,
@@ -1084,6 +1161,12 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Pin the major coordinate-grid interval in pixels. Implies "
         "--coordinate-grid; omit for automatic 1/2/5×10ⁿ spacing.",
     )
+    viz.add_argument(
+        "--coordinate-grid-font-size",
+        type=int,
+        metavar="PX",
+        help="Size of the coordinate grid's labels, 6–36 px (default: 18).",
+    )
     # VIZ-4: overlay an image stimulus (a screenshot of the reading screen) under
     # the scanpath. The API already supports background_image*; these expose it on
     # the CLI. Works with --animate too.
@@ -1115,6 +1198,16 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
         "dim a busy image so the fixations / saccades / word boxes read over it.",
     )
+    # #420 — the trial's own page, which `--image-root` (or a dataset that
+    # ships its pages, like --sample) put on its rows as `image_path`.
+    viz.add_argument(
+        "--show-stimulus-image",
+        action="store_true",
+        help="Draw each trial's own stimulus page under the scanpath: the "
+        "image_path its rows carry (from --image-root, or a dataset that ships "
+        "its pages, like --sample), placed at its image_x / image_y. "
+        "--stimulus-image PATH wins.",
+    )
     # EXP-20 — a flag for every figure option `render` could not say before, so
     # the command the Share subtab prints (`code_snippet._CLI_EMITTERS`) draws
     # the figure rather than naming what it left out. Each is spelled after its
@@ -1126,6 +1219,18 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="O",
         help="Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping "
         "fixations show through).",
+    )
+    viz.add_argument(
+        "--fixation-outline-width",
+        type=float,
+        metavar="PX",
+        help="Outline round each filled fixation marker, 0–5 px; 0 draws none "
+        "(default: 0.5).",
+    )
+    viz.add_argument(
+        "--fixation-outline-color",
+        metavar="COLOR",
+        help="Color of that outline (default: #111111).",
     )
     viz.add_argument(
         "--hollow-fixations",
@@ -1187,11 +1292,23 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Plot background color (default: #ffffff).",
     )
     viz.add_argument(
+        "--no-plot-frame",
+        dest="show_plot_frame",
+        action="store_false",
+        help="Leave out the border round the plot area.",
+    )
+    viz.add_argument(
+        "--plot-frame-color",
+        metavar="COLOR",
+        help="Color of the border round the plot area (default: #000000).",
+    )
+    viz.add_argument(
         "--line-spacing",
         type=float,
         metavar="N",
-        help="Line slots each word box stands for, which sizes the reading text "
-        "(default: 3 — OneStop's one blank line above and below).",
+        help="How far apart the lines are, in font sizes: the reading text is "
+        "the distance between lines ÷ N (default: 3, a blank line above and "
+        "below).",
     )
     viz.add_argument(
         "--no-scale-text-to-boxes",
@@ -1237,6 +1354,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "(the app's Crop to data).",
     )
     viz.add_argument(
+        "--crop-margin",
+        type=float,
+        metavar="PX",
+        help="The margin around the data, in screen px, when cropping to it "
+        "(default: 5%% of the data's extent, at least 20 px). Implies "
+        "--crop-to-data.",
+    )
+    viz.add_argument(
         "--no-fixation-colorbar",
         dest="show_fixation_colorbar",
         action="store_false",
@@ -1260,6 +1385,19 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Fixation color bar: tick-label size (default: 12).",
     )
     viz.add_argument(
+        "--fixation-colorbar-thickness",
+        type=int,
+        metavar="PX",
+        help="Fixation color bar: thickness, 4–40 px (default: 14).",
+    )
+    viz.add_argument(
+        "--fixation-colorbar-length",
+        type=float,
+        metavar="F",
+        help="Fixation color bar: length as a share of the plot's side, 0.1–1.0 "
+        "(default: a third of its height upright, 0.6 of its width lying down).",
+    )
+    viz.add_argument(
         "--no-heatmap-colorbar",
         dest="show_heatmap_colorbar",
         action="store_false",
@@ -1281,6 +1419,19 @@ def _render_parser() -> argparse.ArgumentParser:
         type=int,
         metavar="PX",
         help="Heatmap color bar: tick-label size (default: 12).",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-thickness",
+        type=int,
+        metavar="PX",
+        help="Heatmap color bar: thickness, 4–40 px (default: 14).",
+    )
+    viz.add_argument(
+        "--heatmap-colorbar-length",
+        type=float,
+        metavar="F",
+        help="Heatmap color bar: length as a share of the plot's side, 0.1–1.0 "
+        "(default: a third of its height upright, 0.6 of its width lying down).",
     )
     # v0.33.0's shared colour-bar flags, kept so a script written for it still
     # runs (round 9) but not listed: `--colorbars` asked for what is now the
@@ -1451,6 +1602,25 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Caption band stamped on the figure; off by default.",
     )
     viz.add_argument(
+        "--title-size",
+        dest="title_font_size",
+        type=int,
+        metavar="PX",
+        help="Size of the --title text, 8–48 px (default: 20).",
+    )
+    viz.add_argument(
+        "--caption-size",
+        dest="caption_font_size",
+        type=int,
+        metavar="PX",
+        help="Size of the --caption text, 6–36 px (default: 13).",
+    )
+    viz.add_argument(
+        "--caption-color",
+        metavar="COLOR",
+        help="Color of the --caption text (default: #555555).",
+    )
+    viz.add_argument(
         "--separable-layers",
         action="store_true",
         help="Also write the figure split into one file per layer (word boxes / "
@@ -1486,8 +1656,9 @@ def _render_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="With --animate: cap the frame count at N (default: 360). A long "
-        "trial coarsens the grid to stay under it.",
+        help="With --animate: at most N frames, the first included (default: "
+        "360). A trial too long for that many at --anim-grid-step-ms gets a "
+        "wider step instead.",
     )
     # EXP-7: the same reproduction snippet the app's 🔗 Share subtab shows,
     # for the invocation you just typed. Chiefly a *translation*: "I have this
@@ -1588,9 +1759,11 @@ def _render_parser() -> argparse.ArgumentParser:
             "heatmap_colorscale (default --heatmap-colorscale, on the shared "
             f"range), saccade_style ({'|'.join(SACCADE_DASH_OPTIONS.values())}), "
             "saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), "
+            "box_line_opacity / box_fill_opacity (0–1; default "
+            "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
-            "--animate uses them too, except box_color, box_fill_color and "
-            "raw_gaze_color.",
+            "--animate uses them too, except box_color, box_fill_color, the box "
+            "opacities and raw_gaze_color.",
         )
     # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
@@ -1600,7 +1773,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="compare_fixation_flags",
         action="append",
         metavar="SPEC",
-        help="Flag fixations for the SECOND scanpath only, repeatable; "
+        help="Filters & highlights for the SECOND scanpath only, repeatable; "
         "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
         "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
     )
@@ -1685,6 +1858,7 @@ def _render_parser() -> argparse.ArgumentParser:
 _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
     "fixation_opacity",
+    "saccade_opacity",
     "order_font_size",
     "order_font_color",
     "text_color",
@@ -1695,10 +1869,25 @@ _DIRECT_OPTION_FLAGS = (
     "word_hover_measure",
     "x_field",
     "y_field",
+    "crop_margin",
     "fixation_colorbar_tickangle",
     "fixation_colorbar_tickfont_size",
     "heatmap_colorbar_tickangle",
     "heatmap_colorbar_tickfont_size",
+    # #422.
+    "fixation_colorbar_thickness",
+    "fixation_colorbar_length",
+    "heatmap_colorbar_thickness",
+    "heatmap_colorbar_length",
+    "heatmap_opacity",
+    "saccade_arrow_size",
+    "fixation_outline_width",
+    "fixation_outline_color",
+    "plot_frame_color",
+    "coordinate_grid_font_size",
+    "title_font_size",
+    "caption_font_size",
+    "caption_color",
     "illustration_text",
     "word_box_color",
     "word_box_line_opacity",
@@ -1727,6 +1916,8 @@ _SWITCH_OPTION_FLAGS = {
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
     "duration_size_legend": False,
+    "show_stimulus_image": True,
+    "show_plot_frame": False,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.
@@ -1741,6 +1932,8 @@ _STYLE_KEYS = (
     "saccade_width",
     "marker_size_range",
     "opacity",
+    "box_line_opacity",
+    "box_fill_opacity",
     "hollow",
 )
 
@@ -1789,6 +1982,11 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                     if raw.lower() not in ("1", "0", "true", "false", "yes", "no"):
                         raise ValueError
                     style[name] = raw.lower() in ("1", "true", "yes")
+                elif name in ("box_line_opacity", "box_fill_opacity"):
+                    value = float(raw)
+                    if not 0.0 <= value <= 1.0:
+                        raise ValueError
+                    style[name] = value
                 else:  # saccade_width, opacity
                     style[name] = float(raw)
             except ValueError:
@@ -1850,6 +2048,20 @@ def _compare_second_dataset(api, args, words, fixations):
             "--compare-words/--compare-fixations: "
             + _load_error_message(exc, schema_flags=False)
         )
+
+
+def _trial_text_ids(*frames) -> pd.DataFrame | None:
+    """``[participant_id, trial_id, text_id]``, one row per trial, from the
+    first of ``frames`` that has it — ``None`` when none carries a text id."""
+    columns = ["participant_id", "trial_id", "text_id"]
+    parts = [
+        f[columns].drop_duplicates(columns[:2])
+        for f in frames
+        if f is not None and not f.empty and set(columns) <= set(f.columns)
+    ]
+    if not parts:
+        return None
+    return pd.concat(parts, ignore_index=True).drop_duplicates(columns[:2])
 
 
 def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
@@ -1994,7 +2206,8 @@ _OPTION_FLAG_NAMES = {
     "background_image_origin": "--stimulus-image-origin",
     "background_image_opacity": "--stimulus-image-opacity",
     "saccade_render_mode": "--saccade-arcs",
-    "fixation_snap_to_word": "--snap-fixations",
+    "fixation_snap_to_line": "--snap-fixations",
+    "fixation_snap_position": "--snap-position",
     "heatmap_sigma_px": "--heatmap-sigma",
     "saccade_class_colors": "--saccade-type-color",
     "saccade_color_mode": "--saccade-color-by-type",
@@ -2075,6 +2288,26 @@ _CRITICAL_SPAN_STYLES = {
 _FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
 
 
+def _parse_legend_layout(specs: list[str]) -> dict:
+    """``["saccades=right,stacked,14"]`` → the ``legend_layout`` dict.
+
+    One ``KIND=SPEC`` per flag; SPEC is ``plots.parse_legend_spec``'s spelling,
+    the one the ``legend_<kind>`` link parameters use too.
+    """
+    from .plots import normalize_legend_layout, parse_legend_spec
+
+    layout: dict = {}
+    for spec in specs:
+        kind, _, text = spec.partition("=")
+        kind = kind.strip().lower().replace("-", "_")
+        try:
+            layout[kind] = parse_legend_spec(text)
+            normalize_legend_layout(layout)
+        except ValueError as exc:
+            raise SystemExit(f"--legend {spec!r}: {exc}") from None
+    return layout
+
+
 def _parse_fixation_flags(specs: list[str]) -> dict:
     """``["short=discard,threshold_ms=80"]`` → the ``fixation_flags`` dict.
 
@@ -2128,7 +2361,24 @@ def _snippet_source_from_args(args) -> SnippetSource:
 
     The inverse of the ``--sample`` / ``--words`` / ``--potec`` / … group, so
     ``--print-code python`` hands back a loader call that reads the same corpus
-    this invocation just read."""
+    this invocation just read — and, with ``--image-root``, matches the same
+    stimulus pages to its rows (#420)."""
+    source = _snippet_data_source(args)
+    image_root = getattr(args, "image_root", None)
+    if image_root:
+        source = replace(
+            source,
+            options={
+                **source.options,
+                "image_root": image_root,
+                "image_pattern": getattr(args, "image_pattern", None),
+            },
+        )
+    return source
+
+
+def _snippet_data_source(args) -> SnippetSource:
+    """`_snippet_source_from_args` before the stimulus-image folder."""
     from . import code_snippet as cs
 
     if args.authoring:
@@ -2297,7 +2547,12 @@ def _print_reproduction_code(
     if "width_mm" in save_kwargs or "width_in" in save_kwargs:
         save_kwargs.pop("scale", None)  # the print width replaces it
     caveats = []
-    if args.all_screens:
+    if args.screens:
+        caveats.append(
+            "--screens renders the screens named; the snippet rebuilds one "
+            "screen. Use api.render_parent_trial(..., screens=[...]) for the set."
+        )
+    elif args.all_screens:
         caveats.append(
             "--all-screens renders every screen of the parent trial; the "
             "snippet rebuilds one screen. Use api.render_parent_trial(...) for "
@@ -2307,16 +2562,11 @@ def _print_reproduction_code(
     # named, never dropped — the same rule `cli_unsupported` applies in the other
     # direction. Translating a command into a notebook cell has to be honest
     # about the parts of the command that didn't come along.
-    if args.image_root:
-        caveats.append(
-            "--image-root / --image-pattern resolve one stimulus image per row; "
-            "the snippet names no image. Pass the resolved file as "
-            "`background_image=`."
-        )
     if args.all_screens and args.screen_transition != "instant":
         caveats.append(
             f"--screen-transition {args.screen_transition} only affects the "
-            "--all-screens metadata, which the single-figure snippet omits."
+            "--all-screens / --screens metadata, which the single-figure "
+            "snippet omits."
         )
     source = _snippet_source_from_args(args)
     if args.raw_gaze:
@@ -2496,6 +2746,16 @@ def _save_kwargs(args) -> dict:
     return kwargs
 
 
+def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
+    """``--screens``' comma-separated ids, or ``None`` when not given."""
+    if value is None:
+        return None
+    screens = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not screens:
+        raise SystemExit("--screens names no screen; pass e.g. --screens Paragraph.")
+    return screens
+
+
 def render(argv: list[str]) -> None:
     # Bound, not inlined: DATA-27's --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
@@ -2603,9 +2863,17 @@ def render(argv: list[str]) -> None:
     # per child screen of a multipart trial. There is no defined pairing between
     # the two, and without this guard the compare branch left `figures` unbound
     # and the run died on an UnboundLocalError instead of saying so.
+    # --screens is --all-screens cut to the screens named.
+    chosen_screens = _parse_screen_list(args.screens)
+    if chosen_screens is not None:
+        if args.screen is not None:
+            raise SystemExit(
+                "--screen renders one screen and --screens several; pass one of them."
+            )
+        args.all_screens = True
     if args.compare_with is not None and args.all_screens:
         raise SystemExit(
-            "--compare-with cannot be combined with --all-screens: a comparison "
+            "--compare-with cannot be combined with --all-screens or --screens: a comparison "
             "is a single figure of two trials. Render one screen at a time with "
             "--screen SCREEN_ID."
         )
@@ -2640,6 +2908,8 @@ def render(argv: list[str]) -> None:
     canvas = _parse_canvas(args.canvas)
     if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
+    if args.crop_margin is not None and args.crop_margin < 0:
+        raise SystemExit("--crop-margin must be zero or more pixels.")
     if args.animate and args.output and not args.output.lower().endswith(".html"):
         raise SystemExit(
             "--animate writes interactive HTML — use a .html output. For GIF or "
@@ -2791,14 +3061,11 @@ def render(argv: list[str]) -> None:
             column_names = dict(data.column_names)
 
     if args.image_root and not (args.words or args.fixations):
-        from .data import resolve_stimulus_image_paths
-
+        # #420: --sample and the corpora take the folder the way a script
+        # does, through `attach_stimulus_images` (frames stay canonical here).
         try:
-            words = resolve_stimulus_image_paths(
-                words, args.image_root, args.image_pattern
-            )
-            fixations = resolve_stimulus_image_paths(
-                fixations, args.image_root, args.image_pattern
+            words, fixations = api.attach_stimulus_images(
+                words, fixations, args.image_root, args.image_pattern
             )
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
@@ -2943,37 +3210,19 @@ def render(argv: list[str]) -> None:
                 # `list_trials`'s combos is deliberately just
                 # (participant_id, trial_id) — text_id isn't part of its
                 # public contract — so bring it in here, from whichever
-                # frame has it, before projecting the text table onto it.
-                source = (
-                    fixations
-                    if not fixations.empty
-                    else words
-                    if not words.empty
-                    else join_frame
-                )
-                if "text_id" in source.columns:
+                # table has the trial, before projecting the text table.
+                texts = _trial_text_ids(fixations, words, join_frame)
+                if texts is not None:
                     combos = combos.merge(
-                        source[
-                            ["participant_id", "trial_id", "text_id"]
-                        ].drop_duplicates(),
-                        on=["participant_id", "trial_id"],
-                        how="left",
+                        texts, on=["participant_id", "trial_id"], how="left"
                     )
                     combos = _metadata.project_texts(attached_texts, combos)
-        # #374 F21: the text id too — the id the app shows a trial by.
-        source = fixations if not fixations.empty else words
-        if (
-            "text_id" not in combos.columns
-            and source is not None
-            and {"participant_id", "trial_id", "text_id"} <= set(source.columns)
-        ):
-            combos = combos.merge(
-                source[["participant_id", "trial_id", "text_id"]].drop_duplicates(
-                    ["participant_id", "trial_id"]
-                ),
-                on=["participant_id", "trial_id"],
-                how="left",
-            )
+        # #374 F21: the text id too — the id the app shows a trial by. #412:
+        # from whichever table has the trial, since every table's trials are
+        # listed.
+        texts = _trial_text_ids(fixations, words, raw_gaze)
+        if "text_id" not in combos.columns and texts is not None:
+            combos = combos.merge(texts, on=["participant_id", "trial_id"], how="left")
         print(
             f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
             "participant as -p and the trial as -t; the app shows a trial by "
@@ -3117,6 +3366,8 @@ def render(argv: list[str]) -> None:
         overrides["saccade_color_mode"] = "By type"
     if not args.saccade_type_legend:
         overrides["saccade_type_legend"] = False
+    if not args.show_color_legend:
+        overrides["show_color_legend"] = False
     if args.saccade_type_colors:
         # Over the palette's class colours when one is named: the explicit dict
         # wins over `--palette` wholesale in `api._expand_palette`, so starting
@@ -3148,6 +3399,8 @@ def render(argv: list[str]) -> None:
         ]
     if args.fixation_flags:
         overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
+    if args.legend_layout:
+        overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
     # VIZ-31: the reading-class filter. Independent of the colour mode above —
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.
@@ -3159,7 +3412,9 @@ def render(argv: list[str]) -> None:
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
     if args.snap_fixations:
-        overrides["fixation_snap_to_word"] = True
+        overrides["fixation_snap_to_line"] = True
+    if args.snap_position is not None:
+        overrides["fixation_snap_position"] = args.snap_position
     if args.illustration:
         preset = dict(
             show_words=False,
@@ -3172,7 +3427,7 @@ def render(argv: list[str]) -> None:
             color_by=UNIFORM_COLOR_FIELD,
             saccade_color_mode="Uniform",
             saccade_render_mode="Arc",
-            fixation_snap_to_word=True,
+            fixation_snap_to_line=True,
             fixation_opacity=1.0,
         )
         # BUG-85 review: an explicit flag wins over the preset, as it does over
@@ -3199,6 +3454,14 @@ def render(argv: list[str]) -> None:
         ) or (0.0, 0.0)
     if args.stimulus_image_opacity is not None:
         overrides["background_image_opacity"] = args.stimulus_image_opacity
+    if args.image_root and not (args.show_stimulus_image or args.stimulus_image):
+        # #420: the folder only fills `image_path`; drawing it is its own flag,
+        # as in the API, so a printed command names both.
+        print(
+            "Note: --image-root matches each trial's stimulus page; add "
+            "--show-stimulus-image to draw it.",
+            file=sys.stderr,
+        )
     # EXP-20: the rest of the figure options. After `--illustration` on purpose,
     # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
     # `illustration=True` applies them in.
@@ -3211,6 +3474,9 @@ def render(argv: list[str]) -> None:
     for key, flipped in _SWITCH_OPTION_FLAGS.items():
         if getattr(args, key) == flipped:
             overrides[key] = flipped
+    if args.crop_margin is not None:
+        # #422: a margin is only drawn around a cropped view.
+        overrides["fit_to_monitor"] = False
     if args.marker_duration_range:
         overrides["marker_duration_range"] = tuple(args.marker_duration_range)
     if args.fixation_color_range:
@@ -3376,6 +3642,7 @@ def render(argv: list[str]) -> None:
                     trial,
                     animate=True,
                     transition_mode=args.screen_transition,
+                    screens=chosen_screens,
                     **animation_options,
                 )
                 fig = next(iter(figures.values()))
@@ -3500,6 +3767,7 @@ def render(argv: list[str]) -> None:
                     fixations,
                     participant,
                     trial,
+                    screens=chosen_screens,
                     **static_options,
                 )
                 fig = next(iter(figures.values()))
@@ -3518,6 +3786,10 @@ def render(argv: list[str]) -> None:
             for position, (screen_id, screen_figure) in enumerate(
                 figures.items(), start=1
             ):
+                # The screen's place in its trial, which --screens can skip past.
+                meta = screen_figure.layout.meta
+                if isinstance(meta, dict) and meta.get("screen_index"):
+                    position = int(meta["screen_index"])
                 safe_screen = "".join(
                     char if char.isalnum() or char in "-_" else "_"
                     for char in str(screen_id)
@@ -3922,6 +4194,60 @@ def cache(argv: list[str]) -> None:
     print("Delete with `scanpath-studio cache --clear`.")
 
 
+def _version_parser() -> argparse.ArgumentParser:
+    """The `version` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio version",
+        description="Show which build of Scanpath Studio this is and how it was "
+        "installed. With --check, also ask GitHub whether a newer release is out "
+        "and how to update — the only time this command uses the network.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Ask GitHub for the latest release and say how to update this install.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        metavar="SECONDS",
+        help="How long to wait for GitHub (default 5).",
+    )
+    return parser
+
+
+def version(argv: list[str]) -> None:
+    """Print which build this is, and with ``--check`` whether a newer release is out (#139).
+
+    The terminal counterpart of Help → About and ``api.check_for_updates``.
+    Exits 1 only when the check itself could not be made.
+    """
+    args = _version_parser().parse_args(argv)
+    from .build_info import INSTALL_KINDS, build_info, install_kind
+
+    info = build_info()
+    print(f"scanpath-studio {info.version}")
+    print(f"Build:      {info.describe()}")
+    print(f"Installed:  {INSTALL_KINDS[install_kind(info)]}")
+    if not args.check:
+        return
+    from .updates import check_for_updates
+
+    result = check_for_updates(args.timeout)
+    if result.status == "error":
+        print(result.message, file=sys.stderr)
+        raise SystemExit(1)
+    print()
+    print(result.message)
+    if result.command:
+        print(f"Update:     {result.command}")
+    if result.download is not None:
+        print(f"Download:   {result.download.url}")
+    if result.status == "update_available" and result.latest is not None:
+        print(f"What's new: {result.latest.url}")
+
+
 def _check_parser() -> argparse.ArgumentParser:
     """The `check` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4094,6 +4420,10 @@ usage:
   scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
+  scanpath-studio version [--check]
+                                   show this build and how it was installed;
+                                   --check asks GitHub whether a newer
+                                   release is out
   scanpath-studio --version        print the version
 
 Unrecognized flags are forwarded to `streamlit run` (e.g.
@@ -4104,7 +4434,7 @@ SCANPATH_LOCAL_FS=1."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.
-_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache")
+_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache", "version")
 
 
 def _commands() -> tuple[str, ...]:
@@ -4214,6 +4544,8 @@ def main(argv: list[str] | None = None) -> None:
         check(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
+    elif argv[0] == "version":
+        version(argv[1:])
     elif argv[0] in ("-h", "--help"):
         print(_help_text())
     elif argv[0] in ("-V", "--version"):

@@ -42,6 +42,8 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.api.load_sample_data
 
+::: scanpath_studio.api.attach_stimulus_images
+
 ::: scanpath_studio.api.load_raw_gaze
 
 ::: scanpath_studio.api.load_sample_raw_gaze
@@ -132,6 +134,12 @@ print(figure_options_table())
 ::: scanpath_studio.api.cache_status
 
 ::: scanpath_studio.api.clear_cache
+
+## Version and updates
+
+::: scanpath_studio.api.version_info
+
+::: scanpath_studio.api.check_for_updates
 
 For a batch loop, see [Automation](automation.md#batch-pattern). GIF and MP4
 export uses

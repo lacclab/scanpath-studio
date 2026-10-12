@@ -13,7 +13,7 @@ import json
 import math
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -45,14 +45,22 @@ from .constants import (
     _VIEW_SCANPATH,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
+    CAPTION_FONT_SIZE_BOUNDS,
+    COLORBAR_LENGTH_BOUNDS,
+    COLORBAR_THICKNESS_BOUNDS,
     COLORSCALES,
+    CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
+    GRID_FONT_SIZE_BOUNDS,
+    HEATMAP_OPACITY_BOUNDS,
     HEATMAP_SIGMA_BOUNDS,
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
+    LEGEND_ARRANGEMENTS,
     MANUAL_SAMPLE_CHOICE,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
@@ -65,14 +73,18 @@ from .constants import (
     ONESTOP_VARIANT_LABELS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
+    SACCADE_ARROW_SIZE_BOUNDS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SETUP_OVERRIDE_SESSION_KEYS,
+    SNAP_POSITION_BOUNDS,
     SYNTHETIC_CHOICE,
+    TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
+    canonical_legend_position,
     drift_correction_enabled,
     onestop_regime_for_choice,
     plural,
@@ -103,6 +115,7 @@ from .session_keys import (
     COMPARE_STYLE_PARAMS,
     EXPORT_PARAMS,
     FIX_RANGE_PARAM,
+    LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
@@ -115,6 +128,13 @@ from .session_keys import (
     SINGLE_ANIMATE,
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
+)
+from .utils import (
+    combo_reading_keys,
+    reading_key,
+    readings_by_trial,
+    resolve_reading,
+    split_reading_key,
 )
 
 # URL query-param → session_state key map for the deep-link API. Used by
@@ -384,7 +404,60 @@ def _cmp_style_params(*fields: str) -> dict[str, str]:
     }
 
 
+# #422: the design choices that used to be fixed — link param → (session key,
+# bounds). The param is the key without `global_`; the settings file's `design`
+# section keeps them under the same names. Bounds `None` is a switch, "color" a
+# colour; an int pair is a whole number.
+_DESIGN_PARAMS = {
+    "heatmap_opacity_auto": ("global_heatmap_opacity_auto", None),
+    "heatmap_opacity": ("global_heatmap_opacity", HEATMAP_OPACITY_BOUNDS),
+    "title_font_size": ("global_title_font_size", TITLE_FONT_SIZE_BOUNDS),
+    "caption_font_size": ("global_caption_font_size", CAPTION_FONT_SIZE_BOUNDS),
+    "caption_color": ("global_caption_color", "color"),
+    "show_plot_frame": ("global_show_plot_frame", None),
+    "plot_frame_color": ("global_plot_frame_color", "color"),
+    "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
+    "fixation_outline_width": (
+        "global_fixation_outline_width",
+        FIXATION_OUTLINE_WIDTH_BOUNDS,
+    ),
+    "fixation_outline_color": ("global_fixation_outline_color", "color"),
+    "coordinate_grid_font_size": (
+        "global_coordinate_grid_font_size",
+        GRID_FONT_SIZE_BOUNDS,
+    ),
+    **{
+        f"{bar}_colorbar_{name}": (f"global_{bar}_colorbar_{name}", bounds)
+        for bar in ("fixation", "heatmap")
+        for name, bounds in (
+            ("thickness", COLORBAR_THICKNESS_BOUNDS),
+            ("length_auto", None),
+            ("length", COLORBAR_LENGTH_BOUNDS),
+        )
+    },
+}
+
+
+def _design_params(kind: str) -> dict[str, str]:
+    """The `_DESIGN_PARAMS` of one share group: "toggle", "color", "int" or
+    "float" — param → session key."""
+
+    def kind_of(bounds) -> str:
+        if bounds is None:
+            return "toggle"
+        if bounds == "color":
+            return "color"
+        return "int" if all(isinstance(b, int) for b in bounds) else "float"
+
+    return {
+        param: key
+        for param, (key, bounds) in _DESIGN_PARAMS.items()
+        if kind_of(bounds) == kind
+    }
+
+
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
+    **_design_params("toggle"),
     "preproc_enabled": "global_preproc_enabled",
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
     "show_words": "global_show_words",
@@ -398,9 +471,13 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_saccade_arrows": "global_show_saccade_arrows",
     # VIZ-8: saccade-type colour key (default on, so always emitted).
     "saccade_type_legend": "global_saccade_type_legend",
+    "show_color_legend": "global_show_color_legend",
     # The fixed duration scale's size key (default on, so always emitted).
     "duration_size_legend": "global_duration_size_legend",
-    "snap_fixations": "global_fixation_snap_to_word",
+    # #422: Snap to line (its *Position* is a float below). The param kept its
+    # name when the snap moved from "above the word" to "onto the line", so an
+    # older link that snapped still snaps.
+    "snap_fixations": "global_fixation_snap_to_line",
     # PRE-3 / ENG-23: the drift-correction connector layer. Its algorithm rides
     # in `_SHARE_VALUE_PARAMS` below — both, or a shared corrected view reopens
     # uncorrected.
@@ -416,6 +493,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
+    # #422: Crop to data's margin — automatic, or the px below.
+    "crop_margin_auto": "global_crop_margin_auto",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
     # EXP-5: title and caption on the figure — each off by default. The one
@@ -436,6 +515,7 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_chips": "single_show_chips",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    **_design_params("color"),
     # #374 F28: Export → Current figure's print size (only while a width is set).
     "export_width_unit": "export_figure_width_unit",
     "preproc_short_policy": "global_preproc_short_policy",
@@ -539,6 +619,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
 #: `_parse_hex_color` rather than `str` (BUG-69).
 _SHARE_COLOR_PARAMS = (
+    *_design_params("color"),
     "fixation_color",
     "saccade_color",
     "raw_gaze_color",
@@ -563,6 +644,7 @@ _SHARE_COLOR_PARAMS = (
     ),
 )
 _SHARE_INT_PARAMS = {
+    **_design_params("int"),
     "export_dpi": "export_figure_dpi",
     "order_font_size": "global_order_font_size",
     # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
@@ -586,12 +668,17 @@ _SHARE_INT_PARAMS = {
     "cmp_b_fixclass_long_threshold_ms": "cmp1_fixclass_long_threshold_ms",
 }
 _SHARE_FLOAT_PARAMS = {
+    **_design_params("float"),
     "export_width": "export_figure_width",
     "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
     "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
+    # #422: the saccade lines' and arrows' opacity.
+    "saccade_opacity": "global_saccade_opacity",
     "fixation_opacity": "global_fixation_opacity",
+    # #422: where on its line a snapped fixation sits, in line heights.
+    "snap_position": "global_fixation_snap_position",
     # The Interpolated heatmap's fixed blur σ (px); its Auto switch is a toggle.
     "heatmap_sigma_px": "global_heatmap_sigma_px",
     # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
@@ -603,6 +690,7 @@ _SHARE_FLOAT_PARAMS = {
     "stimulus_image_offset_y": "global_stimulus_image_offset_y",
     "stimulus_image_scale": "global_stimulus_image_scale",
     "coordinate_grid_spacing": "global_coordinate_grid_spacing",
+    "crop_margin": "global_crop_margin_px",
     # UX-86: raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
@@ -618,7 +706,9 @@ _SHARE_FLOAT_PARAMS = {
     "viewing_distance_mm": "global_viewing_distance_mm",
     "display_dpi": "global_display_dpi",
     "stimulus_font_pt": "global_stimulus_font_pt",
-    **_cmp_style_params("saccade_width", "opacity"),
+    **_cmp_style_params(
+        "saccade_width", "opacity", "box_line_opacity", "box_fill_opacity"
+    ),
 }
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
@@ -751,23 +841,31 @@ _MARKER_BOUNDS = (4, 40)
 # colour ranges aren't here — the rail's slider widens to hold them, and its
 # number boxes are unbounded.)
 _URL_BOUNDED = {
+    **{
+        key: bounds
+        for key, bounds in _DESIGN_PARAMS.values()
+        if bounds is not None and bounds != "color"
+    },
     "global_preproc_short_threshold_ms": (1.0, 500.0),
     "global_preproc_merge_distance_chars": (0.25, 10.0),
     "global_heatmap_sigma_px": HEATMAP_SIGMA_BOUNDS,
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
+    "global_saccade_opacity": (0.1, 1.0),
     "global_order_font_size": (6, 72),
     "global_anim_grid_step_ms": (20, 500),
     "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
     "global_marker_duration_range": MARKER_DURATION_BOUNDS,
     "global_fixation_opacity": (0.1, 1.0),
+    "global_fixation_snap_position": SNAP_POSITION_BOUNDS,
     "global_stimulus_image_opacity": (0.1, 1.0),
     # VIZ-4: image-alignment nudge — clamp a hand-crafted link to sane ranges.
     "global_stimulus_image_offset_x": (-5000.0, 5000.0),
     "global_stimulus_image_offset_y": (-5000.0, 5000.0),
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
+    "global_crop_margin_px": CROP_MARGIN_BOUNDS,
     # UX-86 put raw gaze's style on the link without its bounds (BUG-69), so
     # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
@@ -804,6 +902,11 @@ _URL_BOUNDED = {
     "export_figure_dpi": PRINT_DPI_BOUNDS,
     "global_stimulus_font_pt": (4.0, 144.0),
     **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
+    **{
+        f"cmp{i}_box_{part}_opacity": (0.0, 1.0)
+        for i in (0, 1)
+        for part in ("line", "fill")
+    },
     **{f"cmp{i}_saccade_width": SACCADE_WIDTH_BOUNDS for i in (0, 1)},
     **{f"cmp{i}_marker_size_range": _MARKER_BOUNDS for i in (0, 1)},
 }
@@ -1003,6 +1106,61 @@ def _selected_corpus(data_choice: str) -> tuple[str, dict]:
     return "", {}
 
 
+def _legend_state(kind: str, spec: dict) -> dict:
+    """One legend's three session keys, from a parsed spec."""
+    return {
+        f"global_legend_{kind}_position": spec.get("position", "auto"),
+        f"global_legend_{kind}_arrangement": spec.get("arrangement", "auto"),
+        f"global_legend_{kind}_size": spec.get("size"),
+    }
+
+
+def _apply_url_legends(qp) -> None:
+    """Seed each ``legend_<kind>=SPEC`` param's three Legends keys.
+
+    One param per legend rather than three generic ones, written only for a
+    legend moved off Auto (`_build_share_query`), so an ordinary link carries
+    none. A malformed one is reported and ignored, like every other param.
+    """
+    from .plots import parse_legend_spec
+
+    for param, kind in LEGEND_PARAMS.items():
+        if param not in qp:
+            continue
+        try:
+            spec = parse_legend_spec(qp[param])
+        except ValueError:
+            st.warning(f"Ignored the link's invalid {param}={qp[param]}.")
+            continue
+        if spec.get("size") is not None:
+            spec["size"] = _legend_size(spec["size"])
+        for key, value in _legend_state(kind, spec).items():
+            st.session_state.setdefault(key, value)
+
+
+def _legend_query(params: dict) -> None:
+    """Write ``legend_<kind>`` for each legend moved off Auto (the inverse)."""
+    from .plots import _legend_is_moved, legend_spec_text, normalize_legend_layout
+
+    layout = {
+        kind: {
+            "position": st.session_state.get(f"global_legend_{kind}_position")
+            or "auto",
+            "arrangement": st.session_state.get(f"global_legend_{kind}_arrangement")
+            or "auto",
+            "size": st.session_state.get(f"global_legend_{kind}_size"),
+        }
+        for kind in LEGEND_PARAMS.values()
+    }
+    try:
+        layout = normalize_legend_layout(layout)
+    except (ValueError, TypeError):
+        return
+    for param, kind in LEGEND_PARAMS.items():
+        if _legend_is_moved(layout[kind]):
+            params[param] = legend_spec_text(layout[kind])
+
+
 def _apply_url_palette(qp) -> None:
     """Expand a ``?palette=<name>`` deep link into its colour session keys (VIZ-18).
 
@@ -1086,6 +1244,7 @@ def _apply_url_preset() -> str | None:
                     st.warning(f"Ignored the link's invalid trial={qp['trial']}.")
 
     _apply_url_palette(qp)
+    _apply_url_legends(qp)
 
     snapped_from_link: set[str] = set()
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
@@ -1293,6 +1452,11 @@ def linked_state_keys() -> frozenset[str]:
         target
         for url_key, (target, _coerce) in _URL_PRESETS.items()
         if url_key in params
+    ) | frozenset(
+        key
+        for param, kind in LEGEND_PARAMS.items()
+        if param in params
+        for key in _legend_state(kind, {})
     )
 
 
@@ -1481,10 +1645,41 @@ def _closed_choice(options) -> Callable[[object], object]:
     return parse
 
 
+def _legend_size(value) -> int:
+    """A legend's text size, clamped to its box's 6–72 px (``None`` = Auto
+    passes before this is called)."""
+    if isinstance(value, bool):
+        raise TypeError(f"not a text size: {value!r}")
+    return max(6, min(72, int(value)))
+
+
+def _legend_position(value) -> str:
+    """A legend's position, an old spelling (``above``, ``top-left`` …) read
+    as the spot it drew at."""
+    position = canonical_legend_position(value)
+    if position is None:
+        raise ValueError(f"not a legend position: {value!r}")
+    return position
+
+
+#: Each legend's three keys (Figure & canvas → Legends), checked the same way
+#: whether they come from a link, a settings file, a design or the cache.
+_LEGEND_STATE_PARSERS = {
+    key: parse
+    for kind in LEGEND_PARAMS.values()
+    for key, parse in (
+        (f"global_legend_{kind}_position", _legend_position),
+        (f"global_legend_{kind}_arrangement", _closed_choice(LEGEND_ARRANGEMENTS)),
+        (f"global_legend_{kind}_size", _legend_size),
+    )
+}
+
+
 #: Closed vocabularies — the same sets `_restore_plot_config` checks with
 #: `put_valid`, and the links' own validating parsers where there is one. `None`
 #: passes (a deselected segmented control stores it, and the rail coerces it).
 _CHOICE_STATE_PARSERS = {
+    **_LEGEND_STATE_PARSERS,
     "global_align_algorithm": _parse_align_algorithm,
     **{
         key: lambda v: _parse_saccade_classes(
@@ -1633,6 +1828,9 @@ def sanitize_session_value(key: str, value):
 #   v6 -> v7 : the fixations' and the heatmap's colour bars got their own
 #              settings, and title and caption their own switch; each shared
 #              value moves to both (`_migrate_config_6_to_7`).
+#   v7 -> v8 : #422 — "Snap above words" became Snap to line
+#              (`coloring.fixation_snap_to_word` → `fixation_snap_to_line`),
+#              so a file that snapped still snaps (`_migrate_config_7_to_8`).
 #
 # **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
 # whenever the config layout changes** (a renamed key, a moved section, a changed
@@ -1641,7 +1839,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 7
+PLOT_CONFIG_SCHEMA = 8
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -1794,6 +1992,23 @@ def _migrate_config_6_to_7(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_7_to_8(config: dict) -> dict:
+    """#422: "Snap above words" became Snap to line. The old switch moved a
+    fixation onto its word, sideways too; the new one moves it only up or down,
+    onto its line, and draws it where the old one did vertically by default
+    (its position, absent here, falls back to that). Without this an old file
+    that snapped restored unsnapped, silently."""
+    migrated = dict(config)
+    coloring = migrated.get("coloring")
+    if isinstance(coloring, dict) and "fixation_snap_to_word" in coloring:
+        coloring = dict(coloring)
+        coloring.setdefault(
+            "fixation_snap_to_line", coloring.pop("fixation_snap_to_word")
+        )
+        migrated["coloring"] = coloring
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -1803,6 +2018,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     4: _migrate_config_4_to_5,
     5: _migrate_config_5_to_6,
     6: _migrate_config_6_to_7,
+    7: _migrate_config_7_to_8,
 }
 
 
@@ -1907,18 +2123,20 @@ def _restore_selection(
         return False
     st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     # The picker renders a single dropdown keyed `<prefix>_trial_id` whose
-    # *options* are the trial_field values (`unique_trial_id` when present), so
-    # seed that one key with this row's option value — not a
-    # `<prefix>_<trial_field>` key, which no widget reads. The slider
-    # (`<prefix>_trial_pos`) needs no seeding: the picker mirrors it onto the
-    # selectbox's value before it renders.
+    # *options* are readings — `utils.reading_key` of the participant and the
+    # trial_field value (`unique_trial_id` when present), #412 — so seed that
+    # one key with this row's reading key, not a `<prefix>_<trial_field>` key,
+    # which no widget reads. The slider (`<prefix>_trial_pos`) needs no
+    # seeding: the picker mirrors it onto the selectbox's value before it
+    # renders.
     trial_field = (
         "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
     )
-    st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
+    key = reading_key(row["participant_id"], row[trial_field])
+    st.session_state[f"{key_prefix}_trial_id"] = key
     # Read once by `utils.select_trial`: a trial chosen here is never mistaken
     # for one carried over from another dataset that happens to share its id.
-    st.session_state[f"_{key_prefix}_trial_chosen"] = str(row[trial_field])
+    st.session_state[f"_{key_prefix}_trial_chosen"] = key
     if selection.get("screen_id") not in (None, ""):
         st.session_state[f"{key_prefix}_screen_id"] = str(selection["screen_id"])
     return True
@@ -2040,6 +2258,46 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
     return None
 
 
+def _settle_picker_selection(combos: pd.DataFrame) -> str | None:
+    """Turn a trial id alone in the picker's key into the reading it names (#412).
+
+    ``{prefix}_trial_id`` holds a reading key (``utils.reading_key``) since
+    #412; one saved before — a recovery cache from an older version — is a
+    trial id alone. It becomes the one reading with that id. When several
+    readers have the id it names none of them: the key is cleared, so the
+    picker opens where it would without it, and the sentence returned says why
+    for the page notices — where the picker used to open the first reader's.
+    A trial the filters left out is left to the picker, as before. ``None``
+    when nothing needed saying."""
+    if combos is None or combos.empty:
+        return None
+    trial_field = (
+        "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
+    )
+    message = None
+    pool = None
+    for prefix in _SELECTION_PREFIXES:
+        state_key = f"{prefix}_trial_id"
+        value = st.session_state.get(state_key)
+        participant, trial = split_reading_key(value)
+        if value is None or participant is not None:
+            continue
+        if pool is None:
+            keys = set(combo_reading_keys(combos, trial_field).tolist())
+            pool = (keys, readings_by_trial(keys))
+        key, readers = resolve_reading(value, *pool)
+        if key is not None:
+            st.session_state[state_key] = key
+        elif readers:
+            st.session_state.pop(state_key, None)
+            message = (
+                f"Couldn't reopen the last trial: trial {trial} belongs to "
+                f"{len(readers)} participants and the saved selection names none. "
+                "Pick one in the trial list."
+            )
+    return message
+
+
 def _seed_column_mapping(
     mapping, *, overwrite: bool = False, dataset: object = None
 ) -> None:
@@ -2061,7 +2319,7 @@ def _seed_column_mapping(
 
     BUG-32: the mapping is scoped to a dataset, so a caller restoring keys *for*
     a dataset whose table has not been read yet names it as ``dataset`` — the
-    wizard's *Restore a saved setup* — and the keys are claimed for it
+    wizard's *Start from* — and the keys are claimed for it
     (``controls.claim_mapping``): its first table keeps them, another dataset
     meeting them first drops them. Without ``dataset`` (the 💾 plot-config
     restore) the keys describe whatever those prefixes already map, and the
@@ -2324,7 +2582,14 @@ def _restore_plot_config(
             SACCADE_WIDTH_BOUNDS[1],
             "saccade line width",
         )
-    # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
+    if "saccade_opacity" in coloring:
+        put_float(
+            coloring["saccade_opacity"],
+            "global_saccade_opacity",
+            *_URL_BOUNDED["global_saccade_opacity"],
+            "saccade opacity",
+        )
+    # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
     if "saccade_render_mode" in coloring:
         put_valid(
             coloring["saccade_render_mode"] in ("Straight", "Arc"),
@@ -2332,8 +2597,15 @@ def _restore_plot_config(
             coloring["saccade_render_mode"],
             "saccade line shape",
         )
-    if "fixation_snap_to_word" in coloring:
-        put("global_fixation_snap_to_word", bool(coloring["fixation_snap_to_word"]))
+    if "fixation_snap_to_line" in coloring:
+        put("global_fixation_snap_to_line", bool(coloring["fixation_snap_to_line"]))
+    if "fixation_snap_position" in coloring:
+        put_float(
+            coloring["fixation_snap_position"],
+            "global_fixation_snap_position",
+            *SNAP_POSITION_BOUNDS,
+            "snap position",
+        )
     # PRE-3 / ENG-23: vertical drift correction. Validated like the deep link —
     # an algorithm the build no longer ships must not reach the selectbox.
     # PRE-21: and skipped entirely while the feature is gated off, silently, for
@@ -2360,6 +2632,8 @@ def _restore_plot_config(
         )
     if "saccade_type_legend" in coloring:
         put("global_saccade_type_legend", bool(coloring["saccade_type_legend"]))
+    if "show_color_legend" in coloring:
+        put("global_show_color_legend", bool(coloring["show_color_legend"]))
     class_colors = coloring.get("saccade_class_colors")
     if isinstance(class_colors, dict):
         for cls_name in SACCADE_CLASS_EDITABLE:
@@ -2505,6 +2779,22 @@ def _restore_plot_config(
             )
     if "duration_size_legend" in sizing:
         put("global_duration_size_legend", bool(sizing["duration_size_legend"]))
+    legends = config.get("legends")
+    if isinstance(legends, dict):
+        from .plots import normalize_legend_layout
+
+        for kind in LEGEND_PARAMS.values():
+            if kind not in legends:
+                continue
+            try:
+                spec = normalize_legend_layout({kind: legends[kind]})[kind]
+            except (ValueError, TypeError, AttributeError):
+                skipped.append(f"{kind.replace('_', ' ')} legend")
+                continue
+            if spec["size"] is not None:
+                spec["size"] = _legend_size(spec["size"])
+            for key, value in _legend_state(kind, spec).items():
+                put(key, value)
     if "order_font_size" in sizing:
         put_int(
             sizing["order_font_size"],
@@ -2662,6 +2952,17 @@ def _restore_plot_config(
             5000.0,
             "coordinate grid spacing",
         )
+    # #422: Crop to data's margin. Additive (ENG-11): a config saved before it
+    # says nothing, and the margin stays as it is.
+    if "crop_margin_auto" in axes:
+        put("global_crop_margin_auto", bool(axes["crop_margin_auto"]))
+    if axes.get("crop_margin_px") is not None:
+        put_float(
+            axes["crop_margin_px"],
+            "global_crop_margin_px",
+            *CROP_MARGIN_BOUNDS,
+            "crop margin",
+        )
 
     text = section("text")
     if "scale_text_to_boxes" in text:
@@ -2777,6 +3078,29 @@ def _restore_plot_config(
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)
 
+    # #422: the design choices that used to be fixed. Additive (ENG-11): a
+    # file saved before them has no `design` section and changes none of them.
+    design = section("design")
+    for name, (state_key, bounds) in _DESIGN_PARAMS.items():
+        if name not in design:
+            continue
+        value = design[name]
+        label = name.replace("_", " ")
+        if bounds is None:
+            put(state_key, bool(value))
+        elif bounds == "color":
+            put_valid(
+                isinstance(value, str)
+                and re.fullmatch(r"#[0-9A-Fa-f]{6}", value) is not None,
+                state_key,
+                value,
+                label,
+            )
+        elif all(isinstance(b, int) for b in bounds):
+            put_int(value, state_key, *bounds, label)
+        else:
+            put_float(value, state_key, *bounds, label)
+
     # VIZ-43 — raw gaze's own style. The section's `available` / `points`
     # describe the trial the config was saved on, not a setting. Absent in a
     # config saved before this existed, which keeps the seeded defaults.
@@ -2857,6 +3181,22 @@ def _restore_plot_config(
                 bf == "" or re.fullmatch(r"#[0-9A-Fa-f]{6}", bf)
             ):
                 put(f"cmp{idx}_box_fill_color", bf)
+            # The word-box opacities: null follows the figure's again.
+            for part in ("line", "fill"):
+                name = f"box_{part}_opacity"
+                if name not in entry:
+                    continue
+                if entry[name] is None:
+                    st.session_state.pop(f"cmp{idx}_{name}", None)
+                    restore.applied += 1
+                else:
+                    put_float(
+                        entry[name],
+                        f"cmp{idx}_{name}",
+                        0.0,
+                        1.0,
+                        f"scanpath {idx + 1} word box {part} opacity",
+                    )
             # And for the raw-gaze samples: follow the fixation colour.
             rg = entry.get("raw_gaze_color")
             if isinstance(rg, str) and (
@@ -3141,7 +3481,7 @@ def _build_share_query(
         # re-mapping, which is a real second half of "load the same data": the
         # column mapping and recording setup are exportable as JSON from the
         # add-dataset screen's ⬇️ Download setup file, and re-applied from that screen's
-        # *Restore a saved setup*. The caveat used to stop at "load the same
+        # *Start from → A setup file*. The caveat used to stop at "load the same
         # data" and leave the mapping to be redone by hand.
         #
         # #374 F14: the link names the dataset, so the recipient's app can open
@@ -3324,6 +3664,7 @@ def _build_share_query(
         )
         if orphaned or restated:
             params.pop(url_key)
+    _legend_query(params)
     # #374 F28 — the print size travels only while a width is set; without
     # one the PNG is drawn at the screen size, which needs nothing said.
     if not st.session_state.get(EXPORT_PARAMS["export_width"]):
@@ -3603,6 +3944,26 @@ _SNIPPET_OUTPUT = {
 }
 
 
+def _with_stimulus_folder(source: SnippetSource) -> SnippetSource:
+    """``source`` with the local folder the app matched its stimulus pages from
+    (#420): the snippet then loads them with `attach_stimulus_images`, which it
+    writes when the figure draws a page through ``show_stimulus_image``."""
+    from scanpath_studio.app import active_stimulus_folder
+
+    folder = active_stimulus_folder()
+    if folder is None:
+        return source
+    image_root, image_pattern = folder
+    return replace(
+        source,
+        options={
+            **source.options,
+            "image_root": image_root,
+            "image_pattern": image_pattern,
+        },
+    )
+
+
 def _snippet_source(data_choice: str) -> SnippetSource:
     """Describe the loaded data the way a script would have to load it.
 
@@ -3821,7 +4182,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     )
     output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(
-        _snippet_source(data_choice),
+        _with_stimulus_folder(_snippet_source(data_choice)),
         state,
         explicit=bool(explicit),
         output=output,

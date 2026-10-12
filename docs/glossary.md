@@ -70,9 +70,9 @@ True to scale
 
 Recording setup
 :   How the text was shown: the screen resolution (the canvas), the monitor's
-    size and viewing distance, and the text size, each marked measured,
-    estimated or assumed. Size and distance give pixels per degree of visual angle
-    ([`geom.pixels_per_degree`](computations.md#geom-pixels-per-degree)).
+    physical width, and the text size, each marked measured, estimated or
+    assumed. The width gives the DPI that turns a font size in points into
+    pixels.
 
 Screen
 :   One of several displays a single trial was read over — the pages of a

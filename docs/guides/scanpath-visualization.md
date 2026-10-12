@@ -17,7 +17,9 @@ The Scanpath view draws one reading on the screen it was recorded on.
 
 Pick a trial above the plot. The **filter funnel** beside it narrows the list
 by text, participant, condition or annotation, and **⇅** sorts it. A trial with
-several screens gets a second navigator to move between them.
+several screens gets a second navigator to move between them. When several
+participants have the same trial ID, each reading is in the list on its own,
+with its participant in brackets, `3 [p2]`.
 
 ## Control the layers
 
@@ -30,11 +32,11 @@ and a **▾** with its settings.
 | :material/blur_on: Fixations | markers: size, color, order |
 | :material/arrow_outward: Saccades | lines and arrows, colored by direction or reading type |
 | :material/article: Stimulus | text, span highlight, stimulus image, font and background |
-| :material/crop_square: Word boxes | each word's interest area: outline color and opacity; fill color and opacity |
+| :material/crop_square: Word boxes | each word's interest area: outline color and opacity; fill color and opacity. In Compare, each scanpath has its own, the figure's until you set one |
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |
-| :material/cleaning_services: Flag fixations | which fixations and saccades are drawn |
-| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields |
+| :material/filter_list: Filters & highlights | which fixations and saccades are drawn |
+| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields, legends |
 
 Color ranges start on **Auto**, scaled to each trial. Pin a range to keep it
 fixed as you step through trials and filters, so they stay comparable; its
@@ -60,9 +62,9 @@ longest fixation instead, so its sizes compare only within that figure. Share
 links, settings files, saved designs and restored sessions from before the fixed
 scale reopen on the relative one, as they were drawn.
 
-## Flag fixations
+## Filters & highlights
 
-**:material/cleaning_services: Flag fixations** thins the trial on screen (the funnel above the plot chooses
+**:material/filter_list: Filters & highlights** thins the trial on screen (the funnel above the plot chooses
 *which* trials you can pick). For fixations, **Highlight** or **Discard**
 short, long, out-of-bounds or blink fixations, or show only an index range.
 *Out of bounds* means outside every word box, not off the screen; *blink* needs
@@ -71,6 +73,34 @@ a blink column in your fixations (`is_blink`, `blink`, `blink_before`,
 For saccades, choose which reading types are drawn: hide everything but
 regressions, for example. Filtering changes only the figure, never your data.
 
+## Place the legends
+
+**:material/aspect_ratio: Figure & canvas → :material/legend_toggle: Legends** is a
+table with a row for each legend the current figure draws: **Compare (A/B)**
+while comparing, **Saccade types** when saccades are coloured by type,
+**Fixation colors** for a categorical **Color by**, a Highlight filter or raw
+gaze, and the duration **Size key** on a fixed marker scale. A legend the
+figure does not draw has no row. Its columns:
+
+- **Show**: draw the legend at all. This is the only place to turn a legend on
+  or off.
+- **Position**: one of eight spots (**Top left**, **Top center**, **Top
+  right**, **Left**, **Right**, **Bottom left**, **Bottom center**, **Bottom
+  right**), each **outside** or **inside** the plot. **Left** and **Right** run
+  down that side. An outside spot makes the figure larger instead of shrinking
+  the plot, so the text stays true to scale. Legends sharing a spot stack, the
+  size key included.
+- **Arrangement**: **Stacked** (one item under the other) or **Side by side**.
+  On **Auto**, a legend at the middle of the top or bottom edge is a row and
+  every other one a stack.
+- **Text size**: in px; empty uses the figure's own.
+
+On **Auto** a legend stays where it is drawn by default. The size key's circles
+keep the true marker sizes wherever it goes; its **Text size** sets the labels.
+Compare's A/B label patterns stay under **Compare ▾**. Share links, settings
+files, saved designs, `render --legend` / `--no-color-legend` and the API's
+`legend_layout` / `show_color_legend` all carry these.
+
 ## Replay and compare
 
 - **Animate** replays the trial; its **▾** sets the speed.
@@ -78,6 +108,8 @@ regressions, for example. Filtering changes only the figure, never your data.
   with** can take it from another dataset.
 - **Comparisons** lists other trials that match this one on a field you
   choose: other readings of the same text, or the same participant's other trials.
+  It shows 12 at a time, with a pager for the rest, and a table of the chips
+  from above the plot for this trial and each match on the page.
 
 Side by side, each panel shows its own reading's stimulus image, or none when
 that reading has no image. An uploaded image stands for the first reading's

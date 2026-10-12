@@ -252,6 +252,8 @@ def test_bulk_manifest_records_grid_settings():
         "coordinate_grid": True,
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,
+        "crop_margin_auto": True,
+        "crop_margin_px": None,
     }
 
 
@@ -332,5 +334,7 @@ def test_saved_config_round_trips_grid():
         "coordinate_grid": True,
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,
+        "crop_margin_auto": True,
+        "crop_margin_px": 50.0,
     }
     assert at.session_state["_restored_grid"] == (True, False, 250.0)

@@ -62,7 +62,9 @@ under **Metadata → Participants**. Its columns then behave like fields in the
 data: they filter trials (the filter funnel's *By participant* section), show up as
 chips above the plot, sort the trial picker, group cohorts in Corpus Analysis,
 appear in the dataset's inspection tables, and travel with exports and saved
-sessions.
+sessions. A table split across files — one per session, one per lab — can be
+uploaded as several files at once: they are stacked into one table, matching
+columns by name. The same holds for the trial and text tables.
 
 ```csv
 participant_id,native_language,age,comprehension
@@ -87,7 +89,7 @@ Three rules are worth knowing:
   counts as no value. The same choice sits under every numeric trial filter,
   for the trial and text tables as well.
 
-Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
+Headless, it is a `--participant-metadata FILE…` flag on `scanpath-studio render`
 and [`load_participant_metadata()`](api.md) in the Python API.
 
 ## Trial metadata
@@ -120,7 +122,7 @@ Python API.
 
 Join reporting and duplicate handling are as for the participant table.
 
-Headless, it is `--trial-metadata FILE` on `scanpath-studio render` and
+Headless, it is `--trial-metadata FILE…` on `scanpath-studio render` and
 [`load_trial_metadata()`](api.md) in the Python API.
 
 ## Text metadata
@@ -134,7 +136,7 @@ columns. Its columns behave like fields in the data in the same way, travel with
 exports (`metadata/texts.csv`) and saved sessions, and follow the same join
 rules.
 
-Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
+Headless, it is `--text-metadata FILE…` on `scanpath-studio render` and
 [`load_text_metadata()`](api.md) in the Python API.
 
 ## Flexible loading
@@ -159,11 +161,22 @@ Headless, it is `--text-metadata FILE` on `scanpath-studio render` and
   same way when any screen a participant looked at has no boxes. When some readings
   find none, the screen, the API and the CLI warn with the counts. When it
   works, the screen says how the words attached.
+- **Repeated readings** — when a participant has one trial ID more than once,
+  told apart by a `TRIAL_INDEX` column, the later readings get `_r2`, `_r3` …,
+  so each stays a trial of its own. When that participant already has a trial
+  spelled that way (a recorded `a_r2` beside two readings of `a`), the repeat
+  is written `a__r2` instead, with one more `_` while that is taken too, so two
+  readings never merge.
 - **Text ID falls back to the trial ID** when it isn't mapped. A repeated
-  reading takes its first reading's trial ID (without the `_r2`), so per-text
+  reading takes its first reading's trial ID (without the suffix), so per-text
   grouping counts a re-reading as the same text.
 - **AOI-only fixations** — fixations with a word/IA id but no x/y are placed at
-  the matching word-box centers.
+  the matching word-box centers. Word/IA ids are read as numbers: a fixation
+  whose id is blank or not a number matches no box and stays off the plot, and
+  when the fixations map no x/y and their Word/IA ID column holds no numbers at
+  all (`w1`, `w2` …), the dataset is refused with a message saying so — on the
+  add-dataset screen, and as an error from the Python API and CLI — rather than
+  loaded with nothing to draw.
 - **Composite trial ids** — when no single column identifies a trial, map *Trial
   ID* to several columns (e.g. participant + paragraph + repeated-reading) and a
   combined unique id is built on the fly: the values joined with `_`. A `_`

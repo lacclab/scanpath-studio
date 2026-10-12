@@ -299,7 +299,10 @@ def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFr
         return pd.DataFrame()
     identity = grouping_columns(words)
     word_keys = [*identity, "word_id"]
-    join = words[[*word_keys, "sentence_id"]].drop_duplicates()
+    # A word with no id joins no fixation: pandas matches NaN to NaN, which put
+    # every off-text fixation in that word's sentence (#412).
+    join = words[[*word_keys, "sentence_id"]].dropna(subset=["word_id"])
+    join = join.drop_duplicates()
     fix = materialize_runs(fixations).merge(join, on=word_keys, how="left")
     rows = []
     included = (

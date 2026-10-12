@@ -19,6 +19,8 @@
 import os
 import re
 import sys
+import tempfile
+from pathlib import Path
 
 from PyInstaller.utils.hooks import (
     collect_data_files,
@@ -26,7 +28,8 @@ from PyInstaller.utils.hooks import (
     copy_metadata,
 )
 
-from scanpath_studio import __version__
+from scanpath_studio import __release__
+from scanpath_studio.build_info import STAMP_NAME, read_checkout, write_stamp
 
 datas = []
 hiddenimports = []
@@ -52,6 +55,18 @@ for pkg in ("plotly", "streamlit_sortables", "kaleido", "imageio_ffmpeg"):
 # pandas imports its Excel engines by name at call time, which the analysis
 # cannot see: openpyxl reads .xlsx, xlrd legacy .xls (#DATA-53).
 hiddenimports += ["streamlit_sortables", "imageio_ffmpeg", "openpyxl", "xlrd"]
+
+# #139: the bundle reports the exact build it was made from. The spec runs in
+# the repository (CI checks it out with fetch-depth 0, so the tag is visible)
+# while `scanpath_studio` is imported from site-packages, so describe the
+# checkout explicitly and ship the answer as _build.json, which build_info
+# reads ahead of the release literal. A build from an exact tag stamps the
+# release itself; no checkout (an sdist build) stamps nothing.
+_build = read_checkout(Path(SPECPATH).parent)  # noqa: F821
+if _build is not None:
+    _stamp = Path(tempfile.mkdtemp(prefix="scanpath-build-")) / STAMP_NAME
+    write_stamp(_build, _stamp)
+    datas.append((str(_stamp), "scanpath_studio"))
 
 is_macos = sys.platform == "darwin"
 
@@ -127,7 +142,7 @@ if is_macos:
     # so a PEP 440 pre-release ("0.31.0rc1", "0.31.0.dev0") has to be trimmed to
     # its numeric prefix — Apple's validation can reject the raw string, and a
     # tag build is the wrong place to discover that.
-    bundle_version = re.match(r"\d+(?:\.\d+){0,2}", __version__)
+    bundle_version = re.match(r"\d+(?:\.\d+){0,2}", __release__)
     bundle_version = bundle_version.group(0) if bundle_version else "0"
 
     app = BUNDLE(

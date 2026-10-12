@@ -393,20 +393,32 @@ def test_plot_scanpath_heatmap_log_norm(sample):
 
 
 def test_plot_scanpath_snap_fixations(sample):
-    # VIZ-9: snapping repositions the fixation markers (fewer distinct y — one per
-    # text line — than the raw gaze scatter).
+    # #422: snapping moves the fixation markers onto their lines (fewer distinct
+    # y — one per text line — than the raw gaze scatter), and only up or down.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
 
-    def marker_ys(snap):
+    def markers(snap, **position):
         fig = sps.plot_scanpath(
-            words, fixations, pid, tid, show_heatmap=False, fixation_snap_to_word=snap
+            words,
+            fixations,
+            pid,
+            tid,
+            show_heatmap=False,
+            fixation_snap_to_line=snap,
+            **position,
         )
         m = [t for t in fig.data if t.mode and "markers" in t.mode]
-        return list(m[0].y)
+        return list(m[0].x), list(m[0].y)
 
-    raw, snapped = marker_ys(False), marker_ys(True)
-    assert len(set(snapped)) < len(set(raw))
+    (raw_x, raw_y), (snap_x, snap_y) = markers(False), markers(True)
+    assert len(set(snap_y)) < len(set(raw_y))
+    assert snap_x == raw_x
+    # From -0.5 (the line's top edge) to 0 (its middle) every fixation moves
+    # down (y grows downward on screen), and still not sideways.
+    mid_x, mid_y = markers(True, fixation_snap_position=0.0)
+    assert mid_x == raw_x
+    assert all(b > a for a, b in zip(snap_y, mid_y))
 
 
 def test_plot_scanpath_axis_field_override(sample):

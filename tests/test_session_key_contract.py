@@ -460,6 +460,8 @@ def _restore_config_app():
         "label_pattern": "{participant_id} · {trial_id}",
         "box_color": "#333333",
         "box_fill_color": "#444444",
+        "box_line_opacity": 0.6,
+        "box_fill_opacity": 0.3,
         "raw_gaze_color": "#555555",
         "heatmap_colorscale": "Blues",
     }
@@ -482,14 +484,17 @@ def _restore_config_app():
             "saccade_color": "#112233",
             "saccade_style": "Solid",
             "saccade_width": 2.0,
+            "saccade_opacity": 0.5,
             "saccade_render_mode": "Arc",
             "saccade_color_mode": "Uniform",
             "saccade_type_legend": True,
+            "show_color_legend": True,
             "saccade_class_colors": {c: "#445566" for c in SACCADE_CLASS_EDITABLE},
             # VIZ-31 reading-class filter — a real subset, since the reader
             # validates the names against the classes this build knows.
             "saccade_classes": ["forward", "regression"],
-            "fixation_snap_to_word": True,
+            "fixation_snap_to_line": True,
+            "fixation_snap_position": 0.25,
             "drift_correction": "Warp",
             "drift_connectors": True,
             "fixation_symbol": "circle",
@@ -517,6 +522,13 @@ def _restore_config_app():
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
+        # Figure & canvas → Legends: every legend, as the writer saves them.
+        "legends": {
+            "compare": {"position": "left", "arrangement": "stacked", "size": 14},
+            "saccades": {"position": "right", "arrangement": "auto", "size": None},
+            "colors": {"position": "below", "arrangement": "side-by-side"},
+            "size_key": {"position": "top-left", "arrangement": "stacked"},
+        },
         # #374 F28 — Export → Current figure's print size.
         "export": {"width": 180.0, "unit": "mm", "dpi": 600},
         "canvas_px": {"width": 1000, "height": 800},
@@ -526,6 +538,8 @@ def _restore_config_app():
             "coordinate_grid": True,
             "coordinate_grid_auto": False,
             "coordinate_grid_spacing": 250.0,
+            "crop_margin_auto": False,
+            "crop_margin_px": 40.0,
         },
         "text": {
             "scale_text_to_boxes": True,
@@ -587,6 +601,29 @@ def _restore_config_app():
             "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
         },
         "mode": {"animate": True, "compare": True},
+        # #422 — the design choices that used to be fixed.
+        "design": {
+            "heatmap_opacity_auto": False,
+            "heatmap_opacity": 0.8,
+            "title_font_size": 28,
+            "caption_font_size": 16,
+            "caption_color": "#222222",
+            "show_plot_frame": False,
+            "plot_frame_color": "#999999",
+            "saccade_arrow_size": 18.0,
+            "fixation_outline_width": 1.5,
+            "fixation_outline_color": "#336699",
+            "coordinate_grid_font_size": 12,
+            **{
+                f"{bar}_colorbar_{name}": value
+                for bar in ("fixation", "heatmap")
+                for name, value in (
+                    ("thickness", 20),
+                    ("length_auto", False),
+                    ("length", 0.5),
+                )
+            },
+        },
         "annotations": [],
     }
     before = set(st.session_state.keys())

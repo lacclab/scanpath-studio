@@ -35,6 +35,9 @@ from launcher import _env_flag, _free_port
 
 BOOT_TIMEOUT_S = 180.0
 SELFCHECK_TIMEOUT_S = 300.0
+#: What the selfcheck shakes hands with through the OS trust store (#394):
+#: GitHub, which the update check and the update download reach.
+TLS_URL = "https://github.com/"
 
 
 def _default_binary() -> Path:
@@ -95,7 +98,9 @@ def _run_selfcheck(binary: Path) -> None:
         # capture_output makes stdout a pipe, so the isatty() escape does not
         # fire. The traceback this phase exists to surface would land in a file
         # on a throwaway runner, leaving a red CI run with no reason attached.
-        env=_child_env(),
+        # A real handshake through the frozen truststore, which reaches the
+        # OS's certificate store only then (#394).
+        env=_child_env(SCANPATH_SELFCHECK_TLS_URL=TLS_URL),
     )
     sys.stdout.write(result.stdout)
     sys.stderr.write(result.stderr)

@@ -925,6 +925,9 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     words_boxes[geometry_col] = words.get(
         "geometry_source", pd.Series(index=words.index, dtype="object")
     )
+    # A box with a missing key places nothing: pandas joins NaN to NaN, which
+    # would put every fixation with no IA on it (#412).
+    words_boxes = words_boxes.dropna(subset=["unique_paragraph_id", "ia_index"])
     words_boxes = words_boxes.rename(columns=internal)
     merged = fix_df.merge(
         words_boxes, on=["unique_paragraph_id", "ia_index"], how="inner"

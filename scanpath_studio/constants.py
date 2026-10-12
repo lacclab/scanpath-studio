@@ -289,6 +289,11 @@ SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
 #: The Interpolated heatmap's fixed blur σ (px): the box's limits and default.
 HEATMAP_SIGMA_BOUNDS = (1.0, 500.0)
 DEFAULT_HEATMAP_SIGMA_PX = 20.0
+#: #422 — Snap to line: where on its text line a snapped fixation sits, in
+#: line heights from the line's middle (negative = up). −0.5 is the line's top
+#: edge, where VIZ-9's snap above the word drew it; the default keeps that look.
+DEFAULT_SNAP_POSITION = -0.5
+SNAP_POSITION_BOUNDS = (-2.0, 2.0)
 
 # VIZ-8 · colour saccades by reading type. Each saccade (the segment from one
 # fixation to the next) is classified into one of these reading-schematic
@@ -402,8 +407,47 @@ BACKGROUND_PRESETS = {
     "Black": "#000000",
 }
 
+#: Crop to data's automatic margin: 5% of the data's extent on each axis, at
+#: least this many screen px (`plots._compute_axis_ranges`).
 CANVAS_PAD_MIN_PX = 20.0
 CANVAS_PAD_FRACTION = 0.05
+#: #422 — Crop to data's own margin, in screen px: where the box starts once
+#: *Auto* is unticked, and the range a link or settings file is held to.
+DEFAULT_CROP_MARGIN_PX = 50.0
+CROP_MARGIN_BOUNDS = (0.0, 2000.0)
+
+# --- #422 · design choices that used to be fixed --------------------------------
+# Each default is the value the figure always drew with; each `*_BOUNDS` is the
+# range the rail, a link, a settings file and `render` hold it to.
+#: The heatmap's opacity once set by hand; unset, each style keeps its own
+#: (`plots.HEATMAP_STYLE_OPACITY`). The rail's box starts from Word boxes'.
+DEFAULT_HEATMAP_OPACITY = 0.5
+HEATMAP_OPACITY_BOUNDS = (0.05, 1.0)
+#: The export title and caption (`export.annotate_figure`), in px.
+DEFAULT_TITLE_FONT_SIZE = 20
+TITLE_FONT_SIZE_BOUNDS = (8, 48)
+DEFAULT_CAPTION_FONT_SIZE = 13
+CAPTION_FONT_SIZE_BOUNDS = (6, 36)
+DEFAULT_CAPTION_COLOR = "#555555"
+#: The static figure's border round the plot area.
+DEFAULT_PLOT_FRAME_COLOR = "#000000"
+#: The saccades' direction arrowheads, in px.
+DEFAULT_SACCADE_ARROW_SIZE = 12.0
+SACCADE_ARROW_SIZE_BOUNDS = (4.0, 40.0)
+#: The outline round a filled fixation marker; a width of 0 draws none. The
+#: colour is `FIX_MARKER_OUTLINE`, spelt out for a colour picker.
+DEFAULT_FIXATION_OUTLINE_WIDTH = 0.5
+FIXATION_OUTLINE_WIDTH_BOUNDS = (0.0, 5.0)
+DEFAULT_FIXATION_OUTLINE_COLOR = "#111111"
+#: The coordinate grid's tick labels, in px.
+DEFAULT_GRID_FONT_SIZE = 18
+GRID_FONT_SIZE_BOUNDS = (6, 36)
+#: A colour bar's thickness in px, and its length as a fraction of the plot's
+#: side (unset: a third of the height upright, 0.6 of the width lying down).
+DEFAULT_COLORBAR_THICKNESS = 14
+COLORBAR_THICKNESS_BOUNDS = (4, 40)
+DEFAULT_COLORBAR_LENGTH = 0.33
+COLORBAR_LENGTH_BOUNDS = (0.1, 1.0)
 
 
 # --- BUG-101 · the Plotly config every figure is drawn with --------------------
@@ -867,6 +911,16 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 
+#: #417 — ``{dataset token: {"folder": str, "pattern": str}}``, the local
+#: folder of stimulus images each dataset was pointed at (the add screen's and
+#: ✏️ Edit dataset's *Stimulus images*), for any kind of dataset. Kept beside
+#: the store like the descriptions, for the same reason. A machine-local path,
+#: so it is in the recovery cache — which is local itself — and never on a
+#: share link or in a settings file.
+DATASET_STIMULUS_IMAGES_KEY = "_dataset_stimulus_images"
+#: The filename pattern a dataset starts with when none was given.
+DEFAULT_STIMULUS_IMAGE_PATTERN = "{text_id}.png"
+
 #: ``{dataset token: SetupSnapshot.to_dict()}`` — the recording setup the user
 #: saved on ✏️ Edit dataset for a **built-in or public** dataset, in place of
 #: the one the corpus declares (which is never rewritten). An upload keeps its
@@ -887,6 +941,7 @@ SETUP_OVERRIDE_SESSION_KEYS = (
     "global_viewing_distance_mm",
     "global_display_dpi",
     "global_base_font_size",
+    "global_use_stimulus_font_pt",
     "global_font_family",
     "global_line_spacing",
     "global_scale_text_to_boxes",
@@ -1027,8 +1082,31 @@ SELECTOR_SCREEN_TRACK = 1.0
 #: ~5rem ◀ ▶ pair, then the row's ⇅ 🔎 ✏️ (~10rem, measured 160px), which follow it.
 SELECTOR_SCREEN_FLOOR_REM = 24.5
 
+#: The screen navigator's own width inside that track, in rem: the track less
+#: A's ⇅ 🔎 ✏️ and the gap before them (~10.75rem). Fixed rather than "what the
+#: menus leave", because B's row has no ✏️ — its navigator used to take the
+#: difference and come out wider than A's, right under it (2026-10-07).
+SELECTOR_SCREEN_PICKER_REM = SELECTOR_SCREEN_FLOOR_REM - 10.75
+
 #: With a screen track, the actions track keeps only ◀ ▶: its floor, in rem.
 SELECTOR_STEPS_FLOOR_REM = 5.2
+
+#: The least the trial scrubber is squeezed to before a selector row wraps.
+SELECTOR_SCRUB_MIN_REM = 7.5
+#: How wide a selector row must be to stay on one line: every floor of its
+#: widest shape (dataset · trial · scrubber · ◀ ▶ · screen + ⇅ 🔎 ✏️) plus
+#: the 1rem gaps between its five columns. Wider, the row keeps one line and
+#: compresses (the scrubber gives first); narrower, it wraps, the screen and
+#: action cluster moving to a line of their own rather than running past the
+#: column into the plot-controls rail.
+SELECTOR_ROW_WRAP_REM = (
+    SELECTOR_ROW_FLOORS_REM[0]
+    + SELECTOR_ROW_FLOORS_REM[1]
+    + SELECTOR_SCRUB_MIN_REM
+    + SELECTOR_STEPS_FLOOR_REM
+    + SELECTOR_SCREEN_FLOOR_REM
+    + 4 * 1.0
+)
 
 #: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
 #: is a single wide element rather than dataset + pick + scrub. Kept for
@@ -1101,12 +1179,13 @@ ICONS: dict[str, str] = {
     "word_boxes": ":material/crop_square:",
     "heatmap": ":material/local_fire_department:",
     "raw_gaze": ":material/grain:",
-    "plot_filter": ":material/cleaning_services:",
+    "plot_filter": ":material/filter_list:",
     "figure": ":material/aspect_ratio:",
     "screen": ":material/desktop_windows:",
     "axes": ":material/grid_on:",
     "labels": ":material/title:",
     "hover": ":material/ads_click:",
+    "legend": ":material/legend_toggle:",
     "designs": ":material/palette:",
     "plot_controls": ":material/tune:",
     "animate": ":material/movie:",
@@ -1199,6 +1278,7 @@ ICONS: dict[str, str] = {
     "code": ":material/code:",
     "doi": ":material/bookmark:",
     "ai": ":material/smart_toy:",
+    "update": ":material/update:",
     "missing_bundle": ":material/inventory_2:",
 }
 
@@ -1269,3 +1349,86 @@ SUBTAB_COMPARISONS = f"{ICONS['comparisons']} Comparisons"
 SUBTAB_LINE_ASSIGNMENT = f"{ICONS['line_assignment']} Line assignment"
 SUBTAB_EXPORT = f"{ICONS['export']} Export"
 SUBTAB_SHARE = f"{ICONS['share']} Share"
+
+
+# --- Legend layout ------------------------------------------------------------
+# Where each legend sits (📐 Figure & canvas → Legends; `plots.apply_legend_layout`).
+# The values are wire format — share links, saved configs, `render --legend` —
+# so never rename one.
+
+#: The legends a figure can draw, in the order the controls list them.
+LEGEND_KINDS = ("compare", "saccades", "colors", "size_key")
+#: What the controls call each legend.
+LEGEND_KIND_LABELS = {
+    "compare": "Compare (A/B)",
+    "saccades": "Saccade types",
+    "colors": "Fixation colors",
+    "size_key": "Size key",
+}
+#: The eight spots a legend can take around the plot — each corner, the middle
+#: of the top and bottom edges, and the middle of the left and right sides
+#: (where a legend runs down the side).
+LEGEND_SPOTS = (
+    "top-left",
+    "top-center",
+    "top-right",
+    "left",
+    "right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+)
+LEGEND_SPOT_LABELS = {
+    "top-left": "Top left",
+    "top-center": "Top center",
+    "top-right": "Top right",
+    "left": "Left",
+    "right": "Right",
+    "bottom-left": "Bottom left",
+    "bottom-center": "Bottom center",
+    "bottom-right": "Bottom right",
+}
+#: Where a legend can go: *Auto*, or a spot outside the plot (the figure grows
+#: to make room) or inside it (over the plot), spelled ``<spot>-<side>``.
+LEGEND_POSITIONS = (
+    "auto",
+    *(f"{spot}-outside" for spot in LEGEND_SPOTS),
+    *(f"{spot}-inside" for spot in LEGEND_SPOTS),
+)
+LEGEND_POSITION_LABELS = {
+    "auto": "Auto",
+    **{
+        f"{spot}-{side}": f"{label}, {side}"
+        for side in ("outside", "inside")
+        for spot, label in LEGEND_SPOT_LABELS.items()
+    },
+}
+#: The positions links, settings files and scripts wrote before the eight
+#: spots, read as the spot each one drew at.
+LEGEND_POSITION_ALIASES = {
+    "above": "top-right-outside",
+    "below": "bottom-left-outside",
+    "left": "left-outside",
+    "right": "right-outside",
+    "top-left": "top-left-inside",
+    "top-right": "top-right-inside",
+    "bottom-left": "bottom-left-inside",
+    "bottom-right": "bottom-right-inside",
+}
+
+
+def canonical_legend_position(value) -> str | None:
+    """``value`` as one of `LEGEND_POSITIONS` (an old spelling is read through
+    `LEGEND_POSITION_ALIASES`), or ``None`` when it is neither."""
+    text = str(value or "auto").strip().lower()
+    text = LEGEND_POSITION_ALIASES.get(text, text)
+    return text if text in LEGEND_POSITIONS else None
+
+
+#: How a legend's items run: one under the other, or side by side.
+LEGEND_ARRANGEMENTS = ("auto", "stacked", "side-by-side")
+LEGEND_ARRANGEMENT_LABELS = {
+    "auto": "Auto",
+    "stacked": "Stacked",
+    "side-by-side": "Side by side",
+}

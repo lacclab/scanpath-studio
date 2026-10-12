@@ -242,11 +242,38 @@ class TestSliderRow:
         assert slider.proto.label_visibility.value == COLLAPSED
 
 
+def test_a_tooltip_with_no_room_below_opens_upward():
+    """#422: a popover's last row opened its tooltip past the popover's bottom
+    edge, which made the popover scroll while it showed — and a scrollbar that
+    takes room narrowed the rows, slid the title from under the pointer and
+    shook the popover for as long as the pointer rested there.
+
+    The page installs a hover listener that marks such a title `sps-tip-up`,
+    and the stylesheet draws that tooltip above the title instead."""
+    from scanpath_studio import app
+    from scanpath_studio.styles import get_app_css
+
+    script = app._FIELD_TIP_PLACEMENT_SCRIPT
+    assert '"mouseover"' in script and '"focusin"' in script
+    assert 'closest(".sps-fhelp")' in script
+    assert '"sps-tip-up"' in script
+    # Installed in the parent page once, like the other page scripts.
+    assert "__spsFieldTipPlacementInstalled" in script
+    configure = Path(app.__file__).read_text(encoding="utf-8")
+    assert "embed_html_iframe(_FIELD_TIP_PLACEMENT_SCRIPT, height=0)" in configure
+
+    css = " ".join(get_app_css().split())
+    assert (
+        ".sps-fhelp.sps-tip-up::after { top: auto; bottom: calc(100% + 0.3rem); }"
+        in css
+    )
+
+
 def test_fixation_controls_drop_the_linear_reading_subheading():
-    """The snap setting remains compatible, without a redundant mini-heading."""
+    """The snap setting keeps its row, without a redundant mini-heading."""
     source = (Path(APP_SCRIPT).parent / "scanpath_studio" / "controls.py").read_text()
     assert 'st.caption("Linear-reading schematic")' not in source
-    assert '"global_fixation_snap_to_word"' in source
+    assert '"global_fixation_snap_to_line"' in source
 
 
 @pytest.mark.timeout(180)

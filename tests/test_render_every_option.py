@@ -74,7 +74,16 @@ NON_DEFAULT = {
     "marker_size_scale": "log",
     "marker_duration_range": (80.0, 900.0),
     "duration_size_legend": False,
-    "fixation_snap_to_word": True,
+    "legend_layout": {
+        "saccades": {
+            "position": "right-outside",
+            "arrangement": "stacked",
+            "size": 14,
+        },
+        "size_key": {"position": "top-left-inside"},
+    },
+    "fixation_snap_to_line": True,
+    "fixation_snap_position": 0.25,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
     # CMP-24 — the co-animation's B flags (`--compare-fixation-flag`).
     "fixation_flags_b": {"long": {"mode": "Highlight", "threshold_ms": 700.0}},
@@ -86,9 +95,26 @@ NON_DEFAULT = {
     "saccade_color": "#123456",
     "saccade_style": "dash",
     "saccade_width": 3.0,
+    "saccade_opacity": 0.5,
+    # #422 — the design choices that used to be fixed.
+    "saccade_arrow_size": 18.0,
+    "heatmap_opacity": 0.8,
+    "fixation_outline_width": 1.5,
+    "fixation_outline_color": "#336699",
+    "show_plot_frame": False,
+    "plot_frame_color": "#999999",
+    "coordinate_grid_font_size": 12,
+    "title_font_size": 28,
+    "caption_font_size": 16,
+    "caption_color": "#222222",
+    "fixation_colorbar_thickness": 20,
+    "fixation_colorbar_length": 0.5,
+    "heatmap_colorbar_thickness": 24,
+    "heatmap_colorbar_length": 0.75,
     "saccade_color_mode": "By type",
     "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#abcdef"},
     "saccade_type_legend": False,
+    "show_color_legend": False,
     "saccade_classes": ["forward", "regression"],
     "saccade_render_mode": "Arc",
     "critical_span_style": "Mark border",
@@ -98,6 +124,7 @@ NON_DEFAULT = {
     "span_border_color": "#555555",
     "background_color": "#fafafa",
     "fit_to_monitor": False,
+    "crop_margin": 30.0,
     "show_coordinate_grid": True,
     "coordinate_grid_spacing": 250.0,
     "line_spacing": 2.5,
@@ -114,6 +141,7 @@ NON_DEFAULT = {
     "background_image_size": (1200, 800),
     "background_image_origin": (10.0, 20.0),
     "background_image_opacity": 0.5,
+    "show_stimulus_image": True,
     "raw_gaze_color": "#666666",
     "raw_gaze_marker_size": 3.0,
     "raw_gaze_opacity": 0.4,
@@ -131,7 +159,12 @@ NON_DEFAULT = {
     "label_a": "A",
     "label_b": "B",
     "style_a": {"fix_color": "#aa0000", "opacity": 0.5},
-    "style_b": {"saccade_style": "dot", "hollow": True},
+    "style_b": {
+        "saccade_style": "dot",
+        "hollow": True,
+        "box_line_opacity": 0.25,
+        "box_fill_opacity": 0,
+    },
     "background_image_b": "page_b.png",
     "background_image_size_b": (1000, 700),
     "background_image_origin_b": (5.0, 6.0),
@@ -264,6 +297,24 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             (80.0, 900.0),
         ),
         (["--no-duration-size-legend"], "duration_size_legend", False),
+        (["--no-color-legend"], "show_color_legend", False),
+        (
+            [
+                "--legend",
+                "saccades=right-outside,14,stacked",
+                "--legend",
+                "size-key=bottom-center-outside",
+            ],
+            "legend_layout",
+            {
+                "saccades": {
+                    "position": "right-outside",
+                    "arrangement": "stacked",
+                    "size": 14,
+                },
+                "size_key": {"position": "bottom-center-outside"},
+            },
+        ),
         (["--hollow-fixations"], "hollow_fixations", True),
         (["--color-by-line"], "color_by_line", True),
         (["--fixation-color-range", "100", "400"], "fixation_color_range", (100, 400)),
@@ -284,6 +335,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
         (["--no-full-monitor"], "fit_to_monitor", False),
+        (["--crop-margin", "30"], "crop_margin", 30.0),
         (["--no-fixation-colorbar"], "show_fixation_colorbar", False),
         (
             ["--fixation-colorbar-orientation", "horizontal"],
@@ -321,6 +373,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             "gpt2_surprisal",
         ),
         (["--word-heatmap-title", "Surprisal"], "word_heatmap_title", "Surprisal"),
+        (["--show-stimulus-image"], "show_stimulus_image", True),
     ],
 )
 def test_each_static_flag_reaches_its_keyword(monkeypatch, flags, kwarg, expected):
@@ -418,7 +471,9 @@ def test_the_comparison_flags_reach_compare_scanpaths(monkeypatch, tmp_path):
             "--style-a",
             "opacity=0.5,marker_size_range=6:18,hollow=true",
             "--style-b",
-            "saccade_color=#00aa00,saccade_width=2.5",
+            "saccade_color=#00aa00,saccade_width=2.5,box_line_opacity=0.25",
+            "--style-b",
+            "box_fill_opacity=0",
             "--stimulus-image-b",
             str(image),
             "--stimulus-image-size-b",
@@ -435,7 +490,12 @@ def test_the_comparison_flags_reach_compare_scanpaths(monkeypatch, tmp_path):
         "marker_size_range": (6, 18),
         "hollow": True,
     }
-    assert seen["style_b"] == {"saccade_color": "#00aa00", "saccade_width": 2.5}
+    assert seen["style_b"] == {
+        "saccade_color": "#00aa00",
+        "saccade_width": 2.5,
+        "box_line_opacity": 0.25,
+        "box_fill_opacity": 0.0,
+    }
     assert seen["background_image_b"] == str(image)
     assert seen["background_image_size_b"] == (800, 600)
     assert seen["background_image_origin_b"] == (10.0, 20.0)

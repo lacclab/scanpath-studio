@@ -1069,7 +1069,7 @@ class TestSpotlightSelectorsResolve:
         control_source = inspect.getsource(controls.render_plot_controls)
 
         assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
-        assert "f\"{ICONS['plot_filter']} **Flag fixations**{" in control_source
+        assert "f\"{ICONS['plot_filter']} **Filters & highlights**{" in control_source
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
@@ -1186,24 +1186,29 @@ def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
     assert tour._GROUP_RING_ID in tour._dismiss_listener_script(NAV_SELECTOR)
 
 
-def test_the_setup_guide_counts_the_parts_it_names():
-    """The guide's overview says "three parts" and each part card is headed
-    "1 ·", "2 ·", "3 ·" — so it counts parts, not cards ("Step 3 of 4" under
-    "2 · Upload data tables" contradicted both)."""
+def test_the_setup_guide_counts_the_parts_it_names(monkeypatch):
+    """Each part card is headed "1 ·", "2 ·", "3 ·" — so the guide counts
+    parts, not cards ("Step 3 of 4" under "2 · Upload data tables"
+    contradicted both). The fourth, Stimulus images, is a card only where the
+    add screen draws that part (#417), and the overview names no count, which
+    would be wrong on one install or the other."""
     from scanpath_studio import tour
 
-    intro, *parts, save = tour._WIZARD_GUIDE_STEPS
-    assert "three parts" in intro["body"]
-    assert len(parts) == 3
-    for number, part in enumerate(parts, start=1):
-        assert part["title"].startswith(f"{number} · ")
-        assert part["step_id"]
+    for local, expected in (("1", 4), ("0", 3)):
+        monkeypatch.setenv("SCANPATH_LOCAL_FS", local)
+        intro, *parts, save = tour._wizard_guide_steps()
+        assert "parts" not in intro["body"]
+        assert len(parts) == expected
+        for number, part in enumerate(parts, start=1):
+            assert part["title"].startswith(f"{number} · ")
+            assert part["step_id"]
+        assert tour._wizard_guide_progress(0, intro) == f"Overview · {expected} parts"
     # The closing card is not a fourth part: no number, no wizard part to open.
     assert save["step_id"] is None
     assert not save["title"][0].isdigit()
     import inspect
 
-    source = inspect.getsource(tour.render_spotlight_wizard_guide)
+    source = inspect.getsource(tour._wizard_guide_progress)
     assert 'f"Part {step_idx} of {n_parts}"' in source
 
 
@@ -1233,3 +1238,62 @@ def test_the_setup_guide_progress_names_the_save_step():
     (bar,) = at.get("progress")
     assert "Last step" in bar.proto.text
     assert "Part 4" not in bar.proto.text
+
+
+class TestEveryGuideCardFolds:
+    """2026-10-09: the welcome tour, a tutorial and the setup guide each fold
+    (—) to a tab naming where they are, open again where they were, and are
+    dragged by their title (`tour._GUIDE_DRAG_SCRIPT`)."""
+
+    @staticmethod
+    def _keys(at) -> set[str]:
+        return {b.key for b in at.button if b.key}
+
+    def _folds_and_opens(self, at, kind: str, next_key: str, tab: str) -> None:
+        assert not at.exception, at.exception
+        at.button(key=f"guide_fold_{kind}").click().run()
+        assert not at.exception, at.exception
+        assert self._keys(at) == {f"guide_unfold_{kind}"}
+        assert any(tab in m.value for m in at.markdown)
+        assert not at.get("progress")
+        at.button(key=f"guide_unfold_{kind}").click().run()
+        assert next_key in self._keys(at)
+
+    def test_the_setup_guide(self):
+        at = AppTest.from_function(_wizard_guide_app).run()
+        self._folds_and_opens(at, "wizard", "wizard_sp_next", "Setup guide")
+
+    def test_the_welcome_tour(self):
+        at = AppTest.from_function(_welcome_tour_app).run()
+        self._folds_and_opens(at, "tour", "tour_sp_next", "Welcome tour")
+
+    def test_the_welcome_tour_folds_without_its_backdrop(self):
+        at = AppTest.from_function(_welcome_tour_app).run()
+        assert any("tour-backdrop" in m.value for m in at.markdown)
+        at.button(key="guide_fold_tour").click().run()
+        assert not any("tour-backdrop" in m.value for m in at.markdown)
+
+    def test_a_tutorial(self):
+        at = AppTest.from_function(_use_case_tutorial_app).run()
+        self._folds_and_opens(at, "tutorial", "tutorial_next", "Step 1 of")
+
+    def test_arming_a_guide_unfolds_it(self):
+        at = AppTest.from_function(_wizard_guide_app).run()
+        at.button(key="guide_fold_wizard").click().run()
+        from unittest.mock import patch
+
+        from scanpath_studio import tour
+
+        with patch.object(tour.st, "session_state", at.session_state):
+            tour._arm_wizard_guide()
+        at.run()
+        assert "wizard_sp_next" in self._keys(at)
+
+    def test_each_kind_remembers_its_own_spot(self):
+        from scanpath_studio.tour import _guide_drag_script
+
+        for kind in ("tour", "tutorial", "wizard"):
+            script = _guide_drag_script(kind)
+            assert f'"sps_guide_pos_{kind}"' in script
+            assert f".st-key-guide_pill_{kind}" in script
+            assert "__KIND__" not in script

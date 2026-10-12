@@ -14,6 +14,7 @@ from scanpath_studio.utils import (  # noqa: E402
     TRIAL_SORT_DEFAULT,
     _merge_trial_level_sources,
     format_sort_value,
+    reading_key,
     sort_trial_options,
     trial_sort_keys,
 )
@@ -71,11 +72,13 @@ class TestTrialSortKeys:
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
         assert "Fixation count (computed)" in keys
         assert "Total fixation time, s (computed)" in keys
-        assert keys["Fixation count (computed)"]["t2"] == 3
-        assert keys["Total fixation time, s (computed)"]["t2"] == pytest.approx(0.6)
-        assert keys["Mean fixation duration, ms (computed)"]["t3"] == pytest.approx(
-            250.0
-        )
+        assert keys["Fixation count (computed)"][reading_key("p1", "t2")] == 3
+        assert keys["Total fixation time, s (computed)"][
+            reading_key("p1", "t2")
+        ] == pytest.approx(0.6)
+        assert keys["Mean fixation duration, ms (computed)"][
+            reading_key("p3", "t3")
+        ] == pytest.approx(250.0)
 
     def test_computed_stats_are_dropped_without_their_frame(self, combos):
         keys = trial_sort_keys(combos, "trial_id")
@@ -84,9 +87,9 @@ class TestTrialSortKeys:
 
     def test_trial_level_columns_are_offered(self, combos, fixations):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
-        assert keys["participant_id"]["t1"] == "p2"
-        assert keys["text_id"]["t2"] == "a"
-        assert bool(keys["is_correct"]["t3"]) is True
+        assert keys["participant_id"][reading_key("p2", "t1")] == "p2"
+        assert keys["text_id"][reading_key("p1", "t2")] == "a"
+        assert bool(keys["is_correct"][reading_key("p3", "t3")]) is True
 
     def test_a_column_that_varies_within_a_trial_is_not_offered(self, fixations):
         """Two rows for the same trial disagreeing on a column can't order it."""
@@ -130,8 +133,14 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
 
-        assert keys["difficulty_band"].to_dict() == {"t1": "easy", "t2": "hard"}
-        assert keys["device_batch"].to_dict() == {"t1": 3, "t2": 7}
+        assert keys["difficulty_band"].to_dict() == {
+            reading_key("p1", "t1"): "easy",
+            reading_key("p1", "t2"): "hard",
+        }
+        assert keys["device_batch"].to_dict() == {
+            reading_key("p1", "t1"): 3,
+            reading_key("p1", "t2"): 7,
+        }
         assert "word_index" not in keys
         assert "duration_ms" not in keys
 
@@ -155,8 +164,9 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "trial_id", words=words)
 
-        assert keys["condition"].to_dict() == {"t1": "A", "t2": "B"}
-        assert sort_trial_options(["t1", "t2"], keys["condition"]) == ["t1", "t2"]
+        p1_t1, p1_t2 = reading_key("p1", "t1"), reading_key("p1", "t2")
+        assert keys["condition"].to_dict() == {p1_t1: "A", p1_t2: "B"}
+        assert sort_trial_options([p1_t1, p1_t2], keys["condition"]) == [p1_t1, p1_t2]
 
     def test_matching_cross_table_metadata_is_merged_once(self):
         combos = pd.DataFrame(
@@ -180,7 +190,10 @@ class TestTrialSortKeys:
         keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
 
         assert list(keys).count("session") == 1
-        assert keys["session"].to_dict() == {"t1": "s1", "t2": "s2"}
+        assert keys["session"].to_dict() == {
+            reading_key("p1", "t1"): "s1",
+            reading_key("p1", "t2"): "s2",
+        }
 
     def test_cross_table_conflict_is_not_silently_resolved(self):
         combos = pd.DataFrame(
@@ -219,8 +232,9 @@ class TestTrialSortKeys:
 
         keys = trial_sort_keys(combos, "unique_trial_id", fixations=fixations)
 
-        assert keys["Fixation count (computed)"].to_dict() == {"u1": 1.0, "u2": 2.0}
-        assert keys["is_correct"].to_dict() == {"u1": True, "u2": False}
+        u1, u2 = reading_key("p1", "u1"), reading_key("p1", "u2")
+        assert keys["Fixation count (computed)"].to_dict() == {u1: 1.0, u2: 2.0}
+        assert keys["is_correct"].to_dict() == {u1: True, u2: False}
 
     def test_within_trial_variation_and_non_metadata_payloads_are_excluded(self):
         combos = pd.DataFrame(
@@ -244,6 +258,51 @@ class TestTrialSortKeys:
         assert "image_x" not in keys
         assert "notes" not in keys
 
+    def test_readers_who_share_a_trial_id_keep_their_own_values(self):
+        """#412: one key per reading, so two readers' trials of one id are
+        neither counted as one trial nor dropped for disagreeing."""
+        combos = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["shared", "shared"],
+                "_data_order": [0, 1],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2", "p2", "p2"],
+                "trial_id": ["shared"] * 4,
+                "duration_ms": [100.0] * 4,
+                "condition": ["A", "B", "B", "B"],
+            }
+        )
+
+        keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
+
+        p1, p2 = reading_key("p1", "shared"), reading_key("p2", "shared")
+        assert keys["Fixation count (computed)"].to_dict() == {p1: 1.0, p2: 3.0}
+        assert keys["condition"].to_dict() == {p1: "A", p2: "B"}
+        assert keys["Data order"].to_dict() == {p1: 0, p2: 1}
+        count = keys["Fixation count (computed)"]
+        assert sort_trial_options([p1, p2], count, descending=True) == [p2, p1]
+
+    def test_a_table_without_readers_gives_every_reading_its_value(self):
+        combos = pd.DataFrame(
+            {"participant_id": ["p1", "p2"], "trial_id": ["shared", "shared"]}
+        )
+        words = pd.DataFrame({"trial_id": ["shared"] * 2, "genre": ["news"] * 2})
+
+        keys = trial_sort_keys(combos, "trial_id", words=words)
+
+        p1, p2 = reading_key("p1", "shared"), reading_key("p2", "shared")
+        assert keys["genre"].to_dict() == {p1: "news", p2: "news"}
+        assert keys["Word count (computed)"].to_dict() == {p1: 2.0, p2: 2.0}
+
+
+def _fixture_keys() -> tuple[str, str, str]:
+    """The ``combos`` fixture's three readings, as the picker keys them."""
+    return reading_key("p2", "t1"), reading_key("p1", "t2"), reading_key("p3", "t3")
+
 
 class TestSortTrialOptions:
     def test_default_is_id_order(self, combos, fixations):
@@ -251,27 +310,16 @@ class TestSortTrialOptions:
 
     def test_sorts_by_a_numeric_key(self, combos, fixations):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
-        options = ["t1", "t2", "t3"]
-        assert sort_trial_options(options, keys["Fixation count (computed)"]) == [
-            "t1",
-            "t3",
-            "t2",
-        ]
-        assert sort_trial_options(
-            options, keys["Fixation count (computed)"], descending=True
-        ) == [
-            "t2",
-            "t3",
-            "t1",
-        ]
+        t1, t2, t3 = _fixture_keys()
+        options = [t1, t2, t3]
+        count = keys["Fixation count (computed)"]
+        assert sort_trial_options(options, count) == [t1, t3, t2]
+        assert sort_trial_options(options, count, descending=True) == [t2, t3, t1]
 
     def test_sorts_by_a_text_key(self, combos, fixations):
         keys = trial_sort_keys(combos, "trial_id", fixations=fixations)
-        assert sort_trial_options(["t1", "t2", "t3"], keys["text_id"]) == [
-            "t2",
-            "t1",
-            "t3",
-        ]
+        t1, t2, t3 = _fixture_keys()
+        assert sort_trial_options([t1, t2, t3], keys["text_id"]) == [t2, t1, t3]
 
     def test_unranked_trials_sort_last_in_both_directions(self):
         key = pd.Series({"t1": 5.0, "t2": 1.0})
@@ -440,7 +488,7 @@ class TestDataOrderIsTheDefault:
         picker = self._picker(at)
         assert picker.label == "Select trial"
         assert list(picker.options) == [str(n) for n in range(1, 13)]
-        assert picker.value == "1"
+        assert picker.value == reading_key("p1", "1")
 
     def test_trial_id_is_still_a_choice(self):
         at = AppTest.from_function(_numeric_ids_picker_app)

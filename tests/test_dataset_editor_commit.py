@@ -121,12 +121,12 @@ class TestCancelledMappingDoesNotReturn:
         # The setup form persists its widgets across runs and seeds them with
         # `setdefault`, so the end of an edit has to clear them too.
         at = AppTest.from_function(_editor_app).run()
-        mode = at.radio(key="edit_Probe_setup_geometry_mode")
+        mode = at.segmented_control(key="edit_Probe_setup_geometry_mode")
         saved = mode.value
         other = next(o for o in mode.options if o != saved)
         mode.set_value(other).run()
         _close_and_reopen(at)
-        assert at.radio(key="edit_Probe_setup_geometry_mode").value == saved
+        assert at.segmented_control(key="edit_Probe_setup_geometry_mode").value == saved
 
     def test_a_draft_survives_reruns_within_one_edit(self):
         at = AppTest.from_function(_editor_app).run()

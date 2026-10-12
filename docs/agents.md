@@ -73,7 +73,7 @@ are carried through when present.
 | `trial_id` | Must match the words table. **Required.** |
 | `screen_id`, `screen_index` | Optional child screen and 1-based order; scientific operations never join across it. |
 | `text_id` | Text/passage id, when present. |
-| `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers. |
+| `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers, so its word ids must be numbers. |
 | `duration_ms` | Fixation duration. **Required.** |
 | `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. Those numbers are not times: the internal `_timestamp_synthesized` column marks them, and the replay lays the fixations end to end by their durations. |
 | `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
@@ -137,6 +137,13 @@ words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
 `sps.load_onestop(dir)` — which return the same normalized pair. See
 [OneStop](onestop.md).
+
+The two tables need not cover the same trials. `sps.list_trials(words,
+fixations)` lists every trial either table has, once — the set the app's trial
+picker, `render --list-trials` and the export bundle list too. A trial with
+words but no fixations plots its text alone, and one with fixations but no
+words its scanpath without word boxes; `animate_scanpath` and
+`compare_scanpaths` need fixations and say so.
 
 A raw-gaze table is loaded with `load_raw_gaze(path_or_frame)` (columns
 auto-detected; `raw_gaze_schema=` overrides), or `load_sample_raw_gaze()` for
@@ -244,7 +251,10 @@ colors. `saccade_classes` is the same split used as a **filter** rather than as
 hue — `saccade_classes=["regression"]` draws a regressions-only figure (the
 hidden classes lose their direction arrows too), and it composes with any
 color mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
-the linear-reading schematic.
+the linear-reading schematic, and `fixation_snap_to_line=True` moves each
+fixation up or down onto its text line, keeping its x, at
+`fixation_snap_position` line heights from the line's middle (default −0.5,
+the top edge).
 
 `heatmap_style` is `"Word boxes"` or `"Interpolated"`;
 `heatmap_metric="counts"` weights by fixation count instead of dwell time;
@@ -262,11 +272,20 @@ density to its own peak and ignores `heatmap_range`.
 `highlight_column` is a boolean words column (OneStop's critical span by
 default); the default is skipped when absent, a column you name must exist.
 
-`fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data.
+`fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data,
+with a margin of `crop_margin` screen pixels on every side (`None`, the default:
+5% of the data's extent on each axis, at least 20 px).
 `show_coordinate_grid=True` overlays zero-anchored monitor-pixel coordinates;
 `coordinate_grid_spacing=None` selects a readable 1/2/5×10ⁿ interval, while a
 positive number pins the major interval in pixels. `background_image` places a
 stimulus screenshot under the scanpath at data coordinates.
+`show_stimulus_image=True` draws each trial's own page instead: the
+`image_path` its rows carry, at its `image_x` / `image_y`. The bundled demo
+ships its pages; for your own data, load with
+`load_scanpath_data(..., image_root="pages/", image_pattern="{text_id}.png")`,
+or match a folder to frames you already have with
+`attach_stimulus_images(words, fixations, "pages/")`. A trial with no readable
+page draws none and raises a `UserWarning`.
 
 `palette=` is a shorthand that sets a whole group of colors at once —
 `"default"` (colorblind-safe), `"print"` (grayscale) or `"high-contrast"`; the
@@ -307,6 +326,7 @@ raising. Every flag is in the [CLI reference](cli.md).
 | `Options not supported by the animation:` | A static-only option (heatmap, arcs, saccade types) passed to `animate_scanpath`. | Drop it, or render the static figure. |
 | `Static .png export failed:` | Kaleido has no Chrome. | `plotly_get_chrome -y`, or save `.html`. |
 | `Fixations … have no usable coordinates` | AOI-sequence fixations with no matching word boxes. | Supply the words table whose `word_id`s match. |
+| `Fixations: the Word/IA ID column … holds no numbers` | `data.UnplacedFixationsError`: the fixations map no `x`/`y` and their word ids are text (`w1`), so none can be placed. | Map `x` and `y` in `fix_schema`, or give both tables numeric word ids. |
 
 ## GIF / MP4 of a replay
 

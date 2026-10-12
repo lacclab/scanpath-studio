@@ -24,7 +24,7 @@ from scanpath_studio.session_keys import (
     SINGLE_COMPARE_TOGGLE,
 )
 from scanpath_studio.synthetic import make_multipart_synthetic_data
-from scanpath_studio.url_state import SHARE_SECTION_KEY
+from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA, SHARE_SECTION_KEY
 from tests.conftest import APP_SCRIPT, SUBTAB_KEY, SUBTAB_SHARE
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -141,7 +141,7 @@ class TestSettingsFileMode:
         self, monkeypatch, animate, compare
     ):
         config = _save(monkeypatch, animate=animate, compare=compare)
-        assert config["schema"] == 7
+        assert config["schema"] == PLOT_CONFIG_SCHEMA
         assert config["mode"] == {"animate": animate, "compare": compare}
         if compare:
             assert config["selection"]["compare"] == {

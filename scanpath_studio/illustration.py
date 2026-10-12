@@ -22,8 +22,15 @@ def illustration_reasons(
     fixation_flags_b: dict | None = None,
     fix_index_range_b: Sequence[int] | None = None,
     full_fixation_range_b: Sequence[int] | None = None,
+    static: bool = True,
 ) -> list[str]:
     """Return visible, substantive transformations; ignore cosmetic styling.
+
+    #422: VIZ-9's Snap to line and arced saccades count only where they change
+    what is drawn — on the static figure (``static``; the replay and the
+    comparison draw neither) and while the layer each one moves is on: the
+    snap moves the fixations (``show_fixations``), the arcs the saccades
+    (``show_saccades``). Either layer off, the setting is kept but inert.
 
     CMP-24: in Compare, scanpath B has filters of its own —
     ``fixation_flags_b`` and a window ``fix_index_range_b`` against B's
@@ -36,9 +43,17 @@ def illustration_reasons(
     "derived from raw gaze" reason it used to carry named a derivation that
     never happened."""
     reasons: list[str] = []
-    if settings.get("fixation_snap_to_word"):
-        reasons.append("fixations snapped to words")
-    if settings.get("saccade_render_mode") == "Arc":
+    if (
+        static
+        and settings.get("show_fixations", True)
+        and settings.get("fixation_snap_to_line")
+    ):
+        reasons.append("fixations snapped to lines")
+    if (
+        static
+        and settings.get("show_saccades", True)
+        and settings.get("saccade_render_mode") == "Arc"
+    ):
         reasons.append("schematic saccade arcs")
     algorithm = settings.get("align_algorithm", "Off")
     if algorithm and algorithm != "Off":

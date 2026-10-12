@@ -228,7 +228,9 @@ class TestAnimationParity:
             "words",
             "Scanpath A",
             None,
-            None,
+            # Named like the static figure's since #422, so the app can stamp
+            # the saccade opacity onto a cached replay.
+            "saccades",
             None,
         ]
         # labels + trail + order numbers + saccades + the current-fixation dot

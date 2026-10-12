@@ -11,13 +11,18 @@ filters. Start with broad dataset fields such as participant, condition,
 correctness, or repeated-reading status. Use the ⇅ trial-ordering popover to
 surface unusually short or long trials.
 
+A condition filter decides each trial as a whole, from whichever table holds
+the field: a difficulty level recorded only in your Words table narrows the
+fixations too. A trial whose Words and Fixations tables give it different
+values is left out, and a warning above the plot names it.
+
 If the pool becomes empty, the app names the filter that emptied it and offers
 to clear just that one.
 
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **:material/cleaning_services: Flag fixations → :material/blur_on: Fixations** in the plot rail and set
+when timing helps. Open **:material/filter_list: Filters & highlights → :material/blur_on: Fixations** in the plot rail and set
 **Highlight** for:
 
 - out-of-bounds points;

@@ -26,7 +26,7 @@ system before judging participants.
 Turn on **Animate**. Look for long missing periods, repeated points out of bounds,
 frequent interruptions, or a vertical shift that grows during the trial.
 
-Use **:material/cleaning_services: Flag fixations → :material/blur_on: Fixations** in the plot rail to **Highlight** short, long,
+Use **:material/filter_list: Filters & highlights → :material/blur_on: Fixations** in the plot rail to **Highlight** short, long,
 or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard**
 is better reserved for a later, documented filtering decision.
 

@@ -44,7 +44,7 @@ needs_node = pytest.mark.skipif(
     NODE is None, reason="needs node to run the replay page's JavaScript"
 )
 
-# The demo's longest reading (311 fixations, 81.6 s): 361 frames at the default grid.
+# The demo's longest reading (311 fixations, 81.6 s): 360 frames at the default grid.
 LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
 
 
@@ -235,7 +235,7 @@ class TestThePageIsSmall:
         # 12 MB before PERF-17 (361 frames × ~33 KB). The bound leaves room for
         # a layer or two more, not for frames that restate their traces again.
         fig = _replay("longest")
-        assert len(fig.frames) == 361
+        assert len(fig.frames) == 360
         markup = tabs._true_scale_plot_html(fig, key="k", figure_dict=fig.to_dict())
         assert len(markup.encode()) < 500_000
         assert "Plotly.addFrames('" not in markup  # plotly.py's own, unpacked

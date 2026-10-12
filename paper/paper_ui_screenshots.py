@@ -442,8 +442,8 @@ def capture(page: Page) -> None:
         page,
         {
             **DEMO_TRIAL,
-            # VIZ-9's linear-reading schematic: fixations snapped above the word
-            # they landed on, saccades arced over the text.
+            # VIZ-9's linear-reading schematic: fixations snapped to their line
+            # (keeping their own x, #422), saccades arced over the text.
             "snap_fixations": 1,
             "saccade_render_mode": "Arc",
             "show_order": 1,

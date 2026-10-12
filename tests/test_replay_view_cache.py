@@ -78,12 +78,12 @@ def page(monkeypatch):
     return record
 
 
-def _render(speed: float = 1.0, *, autoplay: bool = True, **viz):
+def _render(speed: float = 1.0, *, autoplay: bool = True, figure=None, **viz):
     frames = (_words(), _fixations(), None, None, "p1", "t1", None, None)
     viz_settings = {"anim_autoplay": autoplay, "critical_span_style": "None", **viz}
     plan = tabs._plan_replay(
         *frames,
-        settings=plots.FigureSettings.from_mapping({}, **_CANVAS),
+        settings=plots.FigureSettings.from_mapping(figure or {}, **_CANVAS),
         viz_settings=viz_settings,
         playback_speed=speed,
     )
@@ -124,7 +124,12 @@ class TestARerunShowsTheCachedView:
         _render()
         # What PERF-13's path embedded for that same finished figure.
         tabs._render_true_scale_chart(
-            finished[0], key="single_anim", download_name="animation_p1__t1_frame"
+            finished[0],
+            key="single_anim",
+            download_name="animation_p1__t1_frame",
+            # The Scanpath view's replay is fitted to the window, like its
+            # static and comparison figures.
+            fit_window=True,
         )
         assert page["embeds"][1] == page["embeds"][2]
 
@@ -143,6 +148,49 @@ class TestARerunShowsTheCachedView:
         assert page["embeds"][1] != page["embeds"][0]
         assert _shows(shows, page["embeds"][1])
         assert not _shows(shows, page["embeds"][0])
+
+
+class TestTheSaccadeOpacityRebuildsNoFrame:
+    """#422: the saccades' opacity is a trace attribute no frame restates, so
+    it is stamped onto the cached replay, like the speed — dragging it is a
+    new view, never a new set of frames."""
+
+    def test_a_new_opacity_is_a_new_view_over_the_same_frames(self, page, monkeypatch):
+        builds = []
+        real = tabs.build_scanpath_replay
+
+        def build(*args, **kwargs):
+            builds.append(1)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(tabs, "build_scanpath_replay", build)
+        faded = {"saccade_opacity": 0.4, "show_saccade_arrows": True}
+        plain = _render(figure={"show_saccade_arrows": True})
+        view = _render(figure=faded)
+        assert page["embeds"][1] != page["embeds"][0]
+        assert view.signature != plain.signature
+        # Both views came from one build of the frames.
+        assert len(builds) == 1
+        traces = [
+            t for t in view.figure().data if t.name in ("saccades", "saccade direction")
+        ]
+        assert {t.name for t in traces} == {"saccades", "saccade direction"}
+        assert all(t.opacity == 0.4 for t in traces)
+
+    def test_the_replay_key_ignores_it(self):
+        frames = (_words(), _fixations(), None, None, "p1", "t1", None, None)
+
+        def key(**figure):
+            return tabs._plan_replay(
+                *frames,
+                settings=plots.FigureSettings.from_mapping(figure, **_CANVAS),
+                viz_settings={"critical_span_style": "None"},
+                playback_speed=1.0,
+            ).key
+
+        assert key(saccade_opacity=0.4) == key()
+        # Nor does the static figure's Snap to line, which no replay draws.
+        assert key(fixation_snap_to_line=True, fixation_snap_position=0.5) == key()
 
 
 class TestTheExportReadsTheView:
@@ -186,3 +234,24 @@ class TestTheExportReadsTheView:
         assert _render(speed=2.0).signature != base
         assert _render(title_pattern="Reading {participant_id}").signature != base
         assert _render().signature == base
+
+
+class TestTheTitleStyleIsAViewOfTheSameFrames:
+    """#422: the title/caption styling is stamped on the cached replay, so a
+    new size is a new view — never a stale one, and never a new set of frames."""
+
+    def test_a_new_title_size_is_a_new_view(self, page, monkeypatch):
+        builds = []
+        real = tabs.build_scanpath_replay
+
+        def build(*args, **kwargs):
+            builds.append(1)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(tabs, "build_scanpath_replay", build)
+        plain = _render(title_pattern="A title")
+        bigger = _render(title_pattern="A title", title_font_size=32)
+        assert bigger.signature != plain.signature
+        assert bigger.figure().layout.title.font.size == 32
+        assert plain.figure().layout.title.font.size == 20
+        assert len(builds) == 1

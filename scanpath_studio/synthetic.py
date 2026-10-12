@@ -31,9 +31,6 @@ from word 2 back to word 1, and one deliberately out-of-text fixation::
 
 from __future__ import annotations
 
-import io
-import zipfile
-
 import numpy as np
 import pandas as pd
 
@@ -138,43 +135,35 @@ EXPECTED = {
 
 # --- DATA-67: the example import pair ---------------------------------------
 #
-# The add-dataset wizard's **Download example tables** hands a new user the
-# trial above as the two files an import starts from, with every column named
-# the way the wizard's auto-detection reads it, so the pair maps without a
-# single manual pick (`tests/test_example_tables.py` holds it to that). The
-# column notes are the README's, kept here beside the frames they describe.
+# The trial above as the two files an import starts from, with every column
+# named the way the add wizard's auto-detection reads it, so the pair maps
+# without a single manual pick (`tests/test_example_tables.py` holds it to that).
 
-#: The AOI table's columns, in file order, with what each one holds.
-EXAMPLE_AOI_COLUMNS: dict[str, str] = {
-    "participant_id": "who read the text.",
-    "trial_id": "one trial (one reading of a text); participant_id + trial_id together "
-    "identify it, in both tables.",
-    "text_id": "which text was shown; shared by everyone who read it.",
-    "word_id": "the word's number within its text, from 0.",
-    "text": "the word as displayed.",
-    "x": "left edge of the word's box, in screen pixels.",
-    "y": "top edge of the word's box, in screen pixels.",
-    "width": "box width, in pixels.",
-    "height": "box height, in pixels.",
-    "first_fixation_ms": "optional reading measure: first fixation duration, ms.",
-    "total_fixation_duration_ms": "optional reading measure: total fixation "
-    "duration (dwell time), ms.",
-}
+#: The AOI table's columns, in file order.
+EXAMPLE_AOI_COLUMNS = (
+    "participant_id",
+    "trial_id",
+    "text_id",
+    "word_id",
+    "text",
+    "x",
+    "y",
+    "width",
+    "height",
+    "first_fixation_ms",
+    "total_fixation_duration_ms",
+)
 
-#: The fixation table's columns, in file order, with what each one holds.
-EXAMPLE_FIXATION_COLUMNS: dict[str, str] = {
-    "participant_id": "who read the text; matches the Words table.",
-    "trial_id": "which trial; matches the Words table.",
-    "text_id": "which text was shown; matches the Words table.",
-    "timestamp_ms": "fixation onset, in ms from the start of the trial.",
-    "duration_ms": "fixation duration, in ms.",
-    "x": "horizontal gaze position, in screen pixels.",
-    "y": "vertical gaze position, in screen pixels.",
-}
-
-EXAMPLE_AOI_FILE = "aois.csv"
-EXAMPLE_FIXATION_FILE = "fixations.csv"
-EXAMPLE_ZIP_FILE = "scanpath_studio_example_tables.zip"
+#: The fixation table's columns, in file order.
+EXAMPLE_FIXATION_COLUMNS = (
+    "participant_id",
+    "trial_id",
+    "text_id",
+    "timestamp_ms",
+    "duration_ms",
+    "x",
+    "y",
+)
 
 
 def example_import_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -193,47 +182,6 @@ def example_import_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
         words[list(EXAMPLE_AOI_COLUMNS)],
         fixations[list(EXAMPLE_FIXATION_COLUMNS)],
     )
-
-
-def _column_notes(columns: dict[str, str]) -> str:
-    return "\n".join(f"- `{name}`: {note}" for name, note in columns.items())
-
-
-def example_readme() -> str:
-    """The example's README: what the two files are, their units and IDs."""
-    words, fixations = example_import_tables()
-    return f"""# Scanpath Studio example tables
-
-One participant reading a six-word text on two lines ("The cat sat / on the mat")
-once. On **Add dataset**, upload `{EXAMPLE_AOI_FILE}` as **Words** and
-`{EXAMPLE_FIXATION_FILE}` as **Fixations**; every column maps automatically.
-Unzip first: a zip dropped on one upload box is read as one table.
-
-Units: positions are screen pixels from the top-left corner, with y growing
-downward. Times are milliseconds.
-
-## {EXAMPLE_AOI_FILE}: one row per word ({len(words)} rows)
-
-{_column_notes(EXAMPLE_AOI_COLUMNS)}
-
-## {EXAMPLE_FIXATION_FILE}: one row per fixation, in time order ({len(fixations)} rows)
-
-{_column_notes(EXAMPLE_FIXATION_COLUMNS)}
-
-The fixation table has no word column: each fixation is assigned to the word
-box it falls in. The fixation at (700, 700) is outside every box on purpose, and counts as out of text.
-"""
-
-
-def example_import_zip() -> bytes:
-    """``aois.csv`` + ``fixations.csv`` + ``README.md``, zipped, for download."""
-    words, fixations = example_import_tables()
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(EXAMPLE_AOI_FILE, words.to_csv(index=False))
-        archive.writestr(EXAMPLE_FIXATION_FILE, fixations.to_csv(index=False))
-        archive.writestr("README.md", example_readme())
-    return buffer.getvalue()
 
 
 def make_multipart_synthetic_data() -> tuple[pd.DataFrame, pd.DataFrame]:

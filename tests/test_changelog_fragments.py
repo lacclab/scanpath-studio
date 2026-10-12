@@ -75,6 +75,38 @@ def test_merged_pr_reads_the_squash_merge_subject(tmp_path):
     assert changelog_fragments.merged_pr(tmp_path / "unmerged.fixed.md") is None
 
 
+def test_merged_pr_reads_a_pr_landed_as_a_merge_commit(tmp_path):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    _write(tmp_path, "README", "x")
+    git("add", ".")
+    git("commit", "-qm", "start")
+    git("checkout", "-qb", "feature")
+    _write(tmp_path, "a-change.fixed.md", "A fix")
+    git("add", ".")
+    git("commit", "-qm", "Fix the thing")
+    git("checkout", "-q", "main")
+    git(
+        "merge",
+        "-q",
+        "--no-ff",
+        "-m",
+        "Merge pull request #397 from x/feature",
+        "feature",
+    )
+    # a later merge of main into some branch is a merge too, and not the PR
+    git("checkout", "-qb", "later")
+    _write(tmp_path, "other", "y")
+    git("add", ".")
+    git("commit", "-qm", "other work")
+    git("merge", "-q", "--no-ff", "-m", "Merge pull request #400 from x/later", "main")
+    assert changelog_fragments.merged_pr(tmp_path / "a-change.fixed.md") == 397
+
+
 @pytest.mark.parametrize(
     ("name", "text"),
     [

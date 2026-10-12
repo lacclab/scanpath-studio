@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a Scanpath Studio release — roll the changelog, bump __version__ and CITATION.cff in lockstep, verify parity, land the bump through a PR (main is protected), then tag v<version> on main and push the tag.
+description: Cut a Scanpath Studio release — roll the changelog, bump __release__ and CITATION.cff in lockstep, verify parity, land the bump through a PR (main is protected), then tag v<version> on main and push the tag.
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Cut a release of scanpath-studio. Argument (optional): the target version
 (e.g. `1.4.0`). If omitted, propose the next version from the current
-`__version__` and the nature of the unreleased entries in `changelog.d/`
+`__release__` and the nature of the unreleased entries in `changelog.d/`
 (semver: features → minor, fixes only → patch), and confirm with the user
 before proceeding.
 
@@ -40,7 +40,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    the script refuses one ("no merged PR found"), it did not land through a
    PR — rename it to the issue or PR it belongs to. Read the section it wrote;
    tidy wording there if needed.
-3. **Version bump** — set `__version__` in `scanpath_studio/__init__.py`. This
+3. **Version bump** — set `__release__` in `scanpath_studio/__init__.py`. This
    is the single source of truth; `pyproject.toml` reads it dynamically — do
    NOT edit a version in `pyproject.toml`.
 4. **Citation** — set `version` and `date-released` (today, ISO format) in
@@ -68,7 +68,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    (`.github/workflows/publish.yml`, Trusted Publishing) and the
    `Desktop builds` workflow (`.github/workflows/desktop.yml`), which
    attaches per-OS bundles to the GitHub release. `publish.yml` refuses a tag
-   that does not match `__version__` (ENG-62) — which is why the tag goes on
+   that does not match `__release__` (ENG-62) — which is why the tag goes on
    the merged commit, not on a commit from before the bump.
 
 ## After

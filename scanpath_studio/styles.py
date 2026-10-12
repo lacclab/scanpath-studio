@@ -5,7 +5,9 @@ from __future__ import annotations
 from scanpath_studio.constants import (
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
+    SELECTOR_ROW_WRAP_REM,
     SELECTOR_SCREEN_FLOOR_REM,
+    SELECTOR_SCREEN_PICKER_REM,
     SELECTOR_STEPS_FLOOR_REM,
 )
 
@@ -282,15 +284,19 @@ def get_app_css() -> str:
         font-size: 0.875rem;
     }
     .st-key-dsrow_head button p { white-space: nowrap; font-size: 0.875rem; }
-    /* Remove is its icon; the label names the dataset for screen readers. */
+    /* Edit and Remove are their icons; each label names the dataset for
+       screen readers. */
+    [class*="st-key-dataset_row_edit_"] button,
     [class*="st-key-dataset_row_remove_"] button {
         padding: 0 0.35rem !important;
         min-height: 0;
     }
+    [class*="st-key-dataset_row_edit_"] button [data-testid="stMarkdownContainer"],
     [class*="st-key-dataset_row_remove_"] button [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;
         overflow: hidden; clip-path: inset(50%); white-space: nowrap;
     }
+    .st-key-dataset_table_grid [class*="st-key-dataset_row_edit_"] button:focus-visible,
     .st-key-dataset_table_grid [class*="st-key-dataset_row_remove_"] button:focus-visible,
     .st-key-dsrow_head button:focus-visible {
         outline: 2px solid var(--sps-accent);
@@ -751,8 +757,12 @@ def get_app_css() -> str:
             radial-gradient(farthest-side at 0 50%, rgba(128, 128, 128, 0.35), transparent) left / 0.7rem 100% no-repeat scroll,
             radial-gradient(farthest-side at 100% 50%, rgba(128, 128, 128, 0.35), transparent) right / 0.7rem 100% no-repeat scroll;
     }
+    /* The table spans its column, like the trial rows above it, rather than
+       ending a third of the way across a wide window; the browser shares the
+       extra width out between the columns. Its text is the selectors' size,
+       and its headers their labels' (2026-10-07). */
     .sps-chip-table-wrap table.sps-chip-table {
-        width: auto;
+        width: 100%;
         margin: 0;
         border: none;
         border-collapse: collapse;
@@ -760,22 +770,25 @@ def get_app_css() -> str:
         line-height: 1.45;
         color: inherit;
     }
+    /* #422: values in the app's regular weight (400), like the trial picker
+       above them — at 500 they read bolder than every other value on the
+       page. A value both rows share still steps back, by its colour. */
     .sps-chip-table-wrap table.sps-chip-table th,
     .sps-chip-table-wrap table.sps-chip-table td {
-        padding: 0.2rem 0.55rem;
+        padding: 0.28rem 0.55rem;
         border: none;
         border-bottom: 1px solid var(--sps-border);
         background: transparent;
         text-align: left;
         vertical-align: middle;
         white-space: nowrap;
-        font-weight: 500;
+        font-weight: 400;
     }
     .sps-chip-table-wrap table.sps-chip-table thead th {
         padding-top: 0;
         vertical-align: bottom;
         white-space: normal;
-        font-size: 0.75rem;
+        font-size: 0.8125rem;
         font-weight: 600;
         line-height: 1.25;
         color: color-mix(in srgb, currentColor 62%, transparent);
@@ -802,7 +815,6 @@ def get_app_css() -> str:
     }
     .sps-chip-table-wrap table.sps-chip-table td.sps-ct-same,
     .sps-chip-table-wrap table.sps-chip-table td.sps-ct-missing {
-        font-weight: 400;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
     .sps-ct-dot {
@@ -872,7 +884,7 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* UX-153 — a rail row with no switch (🧹 Flag fixations, 📐 Figure & canvas) is
+    /* UX-153 — a rail row with no switch (Filters & highlights, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
        is stretched over the whole row by an `::after` overlay, which keeps the
        row's look, and the popover still anchors on the ▾ itself. The row is
@@ -955,7 +967,7 @@ def get_app_css() -> str:
        carries `margin-bottom: 1rem` that Streamlit cancels with a matching
        negative margin on `stMarkdownContainer` — which fixes the layout but not
        `scrollHeight`, and the margin still counts there. So exactly the three
-       name-only sections (📄 Stimulus · 🧹 Flag fixations · 📐 Figure & canvas, the ones
+       name-only sections (📄 Stimulus · Filters & highlights · 📐 Figure & canvas, the ones
        drawn with a name instead of a switch) scrolled 8px and lost 11px of
        width to the scrollbar's gutter, while the five with a toggle did not.
        Zeroing both margins is the fix rather than `overflow: visible`, because
@@ -967,6 +979,37 @@ def get_app_css() -> str:
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"] p {
         margin-bottom: 0;
+    }
+    /* #422 — a switch's `help` is hover text on the switch itself: on
+       Animate, what it greys; on a greyed layer, why. Streamlit draws `help`
+       as a `?` button after the label, which UX-80/UX-103 cleared off these
+       rows (and which "Word boxes" has no room for). So the tooltip's hover
+       target is stretched over the whole switch — the <label>, already
+       `position: relative` — and the `?` is not drawn. A click still flips
+       the switch: the target is a plain span inside the <label>, while the
+       `?` button, interactive content that would swallow the click, takes no
+       pointer events. It stays focusable, and shows while it has focus. */
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stWidgetLabel"]
+        > span:has(> [data-testid="stTooltipIcon"]),
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipIcon"] {
+        display: contents;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] {
+        position: absolute;
+        inset: 0;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] button {
+        opacity: 0;
+        pointer-events: none;
+    }
+    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+        [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"]
+        button:focus-visible {
+        opacity: 1;
     }
     /* The divider is drawn on the popover's SLOT — the row's own child — and not
        on the button, which is the obvious place and does not work. A trigger
@@ -1117,18 +1160,51 @@ def get_app_css() -> str:
          merged), and the actions track wherever it is. A column holding its
          floor leaves the rest of the shrinking to the columns beside it, so
          the tracks still share their edges.
-       - Streamlit's column row wraps, so a floor wider than the column's share
-         would push it onto a line of its own. The row is kept on one line
-         instead, above the 640px width where Streamlit stacks columns on
-         purpose.
+       - The row stays on one line, compressing (the scrubber gives first,
+         down to `SELECTOR_SCRUB_MIN_REM`), while its own width holds every
+         floor (`SELECTOR_ROW_WRAP_REM`). Narrower than that — the
+         plot-controls rail open beside a small window — it wraps: the tracks
+         that no longer fit (the screen picker with ⇅ 🔎 ✏️, then ◀ ▶) move to
+         a line of their own under the rest. It used to be held on one line at
+         any width, and then ran past its column into the rail, over
+         *Animate*. The test is a container query on the row's own wrapper, not
+         the window: the rail takes a share of the window, and a flex wrap
+         alone would break the line before shrinking the scrubber. A's row and
+         B's have the same floors, so they wrap at the same width.
        On the column rules, `:where()` keeps the row match at zero specificity,
-       so each floor outranks the `min-width: 0`. The `nowrap` rule keeps its
-       specificity, since it has to outrank Streamlit's own `flex-wrap`. */
+       so each floor outranks the `min-width: 0`. The `flex-wrap` rules keep
+       their specificity, since they have to outrank Streamlit's own. */
     @media (min-width: 640px) {
+        [data-testid="stLayoutWrapper"]:has(> [data-testid="stHorizontalBlock"]
+            > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+            > [data-testid="stLayoutWrapper"] > [class*="st-key-railbtn_"]) {
+            container-type: inline-size;
+        }
         [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
             > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
             > [class*="st-key-railbtn_"]) {
             flex-wrap: nowrap;
+        }
+        @container (max-width: __SELECTOR_ROW_WRAP__) {
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+                > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+                > [class*="st-key-railbtn_"]) {
+                flex-wrap: wrap;
+                row-gap: 0.5rem;
+            }
+            /* On a line of its own, the screen tail is never wider than the
+               row: its floor gives way, and the screen picker and ⇅ 🔎 ✏️
+               inside it wrap too. Doubled class match, so it outranks the
+               tail's own one-line rule below. */
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+                > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+                > [class*="_row_tail"]) {
+                min-width: min(__SELECTOR_SCREEN_FLOOR__, 100%);
+            }
+            [class*="_row_tail"][class*="_row_tail"] {
+                flex-wrap: wrap !important;
+                row-gap: 0.5rem;
+            }
         }
         :where([data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
             > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
@@ -1169,8 +1245,11 @@ def get_app_css() -> str:
     [class*="_row_tail"] {
         flex-wrap: nowrap !important;
     }
+    /* One width on both rows (`SELECTOR_SCREEN_PICKER_REM`), so B's screen
+       picker lines up under A's and its ⇅ 🔎 under A's; it only gives way
+       when the track is narrower than that. */
     [class*="_row_tail"] > [data-testid="stLayoutWrapper"]:has([class*="screen_picker"]) {
-        flex: 1 1 0 !important;
+        flex: 0 1 __SELECTOR_SCREEN_PICKER__ !important;
         min-width: 0 !important;
     }
     /* Its own control keeps the label and value on one line; the value
@@ -1361,6 +1440,15 @@ def get_app_css() -> str:
         from { opacity: 0; }
         to { opacity: 1; }
     }
+    /* #422 — above the title instead, where the box that clips it (a rail
+       popover, the page) has no room below: `app._FIELD_TIP_PLACEMENT_SCRIPT`
+       sets the class on hover. Opened below there, a popover's last rows made
+       it scroll while the tip showed, and a scrollbar that takes room shook
+       the whole popover. */
+    .sps-fhelp.sps-tip-up::after {
+        top: auto;
+        bottom: calc(100% + 0.3rem);
+    }
 
     /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses
        the tooltip above. Two adjustments for this context: the carrier is a
@@ -1459,7 +1547,10 @@ def get_app_css() -> str:
     }
 
     /* The dataset name leads the wizard and names the whole thing, so it is set
-       larger than an ordinary field rather than looking like the first of them. */
+       larger than an ordinary field rather than looking like the first of them.
+       Its label is the part's own title, so the box gets the room under that
+       title a label would have taken — it sat pressed against it. */
+    .st-key-wiz_name_box { margin-top: 1rem; }
     .st-key-wiz_name_box input {
         font-size: 1.05rem;
         font-weight: 600;
@@ -1545,12 +1636,12 @@ def get_app_css() -> str:
         top: 0;
         bottom: 0;
         left: 0;
-        /* UX-127: widened from 9% to match `_ID_ROW1_W`/`_META_ROW_W`'s own
+        /* UX-127: widened from 9% to match `_MAP_ROW_W`/`_META_ROW_W`'s own
            widened first cell in wizard.py (0.09 -> 0.135) — the Browse-files
            button didn't fit at 9%. */
         width: 13.5%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
-        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_ID_ROW1_W`
+        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_MAP_ROW_W`
            (and its row-2/meta siblings) widening from 0.135 to 0.155 — that
            gives the divider room on the picker side, this gives it room on
            the upload side, so the line no longer reads as glued to either
@@ -1602,6 +1693,27 @@ def get_app_css() -> str:
        `help_text` in wizard.py). */
     [class*="st-key-wiz_map_upload_"] [data-testid="stFileUploaderDropzoneInstructions"] {
         display: none;
+    }
+    /* 2026-10-09 — before a file is in, the Fixations / Words / Raw gaze
+       uploader is a real drop target the height of its row, not a lone
+       button: its row is otherwise empty, and a small box is easy to miss.
+       It shrinks back to the button once a file is there. */
+    [class*="st-key-wiz_map_block_col_map_"]:not(:has([data-testid="stFileChip"])) {
+        min-height: 9.5rem;
+    }
+    [class*="st-key-wiz_map_upload_col_map_"]:not(:has([data-testid="stFileChip"])) [data-testid="stFileUploaderDropzone"] {
+        min-height: 6.25rem;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4rem;
+        border: 1px dashed rgba(128, 128, 128, 0.5) !important;
+        border-radius: 0.5rem;
+    }
+    [class*="st-key-wiz_map_upload_col_map_"]:not(:has([data-testid="stFileChip"])) [data-testid="stFileUploaderDropzone"]::after {
+        content: "or drop files here";
+        font-size: 0.78rem;
+        opacity: 0.7;
     }
     /* UX-124 — the uploaded-file chip is sized for a full-width column; in
        this ~9%-wide one it clipped outright rather than shrinking (its
@@ -1679,16 +1791,23 @@ def get_app_css() -> str:
        show through, and the z-index keeps it over them.
 
        Scoped to this container's key: only the wizard gets a sticky bar, not
-       every page. */
+       every page.
+
+       The sticky element is the bar's `stLayoutWrapper`, not the keyed block
+       itself: a sticky box only travels inside its parent, and the wrapper is
+       exactly the bar's height, so a sticky *bar* scrolled away with the page. */
     /* DATA-35 — the ✏️ Edit dataset screen wears the add-dataset screen's bar,
        because the ask was that the two look the same. Same rule, two keys. */
+    [data-testid="stLayoutWrapper"]:has(> .st-key-dataset_editor_bar),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-wiz_sticky_bar) {
+        position: sticky;
+        top: 3.75rem;
+        z-index: 60;
+    }
     .st-key-dataset_editor_bar,
     .st-key-wiz_sticky_bar {
-        position: sticky;
-        top: 3.2rem;
-        z-index: 60;
         background: var(--sps-page-bg);
-        padding: 0.35rem 0 0.4rem;
+        padding: 0.5rem 0 0.4rem;
         margin-bottom: 0.2rem;
         border-bottom: 1px solid rgba(128, 128, 128, 0.25);
     }
@@ -1802,7 +1921,7 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-72 — the two halves of the rail's 🧹 Flag fixations section. A rule and a
+    /* UX-72 — the two halves of the rail's Filters & highlights section. A rule and a
        small label: enough to group, cheap in height. (UX-74 briefly used this
        for every section's contents and was reverted — the sections read better
        with their `⚙️ …` popovers.) */
@@ -1821,10 +1940,12 @@ def get_app_css() -> str:
         padding-top: 0.4rem;
         border-top: 1px solid rgba(128, 128, 128, 0.28);
     }
-    /* The first block in a section needs no rule — the expander's own header is
-       the boundary. */
-    [data-testid="stExpander"] [data-testid="stVerticalBlock"]
-        > div:first-child .sps-rail-subhead {
+    /* #422 — the block that opens a popover (Screen & framing in Figure &
+       canvas, Fixations in Filters & highlights) needs no rule above it: the
+       popover's own edge is the boundary. `_rail_subsection(first=True)` marks
+       it, since the popover body is drawn apart from the rail row's keyed
+       container, and its first child differs between the two popovers. */
+    .sps-rail-subhead.sps-rail-subhead-first {
         border-top: none;
         padding-top: 0;
         margin-top: 0.1rem;
@@ -1928,10 +2049,23 @@ def get_app_css() -> str:
     /* Section dividers default to 32px top+bottom margin — far too airy for the
        narrow rail. Tighten them so the sections sit close together. */
     .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
-    /* The palette divider meets the first bordered layer card; leave a small
-       extra pause so the rule and the Fixations border do not crowd together. */
+    /* #422 — the palette divider sits midway between the Palette box and the
+       Fixations card, ~0.55rem from each, instead of a rem below the box and
+       half that above the card. Its own margins are zeroed — the rule's, and
+       its markdown wrapper's (Streamlit's -1rem that cancels a paragraph's
+       margin, which with the rule's margins made the space lopsided) — so the
+       rail's gap and the app-wide 0.25rem under each block set the space
+       above it; the 0.2rem below makes up for the layer rows sitting a little
+       closer than other blocks do. */
+    .st-key-scanpath_rail .st-key-palette_layers_divider > div,
+    .st-key-scanpath_rail .st-key-palette_layers_divider
+        [data-testid="stMarkdownContainer"],
+    .st-key-scanpath_rail .st-key-palette_layers_divider hr {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
     .st-key-scanpath_rail .st-key-palette_layers_divider {
-        margin-bottom: 0.4rem !important;
+        margin-bottom: 0.2rem !important;
     }
     /* Plot-rail triggers need enough height for their labels and switch tracks;
        the app-wide compact button treatment otherwise leaves them cramped. */
@@ -1943,8 +2077,9 @@ def get_app_css() -> str:
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
     }
+    /* #422: the presets' height, not 3rem — one line of label needs no more. */
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
-        min-height: 3rem;
+        min-height: 2.6rem;
     }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
@@ -2002,8 +2137,17 @@ def get_app_css() -> str:
         padding-top: 0.45rem;
         margin-bottom: 0.05rem;
     }
-    .st-key-scanpath_rail .st-key-quick_views_grid > [data-testid="stVerticalBlock"] {
-        gap: 0.15rem !important;
+    /* #422 — the grid's two rows are as far apart as its two columns
+       (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
+       app-wide 0.25rem under each block, twice over. The key sits on the
+       vertical block itself, so the rule names it, not a child of it. */
+    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"] {
+        gap: 0.4rem !important;
+    }
+    .st-key-scanpath_rail .st-key-quick_views_grid > div,
+    .st-key-scanpath_rail .st-key-quick_views_grid [data-testid="stColumn"]
+        [data-testid="stVerticalBlock"] > div {
+        margin-bottom: 0 !important;
     }
     /* VIZ-39 — 🎨 My designs. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
@@ -2013,27 +2157,52 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-design_shell {
         position: relative;
     }
+    /* #422 — one inset, 0.6rem, on every side of the open list, and the title
+       row on the same lines: the chevron's glyph starts 0.6rem in (the summary's
+       0.35rem padding plus the glyph's own side bearing), so the cards and the
+       Export / Import row start under it, and 💾 ends where they end. */
     .st-key-scanpath_rail .st-key-design_save {
         position: absolute;
+        /* Centred on the 38px title row: (38 − 30.4) / 2 plus the 1px border. */
         top: 0.3rem;
-        right: 0.4rem;
+        /* The list's inset plus the expander's 1px border. */
+        right: calc(0.6rem + 1px);
         width: auto !important;
         z-index: 3;
     }
     .st-key-scanpath_rail .st-key-design_save button {
         min-height: 1.9rem;
+        height: 1.9rem;
         padding: 0 0.4rem;
     }
     /* Keep the title itself clear of the button it now shares a line with. */
     .st-key-scanpath_rail .st-key-design_shell summary {
-        padding-right: 2.4rem;
+        padding-right: 3.4rem;
+    }
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"] {
+        padding: 0.6rem;
+    }
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"]
+        > [data-testid="stVerticalBlock"] {
+        gap: 0.5rem !important;
+    }
+    /* The app-wide 4px under each block would add to the gap above and to the
+       inset under the last row. */
+    .st-key-scanpath_rail .st-key-design_shell [data-testid="stExpanderDetails"]
+        [data-testid="stLayoutWrapper"] {
+        margin-bottom: 0 !important;
+    }
+    /* Export is a button and Import a popover, which the app draws as a pill;
+       side by side they read as one pair of the cards' shape. */
+    .st-key-scanpath_rail .st-key-design_file_row [data-testid="stPopover"] button {
+        border-radius: 0.5rem;
+        justify-content: center;
     }
     /* One saved design is one bordered card, not three loose buttons: the row's
        own container carries the border, and the controls inside it are borderless
        so the card reads as a single object. */
     .st-key-scanpath_rail [class*="st-key-design_row_"] {
         padding: 0.15rem 0.3rem;
-        margin-bottom: 0.3rem;
         border-radius: 0.5rem;
     }
     .st-key-scanpath_rail [class*="st-key-design_row_"] [data-testid="stHorizontalBlock"] {
@@ -2043,6 +2212,12 @@ def get_app_css() -> str:
         min-height: 1.9rem;
         padding: 0.1rem 0.3rem;
         justify-content: center;
+    }
+    /* #422: a design's name starts at the card's left edge, as a list's names
+       do, rather than floating mid-cell beside its two icons. */
+    .st-key-scanpath_rail [class*="st-key-design_apply_"] button,
+    .st-key-scanpath_rail [class*="st-key-design_apply_"] button > div {
+        justify-content: flex-start;
     }
     /* An icon-only button still carries the label's right margin, which is what
        pushes these two off-center. */
@@ -2135,7 +2310,7 @@ def get_app_css() -> str:
        the rail (`plot_reset_footer`), full width like every other trigger there,
        so neither the two-column header nor the query that patched it remains.
        Keep the heading a single element: a second column here is what broke. */
-    .st-key-plot_reset_footer { margin-top: 0.35rem; }
+    .st-key-plot_reset_footer { margin-top: 0.15rem; }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on
@@ -2355,9 +2530,12 @@ def get_app_css() -> str:
     """
     for i in (0, 1, 3):
         css = css.replace(f"__SELECTOR_FLOOR_{i}__", selector_track_floor(i))
-    css = css.replace(
-        "__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem"
-    ).replace("__SELECTOR_STEPS_FLOOR__", f"{SELECTOR_STEPS_FLOOR_REM}rem")
+    css = (
+        css.replace("__SELECTOR_SCREEN_FLOOR__", f"{SELECTOR_SCREEN_FLOOR_REM}rem")
+        .replace("__SELECTOR_STEPS_FLOOR__", f"{SELECTOR_STEPS_FLOOR_REM}rem")
+        .replace("__SELECTOR_SCREEN_PICKER__", f"{SELECTOR_SCREEN_PICKER_REM}rem")
+        .replace("__SELECTOR_ROW_WRAP__", f"{SELECTOR_ROW_WRAP_REM:g}rem")
+    )
     return css
 
 

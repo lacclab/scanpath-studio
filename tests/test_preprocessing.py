@@ -265,6 +265,39 @@ def test_sentence_lookback_and_lookfrom_are_distinct_paths():
     assert sentence_two["firstpass_reread_n_fixations"] == 1
 
 
+def test_an_off_text_fixation_is_in_no_sentence_beside_a_word_with_no_id():
+    """#412: the fixation → sentence join matched a fixation on no word to a
+    word with no id (pandas joins NaN to NaN), crediting it to that sentence."""
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p"] * 2,
+            "trial_id": ["t"] * 2,
+            "word_id": [1.0, np.nan],
+            "sentence_id": [1, 2],
+            "text": ["One.", "Two."],
+            "line_idx": [0, 0],
+            "x": [0.0, 100.0],
+            "y": [0.0, 0.0],
+            "width": [80.0] * 2,
+            "height": [20.0] * 2,
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p"] * 2,
+            "trial_id": ["t"] * 2,
+            "word_id": [1.0, np.nan],
+            "timestamp_ms": [0.0, 100.0],
+            "duration_ms": [80.0, 90.0],
+            "x": [10.0, 500.0],
+            "y": [10.0, 300.0],
+        }
+    )
+    table = sentence_measures(words, fixations).set_index("sentence_id")
+    assert table.loc[1, "total_n_fixations"] == 1
+    assert table.loc[2, "total_n_fixations"] == 0
+
+
 def test_sensitivity_is_trial_scoped():
     words = pd.DataFrame(
         {

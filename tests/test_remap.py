@@ -1439,7 +1439,7 @@ class TestEditorEstimateUsesPendingMapping:
         at = AppTest.from_function(_setup_file_editor_app, default_timeout=30)
         at.run()
         at.selectbox(key="remap_Lab_fixations_x").set_value("alt_x").run()
-        at.radio(key="edit_Lab_setup_screen_mode").set_value(
+        at.segmented_control(key="edit_Lab_setup_screen_mode").set_value(
             "Estimate from my data"
         ).run()
         assert not at.exception, at.exception

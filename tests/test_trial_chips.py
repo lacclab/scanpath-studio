@@ -64,6 +64,118 @@ def test_trial_duration_is_onset_to_offset_and_named_apart_from_fixation_time():
     assert "Trial duration (s)" not in {r["Field"] for r in no_clock}
 
 
+def _unclocked_fixations(n: int = 300):
+    """A PoTeC-shaped trial: durations and no onset column, so normalization
+    numbers the fixations 0, 1, 2, … and marks those numbers made up."""
+    import pandas as pd
+
+    from scanpath_studio import data
+
+    raw = pd.DataFrame(
+        {
+            "participant_id": ["p1"] * n,
+            "trial_id": ["t1"] * n,
+            "x": [100.0 + i for i in range(n)],
+            "y": [50.0] * n,
+            "duration_ms": [200.0] * n,
+        }
+    )
+    schema = data.propose_fix_schema(raw)
+    assert not schema.get("timestamp")
+    fixations = data.normalize_fixations(raw, schema)
+    assert data.timestamps_synthesized(fixations)
+    return fixations
+
+
+def test_numbered_fixations_have_no_trial_duration():
+    """#422: PoTeC's chips read *Total fixation time 103.5 · Trial duration
+    1.0* — the made-up 0, 1, 2, … onsets taken for milliseconds. Without
+    recorded onsets there is no trial duration to show."""
+    import pandas as pd
+
+    from scanpath_studio import tabs
+    from scanpath_studio.controls import SUMMARY_CHIP_FIELDS
+
+    fixations = _unclocked_fixations()
+    rows = {
+        r["Field"]: r["Value"] for r in tabs._summary_rows(pd.DataFrame(), fixations)
+    }
+    assert rows[SUMMARY_CHIP_FIELDS["@reading_time_s"]] == "60.0"
+    assert SUMMARY_CHIP_FIELDS["@trial_duration_s"] not in rows
+    assert tabs._trial_duration_ms(fixations) is None
+
+
+def test_onsets_too_close_for_their_durations_are_not_a_trial_duration():
+    """A column of fixation numbers mapped as the onset fails the replay's own
+    test (the span can't be shorter than the fixations in it), so the chip
+    does not quote it either."""
+    import pandas as pd
+
+    from scanpath_studio import tabs
+
+    fixations = pd.DataFrame(
+        {"timestamp_ms": [0.0, 1.0, 2.0], "duration_ms": [200.0, 250.0, 300.0]}
+    )
+    assert tabs._trial_duration_ms(fixations) is None
+    # Recorded onsets, unsorted: still onset of the first → end of the last.
+    recorded = pd.DataFrame(
+        {"timestamp_ms": [2000.0, 1000.0, 1300.0], "duration_ms": [300.0, 200, 250]}
+    )
+    assert tabs._trial_duration_ms(recorded) == pytest.approx(1300.0)
+
+
+def test_the_replay_names_a_span_without_onsets_for_what_it_is():
+    """#422: the Animate box said *Trial duration: 103.5s* — the fixations laid
+    end to end. That span is the summed fixation time, and the replay's
+    readout must not call its clock the trial's either."""
+    import pandas as pd
+
+    from scanpath_studio import tabs
+    from scanpath_studio.plots import (
+        animation_timeline_summary,
+        make_scanpath_animation,
+    )
+
+    unclocked = _unclocked_fixations(5)
+    summary = animation_timeline_summary([unclocked], 1.0)
+    assert summary["recorded_clock"] is False
+    assert summary["reading_span_ms"] == pytest.approx(1000.0)
+    text = tabs._replay_span_text({"": summary})
+    assert text.startswith("Fixation time 1.0 s")
+    assert "Trial" not in text and "back to back" in text
+
+    clocked = unclocked.assign(timestamp_ms=[0.0, 300.0, 600.0, 900.0, 1200.0]).drop(
+        columns="_timestamp_synthesized"
+    )
+    recorded = animation_timeline_summary([clocked], 1.0)
+    assert recorded["recorded_clock"] is True
+    assert tabs._replay_span_text({"": recorded}) == "Trial 1.4 s"
+    # A co-animation of one of each names each side's span.
+    mixed = tabs._replay_span_text({"A": recorded, "B": summary})
+    assert mixed == "**A** trial 1.4 s · **B** fixation time 1.0 s"
+    assert tabs._replay_span_text({"A": summary, "B": summary}).startswith(
+        "Fixation time **A** 1.0 s · **B** 1.0 s"
+    )
+
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1"],
+            "trial_id": ["t1"],
+            "word_id": [1],
+            "text": ["word"],
+            "x": [90.0],
+            "y": [40.0],
+            "width": [400.0],
+            "height": [20.0],
+        }
+    )
+    common = dict(canvas_width=800, canvas_height=600, base_font_size=12)
+    fig = make_scanpath_animation(words, unclocked, **common)
+    assert fig.layout.sliders[0].currentvalue.prefix == "Fixation time "
+    fig = make_scanpath_animation(words, clocked, **common)
+    assert fig.layout.sliders[0].currentvalue.prefix == "Trial time "
+
+
 def test_every_summary_field_is_still_pickable():
     """Dropping two from the default must not drop them from the picker."""
     import pandas as pd

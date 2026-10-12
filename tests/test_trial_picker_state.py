@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from scanpath_studio.utils import reading_key
 from tests.conftest import APP_SCRIPT
 
 pytestmark = pytest.mark.timeout(180)
@@ -101,4 +102,4 @@ def test_a_link_naming_the_remembered_trial_is_not_overridden():
     at.session_state["_single_trial_chosen"] = "t2"
     at.run()
     assert not at.exception
-    assert at.session_state["single_trial_id"] == "t2"
+    assert at.session_state["single_trial_id"] == reading_key("p1", "t2")

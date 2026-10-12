@@ -32,7 +32,7 @@ import io
 import json
 import re
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -52,10 +52,13 @@ from .column_names import (
 )
 from .constants import (
     CITATION,
+    DEFAULT_CAPTION_COLOR,
+    DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
+    DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
     ICONS,
     PLOTLY_CONFIG,
@@ -81,6 +84,7 @@ from .plots import (
     FigureSettings,
     _plotly_literal,
     make_scanpath_figure,
+    normalize_legend_layout,
     split_scanpath_layers,
 )
 from .preprocessing import (
@@ -246,7 +250,7 @@ class ExportOptions:
     text_metadata_fields: tuple[str, ...] | None = None
     # HTML figures embed the Plotly library (opens offline, ~4.8 MB more per
     # file) instead of loading it from cdn.plot.ly when opened. Off by default:
-    # the app's Export subtab sets it from its *Self-contained HTML* choice.
+    # the bundle's *Self-contained HTML* choice, shown while HTML is picked.
     html_self_contained: bool = False
     # When True, export operates on the whole loaded dataset, ignoring the
     # trial-filter funnel; the caller supplies the unfiltered frames.
@@ -255,6 +259,10 @@ class ExportOptions:
     scope_participant: str | None = None
     scope_trial: str | None = None
     scope_text: str | None = None
+    # Which screens of a multipart trial go in, by `screen_id` — one id across
+    # trials (OneStop's `Paragraph`, MultiplEYE's `page_1`). `None` is every
+    # screen; a trial showing none of the chosen screens is left out.
+    screens: tuple[str, ...] | None = None
 
     def any_table(self) -> bool:
         return (
@@ -330,8 +338,9 @@ class ExportSummary:
     expand_errors: bool
 
 
-#: Session key of the Export subtab's *Self-contained HTML* choice — every HTML file
-#: the subtab writes (the figure, the replay, the bundles) follows it.
+#: Session key of the current figure's *Self-contained HTML* choice — the figure's
+#: and the replay's HTML follow it; the bundle asks its own
+#: (``<key_prefix>_html_self_contained``).
 HTML_SELF_CONTAINED_KEY = "export_html_self_contained"
 
 
@@ -584,7 +593,13 @@ def pattern_fields(
     so a trial table's ``font_size`` and a recorded ``font_size`` are both
     reachable, and none of the plain names above changes.
     """
-    fields: dict = dict(combo_row or {})
+    # The trial's row, less its bookkeeping (`_data_order`): a `_` column is the
+    # app's, as `_saved_table_fields` already holds for the tables (#422).
+    fields: dict = {
+        name: value
+        for name, value in (combo_row or {}).items()
+        if not str(name).startswith("_")
+    }
     for table in table_pattern_fields(
         trial_words, trial_fixations, metadata_rows
     ).values():
@@ -714,14 +729,146 @@ def render_pattern(
     return _PLACEHOLDER_RE.sub(_sub, pattern)
 
 
+#: The tables a bundle can write once across every trial, as
+#: `aggregate/all_<table>` — each per-trial table artifact, and the reader
+#: summary, which has no per-trial form.
+_AGGREGATE_TABLES = (
+    "fixations",
+    "raw_gaze",
+    "measures",
+    "word_measures",
+    "saccades",
+    "sentence_measures",
+    "trial_summary",
+    "characters",
+    "cleaning_qa",
+    "reader_summary",
+)
+#: The attached metadata tables, as `metadata/<grain>` (DATA-20/29).
+_METADATA_TABLES = ("participants", "trials", "texts")
+
+
+def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
+    """The paths a bulk export writes for itself, whichever trials it holds (#412).
+
+    Reserved before any trial's file is named (:class:`ArchiveNames`), so a
+    path pattern can never give a trial's file one of them — the README, the
+    ``index.csv`` inventory, ``columns.json``, ``run_config.json``,
+    ``annotations.json``, the combined tables and the metadata tables, in each
+    table format. ``options`` narrows the combined tables to the ones a run
+    with them can write; without it, every name a bundle can have.
+    """
+    formats = options.table_formats() if options is not None else ["csv", "parquet"]
+    if options is None or (options.combine_trials and options.any_table()):
+        combined = _AGGREGATE_TABLES
+    elif options.include_analysis_family:
+        combined = ("reader_summary",)
+    else:
+        combined = ()
+    names = [
+        "README.md",
+        "index.csv",
+        "columns.json",
+        "run_config.json",
+        "annotations.json",
+    ]
+    for fmt in formats:
+        names += [f"aggregate/all_{table}.{fmt}" for table in combined]
+        names += [f"metadata/{table}.{fmt}" for table in _METADATA_TABLES]
+    return names
+
+
+class ArchiveNames:
+    """Every member name one ZIP has given out, so that no two collide (#412).
+
+    A bundle's own files are reserved up front (:func:`bundle_member_names`)
+    and keep their names (:meth:`own`); a file the user's path pattern names
+    takes the first free ``-2``, ``-3`` … variant of its name instead
+    (:meth:`claim`) — so a pattern of ``README.md`` writes ``README-2.md``
+    beside the README rather than a second ``README.md`` that hides it, and the
+    inventory names the file it describes. Names compare without case, since
+    unpacking on macOS or Windows merges ``README.md`` and ``readme.md`` into
+    one file; and a file never takes a folder's name, nor a folder a file's,
+    since the two cannot both be unpacked.
+    """
+
+    def __init__(self, reserved: Iterable[str] = ()) -> None:
+        self._files: set[str] = set()
+        self._folders: set[str] = set()
+        self._reserved: set[str] = set()
+        for path in reserved:
+            self._take(path)
+            self._reserved.add(path.casefold())
+
+    def _take(self, path: str) -> None:
+        key = path.casefold()
+        self._files.add(key)
+        parts = key.split("/")
+        self._folders.update("/".join(parts[:end]) for end in range(1, len(parts)))
+
+    def _free(self, parents: list[str], name: str, *, folder: bool) -> str:
+        """``name`` under ``parents``, or its first free ``-N`` variant."""
+
+        def taken(candidate: str) -> bool:
+            key = "/".join([*parents, candidate]).casefold()
+            # A folder may be shared; only a file may not have its name.
+            return key in self._files or (not folder and key in self._folders)
+
+        if not taken(name):
+            return name
+        stem, dot, suffix = name.rpartition(".")
+        base, tail = (stem, f".{suffix}") if dot and stem else (name, "")
+        n = 2
+        while taken(f"{base}-{n}{tail}"):
+            n += 1
+        return f"{base}-{n}{tail}"
+
+    def claim(self, path: str, *, record: bool = True) -> str:
+        """``path``, made free of every name given out so far, and recorded.
+
+        ``record=False`` only says what the name would be — for a file that
+        failed, listed in the inventory without taking the name from the next.
+        """
+        parts = path.split("/")
+        for index, name in enumerate(parts):
+            parts[index] = self._free(
+                parts[:index], name, folder=index < len(parts) - 1
+            )
+        path = "/".join(parts)
+        if record:
+            self._take(path)
+        return path
+
+    def own(self, path: str) -> str:
+        """A bundle's own member: its reserved name, given out once.
+
+        One that was not reserved is claimed like any other, so even a name
+        missing from :func:`bundle_member_names` never becomes a duplicate.
+        """
+        key = path.casefold()
+        if key in self._reserved:
+            self._reserved.discard(key)
+            return path
+        return self.claim(path)
+
+
 def resolve_export_path(
-    pattern: str, fields: dict, *, artifact: str, ext: str, used: set
+    pattern: str,
+    fields: dict,
+    *,
+    artifact: str,
+    ext: str,
+    used: ArchiveNames,
+    record: bool = True,
 ) -> str:
-    """The zip path for one artifact, de-duplicated against ``used``.
+    """The zip path for one artifact, made unique among the names in ``used``.
 
     Two trials can render to the same path (a pattern that omits the trial id,
-    say). Writing both would put two entries at one name in the zip and silently
-    lose one, so the second gets a ``-2`` suffix instead. ``used`` is mutated.
+    say), and a pattern can name a file as one of the bundle's own
+    (``README.md``). Writing both would put two entries at one name in the zip
+    and silently lose one, so the later file gets a ``-2`` suffix instead
+    (:class:`ArchiveNames`). ``used`` records the name unless ``record`` is
+    false.
     """
     path = render_pattern(
         pattern,
@@ -729,17 +876,7 @@ def resolve_export_path(
         as_path=True,
         multi_segment_fields=("artifact",),
     ).lstrip("/")
-    if path not in used:
-        used.add(path)
-        return path
-    stem, dot, suffix = path.rpartition(".")
-    base, tail = (stem, f"{dot}{suffix}") if dot else (path, "")
-    n = 2
-    while f"{base}-{n}{tail}" in used:
-        n += 1
-    path = f"{base}-{n}{tail}"
-    used.add(path)
-    return path
+    return used.claim(path, record=record)
 
 
 # --- EXP-2 · titles and captions on the exported figure -----------------------
@@ -749,27 +886,39 @@ def resolve_export_path(
 # un-shrunk size, then no longer match their boxes. Same constraint the animation
 # transport controls hit; same fix: grow the figure by exactly what the band
 # takes, so the plot region is untouched.
-_TITLE_BAND_PX = 46
-_CAPTION_LINE_PX = 22
+# The bands follow the text's size (#422): at the default 20 px title and 13 px
+# caption they are the 46 px band and 22 px lines they always were.
+_TITLE_BAND_PAD_PX = 26
+_CAPTION_LINE_FACTOR = 22 / 13
 _CAPTION_PAD_PX = 12
 
 
-def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
+def annotate_figure(
+    fig,
+    *,
+    title: str = "",
+    caption: str = "",
+    title_font_size: float = DEFAULT_TITLE_FONT_SIZE,
+    caption_font_size: float = DEFAULT_CAPTION_FONT_SIZE,
+    caption_color: str = DEFAULT_CAPTION_COLOR,
+) -> None:
     """Stamp ``title`` / ``caption`` onto ``fig`` in place, without shrinking it.
 
     The figure grows by the height of each band and its margin grows to match, so
     the plotting area — and therefore the true-to-scale text — is byte-identical
     to the untitled figure. Both are drawn as written: ``<b>`` in a title shows
-    as ``<b>``, and only a real newline starts a new caption line.
+    as ``<b>``, and only a real newline starts a new caption line. The sizes are
+    in px (#422); each band grows with its text.
     """
     if not title and not caption:
         return
     margin = fig.layout.margin
     height = fig.layout.height
     if title:
-        fig.layout.margin.t = (margin.t or 0) + _TITLE_BAND_PX
+        band = round(float(title_font_size)) + _TITLE_BAND_PAD_PX
+        fig.layout.margin.t = (margin.t or 0) + band
         if height:
-            height += _TITLE_BAND_PX
+            height += band
             fig.layout.height = height
         fig.update_layout(
             title=dict(
@@ -779,12 +928,13 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
                 y=1.0,
                 yanchor="top",
                 pad=dict(t=14),
-                font=dict(size=20),
+                font=dict(size=int(title_font_size)),
             )
         )
     if caption:
         original_bottom = fig.layout.margin.b or 0
-        band = _CAPTION_LINE_PX * (caption.count("\n") + 1) + _CAPTION_PAD_PX
+        line_px = round(float(caption_font_size) * _CAPTION_LINE_FACTOR)
+        band = line_px * (caption.count("\n") + 1) + _CAPTION_PAD_PX
         fig.layout.margin.b = original_bottom + band
         if height:
             fig.layout.height = height + band
@@ -801,8 +951,26 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
             yshift=-(original_bottom + _CAPTION_PAD_PX // 2),
             showarrow=False,
             align="left",
-            font=dict(size=13, color="#555555"),
+            font=dict(size=int(caption_font_size), color=caption_color),
         )
+
+
+def figure_text_style(settings) -> dict:
+    """``annotate_figure``'s text styling (#422) from a ``FigureSettings`` or a
+    settings mapping (the app's ``viz_settings``); what is missing is the
+    default."""
+    if isinstance(settings, Mapping):
+        get = settings.get
+    else:
+
+        def get(name, default):
+            return getattr(settings, name, default)
+
+    return dict(
+        title_font_size=int(get("title_font_size", DEFAULT_TITLE_FONT_SIZE)),
+        caption_font_size=int(get("caption_font_size", DEFAULT_CAPTION_FONT_SIZE)),
+        caption_color=str(get("caption_color", DEFAULT_CAPTION_COLOR)),
+    )
 
 
 # DATA-16 (security audit S4). Columns that hold a filesystem path from the
@@ -1061,6 +1229,8 @@ def _plot_config_dict(
             "coordinate_grid": bool(settings.get("show_coordinate_grid", False)),
             "coordinate_grid_auto": settings.get("coordinate_grid_spacing") is None,
             "coordinate_grid_spacing": settings.get("coordinate_grid_spacing"),
+            "crop_margin_auto": settings.get("crop_margin") is None,
+            "crop_margin_px": settings.get("crop_margin"),
         },
         "layers": {
             "words": settings.get("show_words"),
@@ -1119,6 +1289,10 @@ def _plot_config_dict(
             "duration_size_legend": bool(settings.get("duration_size_legend", True)),
             "order_font_size": settings.get("order_font_size"),
         },
+        # Where each legend was placed (Figure & canvas → Legends); absent = Auto.
+        # Every legend, Auto included, as the settings file writes them: a
+        # partial section would leave a restoring session's moved legends.
+        "legends": normalize_legend_layout(settings.get("legend_layout")),
         # True-to-scale reading text: records how the word labels were sized so
         # the figure can be reproduced exactly (see plots._word_label_font_px).
         "text": {
@@ -1448,13 +1622,21 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
         f"{key_prefix}_path_pattern",
         "Path inside the ZIP. Use `/` for folders and `{…}` placeholders.",
     )
-    st.caption(
-        "Example: `"
-        + resolve_export_path(
-            path_pattern, fields, artifact="figure", ext="png", used=set()
+    plain, example = (
+        resolve_export_path(
+            path_pattern, fields, artifact="figure", ext="png", used=ArchiveNames(names)
         )
-        + "`"
+        for names in ((), bundle_member_names())
     )
+    # #412: a name the bundle keeps for its own files is not refused — the
+    # trial's file takes the next free one, which the example shows.
+    clash = (
+        f" — `{plain}` would clash with one of the bundle's own files, so it "
+        "gets the next free name."
+        if example != plain
+        else ""
+    )
+    st.caption(f"Example: `{example}`{clash}")
     return path_pattern
 
 
@@ -1467,8 +1649,12 @@ def render_export_options(
     caption_pattern: str = "",
     selected_participant: str | None = None,
     selected_trial: str | None = None,
+    screen_options: list[str] | None = None,
 ) -> ExportOptions:
     """Render the bulk-export options UI and return a populated ExportOptions.
+
+    ``screen_options`` are the dataset's screen ids (:func:`screen_choices`);
+    when there are any, a *Screens* picker narrows the bundle to some of them.
 
     ``combos`` is the currently filtered trial pool; ``combos_all`` (when given)
     is the whole loaded dataset. Picking the "All" scope switches the scope
@@ -1496,6 +1682,7 @@ def render_export_options(
             selected_participant=selected_participant,
             selected_trial=selected_trial,
         )
+        screens = _render_screen_picker(st, screen_options or [], key_prefix)
 
         # Figures are the headline artifact, so they lead with a single
         # multi-select of formats (pills) rather than a column of checkboxes.
@@ -1519,6 +1706,21 @@ def render_export_options(
         include_svg = "SVG" in fig_formats
         include_png = "PNG" in fig_formats
         include_html = "HTML" in fig_formats
+        # Asked only while HTML is picked, as for the current figure above.
+        html_self_contained = include_html and bool(
+            panel_field(
+                st,
+                "checkbox",
+                "Self-contained HTML (opens offline, larger file)",
+                display="Self-contained HTML",
+                value=False,
+                key=f"{key_prefix}_html_self_contained",
+                persist_state="session",
+                help="Tick to make the bundle's HTML figures open without an "
+                "internet connection: each carries the Plotly library, about "
+                "4.8 MB more. Unticked, they load it from cdn.plot.ly when opened.",
+            )
+        )
         # EXP-24: the bundle's static figures need a browser on the server,
         # which the current figure's PNG/SVG do not — said only when it is
         # missing, and only while one of those formats is picked.
@@ -1651,6 +1853,7 @@ def render_export_options(
         include_svg=include_svg,
         include_pdf=include_pdf,
         include_html=include_html,
+        html_self_contained=html_self_contained,
         include_plot_config=include_plot_config,
         include_annotations=include_annotations,
         include_fixations=include_fixations,
@@ -1675,7 +1878,38 @@ def render_export_options(
         scope_participant=scope_pid,
         scope_trial=scope_trial,
         scope_text=scope_text,
+        screens=screens,
     )
+
+
+def _render_screen_picker(
+    st, screen_options: list[str], key_prefix: str
+) -> tuple[str, ...] | None:
+    """The *Screens* row: which screens of each multipart trial go in. Nothing
+    picked is every screen (``None``); drawn only for a dataset with screens."""
+    if not screen_options:
+        return None
+    key = f"{key_prefix}_screens"
+    # A pick from another dataset names screens this one does not have.
+    held = st.session_state.get(key)
+    if held is not None:
+        kept = [screen for screen in held if screen in screen_options]
+        if kept != list(held):
+            st.session_state[key] = kept
+    picked = (
+        panel_field(
+            st,
+            "multiselect",
+            "Screens",
+            options=screen_options,
+            key=key,
+            placeholder="All screens",
+            help="Export only these screens of each trial. Leave empty for "
+            "every screen; a trial that shows none of them is left out.",
+        )
+        or []
+    )
+    return tuple(picked) if picked else None
 
 
 def _session_dataset_name() -> str:
@@ -2096,12 +2330,38 @@ INVENTORY_COLUMNS = (
 )
 
 
-def _write_inventory(zf: zipfile.ZipFile, inventory: list[dict]) -> None:
+def _write_inventory(
+    zf: zipfile.ZipFile, inventory: list[dict], path: str = "index.csv"
+) -> None:
     """Write ``index.csv``: one row per file in the bundle, plus each requested
     file that failed and each reading skipped. ``status`` is ``written``,
     ``failed`` or ``skipped``; a file type nobody asked for has no row."""
     frame = pd.DataFrame(inventory, columns=list(INVENTORY_COLUMNS))
-    zf.writestr("index.csv", frame.to_csv(index=False))
+    zf.writestr(path, frame.to_csv(index=False))
+
+
+def screen_choices(*frames: pd.DataFrame | None) -> list[str]:
+    """The screen ids ``frames`` carry, for the export's screen picker: in the
+    order they are shown (their lowest ``screen_index``), then by id. Empty when
+    no frame has screens."""
+    parts = [
+        # De-duplicated first: a raw-gaze table can hold millions of samples.
+        frame[
+            [c for c in (SCREEN_ID, SCREEN_INDEX) if c in frame.columns]
+        ].drop_duplicates()
+        for frame in frames
+        if frame is not None and not frame.empty and SCREEN_ID in frame.columns
+    ]
+    if not parts:
+        return []
+    pairs = pd.concat(parts, ignore_index=True).dropna(subset=[SCREEN_ID])
+    pairs[SCREEN_ID] = pairs[SCREEN_ID].astype(str)
+    if SCREEN_INDEX not in pairs.columns:
+        pairs[SCREEN_INDEX] = float("nan")
+    pairs[SCREEN_INDEX] = pd.to_numeric(pairs[SCREEN_INDEX], errors="coerce")
+    first = pairs.groupby(SCREEN_ID)[SCREEN_INDEX].min().reset_index()
+    first = first.sort_values([SCREEN_INDEX, SCREEN_ID], na_position="last")
+    return first[SCREEN_ID].tolist()
 
 
 def export_units(
@@ -2109,18 +2369,22 @@ def export_units(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     raw_gaze: pd.DataFrame | None = None,
+    screens: tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
     """One row per **screen export unit**: each trial in ``combos``, or each of
     its screens when it is a multipart reading. ``combos`` is already scoped.
+
+    ``screens`` (``ExportOptions.screens``) keeps only the units on those
+    screen ids, so a trial without screens has none of them and is left out.
     """
     rows: list[dict] = []
     for combo in combos.to_dict("records"):
         participant, trial = combo["participant_id"], combo["trial_id"]
         parent_words = extract_trial(words, participant, trial)
         parent_fixations = extract_trial(fixations, participant, trial)
-        screens = part_catalog(parent_words, parent_fixations)
+        catalog = part_catalog(parent_words, parent_fixations)
         if (
-            screens.empty
+            catalog.empty
             and parent_words.empty
             and parent_fixations.empty
             and raw_gaze is not None
@@ -2129,13 +2393,20 @@ def export_units(
             # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
             # gaze alone takes its screens from its samples, so each screen's
             # coordinate space is exported on its own instead of pooled.
-            screens = part_catalog(extract_trial(raw_gaze, participant, trial))
-        if screens.empty:
+            catalog = part_catalog(extract_trial(raw_gaze, participant, trial))
+        if catalog.empty:
             rows.append(combo)
         else:
-            for screen in screens.to_dict("records"):
+            for screen in catalog.to_dict("records"):
                 rows.append({**combo, **screen})
-    return pd.DataFrame(rows)
+    units = pd.DataFrame(rows)
+    if screens is None:
+        return units
+    if units.empty or SCREEN_ID not in units.columns:
+        return units.iloc[0:0]
+    chosen = {str(screen) for screen in screens}
+    keep = units[SCREEN_ID].notna() & units[SCREEN_ID].astype(str).isin(chosen)
+    return units[keep].reset_index(drop=True)
 
 
 @dataclass(frozen=True)
@@ -2167,8 +2438,8 @@ def plan_export(
     """The trial, screen and figure-file counts :func:`bulk_export` will
     produce for these inputs and ``options``."""
     scoped = _apply_scope(combos, options)
-    units = count_export_units(scoped, words, fixations, raw_gaze)
-    return plan_from_counts(len(scoped), units, options)
+    trials, units = count_export(scoped, words, fixations, raw_gaze, options.screens)
+    return plan_from_counts(trials, units, options)
 
 
 def count_export_units(
@@ -2185,6 +2456,43 @@ def count_export_units(
     ):
         return len(combos)
     return len(export_units(combos, words, fixations, raw_gaze))
+
+
+def count_export(
+    combos: pd.DataFrame,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+    screens: tuple[str, ...] | None = None,
+) -> tuple[int, int]:
+    """``(trials, units)`` a bundle of ``combos`` exports: with ``screens``
+    chosen, only the trials that show one of them count."""
+    if screens is None:
+        return len(combos), count_export_units(combos, words, fixations, raw_gaze)
+    units = export_units(combos, words, fixations, raw_gaze, screens)
+    if units.empty:
+        return 0, 0
+    trials = units[["participant_id", "trial_id"]].drop_duplicates()
+    return len(trials), len(units)
+
+
+def _keep_unit_trials(combos: pd.DataFrame, units: pd.DataFrame) -> pd.DataFrame:
+    """``combos`` cut to the trials ``units`` still holds — after a screen
+    choice, the trials the bundle actually exports."""
+    if units.empty:
+        return combos.iloc[0:0]
+    keys = set(
+        zip(
+            units["participant_id"].astype(str),
+            units["trial_id"].astype(str),
+            strict=True,
+        )
+    )
+    held = [
+        (str(pid), str(tid)) in keys
+        for pid, tid in zip(combos["participant_id"], combos["trial_id"], strict=True)
+    ]
+    return combos[held]
 
 
 def plan_from_counts(trials: int, units: int, options: ExportOptions) -> ExportPlan:
@@ -2252,6 +2560,8 @@ def _scope_lines(
         f"- {_plural(len(combos), 'trial')}"
         + (f" ({_plural(len(units), 'screen')})" if len(units) != len(combos) else ""),
     ]
+    if options.screens is not None:
+        lines.append(f"- Screens: only {', '.join(options.screens)}")
     return lines
 
 
@@ -2306,6 +2616,11 @@ def bulk_export(
     if pattern_problem:
         raise ValueError(pattern_problem)
     combos = _apply_scope(combos, options)
+    units = export_units(combos, words, fixations, raw_gaze, options.screens)
+    if options.screens is not None:
+        # Only the trials that show a chosen screen are exported — for the
+        # annotations, the README and every per-trial table alike.
+        combos = _keep_unit_trials(combos, units)
     # UX-179's annotations, cut to the exported trials once: the README says
     # the file is there exactly when the writer below writes it (round 10).
     annotations_kept: list[dict] = []
@@ -2344,7 +2659,6 @@ def bulk_export(
             return maps[table], hidden.get(table)
         return every_table.identity(), None
 
-    units = export_units(combos, words, fixations, raw_gaze)
     progress = ExportProgress(total_trials=len(units))
     started = perf_counter()
     emit_status(
@@ -2355,6 +2669,12 @@ def bulk_export(
     )
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
+    # #412: every member's name comes from one registry, with the bundle's own
+    # files reserved first. A trial's file the path pattern names like one of
+    # them, or like another trial's, gets a `-2` instead of a second member of
+    # that name — which hid the README behind a plot config, and left the
+    # inventory pointing at whichever one a reader happened to open.
+    members = ArchiveNames(bundle_member_names(options))
     # The bundle's inventory, written last as `index.csv`: every file in it at
     # its actual path, and every requested file that failed, with the reading
     # and screen it belongs to.
@@ -2421,7 +2741,9 @@ def bulk_export(
         "failed (`status` = `failed`) or reading skipped (`skipped`). A file "
         "type that was not requested is not listed.",
         "- `per_trial/<participant>__<trial>/` holds each trial's files, "
-        "unless the File naming pattern moved them (`index.csv` has every path).",
+        "unless the File naming pattern moved them (`index.csv` has every path). "
+        "A file the pattern names like another, or like one of this bundle's "
+        "own files, has `-2`, `-3` … added to its name.",
         "- A trial shown on several screens adds `screens/screen-001-<id>/` "
         "inside its folder.",
         *(
@@ -2498,14 +2820,17 @@ def bulk_export(
             else []
         ),
     ]
-    zf.writestr("README.md", "\n".join(readme_lines))
-    _inventory("README.md", "readme", "written")
+    path = members.own("README.md")
+    zf.writestr(path, "\n".join(readme_lines))
+    _inventory(path, "readme", "written")
     if any(written.values()):
-        zf.writestr("columns.json", json.dumps(columns_manifest(written), indent=2))
-        _inventory("columns.json", "columns", "written")
+        path = members.own("columns.json")
+        zf.writestr(path, json.dumps(columns_manifest(written), indent=2))
+        _inventory(path, "columns", "written")
     if options.include_analysis_family:
+        path = members.own("run_config.json")
         zf.writestr(
-            "run_config.json",
+            path,
             json.dumps(
                 {
                     "generated_at": datetime.now(UTC).isoformat(),
@@ -2516,7 +2841,7 @@ def bulk_export(
                 default=str,
             ),
         )
-        _inventory("run_config.json", "run_config", "written")
+        _inventory(path, "run_config", "written")
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
@@ -2526,8 +2851,8 @@ def bulk_export(
     layer_formats = options.layer_formats()
     # EXP-1: a user pattern can map two trials to the same path (one that omits
     # the trial id, say). Two zip entries at one name silently loses a file, so
-    # `resolve_export_path` disambiguates against what's already been written.
-    used_paths: set = set()
+    # `resolve_export_path` disambiguates against `members` — every name given
+    # out so far, the bundle's own reserved among them.
     # The readers, trials and texts the bundle actually holds — what its
     # metadata tables are narrowed to at the end.
     exported_pairs: set[tuple[str, str]] = set()
@@ -2658,7 +2983,8 @@ def bulk_export(
                     _f,
                     artifact=artifact,
                     ext=ext,
-                    used=used_paths if reserve else set(used_paths),
+                    used=members,
+                    record=reserve,
                 )
 
             title = (
@@ -2722,7 +3048,12 @@ def bulk_export(
                     # EXP-2: stamp the title/caption BEFORE measuring the output
                     # size — the bands grow the figure, and rendering at the
                     # pre-title size would crop them off.
-                    annotate_figure(fig, title=title, caption=caption)
+                    annotate_figure(
+                        fig,
+                        title=title,
+                        caption=caption,
+                        **figure_text_style(render_settings),
+                    )
                 except Exception as exc:
                     fig = None
                     # Its formats, and its layer set when one was asked for.
@@ -2943,7 +3274,7 @@ def bulk_export(
     }
     for fmt in options.table_formats():
         for artifact, table in stacked.items():
-            path = f"aggregate/all_{artifact}.{fmt}"
+            path = members.own(f"aggregate/all_{artifact}.{fmt}")
             progress.bytes_written += _write_table(
                 zf, path, table, fmt, *names_for(artifact)
             )
@@ -2968,7 +3299,7 @@ def bulk_export(
     )
     if participant_metadata is not None and not participant_metadata.empty:
         for fmt in options.table_formats():
-            path = f"metadata/participants.{fmt}"
+            path = members.own(f"metadata/participants.{fmt}")
             progress.bytes_written += _write_table(zf, path, participant_metadata, fmt)
             _inventory(path, "participant_metadata", "written")
     # DATA-29: and the trial table beside it, on the same terms — its own
@@ -2985,7 +3316,7 @@ def bulk_export(
     )
     if trial_metadata is not None and not trial_metadata.empty:
         for fmt in options.table_formats():
-            path = f"metadata/trials.{fmt}"
+            path = members.own(f"metadata/trials.{fmt}")
             progress.bytes_written += _write_table(zf, path, trial_metadata, fmt)
             _inventory(path, "trial_metadata", "written")
     # And the text table, the third grain — same reasoning again.
@@ -3000,7 +3331,7 @@ def bulk_export(
     )
     if text_metadata is not None and not text_metadata.empty:
         for fmt in options.table_formats():
-            path = f"metadata/texts.{fmt}"
+            path = members.own(f"metadata/texts.{fmt}")
             progress.bytes_written += _write_table(zf, path, text_metadata, fmt)
             _inventory(path, "text_metadata", "written")
     # UX-179: the exported trials' annotations, in the Data → Annotations file
@@ -3011,8 +3342,9 @@ def bulk_export(
         data = serialize(
             records_to_store(annotations_kept), dataset=annotation_dataset
         ).encode("utf-8")
-        zf.writestr("annotations.json", data)
-        _inventory("annotations.json", "annotations", "written")
+        path = members.own("annotations.json")
+        zf.writestr(path, data)
+        _inventory(path, "annotations", "written")
         progress.bytes_written += len(data)
     emit_status(
         status_callback,
@@ -3022,7 +3354,7 @@ def bulk_export(
         completed=progress.finished_trials,
         total=progress.total_trials,
     )
-    _write_inventory(zf, inventory)
+    _write_inventory(zf, inventory, members.own("index.csv"))
     progress.files_written = len(zf.namelist())
     zf.close()
     buf.seek(0)

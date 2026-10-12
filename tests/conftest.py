@@ -227,6 +227,14 @@ def pin_data_view(at) -> None:
     pin_view(at, VIEW_DATA)
 
 
+def picked_trial_id(value) -> str | None:
+    """The trial id in the trial picker's value (``single_trial_id``), which
+    names a reading — participant and trial — since #412."""
+    from scanpath_studio.utils import split_reading_key
+
+    return split_reading_key(value)[1]
+
+
 def picker_trial_id(option: str) -> str:
     """The trial id behind a trial-picker option, as ``AppTest`` shows it.
 

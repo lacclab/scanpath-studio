@@ -11,13 +11,15 @@ tables are in different coordinate frames — a different origin, unit or offset
 ([Data format → Units](data-format.md#tables)). If the alignment is right but
 the figure is framed or sized wrongly, the recording screen size is: set the
 resolution of the monitor used in the experiment under :material/database: **Data Management → :material/edit: Edit dataset → Recording
-setup**. *Estimate from my data* only gives a lower bound.
+setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
 
 Text is drawn to scale from the word boxes and the recording screen size. Set
 the real resolution (see above); for OneStop it is 2560×1440. In Python, pass
-`canvas_size=(2560, 1440)`.
+`canvas_size=(2560, 1440)`. If it is still off, set the line spacing (how far
+apart the lines are, in font sizes) under **Recording setup → Text size → Fit
+to word boxes**, or `line_spacing=` in Python.
 
 ### A column was detected wrongly
 
@@ -29,7 +31,8 @@ The app guesses columns from their names. Pick the right one under
 
 Yes. A Words table alone shows the text and any reading measures it carries; a
 fixations table alone shows gaze positions without text. Most features need
-both.
+both. The same holds trial by trial: when the two tables cover different
+trials, every trial either one has is listed, and drawn with what it has.
 
 ### Can I open PoTeC or OneStop in the online demo?
 
@@ -51,7 +54,7 @@ No. Corpus Analysis and Export show the measures your interest-area report
 provides, as your eye-tracking software defines them; [Computations](computations.md)
 gives how Scanpath Studio would compute each.
 
-### Does :material/cleaning_services: Flag fixations change my data?
+### Does :material/filter_list: Filters & highlights change my data?
 
 No. It changes only what the figure draws. Your tables and measures stay as
 they are.

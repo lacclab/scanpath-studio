@@ -241,7 +241,8 @@ def test_render_keeps_the_v0_33_colorbar_flags(tmp_path, monkeypatch, flags, exp
 
 
 def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
-    # VIZ-9: --saccade-arcs / --snap-fixations reach the figure builder.
+    # VIZ-9: --saccade-arcs / --snap-fixations (#422: + --snap-position) reach
+    # the figure builder.
     from scanpath_studio import api
 
     captured = {}
@@ -258,12 +259,15 @@ def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
             "--sample",
             "--saccade-arcs",
             "--snap-fixations",
+            "--snap-position",
+            "0.25",
             "-o",
             str(tmp_path / "x.html"),
         ]
     )
     assert captured["saccade_render_mode"] == "Arc"
-    assert captured["fixation_snap_to_word"] is True
+    assert captured["fixation_snap_to_line"] is True
+    assert captured["fixation_snap_position"] == 0.25
 
 
 def test_render_saccade_type_color_rejects_bad_class(tmp_path):
@@ -670,6 +674,18 @@ def test_render_multipart_manifest_lists_and_renders_all_screens(tmp_path, capsy
     assert (tmp_path / "parent__screen-001-intro.html").is_file()
     assert (tmp_path / "parent__screen-002-question.html").is_file()
 
+    # --screens: only the screens named, each keeping its place in the trial.
+    chosen = tmp_path / "chosen.html"
+    cli.main([*common, "--screens", "question", "-o", str(chosen)])
+    assert (tmp_path / "chosen__screen-002-question.html").is_file()
+    assert not (tmp_path / "chosen__screen-001-intro.html").exists()
+    with pytest.raises(SystemExit, match="no screen 'nope'"):
+        cli.main([*common, "--screens", "nope", "-o", str(chosen)])
+    with pytest.raises(SystemExit, match="--screen renders one screen"):
+        cli.main(
+            [*common, "--screens", "intro", "--screen", "intro", "-o", str(chosen)]
+        )
+
 
 def test_render_fixations_only_multifile(tmp_path):
     """Fixations-only, multi-file glob input renders without a words table."""
@@ -889,12 +905,11 @@ def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):
     it back and keeps it — beside the ones that restore."""
     import json as json_module
 
-    from scanpath_studio import persistence
-
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
     _seed_cache(tmp_path)
-    slug = persistence._dataset_slug("Corpus")
-    (tmp_path / "datasets" / f"{slug}-words.parquet").unlink()
+    # #412: a fresh name per write — the manifest says which file is Words.
+    manifest = json_module.loads((tmp_path / "manifest.json").read_text("utf-8"))
+    (tmp_path / manifest["datasets"]["Corpus"]["frames"]["words"]).unlink()
 
     cli.main(["cache"])
     out = capsys.readouterr().out
@@ -2121,3 +2136,69 @@ def test_style_spec_reads_a_box_color():
     }
     with pytest.raises(SystemExit):
         _parse_style_spec(["box_color=red"], "--style-a")
+
+
+def test_version_command_names_the_build_and_install(capsys):
+    from scanpath_studio.build_info import INSTALL_KINDS, build_info, install_kind
+
+    cli.main(["version"])
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == f"scanpath-studio {__version__}"
+    assert out[1] == f"Build:      {build_info().describe()}"
+    assert out[2] == f"Installed:  {INSTALL_KINDS[install_kind()]}"
+    assert len(out) == 3  # no --check, no network
+
+
+def test_version_check_prints_the_answer(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    release = updates.Release(
+        "99.0.0",
+        "v99.0.0",
+        "2026-10-09T10:00:00Z",
+        "https://github.com/lacclab/scanpath-studio/releases/tag/v99.0.0",
+    )
+    monkeypatch.setattr(updates, "latest_release", lambda timeout=5.0: release)
+    cli.main(["version", "--check"])
+    out = capsys.readouterr().out
+    assert "v99.0.0 is out (released 9 Oct 2026)" in out
+    assert "Update:     " in out
+    assert (
+        "What's new: https://github.com/lacclab/scanpath-studio/releases/tag/v99.0.0"
+        in out
+    )
+
+
+def test_version_check_waits_as_long_as_it_is_told(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    waited = []
+
+    def latest(timeout=5.0):
+        waited.append(timeout)
+        return updates.Release("99.0.0", "v99.0.0", "2026-10-09T10:00:00Z", "u")
+
+    monkeypatch.setattr(updates, "latest_release", latest)
+    cli.main(["version", "--check", "--timeout", "2"])
+    cli.main(["version", "--check"])
+    assert waited == [2.0, 5.0]
+
+
+def test_a_failed_version_check_exits_1(capsys, monkeypatch):
+    from scanpath_studio import updates
+
+    def offline(timeout=5.0):
+        raise updates.UpdateCheckError(
+            "Couldn't reach GitHub to check — are you offline?"
+        )
+
+    monkeypatch.setattr(updates, "latest_release", offline)
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["version", "--check"])
+    assert exited.value.code == 1
+    assert "offline" in capsys.readouterr().err
+
+
+def test_version_is_a_listed_command(capsys):
+    cli.main(["--help"])
+    assert "scanpath-studio version [--check]" in capsys.readouterr().out

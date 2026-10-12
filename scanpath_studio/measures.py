@@ -537,8 +537,9 @@ def classify_saccades(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.Series
     return pd.Series(classed, index=order, dtype=object).reindex(fixations.index)
 
 
-def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
-    """Fixation onset times (ms), rebased so the first fixation is t=0.
+def fixation_clock(ordered_fixations: pd.DataFrame) -> tuple[np.ndarray, bool]:
+    """Fixation onset times (ms) rebased so the first fixation is t=0, and
+    whether they are the recorded ones.
 
     ``ordered_fixations`` must already be in reading order (sorted by
     ``timestamp_ms``); the returned array is aligned to its rows. Uses the
@@ -547,12 +548,14 @@ def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
     fixations back-to-back by their durations, so a synthesised 0,1,2,… index
     doesn't crush the time axis. Fixations normalization numbered because the
     table had no onset (``data.TIMESTAMP_SYNTHESIZED``) always take the
-    durations — the same estimate the reading summaries use. Shared by the similarity time-curve
-    (:func:`scanpath_studio.similarity._rebased_onsets`) and the animation clock
-    (:func:`scanpath_studio.plots._scanpath_anim_specs`).
+    durations — the same estimate the reading summaries use.
+
+    The flag is ``False`` whenever the onsets were laid end to end: their span
+    is then the summed fixation time, not the trial's duration, and nothing
+    may call it one (#422 — PoTeC ships no onsets).
     """
     if ordered_fixations.empty:
-        return np.array([], dtype=float)
+        return np.array([], dtype=float), False
     if "duration_ms" in ordered_fixations.columns:
         dur = (
             pd.to_numeric(ordered_fixations["duration_ms"], errors="coerce")
@@ -565,7 +568,7 @@ def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
     from .data import timestamps_synthesized
 
     if timestamps_synthesized(ordered_fixations):
-        return contiguous
+        return contiguous, False
     if "timestamp_ms" in ordered_fixations.columns:
         ts = pd.to_numeric(ordered_fixations["timestamp_ms"], errors="coerce").to_numpy(
             dtype=float
@@ -576,8 +579,16 @@ def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
             and not np.isnan(ts).any()
             and (ts[-1] - ts[0]) >= REAL_TIMESTAMP_DWELL_FRAC * total_dwell
         ):
-            return ts - ts[0]
-    return contiguous
+            return ts - ts[0], True
+    return contiguous, False
+
+
+def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
+    """The onsets of :func:`fixation_clock`, without its flag. Shared by the
+    similarity time-curve (:func:`scanpath_studio.similarity._rebased_onsets`)
+    and the animation clock (:func:`scanpath_studio.plots._scanpath_anim_specs`).
+    """
+    return fixation_clock(ordered_fixations)[0]
 
 
 # ---------------------------------------------------------------------------

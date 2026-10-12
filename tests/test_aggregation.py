@@ -1118,9 +1118,10 @@ class TestGroupSelection:
         assert group_mask(w, {}).all()  # empty spec → every row
         # Values are compared as strings, so a numeric column takes "0".
         assert group_mask(w, {"word_id": ["0"]}).sum() == 3
-        # An unknown column (or an empty value list) is ignored, not fatal.
-        assert group_mask(w, {"nope": ["x"]}).all()
+        # An empty value list constrains nothing; a column the frame lacks
+        # selects nothing (#412) — it used to select every row.
         assert group_mask(w, {"text_id": []}).all()
+        assert not group_mask(w, {"nope": ["x"]}).any()
         assert group_mask(pd.DataFrame(), {"text_id": ["A"]}).empty
 
     def test_a_composite_key_matches_the_pair_not_each_part(self):
@@ -1148,8 +1149,8 @@ class TestGroupSelection:
             False,
             True,
         ]
-        # A frame missing a key column is not constrained by it, like a column.
-        assert group_mask(w.drop(columns=["trial_id"]), pairs).all()
+        # A frame missing a key column selects nothing, like a column (#412).
+        assert not group_mask(w.drop(columns=["trial_id"]), pairs).any()
         assert group_mask(w, {("participant_id", "trial_id"): []}).all()
 
     def test_apply_group(self):

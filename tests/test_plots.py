@@ -105,9 +105,10 @@ class TestDecorationDoesNotShrinkPlot:
             normalized_fixations_df,
             **_scanpath_kwargs(color_by_line=True),
         )
-        # Same plot region; the by-line legend is reserved above the plot.
+        # Same plot region; the by-line legend stands on the text's top, and
+        # only what of it pokes out of the plot is reserved above it.
         assert _plot_region(on) == _plot_region(off)
-        assert on.layout.height > off.layout.height
+        assert on.layout.height >= off.layout.height
 
 
 class TestDriftConnectors:

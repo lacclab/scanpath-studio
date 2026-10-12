@@ -1759,9 +1759,11 @@ def _render_parser() -> argparse.ArgumentParser:
             "heatmap_colorscale (default --heatmap-colorscale, on the shared "
             f"range), saccade_style ({'|'.join(SACCADE_DASH_OPTIONS.values())}), "
             "saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), "
+            "box_line_opacity / box_fill_opacity (0–1; default "
+            "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
-            "--animate uses them too, except box_color, box_fill_color and "
-            "raw_gaze_color.",
+            "--animate uses them too, except box_color, box_fill_color, the box "
+            "opacities and raw_gaze_color.",
         )
     # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
@@ -1930,6 +1932,8 @@ _STYLE_KEYS = (
     "saccade_width",
     "marker_size_range",
     "opacity",
+    "box_line_opacity",
+    "box_fill_opacity",
     "hollow",
 )
 
@@ -1978,6 +1982,11 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                     if raw.lower() not in ("1", "0", "true", "false", "yes", "no"):
                         raise ValueError
                     style[name] = raw.lower() in ("1", "true", "yes")
+                elif name in ("box_line_opacity", "box_fill_opacity"):
+                    value = float(raw)
+                    if not 0.0 <= value <= 1.0:
+                        raise ValueError
+                    style[name] = value
                 else:  # saccade_width, opacity
                     style[name] = float(raw)
             except ValueError:

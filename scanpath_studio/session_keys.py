@@ -337,6 +337,9 @@ CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 CMP_BOX_COLOR = "cmp{idx}_box_color"
 # The word-box fill override ("" = the figure's `global_word_box_fill_color`).
 CMP_BOX_FILL_COLOR = "cmp{idx}_box_fill_color"
+# The word-box outline's / fill's opacity (absent = the figure's).
+CMP_BOX_LINE_OPACITY = "cmp{idx}_box_line_opacity"
+CMP_BOX_FILL_OPACITY = "cmp{idx}_box_fill_opacity"
 # The raw-gaze sample colour override ("" = the scanpath's own fixation colour).
 CMP_RAW_GAZE_COLOR = "cmp{idx}_raw_gaze_color"
 # The heatmap colour-scale override ("" = the figure's `global_heatmap_colorscale`).
@@ -714,7 +717,9 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
         "display_dpi": GLOBAL_DISPLAY_DPI,
         "stimulus_font_pt": GLOBAL_STIMULUS_FONT_PT,
-        **_compare_style_params("saccade_width", "opacity"),
+        **_compare_style_params(
+            "saccade_width", "opacity", "box_line_opacity", "box_fill_opacity"
+        ),
     }
 )
 
@@ -847,6 +852,8 @@ COMPARE_STYLE_PARAMS: Mapping[str, str] = MappingProxyType(
             "label_pattern",
             "box_color",
             "box_fill_color",
+            "box_line_opacity",
+            "box_fill_opacity",
             "raw_gaze_color",
             "heatmap_colorscale",
         ),
@@ -970,7 +977,13 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         EXPORT_FIGURE_DPI,
         *(
             template.format(idx=idx)
-            for template in (CMP_SACCADE_WIDTH, CMP_MARKER_SIZE_RANGE, CMP_OPACITY)
+            for template in (
+                CMP_SACCADE_WIDTH,
+                CMP_MARKER_SIZE_RANGE,
+                CMP_OPACITY,
+                CMP_BOX_LINE_OPACITY,
+                CMP_BOX_FILL_OPACITY,
+            )
             for _side, idx in COMPARE_STYLE_SIDES
         ),
     }
@@ -1023,6 +1036,8 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_LABEL_PATTERN,
         CMP_BOX_COLOR,
         CMP_BOX_FILL_COLOR,
+        CMP_BOX_LINE_OPACITY,
+        CMP_BOX_FILL_OPACITY,
         CMP_RAW_GAZE_COLOR,
         CMP_HEATMAP_COLORSCALE,
     }

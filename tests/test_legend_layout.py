@@ -112,11 +112,13 @@ class TestTheLayoutValue:
 
 
 class TestMovingTraceLegends:
-    def test_auto_leaves_the_figure_untouched(self):
+    def test_auto_moves_no_entry_and_blackens_the_text(self):
         fig = _figure()
-        before = fig.to_dict()
+        before = [t.legend for t in fig.data]
         apply_legend_layout(fig, None)
-        assert fig.to_dict() == before
+        assert [t.legend for t in fig.data] == before
+        assert fig.layout.legend.font.color == "#000000"
+        assert "legend2" not in fig.to_dict()["layout"]
 
     @pytest.mark.parametrize(
         "position", [p for p in plots.LEGEND_POSITIONS if p.endswith("-outside")]
@@ -136,7 +138,9 @@ class TestMovingTraceLegends:
     def test_inside_spots_do_not_grow_the_figure(self, position):
         fig = _figure()
         apply_legend_layout(fig, {"saccades": {"position": position}})
-        assert (fig.layout.width, fig.layout.height) == (800, 600)
+        # The plot keeps its size; only the default legend's strip can shrink.
+        assert _plot_region(fig) == pytest.approx((800, 540))
+        assert fig.layout.width == 800 and fig.layout.height <= 600
         legend = fig.layout.legend3
         assert 0 <= legend.x <= 1 and 0 <= legend.y <= 1
 
@@ -254,9 +258,30 @@ class TestTheEmptyLegendStrip:
             (p2, t2),
             legend_layout={"compare": {"position": "right-outside"}},
         )
-        assert kept.layout.margin.t > 0
         assert moved.layout.margin.t == 0
         assert _plot_region(moved) == pytest.approx(_plot_region(kept))
+
+    def test_legends_above_stand_on_the_text_not_the_plot_edge(self):
+        """The plot reaches past the text; a legend above it sits just over
+        the topmost word or fixation instead of floating at the plot's edge."""
+        import scanpath_studio as sps
+
+        words, fixations = sps.load_sample_data()
+        (p1, t1), (p2, t2) = sps.list_trials(words, fixations).iloc[:2].values.tolist()
+        fig = sps.compare_scanpaths(
+            words,
+            fixations,
+            (p1, t1),
+            (p2, t2),
+            legend_layout={"compare": {"position": "top-left-outside"}},
+        )
+        inset = plots._content_top_inset(fig)
+        assert inset > 0
+        _w, plot_h = _plot_region(fig)
+        # The legend's bottom is a gap above the content's top, inside the plot.
+        expected = 1.0 + (plots._LEGEND_GAP_PX - inset) / plot_h
+        assert fig.layout.legend2.y == pytest.approx(expected)
+        assert fig.layout.legend2.y < 1
 
 
 class TestTheSizeKey:
@@ -568,3 +593,72 @@ class TestOnlyTheLegendsDrawnGetARow:
 
     def test_a_relative_scale_has_no_size_key(self):
         assert "size_key" not in _drawn({"global_marker_size_scale": "relative"})
+
+
+class TestTheContentTop:
+    """A legend above the plot stands on the top of the highest marker, not its
+    centre — its background washed out the top of that fixation."""
+
+    @staticmethod
+    def _inset(size):
+        fig = go.Figure(
+            go.Scatter(x=[100], y=[100], mode="markers", marker={"size": size})
+        )
+        fig.update_layout(
+            width=800,
+            height=600,
+            margin=dict(l=0, r=0, t=0, b=0),
+            yaxis={"range": [600, 0]},
+        )
+        return plots._content_top_inset(fig)
+
+    def test_a_markers_radius_counts(self):
+        assert self._inset(0) == pytest.approx(100)
+        assert self._inset(40) == pytest.approx(80)
+
+    def test_a_marker_at_the_edge_leaves_no_inset(self):
+        assert self._inset(400) == 0
+
+
+class TestTheSizeKeyAboveThePlot:
+    """A size key above the plot comes down a little toward what is under it,
+    its labels stopping just over the highest thing beneath them."""
+
+    @staticmethod
+    def _key(y, size=10):
+        fig = go.Figure(
+            go.Scatter(x=[780], y=[y], mode="markers", marker={"size": size})
+        )
+        fig.update_layout(
+            width=800,
+            height=600,
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis={"range": [0, 800]},
+            yaxis={"range": [600, 0]},
+        )
+        plots._add_duration_size_key(
+            fig,
+            (8, 24),
+            "sqrt",
+            (50.0, 600.0),
+            legend_layout={"size_key": {"position": "top-right-outside"}},
+        )
+        return fig
+
+    @staticmethod
+    def _lowest_circle(fig):
+        return min(float(s.y0) for s in fig.layout.shapes if s.type == "circle")
+
+    def test_it_comes_down(self, monkeypatch):
+        dropped = self._lowest_circle(self._key(300))
+        monkeypatch.setattr(plots, "_SIZE_KEY_DROP_PX", 0.0)
+        assert dropped < self._lowest_circle(self._key(300))
+
+    def test_its_labels_stay_over_the_fixation_under_it(self):
+        fig = self._key(10, size=20)  # its top 0 px under the plot's edge
+        lowest_text = min(
+            float(a.yshift) - float(a.font.size) / 2
+            for a in fig.layout.annotations
+            if a.name == plots._SIZE_KEY_NAME
+        )
+        assert lowest_text >= 0.0

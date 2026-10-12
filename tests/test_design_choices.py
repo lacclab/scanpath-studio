@@ -87,6 +87,26 @@ def test_the_frame_can_be_recoloured_or_left_out():
     assert _frame_shapes(_static_fig(show_plot_frame=False)) == []
 
 
+def test_the_replay_and_compare_take_the_frame_too():
+    import scanpath_studio as sps
+
+    words, fixations = _frames()
+    pid, tid = fixations[["participant_id", "trial_id"]].iloc[0]
+    figs = {
+        "replay": lambda **o: sps.animate_scanpath(words, fixations, pid, tid, **o),
+        "compare": lambda **o: sps.compare_scanpaths(
+            words, fixations, (pid, tid), (pid, tid), **o
+        ),
+        "side by side": lambda **o: sps.compare_scanpaths(
+            words, fixations, (pid, tid), (pid, tid), layout="side_by_side", **o
+        ),
+    }
+    for name, build in figs.items():
+        drawn = _frame_shapes(build(plot_frame_color="#999999"))
+        assert drawn and {s.line.color for s in drawn} == {"#999999"}, name
+        assert _frame_shapes(build(show_plot_frame=False)) == [], name
+
+
 def test_the_arrowheads_take_their_size():
     def arrow_size(**over):
         fig = _static_fig(show_saccade_arrows=True, **over)
@@ -225,8 +245,8 @@ def test_auto_leaves_the_heatmap_opacity_and_bar_length_unset():
 
 
 def test_the_replay_key_ignores_what_no_frame_draws():
-    """The frame, the heatmap's opacity and the title/caption styling never
-    reach a replay frame, so changing one rebuilds none."""
+    """The heatmap's opacity and the title/caption styling never reach a
+    replay frame, so changing one rebuilds none."""
     from scanpath_studio import tabs
 
     words, fixations = _frames()
@@ -250,8 +270,6 @@ def test_the_replay_key_ignores_what_no_frame_draws():
 
     assert (
         key(
-            show_plot_frame=False,
-            plot_frame_color="#999999",
             heatmap_opacity=0.8,
             title_font_size=30,
             caption_font_size=18,

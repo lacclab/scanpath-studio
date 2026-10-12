@@ -679,6 +679,57 @@ class TestBoxFill:
         assert len(split) == 2 and same < split
 
 
+class TestBoxOpacity:
+    """Each reading's word boxes are drawn at the figure's outline and fill
+    opacities unless its style names its own — the Compare rail's per-scanpath
+    *Line* / *Fill* opacity. 0 is kept: it hides that reading's outline or fill."""
+
+    @staticmethod
+    def _boxes(**kwargs) -> dict:
+        from scanpath_studio.plots import _shape_layer
+
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout="side_by_side",
+            canvas_size=(1920, 1080),
+            show_words=True,
+            word_box_color="#000000",
+            word_box_fill_color="#00aa00",
+            word_box_line_opacity=0.5,
+            word_box_fill_opacity=0.3,
+            style_a={"box_color": "#000000"},
+            **kwargs,
+        )
+        panels: dict = {}
+        for shape in fig.layout.shapes:
+            if _shape_layer(shape) == "word_boxes":
+                panels.setdefault(shape.xref, set()).add(
+                    (shape.line.color, shape.fillcolor)
+                )
+        return panels
+
+    def test_the_default_is_the_figures(self):
+        a, b = self._boxes().values()
+        assert {fill for _line, fill in a} == {fill for _line, fill in b}
+
+    def test_a_style_sets_one_readings_own(self):
+        panels = self._boxes(
+            style_b={
+                "box_color": "#000000",
+                "box_line_opacity": 0.9,
+                "box_fill_opacity": 0,
+            }
+        )
+        ((a_line, a_fill),) = panels["x"]
+        ((b_line, b_fill),) = panels["x2"]
+        assert a_fill.endswith("0.3)") and b_fill.endswith("0)")
+        assert a_line.endswith("0.5)") and b_line.endswith("0.9)")
+
+
 class TestRawGazeColor:
     """Each reading's raw-gaze samples take its fixation colour unless its style
     names a `raw_gaze_color` — the Compare rail's per-scanpath raw-gaze *Color*."""

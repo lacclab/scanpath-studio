@@ -1689,16 +1689,22 @@ def _settings_size_scale(settings: FigureSettings) -> dict:
 def _duration_key_references(duration_range) -> list[tuple[float, str]]:
     """The durations a size key draws, each with its label.
 
-    The two bounds (labelled ``≤`` / ``≥``, because everything beyond them
-    clamps) plus the round values 100/200/400/800/1600 ms that fall strictly
-    between them — at most three of those, so the key stays compact."""
+    The lower bound (labelled ``≤``, because everything below it clamps) plus
+    the round values 100/200/400/800/1600 ms that fall strictly between the
+    bounds — at most three of those, so the key stays compact. The upper
+    bound's circle, the largest, is left out: it dwarfed the rest of the key.
+    It is drawn only when nothing falls between the bounds, so the key always
+    shows two sizes."""
     lo, hi = _duration_bounds(duration_range)
     inner = [d for d in (100, 200, 400, 800, 1600) if lo < d < hi][:3]
     if not inner and hi - lo > 2:
         inner = [round((lo + hi) / 2)]
     refs = [(lo, f"≤{lo:g}")]
     refs += [(float(d), f"{d:g}") for d in inner]
-    refs.append((hi, f"≥{hi:g} ms"))
+    if len(refs) < 2:
+        refs.append((hi, f"≥{hi:g}"))
+    last_d, last_label = refs[-1]
+    refs[-1] = (last_d, f"{last_label} ms")
     return refs
 
 
@@ -1753,6 +1759,8 @@ _LEGEND_AUTO_POSITION = "top-right-outside"
 _COLORS_LEGEND_META = "legend:colors"
 _LEGEND_IDS = {"compare": "legend2", "saccades": "legend3", "colors": "legend4"}
 _LEGEND_GAP_PX = 8
+#: Every legend's text: entries, group titles and the size key's labels.
+LEGEND_TEXT_COLOR = "#000000"
 #: Spots whose legend reads as a row by default; the rest stack.
 _ROW_SPOTS = ("top-center", "bottom-center")
 
@@ -1917,11 +1925,18 @@ class _LegendSlots:
     it still has entries. An inside spot stacks in toward the plot's middle.
     """
 
-    def __init__(self, fig: go.Figure, *, top_start: float = 0.0) -> None:
+    def __init__(
+        self, fig: go.Figure, *, top_start: float = 0.0, inset: float | None = None
+    ) -> None:
         _plot_w, _plot_h, margin = _plot_px(fig)
         self.base = dict(margin)
-        self.top_start = top_start
+        # Above the plot, legends stand on the content's top, not the edge.
+        self.inset = _content_top_inset(fig) if inset is None else inset
+        self.top_start = top_start - self.inset
         self.used: dict = {}
+        # The first legend's height on each outside edge, which a size key on
+        # that edge is centred against.
+        self.rows: dict = {}
 
     @classmethod
     def of(cls, fig: go.Figure) -> _LegendSlots:
@@ -1933,7 +1948,14 @@ class _LegendSlots:
         return slots
 
     def place(
-        self, fig: go.Figure, position: str, w: float, h: float, *, gap: float
+        self,
+        fig: go.Figure,
+        position: str,
+        w: float,
+        h: float,
+        *,
+        gap: float,
+        pad: float = 0.0,
     ) -> dict:
         """Claim a ``w`` x ``h`` px box at ``position``; return where it goes.
 
@@ -1941,17 +1963,27 @@ class _LegendSlots:
         on it (``xanchor`` / ``yanchor``), and a px offset from that point
         (``dx`` / ``dy``, y up). An outside spot grows the figure on its side
         so the plot region keeps its size.
+
+        ``pad`` is empty space inside the box along its edges (the size key's);
+        given, a box first on an outside top or bottom spot is centred on the
+        legend already on that edge — it moves toward the plot by up to the gap
+        plus that padding — so the two read as one row.
         """
         _plot_w, _plot_h, margin = _plot_px(fig)
         edge, along, outside = _spot_parts(position)
         used = self.used.get(position, 0.0)
         out = {"dx": 0.0, "dy": 0.0}
         if edge in ("top", "bottom"):
+            row = self.rows.get(edge)
+            if outside and not used and pad and row is not None:
+                used = -min(max((h - row) / 2.0, 0.0), gap + pad)
+            elif outside and not used and not pad:
+                self.rows.setdefault(edge, h)
             out["x"] = {"left": 0.0, "center": 0.5, "right": 1.0}[along]
             out["xanchor"] = along
             if not outside and along != "center":
                 out["dx"] = gap if along == "left" else -gap
-            self.used[position] = used + h + gap
+            self.used[position] = max(used, 0.0) + h + gap
             if edge == "top":
                 out["y"] = 1.0
                 if outside:
@@ -2000,12 +2032,104 @@ def _default_legend_entries(fig: go.Figure) -> list:
 
 def _default_legend_height(fig: go.Figure) -> float:
     """The default legend's height above the plot (0 once it is empty), so a
-    legend moved above the plot sits beyond it rather than over it."""
+    legend moved above the plot sits beyond it rather than over it. A row too
+    long for the plot's width wraps, and is counted as the rows it takes."""
     names = _default_legend_entries(fig)
     if not names:
         return 0.0
-    font_px = float((fig.layout.font and fig.layout.font.size) or 12)
-    return _legend_extent(names, font_px, True)[1]
+    legend_font = fig.layout.legend.font.size if fig.layout.legend.font else None
+    font_px = float(legend_font or (fig.layout.font and fig.layout.font.size) or 12)
+    w, h = _legend_extent(names, font_px, True)
+    plot_w, _plot_h, _margin = _plot_px(fig)
+    rows = max(1, math.ceil(w / plot_w))
+    return h + (rows - 1) * (h - 10.0)
+
+
+def _content_top_inset(fig: go.Figure, x_span: tuple | None = None) -> float:
+    """How far, in px, the topmost thing drawn sits below the plot's top edge.
+
+    The plot region reaches past the text (the screen, or a margin of padding
+    round the text), so a legend placed on the plot's edge floated well above
+    the text. Legends above the plot sit on this line instead: the top of the
+    highest word box, label, fixation or saccade — a marker's or a label's top,
+    not its centre, or a legend's background washed out the top of the highest
+    fixation. 0 for a figure of several panels, without a fixed y range, or
+    whose content reaches the edge. ``x_span`` (paper ``(lo, hi)``) counts only
+    what lies under that stretch of the plot.
+    """
+    if getattr(fig, "_grid_ref", None) is not None:
+        return 0.0
+    x_range = fig.layout.xaxis.range
+    if x_span is not None and (not x_range or x_range[0] == x_range[1]):
+        x_span = None
+
+    def x_paper(xs: pd.Series) -> pd.Series:
+        x0, x1 = float(x_range[0]), float(x_range[1])
+        return (xs - x0) / (x1 - x0)
+
+    y_range = fig.layout.yaxis.range
+    if not y_range or y_range[0] == y_range[1]:
+        return 0.0
+    r0, r1 = float(y_range[0]), float(y_range[1])
+    _plot_w, plot_h, _margin = _plot_px(fig)
+    top = None
+
+    def reach(ys: pd.Series, above_px) -> None:
+        nonlocal top
+        paper = (ys - r0) / (r1 - r0) + above_px / plot_h
+        paper = paper[paper.notna()]
+        if not paper.empty:
+            highest = float(paper.max())
+            top = highest if top is None else max(top, highest)
+
+    for trace in fig.data:
+        if getattr(trace, "yaxis", None) not in (None, "y"):
+            continue
+        y = getattr(trace, "y", None)
+        if y is None:
+            continue
+        ys = pd.to_numeric(pd.Series(list(y)), errors="coerce")
+        if x_span is not None:
+            x = getattr(trace, "x", None)
+            if x is None or len(x) != len(ys):
+                continue
+            xp = x_paper(pd.to_numeric(pd.Series(list(x)), errors="coerce"))
+            ys = ys.where((xp >= x_span[0]) & (xp <= x_span[1]))
+        mode = str(getattr(trace, "mode", "") or "")
+        above = pd.Series(0.0, index=ys.index)
+        if "markers" in mode and trace.marker is not None:
+            size = trace.marker.size
+            if size is not None:
+                sizes = pd.to_numeric(
+                    pd.Series(
+                        list(size)
+                        if isinstance(size, (list, tuple)) or hasattr(size, "tolist")
+                        else [size] * len(ys)
+                    ),
+                    errors="coerce",
+                ).fillna(0.0)
+                if len(sizes) == len(ys):
+                    sizes.index = ys.index
+                    above = above.combine(sizes / 2.0, max)
+        if "text" in mode and trace.textfont is not None:
+            font = trace.textfont.size
+            if isinstance(font, (int, float)):
+                above = above.clip(lower=float(font) / 2.0)
+        reach(ys, above)
+    for shape in fig.layout.shapes or ():
+        if shape.yref not in (None, "y") or str(shape.name or "").endswith("frame"):
+            continue
+        if x_span is not None:
+            if shape.xref not in (None, "x"):
+                continue
+            ends = x_paper(pd.to_numeric(pd.Series([shape.x0, shape.x1])))
+            if ends.max() < x_span[0] or ends.min() > x_span[1]:
+                continue
+        reach(pd.to_numeric(pd.Series([shape.y0, shape.y1]), errors="coerce"), 0.0)
+    if top is None:
+        # Nothing at all under that stretch: it is empty to the bottom.
+        return float(plot_h) if x_span is not None else 0.0
+    return float((1.0 - min(1.0, top)) * plot_h)
 
 
 def apply_legend_layout(
@@ -2028,14 +2152,15 @@ def apply_legend_layout(
         for trace in fig.data:
             if _trace_legend_kind(trace, comparing) == "colors":
                 trace.showlegend = False
+    # Every legend's text is black, the default one's included (the template's
+    # is a grey-blue).
+    fig.update_layout(legend_font_color=LEGEND_TEXT_COLOR)
     specs = normalize_legend_layout(layout)
     moved = {
         kind
         for kind in ("compare", "saccades", "colors")
         if _legend_is_moved(specs[kind])
     }
-    if not moved:
-        return fig
     names: dict = {kind: [] for kind in moved}
     titled: set = set()
     for trace in fig.data:
@@ -2051,20 +2176,32 @@ def apply_legend_layout(
             names[kind].append(title)
         if trace.name:
             names[kind].append(trace.name)
-    # The default legend's strip above the plot: when every entry has moved out
-    # of it and the strip is exactly that reserve — the single-trial figures'
-    # and the Compare overlay's (a title is added later, in a band of its own)
-    # — it is handed back. The side-by-side and stacked layouts keep theirs:
-    # their panels' names sit in it.
-    _plot_w, _plot_h, margin = _plot_px(fig)
+    # The legends above the plot stand on the top of what is drawn — the text,
+    # the boxes, the fixations — rather than on the plot's edge, which can sit
+    # well above it. The default legend is lowered onto that line, and its
+    # strip above the plot (exactly that reserve on the single-trial figures
+    # and the Compare overlay; a title is added later, in a band of its own)
+    # shrinks to what still pokes out of the plot. The side-by-side and stacked
+    # layouts keep theirs: their panels' names sit in it.
+    plot_w, plot_h, margin = _plot_px(fig)
+    inset = _content_top_inset(fig)
+    default_h = _default_legend_height(fig)
+    if default_h and inset and fig.layout.legend.yanchor == "bottom":
+        fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
     if (
-        not _default_legend_entries(fig)
-        and margin["t"] in (_LEGEND_RESERVE_PX, _OVERLAY_TOP_PX)
+        margin["t"] in (_LEGEND_RESERVE_PX, _OVERLAY_TOP_PX)
         and getattr(fig, "_grid_ref", None) is None
     ):
-        _grow(fig, "t", -margin["t"])
-    slots = _LegendSlots(fig, top_start=_default_legend_height(fig))
+        needed = max(0.0, default_h + _LEGEND_GAP_PX - inset) if default_h else 0.0
+        if needed < margin["t"]:
+            _grow(fig, "t", needed - margin["t"])
+            if default_h:
+                _plot_w, plot_h, _margin = _plot_px(fig)
+                fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
+    slots = _LegendSlots(fig, top_start=default_h, inset=inset)
     fig._sps_legend_slots = slots
+    if not moved:
+        return fig
     base_font = float((fig.layout.font and fig.layout.font.size) or 12)
     for kind in ("compare", "saccades", "colors"):
         if kind not in moved or not names[kind]:
@@ -2090,8 +2227,9 @@ def apply_legend_layout(
             # A grouped legend gives each group a column of its own, so the
             # saccade types would still stack; "normal" runs them as one row.
             cfg["traceorder"] = "normal"
+        cfg["font"] = {"color": LEGEND_TEXT_COLOR}
         if spec["size"]:
-            cfg["font"] = {"size": font_px}
+            cfg["font"]["size"] = font_px
         fig.update_layout({_LEGEND_IDS[kind]: cfg})
     return fig
 
@@ -2142,7 +2280,7 @@ def _add_duration_size_key(
     ]
     label_font = float(placement["size"] or 10)
     label_px = 1.6 * label_font
-    biggest = float(size_range[1])
+    biggest = max(sizes)
     pad = 8.0
     n = len(refs)
     # The key's own box, in px, origin bottom-left and y up: where each circle's
@@ -2161,7 +2299,12 @@ def _add_duration_size_key(
         cy = pad + label_px + biggest / 2.0
         centres = [(pad + (i + 0.5) * slot, cy) for i in range(n)]
         labels = [(cx, pad + label_px / 2.0, "center") for cx, _ in centres]
-    left, bottom, ax, ay = _size_key_anchor(fig, placement["position"], w, h)
+    # What under the key must stay clear of the content: its lowest label's
+    # text, not the box's own padding.
+    clear = min(y for _x, y, _align in labels) - label_font / 2.0
+    left, bottom, ax, ay = _size_key_anchor(
+        fig, placement["position"], w, h, clear=clear
+    )
     # Collected and added in one assignment: each `add_shape` re-validates every
     # shape already on the figure — the word boxes and heatmap rects (#422).
     circles = []
@@ -2201,7 +2344,9 @@ def _add_duration_size_key(
             xanchor=align,
             yanchor="middle",
             font=dict(
-                size=label_font, color="#444444", family=font_family or FONT_FAMILY
+                size=label_font,
+                color=LEGEND_TEXT_COLOR,
+                family=font_family or FONT_FAMILY,
             ),
             name=_SIZE_KEY_NAME,
         )
@@ -2209,7 +2354,9 @@ def _add_duration_size_key(
     _stack_bottom_right(fig)
 
 
-def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple:
+def _size_key_anchor(
+    fig: go.Figure, position: str, w: float, h: float, *, clear: float = 8.0
+) -> tuple:
     """``(left, bottom, anchor_x, anchor_y)``: where the size key's box goes.
 
     ``left`` / ``bottom`` are px from the paper anchor to the box's bottom-left
@@ -2218,10 +2365,25 @@ def _size_key_anchor(fig: go.Figure, position: str, w: float, h: float) -> tuple
     Inside, the key keeps to the plot's edge: its own padding is its gap.
     """
     gap = 0.0 if not _spot_parts(position)[2] else float(_LEGEND_GAP_PX)
-    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap)
+    pad = 8.0
+    at = _LegendSlots.of(fig).place(fig, position, w, h, gap=gap, pad=pad)
     left = at["dx"] - {"left": 0.0, "center": w / 2.0, "right": w}[at["xanchor"]]
     bottom = at["dy"] - {"bottom": 0.0, "middle": h / 2.0, "top": h}[at["yanchor"]]
+    edge, _along, outside = _spot_parts(position)
+    if edge == "top" and outside:
+        # Down toward what is under the key itself, by up to `_SIZE_KEY_DROP_PX`,
+        # its labels' text (``clear`` px above the box's bottom) stopping just
+        # over the top of the highest thing beneath them.
+        plot_w, _plot_h, _margin = _plot_px(fig)
+        span = (at["x"] + left / plot_w, at["x"] + (left + w) / plot_w)
+        lowest = -_content_top_inset(fig, span) - clear + 2.0
+        bottom -= min(max(bottom - lowest, 0.0), _SIZE_KEY_DROP_PX)
     return left, bottom, at["x"], at["y"]
+
+
+#: How far the size key above the plot may come down past the legend row's
+#: centre toward the content under it.
+_SIZE_KEY_DROP_PX = 10.0
 
 
 # VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight
@@ -3098,7 +3260,7 @@ def _add_highlight_key(
         text=text,
         showarrow=False,
         align="left",
-        font=dict(size=12, color="#444444"),
+        font=dict(size=12, color=LEGEND_TEXT_COLOR),
         bgcolor="rgba(255,255,255,0.75)",
         name=_HIGHLIGHT_KEY_NAME,
     )
@@ -6664,17 +6826,19 @@ def _render_scanpath_animation(
         )
     fig.frames = frames
 
-    shapes.append(
-        dict(
-            type="rect",
-            x0=x_range[0],
-            y0=y_range[1],
-            x1=x_range[1],
-            y1=y_range[0],
-            line=dict(color="#000000", width=1),
-            fillcolor="rgba(0,0,0,0)",
+    if settings.show_plot_frame:
+        shapes.append(
+            dict(
+                type="rect",
+                x0=x_range[0],
+                y0=y_range[1],
+                x1=x_range[1],
+                y1=y_range[0],
+                line=dict(color=settings.plot_frame_color, width=1),
+                fillcolor="rgba(0,0,0,0)",
+                name=_shape_layer_tag("frame"),
+            )
         )
-    )
 
     sliders = (
         _animation_time_slider(frame_times, reading_span_ms, _recorded_clock(specs))
@@ -6857,7 +7021,11 @@ def _comparison_scanpath_style(
             {
                 k: v
                 for k, v in override.items()
-                if v or (k in COMPARE_FILTER_STYLE_KEYS and v is not None)
+                if v
+                or (
+                    k in COMPARE_FILTER_STYLE_KEYS | COMPARE_BOX_OPACITY_STYLE_KEYS
+                    and v is not None
+                )
             }
         )
     return base
@@ -6868,6 +7036,10 @@ def _comparison_scanpath_style(
 #: ``fixation_flags`` / ``saccade_classes`` apply to a scanpath whose style names
 #: none, so one setting filters both and a style entry overrides it per side.
 COMPARE_FILTER_STYLE_KEYS = frozenset({"fixation_flags", "saccade_classes"})
+#: A scanpath's own word-box opacities, which follow the figure's
+#: ``word_box_line_opacity`` / ``word_box_fill_opacity`` until named. 0 is kept:
+#: it hides that scanpath's outline or fill.
+COMPARE_BOX_OPACITY_STYLE_KEYS = frozenset({"box_line_opacity", "box_fill_opacity"})
 
 
 def _visible_saccade_classes(classes: Iterable[str] | None) -> set[str] | None:
@@ -7710,6 +7882,14 @@ def _make_split_comparison_figure(
                 box_fill_color=(
                     style.get("box_fill_color") or settings.word_box_fill_color
                 ),
+                # Its outline's and fill's opacity: the figure's unless the
+                # style names one (0 is a real answer: hidden).
+                box_line_opacity=style.get(
+                    "box_line_opacity", settings.word_box_line_opacity
+                ),
+                box_fill_opacity=style.get(
+                    "box_fill_opacity", settings.word_box_fill_opacity
+                ),
                 # Its raw-gaze samples: the scanpath's own colour unless its
                 # style names one (`raw_gaze_color`).
                 raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
@@ -7905,27 +8085,29 @@ def _make_split_comparison_figure(
                 trial_words,
                 color=spec["box_color"],
                 fill_color=spec["box_fill_color"],
-                fill_opacity=settings.word_box_fill_opacity,
-                line_opacity=settings.word_box_line_opacity,
+                fill_opacity=spec["box_fill_opacity"],
+                line_opacity=spec["box_line_opacity"],
             ):
                 box = dict(box)
                 box["xref"] = xref
                 box["yref"] = yref
                 all_shapes.append(box)
 
-        all_shapes.append(
-            dict(
-                type="rect",
-                xref=xref,
-                yref=yref,
-                x0=x_range[0],
-                y0=y_range[1],
-                x1=x_range[1],
-                y1=y_range[0],
-                line=dict(color="#000000", width=1),
-                fillcolor="rgba(0,0,0,0)",
+        if settings.show_plot_frame:
+            all_shapes.append(
+                dict(
+                    type="rect",
+                    xref=xref,
+                    yref=yref,
+                    x0=x_range[0],
+                    y0=y_range[1],
+                    x1=x_range[1],
+                    y1=y_range[0],
+                    line=dict(color=settings.plot_frame_color, width=1),
+                    fillcolor="rgba(0,0,0,0)",
+                    name=_shape_layer_tag("frame"),
+                )
             )
-        )
 
         # Under the scanpath, as on the single-trial figure.
         _add_comparison_raw_gaze_trace(
@@ -8233,6 +8415,14 @@ def _render_comparison_figure(
                 box_fill_color=(
                     style.get("box_fill_color") or settings.word_box_fill_color
                 ),
+                # Its outline's and fill's opacity: the figure's unless the
+                # style names one (0 is a real answer: hidden).
+                box_line_opacity=style.get(
+                    "box_line_opacity", settings.word_box_line_opacity
+                ),
+                box_fill_opacity=style.get(
+                    "box_fill_opacity", settings.word_box_fill_opacity
+                ),
                 # Its raw-gaze samples: the scanpath's own colour unless its
                 # style names one (`raw_gaze_color`).
                 raw_gaze_color=style.get("raw_gaze_color") or style["fix_color"],
@@ -8371,8 +8561,8 @@ def _render_comparison_figure(
                 spec["trial_words"],
                 color=spec["box_color"],
                 fill_color=spec["box_fill_color"],
-                fill_opacity=settings.word_box_fill_opacity,
-                line_opacity=settings.word_box_line_opacity,
+                fill_opacity=spec["box_fill_opacity"],
+                line_opacity=spec["box_line_opacity"],
             )
         if show_word_labels and draws_stimulus[_idx]:
             _add_word_label_trace(
@@ -8395,17 +8585,19 @@ def _render_comparison_figure(
 
     _add_category_legend(fig, category_legend, category_label or "")
 
-    layout_shapes.append(
-        dict(
-            type="rect",
-            x0=x_range[0],
-            y0=y_range[1],
-            x1=x_range[1],
-            y1=y_range[0],
-            line=dict(color="#000000", width=1),
-            fillcolor="rgba(0,0,0,0)",
+    if settings.show_plot_frame:
+        layout_shapes.append(
+            dict(
+                type="rect",
+                x0=x_range[0],
+                y0=y_range[1],
+                x1=x_range[1],
+                y1=y_range[0],
+                line=dict(color=settings.plot_frame_color, width=1),
+                fillcolor="rgba(0,0,0,0)",
+                name=_shape_layer_tag("frame"),
+            )
         )
-    )
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # The title + top A/B legend get reserved space above the plot so they don't
@@ -9576,9 +9768,7 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_render_mode",
         "fixation_snap_to_line",
         "fixation_snap_position",
-        # #422 — the replay draws no frame and no heatmap.
-        "show_plot_frame",
-        "plot_frame_color",
+        # #422 — the replay draws no heatmap.
         "heatmap_opacity",
         "span_border_color",
         "word_heatmap_col",

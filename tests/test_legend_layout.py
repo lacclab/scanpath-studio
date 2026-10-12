@@ -618,3 +618,47 @@ class TestTheContentTop:
 
     def test_a_marker_at_the_edge_leaves_no_inset(self):
         assert self._inset(400) == 0
+
+
+class TestTheSizeKeyAboveThePlot:
+    """A size key above the plot comes down a little toward what is under it,
+    its labels stopping just over the highest thing beneath them."""
+
+    @staticmethod
+    def _key(y, size=10):
+        fig = go.Figure(
+            go.Scatter(x=[780], y=[y], mode="markers", marker={"size": size})
+        )
+        fig.update_layout(
+            width=800,
+            height=600,
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis={"range": [0, 800]},
+            yaxis={"range": [600, 0]},
+        )
+        plots._add_duration_size_key(
+            fig,
+            (8, 24),
+            "sqrt",
+            (50.0, 600.0),
+            legend_layout={"size_key": {"position": "top-right-outside"}},
+        )
+        return fig
+
+    @staticmethod
+    def _lowest_circle(fig):
+        return min(float(s.y0) for s in fig.layout.shapes if s.type == "circle")
+
+    def test_it_comes_down(self, monkeypatch):
+        dropped = self._lowest_circle(self._key(300))
+        monkeypatch.setattr(plots, "_SIZE_KEY_DROP_PX", 0.0)
+        assert dropped < self._lowest_circle(self._key(300))
+
+    def test_its_labels_stay_over_the_fixation_under_it(self):
+        fig = self._key(10, size=20)  # its top 0 px under the plot's edge
+        lowest_text = min(
+            float(a.yshift) - float(a.font.size) / 2
+            for a in fig.layout.annotations
+            if a.name == plots._SIZE_KEY_NAME
+        )
+        assert lowest_text >= 0.0

@@ -77,9 +77,11 @@ from .session_keys import (
     DESIGN_PRESETS,
     PLOT_CONFIG_STATE_KEYS,
     SINGLE_COMPARE_LAYOUT,
+    SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
+    SINGLE_SCREEN_ID,
     compare_state_keys,
     keep_legacy_marker_scale,
     rename_legacy_keys,
@@ -183,6 +185,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # is kept: a refresh in Compare must not swap B for the first candidate.
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_IDENTITY_STATE_KEY,
+    # …and the screen each one shows, on a trial recorded over several screens.
+    # A screen the restored trial does not have falls back to its first.
+    SINGLE_SCREEN_ID,
+    SINGLE_COMPARE_SCREEN_ID,
     *compare_state_keys(0),
     *compare_state_keys(1),
     # UX-174 r2 — the descriptions the user wrote: their own words, like the

@@ -519,6 +519,8 @@ PENDING_COMPARE_STATE_KEY = "_pending_compare"
 #: B's own screen navigator, seeded by `cmp_screen=` and by a settings file's
 #: `selection.compare.screen_id` (schema 6).
 SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
+#: Scanpath A's screen of a multipart trial (`tabs._render_screen_navigator`).
+SINGLE_SCREEN_ID = "single_screen_id"
 
 # ---------------------------------------------------------------------------
 # Frozen groupings — `url_key -> session_state key`, one mapping per encoding.

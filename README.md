@@ -206,6 +206,6 @@ If you use the bundled demo, a subset of [OneStop Eye Movements][onestop-corpus]
 ## AI-assisted development
 
 Scanpath Studio was developed with AI assistance. As with any research
-software, verify its outputs before relying on them in published work. Found a
+software, cross-check its results before relying on them in published work. Found a
 bug, or have a feature request?
 [Open an issue](https://github.com/lacclab/scanpath-studio/issues).

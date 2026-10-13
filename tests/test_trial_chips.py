@@ -239,14 +239,16 @@ def test_the_picker_says_where_the_colours_are():
     assert 'set below the list."' in source
 
 
-def test_a_full_screen_figure_says_how_to_zoom_to_the_text():
-    """#374 F39: the empty band under the text is the screen, and says so."""
+def test_a_cropped_figure_says_it_is_cropped():
+    """A figure cropped to its data shows part of the screen, and says so; the
+    full screen hides nothing, so it carries no note."""
     from scanpath_studio import tabs
 
-    note = tabs._full_screen_note({"fit_to_monitor": True}, 2560, 1440)
-    assert note.startswith("Full 2560×1440 screen") and "Crop to data" in note
-    assert tabs._full_screen_note({"fit_to_monitor": False}, 2560, 1440) == ""
-    assert tabs._full_screen_note({}, None, None) == ""
+    note = tabs._full_screen_note({"fit_to_monitor": False}, 2560, 1440)
+    assert note.startswith("Cropped to the data") and "2560×1440" in note
+    assert "Crop to data" in note
+    assert tabs._full_screen_note({"fit_to_monitor": True}, 2560, 1440) == ""
+    assert tabs._full_screen_note({"fit_to_monitor": False}, None, None) == ""
 
 
 def test_the_chip_editor_offers_each_role_once():

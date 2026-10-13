@@ -8283,13 +8283,15 @@ def _font_rows(choice_host, other_host, *, disabled: bool, **kwargs) -> str:
         ss[_FONT_OTHER_OPEN_KEY] = False
         ss[_FONT_SEEDED_FROM_KEY] = css
     choice = OTHER_FONT if ss.get(_FONT_OTHER_OPEN_KEY) else font_choice(css)
-    choice_key = shadow_widget_key(_FONT_CHOICE_KEY, choice)
-    other_key = shadow_widget_key(
-        _FONT_OTHER_KEY, font_other_text(css) if choice == OTHER_FONT else ""
-    )
+    # Each takes its value as its own default (`shadow_widget_key`'s
+    # ``seed=False``), so it mounts right inside a popover that was closed.
+    choice_key = shadow_widget_key(_FONT_CHOICE_KEY, choice, seed=False)
+    other_text = font_other_text(css) if choice == OTHER_FONT else ""
+    other_key = shadow_widget_key(_FONT_OTHER_KEY, other_text, seed=False)
     choice_host.selectbox(
         "Text font",
         FONT_CHOICES,
+        index=list(FONT_CHOICES).index(choice),
         key=choice_key,
         on_change=_apply_font_choice,
         args=(choice_key,),
@@ -8298,6 +8300,7 @@ def _font_rows(choice_host, other_host, *, disabled: bool, **kwargs) -> str:
     )
     other_host.text_input(
         "Other font",
+        value=other_text,
         key=other_key,
         on_change=_apply_font_other,
         args=(other_key,),

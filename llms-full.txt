@@ -395,16 +395,16 @@ Pick a trial above the plot. The **filter funnel** beside it narrows the list by
 
 The **Plot controls** rail starts with **Animate**, **Compare**, four design presets and a palette. Below them, each section is one line: a switch, and a **▾** with its settings.
 
-| Section              | What it controls                                                             |
-| -------------------- | ---------------------------------------------------------------------------- |
-| Fixations            | markers: size, color, order                                                  |
-| Saccades             | lines and arrows, colored by direction or reading type                       |
-| Stimulus             | text, span highlight, stimulus image, font and background                    |
-| Word boxes           | each word's interest area: outline color and opacity; fill color and opacity |
-| Heatmap              | where fixations concentrate, by count or duration                            |
-| Raw gaze             | the gaze samples as recorded                                                 |
-| Filters & highlights | which fixations and saccades are drawn                                       |
-| Figure & canvas      | screen framing, axes and grid, title and labels, hover fields, legends       |
+| Section              | What it controls                                                                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixations            | markers: size, color, order                                                                                                                         |
+| Saccades             | lines and arrows, colored by direction or reading type                                                                                              |
+| Stimulus             | text, span highlight, stimulus image, font and background                                                                                           |
+| Word boxes           | each word's interest area: outline color and opacity; fill color and opacity. In Compare, each scanpath has its own, the figure's until you set one |
+| Heatmap              | where fixations concentrate, by count or duration                                                                                                   |
+| Raw gaze             | the gaze samples as recorded                                                                                                                        |
+| Filters & highlights | which fixations and saccades are drawn                                                                                                              |
+| Figure & canvas      | screen framing, axes and grid, title and labels, hover fields, legends                                                                              |
 
 Color ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials and filters, so they stay comparable; its number boxes take any endpoint, beyond the data shown too. The word-box heatmap's range is in dwell time per word (ms), the summed duration of the fixations in each box, or in fixations per word; on Auto it runs from 0 to the trial's highest. **Interpolated** blurs the fixations with a Gaussian (its **Blur** row: Auto, or a σ in px) and scales to each figure's own peak, so its range is grayed. The range still applies to Word boxes, and in Compare, which always draws word boxes.
 
@@ -983,7 +983,7 @@ The headless form of the app's **Compare** mode. `trial_a` / `trial_b` are `(par
 
 `compare_stimulus` picks whose word boxes and text an **overlay** draws — `"both"` (default), `"a"` or `"b"`. Two datasets' AOIs coincide only when the text is identical. Split layouts ignore it; each panel owns its own stimulus.
 
-**Per-scanpath style.** `style_a` / `style_b` restyle one scanpath: `fix_color`, `marker_size_range`, `opacity`, `hollow`, `saccade_color`, `saccade_style`, `saccade_width`, `box_color` — the outline of that reading's word boxes, its `fix_color` when left out — `box_fill_color`, their fill, `word_box_fill_color` when left out — and `raw_gaze_color`, that reading's raw-gaze samples, its `fix_color` when left out. These three are this figure's only: the co-animation draws one set of boxes, in `word_box_color` / `word_box_fill_color`, and no raw gaze, and ignores them. `heatmap_colorscale` gives that reading's word-box heatmap its own color scale (`heatmap_colorscale` when left out) on the range both share; when A's and B's differ, each gets its own color bar.
+**Per-scanpath style.** `style_a` / `style_b` restyle one scanpath: `fix_color`, `marker_size_range`, `opacity`, `hollow`, `saccade_color`, `saccade_style`, `saccade_width`, `box_color` — the outline of that reading's word boxes, its `fix_color` when left out — `box_fill_color`, their fill, `word_box_fill_color` when left out — `box_line_opacity` / `box_fill_opacity`, their outline's and fill's opacity (0–1; 0 hides it), `word_box_line_opacity` / `word_box_fill_opacity` when left out — and `raw_gaze_color`, that reading's raw-gaze samples, its `fix_color` when left out. These are this figure's only: the co-animation draws one set of boxes, in `word_box_color` / `word_box_fill_color` at the figure's opacities, and no raw gaze, and ignores them. `heatmap_colorscale` gives that reading's word-box heatmap its own color scale (`heatmap_colorscale` when left out) on the range both share; when A's and B's differ, each gets its own color bar.
 
 **Filters, per scanpath.** `fixation_flags` and `saccade_classes` filter both scanpaths, as they filter plot_scanpath's one; the same two keys in `style_a` / `style_b` give that scanpath its own, overriding them — e.g. `style_b={"fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80}}, "saccade_classes": ["regression"]}`. The app's Compare mode draws A under the plot controls' filters and B under its own. `fix_index_range` windows both scanpaths; `fix_index_range_b` gives B a window of its own (the app's B slider).
 
@@ -1161,7 +1161,7 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `marker_size_scale`               | `'sqrt'`                                       | `'sqrt'`, `'linear'`, `'log'`, `'relative'`                                                              | `--marker-size-scale`                                     | all three        |
 | `order_font_color`                | `'#111111'`                                    | —                                                                                                        | `--order-font-color`                                      | all three        |
 | `order_font_size`                 | `10`                                           | —                                                                                                        | `--order-font-size`                                       | all three        |
-| `plot_frame_color`                | `'#000000'`                                    | —                                                                                                        | `--plot-frame-color`                                      | plot, compare    |
+| `plot_frame_color`                | `'#000000'`                                    | —                                                                                                        | `--plot-frame-color`                                      | all three        |
 | `raw_gaze_color`                  | `'#888888'`                                    | —                                                                                                        | `--raw-gaze-color`                                        | all three        |
 | `raw_gaze_marker_size`            | `4.0`                                          | —                                                                                                        | `--raw-gaze-marker-size`                                  | all three        |
 | `raw_gaze_opacity`                | `0.6`                                          | —                                                                                                        | `--raw-gaze-opacity`                                      | all three        |
@@ -1185,7 +1185,7 @@ Every keyword the figure builders take, with the default it renders with, the va
 | `show_heatmap_colorbar`           | `True`                                         | —                                                                                                        | `--no-heatmap-colorbar`                                   | all three        |
 | `show_legend`                     | `True`                                         | —                                                                                                        | `--no-compare-legend`                                     | animate, compare |
 | `show_order`                      | `False`                                        | —                                                                                                        | `--no-fixation-index`, `--fixation-index`                 | all three        |
-| `show_plot_frame`                 | `True`                                         | —                                                                                                        | `--no-plot-frame`                                         | plot, compare    |
+| `show_plot_frame`                 | `True`                                         | —                                                                                                        | `--no-plot-frame`                                         | all three        |
 | `show_raw_gaze`                   | `False`                                        | —                                                                                                        | `--raw-gaze`, `--no-raw-gaze`                             | plot, compare    |
 | `show_saccade_arrows`             | `False`                                        | —                                                                                                        | `--saccade-arrows`                                        | all three        |
 | `show_saccades`                   | `True`                                         | —                                                                                                        | `--no-saccades`                                           | all three        |
@@ -1402,7 +1402,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 `--label-a` / `--label-b` also label the `--animate` co-animation, and `--style-a` / `--style-b` (below) style it as they style the comparison.
 
-`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under Fixations, Saccades, the word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`, `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`; `box_color` outlines that scanpath's word boxes, its `fix_color` when left out, `box_fill_color` fills them, `--word-box-fill-color` when left out, and `raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out — all three static comparison only, the `--animate` co-animation draws one set of boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared, and two different scales get a color bar each), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
+`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under Fixations, Saccades, the word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`, `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`; `box_color` outlines that scanpath's word boxes, its `fix_color` when left out, `box_fill_color` fills them, `--word-box-fill-color` when left out, `box_line_opacity` / `box_fill_opacity` (0–1) are their outline's and fill's opacity, `--word-box-line-opacity` / `--word-box-fill-opacity` when left out, and `raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out — all of these static comparison only, the `--animate` co-animation draws one set of boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared, and two different scales get a color bar each), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
 
 ```
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
@@ -1544,7 +1544,7 @@ Between releases the version names the build: `0.35.0.post3+g8f18219` is three c
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.38.0 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.38.0.post6+g286cf408 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)

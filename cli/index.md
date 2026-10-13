@@ -123,7 +123,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 `--label-a` / `--label-b` also label the `--animate` co-animation, and `--style-a` / `--style-b` (below) style it as they style the comparison.
 
-`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under Fixations, Saccades, the word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`, `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`; `box_color` outlines that scanpath's word boxes, its `fix_color` when left out, `box_fill_color` fills them, `--word-box-fill-color` when left out, and `raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out — all three static comparison only, the `--animate` co-animation draws one set of boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared, and two different scales get a color bar each), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
+`--style-a` / `--style-b` are the app's per-scanpath styling (the Compare rows under Fixations, Saccades, the word boxes, heatmap and raw gaze — their *Scanpath A* / *Scanpath B* groups), `compare_scanpaths`'s `style_a` / `style_b`: a comma-separated `KEY=VALUE` list, repeatable, with `fix_color`, `saccade_color`, `box_color`, `box_fill_color` and `raw_gaze_color` (`#RRGGBB`; `box_color` outlines that scanpath's word boxes, its `fix_color` when left out, `box_fill_color` fills them, `--word-box-fill-color` when left out, `box_line_opacity` / `box_fill_opacity` (0–1) are their outline's and fill's opacity, `--word-box-line-opacity` / `--word-box-fill-opacity` when left out, and `raw_gaze_color` colors its raw-gaze samples, its `fix_color` when left out — all of these static comparison only, the `--animate` co-animation draws one set of boxes and no raw gaze), `heatmap_colorscale` (a Plotly color scale for that scanpath's heatmap, `--heatmap-colorscale` when left out; the range stays shared, and two different scales get a color bar each), `saccade_style` (`solid`, `dash`, `dot`, `dashdot`), `saccade_width` (px), `marker_size_range` (`MIN:MAX`), `opacity` (0.1–1) and `hollow` (`true` / `false`). A key left out keeps that scanpath's default.
 
 ```
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
@@ -265,7 +265,7 @@ Between releases the version names the build: `0.35.0.post3+g8f18219` is three c
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.38.0 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.38.0.post6+g286cf408 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)

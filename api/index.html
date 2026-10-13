@@ -3492,11 +3492,14 @@ stimulus.</p>
 <code>fix_color</code>, <code>marker_size_range</code>, <code>opacity</code>, <code>hollow</code>,
 <code>saccade_color</code>, <code>saccade_style</code>, <code>saccade_width</code>, <code>box_color</code> —
 the outline of that reading's word boxes, its <code>fix_color</code> when left out —
-<code>box_fill_color</code>, their fill, <code>word_box_fill_color</code> when left out — and
-<code>raw_gaze_color</code>, that reading's raw-gaze samples, its <code>fix_color</code> when
-left out. These three are this figure's only: the co-animation draws one set
-of boxes, in <code>word_box_color</code> / <code>word_box_fill_color</code>, and no raw gaze,
-and ignores them. <code>heatmap_colorscale</code> gives that reading's word-box
+<code>box_fill_color</code>, their fill, <code>word_box_fill_color</code> when left out —
+<code>box_line_opacity</code> / <code>box_fill_opacity</code>, their outline's and fill's
+opacity (0–1; 0 hides it), <code>word_box_line_opacity</code> /
+<code>word_box_fill_opacity</code> when left out — and <code>raw_gaze_color</code>, that
+reading's raw-gaze samples, its <code>fix_color</code> when left out. These are this
+figure's only: the co-animation draws one set of boxes, in
+<code>word_box_color</code> / <code>word_box_fill_color</code> at the figure's opacities, and
+no raw gaze, and ignores them. <code>heatmap_colorscale</code> gives that reading's word-box
 heatmap its own color scale (<code>heatmap_colorscale</code> when left out) on the
 range both share; when A's and B's differ, each gets its own color bar.</p>
 <p><strong>Filters, per scanpath.</strong> <code>fixation_flags</code> and
@@ -4205,7 +4208,7 @@ builders accept it:
 <td><code>'#000000'</code></td>
 <td>—</td>
 <td><code>--plot-frame-color</code></td>
-<td>plot, compare</td>
+<td>all three</td>
 </tr>
 <tr>
 <td><code>raw_gaze_color</code></td>
@@ -4373,7 +4376,7 @@ builders accept it:
 <td><code>True</code></td>
 <td>—</td>
 <td><code>--no-plot-frame</code></td>
-<td>plot, compare</td>
+<td>all three</td>
 </tr>
 <tr>
 <td><code>show_raw_gaze</code></td>

@@ -6946,7 +6946,6 @@ DATASET_TABLE_ROWS_KEY = "_dataset_table_rows_current"
 _DATASET_TABLE_SORT_KEY = "_dataset_table_sort"
 _DATASET_SEARCH_KEY = "dataset_table_search"
 _DATASET_KIND_FILTER_KEY = "dataset_table_kinds"
-_DATASET_LANGUAGE_FILTER_KEY = "dataset_table_languages"
 #: Search and the Kind / Language filters appear only past this many rows — on
 #: the short default list they would be controls with nothing to narrow. Ten,
 #: since DATA-63 made OneStop four rows: the default list is eight.
@@ -7235,7 +7234,7 @@ def _cycle_dataset_sort(column: str) -> None:
 
 
 def _render_dataset_table_tools(box, rows: list[DatasetRow]) -> list[DatasetRow]:
-    """Search and the Kind / Language filters, for a long list only.
+    """Search and the Kind filter, for a long list only.
 
     Returns the rows they leave. Nothing is drawn until the list is long enough
     to need narrowing, and each filter only when it has more than one value to
@@ -7272,25 +7271,7 @@ def _render_dataset_table_tools(box, rows: list[DatasetRow]) -> list[DatasetRow]
         if len(kinds) > 1
         else []
     )
-    languages = sorted({row.language for row in rows if row.language})
-    picked_languages = (
-        tools.multiselect(
-            "Language",
-            languages,
-            key=_DATASET_LANGUAGE_FILTER_KEY,
-            placeholder="Any language",
-            label_visibility="collapsed",
-            width=220,
-        )
-        if len(languages) > 1
-        else []
-    )
-    return dataset_table.filter_rows(
-        rows,
-        query=query or "",
-        kinds=picked_kinds or (),
-        languages=picked_languages or (),
-    )
+    return dataset_table.filter_rows(rows, query=query or "", kinds=picked_kinds or ())
 
 
 def _render_dataset_table_head(grid, sort) -> None:

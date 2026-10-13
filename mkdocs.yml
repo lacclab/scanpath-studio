@@ -81,7 +81,13 @@ nav:
       - Get started: getting-started.md
       - Tutorials:
           - tutorials/index.md
-          - Check data collection: tutorials/data-collection.md
+          - Optimize data collection:
+              - tutorials/data-collection/index.md
+              - Load a session: tutorials/data-collection/load-a-session.md
+              - Check the setup: tutorials/data-collection/check-the-setup.md
+              - Replay a recording: tutorials/data-collection/replay-a-recording.md
+              - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
+              - Record the review: tutorials/data-collection/record-the-review.md
           - Data filtering: tutorials/data-filtering.md
           - Exporting figures: tutorials/exporting-figures.md
           - Corpus analysis: tutorials/corpus-analysis.md
@@ -147,7 +153,7 @@ plugins:
       redirect_maps:
         bring-your-own-data.md: guides/loading-data.md
         corpus-analysis.md: guides/corpus-workspace.md
-        tutorials/batch-export.md: tutorials/exporting-figures.md#3-export-a-batch-when-needed
+        tutorials/batch-export.md: tutorials/exporting-figures.md#4-export-a-batch-when-needed
         tutorials/compare-two-readers.md: guides/scanpath-visualization.md#replay-and-compare
         tutorials/figure-for-a-paper.md: tutorials/exporting-figures.md
         tutorials/line-assignment.md: guides/scanpath-visualization.md

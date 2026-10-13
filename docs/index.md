@@ -33,16 +33,16 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 
 <div class="grid cards" markdown>
 
-- :material-clipboard-pulse:{ .lg .middle } **[Run better data collection](tutorials/data-collection.md)**
+- :material-clipboard-pulse:{ .lg .middle } **[Optimize data collection](tutorials/data-collection/index.md)**
 
     Pilot your eye tracker, software, and stimulus layout (font, spacing)
     before you commit — for example, [compare two eye trackers on the same
-    text](tutorials/data-collection.md#compare-two-eye-trackers). Catch
+    text](tutorials/data-collection/compare-eye-trackers.md). Catch
     calibration and setup problems that only show up in a plot, and train new
     experimenters to spot issues such as frequent blinking, or check their
     sessions as you supervise.
 
-- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection.md#4-record-the-decision)**
+- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection/record-the-review.md)**
 
     Mark trials or whole sessions for exclusion, and decide whether you need
     to collect more. Check that fixation detection and line assignment hold up

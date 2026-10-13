@@ -5,10 +5,10 @@ with [Getting started](../getting-started.md).
 
 <div class="grid cards" markdown>
 
-- :material-clipboard-pulse:{ .lg .middle } **[Check data collection](data-collection.md)**
+- :material-clipboard-pulse:{ .lg .middle } **[Optimize data collection](data-collection/index.md)**
 
-    Check a pilot or completed session and record issues, or compare two
-    eye trackers on the same text.
+    Pilot your setup, check sessions for calibration and recording problems,
+    compare two eye trackers on the same text, and train experimenters.
 
 - :material-filter:{ .lg .middle } **[Data filtering](data-filtering.md)**
 

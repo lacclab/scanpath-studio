@@ -1,0 +1,1 @@
+The docs' data-collection tutorial is now an Optimize data collection section: one page per task (load a session, check the setup, replay a recording, compare two eye trackers, record the review), each with a recording of it in the app.

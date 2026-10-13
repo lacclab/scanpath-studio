@@ -737,6 +737,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # like the other legends.
     "global_saccade_type_legend": True,
     "global_show_color_legend": True,
+    "global_show_highlight_legend": True,
     # The fixed duration scale: one mapping of duration to marker size for every
     # figure (√ by default — area grows with duration). Old configs and links
     # that predate it are migrated to "relative" so they still draw as saved.
@@ -5674,6 +5675,7 @@ _LEGEND_SHOW_KEYS = {
     "saccades": "global_saccade_type_legend",
     "colors": "global_show_color_legend",
     "size_key": "global_duration_size_legend",
+    "highlight": "global_show_highlight_legend",
 }
 #: The Legends table's column titles, with their hover text.
 _LEGEND_COLUMNS = (
@@ -5708,7 +5710,9 @@ def _legends_drawn(
     Compare's A/B labels only while comparing; the saccade-type key only on the
     static figure, with saccades coloured by type; the fixation colours with a
     categorical *Color by* (or by line), a *Highlight* filter (A's or, in
-    Compare, B's) or raw gaze; the size key with fixations on a fixed scale.
+    Compare, B's) or raw gaze; the size key with fixations on a fixed scale;
+    the text-highlight note while words are highlighted — by *Mark text*, or
+    *Mark border* on the static figure, the only one that draws borders.
     """
     ss = st.session_state
     color_by = ss.get("global_color_by")
@@ -5733,6 +5737,18 @@ def _legends_drawn(
         "size_key": show_fix
         and (ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE)
         != "relative",
+        "highlight": bool(ss.get("global_highlight_column"))
+        and bool(ss.get("global_show_stimulus", True))
+        and (
+            (
+                ss.get("global_critical_span_style", "Mark text") == "Mark text"
+                and bool(ss.get("global_show_labels", True))
+            )
+            or (
+                ss.get("global_critical_span_style") == "Mark border"
+                and not (animating or comparing)
+            )
+        ),
     }
     return [kind for kind in LEGEND_KINDS if kinds[kind]]
 
@@ -5748,6 +5764,8 @@ _LEGEND_ROW_HELP = {
     "Highlight filters in 🧹 Filter ▾.",
     "size_key": "The duration size key. Its circles keep the true marker sizes; "
     "edit the durations it shows in 👁️ Fixations ▾ → Durations.",
+    "highlight": "The note naming the highlighted words. Pick the words and "
+    "their color in 📄 Stimulus ▾ → Highlight. One line, so no arrangement.",
 }
 
 
@@ -6063,6 +6081,7 @@ def _collect_viz_settings(
         saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
         saccade_type_legend=bool(ss.get("global_saccade_type_legend", True)),
         show_color_legend=bool(ss.get("global_show_color_legend", True)),
+        show_highlight_legend=bool(ss.get("global_show_highlight_legend", True)),
         saccade_class_colors={
             cls_name: ss.get(
                 f"global_saccade_class_color_{cls_name}", SACCADE_CLASS_COLORS[cls_name]
@@ -8714,7 +8733,8 @@ def render_plot_controls(
             st.caption(
                 "This figure draws no legend. Compare's A/B labels, a saccade "
                 "colour by type, a categorical fixation colour, a Highlight "
-                "filter or a fixed marker-size scale each add one."
+                "filter, a fixed marker-size scale or highlighted words each "
+                "add one."
             )
         else:
             weights = [0.14, 0.38, 0.28, 0.2]
@@ -8753,7 +8773,8 @@ def render_plot_controls(
             )
             arr_col.selectbox(
                 f"{LEGEND_KIND_LABELS[kind]} legend arrangement",
-                disabled=not shown,
+                # The highlight note is one line: nothing to arrange.
+                disabled=not shown or kind == "highlight",
                 options=list(LEGEND_ARRANGEMENT_LABELS),
                 format_func=LEGEND_ARRANGEMENT_LABELS.__getitem__,
                 key=f"global_legend_{kind}_arrangement",

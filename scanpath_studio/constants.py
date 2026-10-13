@@ -1357,13 +1357,14 @@ SUBTAB_SHARE = f"{ICONS['share']} Share"
 # so never rename one.
 
 #: The legends a figure can draw, in the order the controls list them.
-LEGEND_KINDS = ("compare", "saccades", "colors", "size_key")
+LEGEND_KINDS = ("compare", "saccades", "colors", "size_key", "highlight")
 #: What the controls call each legend.
 LEGEND_KIND_LABELS = {
     "compare": "Compare (A/B)",
     "saccades": "Saccade types",
     "colors": "Fixation colors",
     "size_key": "Size key",
+    "highlight": "Text highlight",
 }
 #: The eight spots a legend can take around the plot — each corner, the middle
 #: of the top and bottom edges, and the middle of the left and right sides

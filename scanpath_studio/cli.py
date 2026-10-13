@@ -885,6 +885,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "split (its forward and regression colors).",
     )
     viz.add_argument(
+        "--no-highlight-legend",
+        dest="show_highlight_legend",
+        action="store_false",
+        help="Hide the note naming the highlighted words (the words stay "
+        "marked). Shows by default; --legend highlight=SPEC places it.",
+    )
+    viz.add_argument(
         "--no-color-legend",
         dest="show_color_legend",
         action="store_false",
@@ -946,7 +953,8 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="SPEC",
         help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
         "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
-        "colour categories), size-key; POSITION auto or SPOT-outside / "
+        "colour categories), size-key, highlight (the highlighted-words note); "
+        "POSITION auto or SPOT-outside / "
         "SPOT-inside with SPOT one of top-left, top-center, top-right, left, "
         "right, bottom-left, bottom-center, bottom-right (outside grows the "
         "figure; left and right run down the side); ARRANGEMENT stacked or "
@@ -3368,6 +3376,8 @@ def render(argv: list[str]) -> None:
         overrides["saccade_type_legend"] = False
     if not args.show_color_legend:
         overrides["show_color_legend"] = False
+    if not args.show_highlight_legend:
+        overrides["show_highlight_legend"] = False
     if args.saccade_type_colors:
         # Over the palette's class colours when one is named: the explicit dict
         # wins over `--palette` wholesale in `api._expand_palette`, so starting

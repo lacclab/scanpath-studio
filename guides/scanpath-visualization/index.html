@@ -1894,8 +1894,10 @@ regressions, for example. Filtering changes only the figure, never your data.</p
 table with a row for each legend the current figure draws: <strong>Compare (A/B)</strong>
 while comparing, <strong>Saccade types</strong> when saccades are coloured by type,
 <strong>Fixation colors</strong> for a categorical <strong>Color by</strong>, a Highlight filter or raw
-gaze, and the duration <strong>Size key</strong> on a fixed marker scale. A legend the
-figure does not draw has no row. Its columns:</p>
+gaze, the duration <strong>Size key</strong> on a fixed marker scale, and <strong>Text
+highlight</strong>, the note naming the highlighted words, while words are highlighted
+(<span class="sps-icon" data-icon="description" aria-hidden="true"></span> Stimulus → Highlight). A legend the figure does not draw
+has no row. Its columns:</p>
 <ul>
 <li><strong>Show</strong>: draw the legend at all. This is the only place to turn a legend on
   or off.</li>
@@ -1907,14 +1909,15 @@ figure does not draw has no row. Its columns:</p>
   size key included.</li>
 <li><strong>Arrangement</strong>: <strong>Stacked</strong> (one item under the other) or <strong>Side by side</strong>.
   On <strong>Auto</strong>, a legend at the middle of the top or bottom edge is a row and
-  every other one a stack.</li>
+  every other one a stack. The text-highlight note is one line, so it has none.</li>
 <li><strong>Text size</strong>: in px; empty uses the figure's own.</li>
 </ul>
 <p>On <strong>Auto</strong> a legend stays where it is drawn by default. The size key's circles
 keep the true marker sizes wherever it goes; its <strong>Text size</strong> sets the labels.
 Compare's A/B label patterns stay under <strong>Compare ▾</strong>. Share links, settings
-files, saved designs, <code>render --legend</code> / <code>--no-color-legend</code> and the API's
-<code>legend_layout</code> / <code>show_color_legend</code> all carry these.</p>
+files, saved designs, <code>render --legend</code> / <code>--no-color-legend</code> /
+<code>--no-highlight-legend</code> and the API's <code>legend_layout</code> / <code>show_color_legend</code> /
+<code>show_highlight_legend</code> all carry these.</p>
 <h2 id="replay-and-compare">Replay and compare<a class="headerlink" href="#replay-and-compare" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Animate</strong> replays the trial; its <strong>▾</strong> sets the speed.</li>
@@ -1955,7 +1958,7 @@ overlay.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 12, 2026 07:50:31 UTC">October 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 13, 2026 07:05:44 UTC">October 13, 2026</span>
   </span>
 
     

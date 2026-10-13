@@ -2459,7 +2459,7 @@ in the app, and <code>check_for_updates()</code> in the <a href="../api/#version
 <h2 id="full-reference">Full reference<a class="headerlink" href="#full-reference" title="Permanent link">&para;</a></h2>
 <p>Generated from the parsers the commands themselves use, so every flag is here
 with the default and help <code>--help</code> prints.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.38.0.post6+g286cf408 — visualize eye-tracking-while-reading scanpaths
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.38.0.post10+g1fc0096c — visualize eye-tracking-while-reading scanpaths
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>usage:
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  scanpath-studio                  launch the interactive app (Streamlit)
@@ -2822,6 +2822,12 @@ with the default and help <code>--help</code> prints.</p>
 <td>Override a reading-type color, e.g. <code>--saccade-type-color</code> regression=#000000 (repeatable; classes: forward, skip, refixation, return_sweep, regression). Implies <code>--saccade-color-by-type</code>, unless <code>--saccade-color-by-direction</code> is given — then it recolors that two-way split (its forward and regression colors).</td>
 </tr>
 <tr>
+<td><code>--no-highlight-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the note naming the highlighted words (the words stay marked). Shows by default; <code>--legend</code> highlight=SPEC places it.</td>
+</tr>
+<tr>
 <td><code>--no-color-legend</code></td>
 <td>switch</td>
 <td>—</td>
@@ -2861,7 +2867,7 @@ with the default and help <code>--help</code> prints.</p>
 <td><code>--legend</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key; POSITION auto or SPOT-outside / SPOT-inside with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right (outside grows the figure; left and right run down the side); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right-outside,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
+<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key, highlight (the highlighted-words note); POSITION auto or SPOT-outside / SPOT-inside with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right (outside grows the figure; left and right run down the side); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right-outside,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
 </tr>
 <tr>
 <td><code>--saccade-classes</code></td>

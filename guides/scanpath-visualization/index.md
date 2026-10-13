@@ -38,14 +38,14 @@ Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the s
 
 ## Place the legends
 
-**Figure & canvas → Legends** is a table with a row for each legend the current figure draws: **Compare (A/B)** while comparing, **Saccade types** when saccades are coloured by type, **Fixation colors** for a categorical **Color by**, a Highlight filter or raw gaze, and the duration **Size key** on a fixed marker scale. A legend the figure does not draw has no row. Its columns:
+**Figure & canvas → Legends** is a table with a row for each legend the current figure draws: **Compare (A/B)** while comparing, **Saccade types** when saccades are coloured by type, **Fixation colors** for a categorical **Color by**, a Highlight filter or raw gaze, the duration **Size key** on a fixed marker scale, and **Text highlight**, the note naming the highlighted words, while words are highlighted ( Stimulus → Highlight). A legend the figure does not draw has no row. Its columns:
 
 - **Show**: draw the legend at all. This is the only place to turn a legend on or off.
 - **Position**: one of eight spots (**Top left**, **Top center**, **Top right**, **Left**, **Right**, **Bottom left**, **Bottom center**, **Bottom right**), each **outside** or **inside** the plot. **Left** and **Right** run down that side. An outside spot makes the figure larger instead of shrinking the plot, so the text stays true to scale. Legends sharing a spot stack, the size key included.
-- **Arrangement**: **Stacked** (one item under the other) or **Side by side**. On **Auto**, a legend at the middle of the top or bottom edge is a row and every other one a stack.
+- **Arrangement**: **Stacked** (one item under the other) or **Side by side**. On **Auto**, a legend at the middle of the top or bottom edge is a row and every other one a stack. The text-highlight note is one line, so it has none.
 - **Text size**: in px; empty uses the figure's own.
 
-On **Auto** a legend stays where it is drawn by default. The size key's circles keep the true marker sizes wherever it goes; its **Text size** sets the labels. Compare's A/B label patterns stay under **Compare ▾**. Share links, settings files, saved designs, `render --legend` / `--no-color-legend` and the API's `legend_layout` / `show_color_legend` all carry these.
+On **Auto** a legend stays where it is drawn by default. The size key's circles keep the true marker sizes wherever it goes; its **Text size** sets the labels. Compare's A/B label patterns stay under **Compare ▾**. Share links, settings files, saved designs, `render --legend` / `--no-color-legend` / `--no-highlight-legend` and the API's `legend_layout` / `show_color_legend` / `show_highlight_legend` all carry these.
 
 ## Replay and compare
 

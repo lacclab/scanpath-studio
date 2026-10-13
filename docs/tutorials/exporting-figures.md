@@ -38,7 +38,15 @@ and MP4 need Chrome, Chromium or Edge. For print, give the PNG a **Width**
 **Share → Code** writes the same size. Without a width, the plot's own camera
 button saves the same PNG.
 
-## 3. Export a batch when needed
+## 3. Save the look for next time
+
+Once the figure looks right — a heatmap, say, or a replay — save its settings
+as a design: open **:material/palette: My designs** in the plot rail and select
+its save button. A saved design applies the same layers, colors and sizes to any
+trial in one click. **Export** writes your designs to a file, and **Import**
+reads one back on another computer or shares them with a colleague.
+
+## 4. Export a batch when needed
 
 In **Export → Export bundle**:
 
@@ -50,7 +58,7 @@ In **Export → Export bundle**:
 For post-production, enable separable layers so text, boxes, fixations,
 saccades, heatmap, and stimulus image can be stacked in a vector editor.
 
-## 4. Keep provenance
+## 5. Keep provenance
 
 Keep `plot_config.json` with the batch (or a **:material/share: Share → File** settings file
 for a single figure). The bundle's `README.md` records the package version and

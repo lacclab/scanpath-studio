@@ -30,6 +30,8 @@ matches the question:
 | How was one text read? | **Per text** |
 | How does one participant behave across trials? | **Per participant** |
 | How do conditions or populations differ? | **Groups** |
+| Does reading change over a session? | **Per participant → Per-trial trend** or **Fixation duration over time** |
+| Does a group's reading change over time? | **Groups → Group trend** |
 
 ## 3. Choose one measure
 

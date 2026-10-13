@@ -16,6 +16,14 @@ the field: a difficulty level recorded only in your Words table narrows the
 fixations too. A trial whose Words and Fixations tables give it different
 values is left out, and a warning above the plot names it.
 
+To select participants by something your data does not record per trial —
+native language, age, a questionnaire score — attach a participants table, one
+row per participant: under **Metadata → Participants** when you add the dataset,
+or later in **:material/database: Data Management → Edit dataset → Data tables &
+column mapping**. Its columns then appear under **By participant** in the same
+filter funnel, so you can keep, for example, the native speakers of one language
+and then review their calibration below.
+
 If the pool becomes empty, the app names the filter that emptied it and offers
 to clear just that one.
 
@@ -62,6 +70,11 @@ Use **Export → Export bundle** for the active filtered pool. Include the tidy
 tables, `plot_config.json` and **Annotations (JSON)** — the tags and notes are
 the human review record; export figures only if they are part of the analysis
 record.
+
+For the list of trials you marked, export the annotations
+(**:material/database: Data Management → Annotations → Export**): each entry names
+its participant and trial with its star, tags and note. The bundle's `index.csv`
+lists the participant and trial of every trial it exported.
 
 **Done:** the original data remains intact, the retained trials are in the
 export bundle, and each manual decision has a tag and a reason in the

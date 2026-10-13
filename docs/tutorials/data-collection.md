@@ -50,3 +50,20 @@ row there; a screen annotation opens that screen.
 **Done:** you have checked geometry and timing, marked suspicious trials, and
 saved the review. For a formal retained/excluded pool, continue with
 [Data filtering](data-filtering.md).
+
+## Compare two eye trackers
+
+Choosing between two eye trackers, or two recording setups, for an experiment?
+Record the same text with each and compare the scanpaths side by side.
+
+1. Add each recording as its own dataset (**:material/database: Data Management →
+   :material/add: Add dataset → Import files**), each with the **Recording setup**
+   of the screen it was recorded on.
+2. Open the first tracker's dataset and select a trial.
+3. Turn on **Compare**. In scanpath B's row, choose the second tracker's dataset
+   under **Dataset B**, then a trial of the same text — trials of the same text
+   are marked 📄.
+4. Compare the two readings: precision, how fixations sit on the words, missing
+   stretches. Two recordings on screens of the same size can be overlaid;
+   otherwise each is drawn on its own screen, side by side. Turn on **Animate**
+   to replay both on one clock.

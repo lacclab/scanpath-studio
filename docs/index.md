@@ -36,9 +36,11 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 - :material-clipboard-pulse:{ .lg .middle } **[Run better data collection](tutorials/data-collection.md)**
 
     Pilot your eye tracker, software, and stimulus layout (font, spacing)
-    before you commit. Catch calibration and setup problems that only show up
-    in a plot, and train new experimenters to spot issues such as frequent
-    blinking, or check their sessions as you supervise.
+    before you commit — for example, [compare two eye trackers on the same
+    text](tutorials/data-collection.md#compare-two-eye-trackers). Catch
+    calibration and setup problems that only show up in a plot, and train new
+    experimenters to spot issues such as frequent blinking, or check their
+    sessions as you supervise.
 
 - :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection.md#4-record-the-decision)**
 
@@ -50,18 +52,20 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 
     Exclude or flag poorly calibrated, skimming, or non-reading trials, and
     trials with out-of-bounds, very short, or very long fixations. Find the
-    trials a specific analysis needs, such as those with many blinks.
+    trials a specific analysis needs — for example, participants with a given
+    native language and good calibration — and export the marked trial IDs.
 
 - :material-file-export:{ .lg .middle } **[Export figures](tutorials/exporting-figures.md)**
 
-    Produce one polished figure for a paper or talk, or bulk-export every
-    trial consistently, for example as training data for models that
-    generate scanpaths on images.
+    Show a real scanpath in a paper or talk as a heatmap or a replay, and
+    save the look as a design to reuse. Or bulk-export every trial
+    consistently, for example as training data for models that generate
+    scanpaths on images.
 
 - :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis.md)**
 
-    Compare model-generated scanpaths with human ones, and contrast groups,
-    conditions, and sessions over time.
+    Compare model-generated scanpaths with human ones, contrast groups and
+    conditions, and see how reading progresses over time.
 
 </div>
 

@@ -7,19 +7,24 @@ with [Getting started](../getting-started.md).
 
 - :material-clipboard-pulse:{ .lg .middle } **[Check data collection](data-collection.md)**
 
-    Check a pilot or completed session and record issues.
+    Check a pilot or completed session and record issues, or compare two
+    eye trackers on the same text.
 
 - :material-filter:{ .lg .middle } **[Data filtering](data-filtering.md)**
 
-    Review trials, annotate decisions, and define the retained pool.
+    Pick the trials to include — for example, participants with a given
+    native language and good calibration — annotate them, and export the
+    marked trial IDs.
 
 - :material-file-export:{ .lg .middle } **[Exporting figures](exporting-figures.md)**
 
-    Export one polished figure or the same view across many trials.
+    Showcase a real scanpath as a heatmap or a replay, save the look as a
+    design, and export one figure or the same view across many trials.
 
 - :material-chart-box:{ .lg .middle } **[Corpus analysis](corpus-analysis.md)**
 
-    Summarize texts, participants, or groups and download the table.
+    Summarize texts, participants, or groups, see progression over time,
+    and download the table.
 
 </div>
 

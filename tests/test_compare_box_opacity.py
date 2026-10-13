@@ -34,7 +34,10 @@ def _run(**state):
 
 
 def _slider(at, key):
-    return next(s for s in at.slider if s.key == key)
+    """The shadow slider for ``cmp{idx}_box_{part}_opacity`` — its key moves
+    with each new value (`controls.shadow_widget_key`)."""
+    name = key.removesuffix("__pick")
+    return next(s for s in at.slider if s.key.startswith(f"_{name}_pick__w"))
 
 
 def test_untouched_they_follow_the_figure():

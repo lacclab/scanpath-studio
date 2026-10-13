@@ -4122,9 +4122,10 @@ def _no_fixations_note(
 
 
 def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
-    """The caption under a figure framed on the whole screen (#374 F39), else
-    ``""``: the empty band is the screen, and where to zoom to the text."""
-    if not viz_settings.get("fit_to_monitor", True):
+    """The caption under a figure *cropped* to its data, else ``""``: what is
+    shown is part of the screen, and where to see all of it. (#374 F39 put it
+    under the full screen instead, where nothing was hidden to notice.)"""
+    if viz_settings.get("fit_to_monitor", True):
         return ""
     try:
         width, height = int(canvas_width), int(canvas_height)
@@ -4133,8 +4134,8 @@ def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
     if width <= 0 or height <= 0:
         return ""
     return (
-        f"Full {width}×{height} screen — **Figure & canvas → Crop to data** "
-        "zooms to the text."
+        f"Cropped to the data — the full screen is {width}×{height}. Turn off "
+        "**Figure & canvas → Crop to data** to show all of it."
     )
 
 

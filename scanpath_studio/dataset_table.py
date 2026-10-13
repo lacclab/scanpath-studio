@@ -239,9 +239,8 @@ def filter_rows(
     *,
     query: str = "",
     kinds: Sequence[str] = (),
-    languages: Sequence[str] = (),
 ) -> list[DatasetRow]:
-    """The rows matching a name search and the Kind / Language picks.
+    """The rows matching a name search and the Kind pick.
 
     An empty pick means "any", so the filters narrow only once something is
     chosen. The search is a case-insensitive substring of the name.
@@ -252,7 +251,6 @@ def filter_rows(
         for row in rows
         if (not needle or needle in row.name.casefold())
         and (not kinds or row.kind in kinds)
-        and (not languages or row.language in languages)
     ]
 
 

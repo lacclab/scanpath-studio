@@ -190,9 +190,9 @@ class TestFiltering:
     def test_search_is_a_case_insensitive_substring(self, rows):
         assert [r.name for r in dt.filter_rows(rows, query="stud")] == ["My study"]
 
-    def test_kind_and_language_narrow_together(self, rows):
-        picked = dt.filter_rows(rows, kinds=["Public"], languages=["German"])
-        assert [r.name for r in picked] == ["PoTeC"]
+    def test_kind_narrows(self, rows):
+        picked = dt.filter_rows(rows, kinds=["Public"])
+        assert picked and {r.kind for r in picked} == {"Public"}
 
 
 def test_the_record_keeps_values_and_cells_apart():

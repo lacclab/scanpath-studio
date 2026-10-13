@@ -27,8 +27,8 @@
       Extract it and run `./ScanpathStudio/ScanpathStudio`.
 
     The app opens in its own window. To quit, close that window on macOS, or
-    the console window on Windows and Linux. On an Intel Mac or an older macOS,
-    use pip instead.
+    the console window on Windows and Linux. A download there asks where to
+    save the file. On an Intel Mac or an older macOS, use pip instead.
 
 === "pip"
 

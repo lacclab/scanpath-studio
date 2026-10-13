@@ -300,6 +300,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     server_bound_to_loopback,
 )
+from scanpath_studio.save_dialog import render_save_dialog
 from scanpath_studio.session_keys import (
     COLUMN_MAPPING_PREFIX,
     PARAM_CORPUS,
@@ -9952,6 +9953,8 @@ def _run_app() -> None:
         render_truncation_tooltips()
         # #422: a color picked in a rail popover survives a click on the page.
         render_color_picker_commit()
+        # #439: in the desktop app's window, a download opens a Save-as dialog.
+        render_save_dialog()
         # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
         # renders at the bottom of this function, so serving it here is what keeps
         # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since

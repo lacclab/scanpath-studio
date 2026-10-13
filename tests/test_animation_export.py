@@ -563,3 +563,23 @@ class TestEndToEnd:
         expected_video_frames = round(n * frame_ms / _MP4_DT_MS)
         count = _mp4_frame_count(data)
         assert count == expected_video_frames
+
+
+@pytest.mark.skipif(
+    not os.path.exists("/usr/bin/false"), reason="needs a browser that exits at once"
+)
+# Kaleido's server thread dies with the browser, which is the point.
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_a_browser_that_closes_at_once_fails_the_render_instead_of_hanging():
+    """The frozen desktop app's hung "Render GIF": Kaleido's warm server thread
+    died with the browser, and ``calc_fig_sync`` waited for it forever."""
+    import kaleido
+
+    fig = go.Figure(go.Scatter(x=[1], y=[1]))
+    with ae.KALEIDO_LOCK:
+        kaleido.start_sync_server(path="/usr/bin/false", silence_warnings=True)
+        try:
+            with pytest.raises(ae.RendererStoppedError):
+                ae.warm_calc_fig(fig, {"format": "png"})
+        finally:
+            kaleido.stop_sync_server(silence_warnings=True)

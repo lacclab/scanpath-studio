@@ -1066,7 +1066,7 @@ def _figure_renderer(enabled: bool):
     ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
     stopped, since that server is one per process (UX-150).
     """
-    from .animation_export import KALEIDO_LOCK
+    from .animation_export import KALEIDO_LOCK, warm_calc_fig
 
     with KALEIDO_LOCK if enabled else nullcontext():
         server = None
@@ -1085,9 +1085,9 @@ def _figure_renderer(enabled: bool):
 
         def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
             if server is not None:
-                data = server.calc_fig_sync(
+                data = warm_calc_fig(
                     fig,
-                    opts={
+                    {
                         "format": fmt,
                         "width": int(width),
                         "height": int(height),

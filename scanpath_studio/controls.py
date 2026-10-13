@@ -390,6 +390,7 @@ def _numeric_slider(
     label_left: bool = False,
     display: str | None = None,
     field_host=None,
+    value=None,
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
 
@@ -411,15 +412,33 @@ def _numeric_slider(
     """
     disabled, help = _layer_gate(disabled, help)  # UX-97
     num_key = f"{key}__num"
-    if key in st.session_state:
-        st.session_state[num_key] = st.session_state[key]
+    if value is not None:
+        # A shadow (`shadow_widget_key(seed=False)`): both halves take ``value``
+        # as their own default and hand a change to ``on_change(new_value)``;
+        # neither is seeded through session state (see `shadow_widget_key`).
+        def _from(widget_key: str):
+            def call() -> None:
+                if _shadow_key_missing(widget_key):  # BUG-18
+                    return
+                if on_change is not None:
+                    on_change(st.session_state[widget_key])
 
-    def _apply() -> None:
-        if _shadow_key_missing(num_key):  # BUG-18
-            return
-        st.session_state[key] = st.session_state[num_key]
-        if on_change is not None:
-            on_change()
+            return call
+
+        slider_change, apply_num = _from(key), _from(num_key)
+    else:
+        if key in st.session_state:
+            st.session_state[num_key] = st.session_state[key]
+
+        def apply_num() -> None:
+            if _shadow_key_missing(num_key):  # BUG-18
+                return
+            st.session_state[key] = st.session_state[num_key]
+            if on_change is not None:
+                on_change()
+
+        slider_change = on_change
+    shown = {} if value is None else {"value": value}
 
     # A narrow box on the same line as the slider: the box is for typing an
     # exact value, so it only needs room for the number itself (the CSS drops its
@@ -442,17 +461,19 @@ def _numeric_slider(
         key=key,
         help=help,
         disabled=disabled,
-        on_change=on_change,
+        on_change=slider_change,
         persist_state=persist_state,
         label_visibility=(
             "collapsed" if label_left or field_host is not None else "visible"
         ),
+        **shown,
     )
     num_col.number_input(
         label,
         min_value=min_value,
         max_value=max_value,
         step=step,
+        **shown,
         format=_number_box_format(
             number_format if number_format is not None else slider_format,
             min_value,
@@ -461,7 +482,7 @@ def _numeric_slider(
             st.session_state.get(num_key),
         ),
         key=num_key,
-        on_change=_apply,
+        on_change=apply_num,
         label_visibility="collapsed",
         disabled=disabled,
     )
@@ -5030,8 +5051,8 @@ def _compare_follow_color_picker(
     untouched colour keeps following ``follow`` when that changes. Picking
     ``follow`` itself again goes back to following it."""
     key = f"cmp{idx}_{part}_color"
-    pick_key = f"{key}__pick"
-    st.session_state[pick_key] = st.session_state.get(key) or follow
+    shown = st.session_state.get(key) or follow
+    pick_key = shadow_widget_key(f"{key}_pick", shown, seed=False)
 
     def _apply() -> None:
         if _shadow_key_missing(pick_key):  # BUG-18
@@ -5044,6 +5065,7 @@ def _compare_follow_color_picker(
     disabled, tip = _layer_gate(disabled, help)
     host.color_picker(
         f"{_COMPARE_SCANPATHS[idx][1]} — {what} color",
+        value=shown,
         key=pick_key,
         on_change=_apply,
         disabled=disabled,
@@ -5072,14 +5094,12 @@ def _compare_follow_opacity(
     follow = float(
         st.session_state.get(f"global_word_box_{part}_opacity", defaults[part])
     )
-    pick_key = f"{key}__pick"
     own = st.session_state.get(key)
-    st.session_state[pick_key] = float(own) if own is not None else follow
+    shown = float(own) if own is not None else follow
+    pick_key = shadow_widget_key(f"{key}_pick", shown, seed=False)
 
-    def _apply() -> None:
-        if _shadow_key_missing(pick_key):  # BUG-18
-            return
-        picked = float(st.session_state[pick_key])
+    def _apply(picked: float) -> None:
+        picked = float(picked)
         if abs(picked - follow) < 1e-9:
             st.session_state.pop(key, None)
         else:
@@ -5094,6 +5114,7 @@ def _compare_follow_opacity(
         step=0.01,
         number_format="%.2f",
         help=help,
+        value=shown,
         on_change=_apply,
         field_host=host,
     )
@@ -5789,7 +5810,7 @@ BG_CHOICES = (*BACKGROUND_PRESETS, BG_CUSTOM_CHOICE)
 _BG_SWATCH_KEY = "rail_bg_swatch"
 
 
-def shadow_widget_key(name: str, value) -> str:
+def shadow_widget_key(name: str, value, *, seed: bool = True) -> str:
     """The key a shadow widget showing ``value`` is drawn under (#422).
 
     A shadow shows a value derived from wire keys it does not own, and writes
@@ -5800,7 +5821,15 @@ def shadow_widget_key(name: str, value) -> str:
     file, a design, another dataset). So, like the fixation window's slider,
     the widget moves to a fresh key whenever ``value`` changed without it: a
     widget the browser has never seen has nothing old to send back. Returns
-    the key to draw under; its value is already ``value``."""
+    the key to draw under; its value is already ``value``.
+
+    ``seed=False`` leaves the fresh key out of session state, and the caller
+    passes ``value`` as the widget's own ``value=`` / ``index=``. Prefer it: a
+    widget made inside a *closed* popover never receives a value set through
+    session state, so the browser mounts it at its built-in default — a colour
+    picker's ``#000000`` — and sends that back on the next rerun as if picked
+    (the background turning black on a dataset switch). A widget's own default
+    is in the element itself, so it mounts right whenever it is opened."""
     ss = st.session_state
     gen_key = f"_{name}_gen"
     generation = int(ss.get(gen_key) or 0)
@@ -5810,7 +5839,8 @@ def shadow_widget_key(name: str, value) -> str:
         generation += 1
         ss[gen_key] = generation
         widget_key = f"_{name}__w{generation}"
-        ss[widget_key] = value
+        if seed:
+            ss[widget_key] = value
     return widget_key
 
 
@@ -5854,11 +5884,11 @@ def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
     the other control. It is a shadow now (`shadow_widget_key`), derived every
     run from the wire keys, so links, settings files and presets move it and
     only a pick writes them."""
-    widget_key = shadow_widget_key(
-        _BG_SWATCH_KEY, resolved_background_color(st.session_state)
-    )
+    color = resolved_background_color(st.session_state)
+    widget_key = shadow_widget_key(_BG_SWATCH_KEY, color, seed=False)
     return host.color_picker(
         label,
+        value=color,
         key=widget_key,
         on_change=_apply_background_swatch,
         args=(widget_key,),

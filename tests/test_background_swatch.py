@@ -121,3 +121,58 @@ def test_a_shadow_moves_to_a_fresh_key_only_when_its_value_moves():
     assert moved != first
     assert at.session_state[moved] == "b"
     assert first not in at.session_state
+
+
+class TestTheShadowsCarryTheirOwnDefault:
+    """The background turned black on a dataset switch. The swatch was created
+    in a closed popover with its colour set through session state, which a
+    widget the browser has not mounted never receives — so the browser mounted
+    it at a colour picker's built-in ``#000000`` and sent that back on the next
+    rerun as a pick, selecting the Black background. A shadow widget now
+    carries the value as its *own* default, which the element itself holds, so
+    it mounts right however late it is opened. The same holds for the Compare
+    colour and opacity shadows and the font picker."""
+
+    def test_the_swatch_default_is_the_background_in_use(self):
+        at = _run(global_bg_choice="Light gray")
+        (picker,) = at.color_picker
+        assert picker.proto.default.lower() == BACKGROUND_PRESETS["Light gray"]
+
+    def test_the_compare_colors_default_to_what_is_drawn(self):
+        def app():
+            import streamlit as st
+
+            from scanpath_studio import controls
+
+            st.session_state.setdefault("cmp1_box_color", "#123456")
+            controls._compare_follow_color_picker(
+                st, 1, "box", follow="#abcdef", help="", what="word box line"
+            )
+            controls._compare_follow_color_picker(
+                st, 0, "box", follow="#abcdef", help="", what="word box line"
+            )
+
+        at = AppTest.from_function(app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        defaults = sorted(p.proto.default.lower() for p in at.color_picker)
+        assert defaults == ["#123456", "#abcdef"]
+
+    def test_the_opacity_sliders_default_to_what_is_drawn(self):
+        def app():
+            import streamlit as st
+
+            from scanpath_studio import controls
+
+            st.session_state.setdefault("global_word_box_fill_opacity", 0.3)
+            controls._compare_follow_opacity(
+                st, 1, "fill", label="word box fill opacity", help=""
+            )
+
+        at = AppTest.from_function(app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        (slider,) = at.slider
+        assert list(slider.proto.default) == [pytest.approx(0.3)]
+        (box,) = at.number_input
+        assert box.proto.default == pytest.approx(0.3)

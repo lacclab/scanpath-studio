@@ -1,8 +1,25 @@
 # Analyze a corpus
 
-Move from single scanpaths to a text, participant, condition or group-level
-result: contrast groups and conditions, and see how reading progresses over
-time.
+Move from single scanpaths to a text, condition or group-level result. Each
+page below is one task.
+
+<div class="grid cards" markdown>
+
+- :material-text-box-search-outline:{ .lg .middle } **[Analyze one text](analyze-one-text.md)**
+
+    How one text was read, word by word, across its readers.
+
+- :material-chart-box:{ .lg .middle } **[Compare groups or conditions](compare-groups.md)**
+
+    Two cohorts or conditions side by side, with their difference.
+
+- :material-chart-timeline-variant:{ .lg .middle } **[See progression over time](progression-over-time.md)**
+
+    How reading changes over a session, for a participant or a group.
+
+</div>
+
+## Before you start
 
 Corpus Analysis shows the reading measures your interest-area table brings
 (mapped under **Reading measures** when you add or edit a dataset); it computes
@@ -11,24 +28,18 @@ measures with your own pipeline (EyeLink Data Viewer's interest-area report, for
 example), join them onto your Words (interest areas) table by participant, trial
 and word ID, and load that; EyeLink's `IA_*` names map themselves.
 
-Each page below is one task.
+**Define the pool.** Narrow the trials with the Scanpath view's filter or
+**Edit filters** at the top of Corpus Analysis. The line beside the dataset
+picker there counts the trials and participants left and names each active
+filter; **Clear** resets them. A text ID must identify the same stimulus across
+participants; a trial ID identifies one trial.
 
-<div class="grid cards" markdown>
+## Keep the result
 
-- :material-filter-variant:{ .lg .middle } **[Define the pool](define-the-pool.md)**
-
-    The trials and participants the result is about.
-
-- :material-chart-box:{ .lg .middle } **[Analyze texts and groups](analyze-texts-and-groups.md)**
-
-    One text's reading, one participant, or two groups side by side.
-
-- :material-chart-timeline-variant:{ .lg .middle } **[See progression over time](progression-over-time.md)**
-
-    How reading changes over a session, for a participant or a group.
-
-- :material-table-arrow-down:{ .lg .middle } **[Download the table](download-the-table.md)**
-
-    The table behind a result, and the recipe that made it.
-
-</div>
+Select **Download this table (CSV)** beside a result, and **Download the recipe
+(JSON)** beside it. The recipe records how the table was made: the app version,
+the dataset's name, the trial filters, the view's text, screen, measure,
+aggregation, normalization, spread, minimum participants and group definitions,
+and the trial and participant counts. It names the dataset rather than copying
+it, and holds no figure settings. A Share link carries neither the filters nor
+the Corpus Analysis choices.

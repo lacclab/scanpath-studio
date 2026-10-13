@@ -1,9 +1,12 @@
 # Export a replay
 
-Turn on **Animate**, set the speed, then open **Export → Current figure**: the
-replay saves as **HTML** (interactive, with its own play controls), **GIF** or
-**MP4**. GIF and MP4 need Chrome, Chromium or Edge; the clip runs as long as
-the replay plays at its speed.
+The reading as it happened, for a talk or a supplement.
+
+1. Choose the view as for [one figure](export-one-figure.md#1-choose-the-view),
+   then turn on **Animate** and set the speed.
+2. Open **Export → Current figure**: the replay saves as **HTML** (interactive,
+   with its own play controls), **GIF** or **MP4**. GIF and MP4 need Chrome,
+   Chromium or Edge; the clip runs as long as the replay plays at its speed.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/replay-export_poster.webp" data-autoplay

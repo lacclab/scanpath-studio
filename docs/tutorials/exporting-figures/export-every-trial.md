@@ -1,4 +1,14 @@
-# Export a batch
+# Export every trial
+
+The same view across many trials — for a supplement, or as a consistent image
+set for downstream processing.
+
+## 1. Set the view once
+
+Choose the view as for [one figure](export-one-figure.md#1-choose-the-view);
+every trial in the batch is drawn with it.
+
+## 2. Build the bundle
 
 In **Export → Export bundle**:
 
@@ -18,14 +28,13 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.
 
 *Adding PNG and the fixation and word-measure tables, then building a zip of all 24 trials (fast-forwarded) and downloading it.*
 
-## Keep provenance
+## 3. Keep provenance
 
-Keep `plot_config.json` with the batch (or a **:material/share: Share → File**
-settings file for a single figure). The bundle's `README.md` records the package
-version and which trials it was built from, and `index.csv` lists every file with
-its participant, trial and screen, and any that failed. Record the dataset
-version and the trial filters you used in the caption or analysis log — the
-export does not store them.
+Keep `plot_config.json` with the batch. The bundle's `README.md` records the
+package version and which trials it was built from, and `index.csv` lists every
+file with its participant, trial and screen, and any that failed. Record the
+dataset version and the trial filters you used in the caption or analysis log —
+the export does not store them.
 
 **Done:** the exported files share one visual configuration and can be
 recreated. For scripted runs, see [Automation](../../automation.md).

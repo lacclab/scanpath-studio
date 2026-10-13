@@ -42,7 +42,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
     experimenters to spot issues such as frequent blinking, or check their
     sessions as you supervise.
 
-- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection/record-the-review.md)**
+- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection/check-a-session.md)**
 
     Mark trials or whole sessions for exclusion, and decide whether you need
     to collect more. Check that fixation detection and line assignment hold up

@@ -13,8 +13,8 @@ conditions, a participants-table column under **By participant**.
 ## Review one experimenter's sessions
 
 1. Open the filter funnel beside the trial picker and pick the experimenter.
-2. Step through their trials with ◀ ▶, and [replay](replay-a-recording.md) the
-   ones that look wrong.
+2. Step through their trials with ◀ ▶, and [replay](check-a-session.md#3-replay-the-recording)
+   the ones that look wrong.
 3. In **Annotations**, tag what you find, such as `calibration` or `blink`, with
    the experimenter's name in the note, so the review is one export away.
 
@@ -34,4 +34,4 @@ conditions, a participants-table column under **By participant**.
 3. Pick trials of the same text, marked 📄, and compare how the two sets of
    recordings look: precision, missing stretches, drift.
 
-**Next:** [record the review](record-the-review.md).
+Save what you found as in [Check a session](check-a-session.md#5-save-the-review).

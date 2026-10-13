@@ -12,4 +12,5 @@ condition takes effect? In **:material/bar_chart: Corpus Analysis**:
 The trend follows the trials in the order your data's trial index records, so
 map that column when you add the dataset.
 Narrow the pool first to the participants or condition the question is about —
-see [Define the pool](define-the-pool.md).
+see [Before you start](index.md#before-you-start) — and keep the result as in
+[Keep the result](index.md#keep-the-result).

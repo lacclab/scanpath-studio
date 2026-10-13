@@ -3,8 +3,8 @@
 Choosing between two eye trackers, or two recording setups, for an experiment?
 Record the same text with each and compare the scanpaths.
 
-1. [Load](load-a-session.md) each recording as its own dataset, each with the
-   **Recording setup** of the screen it was recorded on.
+1. [Load](check-a-session.md#1-load-the-session) each recording as its own
+   dataset, each with the **Recording setup** of the screen it was recorded on.
 2. Open the first tracker's dataset and select a trial.
 3. Turn on **Compare**. In scanpath B's row, choose the second tracker's dataset
    under **Dataset B**, then a trial of the same text — trials of the same text

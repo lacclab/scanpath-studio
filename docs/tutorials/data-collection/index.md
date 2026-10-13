@@ -13,33 +13,22 @@ Use Scanpath Studio to:
   experimenters can learn from them and the person overseeing collection can
   check each session.
 
-Each page below is one task, with a recording of it in the app.
+Each page below is one task, with recordings of it in the app.
 
 <div class="grid cards" markdown>
 
-- :material-database-plus:{ .lg .middle } **[Load a session](load-a-session.md)**
+- :material-clipboard-pulse:{ .lg .middle } **[Check a session](check-a-session.md)**
 
-    Add a pilot or completed session, with the screen it was recorded on.
-
-- :material-crosshairs-gps:{ .lg .middle } **[Check the setup](check-the-setup.md)**
-
-    Confirm on one trial that the text, word boxes and fixations line up.
-
-- :material-play-circle:{ .lg .middle } **[Replay a recording](replay-a-recording.md)**
-
-    Watch the reading as it happened to spot data loss, blinks and drift.
+    Check a pilot or completed session for setup, calibration and recording
+    problems, and record what you find.
 
 - :material-compare-horizontal:{ .lg .middle } **[Compare two eye trackers](compare-eye-trackers.md)**
 
-    Put two trackers' recordings of the same text side by side.
+    Record the same text with two trackers, or two setups, and compare.
 
 - :material-account-search:{ .lg .middle } **[Audit an experimenter](audit-an-experimenter.md)**
 
     Review one experimenter's sessions, or compare two experimenters'.
-
-- :material-tag-check:{ .lg .middle } **[Record the review](record-the-review.md)**
-
-    Star, tag and note the trials that need attention, and save the record.
 
 </div>
 

@@ -68,6 +68,16 @@ CURSOR_JS = """
   // A rerun that re-focuses a control scrolls it into view, which in the
   // recording is the page jumping away and back for no visible reason.
   Element.prototype.scrollIntoView = function () {};
+  // The pointer crosses the figure on its way to a control, and Plotly's
+  // hover label and toolbar would pop up there; neither is in the story.
+  const quiet = () => {
+    const style = document.createElement('style');
+    style.textContent = '.hoverlayer, .modebar-container { display: none !important; }';
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', quiet);
+  } else quiet();
   // Init scripts run in every frame, and the figure is an iframe.
   if (window !== window.top) return;
   window.demoCursor = (x, y, pressed) => {

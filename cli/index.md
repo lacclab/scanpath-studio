@@ -265,7 +265,7 @@ Between releases the version names the build: `0.35.0.post3+g8f18219` is three c
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.38.0.post12+g2ecd286f — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.38.1 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)

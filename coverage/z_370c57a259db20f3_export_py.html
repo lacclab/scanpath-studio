@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_export_status_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-13 11:25 +0000
+            created at 2026-10-13 18:27 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1148,7 +1148,7 @@
     <p class="pln"><span class="n"><a id="t1066" href="#t1066">1066</a></span><span class="t"><span class="str">    ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1067" href="#t1067">1067</a></span><span class="t"><span class="str">    stopped, since that server is one per process (UX-150).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1068" href="#t1068">1068</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1069" href="#t1069">1069</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">animation_export</span> <span class="key">import</span> <span class="nam">KALEIDO_LOCK</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1069" href="#t1069">1069</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">animation_export</span> <span class="key">import</span> <span class="nam">KALEIDO_LOCK</span><span class="op">,</span> <span class="nam">warm_calc_fig</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1070" href="#t1070">1070</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1071" href="#t1071">1071</a></span><span class="t">    <span class="key">with</span> <span class="nam">KALEIDO_LOCK</span> <span class="key">if</span> <span class="nam">enabled</span> <span class="key">else</span> <span class="nam">nullcontext</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1072" href="#t1072">1072</a></span><span class="t">        <span class="nam">server</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
@@ -1167,9 +1167,9 @@
     <p class="pln"><span class="n"><a id="t1085" href="#t1085">1085</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1086" href="#t1086">1086</a></span><span class="t">        <span class="key">def</span> <span class="nam">render</span><span class="op">(</span><span class="nam">fig</span><span class="op">,</span> <span class="nam">fmt</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">width</span><span class="op">:</span> <span class="nam">int</span><span class="op">,</span> <span class="nam">height</span><span class="op">:</span> <span class="nam">int</span><span class="op">,</span> <span class="nam">scale</span><span class="op">:</span> <span class="nam">int</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">bytes</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1087" href="#t1087">1087</a></span><span class="t">            <span class="key">if</span> <span class="nam">server</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1088" href="#t1088">1088</a></span><span class="t">                <span class="nam">data</span> <span class="op">=</span> <span class="nam">server</span><span class="op">.</span><span class="nam">calc_fig_sync</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1088" href="#t1088">1088</a></span><span class="t">                <span class="nam">data</span> <span class="op">=</span> <span class="nam">warm_calc_fig</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1089" href="#t1089">1089</a></span><span class="t">                    <span class="nam">fig</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1090" href="#t1090">1090</a></span><span class="t">                    <span class="nam">opts</span><span class="op">=</span><span class="op">{</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1090" href="#t1090">1090</a></span><span class="t">                    <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1091" href="#t1091">1091</a></span><span class="t">                        <span class="str">&quot;format&quot;</span><span class="op">:</span> <span class="nam">fmt</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1092" href="#t1092">1092</a></span><span class="t">                        <span class="str">&quot;width&quot;</span><span class="op">:</span> <span class="nam">int</span><span class="op">(</span><span class="nam">width</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1093" href="#t1093">1093</a></span><span class="t">                        <span class="str">&quot;height&quot;</span><span class="op">:</span> <span class="nam">int</span><span class="op">(</span><span class="nam">height</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -3459,7 +3459,7 @@
             <a class="nav" href="z_370c57a259db20f3_export_status_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-13 11:25 +0000
+            created at 2026-10-13 18:27 +0000
         </p>
     </div>
 </footer>

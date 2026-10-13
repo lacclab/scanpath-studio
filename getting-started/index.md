@@ -8,7 +8,7 @@ The easiest way to work with your own data: no Python needed, your data stays on
 - **Windows**: [`ScanpathStudio-windows-x86_64-setup.exe`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe). Run it to install Scanpath Studio for your account (no administrator rights needed), then launch it from the Start menu. The installer is not code-signed, so SmartScreen warns the first time: click **More info → Run anyway**. Uninstall it from **Settings → Apps**. To run it without installing, use [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) instead: extract it and run `ScanpathStudio.exe`.
 - **Linux**: [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz). Extract it and run `./ScanpathStudio/ScanpathStudio`.
 
-The app opens in its own window. To quit, close that window on macOS, or the console window on Windows and Linux. On an Intel Mac or an older macOS, use pip instead.
+The app opens in its own window. To quit, close that window on macOS, or the console window on Windows and Linux. A download there asks where to save the file. On an Intel Mac or an older macOS, use pip instead.
 
 ```
 pip install scanpath-studio

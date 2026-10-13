@@ -5,7 +5,6 @@ site_description: >-
 site_url: https://lacclab.github.io/scanpath-studio/
 repo_url: https://github.com/lacclab/scanpath-studio
 repo_name: lacclab/scanpath-studio
-edit_uri: edit/main/docs/
 copyright: >-
   MIT licensed · cite it by its DOI,
   <a href="https://doi.org/10.5281/zenodo.22933884">10.5281/zenodo.22933884</a>
@@ -36,8 +35,6 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
   features:
-    - content.action.edit
-    - content.action.view
     - content.code.annotate
     - content.code.copy
     - content.tabs.link

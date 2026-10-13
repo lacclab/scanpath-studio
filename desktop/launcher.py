@@ -36,6 +36,7 @@ from __future__ import annotations
 import math
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -531,7 +532,60 @@ def _confirm_boot_when_ready(port: int) -> None:
         pass
 
 
+_CHROMIUM_PIPE_WRAPPER = "_unix_pipe_chromium_wrapper.py"
+
+
+def _chromium_pipe_wrapper_cli() -> list[str] | None:
+    """The browser command line when this process was started as Kaleido's
+    pipe wrapper, else ``None``.
+
+    On macOS and Linux, choreographer (Kaleido's browser driver) starts the
+    browser as ``sys.executable _unix_pipe_chromium_wrapper.py <browser> …``.
+    Frozen, ``sys.executable`` is this launcher, so without this every image
+    export started a second Scanpath Studio instead of a browser, and the
+    export waited forever for a browser that never came.
+    """
+    if len(sys.argv) > 2 and Path(sys.argv[1]).name == _CHROMIUM_PIPE_WRAPPER:
+        return sys.argv[2:]
+    return None
+
+
+def _run_chromium_pipe_wrapper(cli: list[str]) -> int:
+    """Do what choreographer's ``_unix_pipe_chromium_wrapper.py`` does.
+
+    The browser reads DevTools commands on fd 3 and writes on fd 4; the wrapper
+    exists to hand it our stdin and stdout there. Nothing is imported after the
+    ``dup2``s — an import could open a file onto the descriptors just taken.
+    """
+    os.dup2(0, 3)
+    os.dup2(1, 4)
+    os.set_inheritable(3, True)
+    os.set_inheritable(4, True)
+    process = subprocess.Popen(cli, pass_fds=(3, 4))
+
+    def _stop(_signum, _frame) -> None:
+        process.terminate()
+        try:
+            process.wait(5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+    code = process.wait()
+    # The original's last word: the pipe is not always closed when the browser
+    # exits, so the wrapper says goodbye in its place.
+    print("{bye}", flush=True)
+    return code
+
+
 def main() -> None:
+    # Before anything else, the log redirect included: this process's stdout
+    # is the browser's DevTools pipe.
+    wrapper_cli = _chromium_pipe_wrapper_cli()
+    if wrapper_cli is not None:
+        sys.exit(_run_chromium_pipe_wrapper(wrapper_cli))
+
     # First, before anything imports Streamlit or Tornado: they bind logging
     # handlers to sys.stderr at import time, and in the .app that stream is
     # /dev/null.

@@ -671,3 +671,55 @@ class TestTheSizeKeyAboveThePlot:
         fig = self._key(300)
         assert fig.layout.margin.t > 0
         assert _plot_region(fig) == pytest.approx((800, 600))
+
+
+class TestTheHighlightNote:
+    """The note naming the highlighted words is a Legends row of its own:
+    Show hides it, Position moves it, Text size sizes it; Auto leaves it in
+    the plot's bottom-left corner, where it always was."""
+
+    @staticmethod
+    def _fig():
+        fig = _figure()
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        plots._add_highlight_key(fig, "is_in_aspan", "#d55e00")
+        return fig
+
+    @staticmethod
+    def _notes(fig):
+        return [
+            a for a in fig.layout.annotations if a.name == plots._HIGHLIGHT_KEY_NAME
+        ]
+
+    def test_auto_leaves_it_where_it_was(self):
+        fig = self._fig()
+        before = self._notes(fig)[0].to_plotly_json()
+        apply_legend_layout(fig, None)
+        assert self._notes(fig)[0].to_plotly_json() == before
+
+    def test_show_off_removes_it(self):
+        fig = self._fig()
+        apply_legend_layout(fig, None, show_highlight=False)
+        assert self._notes(fig) == []
+
+    def test_a_spot_moves_it_and_a_size_sizes_it(self):
+        fig = self._fig()
+        apply_legend_layout(
+            fig, {"highlight": {"position": "top-center-outside", "size": 16}}
+        )
+        (note,) = self._notes(fig)
+        assert (note.x, note.xanchor, note.yanchor) == (0.5, "center", "bottom")
+        assert note.font.size == 16
+        assert _plot_region(fig) == pytest.approx((800, 600))
+
+    def test_every_builder_honours_the_switch(self):
+        import scanpath_studio as sps
+
+        words, fixations = sps.load_sample_data()
+        p, t = sps.list_trials(words, fixations).iloc[0].tolist()
+        kwargs = dict(highlight_column="is_in_aspan")
+        drawn = sps.plot_scanpath(words, fixations, p, t, **kwargs)
+        hidden = sps.plot_scanpath(
+            words, fixations, p, t, show_highlight_legend=False, **kwargs
+        )
+        assert self._notes(drawn) and not self._notes(hidden)

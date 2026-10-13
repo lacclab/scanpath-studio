@@ -2019,6 +2019,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         saccade_class_colors=viz_settings.get("saccade_class_colors"),
         saccade_type_legend=viz_settings.get("saccade_type_legend", True),
         show_color_legend=viz_settings.get("show_color_legend", True),
+        show_highlight_legend=viz_settings.get("show_highlight_legend", True),
         # VIZ-31: the reading-class filter (None / a full list = draw them all).
         saccade_classes=viz_settings.get("saccade_classes"),
         saccade_render_mode=viz_settings.get("saccade_render_mode", "Straight"),
@@ -4465,6 +4466,9 @@ def _build_studio_config(
             "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
             "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
             "show_color_legend": bool(viz_settings.get("show_color_legend", True)),
+            "show_highlight_legend": bool(
+                viz_settings.get("show_highlight_legend", True)
+            ),
             "saccade_class_colors": dict(
                 viz_settings.get("saccade_class_colors") or {}
             ),
@@ -5768,6 +5772,7 @@ def _build_and_render_animation(
             comparing=anim_inputs["fixations_b"] is not None
             and not anim_inputs["fixations_b"].empty,
             show_colors=animation_settings.show_color_legend,
+            show_highlight=animation_settings.show_highlight_legend,
         )
         add_illustration_label(
             fig, reasons, text=viz_settings.get("illustration_text", "")

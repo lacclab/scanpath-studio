@@ -489,6 +489,7 @@ def _restore_config_app():
             "saccade_color_mode": "Uniform",
             "saccade_type_legend": True,
             "show_color_legend": True,
+            "show_highlight_legend": True,
             "saccade_class_colors": {c: "#445566" for c in SACCADE_CLASS_EDITABLE},
             # VIZ-31 reading-class filter — a real subset, since the reader
             # validates the names against the classes this build knows.
@@ -528,6 +529,7 @@ def _restore_config_app():
             "saccades": {"position": "right", "arrangement": "auto", "size": None},
             "colors": {"position": "below", "arrangement": "side-by-side"},
             "size_key": {"position": "top-left", "arrangement": "stacked"},
+            "highlight": {"position": "bottom-center-outside", "size": 13},
         },
         # #374 F28 — Export → Current figure's print size.
         "export": {"width": 180.0, "unit": "mm", "dpi": 600},

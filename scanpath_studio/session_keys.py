@@ -55,6 +55,8 @@ GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
 GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
+#: The note naming the highlighted words (Figure & canvas → Legends).
+GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
 # #422: Snap to line and where on the line (it replaced "Snap above words",
 # `global_fixation_snap_to_word` — see `LEGACY_SESSION_KEYS`).
 GLOBAL_FIXATION_SNAP_TO_LINE = "global_fixation_snap_to_line"
@@ -140,7 +142,7 @@ GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
 # 📐 Figure & canvas → Legends: where each legend sits. One key per legend and
 # part, ``global_legend_<kind>_{position,arrangement,size}``, for the kinds in
 # `constants.LEGEND_KINDS` (spelled out here, as everything in this file is).
-LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key")
+LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key", "highlight")
 LEGEND_STATE_KEYS = frozenset(
     f"global_legend_{kind}_{part}"
     for kind in LEGEND_KIND_NAMES
@@ -545,6 +547,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_saccade_arrows": GLOBAL_SHOW_SACCADE_ARROWS,
         "saccade_type_legend": GLOBAL_SACCADE_TYPE_LEGEND,
         "show_color_legend": GLOBAL_SHOW_COLOR_LEGEND,
+        "show_highlight_legend": GLOBAL_SHOW_HIGHLIGHT_LEGEND,
         "duration_size_legend": GLOBAL_DURATION_SIZE_LEGEND,
         "snap_fixations": GLOBAL_FIXATION_SNAP_TO_LINE,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
@@ -1095,6 +1098,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_COLOR_MODE,
         GLOBAL_SACCADE_TYPE_LEGEND,
         GLOBAL_SHOW_COLOR_LEGEND,
+        GLOBAL_SHOW_HIGHLIGHT_LEGEND,
         GLOBAL_SACCADE_CLASS_COLOR_FORWARD,
         GLOBAL_SACCADE_CLASS_COLOR_SKIP,
         GLOBAL_SACCADE_CLASS_COLOR_REFIXATION,

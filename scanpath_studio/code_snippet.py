@@ -1463,6 +1463,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "saccade_class_colors": _saccade_class_colors,
     "saccade_type_legend": _flag_when("--no-saccade-type-legend", False),
     "show_color_legend": _flag_when("--no-color-legend", False),
+    "show_highlight_legend": _flag_when("--no-highlight-legend", False),
     "saccade_classes": _comma_list("--saccade-classes"),
     "saccade_render_mode": _flag_when("--saccade-arcs", "Arc"),
     "fixation_snap_to_line": _flag_when("--snap-fixations", True),

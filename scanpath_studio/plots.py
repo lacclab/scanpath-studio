@@ -192,6 +192,9 @@ class FigureSettings:
     #: The legend of a categorical ``color_by`` (and the Highlight entries,
     #: raw gaze) — Figure & canvas → Legends → Fixation colors → Show.
     show_color_legend: bool = True
+    #: The note naming the highlighted words (``highlight_column``) —
+    #: Figure & canvas → Legends → Text highlight → Show.
+    show_highlight_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
     #: #422 — move each fixation vertically onto its text line (it keeps its
@@ -2116,6 +2119,7 @@ def apply_legend_layout(
     *,
     comparing: bool = False,
     show_colors: bool = True,
+    show_highlight: bool = True,
 ) -> go.Figure:
     """Move each legend kind the user placed into a Plotly legend of its own.
 
@@ -2178,6 +2182,7 @@ def apply_legend_layout(
                 fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
     slots = _LegendSlots(fig, top_start=default_h, inset=inset)
     fig._sps_legend_slots = slots
+    _place_highlight_key(fig, specs["highlight"], slots, show=show_highlight)
     if not moved:
         return fig
     base_font = float((fig.layout.font and fig.layout.font.size) or 12)
@@ -3241,6 +3246,41 @@ def _add_highlight_key(
         font=dict(size=12, color=LEGEND_TEXT_COLOR),
         bgcolor="rgba(255,255,255,0.75)",
         name=_HIGHLIGHT_KEY_NAME,
+    )
+
+
+def _place_highlight_key(
+    fig: go.Figure, spec: Mapping, slots: _LegendSlots, *, show: bool
+) -> None:
+    """The text-highlight note's Legends row: hide it, or move and size it.
+
+    On *Auto* it stays where `_add_highlight_key` drew it, the plot's
+    bottom-left corner. It is one line, so its arrangement does not apply."""
+    notes = [a for a in fig.layout.annotations or () if a.name == _HIGHLIGHT_KEY_NAME]
+    if not notes:
+        return
+    if not show:
+        fig.layout.annotations = [
+            a for a in fig.layout.annotations if a.name != _HIGHLIGHT_KEY_NAME
+        ]
+        return
+    note = notes[0]
+    if spec["size"]:
+        note.font.size = float(spec["size"])
+    if spec["position"] == "auto":
+        return
+    font_px = float(note.font.size or 12)
+    plain = re.sub(r"<[^>]+>", "", str(note.text or ""))
+    w = 0.6 * font_px * len(plain) + 12.0
+    h = font_px * 1.4 + 8.0
+    at = slots.place(fig, spec["position"], w, h, gap=_LEGEND_GAP_PX)
+    note.update(
+        x=at["x"],
+        y=at["y"],
+        xanchor=at["xanchor"],
+        yanchor=at["yanchor"],
+        xshift=at["dx"],
+        yshift=at["dy"],
     )
 
 
@@ -9796,7 +9836,10 @@ def make_scanpath_figure(
         )
     _arrange_colorbars(fig)
     apply_legend_layout(
-        fig, resolved.legend_layout, show_colors=resolved.show_color_legend
+        fig,
+        resolved.legend_layout,
+        show_colors=resolved.show_color_legend,
+        show_highlight=resolved.show_highlight_legend,
     )
     if resolved.show_fixations:
         _maybe_add_duration_key(fig, resolved, resolved.marker_size_range, fixations)
@@ -9876,6 +9919,7 @@ def build_scanpath_replay(
         resolved.legend_layout,
         comparing=fixations_b is not None and not fixations_b.empty,
         show_colors=resolved.show_color_legend,
+        show_highlight=resolved.show_highlight_legend,
     )
     size_range = replay_size_key_range(resolved, fixations, fixations_b)
     if size_range is not None:
@@ -10004,6 +10048,7 @@ def make_comparison_figure(
         resolved.legend_layout,
         comparing=True,
         show_colors=resolved.show_color_legend,
+        show_highlight=resolved.show_highlight_legend,
     )
     # One key serves both scanpaths only while they share a size range; with
     # per-scanpath ranges (Compare's own Size) one duration is two sizes.

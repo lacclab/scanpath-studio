@@ -79,8 +79,10 @@ regressions, for example. Filtering changes only the figure, never your data.
 table with a row for each legend the current figure draws: **Compare (A/B)**
 while comparing, **Saccade types** when saccades are coloured by type,
 **Fixation colors** for a categorical **Color by**, a Highlight filter or raw
-gaze, and the duration **Size key** on a fixed marker scale. A legend the
-figure does not draw has no row. Its columns:
+gaze, the duration **Size key** on a fixed marker scale, and **Text
+highlight**, the note naming the highlighted words, while words are highlighted
+(:material/description: Stimulus → Highlight). A legend the figure does not draw
+has no row. Its columns:
 
 - **Show**: draw the legend at all. This is the only place to turn a legend on
   or off.
@@ -92,14 +94,15 @@ figure does not draw has no row. Its columns:
   size key included.
 - **Arrangement**: **Stacked** (one item under the other) or **Side by side**.
   On **Auto**, a legend at the middle of the top or bottom edge is a row and
-  every other one a stack.
+  every other one a stack. The text-highlight note is one line, so it has none.
 - **Text size**: in px; empty uses the figure's own.
 
 On **Auto** a legend stays where it is drawn by default. The size key's circles
 keep the true marker sizes wherever it goes; its **Text size** sets the labels.
 Compare's A/B label patterns stay under **Compare ▾**. Share links, settings
-files, saved designs, `render --legend` / `--no-color-legend` and the API's
-`legend_layout` / `show_color_legend` all carry these.
+files, saved designs, `render --legend` / `--no-color-legend` /
+`--no-highlight-legend` and the API's `legend_layout` / `show_color_legend` /
+`show_highlight_legend` all carry these.
 
 ## Replay and compare
 

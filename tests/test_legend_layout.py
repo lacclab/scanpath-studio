@@ -621,11 +621,11 @@ class TestTheContentTop:
 
 
 class TestTheSizeKeyAboveThePlot:
-    """A size key above the plot comes down a little toward what is under it,
-    its labels stopping just over the highest thing beneath them."""
+    """A size key above the plot sits right on the screen's top line, wherever
+    the text and the other legends are."""
 
     @staticmethod
-    def _key(y, size=10):
+    def _key(y, size=10, layout=None):
         fig = go.Figure(
             go.Scatter(x=[780], y=[y], mode="markers", marker={"size": size})
         )
@@ -636,29 +636,38 @@ class TestTheSizeKeyAboveThePlot:
             xaxis={"range": [0, 800]},
             yaxis={"range": [600, 0]},
         )
+        layout = layout or {"size_key": {"position": "top-right-outside"}}
+        apply_legend_layout(fig, layout)
         plots._add_duration_size_key(
-            fig,
-            (8, 24),
-            "sqrt",
-            (50.0, 600.0),
-            legend_layout={"size_key": {"position": "top-right-outside"}},
+            fig, (8, 24), "sqrt", (50.0, 600.0), legend_layout=layout
         )
         return fig
 
     @staticmethod
-    def _lowest_circle(fig):
-        return min(float(s.y0) for s in fig.layout.shapes if s.type == "circle")
-
-    def test_it_comes_down(self, monkeypatch):
-        dropped = self._lowest_circle(self._key(300))
-        monkeypatch.setattr(plots, "_SIZE_KEY_DROP_PX", 0.0)
-        assert dropped < self._lowest_circle(self._key(300))
-
-    def test_its_labels_stay_over_the_fixation_under_it(self):
-        fig = self._key(10, size=20)  # its top 0 px under the plot's edge
-        lowest_text = min(
+    def _lowest_text(fig):
+        return min(
             float(a.yshift) - float(a.font.size) / 2
             for a in fig.layout.annotations
             if a.name == plots._SIZE_KEY_NAME
         )
-        assert lowest_text >= 0.0
+
+    @pytest.mark.parametrize("y", [5, 100, 400])
+    def test_its_labels_stand_right_on_the_line(self, y):
+        assert self._lowest_text(self._key(y)) == pytest.approx(
+            plots._SIZE_KEY_LINE_GAP_PX
+        )
+
+    def test_a_legend_beside_it_does_not_move_it(self):
+        fig = self._key(
+            300,
+            layout={
+                "compare": {"position": "top-left-outside"},
+                "size_key": {"position": "top-right-outside"},
+            },
+        )
+        assert self._lowest_text(fig) == pytest.approx(plots._SIZE_KEY_LINE_GAP_PX)
+
+    def test_the_figure_grows_to_hold_it(self):
+        fig = self._key(300)
+        assert fig.layout.margin.t > 0
+        assert _plot_region(fig) == pytest.approx((800, 600))

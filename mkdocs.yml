@@ -87,10 +87,28 @@ nav:
               - Check the setup: tutorials/data-collection/check-the-setup.md
               - Replay a recording: tutorials/data-collection/replay-a-recording.md
               - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
+              - Audit an experimenter: tutorials/data-collection/audit-an-experimenter.md
               - Record the review: tutorials/data-collection/record-the-review.md
-          - Data filtering: tutorials/data-filtering.md
-          - Exporting figures: tutorials/exporting-figures.md
-          - Corpus analysis: tutorials/corpus-analysis.md
+          - Filter data:
+              - tutorials/data-filtering/index.md
+              - Narrow the trial pool: tutorials/data-filtering/narrow-the-pool.md
+              - Review candidate trials: tutorials/data-filtering/review-candidates.md
+              - Annotate the decisions: tutorials/data-filtering/annotate-the-decisions.md
+              - Export the retained trials: tutorials/data-filtering/export-the-retained-trials.md
+          - Export figures:
+              - tutorials/exporting-figures/index.md
+              - Choose the view: tutorials/exporting-figures/choose-the-view.md
+              - Export one figure: tutorials/exporting-figures/export-one-figure.md
+              - Export a replay: tutorials/exporting-figures/export-a-replay.md
+              - Save the look as a design: tutorials/exporting-figures/save-a-design.md
+              - Export a batch: tutorials/exporting-figures/export-a-batch.md
+              - Share the exact figure: tutorials/exporting-figures/share-the-figure.md
+          - Analyze a corpus:
+              - tutorials/corpus-analysis/index.md
+              - Define the pool: tutorials/corpus-analysis/define-the-pool.md
+              - Analyze texts and groups: tutorials/corpus-analysis/analyze-texts-and-groups.md
+              - See progression over time: tutorials/corpus-analysis/progression-over-time.md
+              - Download the table: tutorials/corpus-analysis/download-the-table.md
       - Feature guides:
           - guides/index.md
           - Scanpath visualization: guides/scanpath-visualization.md
@@ -153,9 +171,9 @@ plugins:
       redirect_maps:
         bring-your-own-data.md: guides/loading-data.md
         corpus-analysis.md: guides/corpus-workspace.md
-        tutorials/batch-export.md: tutorials/exporting-figures.md#4-export-a-batch-when-needed
+        tutorials/batch-export.md: tutorials/exporting-figures/export-a-batch.md
         tutorials/compare-two-readers.md: guides/scanpath-visualization.md#replay-and-compare
-        tutorials/figure-for-a-paper.md: tutorials/exporting-figures.md
+        tutorials/figure-for-a-paper.md: tutorials/exporting-figures/index.md
         tutorials/line-assignment.md: guides/scanpath-visualization.md
         tutorials/load-your-own-data.md: guides/loading-data.md
         tutorials/run-it-headless.md: automation.md

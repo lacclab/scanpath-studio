@@ -33,6 +33,10 @@ Each page below is one task, with a recording of it in the app.
 
     Put two trackers' recordings of the same text side by side.
 
+- :material-account-search:{ .lg .middle } **[Audit an experimenter](audit-an-experimenter.md)**
+
+    Review one experimenter's sessions, or compare two experimenters'.
+
 - :material-tag-check:{ .lg .middle } **[Record the review](record-the-review.md)**
 
     Star, tag and note the trials that need attention, and save the record.
@@ -40,4 +44,4 @@ Each page below is one task, with a recording of it in the app.
 </div>
 
 For a formal retained and excluded pool afterwards, continue with
-[Data filtering](../data-filtering.md).
+[Filter data](../data-filtering/index.md).

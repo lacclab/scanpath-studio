@@ -1,1 +1,1 @@
-The docs' data-collection tutorial is now an Optimize data collection section: one page per task (load a session, check the setup, replay a recording, compare two eye trackers, record the review), each with a recording of it in the app.
+Each docs tutorial is now a section of task pages, most with a recording of the task in the app: Optimize data collection (including auditing an experimenter), Filter data, Export figures and Analyze a corpus.

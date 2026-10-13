@@ -48,21 +48,21 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
     to collect more. Check that fixation detection and line assignment hold up
     on this dataset by viewing fixations against the raw gaze and word boxes.
 
-- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](tutorials/data-filtering.md)**
+- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](tutorials/data-filtering/index.md)**
 
     Exclude or flag poorly calibrated, skimming, or non-reading trials, and
     trials with out-of-bounds, very short, or very long fixations. Find the
     trials a specific analysis needs — for example, participants with a given
     native language and good calibration — and export the marked trial IDs.
 
-- :material-file-export:{ .lg .middle } **[Export figures](tutorials/exporting-figures.md)**
+- :material-file-export:{ .lg .middle } **[Export figures](tutorials/exporting-figures/index.md)**
 
     Show a real scanpath in a paper or talk as a heatmap or a replay, and
     save the look as a design to reuse. Or bulk-export every trial
     consistently, for example as training data for models that generate
     scanpaths on images.
 
-- :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis.md)**
+- :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis/index.md)**
 
     Compare model-generated scanpaths with human ones, contrast groups and
     conditions, and see how reading progresses over time.

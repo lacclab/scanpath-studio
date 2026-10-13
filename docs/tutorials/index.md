@@ -8,20 +8,21 @@ with [Getting started](../getting-started.md).
 - :material-clipboard-pulse:{ .lg .middle } **[Optimize data collection](data-collection/index.md)**
 
     Pilot your setup, check sessions for calibration and recording problems,
-    compare two eye trackers on the same text, and train experimenters.
+    compare two eye trackers on the same text, and train and audit
+    experimenters.
 
-- :material-filter:{ .lg .middle } **[Data filtering](data-filtering.md)**
+- :material-filter:{ .lg .middle } **[Filter data](data-filtering/index.md)**
 
     Pick the trials to include — for example, participants with a given
     native language and good calibration — annotate them, and export the
     marked trial IDs.
 
-- :material-file-export:{ .lg .middle } **[Exporting figures](exporting-figures.md)**
+- :material-file-export:{ .lg .middle } **[Export figures](exporting-figures/index.md)**
 
     Showcase a real scanpath as a heatmap or a replay, save the look as a
     design, and export one figure or the same view across many trials.
 
-- :material-chart-box:{ .lg .middle } **[Corpus analysis](corpus-analysis.md)**
+- :material-chart-box:{ .lg .middle } **[Analyze a corpus](corpus-analysis/index.md)**
 
     Summarize texts, participants, or groups, see progression over time,
     and download the table.

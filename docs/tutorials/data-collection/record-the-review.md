@@ -22,4 +22,4 @@ Turn what you saw into a record you can return to.
 
 **Done:** you have checked geometry and timing, marked the trials that need
 attention, and saved the review. For a formal retained and excluded pool,
-continue with [Data filtering](../data-filtering.md).
+continue with [Filter data](../data-filtering/index.md).

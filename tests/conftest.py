@@ -217,9 +217,17 @@ def pin_view(at, view: str) -> None:
     reruns, which a browser does through the URL and ``AppTest`` does not. So a
     second ``main_nav = Data`` on an app already showing Data is ignored, the
     router falls back to its default page, and the assertions land on Scanpath.
+
+    Since Streamlit 1.66 ``AppTest`` does remember the page a run finished on,
+    the way a browser's URL does, and a ``st.switch_page`` inside a run does
+    not move it. So the remembered page is dropped too, and the run starts on
+    the default page, from which ``render_nav`` switches to the request.
     """
     at.session_state[NAV_KEY] = view
     at.session_state[NAV_MIRROR_KEY] = None
+    if hasattr(at, "_finished_page_script_hash"):
+        at._finished_page_script_hash = ""
+        at._page_hash = ""
 
 
 def pin_data_view(at) -> None:

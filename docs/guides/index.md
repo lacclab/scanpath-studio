@@ -4,7 +4,7 @@ For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 
 <div class="grid cards" markdown>
 
-- :material-eye:{ .lg .middle } **[Scanpath visualization](scanpath-visualization.md)**
+- :material-eye:{ .lg .middle } **[Scanpath visualization](scanpath-visualization/index.md)**
 
     Layers, filtering, replay, and comparison — including across datasets.
 

@@ -106,7 +106,9 @@ nav:
               - See progression over time: tutorials/corpus-analysis/progression-over-time.md
       - Feature guides:
           - guides/index.md
-          - Scanpath visualization: guides/scanpath-visualization.md
+          - Scanpath visualization:
+              - guides/scanpath-visualization/index.md
+              - All controls: guides/scanpath-visualization/controls.md
           - Loading public and own data: guides/loading-data.md
           - Corpus Analysis: guides/corpus-workspace.md
           - Outputs and sharing: guides/outputs-sharing.md
@@ -167,9 +169,9 @@ plugins:
         bring-your-own-data.md: guides/loading-data.md
         corpus-analysis.md: guides/corpus-workspace.md
         tutorials/batch-export.md: tutorials/exporting-figures/export-every-trial.md
-        tutorials/compare-two-readers.md: guides/scanpath-visualization.md#replay-and-compare
+        tutorials/compare-two-readers.md: guides/scanpath-visualization/index.md#replay-and-compare
         tutorials/figure-for-a-paper.md: tutorials/exporting-figures/export-one-figure.md
-        tutorials/line-assignment.md: guides/scanpath-visualization.md
+        tutorials/line-assignment.md: guides/scanpath-visualization/index.md
         tutorials/load-your-own-data.md: guides/loading-data.md
         tutorials/run-it-headless.md: automation.md
         # ENG-80 took these off the site for the beta; old links land on the
@@ -179,7 +181,7 @@ plugins:
         benchmark-corpora.md: guides/loading-data.md
         # DATA-54: MultiplEYE is held back from the beta.
         multipleye.md: guides/loading-data.md
-        rendering.md: guides/scanpath-visualization.md
+        rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
         # ENG-88 folded these into Getting started and the FAQ.
         desktop.md: getting-started.md#install

@@ -3,7 +3,7 @@
 The Scanpath view draws one reading on the screen it was recorded on.
 
 <figure class="sps-screenshot" markdown>
-![The Scanpath view, its regions numbered](../assets/screenshots/scanpath-view.webp)
+![The Scanpath view, its regions numbered](../../assets/screenshots/scanpath-view.webp)
 </figure>
 
 1. Views and :material/help: Help.
@@ -26,6 +26,9 @@ with its participant in brackets, `3 [p2]`.
 The **:material/tune: Plot controls** rail starts with **:material/movie: Animate**, **:material/compare: Compare**, four
 design presets and a palette. Below them, each section is one line: a switch,
 and a **▾** with its settings.
+
+Every button and setting, menu by menu, is listed in
+[All controls](controls.md).
 
 | Section | What it controls |
 | --- | --- |
@@ -124,5 +127,5 @@ within one dataset too; otherwise they are drawn side by side, each on its own s
 overlay.
 
 Compare is also available from Python
-([`compare_scanpaths`](../api.md#scanpath_studio.api.compare_scanpaths)) and the
-[CLI](../cli.md#compare-two-scanpaths).
+([`compare_scanpaths`](../../api.md#scanpath_studio.api.compare_scanpaths)) and the
+[CLI](../../cli.md#compare-two-scanpaths).

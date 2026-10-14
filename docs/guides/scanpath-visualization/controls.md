@@ -5,16 +5,23 @@ does — in the order you meet them on screen. Search this page (++ctrl+f++, or
 ++cmd+f++ on a Mac) for the thing you want to change, such as *opacity*,
 *legend* or *font*.
 
-Most controls sit in the **Plot controls** column on the right: a switch turns
-a layer on or off, and its **▾** opens that layer's settings. A greyed-out
-control says why when you hover over it. For how the parts fit together, see
-the [Scanpath visualization](index.md) guide.
+The page has two sets of controls:
 
-## Choosing a trial
+- The **trial control bar**, above the plot, decides *what* you see: the
+  dataset, the trial, and which trials are in the list.
+- The **plot controls**, the column on the right, decide *how* it is drawn:
+  each layer of the figure, its colors and sizes, and the figure as a whole.
 
-<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The row above the plot" loading="lazy"></a>
+The tabs under the plot then work with the trial on screen: annotate it, read
+its context, compare it, export it or share it. For how the parts fit
+together, see the [Scanpath visualization](index.md) guide.
 
-The row above the plot.
+## Trial control bar
+
+<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The trial control bar" loading="lazy"></a>
+
+The bar above the plot: pick a dataset and a trial, step through the trials,
+and narrow, sort or label the list.
 
 | Control | What it does |
 | --- | --- |
@@ -39,11 +46,20 @@ The row above the plot.
 | **✏️** → **Refresh fields** | Look again for which fields are trial-level. |
 | **Screen** and its **◀ ▶** | On a trial recorded over several screens: the screen to show. |
 
-## Plot controls: modes, designs and palette
+## Plot controls
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
 
-The top of the **Plot controls** column.
+The column on the right of the plot. At the top, the modes and designs change
+the whole figure at once. Under them, each layer of the figure has a row of its
+own: the switch turns the layer on or off, and the **▾** beside it opens that
+layer's settings, described below one menu at a time. The last two rows,
+**Filters & highlights** and **Figure & canvas**, cover the figure as a whole.
+A greyed-out control says why when you hover over it.
+
+### Modes, designs and palette
+
+The top of the column: replay or compare, and restyle the whole figure at once.
 
 | Control | What it does |
 | --- | --- |
@@ -66,7 +82,7 @@ The top of the **Plot controls** column.
 | **Palette** | A color scheme for the whole figure, such as colorblind-safe or print. |
 | **Reset visualization** | Reset every plot setting. Annotations, filters, data and the selected trial stay. |
 
-## :material/blur_on: Fixations
+### :material/blur_on: Fixations
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/fixations.webp" title="Open full size"><img src="../../../assets/screenshots/controls/fixations.webp" alt="The Fixations menu" loading="lazy"></a>
 
@@ -89,7 +105,7 @@ The **Fixations** switch draws the fixation markers; its **▾** holds:
 | **Snap** → **To line** | Move each fixation onto its line of text — a schematic, labelled *Illustration*. |
 | **Snap** → **Position** | Where on its line a snapped fixation sits. |
 
-## :material/arrow_outward: Saccades
+### :material/arrow_outward: Saccades
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/saccades.webp" title="Open full size"><img src="../../../assets/screenshots/controls/saccades.webp" alt="The Saccades menu" loading="lazy"></a>
 
@@ -107,7 +123,7 @@ The **Saccades** switch draws the lines between fixations; its **▾** holds:
 | **Direction arrows** → **Show** | An arrowhead on each saccade. |
 | **Direction arrows** → **Arrow size** | Arrowhead size. |
 
-## :material/article: Stimulus
+### :material/article: Stimulus
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/stimulus.webp" title="Open full size"><img src="../../../assets/screenshots/controls/stimulus.webp" alt="The Stimulus menu" loading="lazy"></a>
 
@@ -131,7 +147,7 @@ The **Stimulus** switch draws the text and the stimulus image; its **▾** holds
 | **Offset** → **X** / **Y** | Nudge the image, in px. |
 | **Scale** | Scale the image so its text matches the word boxes. |
 
-## :material/crop_square: Word boxes
+### :material/crop_square: Word boxes
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/word-boxes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/word-boxes.webp" alt="The Word boxes menu" loading="lazy"></a>
 
@@ -144,7 +160,7 @@ The **Word boxes** switch draws each word's interest area; its **▾** holds:
 | **Box** → **Fill** color | The color inside each box. |
 | **Box** → **Fill** opacity | How strongly the fill shows; 0 draws outlines only. |
 
-## :material/local_fire_department: Heatmap
+### :material/local_fire_department: Heatmap
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/heatmap.webp" title="Open full size"><img src="../../../assets/screenshots/controls/heatmap.webp" alt="The Heatmap menu" loading="lazy"></a>
 
@@ -161,7 +177,7 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 | **Opacity** | Heatmap opacity; **Auto** uses each style's own. |
 | **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | The heatmap's color bar, as for fixations. |
 
-## :material/grain: Raw gaze
+### :material/grain: Raw gaze
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/raw-gaze.webp" title="Open full size"><img src="../../../assets/screenshots/controls/raw-gaze.webp" alt="The Raw gaze menu" loading="lazy"></a>
 
@@ -173,7 +189,7 @@ The **Raw gaze** switch draws the gaze samples as recorded; its **▾** holds:
 | **Marker** → **Size** | Sample marker size. |
 | **Marker** → **Opacity** | Sample opacity. |
 
-## :material/filter_list: Filters & highlights
+### :material/filter_list: Filters & highlights
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a>
 
@@ -189,7 +205,7 @@ Which fixations and saccades are drawn, and which stand out:
 | marker and color | The marker and color of each highlighted kind. |
 | **Saccades** → **Types** | Draw only saccades of these types. |
 
-## :material/aspect_ratio: Figure & canvas
+### :material/aspect_ratio: Figure & canvas
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure & canvas menu" loading="lazy"></a>
 

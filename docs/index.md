@@ -29,7 +29,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
   <source src="assets/app_demo.mp4" type="video/mp4">
 </video>
 
-## With Scanpath Studio you can
+## With Scanpath Studio you can:
 
 <div class="grid cards" markdown>
 

@@ -9699,7 +9699,7 @@ def render_trial_chip_picker(
             else:
                 colors[key] = picked
             clear_col.button(
-                "",
+                spoken(f"Remove the highlight of {key_to_label[key]}"),
                 icon=ICONS["close"],
                 key=f"trial_chip_color_clear_{key}",
                 help="Remove the highlight.",

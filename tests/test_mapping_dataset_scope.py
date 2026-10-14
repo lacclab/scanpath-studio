@@ -20,7 +20,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from tests.conftest import APP_SCRIPT, answer_setup_step, open_data_view
+from tests.conftest import APP_SCRIPT, answer_setup_step, open_data_view, pin_view
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
@@ -67,6 +67,10 @@ def test_a_pick_made_while_adding_a_dataset_does_not_carry_into_the_demo(
     stored = at.session_state["_datasets"][name]["schemas"]["fixations"]
     assert stored["duration"] == "CURRENT_FIX_END"
 
+    # The dataset picker is on the Scanpath view; Add dataset leaves the user
+    # on the Data page (AppTest remembers it since Streamlit 1.66).
+    pin_view(at, "Scanpath")
+    at.run(timeout=120)
     at.selectbox(key="data_source_picker").set_value(DEMO_CHOICE)
     at.run(timeout=120)
     assert not at.exception, at.exception

@@ -2,8 +2,8 @@
 
 Every control on the :material/route: **Scanpath** page, where it is and what it
 does — in the order you meet them on screen. Search this page (++ctrl+f++, or
-++cmd+f++ on a Mac) for the thing you want to change, such as *opacity*,
-*legend* or *font*.
+++cmd+f++ on a Mac) for the thing you want to change, such as *colors*,
+*legends* or *axes*.
 
 The page has two sets of controls:
 
@@ -26,8 +26,8 @@ and narrow, sort or label the list.
 | Control | What it does |
 | --- | --- |
 | **Select dataset** | The dataset the page shows. |
-| **+** → **Create manually** | Write a text and place its fixations by hand, or resume your manual scanpath. |
-| **+** → **Import files** | Add your own tables as a new dataset. |
+| **+** → **Create manually** | Add a dataset by manual illustration: write a text and place its fixations by hand. |
+| **+** → **Import files** | Add a dataset from data tables: upload your own tables as a new dataset. |
 | **Select trial** | The trial to show. Click it and type to narrow the list. |
 | **Trial** slider | Scrub through the trials in the list. |
 | **◀ ▶** | The previous or next trial. |

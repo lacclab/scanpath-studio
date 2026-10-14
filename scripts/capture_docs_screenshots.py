@@ -208,20 +208,45 @@ def _shot_controls(page: Page, name: str, locator) -> None:
     print(f"  → controls/{webp.name} ({webp.stat().st_size // 1024} KB)")
 
 
-def capture_controls(page: Page) -> None:
-    """The All controls page's pictures (``--controls``)."""
-    CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
-    ui.OUT = CONTROLS_OUT
-    ui.deep_link(page, ui.DEMO_TRIAL)
-    ui.reset_viz(page)
+# The trial bar is shot on a dataset whose trials span several screens, so its
+# Screen picker shows too: the MultiplEYE sample, when it is in data/.
+MULTI_SCREEN_LINK = {"source": "corpus", "corpus": "multipleye"}
 
-    print("trial row and plot controls")
+
+def _shot_trial_row(page: Page) -> None:
+    ui.deep_link(page, MULTI_SCREEN_LINK)
+    screens = page.locator(".st-key-tour_grp_screen_picker")
+    try:
+        screens.first.wait_for(state="visible", timeout=300_000)
+    except Exception:
+        print("  no multi-screen dataset here (data/MultiplEYE_*); trial-row kept")
+        return
+    ui.settle(page, quiet=2.0)
     _shot_controls(
         page, "trial-row", page.locator(".st-key-tour_grp_trial_picker").first
     )
-    _shot_controls(page, "plot-controls", page.locator(".st-key-scanpath_rail").first)
+
+
+def capture_controls(page: Page, only: set[str] | None = None) -> None:
+    """The All controls page's pictures (``--controls [NAME ...]``)."""
+    CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
+    ui.OUT = CONTROLS_OUT
+
+    def wanted(name: str) -> bool:
+        return not only or name in only
+
+    ui.deep_link(page, ui.DEMO_TRIAL)
+    ui.reset_viz(page)
+
+    if wanted("plot-controls"):
+        print("plot controls")
+        _shot_controls(
+            page, "plot-controls", page.locator(".st-key-scanpath_rail").first
+        )
 
     for name, layer, menu in CONTROL_MENUS:
+        if not wanted(name):
+            continue
         print(name)
         if layer:
             _switch_on(page, layer)
@@ -239,17 +264,23 @@ def capture_controls(page: Page) -> None:
         page.keyboard.press("Escape")
         ui.settle(page, quiet=1.0)
 
-    print("tabs under the plot")
-    _shot_controls(
-        page, "under-the-plot", page.locator(".st-key-tour_grp_subtabs").first
-    )
+    if wanted("under-the-plot"):
+        print("tabs under the plot")
+        _shot_controls(
+            page, "under-the-plot", page.locator(".st-key-tour_grp_subtabs").first
+        )
 
-    print("compare")
-    ui.toggle(page, "single_compare_toggle")
-    _shot_controls(
-        page, "compare-row", page.locator(".st-key-tour_grp_compare_picker").first
-    )
-    ui.toggle(page, "single_compare_toggle")
+    if wanted("compare-row"):
+        print("compare")
+        ui.toggle(page, "single_compare_toggle")
+        _shot_controls(
+            page, "compare-row", page.locator(".st-key-tour_grp_compare_picker").first
+        )
+        ui.toggle(page, "single_compare_toggle")
+
+    if wanted("trial-row"):
+        print("trial row")
+        _shot_trial_row(page)
     ui.OUT = OUT
 
 
@@ -277,7 +308,8 @@ def main() -> None:
                 "document.head.appendChild(s);});"
             )
             if "--controls" in sys.argv:
-                capture_controls(ctx.new_page())
+                names = sys.argv[sys.argv.index("--controls") + 1 :]
+                capture_controls(ctx.new_page(), set(names) or None)
             else:
                 capture(ctx.new_page())
             browser.close()

@@ -9665,27 +9665,48 @@ def render_trial_chip_picker(
     # UX-28: per-chip colour, generalized from what used to be a handful of
     # hardcoded OneStop column/value special-cases (tabs._chip_color) — any
     # dataset's condition chips can now be highlighted, not just OneStop's.
-    # `#EEF2F7` must match `tabs._CHIP_NEUTRAL_BG`: picking it back is how a
-    # chip returns to "no override" rather than staying pinned to a colour.
+    # `#EEF2F7` must match `tabs._CHIP_NEUTRAL_BG`: a chip at it has no
+    # override. The ✕ beside a highlighted chip puts it back there — picking
+    # that exact gray by hand was the only way before, and nobody could.
     _neutral = "#EEF2F7"
     shown_now = st.session_state["trial_chip_fields"]
     if shown_now:
         host.caption("Chip colors — optional highlight per shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
+
+        def _clear_highlight(field: str) -> None:
+            stored = dict(st.session_state.get("trial_chip_colors") or {})
+            stored.pop(field, None)
+            st.session_state["trial_chip_colors"] = stored
+            # Dropped, not written: the picker is drawn with `value=`, and the
+            # next run builds it fresh at the neutral gray.
+            st.session_state.pop(f"trial_chip_color_{field}", None)
+
         for key in shown_now:
-            label_col, swatch_col = host.columns([3, 1], vertical_alignment="center")
+            label_col, swatch_col, clear_col = host.columns(
+                [3, 1, 1], vertical_alignment="center"
+            )
             label_col.caption(key_to_label[key])
             picked = swatch_col.color_picker(
                 key_to_label[key],
                 value=colors.get(key) or _neutral,
                 key=f"trial_chip_color_{key}",
                 label_visibility="collapsed",
-                help="Pick back to the default gray to remove the highlight.",
+                help="Highlight this chip in a color.",
             )
             if picked.lower() == _neutral.lower():
                 colors.pop(key, None)
             else:
                 colors[key] = picked
+            clear_col.button(
+                "",
+                icon=ICONS["close"],
+                key=f"trial_chip_color_clear_{key}",
+                help="Remove the highlight.",
+                disabled=key not in colors,
+                on_click=_clear_highlight,
+                args=(key,),
+            )
         st.session_state["trial_chip_colors"] = colors
 
 

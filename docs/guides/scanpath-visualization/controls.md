@@ -48,11 +48,8 @@ and narrow, sort or label the list.
 
 ## Plot controls
 
-<div class="sps-ctl-row" markdown>
-
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The column on the right of the plot. At the top, the modes and designs change
 the whole figure at once. Under them, each layer of the figure has a row of its
@@ -60,9 +57,6 @@ own: the switch turns the layer on or off, and the **▾** beside it opens that
 layer's settings, described below one menu at a time. The last two rows,
 **Filters & highlights** and **Figure & canvas**, cover the figure as a whole.
 A greyed-out control says why when you hover over it.
-
-</div>
-</div>
 
 ### Modes, designs and palette
 
@@ -91,11 +85,8 @@ The top of the column: replay or compare, and restyle the whole figure at once.
 
 ### :material/blur_on: Fixations
 
-<div class="sps-ctl-row" markdown>
-
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/fixations.webp" title="Open full size"><img src="../../../assets/screenshots/controls/fixations.webp" alt="The Fixations menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The **Fixations** switch draws the fixation markers; its **▾** holds:
 
@@ -116,16 +107,10 @@ The **Fixations** switch draws the fixation markers; its **▾** holds:
 | **Snap** → **To line** | Move each fixation onto its line of text — a schematic, labelled *Illustration*. |
 | **Snap** → **Position** | Where on its line a snapped fixation sits. |
 
-</div>
-</div>
-
 ### :material/arrow_outward: Saccades
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/saccades.webp" title="Open full size"><img src="../../../assets/screenshots/controls/saccades.webp" alt="The Saccades menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The **Saccades** switch draws the lines between fixations; its **▾** holds:
 
@@ -141,16 +126,10 @@ The **Saccades** switch draws the lines between fixations; its **▾** holds:
 | **Direction arrows** → **Show** | An arrowhead on each saccade. |
 | **Direction arrows** → **Arrow size** | Arrowhead size. |
 
-</div>
-</div>
-
 ### :material/article: Stimulus
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/stimulus.webp" title="Open full size"><img src="../../../assets/screenshots/controls/stimulus.webp" alt="The Stimulus menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The **Stimulus** switch draws the text and the stimulus image; its **▾** holds:
 
@@ -172,16 +151,10 @@ The **Stimulus** switch draws the text and the stimulus image; its **▾** holds
 | **Offset** → **X** / **Y** | Nudge the image, in px. |
 | **Scale** | Scale the image so its text matches the word boxes. |
 
-</div>
-</div>
-
 ### :material/crop_square: Word boxes
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/word-boxes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/word-boxes.webp" alt="The Word boxes menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The **Word boxes** switch draws each word's interest area; its **▾** holds:
 
@@ -192,16 +165,10 @@ The **Word boxes** switch draws each word's interest area; its **▾** holds:
 | **Box** → **Fill** color | The color inside each box. |
 | **Box** → **Fill** opacity | How strongly the fill shows; 0 draws outlines only. |
 
-</div>
-</div>
-
 ### :material/local_fire_department: Heatmap
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/heatmap.webp" title="Open full size"><img src="../../../assets/screenshots/controls/heatmap.webp" alt="The Heatmap menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
@@ -216,16 +183,10 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 | **Opacity** | Heatmap opacity; **Auto** uses each style's own. |
 | **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | The heatmap's color bar, as for fixations. |
 
-</div>
-</div>
-
 ### :material/grain: Raw gaze
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/raw-gaze.webp" title="Open full size"><img src="../../../assets/screenshots/controls/raw-gaze.webp" alt="The Raw gaze menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The **Raw gaze** switch draws the gaze samples as recorded; its **▾** holds:
 
@@ -235,16 +196,10 @@ The **Raw gaze** switch draws the gaze samples as recorded; its **▾** holds:
 | **Marker** → **Size** | Sample marker size. |
 | **Marker** → **Opacity** | Sample opacity. |
 
-</div>
-</div>
-
 ### :material/filter_list: Filters & highlights
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 Which fixations and saccades are drawn, and which stand out:
 
@@ -258,16 +213,10 @@ Which fixations and saccades are drawn, and which stand out:
 | marker and color | The marker and color of each highlighted kind. |
 | **Saccades** → **Types** | Draw only saccades of these types. |
 
-</div>
-</div>
-
 ### :material/aspect_ratio: Figure & canvas
-
-<div class="sps-ctl-row" markdown>
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure & canvas menu" loading="lazy"></a>
 
-<div class="sps-ctl-text" markdown>
 
 The figure as a whole:
 
@@ -289,9 +238,6 @@ The figure as a whole:
 | **Legends** → **Position** | Where it sits: a corner, the middle of an edge, or down a side, outside or inside the plot. |
 | **Legends** → **Arrangement** | Its items stacked or side by side. |
 | **Legends** → **Text size** | Its text size, in px. |
-
-</div>
-</div>
 
 ## In Compare
 

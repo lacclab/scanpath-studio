@@ -209,17 +209,18 @@ def _shot_controls(page: Page, name: str, locator) -> None:
 
 
 # The trial bar is shot on a dataset whose trials span several screens, so its
-# Screen picker shows too: the MultiplEYE sample, when it is in data/.
-MULTI_SCREEN_LINK = {"source": "corpus", "corpus": "multipleye"}
+# Screen picker shows too: OneStop's ordinary reading, whose parts (title,
+# paragraph, questions …) are screens, once downloaded into data/OneStop.
+MULTI_SCREEN_LINK = {"source": "corpus", "corpus": "onestop-ordinary-reading"}
 
 
 def _shot_trial_row(page: Page) -> None:
     ui.deep_link(page, MULTI_SCREEN_LINK)
     screens = page.locator(".st-key-tour_grp_screen_picker")
     try:
-        screens.first.wait_for(state="visible", timeout=300_000)
+        screens.first.wait_for(state="visible", timeout=900_000)
     except Exception:
-        print("  no multi-screen dataset here (data/MultiplEYE_*); trial-row kept")
+        print("  no multi-screen dataset here (data/OneStop); trial-row kept")
         return
     ui.settle(page, quiet=2.0)
     _shot_controls(

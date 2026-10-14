@@ -78,7 +78,10 @@ extra:
 nav:
   - Home: index.md
   - Use the app:
-      - Get started: getting-started.md
+      # The home page itself is the Home tab; this is a link back to it, so the
+      # side menu has one too (the same page twice in `nav` is not allowed).
+      - Home: https://lacclab.github.io/scanpath-studio/
+      - Install: getting-started.md
       - Tutorials:
           - tutorials/index.md
           - Optimize data collection:

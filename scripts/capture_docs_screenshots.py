@@ -200,8 +200,8 @@ def _switch_on(page: Page, key: str) -> None:
         ui.toggle(page, key)
 
 
-def _shot_controls(page: Page, name: str, locator) -> None:
-    ui.shot(page, name, locator=locator)
+def _shot_controls(page: Page, name: str, locator, **kw) -> None:
+    ui.shot(page, name, locator=None if locator is page else locator, **kw)
     png, webp = CONTROLS_OUT / f"{name}.png", CONTROLS_OUT / f"{name}.webp"
     Image.open(png).convert("RGB").save(webp, "WEBP", quality=WEBP_QUALITY, method=6)
     png.unlink()
@@ -228,6 +228,21 @@ def _shot_trial_row(page: Page) -> None:
     )
 
 
+def _shot_rail_top(page: Page) -> None:
+    """The top of the Plot controls column, down to the palette."""
+    page.evaluate("window.scrollTo(0, 0)")
+    rail = page.locator(".st-key-scanpath_rail").first.bounding_box()
+    palette = page.locator(".st-key-global_palette").first.bounding_box()
+    pad = 10
+    clip = {
+        "x": rail["x"],
+        "y": rail["y"],
+        "width": rail["width"],
+        "height": palette["y"] + palette["height"] + pad - rail["y"],
+    }
+    _shot_controls(page, "modes-designs", page, clip=clip)
+
+
 def capture_controls(page: Page, only: set[str] | None = None) -> None:
     """The All controls page's pictures (``--controls [NAME ...]``)."""
     CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
@@ -244,6 +259,10 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
         _shot_controls(
             page, "plot-controls", page.locator(".st-key-scanpath_rail").first
         )
+
+    if wanted("modes-designs"):
+        print("modes, designs and palette")
+        _shot_rail_top(page)
 
     for name, layer, menu in CONTROL_MENUS:
         if not wanted(name):

@@ -60,7 +60,9 @@ A greyed-out control says why when you hover over it.
 
 ### Modes, designs and palette
 
-The top of the column: replay or compare, and restyle the whole figure at once.
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/modes-designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/modes-designs.webp" alt="Modes, designs and palette" loading="lazy"></a>
+
+The top of the column: replay the reading as an animation, compare two trials, and restyle the whole figure in one click with a design preset or one of your own saved designs.
 
 | Control | What it does |
 | --- | --- |

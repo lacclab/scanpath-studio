@@ -12,6 +12,8 @@ the [Scanpath visualization](index.md) guide.
 
 ## Choosing a trial
 
+<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The row above the plot" loading="lazy"></a>
+
 The row above the plot.
 
 | Control | What it does |
@@ -39,6 +41,8 @@ The row above the plot.
 
 ## Plot controls: modes, designs and palette
 
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
+
 The top of the **Plot controls** column.
 
 | Control | What it does |
@@ -64,6 +68,8 @@ The top of the **Plot controls** column.
 
 ## :material/blur_on: Fixations
 
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/fixations.webp" title="Open full size"><img src="../../../assets/screenshots/controls/fixations.webp" alt="The Fixations menu" loading="lazy"></a>
+
 The **Fixations** switch draws the fixation markers; its **▾** holds:
 
 | Control | What it does |
@@ -85,6 +91,8 @@ The **Fixations** switch draws the fixation markers; its **▾** holds:
 
 ## :material/arrow_outward: Saccades
 
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/saccades.webp" title="Open full size"><img src="../../../assets/screenshots/controls/saccades.webp" alt="The Saccades menu" loading="lazy"></a>
+
 The **Saccades** switch draws the lines between fixations; its **▾** holds:
 
 | Control | What it does |
@@ -100,6 +108,8 @@ The **Saccades** switch draws the lines between fixations; its **▾** holds:
 | **Direction arrows** → **Arrow size** | Arrowhead size. |
 
 ## :material/article: Stimulus
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/stimulus.webp" title="Open full size"><img src="../../../assets/screenshots/controls/stimulus.webp" alt="The Stimulus menu" loading="lazy"></a>
 
 The **Stimulus** switch draws the text and the stimulus image; its **▾** holds:
 
@@ -123,6 +133,8 @@ The **Stimulus** switch draws the text and the stimulus image; its **▾** holds
 
 ## :material/crop_square: Word boxes
 
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/word-boxes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/word-boxes.webp" alt="The Word boxes menu" loading="lazy"></a>
+
 The **Word boxes** switch draws each word's interest area; its **▾** holds:
 
 | Control | What it does |
@@ -133,6 +145,8 @@ The **Word boxes** switch draws each word's interest area; its **▾** holds:
 | **Box** → **Fill** opacity | How strongly the fill shows; 0 draws outlines only. |
 
 ## :material/local_fire_department: Heatmap
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/heatmap.webp" title="Open full size"><img src="../../../assets/screenshots/controls/heatmap.webp" alt="The Heatmap menu" loading="lazy"></a>
 
 The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
@@ -149,6 +163,8 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
 ## :material/grain: Raw gaze
 
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/raw-gaze.webp" title="Open full size"><img src="../../../assets/screenshots/controls/raw-gaze.webp" alt="The Raw gaze menu" loading="lazy"></a>
+
 The **Raw gaze** switch draws the gaze samples as recorded; its **▾** holds:
 
 | Control | What it does |
@@ -158,6 +174,8 @@ The **Raw gaze** switch draws the gaze samples as recorded; its **▾** holds:
 | **Marker** → **Opacity** | Sample opacity. |
 
 ## :material/filter_list: Filters & highlights
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a>
 
 Which fixations and saccades are drawn, and which stand out:
 
@@ -172,6 +190,8 @@ Which fixations and saccades are drawn, and which stand out:
 | **Saccades** → **Types** | Draw only saccades of these types. |
 
 ## :material/aspect_ratio: Figure & canvas
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure & canvas menu" loading="lazy"></a>
 
 The figure as a whole:
 
@@ -196,6 +216,8 @@ The figure as a whole:
 
 ## In Compare
 
+<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/compare-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-row.webp" alt="Scanpath B's row in Compare" loading="lazy"></a>
+
 With **Compare** on, scanpath B gets a row of its own, and several menus split
 into a **Scanpath A** and a **Scanpath B** group.
 
@@ -213,6 +235,8 @@ into a **Scanpath A** and a **Scanpath B** group.
 | **Filters & highlights ▾** → **· B** groups | Scanpath B's own index range, fixation highlights and saccade types. |
 
 ## Under the plot
+
+<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/under-the-plot.webp" title="Open full size"><img src="../../../assets/screenshots/controls/under-the-plot.webp" alt="The tabs under the plot" loading="lazy"></a>
 
 The tabs under the figure:
 

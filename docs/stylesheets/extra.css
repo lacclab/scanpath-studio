@@ -221,3 +221,16 @@
   margin-right: 0.15em;
   user-select: none;
 }
+
+/* All controls: one plain screenshot per section, kept small; click for full size. */
+.md-typeset .sps-ctl {
+  display: block;
+  width: fit-content;
+  margin: 0.8rem auto 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+.md-typeset .sps-ctl img { display: block; }
+.md-typeset .sps-ctl--menu img { max-height: 26rem; width: auto; }
+.md-typeset .sps-ctl--wide img { max-width: 100%; max-height: 9rem; }

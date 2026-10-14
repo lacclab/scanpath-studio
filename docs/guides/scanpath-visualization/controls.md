@@ -31,18 +31,18 @@ and narrow, sort or label the list.
 | **Select trial** | The trial to show. Click it and type to narrow the list. |
 | **Trial** slider | Scrub through the trials in the list. |
 | **◀ ▶** | The previous or next trial. |
-| **⇅** → **Sort trials by** | Reorder the trial list by a statistic (such as reading time) or a participant, text or condition field. |
+| **⇅** → **Sort trials by** | Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached. |
 | **⇅** → **Descending** | Reverse that order. |
-| **Filter funnel** → **Text** / **Participant** | Keep only these texts or participants. |
-| **Filter funnel** → *a field of your data* | Keep only trials with these values, or, for a number, in this range. |
-| **Filter funnel** → **By participant** / **By trial** / **By text** | The same, for the columns of an attached metadata table. |
-| **Filter funnel** → **Favorites only** | Keep only starred trials. |
-| **Filter funnel** → **With any of these tags** | Keep only trials with any of these tags. |
-| **Filter funnel** → **Excluding tags** | Hide trials with any of these tags, such as `exclude`. |
-| **Filter funnel** → **Clear all filters** | Reset every filter in the panel. |
+| :material/filter_alt: → **Text** / **Participant** | Keep only these texts or participants. |
+| :material/filter_alt: → *a field of your data* | Keep only trials with these values, or, for a number, in this range. |
+| :material/filter_alt: → **By participant** / **By trial** / **By text** | The same, for the columns of an attached metadata table. |
+| :material/filter_alt: → **Favorites only** | Keep only starred trials. |
+| :material/filter_alt: → **With any of these tags** | Keep only trials with any of these tags. |
+| :material/filter_alt: → **Excluding tags** | Hide trials with any of these tags, such as `exclude`. |
+| :material/filter_alt: → **Clear all filters** | Reset every filter in the panel. |
 | **✏️** → **Show chips above the plot** | Show or hide the row of facts about the trial above the plot. |
-| **✏️** → field lists | Drag fields between *Shown* and *Available* to choose the chips. |
-| **✏️** → field colors | Give a chip a highlight color; pick gray again to remove it. |
+| **✏️** → field lists | Drag fields between *Shown* and *Available* to choose the chips. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
+| **✏️** → field colors | Give a chip a highlight color; its **✕** removes the highlight. |
 | **✏️** → **Refresh fields** | Look again for which fields are trial-level. |
 | **Screen** and its **◀ ▶** | On a trial recorded over several screens: the screen to show. |
 
@@ -251,7 +251,7 @@ into a **Scanpath A** and a **Scanpath B** group.
 | **Dataset B** | The dataset scanpath B comes from. |
 | **Trial B**, slider, **◀ ▶** | Scanpath B's trial: 📄 marks the same text, 👤 the same participant. |
 | **⇅** on B's row | Sort scanpath B's candidates. |
-| **Filter funnel** on B's row | Filter scanpath B's trials, apart from A's. |
+| :material/filter_alt: on B's row | Filter scanpath B's trials, apart from A's. |
 | **Fixations ▾** → **Scanpath A / B** → **Color**, **Size**, **Opacity** | Each scanpath's marker color, size range and opacity. |
 | **Saccades ▾** → **Scanpath A / B** → **Color**, **Style**, **Width** | Each scanpath's lines. |
 | **Word boxes ▾** → **Scanpath A / B** → **Line**, **Fill** | Each scanpath's word-box colors and opacities. |

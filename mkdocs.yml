@@ -91,7 +91,7 @@ nav:
               - Exclude unsuitable trials: tutorials/data-filtering/exclude-unsuitable-trials.md
               - Select participants by a field: tutorials/data-filtering/select-participants.md
               - Find the trials an analysis needs: tutorials/data-filtering/find-trials-for-an-analysis.md
-          - Export figures:
+          - Export customized figures:
               - tutorials/exporting-figures/index.md
               - Export one figure: tutorials/exporting-figures/export-one-figure.md
               - Export a replay: tutorials/exporting-figures/export-a-replay.md

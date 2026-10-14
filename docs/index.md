@@ -55,7 +55,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
     trials a specific analysis needs — for example, participants with a given
     native language and good calibration — and export the marked trial IDs.
 
-- :material-file-export:{ .lg .middle } **[Export figures](tutorials/exporting-figures/index.md)**
+- :material-file-export:{ .lg .middle } **[Export customized figures](tutorials/exporting-figures/index.md)**
 
     Show a real scanpath in a paper or talk as a heatmap or a replay, and
     save the look as a design to reuse. Or bulk-export every trial

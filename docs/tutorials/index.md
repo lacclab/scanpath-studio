@@ -17,7 +17,7 @@ with [Getting started](../getting-started.md).
     native language and good calibration — annotate them, and export the
     marked trial IDs.
 
-- :material-file-export:{ .lg .middle } **[Export figures](exporting-figures/index.md)**
+- :material-file-export:{ .lg .middle } **[Export customized figures](exporting-figures/index.md)**
 
     Showcase a real scanpath as a heatmap or a replay, save the look as a
     design, and export one figure or the same view across many trials.

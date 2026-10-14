@@ -1,4 +1,4 @@
-# Export figures
+# Export customized figures
 
 Show a real scanpath in a paper, a talk or a supplement — or export a
 consistent image set for downstream processing, such as training data for

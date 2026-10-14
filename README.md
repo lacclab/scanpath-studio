@@ -85,9 +85,21 @@ counts the clicks as they happen and names each step.
 
 ## Your data
 
-Load word, fixation and raw-gaze tables in CSV, Parquet, Excel or another
-common format. Scanpath Studio adapts to how your study was recorded, so there
-is rarely anything to reformat first — see
+Bring any of these tables, in CSV, Parquet, Excel or another common format:
+
+| Table | What it holds |
+| --- | --- |
+| **Fixations** | One row per fixation: position, duration, participant and trial |
+| **Words (interest areas)** | One box per word, as shown on screen, with any reading measures and word features |
+| **Raw gaze** | The gaze samples, drawn under the fixations — or on their own |
+| **Participants** | Metadata, one row per participant: language, age, group… |
+| **Trials** | Metadata, one row per trial or per reading: condition, question… |
+| **Texts** | Metadata, one row per text: difficulty, genre… |
+
+A dataset needs at least one of the first three. Metadata columns work like
+fields in your data: filters, chips, sorting and export. Scanpath Studio adapts
+to how your study was recorded, so there is rarely anything to reformat first —
+see
 [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/).
 
 ## Command line & Python API
@@ -113,7 +125,10 @@ sps.save_figure(fig, "scanpath.html")
 ```
 
 For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or
-use `sps.load_scanpath_data("ia.csv", "fix.csv")`. HTML output needs nothing
+use `sps.load_scanpath_data("ia.csv", "fix.csv")`; add raw gaze with
+`--raw-gaze` (`sps.load_raw_gaze`) and metadata with `--participant-metadata`,
+`--trial-metadata` and `--text-metadata` (`sps.load_participant_metadata` and
+its trial and text siblings). HTML output needs nothing
 else; PNG, SVG and PDF (and GIF/MP4 replays) go through Kaleido, which needs
 Chrome, Chromium or Edge, or run `plotly_get_chrome -y` once. The
 [CLI reference](https://lacclab.github.io/scanpath-studio/cli/) and the

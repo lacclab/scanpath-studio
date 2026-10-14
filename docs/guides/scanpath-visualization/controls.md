@@ -20,6 +20,8 @@ together, see the [Scanpath visualization](index.md) guide.
 
 <a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The trial control bar" loading="lazy"></a>
 
+<a class="sps-ctl sps-ctl--menu" data-label="Show chips menu" href="../../../assets/screenshots/controls/chips.webp" title="Open full size"><img src="../../../assets/screenshots/controls/chips.webp" alt="The chips menu, opened from the pencil button" loading="lazy"></a>
+
 The bar above the plot: pick a dataset and a trial, step through the trials,
 and narrow, sort or label the list.
 

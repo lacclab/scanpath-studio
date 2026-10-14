@@ -38,12 +38,17 @@
     close();
     for (const link of document.querySelectorAll(".md-typeset a.sps-ctl")) {
       const holder = link.parentElement.tagName === "P" ? link.parentElement : link;
-      const heading = holder.previousElementSibling;
+      // A section can have several pictures in a row under its title; each
+      // gets its own button, named by its `data-label`.
+      let heading = holder.previousElementSibling;
+      while (heading && heading.querySelector?.(":scope > a.sps-ctl, :scope.sps-ctl")) {
+        heading = heading.previousElementSibling;
+      }
       if (!heading || !/^H[1-6]$/.test(heading.tagName)) continue;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "sps-shot-btn";
-      btn.textContent = "Show image";
+      btn.textContent = link.dataset.label || "Show image";
       btn.setAttribute("aria-expanded", "false");
       btn.addEventListener("click", (event) => {
         event.stopPropagation();

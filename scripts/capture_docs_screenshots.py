@@ -243,6 +243,29 @@ def _shot_rail_top(page: Page) -> None:
     _shot_controls(page, "modes-designs", page, clip=clip)
 
 
+def _shot_chips_menu(page: Page) -> None:
+    """The ✏️ chips menu, with one chip highlighted so its ✕ is live."""
+    page.locator(".st-key-iconpop_chip_fields button").first.click()
+    ui.settle(page, quiet=1.5)
+    body = page.locator('[data-testid="stPopoverBody"]').last
+    picker = body.locator(".st-key-trial_chip_color_participant_id")
+    picker.locator('[data-testid="stColorPickerBlock"]').first.click()
+    page.wait_for_timeout(400)
+    hex_box = page.locator("input:visible").last  # the picker's hex box
+    hex_box.fill("#FFD966")
+    hex_box.press("Enter")
+    body.locator("p").first.click()
+    ui.settle(page, quiet=2.0)
+    body = page.locator('[data-testid="stPopoverBody"]').last
+    body.evaluate(
+        "el => { el.style.maxHeight = 'none'; el.style.overflow = 'visible'; }"
+    )
+    page.wait_for_timeout(400)
+    _shot_controls(page, "chips", body)
+    page.keyboard.press("Escape")
+    ui.settle(page, quiet=1.0)
+
+
 def capture_controls(page: Page, only: set[str] | None = None) -> None:
     """The All controls page's pictures (``--controls [NAME ...]``)."""
     CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
@@ -283,6 +306,10 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
         _shot_controls(page, name, body)
         page.keyboard.press("Escape")
         ui.settle(page, quiet=1.0)
+
+    if wanted("chips"):
+        print("chips menu")
+        _shot_chips_menu(page)
 
     if wanted("under-the-plot"):
         print("tabs under the plot")

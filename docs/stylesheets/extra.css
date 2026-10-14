@@ -232,5 +232,24 @@
   overflow: hidden;
 }
 .md-typeset .sps-ctl img { display: block; }
-.md-typeset .sps-ctl--menu img { max-height: 26rem; width: auto; }
-.md-typeset .sps-ctl--wide img { max-width: 100%; max-height: 9rem; }
+.md-typeset .sps-ctl--menu img { width: 100%; height: auto; }
+
+/* A tall menu sits to the left of its table, and stays in view while the
+   table scrolls past; on a narrow screen it goes back above the table.
+   (Markdown wraps the picture's link in a paragraph: that is the row's first
+   child.) */
+.md-typeset .sps-ctl-row { display: flex; gap: 1.2rem; align-items: flex-start; }
+.md-typeset .sps-ctl-row > :first-child {
+  flex: 0 0 13rem;
+  margin: 0.2rem 0 0;
+  position: sticky;
+  top: 4.2rem;
+}
+.md-typeset .sps-ctl-row > :first-child .sps-ctl { width: auto; margin: 0; }
+.md-typeset .sps-ctl-text { flex: 1 1 0; min-width: 0; }
+.md-typeset .sps-ctl-text > :first-child { margin-top: 0; }
+.md-typeset .sps-ctl-text table:not([class]) { font-size: 0.7rem; }
+@media screen and (max-width: 44.9375em) {
+  .md-typeset .sps-ctl-row { display: block; }
+  .md-typeset .sps-ctl-row > :first-child { position: static; width: 13rem; margin: 0.8rem auto 1rem; }
+}

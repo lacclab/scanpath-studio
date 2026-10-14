@@ -59,10 +59,11 @@
   margin: 0 0.5rem 0.5rem 0;
 }
 
-/* The Install button reads larger than its neighbours: it is where most
-   readers are headed. */
-.md-typeset .sps-buttons .md-button.sps-install {
-  font-size: 1.05rem;
+/* The three buttons share one width, so a short label (Install) does not make
+   its button the odd one out. */
+.md-typeset .sps-buttons .md-button {
+  min-width: 10rem;
+  text-align: center;
 }
 
 /* Screenshot / animation frames */

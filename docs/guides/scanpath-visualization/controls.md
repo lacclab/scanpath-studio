@@ -60,21 +60,23 @@ layer's settings, described below one menu at a time. The last two rows,
 **Filters & highlights** and **Figure & canvas**, cover the figure as a whole.
 A greyed-out control says why when you hover over it.
 
-### :material/movie: Animate
+### :material/movie: Animate: play the reading as a video
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="The Animate menu" loading="lazy"></a>
 
-The **Animate** switch replays the reading fixation by fixation; its **▾** holds:
+The **Animate** switch turns the figure into an animation, a video of the
+reading played back fixation by fixation, with play and pause buttons and a
+time slider under the plot. Its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Replay** → **Speed** | Playback speed, from slower than real time to many times faster. |
-| **Replay** → **Autoplay** → **On load** | Start the replay as soon as it is drawn. |
-| **Replay** → **Duration** | The trial's reading time, and how long the replay runs at this speed. |
-| **Frames** → **Quality** | How smooth the replay is: more frames play more smoothly but take longer to build. **Custom** sets the two below by hand. |
+| **Replay** → **Speed** | How fast the video plays, from ×0.25 to ×8: ×1 is the reader's own pace, ×2 twice as fast, ×0.5 half as fast. |
+| **Replay** → **Autoplay** → **On load** | Start playing the animation automatically as soon as the plot is shown; otherwise it starts only when you click play. |
+| **Replay** → **Duration** | For information only: the trial's reading time, and how long the video runs at this speed. |
+| **Frames** → **Quality** | How smooth the video is: more frames play more smoothly but take longer to build. **Custom** sets the two below by hand. |
 | **Frames** → **Every** | Reading time between frames, in ms. |
-| **Frames** → **Limit** | The most frames a replay gets; a long trial gets wider frame steps to fit. |
-| **Frames** → **Result** | How many frames this trial's replay has, and how far apart they ended up. |
+| **Frames** → **Limit** | The most frames a video gets; a long trial gets wider frame steps to fit. |
+| **Frames** → **Result** | How many frames this trial's video has, and how far apart they ended up. |
 
 ### :material/compare: Compare
 

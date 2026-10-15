@@ -14,9 +14,9 @@ view's filter panel, and **Clear** resets every filter.
 
 Corpus Analysis shows the reading measures your interest-area report provides
 (first fixation duration, total fixation duration, regression path, and so on).
-It does not compute them itself. An EyeLink report's `IA_*` columns are mapped
-automatically; other names can be mapped under :material/database: **Data Management → Edit dataset**.
-Without any, the page says so. The per-fixation measures are the fixation table's
+It does not compute them itself, and without any, the page says so. Which
+columns count as reading measures is set when the data is loaded (see
+[Reading measures](../loading-data/index.md#reading-measures)). The per-fixation measures are the fixation table's
 own durations, and its saccade amplitudes, or, when it has none, the distance
 between consecutive fixations.
 

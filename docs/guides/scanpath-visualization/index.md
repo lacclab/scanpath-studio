@@ -54,6 +54,6 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | --- | --- |
 | **Annotations** | Star, tag and write notes on the trial, to find or filter it later. |
 | **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans. |
-| **Comparisons** | Other trials that match this one on a field you choose, such as other readings of the same text. |
+| **Comparisons** | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side. |
 | **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. |
 | **Share** | A link that reopens this view, the Python or command-line code that redraws the figure, or a settings file. |

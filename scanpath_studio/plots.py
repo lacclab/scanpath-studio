@@ -3440,6 +3440,36 @@ def _first_present(frame: pd.DataFrame | None, column: str, *, numeric: bool):
     return float(values.iloc[0]) if numeric else str(values.iloc[0])
 
 
+def stimulus_image_settings(
+    settings: Mapping,
+    canvas_size: tuple[int, int],
+    page: tuple[str, tuple[int, int], tuple[float, float]] | None,
+) -> dict:
+    """Place the requested stimulus page, including an upload and manual offsets."""
+    image = None
+    size = None
+    origin = None
+    if settings.get("show_stimulus_image"):
+        if upload := settings.get("stimulus_image_upload_uri"):
+            image, size, origin = upload, canvas_size, (0.0, 0.0)
+        elif page is not None:
+            image, size, origin = page
+    if image is not None and size is not None:
+        scale = float(settings.get("stimulus_image_scale", 1.0)) or 1.0
+        size = (size[0] * scale, size[1] * scale)
+        ox, oy = origin or (0.0, 0.0)
+        origin = (
+            ox + float(settings.get("stimulus_image_offset_x", 0.0)),
+            oy + float(settings.get("stimulus_image_offset_y", 0.0)),
+        )
+    return {
+        "background_image": image,
+        "background_image_size": size,
+        "background_image_origin": origin,
+        "background_image_opacity": settings.get("stimulus_image_opacity", 1.0),
+    }
+
+
 def reading_stimulus_image(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,

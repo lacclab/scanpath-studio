@@ -159,8 +159,17 @@ def _root(source: SnippetSource, fallback: str) -> str:
 #: keeps only the mapped and recognised columns unless told otherwise.
 _KEEPING_SOURCES = frozenset({SOURCE_FILES, SOURCE_UPLOAD, SOURCE_UNKNOWN})
 
-#: The figure options that name a fixation column.
-_FIXATION_COLUMN_OPTIONS = ("color_by", "x_field", "y_field", "fixation_hover_fields")
+#: Figure options that name word or fixation columns the loader must retain.
+_FIGURE_COLUMN_OPTIONS = (
+    "color_by",
+    "x_field",
+    "y_field",
+    "fixation_hover_fields",
+    "word_hover_fields",
+    "word_hover_measure",
+    "word_heatmap_col",
+    "highlight_column",
+)
 
 
 def _loader_columns() -> frozenset:
@@ -189,7 +198,7 @@ def _kept_columns(settings: dict) -> list[str]:
     """The dataset's own columns a figure names (a retained pupil size as
     ``color_by``, say), which the loader has to be told to keep."""
     named: list[str] = []
-    for option in _FIXATION_COLUMN_OPTIONS:
+    for option in _FIGURE_COLUMN_OPTIONS:
         value = settings.get(option)
         values = value if isinstance(value, (list, tuple)) else [value]
         named += [str(v) for v in values if isinstance(v, str) and v]

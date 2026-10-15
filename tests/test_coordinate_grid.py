@@ -11,6 +11,7 @@ import pytest
 
 import scanpath_studio as sps
 from scanpath_studio import api, cli, plots
+from scanpath_studio.constants import DEFAULT_CROP_MARGIN_PX
 from scanpath_studio.export import _plot_config_dict
 
 
@@ -253,7 +254,7 @@ def test_bulk_manifest_records_grid_settings():
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,
         "crop_margin_auto": True,
-        "crop_margin_px": None,
+        "crop_margin_px": DEFAULT_CROP_MARGIN_PX,
     }
 
 

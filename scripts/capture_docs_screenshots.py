@@ -7,6 +7,9 @@ UI change is one command:
 
     uv run --with playwright python scripts/capture_docs_screenshots.py
 
+``--controls`` captures the All controls page's pictures instead (one per part
+of the Scanpath page, each menu open), into ``docs/assets/screenshots/controls/``.
+
 It starts its own app on a free port with the recovery cache off — so the
 captures show the bundled demo at its defaults, never whatever a local session
 last held — drives it through deep links, and writes WebP files to
@@ -175,6 +178,159 @@ def capture(page: Page) -> None:
     _webp("data-page")
 
 
+#: The All controls page's pictures: one per part of the Scanpath page, each
+#: menu captured open with its own layer on, so nothing in it is greyed out.
+#: ``(file, layer switch to turn on or None, menu container key)``.
+CONTROL_MENUS = (
+    ("fixations", "global_show_fix", "split_mode_rail_fix_popover"),
+    ("saccades", "global_show_saccades", "split_mode_rail_sac_popover"),
+    ("stimulus", "global_show_stimulus", "split_mode_rail_stim_popover"),
+    ("word-boxes", "global_show_words", "split_mode_rail_boxes_popover"),
+    ("heatmap", "global_show_heatmap", "split_mode_rail_heatmap_popover"),
+    ("raw-gaze", "global_show_raw_gaze", "split_mode_rail_rawgaze_popover"),
+    ("filters", None, "split_mode_rail_filter_popover"),
+    ("figure-canvas", None, "split_mode_rail_figure_popover"),
+)
+CONTROLS_OUT = OUT / "controls"
+
+
+def _switch_on(page: Page, key: str) -> None:
+    box = page.locator(f".st-key-{key} input").first
+    if box.count() and not box.is_checked():
+        ui.toggle(page, key)
+
+
+def _shot_controls(page: Page, name: str, locator, **kw) -> None:
+    ui.shot(page, name, locator=None if locator is page else locator, **kw)
+    png, webp = CONTROLS_OUT / f"{name}.png", CONTROLS_OUT / f"{name}.webp"
+    Image.open(png).convert("RGB").save(webp, "WEBP", quality=WEBP_QUALITY, method=6)
+    png.unlink()
+    print(f"  → controls/{webp.name} ({webp.stat().st_size // 1024} KB)")
+
+
+# The trial bar is shot on a dataset whose trials span several screens, so its
+# Screen picker shows too: OneStop's ordinary reading, whose parts (title,
+# paragraph, questions …) are screens, once downloaded into data/OneStop.
+MULTI_SCREEN_LINK = {"source": "corpus", "corpus": "onestop-ordinary-reading"}
+
+
+def _shot_trial_row(page: Page) -> None:
+    ui.deep_link(page, MULTI_SCREEN_LINK)
+    screens = page.locator(".st-key-tour_grp_screen_picker")
+    try:
+        screens.first.wait_for(state="visible", timeout=900_000)
+    except Exception:
+        print("  no multi-screen dataset here (data/OneStop); trial-row kept")
+        return
+    ui.settle(page, quiet=2.0)
+    _shot_controls(
+        page, "trial-row", page.locator(".st-key-tour_grp_trial_picker").first
+    )
+
+
+def _shot_rail_top(page: Page) -> None:
+    """The top of the Plot controls column, down to the palette."""
+    page.evaluate("window.scrollTo(0, 0)")
+    rail = page.locator(".st-key-scanpath_rail").first.bounding_box()
+    palette = page.locator(".st-key-global_palette").first.bounding_box()
+    pad = 10
+    clip = {
+        "x": rail["x"],
+        "y": rail["y"],
+        "width": rail["width"],
+        "height": palette["y"] + palette["height"] + pad - rail["y"],
+    }
+    _shot_controls(page, "modes-designs", page, clip=clip)
+
+
+def _shot_chips_menu(page: Page) -> None:
+    """The ✏️ chips menu, with one chip highlighted so its ✕ is live."""
+    page.locator(".st-key-iconpop_chip_fields button").first.click()
+    ui.settle(page, quiet=1.5)
+    body = page.locator('[data-testid="stPopoverBody"]').last
+    picker = body.locator(".st-key-trial_chip_color_participant_id")
+    picker.locator('[data-testid="stColorPickerBlock"]').first.click()
+    page.wait_for_timeout(400)
+    hex_box = page.locator("input:visible").last  # the picker's hex box
+    hex_box.fill("#FFD966")
+    hex_box.press("Enter")
+    body.locator("p").first.click()
+    ui.settle(page, quiet=2.0)
+    body = page.locator('[data-testid="stPopoverBody"]').last
+    body.evaluate(
+        "el => { el.style.maxHeight = 'none'; el.style.overflow = 'visible'; }"
+    )
+    page.wait_for_timeout(400)
+    _shot_controls(page, "chips", body)
+    page.keyboard.press("Escape")
+    ui.settle(page, quiet=1.0)
+
+
+def capture_controls(page: Page, only: set[str] | None = None) -> None:
+    """The All controls page's pictures (``--controls [NAME ...]``)."""
+    CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
+    ui.OUT = CONTROLS_OUT
+
+    def wanted(name: str) -> bool:
+        return not only or name in only
+
+    ui.deep_link(page, ui.DEMO_TRIAL)
+    ui.reset_viz(page)
+
+    if wanted("plot-controls"):
+        print("plot controls")
+        _shot_controls(
+            page, "plot-controls", page.locator(".st-key-scanpath_rail").first
+        )
+
+    if wanted("modes-designs"):
+        print("modes, designs and palette")
+        _shot_rail_top(page)
+
+    for name, layer, menu in CONTROL_MENUS:
+        if not wanted(name):
+            continue
+        print(name)
+        if layer:
+            _switch_on(page, layer)
+        page.locator(f".st-key-{menu} button").first.click()
+        ui.settle(page, quiet=1.5)
+        body = page.locator('[data-testid="stPopoverBody"]').last
+        # The whole menu, not the part its scroll area shows.
+        body.evaluate(
+            "el => { el.style.maxHeight = 'none'; el.style.overflow = 'visible';"
+            " el.querySelectorAll('*').forEach(c => { if (c.scrollHeight > c.clientHeight)"
+            " { c.style.maxHeight = 'none'; c.style.overflow = 'visible'; } }); }"
+        )
+        page.wait_for_timeout(400)
+        _shot_controls(page, name, body)
+        page.keyboard.press("Escape")
+        ui.settle(page, quiet=1.0)
+
+    if wanted("chips"):
+        print("chips menu")
+        _shot_chips_menu(page)
+
+    if wanted("under-the-plot"):
+        print("tabs under the plot")
+        _shot_controls(
+            page, "under-the-plot", page.locator(".st-key-tour_grp_subtabs").first
+        )
+
+    if wanted("compare-row"):
+        print("compare")
+        ui.toggle(page, "single_compare_toggle")
+        _shot_controls(
+            page, "compare-row", page.locator(".st-key-tour_grp_compare_picker").first
+        )
+        ui.toggle(page, "single_compare_toggle")
+
+    if wanted("trial-row"):
+        print("trial row")
+        _shot_trial_row(page)
+    ui.OUT = OUT
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     port = free_port()
@@ -184,8 +340,13 @@ def main() -> None:
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(executable_path=find_chrome())
+            # --controls: a window tall enough that every menu opens whole,
+            # instead of scrolling inside a box the window's height limits.
+            viewport = (
+                {**VIEWPORT, "height": 3000} if "--controls" in sys.argv else VIEWPORT
+            )
             ctx = browser.new_context(
-                viewport=VIEWPORT, device_scale_factor=2, color_scheme="light"
+                viewport=viewport, device_scale_factor=2, color_scheme="light"
             )
             ctx.add_init_script(
                 "document.addEventListener('DOMContentLoaded', () => {"
@@ -193,7 +354,11 @@ def main() -> None:
                 f"s.textContent = {ui.HIDE_CSS!r};"
                 "document.head.appendChild(s);});"
             )
-            capture(ctx.new_page())
+            if "--controls" in sys.argv:
+                names = sys.argv[sys.argv.index("--controls") + 1 :]
+                capture_controls(ctx.new_page(), set(names) or None)
+            else:
+                capture(ctx.new_page())
             browser.close()
     finally:
         app.terminate()

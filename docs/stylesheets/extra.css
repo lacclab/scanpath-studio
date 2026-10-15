@@ -59,6 +59,13 @@
   margin: 0 0.5rem 0.5rem 0;
 }
 
+/* The three buttons share one width, so a short label (Install) does not make
+   its button the odd one out. */
+.md-typeset .sps-buttons .md-button {
+  min-width: 10rem;
+  text-align: center;
+}
+
 /* Screenshot / animation frames */
 .sps-shot {
   border-radius: 0.5rem;
@@ -214,3 +221,44 @@
   margin-right: 0.15em;
   user-select: none;
 }
+
+/* All controls: each section's menu, as it opens in the app, behind a small
+   button beside the section's title (javascripts/controls.js). Without
+   JavaScript the picture is shown under the title instead. */
+.md-typeset .sps-ctl {
+  display: block;
+  width: fit-content;
+  margin: 0.8rem auto 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+.md-typeset .sps-ctl img { display: block; max-width: 100%; max-height: 26rem; }
+.md-typeset .sps-shot-btn {
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 1rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color--light);
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.md-typeset .sps-shot-btn:hover,
+.md-typeset .sps-shot-btn[aria-expanded="true"] {
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-fg-color);
+}
+.sps-shot-pop {
+  position: absolute;
+  z-index: 5;
+  padding: 0.4rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  background: var(--md-default-bg-color);
+  box-shadow: var(--md-shadow-z3);
+}
+.sps-shot-pop img { display: block; max-width: min(36rem, calc(100vw - 2rem)); max-height: 70vh; }

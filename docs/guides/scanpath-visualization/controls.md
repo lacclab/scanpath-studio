@@ -44,7 +44,7 @@ and narrow, sort or label the list.
 | :material/filter_alt: → **Clear all filters** | Reset every filter in the panel. |
 | **✏️** → **Show chips above the plot** | Show or hide the row of facts about the trial above the plot. |
 | **✏️** → field lists | Drag fields between *Shown* and *Available* to choose the chips. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
-| **✏️** → field colors | Give a chip a highlight color; its **✕** removes the highlight. |
+| **✏️** → field colors | Give a chip a highlight color; its **✕** puts it back to the default gray. |
 | **✏️** → **Refresh fields** | Look again for which fields are trial-level. |
 | **Screen** and its **◀ ▶** | On a trial recorded over several screens: the screen to show. |
 

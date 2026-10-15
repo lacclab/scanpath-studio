@@ -39,8 +39,8 @@ question, answers and feedback are its screens.
 | **Trials** *(optional)* | trial | trial ID, plus any columns you like |
 | **Texts** *(optional)* | text | text ID, plus any columns you like |
 
-A dataset needs at least one of the first three. Otherwise, participant ID,
-text ID and timestamps are optional, and conditions and reading measures
+A dataset needs fixations, words or raw gaze; any one of them is enough, and
+the others are optional. Participant ID, text ID and timestamps are optional too, and conditions and reading measures
 unlock more features. Columns are detected from common EyeLink, Gazepoint,
 Tobii, SMI and Pupil Labs names, and you can correct any guess. Any other
 column of any table can be kept too (each table's **Extra fields to keep**):

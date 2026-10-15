@@ -89,7 +89,7 @@ settings on this computer (when it listens only on this computer, as
 `scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
-([what to back up](guides/outputs-sharing.md#back-up-your-work)).
+([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
 
 If one saved dataset's files go missing or are damaged, the rest of the
 session still comes back. The app names the dataset that didn't, keeps its

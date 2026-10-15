@@ -164,16 +164,6 @@ def capture(page: Page) -> None:
     # The numbered overview (scanpath-view) is `--overview`'s: it needs a
     # dataset with screens, which the demo is not.
 
-    print("export and share")
-    tabs = page.locator('[data-testid="stTabs"]').first
-    for label, name in (("Export", "export"), ("Share", "share")):
-        page.locator(f'[data-testid="stTab"]:has-text("{label}")').first.click()
-        ui.settle(page, quiet=2.0)
-        ui.shot_block(page, name, tabs, max_h=900)
-        _webp(name)
-    page.locator('[data-testid="stTab"]:has-text("Annotations")').first.click()
-    ui.settle(page, quiet=1.5)
-
     print("corpus analysis")
     ui.nav(page, "Corpus Analysis")
     page.wait_for_timeout(2000)

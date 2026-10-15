@@ -55,5 +55,19 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | **Annotations** | Star, tag and write notes on the trial, to find or filter it later. |
 | **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans. |
 | **Comparisons** | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side. |
-| **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. |
+| **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. PDF, GIF and MP4 need Chrome, Chromium or Edge installed ([FAQ](../../faq.md#export-fails)). |
 | **Share** | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+
+## Back up your work
+
+Each of these files can be saved and loaded again:
+
+| What | Where |
+| --- | --- |
+| figure settings | **:material/share: Share → File** |
+| favorites, tags and notes | **:material/database: Data Management → Annotations → Export** |
+| column mapping and recording setup | **:material/edit: Edit dataset → Download setup file** |
+| saved figure designs | **:material/palette: My designs → Export** |
+
+None of them holds your data, so load the same data before restoring one. On
+your own computer, the app also keeps your datasets and work between sessions.

@@ -16,8 +16,4 @@ For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 
     Per text, Per participant and Groups, from the measures your data brings.
 
-- :material-share-variant:{ .lg .middle } **[Outputs and sharing](outputs-sharing.md)**
-
-    Single and bulk export, share links, and restorable configurations.
-
 </div>

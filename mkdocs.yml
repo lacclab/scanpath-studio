@@ -106,7 +106,6 @@ nav:
       - Corpus Analysis:
           - guides/corpus-workspace/index.md
           - Computations & methodology: computations.md
-      - Outputs and sharing: guides/outputs-sharing.md
       - FAQ: faq.md
   - Plot gallery: gallery.md
   - API & CLI:
@@ -155,6 +154,7 @@ plugins:
   # The pages UX-23 retired and ENG-77 deleted: their old URLs keep working.
   - redirects:
       redirect_maps:
+        guides/outputs-sharing.md: guides/scanpath-visualization/index.md#under-the-plot
         onestop.md: guides/loading-data/index.md#onestop
         glossary.md: guides/loading-data/index.md#what-your-data-needs
         data-format.md: guides/loading-data/index.md#what-your-data-needs

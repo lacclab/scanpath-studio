@@ -8,7 +8,7 @@ Words and fixations must use the same pixel coordinates and share trial IDs.
 If the fixations are shifted, mirrored or scaled against the words, the two
 tables are in different coordinate frames — a different origin, unit or offset
 — and no setting here fixes that; convert one of them
-([Data format → Units](data-format.md#tables)). If the alignment is right but
+([What your data needs → Files and units](guides/loading-data/index.md#tables)). If the alignment is right but
 the figure is framed or sized wrongly, the recording screen size is: set the
 resolution of the monitor used in the experiment under :material/database: **Data Management → :material/edit: Edit dataset → Recording
 setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.

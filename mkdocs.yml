@@ -102,9 +102,7 @@ nav:
       - Scanpath visualization:
           - guides/scanpath-visualization/index.md
           - All controls: guides/scanpath-visualization/controls.md
-      - Loading public and own data:
-          - guides/loading-data/index.md
-          - Data format: data-format.md
+      - Loading public and own data: guides/loading-data/index.md
       - Corpus Analysis:
           - guides/corpus-workspace/index.md
           - Computations & methodology: computations.md
@@ -158,7 +156,8 @@ plugins:
   - redirects:
       redirect_maps:
         onestop.md: guides/loading-data/index.md#onestop
-        glossary.md: data-format.md
+        glossary.md: guides/loading-data/index.md#what-your-data-needs
+        data-format.md: guides/loading-data/index.md#what-your-data-needs
         bring-your-own-data.md: guides/loading-data/index.md
         corpus-analysis.md: guides/corpus-workspace/index.md
         tutorials/batch-export.md: tutorials/exporting-figures/export-every-trial.md
@@ -222,7 +221,6 @@ plugins:
           - install.md: Install, launch, and a first plot
           - tutorials/*.md
           - guides/*.md
-          - data-format.md: Accepted tables, units and metadata
           - computations.md: How every measure and derived value is computed
           - faq.md
         API & CLI:

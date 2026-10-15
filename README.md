@@ -45,7 +45,7 @@ Bring any of these tables, in CSV, TSV, Parquet, Feather, Excel or a `.zip` of t
 | **Texts** | Metadata, one row per text: difficulty, genre… |
 
 A dataset needs at least one of the first three. Metadata columns work like
-fields in your data: filters, chips, sorting and export. Columns are detected from common EyeLink, Tobii, Gazepoint, SMI and Pupil Labs names, and you can correct any guess. See [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/) and the [data format](https://lacclab.github.io/scanpath-studio/data-format/).
+fields in your data: filters, chips, sorting and export. Columns are detected from common EyeLink, Tobii, Gazepoint, SMI and Pupil Labs names, and you can correct any guess. See [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/) and the [data format](https://lacclab.github.io/scanpath-studio/guides/loading-data/#what-your-data-needs).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/add-your-data.gif" alt="Adding a dataset from EyeLink fixation and interest-area reports"><br>

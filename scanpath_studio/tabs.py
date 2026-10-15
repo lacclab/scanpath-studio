@@ -9261,7 +9261,7 @@ def _measure_note(host, measure: Measure, observation: str) -> None:
     if entry is None:
         about, url = (
             "As recorded in the data.",
-            f"{CITATION['docs_url']}data-format/#reading-measures",
+            f"{CITATION['docs_url']}guides/loading-data/#reading-measures",
         )
         unit = measure.unit or "count"
     else:

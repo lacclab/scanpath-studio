@@ -160,7 +160,7 @@ For a multipart parent, inspect `sps.list_parts(words, fixations, pid, tid)`,
 pass `screen="…"` to `plot_scanpath` / `animate_scanpath`, or call
 `sps.render_parent_trial(...)` for an ordered mapping of per-screen figures.
 Data without explicit screen columns can use `trial_parts_manifest=`; see
-[Data format](data-format.md#multipart-logical-trials).
+[What your data needs](guides/loading-data/index.md#multipart-logical-trials).
 
 ### When auto-detection can't find a column
 

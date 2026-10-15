@@ -42,7 +42,10 @@ question, answers and feedback are its screens.
 A dataset needs at least one of the first three. Otherwise, participant ID,
 text ID and timestamps are optional, and conditions and reading measures
 unlock more features. Columns are detected from common EyeLink, Gazepoint,
-Tobii, SMI and Pupil Labs names, and you can correct any guess.
+Tobii, SMI and Pupil Labs names, and you can correct any guess. Any other
+column of any table can be kept too (each table's **Extra fields to keep**):
+a field with one value per trial, such as a condition, then works as a trial
+filter, a sort key and a chip above the plot.
 
 ### Files and units { #tables }
 

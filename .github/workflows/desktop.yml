@@ -34,7 +34,7 @@ jobs:
           - os: ubuntu-latest
             archive: ScanpathStudio-linux-x86_64.tar.gz
           # macos-latest is Apple silicon; there is no Intel build (documented
-          # in docs/getting-started.md — add a macos-13 leg if users need one).
+          # in docs/install.md — add a macos-13 leg if users need one).
           - os: macos-latest
             archive: ScanpathStudio-macos-arm64.dmg
           - os: windows-latest

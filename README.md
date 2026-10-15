@@ -139,7 +139,7 @@ For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or us
 
 The full documentation is at **<https://lacclab.github.io/scanpath-studio/>**:
 
-- [Install](https://lacclab.github.io/scanpath-studio/getting-started/): install, launch and a first trial
+- [Install](https://lacclab.github.io/scanpath-studio/install/): install, launch and a first trial
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/): task walk-throughs, from checking a pilot to a figure for a paper
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/): every view and control
 - [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it

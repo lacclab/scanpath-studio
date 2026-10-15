@@ -75,7 +75,7 @@ extra:
 # it, someone looking a definition up, and someone citing or contributing.
 nav:
   - Home: index.md
-  - Install: getting-started.md
+  - Install: install.md
   - Tutorials:
       - tutorials/index.md
       - Optimize data collection:
@@ -178,7 +178,8 @@ plugins:
         rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
         # ENG-88 folded these into Getting started and the FAQ.
-        desktop.md: getting-started.md#install
+        desktop.md: install.md#install
+        getting-started.md: install.md
         export-troubleshooting.md: faq.md#export-fails
   # Runs the pages' `exec="true"` fences: the gallery, printed example output,
   # and the generated references (scripts/docs_support.py).
@@ -220,7 +221,7 @@ plugins:
       full_output: llms-full.txt
       sections:
         Use the app:
-          - getting-started.md: Install, launch, and a first plot
+          - install.md: Install, launch, and a first plot
           - tutorials/*.md
           - guides/*.md
           - faq.md

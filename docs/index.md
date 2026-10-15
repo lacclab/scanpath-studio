@@ -16,7 +16,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 
 <div class="sps-buttons" markdown>
 [:material-play-circle: Try the demo](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
-[:material-download: Install](getting-started.md#install){ .md-button }
+[:material-download: Install](install.md#install){ .md-button }
 [:material-school: Tutorials](tutorials/index.md){ .md-button }
 </div>
 

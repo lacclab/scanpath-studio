@@ -443,7 +443,7 @@ def test_the_grid_shows_one_page_and_says_how_to_see_more(monkeypatch):
     assert len(_panel_captions_shown(at)) == 2
     assert _count_line(at) == "Showing 1–2 of 3 matches — pick a page for more."
     # A pager above the grid and one under it.
-    assert len(at.get("pagination")) == 2
+    assert len(at.pagination) == 2
 
     at.session_state["multi_gen_page"] = 2
     at.run(timeout=60)
@@ -460,7 +460,7 @@ def test_one_page_has_no_pager():
     at = AppTest.from_function(_lookalike_comparisons_app).run(timeout=60)
     assert not at.exception, at.exception
     assert _count_line(at) == "3 matches."
-    assert not at.get("pagination")
+    assert not at.pagination
 
 
 def test_another_match_set_starts_on_page_one(monkeypatch):

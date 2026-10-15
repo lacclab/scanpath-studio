@@ -149,7 +149,7 @@ def test_the_downloaded_file_round_trips(tmp_path):
     at = _custom_draft()
     download = next(
         element
-        for element in at.get("download_button")
+        for element in at.download_button
         if "Download authoring file" in str(element.proto.label)
     )
     payload = at.session_state["_author_save_payload"]["authoring"]

@@ -4185,21 +4185,21 @@ class TestNavRegressions:
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        switch = [c for c in at.get("button_group") if c.key == SHARE_SECTION_KEY]
+        switch = [c for c in at.segmented_control if c.key == SHARE_SECTION_KEY]
         assert switch, "the Link · Code · File switch is missing"
         assert list(switch[0].options) == list(SHARE_SECTIONS)
         # Link is the default, and only the chosen part draws.
         assert "_share_query_current" in at.session_state
-        assert not [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+        assert not [u for u in at.file_uploader if u.key == "plot_config_upload"]
 
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
         at.session_state[SHARE_SECTION_KEY] = "File"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert [
-            d for d in at.get("download_button") if d.key == "plot_config_download"
-        ], "Share → File has no settings download"
-        assert [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+        assert [d for d in at.download_button if d.key == "plot_config_download"], (
+            "Share → File has no settings download"
+        )
+        assert [u for u in at.file_uploader if u.key == "plot_config_upload"]
         # UX-199: what the file holds, and what it does not, beside it.
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Includes the figure settings, recording setup and trial" in captions

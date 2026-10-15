@@ -120,19 +120,19 @@ The **Fixations** switch draws the fixation markers; its **▾** holds:
 | Control | What it does |
 | --- | --- |
 | **Marker** → **Color** | What decides each marker's color. **One color** paints them all alike. Pick a number column of the fixations, such as duration or the fixation's order in the trial, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as the line of text or the next saccade's direction, and each value gets its own color, with a legend. |
-| **Marker** → color box | The single color every marker wears. |
-| **Marker** → **Shape** | Marker shape: circle, square, diamond, triangle, star… |
-| **Marker** → **Size** | The smallest and largest marker diameter, in px. |
-| **Marker** → **Scale** | How duration sets marker size: square root, linear, log, or relative to the trial. |
-| **Marker** → **Durations** | The durations that get the smallest and the largest marker. |
-| **Marker** → **Opacity** | Marker opacity; lower it to see overlapping fixations. |
-| **Marker** → **Outline** | The width and color of the ring round each marker. |
-| **Color bar** → **Show** | The color scale's bar, when markers are colored by a number. |
-| **Color bar** → orientation, **Angle**, **Size**, **Thickness**, **Length** | The bar's direction, tick-label angle and size, and its thickness and length. |
+| **Marker** → color box | Choose the fixation marker color. |
+| **Marker** → **Shape** | Choose the fixation marker shape: circle, square, diamond, triangle, star… |
+| **Marker** → **Size** | Set the marker size range: the smallest and largest marker diameter, in px. |
+| **Marker** → **Scale** | Choose how duration sets marker size: square root, linear, log, or relative to the trial. |
+| **Marker** → **Durations** | Choose the duration range: set the durations that get the smallest and the largest marker. |
+| **Marker** → **Opacity** | Set the fixation marker opacity; lower it to see overlapping fixations. |
+| **Marker** → **Outline** | Set the width and color of the ring round each marker. |
+| **Color bar** → **Show** | Show the color scale's bar, when markers are colored by a number. |
+| **Color bar** → orientation, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction, tick-label angle and size, and its thickness and length. |
 | **Fixation index** → **Show** | Number each fixation in reading order. |
-| **Fixation index** → color, **Size** | The numbers' color and size. |
+| **Fixation index** → color, **Size** | Choose the numbers' color and size. |
 | **Snap** → **To line** | Move each fixation onto its line of text — a schematic, labelled *Illustration*. |
-| **Snap** → **Position** | Where on its line a snapped fixation sits. |
+| **Snap** → **Position** | Choose where on its line a snapped fixation sits. |
 
 ### :material/arrow_outward: Saccades
 
@@ -143,15 +143,15 @@ The **Saccades** switch draws the lines between fixations; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Line** → **Color** | One color; forward and regression apart; or by type (forward, skip, refixation, return sweep, regression). |
-| **Line** → color box | The single saccade color. |
-| **Line** → type colors | With **By type**: each type's color. |
-| **Line** → **Style** | Solid, dashed, dotted or dash-dot lines. |
-| **Line** → **Width** | Line thickness. |
-| **Line** → **Opacity** | Line and arrow opacity; lower it to bring the fixations forward. |
-| **Shape** | Straight lines, or arcs over the text. |
-| **Direction arrows** → **Show** | An arrowhead on each saccade. |
-| **Direction arrows** → **Arrow size** | Arrowhead size. |
+| **Line** → **Color** | Choose what colors the saccades: one color; forward and regression apart; or by type (forward, skip, refixation, return sweep, regression). |
+| **Line** → color box | Choose the saccade color. |
+| **Line** → type colors | With **By type**: choose each type's color. |
+| **Line** → **Style** | Choose the saccade line style: solid, dashed, dotted or dash-dot. |
+| **Line** → **Width** | Set the saccade line thickness. |
+| **Line** → **Opacity** | Set the saccade line and arrow opacity; lower it to bring the fixations forward. |
+| **Shape** | Choose the saccade shape: straight lines, or arcs over the text. |
+| **Direction arrows** → **Show** | Draw an arrowhead on each saccade. |
+| **Direction arrows** → **Arrow size** | Set the arrowhead size. |
 
 ### :material/article: Stimulus
 
@@ -164,17 +164,17 @@ The **Stimulus** switch draws the text and the stimulus image; its **▾** holds
 | --- | --- |
 | **Text** → **Show** | Draw the reading text. |
 | **Fit** → **Fit to word boxes** | Size the text to fill its word boxes. |
-| **Spacing** | How far apart the lines are, in font sizes. |
-| **Size** | The text size, in px or pt. |
-| **Font** | The text's typeface; *Other…* takes any font name. |
-| **Color** → text color | The reading text's color. |
-| **Background** | The plot's background color: a preset, or any color in the box beside it. |
+| **Spacing** | Set how far apart the lines of text are, in font sizes. |
+| **Size** | Set the text size, in px or pt. |
+| **Font** | Choose the text's typeface; *Other…* takes any font name. |
+| **Color** → text color | Choose the reading text's color. |
+| **Background** | Choose the plot's background color: a preset, or any color in the box beside it. |
 | **Highlight** → **Show** | Mark words, such as the answer span. |
-| **Highlight** → **Highlight words by** | The true/false column that picks the words. |
-| **Style** | Color the highlighted words, or draw a border round them; and the color. |
+| **Highlight** → **Highlight words by** | Choose the true/false column that picks the words. |
+| **Style** | Choose how highlighted words are marked: colored, or with a border round them; and the color. |
 | **Image** → **Show** | Draw the stimulus image under the scanpath. |
 | **File** | Upload a stimulus image. |
-| **Opacity** | Image opacity; lower it so the scanpath reads over it. |
+| **Opacity** | Set the image opacity; lower it so the scanpath reads over it. |
 | **Offset** → **X** / **Y** | Nudge the image, in px. |
 | **Scale** | Scale the image so its text matches the word boxes. |
 
@@ -187,10 +187,10 @@ The **Word boxes** switch draws each word's interest area; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Box** → **Line** color | The color of each word box's outline. |
-| **Box** → **Line** opacity | The outline's opacity; 0 hides it. |
-| **Box** → **Fill** color | The color inside each box. |
-| **Box** → **Fill** opacity | How strongly the fill shows; 0 draws outlines only. |
+| **Box** → **Line** color | Choose the color of each word box's outline. |
+| **Box** → **Line** opacity | Set the outline's opacity; 0 hides it. |
+| **Box** → **Fill** color | Choose the color inside each box. |
+| **Box** → **Fill** opacity | Set how strongly the fill shows; 0 draws outlines only. |
 
 ### :material/local_fire_department: Heatmap
 
@@ -201,14 +201,14 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Style** | Word boxes, a smooth interpolated map, or fixation density. |
-| **Blur** | How far each fixation spreads, for the smooth styles; **Auto** picks it. |
-| **Color** → **By** | What the heat counts: total fixation duration, or the number of fixations. |
-| **Color** → **Colors** | The color scale. |
-| **Scale** | Linear or log scaling. |
-| **Range** | The values the color scale spans; **Auto** fits the trial. |
-| **Opacity** | Heatmap opacity; **Auto** uses each style's own. |
-| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | The heatmap's color bar, as for fixations. |
+| **Style** | Choose the heatmap style: word boxes, a smooth interpolated map, or fixation density. |
+| **Blur** | Set how far each fixation spreads, for the smooth styles; **Auto** picks it. |
+| **Color** → **By** | Choose what the heat counts: total fixation duration, or the number of fixations. |
+| **Color** → **Colors** | Choose the heatmap's color scale. |
+| **Scale** | Choose linear or log scaling. |
+| **Range** | Set the values the color scale spans; **Auto** fits the trial. |
+| **Opacity** | Set the heatmap opacity; **Auto** uses each style's own. |
+| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show and style the heatmap's color bar, as for fixations. |
 
 ### :material/grain: Raw gaze
 
@@ -219,9 +219,9 @@ The **Raw gaze** switch draws the gaze samples as recorded; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Marker** → **Color** | The samples' color. |
-| **Marker** → **Size** | Sample marker size. |
-| **Marker** → **Opacity** | Sample opacity. |
+| **Marker** → **Color** | Choose the gaze sample color. |
+| **Marker** → **Size** | Set the gaze sample marker size. |
+| **Marker** → **Opacity** | Set the gaze sample opacity. |
 
 ### :material/filter_list: Filters & highlights
 
@@ -234,10 +234,10 @@ Which fixations and saccades are drawn, and which stand out:
 | --- | --- |
 | **Fixations** → **Index range** | Draw only the fixations in this range of the reading order. |
 | **Fixations** → **All trials** | Keep that range when you move to another trial. |
-| **Short** / **Long** | Fixations shorter or longer than a threshold (ms): **Highlight** marks them, **Discard** hides them. |
-| **Out of bounds** | Fixations in no word box: highlight or discard them. |
-| **Blink** | Fixations at or next to a blink (needs a blink column): highlight or discard them. |
-| marker and color | The marker and color of each highlighted kind. |
+| **Short** / **Long** | Set a threshold (ms) for short or long fixations: **Highlight** marks them, **Discard** hides them. |
+| **Out of bounds** | Highlight or discard fixations that land in no word box. |
+| **Blink** | Highlight or discard fixations at or next to a blink (needs a blink column). |
+| marker and color | Choose the marker and color of each highlighted kind. |
 | **Saccades** → **Types** | Draw only saccades of these types. |
 
 ### :material/aspect_ratio: Figure & canvas
@@ -250,21 +250,21 @@ The figure as a whole:
 | Control | What it does |
 | --- | --- |
 | **Frame** → **Crop to data** | Show only the part of the screen with data, instead of the whole screen. |
-| **Margin** | Space round the data when cropping; **Auto** uses 5%. |
-| **Border** → **Show**, color | The line round the plot area, and its color. |
-| **Grid** → **Show** | Pixel grid lines over the screen. |
-| **Grid** → **Auto**, interval | The grid spacing, chosen for you or in px. |
-| **Labels** | Grid label size. |
-| **Axes** → **X** / **Y** | The fixation fields on the axes; anything but x / y draws a chart of the fixations alone. |
-| **Illustration** → **Label** | When to label the figure *Illustration*: when a setting changes its geometry, always, or never. |
-| **Illustration** → **Text** | That label's text. |
-| **Title** → **Show**, text, **Size** | A line of text above the plot; `{field}` inserts a value of the trial. |
-| **Caption** → **Show**, text, **Size**, color | A line of text below the plot. |
-| **Hover** → **Words** / **Fixations** | The fields shown when hovering a word or a fixation. |
+| **Margin** | Set the space round the data when cropping; **Auto** uses 5%. |
+| **Border** → **Show**, color | Show the line round the plot area, and choose its color. |
+| **Grid** → **Show** | Draw pixel grid lines over the screen. |
+| **Grid** → **Auto**, interval | Set the grid spacing, in px, or let **Auto** choose it. |
+| **Labels** | Set the grid label size. |
+| **Axes** → **X** / **Y** | Choose the fixation fields on the axes; anything but x / y draws a chart of the fixations alone. |
+| **Illustration** → **Label** | Choose when to label the figure *Illustration*: when a setting changes its geometry, always, or never. |
+| **Illustration** → **Text** | Write that label's text. |
+| **Title** → **Show**, text, **Size** | Add a line of text above the plot; `{field}` inserts a value of the trial. |
+| **Caption** → **Show**, text, **Size**, color | Add a line of text below the plot. |
+| **Hover** → **Words** / **Fixations** | Choose the fields shown when hovering a word or a fixation. |
 | **Legends** → **Show** | Draw this legend: Compare (A/B), Saccade types, Fixation colors, Size key or Text highlight. |
-| **Legends** → **Position** | Where it sits: a corner, the middle of an edge, or down a side, outside or inside the plot. |
-| **Legends** → **Arrangement** | Its items stacked or side by side. |
-| **Legends** → **Text size** | Its text size, in px. |
+| **Legends** → **Position** | Choose where it sits: a corner, the middle of an edge, or down a side, outside or inside the plot. |
+| **Legends** → **Arrangement** | Choose its items stacked or side by side. |
+| **Legends** → **Text size** | Set its text size, in px. |
 
 ### :material/restart_alt: Reset visualization
 

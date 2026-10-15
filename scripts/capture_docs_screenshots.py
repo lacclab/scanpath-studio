@@ -310,6 +310,28 @@ def _shot_chips_menu(page: Page) -> None:
     ui.settle(page, quiet=1.0)
 
 
+def _shot_reset(page: Page) -> None:
+    """The whole Plot controls column, the Reset visualization button circled."""
+    page.locator(".st-key-reset_viz_settings_btn").first.evaluate(
+        "el => { el.style.outline = '3px solid #e5262c';"
+        " el.style.outlineOffset = '5px'; el.style.borderRadius = '999px'; }"
+    )
+    page.evaluate("window.scrollTo(0, 0)")
+    box = page.locator(".st-key-scanpath_rail").first.bounding_box()
+    pad = 12  # room for the ring, which sits outside the button
+    clip = {
+        "x": box["x"] - pad,
+        "y": box["y"],
+        "width": box["width"] + 2 * pad,
+        "height": box["height"] + pad,
+    }
+    _shot_controls(page, "reset", page, clip=clip)
+    page.locator(".st-key-reset_viz_settings_btn").first.evaluate(
+        "el => { el.style.outline = ''; el.style.outlineOffset = '';"
+        " el.style.borderRadius = ''; }"
+    )
+
+
 def capture_controls(page: Page, only: set[str] | None = None) -> None:
     """The All controls page's pictures (``--controls [NAME ...]``)."""
     CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
@@ -358,6 +380,10 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
         _shot_controls(page, name, body)
         page.keyboard.press("Escape")
         ui.settle(page, quiet=1.0)
+
+    if wanted("reset"):
+        print("reset visualization")
+        _shot_reset(page)
 
     if wanted("chips"):
         print("chips menu")

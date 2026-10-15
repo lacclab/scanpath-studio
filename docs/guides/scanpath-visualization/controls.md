@@ -268,6 +268,8 @@ The figure as a whole:
 
 ### :material/restart_alt: Reset visualization
 
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="The Plot controls column, with Reset visualization circled at its foot" loading="lazy"></a>
+
 The button at the foot of the column.
 
 | Control | What it does |

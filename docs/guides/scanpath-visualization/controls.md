@@ -278,7 +278,7 @@ The button at the foot of the column.
 
 ## In Compare
 
-<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/compare-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-row.webp" alt="Scanpath B's row in Compare" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/compare-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-row.webp" alt="The trial control bar in Compare: scanpath A's row, and B's under it" loading="lazy"></a>
 
 With **Compare** on, scanpath B gets a row of its own, and several menus split
 into a **Scanpath A** and a **Scanpath B** group.

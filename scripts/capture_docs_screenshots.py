@@ -332,6 +332,22 @@ def _shot_reset(page: Page) -> None:
     )
 
 
+def _shot_compare_bar(page: Page) -> None:
+    """The whole trial control bar in Compare: A's row and B's under it."""
+    page.evaluate("window.scrollTo(0, 0)")
+    a = page.locator(".st-key-tour_grp_trial_picker").first.bounding_box()
+    b = page.locator(".st-key-tour_grp_compare_picker").first.bounding_box()
+    left = min(a["x"], b["x"])
+    right = max(a["x"] + a["width"], b["x"] + b["width"])
+    clip = {
+        "x": left,
+        "y": a["y"],
+        "width": right - left,
+        "height": b["y"] + b["height"] - a["y"],
+    }
+    _shot_controls(page, "compare-row", page, clip=clip)
+
+
 def capture_controls(page: Page, only: set[str] | None = None) -> None:
     """The All controls page's pictures (``--controls [NAME ...]``)."""
     CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
@@ -398,9 +414,7 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
     if wanted("compare-row"):
         print("compare")
         ui.toggle(page, "single_compare_toggle")
-        _shot_controls(
-            page, "compare-row", page.locator(".st-key-tour_grp_compare_picker").first
-        )
+        _shot_compare_bar(page)
         ui.toggle(page, "single_compare_toggle")
 
     if wanted("trial-row"):

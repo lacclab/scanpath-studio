@@ -305,7 +305,7 @@ The tabs under the figure:
 | Tab | Control | What it does |
 | --- | --- | --- |
 | **Annotations** | **Favorite** | Star the trial as a favorite, to find it again with the favorites filter. |
-| | **Tags** / **Add a tag** | Tag the trial, with an existing tag or a new one, such as `exclude`. |
+| | **Tags** / **Add a tag** | Tag the trial, with an existing tag or a new one, such as `exclude`. Tags let you filter the trial list later: the :material/filter_alt: in the trial control bar keeps or hides trials by tag. |
 | | **Notes** | Write a free-text note on the trial. |
 | **Stimulus & context** | **Context fields** | Choose the trial context to show, such as the text's title, a question or an answer. |
 | | **Highlighted spans** | Choose true/false word columns to highlight in the text, each with a summary. |

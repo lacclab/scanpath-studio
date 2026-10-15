@@ -102,8 +102,12 @@ nav:
       - Scanpath visualization:
           - guides/scanpath-visualization/index.md
           - All controls: guides/scanpath-visualization/controls.md
-      - Loading public and own data: guides/loading-data.md
-      - Corpus Analysis: guides/corpus-workspace.md
+      - Loading public and own data:
+          - guides/loading-data/index.md
+          - Data format: data-format.md
+      - Corpus Analysis:
+          - guides/corpus-workspace/index.md
+          - Computations & methodology: computations.md
       - Outputs and sharing: guides/outputs-sharing.md
       - FAQ: faq.md
   - Plot gallery: gallery.md
@@ -112,10 +116,6 @@ nav:
       - Python API: api.md
       - CLI reference: cli.md
       - For coding agents: agents.md
-  - Data & methods:
-      - Data format: data-format.md
-      - Computations & methodology: computations.md
-      - OneStop corpus: onestop.md
   - About:
       - Cite: cite.md
       - Privacy: privacy.md
@@ -157,22 +157,23 @@ plugins:
   # The pages UX-23 retired and ENG-77 deleted: their old URLs keep working.
   - redirects:
       redirect_maps:
+        onestop.md: guides/loading-data/index.md#onestop
         glossary.md: data-format.md
-        bring-your-own-data.md: guides/loading-data.md
-        corpus-analysis.md: guides/corpus-workspace.md
+        bring-your-own-data.md: guides/loading-data/index.md
+        corpus-analysis.md: guides/corpus-workspace/index.md
         tutorials/batch-export.md: tutorials/exporting-figures/export-every-trial.md
         tutorials/compare-two-readers.md: guides/scanpath-visualization/index.md#replay-and-compare
         tutorials/figure-for-a-paper.md: tutorials/exporting-figures/export-one-figure.md
         tutorials/line-assignment.md: guides/scanpath-visualization/index.md
-        tutorials/load-your-own-data.md: guides/loading-data.md
+        tutorials/load-your-own-data.md: guides/loading-data/index.md
         tutorials/run-it-headless.md: automation.md
         # ENG-80 took these off the site for the beta; old links land on the
         # repository file that now carries the subject.
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
         security.md: https://github.com/lacclab/scanpath-studio/blob/main/SECURITY.md
-        benchmark-corpora.md: guides/loading-data.md
+        benchmark-corpora.md: guides/loading-data/index.md
         # DATA-54: MultiplEYE is held back from the beta.
-        multipleye.md: guides/loading-data.md
+        multipleye.md: guides/loading-data/index.md
         rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
         # ENG-88 folded these into Getting started and the FAQ.
@@ -221,16 +222,14 @@ plugins:
           - install.md: Install, launch, and a first plot
           - tutorials/*.md
           - guides/*.md
+          - data-format.md: Accepted tables, units and metadata
+          - computations.md: How every measure and derived value is computed
           - faq.md
         API & CLI:
           - automation.md: Choosing between the app, the CLI and the Python API
           - api.md: The Python API reference
           - cli.md: The CLI reference, every flag included
           - agents.md: Headless use by a coding agent or script
-        Data & methods:
-          - data-format.md: Accepted tables, units and metadata
-          - computations.md: How every measure and derived value is computed
-          - onestop.md
         About:
           - cite.md
           - privacy.md

@@ -7,10 +7,25 @@ Open the dataset picker above the plot, or the :material/database: **Data Manage
 - **Bundled demo** — a small OneStop sample, for learning the app.
 - **Synthetic sample** — a hand-made six-word trial.
 - **Public corpus** — OneStop or PoTeC, downloaded when you ask, on your own
-  computer only (see [OneStop](../onestop.md)).
+  computer only (see [The demo and OneStop](#onestop)).
 - **+ → Import files** — your own tables.
 - **+ → Create manually** — type a text and place fixations on it by hand:
   click to add, drag to move, or edit the table.
+
+### The demo and OneStop { #onestop }
+
+The bundled demo is a small part of
+[OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements), an
+English eye-tracking-while-reading corpus of 360 participants (Berzak et al.,
+*Scientific Data* 2025,
+[doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)).
+The full corpus is four datasets, one per reading regime: ordinary reading,
+information seeking, repeated reading, and information seeking (repeated). Open
+one, and the first time the app offers to download it from
+[OSF](https://osf.io/2prdq/) (about 1 GB per regime, downloaded once). Each
+trial is one reading of one paragraph, and its screens (title, paragraph,
+question, answers, feedback) are steps of the **Screen** picker. Headless:
+`sps.load_onestop(...)`, or `scanpath-studio render --onestop DIR`.
 
 ## What your data needs
 
@@ -25,7 +40,7 @@ conditions and reading measures are optional and unlock more features.
 Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of
 these. A `.zip` holding both EyeLink reports (one folder per participant, say)
 can go in both rows: each row reads only its own reports and says which it
-left out. See [Data format](../data-format.md) for every field.
+left out. See [Data format](../../data-format.md) for every field.
 
 ## Import files
 
@@ -119,5 +134,5 @@ plot controls, a mapped field is named by its role (*Participant*, *Duration
 one Scanpath Studio derived, such as a saccade's amplitude.
 
 <figure class="sps-screenshot" markdown>
-![The Data Management page: the available datasets, and the counts and tables of the open one](../assets/screenshots/data-page.webp)
+![The Data Management page: the available datasets, and the counts and tables of the open one](../../assets/screenshots/data-page.webp)
 </figure>

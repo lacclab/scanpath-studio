@@ -142,6 +142,21 @@ def _webp(name: str) -> None:
     print(f"  → {webp.name} ({webp.stat().st_size // 1024} KB)")
 
 
+def capture_overview(page: Page) -> None:
+    """The Scanpath view with its regions numbered (``--overview``), on a
+    dataset whose trials have several screens, so the Screen picker shows."""
+    ui.deep_link(page, {**MULTI_SCREEN_LINK, "screen": "Paragraph"})
+    page.locator(".st-key-tour_grp_screen_picker").first.wait_for(
+        state="visible", timeout=900_000
+    )
+    ui.reset_viz(page)
+    ui.settle(page, quiet=3.0)
+    page.evaluate(CALLOUT_JS, [list(c) for c in SCANPATH_CALLOUTS])
+    page.wait_for_timeout(300)
+    ui.shot(page, "scanpath-view")
+    _webp("scanpath-view")
+
+
 def capture(page: Page) -> None:
     ui.deep_link(page, ui.DEMO_TRIAL)
     ui.reset_viz(page)
@@ -446,7 +461,9 @@ def main() -> None:
                 f"s.textContent = {ui.HIDE_CSS!r};"
                 "document.head.appendChild(s);});"
             )
-            if "--controls" in sys.argv:
+            if "--overview" in sys.argv:
+                capture_overview(ctx.new_page())
+            elif "--controls" in sys.argv:
                 names = sys.argv[sys.argv.index("--controls") + 1 :]
                 capture_controls(ctx.new_page(), set(names) or None)
             else:

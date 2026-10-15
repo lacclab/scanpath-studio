@@ -7,7 +7,7 @@ participants*) and names each active filter. **Edit filters** opens the Scanpath
 view's filter panel, and **Clear** resets every filter.
 
 <figure class="sps-screenshot" markdown>
-![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../assets/screenshots/corpus-analysis.webp)
+![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../../assets/screenshots/corpus-analysis.webp)
 </figure>
 
 ## Reading measures come from your data

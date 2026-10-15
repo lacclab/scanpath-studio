@@ -8,11 +8,11 @@ For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 
     Layers, filtering, replay, and comparison — including across datasets.
 
-- :material-database-import:{ .lg .middle } **[Loading public and own data](loading-data.md)**
+- :material-database-import:{ .lg .middle } **[Loading public and own data](loading-data/index.md)**
 
     Sources, upload, column mapping, and the recording setup.
 
-- :material-chart-box:{ .lg .middle } **[Corpus Analysis](corpus-workspace.md)**
+- :material-chart-box:{ .lg .middle } **[Corpus Analysis](corpus-workspace/index.md)**
 
     Per text, Per participant and Groups, from the measures your data brings.
 

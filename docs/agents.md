@@ -136,7 +136,7 @@ words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 
 Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
 `sps.load_onestop(dir)` — which return the same normalized pair. See
-[OneStop](onestop.md).
+[OneStop](guides/loading-data/index.md#onestop).
 
 The two tables need not cover the same trials. `sps.list_trials(words,
 fixations)` lists every trial either table has, once — the set the app's trial

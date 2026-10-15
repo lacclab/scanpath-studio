@@ -316,7 +316,7 @@ The tabs under the figure:
 | | **Trials to include** | Choose which trials to export in the bundle: this one, the filtered trials, or all of them. |
 | | **Formats** / **Tabular data** | Choose the bundle's figure formats and the data tables (CSV or Parquet) to include. |
 | | **Separable layers** | Export each visual layer (fixations, saccades, word boxes…) as its own file, to stack in a vector editor. |
-| | **Annotations (JSON)** / **Settings file (JSON)** | Add the annotations or the settings file to the export bundle. |
+| | **Annotations (JSON)** / **Settings file (JSON)** | Add the annotations or the settings file to the export bundle, for reproducibility: the settings file redraws the same figures, and the annotations keep your favorites, tags and notes with the data. |
 | | **File path pattern** | Set the file names inside the export bundle. |
 | | **Build export** | Build the export bundle (a zip) to download. |
 | **Share** | **Link** | Copy a share link that reopens this trial with these settings. |

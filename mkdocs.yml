@@ -75,43 +75,39 @@ extra:
 # it, someone looking a definition up, and someone citing or contributing.
 nav:
   - Home: index.md
-  - Use the app:
-      # The home page itself is the Home tab; this is a link back to it, so the
-      # side menu has one too (the same page twice in `nav` is not allowed).
-      - Home: https://lacclab.github.io/scanpath-studio/
-      - Install: getting-started.md
-      - Tutorials:
-          - tutorials/index.md
-          - Optimize data collection:
-              - tutorials/data-collection/index.md
-              - Check a session: tutorials/data-collection/check-a-session.md
-              - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
-              - Audit an experimenter: tutorials/data-collection/audit-an-experimenter.md
-          - Filter data:
-              - tutorials/data-filtering/index.md
-              - Exclude unsuitable trials: tutorials/data-filtering/exclude-unsuitable-trials.md
-              - Select participants by a field: tutorials/data-filtering/select-participants.md
-              - Find the trials an analysis needs: tutorials/data-filtering/find-trials-for-an-analysis.md
-          - Export customized figures:
-              - tutorials/exporting-figures/index.md
-              - Export one figure: tutorials/exporting-figures/export-one-figure.md
-              - Export a replay: tutorials/exporting-figures/export-a-replay.md
-              - Export every trial: tutorials/exporting-figures/export-every-trial.md
-          - Analyze a corpus:
-              - tutorials/corpus-analysis/index.md
-              - Analyze one text: tutorials/corpus-analysis/analyze-one-text.md
-              - Compare groups or conditions: tutorials/corpus-analysis/compare-groups.md
-              - See progression over time: tutorials/corpus-analysis/progression-over-time.md
-      - Feature guides:
-          - guides/index.md
-          - Scanpath visualization:
-              - guides/scanpath-visualization/index.md
-              - All controls: guides/scanpath-visualization/controls.md
-          - Loading public and own data: guides/loading-data.md
-          - Corpus Analysis: guides/corpus-workspace.md
-          - Outputs and sharing: guides/outputs-sharing.md
+  - Install: getting-started.md
+  - Tutorials:
+      - tutorials/index.md
+      - Optimize data collection:
+          - tutorials/data-collection/index.md
+          - Check a session: tutorials/data-collection/check-a-session.md
+          - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
+          - Audit an experimenter: tutorials/data-collection/audit-an-experimenter.md
+      - Filter data:
+          - tutorials/data-filtering/index.md
+          - Exclude unsuitable trials: tutorials/data-filtering/exclude-unsuitable-trials.md
+          - Select participants by a field: tutorials/data-filtering/select-participants.md
+          - Find the trials an analysis needs: tutorials/data-filtering/find-trials-for-an-analysis.md
+      - Export customized figures:
+          - tutorials/exporting-figures/index.md
+          - Export one figure: tutorials/exporting-figures/export-one-figure.md
+          - Export a replay: tutorials/exporting-figures/export-a-replay.md
+          - Export every trial: tutorials/exporting-figures/export-every-trial.md
+      - Analyze a corpus:
+          - tutorials/corpus-analysis/index.md
+          - Analyze one text: tutorials/corpus-analysis/analyze-one-text.md
+          - Compare groups or conditions: tutorials/corpus-analysis/compare-groups.md
+          - See progression over time: tutorials/corpus-analysis/progression-over-time.md
+  - Feature guides:
+      - guides/index.md
+      - Scanpath visualization:
+          - guides/scanpath-visualization/index.md
+          - All controls: guides/scanpath-visualization/controls.md
+      - Loading public and own data: guides/loading-data.md
+      - Corpus Analysis: guides/corpus-workspace.md
+      - Outputs and sharing: guides/outputs-sharing.md
       - FAQ: faq.md
-  - Gallery: gallery.md
+  - Plot gallery: gallery.md
   - Automate:
       - Overview: automation.md
       - Python API: api.md

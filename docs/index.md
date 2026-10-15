@@ -80,7 +80,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.
 
-See the [Gallery](gallery.md) for what it draws, the
+See the [Plot gallery](gallery.md) for what it draws, the
 [feature guides](guides/index.md) for the controls, or
 [Automation](automation.md) for Python and the CLI.
 

@@ -1,6 +1,6 @@
-# Getting started
+# Install
 
-## 1. Install { #install }
+## 1. Download { #install }
 
 === "Desktop app"
 

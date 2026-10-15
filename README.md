@@ -13,7 +13,7 @@
 
 ![Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-participant comparison and Corpus Analysis](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
-## Get started
+## Install
 
 - **As a desktop app** — recommended, and the easiest way to work with your own data. It updates itself from the app's About menu:
   [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe)
@@ -139,12 +139,12 @@ For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or us
 
 The full documentation is at **<https://lacclab.github.io/scanpath-studio/>**:
 
-- [Getting started](https://lacclab.github.io/scanpath-studio/getting-started/): install, launch and a first trial
+- [Install](https://lacclab.github.io/scanpath-studio/getting-started/): install, launch and a first trial
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/): task walk-throughs, from checking a pilot to a figure for a paper
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/): every view and control
 - [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it
 - [CLI](https://lacclab.github.io/scanpath-studio/cli/) and [Python API](https://lacclab.github.io/scanpath-studio/api/): scripting and batch rendering
-- [Gallery](https://lacclab.github.io/scanpath-studio/gallery/): the figures it draws, each with the code that makes it
+- [Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/): the figures it draws, each with the code that makes it
 - [Computation register](https://lacclab.github.io/scanpath-studio/computations/): how each measure is derived
 - [FAQ](https://lacclab.github.io/scanpath-studio/faq/) 
 - [Cite](https://lacclab.github.io/scanpath-studio/cite/)

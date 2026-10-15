@@ -4,7 +4,7 @@ hide:
   - navigation
 ---
 
-# Gallery
+# Plot gallery
 
 Every figure on this page is drawn from the bundled demo while the docs are
 built, by the code shown under it, so what you see is what the current release

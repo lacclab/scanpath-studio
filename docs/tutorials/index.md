@@ -1,7 +1,7 @@
 # Tutorials
 
 Each tutorial walks one research task from start to finish. New here? Start
-with [Getting started](../getting-started.md).
+with [Install](../getting-started.md).
 
 <div class="grid cards" markdown>
 

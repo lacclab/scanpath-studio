@@ -83,9 +83,9 @@ computes none of its own; how each is defined is in
 **+ → Import files** opens the add dataset screen:
 
 1. **Name** the dataset.
-2. **Upload** the tables. The app guesses which column is which: check its
-   guesses, and hover the :material/visibility: beside a field to see its first
-   values.
+2. **Upload** the tables. The app autodetects which columns are which: check
+   what it picked, and hover the :material/visibility: beside a field to see
+   its first values.
 3. **Recording setup**: the screen the data was recorded on. Each value starts
    as an estimate or a default and is labelled so; enter the real screen size,
    physical width, font size and font if you know them.

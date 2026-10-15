@@ -83,7 +83,7 @@ time slider under the plot. Its **▾** holds:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a>
 
 The **Compare** switch shows a second scanpath, B, beside or over this one
-(pick it in the row that appears above the plot, see [In Compare](#in-compare));
+(pick it in the [trial control bar](#trial-control-bar), above the plot);
 its **▾** holds:
 
 | Control | What it does |

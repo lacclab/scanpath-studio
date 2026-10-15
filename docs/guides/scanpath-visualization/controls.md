@@ -106,7 +106,7 @@ own saved designs:
 | **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: a classic scanpath, a word-box heatmap, or a clean schematic. |
 | **Custom** | Your most recent hand-made settings. |
 | **My designs** | Your saved designs: click one to apply it; the pencil renames it and the bin deletes it. |
-| **My designs** → save button | Save the settings on screen as a named design. |
+| **My designs** → save button | Save the settings on screen as a named design, to apply again later in one click. |
 | **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs. |
 | **Palette** | A color scheme for the whole figure, such as colorblind-safe or print. |
 | **Reset visualization** | Reset every plot setting. Annotations, filters, data and the selected trial stay. |

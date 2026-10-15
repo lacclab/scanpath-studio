@@ -6,7 +6,7 @@ back from this release); this page is the contract for adding another.
 
 !!! tip "You probably don't need this page"
     To load a corpus **you already have**, no code is needed at all — see
-    [Loading public and own data](guides/loading-data/index.md). This page is only for making a
+    [Data management](guides/loading-data/index.md). This page is only for making a
     corpus appear as a built-in source for everyone.
 
 ## Do you need an adapter?

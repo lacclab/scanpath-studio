@@ -8,7 +8,7 @@ For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 
     Layers, filtering, replay, and comparison — including across datasets.
 
-- :material-database-import:{ .lg .middle } **[Loading public and own data](loading-data/index.md)**
+- :material-database-import:{ .lg .middle } **[Data management](loading-data/index.md)**
 
     Sources, upload, column mapping, and the recording setup.
 

@@ -45,7 +45,7 @@ Bring any of these tables, in CSV, TSV, Parquet, Feather, Excel or a `.zip` of t
 | **Texts** | Metadata, one row per text: difficulty, genre… |
 
 A dataset needs at least one of the first three. Metadata columns work like
-fields in your data: filters, chips, sorting and export. Columns are detected from common EyeLink, Tobii, Gazepoint, SMI and Pupil Labs names, and you can correct any guess. See [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/) and the [data format](https://lacclab.github.io/scanpath-studio/guides/loading-data/#what-your-data-needs).
+fields in your data: filters, chips, sorting and export. Columns are detected from common EyeLink, Tobii, Gazepoint, SMI and Pupil Labs names, and you can correct any guess. See [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/#what-your-data-needs).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/add-your-data.gif" alt="Adding a dataset from EyeLink fixation and interest-area reports"><br>
@@ -142,7 +142,7 @@ The full documentation is at **<https://lacclab.github.io/scanpath-studio/>**:
 - [Install](https://lacclab.github.io/scanpath-studio/install/): install, launch and a first trial
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/): task walk-throughs, from checking a pilot to a figure for a paper
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/): every view and control
-- [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it
+- [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it
 - [CLI](https://lacclab.github.io/scanpath-studio/cli/) and [Python API](https://lacclab.github.io/scanpath-studio/api/): scripting and batch rendering
 - [Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/): the figures it draws, each with the code that makes it
 - [Computation register](https://lacclab.github.io/scanpath-studio/computations/): how each measure is derived

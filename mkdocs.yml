@@ -102,7 +102,7 @@ nav:
       - Scanpath visualization:
           - guides/scanpath-visualization/index.md
           - All controls: guides/scanpath-visualization/controls.md
-      - Loading public and own data: guides/loading-data/index.md
+      - Data management: guides/loading-data/index.md
       - Corpus Analysis:
           - guides/corpus-workspace/index.md
           - Computations & methodology: computations.md

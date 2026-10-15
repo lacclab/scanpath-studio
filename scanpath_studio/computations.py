@@ -1667,20 +1667,7 @@ def to_markdown() -> str:
         "Entries marked *experimental* are not in this release. They are "
         "listed so that their definitions are on record.",
         "",
-        "## Summary",
-        "",
-        "| ID | Name | Category | Unit | Status |",
-        "| --- | --- | --- | --- | --- |",
     ]
-    for entry in REGISTER:
-        status = entry.status + (
-            " · experimental" if entry.id in EXPERIMENTAL_IDS else ""
-        )
-        lines.append(
-            f"| [`{entry.id}`](#{anchor(entry.id)}) | {entry.name} | "
-            f"{entry.category} | {entry.unit or '—'} | {status} |"
-        )
-    lines.append("")
     for category in CATEGORIES:
         entries = entries_in(category)
         if not entries:
@@ -1693,9 +1680,15 @@ def to_markdown() -> str:
                 *_experimental_note(entry),
                 _public(entry.summary),
                 "",
-                f"**Formula.** {_public(entry.formula)}",
-                "",
             ]
+            # A held-back entry keeps its heading and summary, which the app's
+            # "Definition" links land on, and nothing a reader would have to
+            # check against a release that does not compute it.
+            if entry.id in EXPERIMENTAL_IDS:
+                continue
+            lines += [f"**Formula.** {_public(entry.formula)}", ""]
+            # What a reader of the figures needs; where the code and its tests
+            # are is the register's own business (`computations.py`).
             rows = [
                 ("Output", _public(entry.output)),
                 ("Unit", entry.unit),
@@ -1703,9 +1696,6 @@ def to_markdown() -> str:
                 ("Missing & edge cases", _public(entry.missing)),
                 ("Precedence & caveats", _public(entry.precedence)),
                 ("Reference", _public(entry.reference)),
-                ("Code", f"`{entry.code}`"),
-                ("Consumers", ", ".join(_public(c) for c in entry.consumers)),
-                ("Tests", ", ".join(f"`{t}`" for t in entry.tests)),
                 ("Verification", f"tier {entry.tiers} — **{entry.status}**"),
             ]
             lines += ["| | |", "| --- | --- |"]

@@ -117,10 +117,9 @@ nav:
       - Python API: api.md
       - CLI reference: cli.md
       - For coding agents: agents.md
-  - Reference:
+  - Data & methods:
       - Data format: data-format.md
       - Computations & methodology: computations.md
-      - Glossary: glossary.md
       - OneStop corpus: onestop.md
   - Project:
       - Cite: cite.md
@@ -164,6 +163,7 @@ plugins:
   # The pages UX-23 retired and ENG-77 deleted: their old URLs keep working.
   - redirects:
       redirect_maps:
+        glossary.md: data-format.md
         bring-your-own-data.md: guides/loading-data.md
         corpus-analysis.md: guides/corpus-workspace.md
         tutorials/batch-export.md: tutorials/exporting-figures/export-every-trial.md
@@ -233,10 +233,9 @@ plugins:
           - api.md: The Python API reference
           - cli.md: The CLI reference, every flag included
           - agents.md: Headless use by a coding agent or script
-        Reference:
+        Data & methods:
           - data-format.md: Accepted tables, units and metadata
           - computations.md: How every measure and derived value is computed
-          - glossary.md
           - onestop.md
         Project:
           - cite.md

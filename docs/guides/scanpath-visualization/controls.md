@@ -60,28 +60,50 @@ layer's settings, described below one menu at a time. The last two rows,
 **Filters & highlights** and **Figure & canvas**, cover the figure as a whole.
 A greyed-out control says why when you hover over it.
 
-### Modes, designs and palette
+### :material/movie: Animate
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/modes-designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/modes-designs.webp" alt="Modes, designs and palette" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="The Animate menu" loading="lazy"></a>
 
-The top of the column: replay the reading as an animation, compare two trials, and restyle the whole figure in one click with a design preset or one of your own saved designs.
+The **Animate** switch replays the reading fixation by fixation; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Animate** | Replay the reading fixation by fixation. |
-| **Animate ▾** → **Speed** | Playback speed. |
-| **Animate ▾** → **Autoplay** → **On load** | Start the replay as soon as it is drawn. |
-| **Animate ▾** → **Quality** | How smooth the replay is: more frames play more smoothly but take longer to build. |
-| **Animate ▾** → **Frame every (ms)** | Reading time between frames. |
-| **Animate ▾** → **Frame limit** | The most frames a replay gets. |
-| **Compare** | Show a second scanpath, B, beside or over this one. |
-| **Compare ▾** → **View** | Overlay both scanpaths, or give each its own panel, side by side or top and bottom. |
-| **Compare ▾** → **Stimulus from** | In an overlay, whose word boxes and text are drawn: both, A's or B's. |
-| **Compare ▾** → **Label A** / **Label B** | Each scanpath's name in the legend; empty uses the automatic one. |
-| **Compare ▾** → **Step** → **A and B together** | ◀ ▶ move both scanpaths at once. |
+| **Replay** → **Speed** | Playback speed, from slower than real time to many times faster. |
+| **Replay** → **Autoplay** → **On load** | Start the replay as soon as it is drawn. |
+| **Replay** → **Duration** | The trial's reading time, and how long the replay runs at this speed. |
+| **Frames** → **Quality** | How smooth the replay is: more frames play more smoothly but take longer to build. **Custom** sets the two below by hand. |
+| **Frames** → **Every** | Reading time between frames, in ms. |
+| **Frames** → **Limit** | The most frames a replay gets; a long trial gets wider frame steps to fit. |
+| **Frames** → **Result** | How many frames this trial's replay has, and how far apart they ended up. |
+
+### :material/compare: Compare
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a>
+
+The **Compare** switch shows a second scanpath, B, beside or over this one
+(pick it in the row that appears above the plot, see [In Compare](#in-compare));
+its **▾** holds:
+
+| Control | What it does |
+| --- | --- |
+| **View** | **Overlay** both scanpaths, or give each its own panel, **Side by side** or **Top & bottom**. |
+| **Stimulus from** | In an overlay, whose word boxes and text are drawn: both, A's or B's. |
+| **Label A** / **Label B** | Each scanpath's name in the legend, written with fields such as `{participant_id}`; empty uses the automatic one. |
+| **Available fields** | The fields a label can use. |
+| **Step** → **A and B together** | ◀ ▶ move both scanpaths at once. |
+
+### :material/palette: Design presets and palette
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/designs.webp" alt="Design presets, My designs open on two saved designs, and the palette" loading="lazy"></a>
+
+Restyle the whole figure in one click, with a ready-made design or one of your
+own saved designs:
+
+| Control | What it does |
+| --- | --- |
 | **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: a classic scanpath, a word-box heatmap, or a clean schematic. |
 | **Custom** | Your most recent hand-made settings. |
-| **My designs** | Your saved designs: apply, rename or delete one. |
+| **My designs** | Your saved designs: click one to apply it; the pencil renames it and the bin deletes it. |
 | **My designs** → save button | Save the settings on screen as a named design. |
 | **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs. |
 | **Palette** | A color scheme for the whole figure, such as colorblind-safe or print. |

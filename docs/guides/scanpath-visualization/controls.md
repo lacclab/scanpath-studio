@@ -143,7 +143,7 @@ The **Saccades** switch draws the lines between fixations; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Line** → **Color** | Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. |
+| **Line** → **Color** | Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. Forward / regression and by type need a word ID for each fixation, the word it landed on, mapped in your fixations table (such as EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`); without one every saccade reads as *other*. |
 | **Line** → color box | Choose the saccade line color. |
 | **Line** → type colors | With **By type**: choose the color of each saccade type, such as regressions or return sweeps. |
 | **Line** → **Style** | Choose the saccade line style: solid, dashed, dotted or dash-dot. |
@@ -238,7 +238,7 @@ Which fixations and saccades are drawn, and which stand out:
 | **Out of bounds** | Highlight or discard out-of-bounds fixations, which land in no word box. |
 | **Blink** | Highlight or discard fixations at or next to a blink (needs a blink column). |
 | marker and color | Choose the marker shape and color of each highlighted fixation kind. |
-| **Saccades** → **Types** | Show only some saccade types, such as regressions or return sweeps. |
+| **Saccades** → **Types** | Show only some saccade types, such as regressions or return sweeps. Needs a word ID for each fixation, as for coloring saccades by type. |
 
 ### :material/aspect_ratio: Figure & canvas
 

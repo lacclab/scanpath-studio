@@ -25,20 +25,16 @@ click its row in the list of datasets.
 Keep the default view first, then turn on :material/crop_square: **Word boxes**
 and confirm that:
 
-- the word boxes match the displayed text;
+- the word boxes match the original stimulus, if you have a screenshot;
 - fixations fall on or near words rather than off the screen;
 - the first and last fixations look plausible.
 
-If every trial is shifted in the same way, the problem is the setup, not the
-participant: check the monitor size in the **Recording setup** and the
-coordinate system.
+If fixations are consistently shifted, check the coordinate units and origin.
 
 ## 3. Replay the recording
 
-A still scanpath hides timing. Turn on **Animate** and look for long missing
-periods, repeated points out of bounds, frequent interruptions such as a
-participant blinking often, or a vertical shift that grows during the trial — a
-sign of calibration drift.
+Turn on **Animate** to inspect timing and changes in fixation position.
+Gaps alone do not identify blinks or their cause.
 
 To make these stand out, open **:material/filter_list: Filters & highlights →
 :material/blur_on: Fixations** in the plot rail and **Highlight** short, long or
@@ -75,6 +71,4 @@ Open :material/database: **Data Management → Annotations** and select
 File** keeps the view settings beside it. To return to a trial from its note,
 select **Open** on its row there.
 
-**Done:** you have checked geometry and timing, marked the trials that need
-attention, and saved the review. For a formal retained and excluded pool,
-continue with [Filter data](../data-filtering/index.md).
+To exclude tagged trials, continue with [Filter data](../data-filtering/index.md).

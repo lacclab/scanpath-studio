@@ -11,8 +11,8 @@ Record the same text with each and compare the scanpaths.
    are marked 📄.
 4. Compare the two readings: precision, how fixations sit on the words, missing
    stretches. Recordings on screens of the same size can be overlaid; otherwise
-   each is drawn on its own screen, side by side. Turn on **Animate** to replay
-   both on one clock.
+   each is drawn on its own screen, side by side. **Animate** can replay both
+   only when they share screen coordinates.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/compare_poster.webp" data-autoplay

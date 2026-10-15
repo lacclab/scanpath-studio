@@ -26,7 +26,7 @@ Vertical drift-correction algorithms (scanpath_studio/alignment.py)
 Bundled demo corpus (scanpath_studio/sample_data/)
 
   The demo tables and stimulus images are a small subset of OneStop Eye
-  Movements (3 participants x 2 articles), with the corpus's own linguistic
+  Movements (2 participants x 2 articles), with the corpus's own linguistic
   annotations:
 
     Berzak, Y., Malmaud, J., Shubi, O., Meiri, Y., Lion, E., & Levy, R. (2025).

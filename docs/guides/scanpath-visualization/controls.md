@@ -206,7 +206,7 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 | **Color** → **By** | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations. |
 | **Color** → **Colors** | Choose the heatmap colors (color scale). |
 | **Scale** | Choose a linear or log heatmap scale. |
-| **Range** | Set the heatmap color range: the values the colors span. Anything below the range takes the lowest color, and anything above it the highest, so a fixed range keeps colors comparable across trials. **Auto** fits each trial. |
+| **Range** | For word-box heatmaps, fix the color range across trials. **Auto** fits each trial. Interpolated heatmaps use each figure's own peak. |
 | **Opacity** | Set the heatmap opacity; **Auto** uses each style's own. |
 | **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length. |
 

@@ -76,7 +76,7 @@ time slider under the plot. Its **▾** holds:
 | **Frames** → **Quality** | How smooth the video is: more frames play more smoothly but take longer to build. **Custom** sets the two below by hand. |
 | **Frames** → **Every** | Reading time between frames, in ms. |
 | **Frames** → **Limit** | The most frames a video gets; a long trial gets wider frame steps to fit. |
-| **Frames** → **Result** | How many frames this trial's video has, and how far apart they ended up. |
+| **Frames** → **Result** | For information only: how many frames this trial's video has, and how far apart they ended up. |
 
 ### :material/compare: Compare
 

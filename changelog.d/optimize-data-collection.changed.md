@@ -1,1 +1,0 @@
-Each docs tutorial is now a section of real tasks, most with a recording of it in the app: Optimize data collection (check a session, compare two eye trackers, audit an experimenter), Filter data, Export figures and Analyze a corpus.

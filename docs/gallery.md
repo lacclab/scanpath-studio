@@ -183,9 +183,7 @@ as a dip. In the app, set the axes under
 :material/aspect_ratio: **Figure & canvas → Axes**.
 
 ```python exec="true" html="true" source="below" session="gallery"
-fig = sps.plot_scanpath(
-    words, fixations, pid, tid, x_field="timestamp_ms", y_field="x"
-)
+fig = sps.plot_scanpath(words, fixations, pid, tid, x_field="timestamp_ms", y_field="x")
 print(embed(fig))  # markdown-exec: hide
 ```
 

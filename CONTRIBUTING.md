@@ -65,8 +65,8 @@ uv run --extra docs mkdocs serve
 uv run --extra docs mkdocs build --strict   # the CI gate
 ```
 
-New pages need a `mkdocs.yml` nav entry. Generated parts (gallery, references,
-changelog page) come from `scripts/docs_support.py` at build time; the API
+New pages need a `mkdocs.yml` nav entry. Generated parts (gallery, references)
+come from `scripts/docs_support.py` at build time; the API
 reference comes from the `api.py` docstrings, so keep those current.
 
 ## More

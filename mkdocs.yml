@@ -118,7 +118,6 @@ nav:
       - OneStop corpus: onestop.md
   - About:
       - Cite: cite.md
-      - Changelog: changelog.md
       - Privacy: privacy.md
 
 # Fail the strict build on a link to a heading that does not exist, not only on
@@ -205,7 +204,6 @@ plugins:
       type: date
       fallback_to_build_date: true
       exclude:
-        - changelog.md
         - cite.md
         - gallery.md
   - llmstxt:

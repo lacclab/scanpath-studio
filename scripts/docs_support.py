@@ -18,8 +18,6 @@ import re
 import unicodedata
 from pathlib import Path
 
-import changelog_fragments
-
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
 BLOB_URL = f"{REPO_URL}/blob/main/"
@@ -139,53 +137,6 @@ def _link_target(path: str) -> str:
     if path.startswith("docs/") and path.endswith(".md"):
         return path.removeprefix("docs/")
     return BLOB_URL + path
-
-
-#: The first release written in the two-tier shape (ENG-34): a short headline
-#: list per group, the longer notes under ``### Details``. Sections before it
-#: are one long paragraph per item; they stay in the repository file. From
-#: ENG-86 on a release is the headline list alone.
-CHANGELOG_SINCE = "0.28.0"
-
-
-def changelog() -> str:
-    """The headline lists of ``CHANGELOG.md``, from `CHANGELOG_SINCE` on.
-
-    The repository file is the one people edit, and the one that keeps the full
-    notes (ENG-80: the site carries only the headlines, which are written to be
-    read on their own). Group headings become bold labels, so the table of
-    contents is one entry per version.
-    """
-    lines = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
-    # The file's own title and preamble ("documented in this file") are the
-    # repository's; the page has its own.
-    start = next(i for i, line in enumerate(lines) if line.startswith("## "))
-    # Unreleased entries are fragments until a release writes them in (ENG-86).
-    fragments, _ = changelog_fragments.load()
-    unreleased = changelog_fragments.render(fragments)
-    lines[start:start] = ["## Unreleased", "", *unreleased.splitlines(), ""]
-    out: list[str] = []
-    in_details = done = False
-    for line in lines[start:]:
-        if line.startswith("## "):
-            if done:
-                break
-            in_details = False
-            done = line.startswith(f"## [{CHANGELOG_SINCE}]")
-            # `## [0.31.0] - 2026-09-24` → `## 0.31.0 — 2026-09-24`: the
-            # brackets are Keep a Changelog's link syntax.
-            version = re.sub(r"^## \[([^\]]+)\](?: - )?", r"## \1 — ", line)
-            out.append(version.removesuffix(" — "))
-        elif line.strip() == "### Details":
-            in_details = True
-        elif in_details:
-            continue
-        elif line.startswith("#"):
-            out += [f"**{line.lstrip('#').strip()}**", ""]
-        else:
-            line = _RELATIVE_LINK.sub(lambda m: f"]({_link_target(m.group(1))})", line)
-            out.append(line)
-    return "\n".join(out)
 
 
 # ---------------------------------------------------------------------------

@@ -120,7 +120,7 @@ version and links both; on the command line, `scanpath-studio --version`.
 
 Scanpath Studio is in beta, so they may not. Until 1.0, any release may change
 the app, its share links and saved settings, the Python API and the CLI. The
-[Changelog](changelog.md) lists every change. To reproduce a result exactly,
+[changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly,
 note the version you used and install that one:
 `pip install scanpath-studio==<version>`.
 

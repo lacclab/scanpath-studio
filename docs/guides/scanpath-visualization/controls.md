@@ -107,9 +107,8 @@ own saved designs:
 | **Custom** | Your most recent hand-made settings. |
 | **My designs** | Your saved designs: click one to apply it; the pencil renames it and the bin deletes it. |
 | **My designs** → save button | Save the settings on screen as a named design, to apply again later in one click. |
-| **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs. |
+| **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs: share a look with co-authors and partners, reproduce a figure exactly, or move your designs to another computer. |
 | **Palette** | A color scheme for the whole figure, such as colorblind-safe or print. |
-| **Reset visualization** | Reset every plot setting. Annotations, filters, data and the selected trial stay. |
 
 ### :material/blur_on: Fixations
 
@@ -266,6 +265,14 @@ The figure as a whole:
 | **Legends** → **Position** | Where it sits: a corner, the middle of an edge, or down a side, outside or inside the plot. |
 | **Legends** → **Arrangement** | Its items stacked or side by side. |
 | **Legends** → **Text size** | Its text size, in px. |
+
+### :material/restart_alt: Reset visualization
+
+The button at the foot of the column.
+
+| Control | What it does |
+| --- | --- |
+| **Reset visualization** | Reset every plot setting. Annotations, filters, data and the selected trial stay. |
 
 ## In Compare
 

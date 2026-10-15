@@ -9462,7 +9462,9 @@ def _render_cancelled_load_notice(host) -> None:
 BACKUP_REMINDER_KEY = "_sps_backup_reminder"
 
 #: Where the docs list what to download, and from where, to keep your work.
-BACKUP_GUIDE_URL = f"{CITATION['docs_url']}guides/outputs-sharing/#back-up-your-work"
+BACKUP_GUIDE_URL = (
+    f"{CITATION['docs_url']}guides/scanpath-visualization/#back-up-your-work"
+)
 
 
 def arm_backup_reminder() -> None:

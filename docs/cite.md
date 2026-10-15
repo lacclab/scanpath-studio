@@ -23,7 +23,7 @@ the same file behind GitHub's **Cite this repository** button and the app's
 ## The data
 
 The bundled demo is a subset of
-[OneStop Eye Movements](onestop.md). If you used it, please cite the corpus as
+[OneStop Eye Movements](guides/loading-data/index.md#onestop). If you used it, please cite the corpus as
 well:
 
 ```bibtex

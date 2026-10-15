@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.38.2] - 2026-10-16
+
+### Added
+- The docs' Scanpath visualization guide gains an All controls page: every button and setting on the Scanpath page, menu by menu, with what it does. ([#436](https://github.com/lacclab/scanpath-studio/issues/436))
+
+### Changed
+- Each docs tutorial is now a section of real tasks, most with a recording of it in the app: Optimize data collection (check a session, compare two eye trackers, audit an experimenter), Filter data, Export figures and Analyze a corpus. ([#436](https://github.com/lacclab/scanpath-studio/issues/436))
+- The README lists every table a dataset can bring: fixations, words (interest areas), raw gaze, and participant, trial and text metadata. ([#436](https://github.com/lacclab/scanpath-studio/issues/436))
+- The docs' task cards and tutorials now walk through the example use cases: comparing two eye trackers on one text, picking participants by a field such as native language and exporting the marked trials, saving a figure's look as a design, and seeing reading progress over time. ([#436](https://github.com/lacclab/scanpath-studio/issues/436))
+- A chip color in the trial chips menu has a ✕ that puts it back to the default gray, instead of picking that gray by hand. ([#446](https://github.com/lacclab/scanpath-studio/issues/446))
+- The docs' Reference tab is now Data & methods: a shorter Data format page, a Computations page without developer details, a short OneStop page, and no Glossary. ([#449](https://github.com/lacclab/scanpath-studio/issues/449))
+
 ## [0.38.1] - 2026-10-13
 
 ### Added

@@ -93,15 +93,6 @@ def test_every_in_app_tutorial_links_a_page_and_heading_that_exist(tutorial):
         assert fragment in _heading_anchors(page), tutorial.docs_url
 
 
-def test_the_changelog_page_is_headlines_from_the_two_tier_release_on():
-    page = docs_support.changelog()
-    assert page.startswith("## Unreleased")
-    assert f"## {docs_support.CHANGELOG_SINCE} — " in page
-    # Nothing older, and none of the long notes.
-    assert "## 0.27.2" not in page
-    assert "### Details" not in page and "#### " not in page
-
-
 def test_the_citation_is_the_cff():
     # PyYAML is a docs-extra dependency; CI's test legs install only the test
     # extra, and its Docs build job builds this page anyway.

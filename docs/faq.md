@@ -8,7 +8,7 @@ Words and fixations must use the same pixel coordinates and share trial IDs.
 If the fixations are shifted, mirrored or scaled against the words, the two
 tables are in different coordinate frames — a different origin, unit or offset
 — and no setting here fixes that; convert one of them
-([Data format → Units](data-format.md#tables)). If the alignment is right but
+([What your data needs → Files and units](guides/loading-data/index.md#tables)). If the alignment is right but
 the figure is framed or sized wrongly, the recording screen size is: set the
 resolution of the monitor used in the experiment under :material/database: **Data Management → :material/edit: Edit dataset → Recording
 setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.
@@ -89,7 +89,7 @@ settings on this computer (when it listens only on this computer, as
 `scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
-([what to back up](guides/outputs-sharing.md#back-up-your-work)).
+([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
 
 If one saved dataset's files go missing or are damaged, the rest of the
 session still comes back. The app names the dataset that didn't, keeps its
@@ -120,7 +120,7 @@ version and links both; on the command line, `scanpath-studio --version`.
 
 Scanpath Studio is in beta, so they may not. Until 1.0, any release may change
 the app, its share links and saved settings, the Python API and the CLI. The
-[Changelog](changelog.md) lists every change. To reproduce a result exactly,
+[changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly,
 note the version you used and install that one:
 `pip install scanpath-studio==<version>`.
 

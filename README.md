@@ -13,7 +13,7 @@
 
 ![Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-participant comparison and Corpus Analysis](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
-## Get started
+## Install
 
 - **As a desktop app** — recommended, and the easiest way to work with your own data. It updates itself from the app's About menu:
   [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe)
@@ -33,15 +33,19 @@ The desktop and pip installs keep your data on your own machine, handle large da
 
 ## Your data
 
-Scanpath Studio reads two tables, and either one alone also works:
+Bring any of these tables, in CSV, TSV, Parquet, Feather, Excel or a `.zip` of them:
 
-| Table | Minimum |
+| Table | What it holds |
 | --- | --- |
-| **Words** (interest areas), e.g. EyeLink's Interest Area Report | trial ID, word ID and the word's on-screen box |
-| **Fixations**, e.g. EyeLink's Fixation Report | trial ID, duration, and x/y or a word ID |
+| **Fixations**, e.g. EyeLink's Fixation Report | One row per fixation: trial ID, duration, and x/y or a word ID |
+| **Words** (interest areas), e.g. EyeLink's Interest Area Report | One box per word, as shown on screen, with any reading measures and word features |
+| **Raw gaze** | The gaze samples, drawn under the fixations — or on their own |
+| **Participants** | Metadata, one row per participant: language, age, group… |
+| **Trials** | Metadata, one row per trial or per reading: condition, question… |
+| **Texts** | Metadata, one row per text: difficulty, genre… |
 
-Raw gaze, participant and text IDs, conditions and reading measures are
-optional and unlock more. Files can be CSV, TSV, Parquet, Feather, Excel or a `.zip` of them. Columns are detected from common EyeLink, Tobii, Gazepoint, SMI and Pupil Labs names, and you can correct any guess. See [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/) and the [data format](https://lacclab.github.io/scanpath-studio/data-format/).
+A dataset needs at least one of the first three. Metadata columns work like
+fields in your data: filters, chips, sorting and export. Columns are detected from common EyeLink, Tobii, Gazepoint, SMI and Pupil Labs names, and you can correct any guess. See [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/#what-your-data-needs).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/workflows/add-your-data.gif" alt="Adding a dataset from EyeLink fixation and interest-area reports"><br>
@@ -129,18 +133,18 @@ fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
 sps.save_figure(fig, "scanpath.html")
 ```
 
-For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or use `sps.load_scanpath_data("ia.csv", "fix.csv")`. HTML output needs nothing else; PNG, SVG and PDF (and GIF/MP4 replays) go through Kaleido, which needs Chrome, Chromium or Edge, or run `plotly_get_chrome -y` once. The [CLI reference](https://lacclab.github.io/scanpath-studio/cli/) and the [Python API reference](https://lacclab.github.io/scanpath-studio/api/) list every flag and parameter.
+For your own files, pass `--words ia.csv --fixations fix.csv` to `render`, or use `sps.load_scanpath_data("ia.csv", "fix.csv")`; add raw gaze with `--raw-gaze` (`sps.load_raw_gaze`) and metadata with `--participant-metadata`, `--trial-metadata` and `--text-metadata` (`sps.load_participant_metadata` and its trial and text siblings). HTML output needs nothing else; PNG, SVG and PDF (and GIF/MP4 replays) go through Kaleido, which needs Chrome, Chromium or Edge, or run `plotly_get_chrome -y` once. The [CLI reference](https://lacclab.github.io/scanpath-studio/cli/) and the [Python API reference](https://lacclab.github.io/scanpath-studio/api/) list every flag and parameter.
 
 ## Where next
 
 The full documentation is at **<https://lacclab.github.io/scanpath-studio/>**:
 
-- [Getting started](https://lacclab.github.io/scanpath-studio/getting-started/): install, launch and a first trial
+- [Install](https://lacclab.github.io/scanpath-studio/install/): install, launch and a first trial
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/): task walk-throughs, from checking a pilot to a figure for a paper
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/): every view and control
-- [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it
+- [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/): what the loader accepts and how to map it
 - [CLI](https://lacclab.github.io/scanpath-studio/cli/) and [Python API](https://lacclab.github.io/scanpath-studio/api/): scripting and batch rendering
-- [Gallery](https://lacclab.github.io/scanpath-studio/gallery/): the figures it draws, each with the code that makes it
+- [Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/): the figures it draws, each with the code that makes it
 - [Computation register](https://lacclab.github.io/scanpath-studio/computations/): how each measure is derived
 - [FAQ](https://lacclab.github.io/scanpath-studio/faq/) 
 - [Cite](https://lacclab.github.io/scanpath-studio/cite/)

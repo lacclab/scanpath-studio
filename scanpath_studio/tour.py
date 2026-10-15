@@ -329,7 +329,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         prerequisite="Two trials sharing a text (and screen for multipart data)",
         availability="has_comparable_readings",
         completion_test="Comparisons panel reached",
-        docs_url=f"{DOCS_URL}guides/scanpath-visualization/#replay-and-compare",
+        docs_url=f"{DOCS_URL}guides/scanpath-visualization/#under-the-plot",
         steps=(
             TutorialStep(
                 "Choose the reference trial",

@@ -1,6 +1,6 @@
-# Getting started
+# Install
 
-## 1. Install { #install }
+## Download { #install }
 
 === "Desktop app"
 
@@ -46,54 +46,30 @@
     can't download the public corpora, so for your own data use the desktop
     app or pip.
 
-## 2. Explore the demo
+## Explore the demo
 
 The app opens on a small bundled sample of the
-[OneStop](onestop.md) corpus.
+[OneStop](guides/loading-data/index.md#onestop) corpus.
 
 1. Pick a trial with the picker above the plot.
 2. Switch layers on and off in **Plot controls**: Fixations, Saccades,
    Stimulus (the text), Word boxes, Heatmap.
 3. Turn on **Animate** to replay the trial.
 4. Open **Export → Current figure** to download it.
-
-## 3. Load your own data
-
-Click **+** beside **Select dataset** and choose **Import files**. Upload a
-fixation table and a Words (interest areas) table, check the column mapping the
-app proposes, describe the **Recording setup**, then click **:material/check: Add dataset**.
-
-[Loading data](guides/loading-data.md) lists the accepted formats and what each
-table needs.
+5. Load your own data: click **+** beside **Select dataset** and choose
+   **Import files** (see [Data management](guides/loading-data/index.md)).
 
 ## Updating { #updating }
 
-**:material/help: Help → :material/info: About** shows the version you are
-running. On your own computer — the desktop app or a pip install —
-**:material/update: Check for updates** asks GitHub whether a newer release is
-out; it is the only time the app goes online for this. If there is one, it
-shows the command that updates your install (`pip install -U scanpath-studio`
-for pip) or, in the desktop app, **:material/update: Update & restart** — see
-below — beside a download link. `scanpath-studio version --check` does the
-same from a terminal.
-
-In the desktop app, **:material/update: Update & restart** does the rest:
-it downloads the new version, checks it against the checksum GitHub
-publishes (on macOS also that it is signed by the same developers), tests
-it, and restarts into it — your datasets and settings come back with it. If
-the new version doesn't start within four minutes, the app puts the old
-one back and says so in About. It needs to be able to write where the app
-is installed; when it can't (for example, on a shared Mac where an
-administrator installed it), About says why and offers the download
-instead.
-
-Between releases the version names the exact build: `0.35.0.post3+g8f18219` is
-three commits after release 0.35.0, at commit `8f18219`, and `.dirty` at the
-end means it has uncommitted changes. Quote the whole version in a bug report.
+**:material/help: Help → :material/info: About** shows your version. Click
+**:material/update: Check for updates** to see if a newer one is out. In the
+desktop app, **:material/update: Update & restart** installs it and keeps your
+datasets and settings; with pip, run `pip install -U scanpath-studio`.
 
 ## Next steps
 
+- [Plot gallery](gallery.md) shows what the app draws, for ideas.
 - [Tutorials](tutorials/index.md) walk through common tasks, from checking a
   pilot to exporting a figure.
 - [Feature guides](guides/index.md) explain each part of the app.
-- [Automation](automation.md) covers the Python API and the command line.
+- [API & CLI](automation.md) covers the Python API and the command line.

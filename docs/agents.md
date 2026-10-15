@@ -136,7 +136,7 @@ words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 
 Ready-made public corpora have their own loaders — `sps.load_potec(dir)` and
 `sps.load_onestop(dir)` — which return the same normalized pair. See
-[OneStop](onestop.md).
+[OneStop](guides/loading-data/index.md#onestop).
 
 The two tables need not cover the same trials. `sps.list_trials(words,
 fixations)` lists every trial either table has, once — the set the app's trial
@@ -160,7 +160,7 @@ For a multipart parent, inspect `sps.list_parts(words, fixations, pid, tid)`,
 pass `screen="…"` to `plot_scanpath` / `animate_scanpath`, or call
 `sps.render_parent_trial(...)` for an ordered mapping of per-screen figures.
 Data without explicit screen columns can use `trial_parts_manifest=`; see
-[Data format](data-format.md#multipart-logical-trials).
+[What your data needs](guides/loading-data/index.md#multipart-logical-trials).
 
 ### When auto-detection can't find a column
 

@@ -9665,27 +9665,56 @@ def render_trial_chip_picker(
     # UX-28: per-chip colour, generalized from what used to be a handful of
     # hardcoded OneStop column/value special-cases (tabs._chip_color) — any
     # dataset's condition chips can now be highlighted, not just OneStop's.
-    # `#EEF2F7` must match `tabs._CHIP_NEUTRAL_BG`: picking it back is how a
-    # chip returns to "no override" rather than staying pinned to a colour.
+    # `#EEF2F7` must match `tabs._CHIP_NEUTRAL_BG`: a chip at it has no
+    # override. The ✕ beside a highlighted chip puts it back there — picking
+    # that exact gray by hand was the only way before, and nobody could.
     _neutral = "#EEF2F7"
     shown_now = st.session_state["trial_chip_fields"]
     if shown_now:
         host.caption("Chip colors — optional highlight per shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
+
+        def _reset_to_gray(field: str) -> None:
+            # Only the picker goes back to the default gray; the loop below
+            # reads that as "no highlight", as it does a gray picked by hand.
+            # Through `write_through`, since the picker sits in a popover and
+            # the browser would otherwise send its old color back.
+            write_through(f"trial_chip_color_{field}", _neutral)
+
         for key in shown_now:
-            label_col, swatch_col = host.columns([3, 1], vertical_alignment="center")
+            label_col, swatch_col, clear_col = host.columns(
+                [3, 1, 1], vertical_alignment="center"
+            )
             label_col.caption(key_to_label[key])
+            widget_key = f"trial_chip_color_{key}"
+            # The stored color seeds a picker the first time it is drawn; after
+            # that its own state holds it (a value= beside a written key would
+            # draw Streamlit's double-default warning).
+            seed = (
+                {}
+                if widget_key in st.session_state
+                else {"value": colors.get(key) or _neutral}
+            )
             picked = swatch_col.color_picker(
                 key_to_label[key],
-                value=colors.get(key) or _neutral,
-                key=f"trial_chip_color_{key}",
+                key=widget_key,
                 label_visibility="collapsed",
-                help="Pick back to the default gray to remove the highlight.",
+                help="Highlight this chip in a color.",
+                **seed,
             )
             if picked.lower() == _neutral.lower():
                 colors.pop(key, None)
             else:
                 colors[key] = picked
+            clear_col.button(
+                spoken(f"Reset the color of {key_to_label[key]}"),
+                icon=ICONS["close"],
+                key=f"trial_chip_color_clear_{key}",
+                help="Back to the default gray.",
+                disabled=key not in colors,
+                on_click=_reset_to_gray,
+                args=(key,),
+            )
         st.session_state["trial_chip_colors"] = colors
 
 

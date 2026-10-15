@@ -16,7 +16,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 
 <div class="sps-buttons" markdown>
 [:material-play-circle: Try the demo](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
-[:material-rocket-launch: Get started](getting-started.md){ .md-button }
+[:material-download: Install](install.md#install){ .md-button }
 [:material-school: Tutorials](tutorials/index.md){ .md-button }
 </div>
 
@@ -29,39 +29,45 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
   <source src="assets/app_demo.mp4" type="video/mp4">
 </video>
 
-## With Scanpath Studio you can
+## With Scanpath Studio you can:
 
 <div class="grid cards" markdown>
 
-- :material-clipboard-pulse:{ .lg .middle } **[Run better data collection](tutorials/data-collection.md)**
+- :material-clipboard-pulse:{ .lg .middle } **[Optimize data collection](tutorials/data-collection/index.md)**
 
     Pilot your eye tracker, software, and stimulus layout (font, spacing)
-    before you commit. Catch calibration and setup problems that only show up
-    in a plot, and train new experimenters to spot issues such as frequent
-    blinking, or check their sessions as you supervise.
+    before you commit — for example, [compare two eye trackers on the same
+    text](tutorials/data-collection/compare-eye-trackers.md). Catch
+    calibration and setup problems that only show up in a plot, and train new
+    experimenters to spot issues such as frequent blinking, or check their
+    sessions as you supervise.
 
-- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection.md#4-record-the-decision)**
+- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection/check-a-session.md)**
 
     Mark trials or whole sessions for exclusion, and decide whether you need
     to collect more. Check that fixation detection and line assignment hold up
     on this dataset by viewing fixations against the raw gaze and word boxes.
 
-- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](tutorials/data-filtering.md)**
+- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](tutorials/data-filtering/index.md)**
 
     Exclude or flag poorly calibrated, skimming, or non-reading trials, and
-    trials with out-of-bounds, very short, or very long fixations. Find the
-    trials a specific analysis needs, such as those with many blinks.
+    trials with out-of-bounds, very short, or very long fixations. Annotate
+    trials as you look through them: star them, tag them (such as
+    `not reading`) or add notes, then filter by those tags. Find the
+    trials a specific analysis needs — for example, participants with a given
+    native language and good calibration — and export the marked trial IDs.
 
-- :material-file-export:{ .lg .middle } **[Export figures](tutorials/exporting-figures.md)**
+- :material-file-export:{ .lg .middle } **[Export customized figures](tutorials/exporting-figures/index.md)**
 
-    Produce one polished figure for a paper or talk, or bulk-export every
-    trial consistently, for example as training data for models that
-    generate scanpaths on images.
+    Show a real scanpath in a paper or talk as a heatmap or a replay, and
+    save the look as a design to reuse. Or bulk-export every trial
+    consistently, for example as training data for models that generate
+    scanpaths on images.
 
-- :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis.md)**
+- :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis/index.md)**
 
-    Compare model-generated scanpaths with human ones, and contrast groups,
-    conditions, and sessions over time.
+    Compare model-generated scanpaths with human ones, contrast groups and
+    conditions, and see how reading progresses over time.
 
 </div>
 
@@ -76,7 +82,7 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
 - **Reproducible output:** static and animated figures, bulk exports, share
   links, and restorable configurations.
 
-See the [Gallery](gallery.md) for what it draws, the
+See the [Plot gallery](gallery.md) for what it draws, the
 [feature guides](guides/index.md) for the controls, or
 [Automation](automation.md) for Python and the CLI.
 

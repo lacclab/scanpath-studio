@@ -287,7 +287,7 @@ into a **Scanpath A** and a **Scanpath B** group.
 | --- | --- |
 | **Dataset B** | Choose the dataset scanpath B comes from: this one, or another dataset. |
 | **Trial B**, slider, **◀ ▶** | Choose scanpath B's trial: 📄 marks the same text, 👤 the same participant. |
-| **⇅** on B's row | Sort scanpath B's trial list. |
+| **⇅** on B's row | Sort scanpath B's trial list, apart from A's. By default, trials of the same text as A come first, then the same participant, then the rest; or sort by any field, as on A's row. |
 | :material/filter_alt: on B's row | Filter scanpath B's trials, apart from A's. |
 | **Fixations ▾** → **Scanpath A / B** → **Color**, **Size**, **Opacity** | Choose each scanpath's fixation marker color, size range and opacity. |
 | **Saccades ▾** → **Scanpath A / B** → **Color**, **Style**, **Width** | Choose each scanpath's saccade line color, style and width. |

@@ -105,4 +105,7 @@ anything.
 The :material/edit: on a row edits the dataset: its name, column mapping,
 recording setup, stimulus images and metadata tables. **Download setup file**
 saves the mapping and setup, so the same files can be added again elsewhere.
-Nothing changes until you click **Save changes**.
+Nothing changes until you click **Save changes**. The editor works on the
+dataset as it was added: only the columns you mapped or chose to keep were
+stored (the others are listed under *dropped at import*), so it cannot map a
+column that was left out. To use one, add the files again.

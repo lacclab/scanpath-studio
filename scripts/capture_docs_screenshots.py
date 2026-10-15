@@ -228,19 +228,63 @@ def _shot_trial_row(page: Page) -> None:
     )
 
 
-def _shot_rail_top(page: Page) -> None:
-    """The top of the Plot controls column, down to the palette."""
+def _open_menu_body(page: Page, popover_key: str):
+    """Open a rail ▾ menu and return its body, unclipped."""
+    page.locator(f".st-key-{popover_key} button").first.click()
+    ui.settle(page, quiet=1.5)
+    body = page.locator('[data-testid="stPopoverBody"]').last
+    # The whole menu, not the part its scroll area shows.
+    body.evaluate(
+        "el => { el.style.maxHeight = 'none'; el.style.overflow = 'visible';"
+        " el.querySelectorAll('*').forEach(c => { if (c.scrollHeight > c.clientHeight)"
+        " { c.style.maxHeight = 'none'; c.style.overflow = 'visible'; } }); }"
+    )
+    page.wait_for_timeout(400)
+    return body
+
+
+def _shot_mode_menu(page: Page, name: str, toggle_key: str, popover_key: str) -> None:
+    """A mode's ▾ menu, with the mode on so nothing in it is greyed out."""
+    _switch_on(page, toggle_key)
+    _shot_controls(page, name, _open_menu_body(page, popover_key))
+    page.keyboard.press("Escape")
+    ui.settle(page, quiet=1.0)
+    ui.toggle(page, toggle_key)
+
+
+#: The two designs saved for the picture of My designs.
+EXAMPLE_DESIGNS = ("My design 1", "My design 2")
+
+
+def _save_design(page: Page, name: str) -> None:
+    page.locator(".st-key-design_save button").first.click()
+    ui.settle(page, quiet=1.5)
+    dialog = page.locator('[role="dialog"]').last
+    dialog.locator('input[type="text"]').last.fill(name)
+    dialog.locator(".st-key-design_save_go button").first.click()
+    ui.settle(page, quiet=2.0)
+
+
+def _shot_designs(page: Page) -> None:
+    """Design presets, My designs open on two saved designs, and the palette."""
+    for name in EXAMPLE_DESIGNS:
+        _save_design(page, name)
+    shell = page.locator(".st-key-design_shell").first
+    if shell.locator("details").first.get_attribute("open") is None:
+        shell.locator("summary").first.click()
+        ui.settle(page, quiet=1.5)
     page.evaluate("window.scrollTo(0, 0)")
     rail = page.locator(".st-key-scanpath_rail").first.bounding_box()
+    top = page.get_by_text("Design presets", exact=True).first.bounding_box()
     palette = page.locator(".st-key-global_palette").first.bounding_box()
     pad = 10
     clip = {
         "x": rail["x"],
-        "y": rail["y"],
+        "y": top["y"] - 2,
         "width": rail["width"],
-        "height": palette["y"] + palette["height"] + pad - rail["y"],
+        "height": palette["y"] + palette["height"] + pad - top["y"],
     }
-    _shot_controls(page, "modes-designs", page, clip=clip)
+    _shot_controls(page, "designs", page, clip=clip)
 
 
 def _shot_chips_menu(page: Page) -> None:
@@ -266,6 +310,44 @@ def _shot_chips_menu(page: Page) -> None:
     ui.settle(page, quiet=1.0)
 
 
+def _shot_reset(page: Page) -> None:
+    """The whole Plot controls column, the Reset visualization button circled."""
+    page.locator(".st-key-reset_viz_settings_btn").first.evaluate(
+        "el => { el.style.outline = '3px solid #e5262c';"
+        " el.style.outlineOffset = '5px'; el.style.borderRadius = '999px'; }"
+    )
+    page.evaluate("window.scrollTo(0, 0)")
+    box = page.locator(".st-key-scanpath_rail").first.bounding_box()
+    pad = 12  # room for the ring, which sits outside the button
+    clip = {
+        "x": box["x"] - pad,
+        "y": box["y"],
+        "width": box["width"] + 2 * pad,
+        "height": box["height"] + pad,
+    }
+    _shot_controls(page, "reset", page, clip=clip)
+    page.locator(".st-key-reset_viz_settings_btn").first.evaluate(
+        "el => { el.style.outline = ''; el.style.outlineOffset = '';"
+        " el.style.borderRadius = ''; }"
+    )
+
+
+def _shot_compare_bar(page: Page) -> None:
+    """The whole trial control bar in Compare: A's row and B's under it."""
+    page.evaluate("window.scrollTo(0, 0)")
+    a = page.locator(".st-key-tour_grp_trial_picker").first.bounding_box()
+    b = page.locator(".st-key-tour_grp_compare_picker").first.bounding_box()
+    left = min(a["x"], b["x"])
+    right = max(a["x"] + a["width"], b["x"] + b["width"])
+    clip = {
+        "x": left,
+        "y": a["y"],
+        "width": right - left,
+        "height": b["y"] + b["height"] - a["y"],
+    }
+    _shot_controls(page, "compare-row", page, clip=clip)
+
+
 def capture_controls(page: Page, only: set[str] | None = None) -> None:
     """The All controls page's pictures (``--controls [NAME ...]``)."""
     CONTROLS_OUT.mkdir(parents=True, exist_ok=True)
@@ -283,9 +365,17 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
             page, "plot-controls", page.locator(".st-key-scanpath_rail").first
         )
 
-    if wanted("modes-designs"):
-        print("modes, designs and palette")
-        _shot_rail_top(page)
+    if wanted("animate"):
+        print("animate menu")
+        _shot_mode_menu(page, "animate", "single_animate", "split_mode_animate_popover")
+    if wanted("compare-menu"):
+        print("compare menu")
+        _shot_mode_menu(
+            page, "compare-menu", "single_compare_toggle", "split_mode_compare_popover"
+        )
+    if wanted("designs"):
+        print("design presets, my designs and palette")
+        _shot_designs(page)
 
     for name, layer, menu in CONTROL_MENUS:
         if not wanted(name):
@@ -307,6 +397,10 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
         page.keyboard.press("Escape")
         ui.settle(page, quiet=1.0)
 
+    if wanted("reset"):
+        print("reset visualization")
+        _shot_reset(page)
+
     if wanted("chips"):
         print("chips menu")
         _shot_chips_menu(page)
@@ -320,9 +414,7 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
     if wanted("compare-row"):
         print("compare")
         ui.toggle(page, "single_compare_toggle")
-        _shot_controls(
-            page, "compare-row", page.locator(".st-key-tour_grp_compare_picker").first
-        )
+        _shot_compare_bar(page)
         ui.toggle(page, "single_compare_toggle")
 
     if wanted("trial-row"):

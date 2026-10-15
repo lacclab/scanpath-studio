@@ -54,6 +54,8 @@ from record_app_demo import (
     encode_gif,
     encode_mp4,
 )
+from record_app_demo import PARK as APP_DEMO_PARK
+from record_app_demo import VIEWPORT as APP_DEMO_VIEWPORT
 
 ROOT = Path(__file__).resolve().parent.parent
 URL = os.environ.get("DEMO_APP_URL")
@@ -62,12 +64,13 @@ OUT = Path(os.environ.get("DEMO_OUT", ROOT / "assets" / "workflows"))
 VIDEO_OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
 SAMPLE = ROOT / "scanpath_studio" / "sample_data"
 
-#: Taller than the app demo's 1440×900: under the figure, a subtab and the trial
-#: picker above it then fit on one screen, so a workflow needn't scroll between them.
-VIEWPORT = {"width": 1440, "height": 960}
+#: The app demo's: wide enough for the trial picker to stay on one line, and
+#: tall enough that a subtab under the figure and the picker above it fit on one
+#: screen, so a workflow needn't scroll between them.
+VIEWPORT = APP_DEMO_VIEWPORT
 #: Where the pointer rests between clicks: in the gutter between the figure and
 #: the plot controls, where it sets off no hover label.
-PARK = (1105, 520)
+PARK = APP_DEMO_PARK
 #: The app's header: a target under it is scrolled into view before a click.
 HEADER = 70
 #: The orange the docs' screenshot callouts use, so the two read as one set.

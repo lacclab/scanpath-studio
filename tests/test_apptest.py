@@ -824,8 +824,15 @@ class TestLeavingTheWizard:
         assert at.session_state["_show_upload_wizard"] is True
         at.run(timeout=60)
         assert not [b for b in at.button if b.key == "wizard_leave_stay"]
-        # A *different* view is a new question.
-        pin_view(at, "Corpus Analysis")
+        # A *different* view is a new question. Which view the stay recorded
+        # depends on the Streamlit version: AppTest remembers the page a run
+        # finished on since 1.66 (Corpus Analysis), and forgot it before
+        # (Scanpath). So ask from the other of the two.
+        from scanpath_studio.constants import WIZARD_STAY_KEY
+
+        stayed = at.session_state[WIZARD_STAY_KEY]
+        other = "Scanpath" if "Corpus" in str(stayed) else "Corpus Analysis"
+        pin_view(at, other)
         at.run(timeout=60)
         assert [b for b in at.button if b.key == "wizard_leave_stay"]
 
@@ -3472,6 +3479,10 @@ class TestSetupWizard:
         assert name in at.session_state["_datasets"]
         # DATA-9: flat source selectbox; an uploaded dataset is tagged private
         # ("🔒 <name> (yours)") but its option token (and the value) is the name.
+        # The dataset picker is on the Scanpath view; Add dataset leaves the
+        # user on the Data page (AppTest remembers it since Streamlit 1.66).
+        pin_view(at, "Scanpath")
+        at.run(timeout=60)
         pickers = [s for s in at.selectbox if s.key == "data_source_picker"]
         assert pickers, "data-source picker not rendered after finalize"
         assert pickers[0].value == name

@@ -39,20 +39,22 @@ URL = os.environ.get("DEMO_APP_URL")
 OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "app_demo.gif"))
 CHROME = os.environ.get("DEMO_CHROME")
 
-VIEWPORT = {"width": 1440, "height": 900}
+#: Wide enough that the trial picker keeps its slider and its ◀ ▶ buttons on
+#: one line (they wrap below 1536 px).
+VIEWPORT = {"width": 1600, "height": 1000}
 #: The README column is ~900 px wide, which a HiDPI screen draws at up to twice
-#: that, so 1200 keeps the app's text legible there. From lossless frames the
-#: GIF lands near 1.5 MB, well under the 5 MB default cap of camo, the image
-#: proxy PyPI shows README images through.
-GIF_WIDTH = 1200
+#: that, so 1280 keeps the app's text legible there. From lossless frames the
+#: GIFs land between 1 and 4 MB, under the 5 MB default cap of camo, the image
+#: proxy GitHub and PyPI show README images through.
+GIF_WIDTH = 1280
 GIF_COLORS = 128
 GIF_FPS = 10
 #: Played back a little faster than recorded: Streamlit's reruns make the
 #: real-time session feel slower than using the app does.
 GIF_SPEEDUP = 1.3
-#: Where the pointer rests between clicks: off the figure, whose hover labels
-#: would otherwise pop up in the recording.
-PARK = (1080, 520)
+#: Where the pointer rests between clicks: in the gutter between the figure
+#: (which ends near x = 1234 at this width) and the plot controls (x = 1298).
+PARK = (1266, 560)
 
 #: Local-dev chrome that has no place in the recording.
 HIDE_CSS = """
@@ -68,6 +70,16 @@ CURSOR_JS = """
   // A rerun that re-focuses a control scrolls it into view, which in the
   // recording is the page jumping away and back for no visible reason.
   Element.prototype.scrollIntoView = function () {};
+  // The pointer crosses the figure on its way to a control, and Plotly's
+  // hover label and toolbar would pop up there; neither is in the story.
+  const quiet = () => {
+    const style = document.createElement('style');
+    style.textContent = '.hoverlayer, .modebar-container { display: none !important; }';
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', quiet);
+  } else quiet();
   // Init scripts run in every frame, and the figure is an iframe.
   if (window !== window.top) return;
   window.demoCursor = (x, y, pressed) => {

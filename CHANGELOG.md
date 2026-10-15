@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.38.1] - 2026-10-13
+
+### Added
+- In Compare, each scanpath's word boxes have their own line and fill opacity under Word boxes, as well as their own colors. ([#429](https://github.com/lacclab/scanpath-studio/issues/429))
+- The note naming the highlighted words is a Figure & canvas → Legends row of its own: show or hide it, place it and size its text, on every surface. ([#433](https://github.com/lacclab/scanpath-studio/issues/433))
+
+### Changed
+- The workflow recordings in the README and the Gallery are re-recorded from the current app, and the one adding a dataset no longer shows a folder path from the machine it was recorded on. ([#426](https://github.com/lacclab/scanpath-studio/issues/426))
+- The Border switch (Figure & canvas) now also hides or recolours the border in Animate and Compare, which always drew it in black. ([#427](https://github.com/lacclab/scanpath-studio/issues/427))
+- Legend text is black, the fixation size key no longer draws its largest circle, and a size key above or below the plot lines up with the legend beside it. ([#427](https://github.com/lacclab/scanpath-studio/issues/427))
+- Legends above the plot sit just over the text and fixations instead of at the plot's top edge, so the figure loses the empty band above it. ([#427](https://github.com/lacclab/scanpath-studio/issues/427))
+- A fixation size key above the plot sits a little lower, coming down toward the fixations and text under it without touching them. ([#430](https://github.com/lacclab/scanpath-studio/issues/430))
+- A fixation size key above the plot always sits right on the screen's top line, never on top of it. ([#432](https://github.com/lacclab/scanpath-studio/issues/432))
+- The screen note under the plot now appears when the view is cropped to the data, saying so, instead of under the full screen. ([#434](https://github.com/lacclab/scanpath-studio/issues/434))
+- The docs home page now lists what Scanpath Studio is for, by research stage: data collection, validation, filtering, figure export, and comparison. ([#435](https://github.com/lacclab/scanpath-studio/issues/435))
+- The app demo at the top of the README and the docs home page is re-recorded from the current app. ([#437](https://github.com/lacclab/scanpath-studio/issues/437))
+- The README's and the Gallery's recordings of the app are taken in a wider window, so the trial picker's slider and its buttons share one line. ([#438](https://github.com/lacclab/scanpath-studio/issues/438))
+- The README now says up front what data it reads, and shows one workflow recording per feature, with the rest linked from the gallery. ([#442](https://github.com/lacclab/scanpath-studio/issues/442))
+- The docs pages no longer show the *Edit this page* and *View source* buttons. ([#443](https://github.com/lacclab/scanpath-studio/issues/443))
+
+### Removed
+- Data Management's dataset list no longer has a language filter; search by name and the Kind buttons remain. ([#431](https://github.com/lacclab/scanpath-studio/issues/431))
+
+### Fixed
+- A refresh keeps scanpath B's trial and dataset in Compare, as it already kept scanpath A's, and the screen each one shows on a trial recorded over several screens. ([#428](https://github.com/lacclab/scanpath-studio/issues/428))
+- The plot background no longer turns black after opening the Stimulus menu and switching dataset, and the same fix covers Compare's per-scanpath colors and opacities and the font picker. ([#434](https://github.com/lacclab/scanpath-studio/issues/434))
+- The desktop app exports GIF, MP4 and PDF on macOS again; a renderer whose browser fails to start now reports an error instead of waiting forever. ([#439](https://github.com/lacclab/scanpath-studio/issues/439))
+- Downloads from the desktop app's own window open a Save dialog and confirm where the file went; before, they saved silently with no sign in the window. ([#441](https://github.com/lacclab/scanpath-studio/issues/441))
+
 ## [0.38.0] - 2026-10-10
 
 ### Added

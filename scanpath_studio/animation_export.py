@@ -31,6 +31,7 @@ browser renders each frame in a fraction of a second.
 from __future__ import annotations
 
 import io
+import queue
 import threading
 from collections.abc import Callable, Iterable
 from time import perf_counter
@@ -124,6 +125,58 @@ CHROME_INSTALL_HINT = (
     "of them and try again — or, with a pip install, run `plotly_get_chrome -y`. "
     "The **HTML** export needs no browser."
 )
+
+
+# How often a render waiting on the warm server checks that the server is alive.
+_WARM_POLL_S = 0.25
+
+
+class RendererStoppedError(AnimationExportError):
+    """Kaleido's warm server stopped before answering — usually because the
+    browser it started closed at once."""
+
+
+def warm_calc_fig(fig, opts: dict):
+    """``kaleido.calc_fig_sync`` that cannot wait forever.
+
+    The warm server runs in a thread of its own. When its browser fails to
+    start, that thread ends with the error and ``calc_fig_sync`` blocks for an
+    answer nobody will send — the frozen desktop app's hung "Render GIF".
+    This sends the task the way ``calc_fig_sync`` does and checks the thread
+    while it waits, raising :class:`RendererStoppedError` once it is gone.
+    Without a running warm server (or with a Kaleido whose internals differ)
+    it is ``calc_fig_sync`` itself.
+    """
+    import kaleido
+
+    try:
+        from kaleido._sync_server import GlobalKaleidoServer, Task
+
+        server = GlobalKaleidoServer()
+        running = server.is_running()
+        thread, tasks, results = (
+            (server._thread, server._task_queue, server._return_queue)
+            if running
+            else (None, None, None)
+        )
+    except Exception:
+        running = False
+    if not running:
+        return kaleido.calc_fig_sync(fig, opts=opts)
+
+    tasks.put(Task("calc_fig", (fig,), {"opts": opts}))
+    while True:
+        try:
+            result = results.get(timeout=_WARM_POLL_S)
+            break
+        except queue.Empty:
+            if not thread.is_alive():
+                raise RendererStoppedError(
+                    "The browser that draws the frames closed as soon as it started."
+                ) from None
+    if isinstance(result, BaseException):
+        raise result
+    return result
 
 
 def chromium_browser_path() -> str | None:
@@ -393,9 +446,9 @@ def render_png_frames(
                             format="png", width=width, height=height, scale=scale
                         )
                     else:
-                        png = kaleido.calc_fig_sync(
+                        png = warm_calc_fig(
                             base,
-                            opts={
+                            {
                                 "format": "png",
                                 "width": width,
                                 "height": height,

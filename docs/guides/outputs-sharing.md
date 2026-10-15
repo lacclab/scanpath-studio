@@ -1,5 +1,9 @@
 # Outputs and sharing
 
+<figure class="sps-screenshot" markdown>
+![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)
+</figure>
+
 ## Export
 
 Open the **Export** subtab in the Scanpath view.
@@ -28,10 +32,6 @@ Open the **Export** subtab in the Scanpath view.
   name, for scripts that work across datasets. File-name, title and caption
   patterns accept either name: `{RECORDING_SESSION_LABEL}` and
   `{participant_id}` both work.
-
-<figure class="sps-screenshot" markdown>
-![The Export subtab: the current figure, and the bundle's trials, formats, tables and file naming](../assets/screenshots/export.webp)
-</figure>
 
 HTML, and the current figure's PNG and SVG, always work. An HTML file from the
 app loads the Plotly library from the internet when opened, unless you tick

@@ -1,14 +1,14 @@
 # Corpus Analysis
 
+<figure class="sps-screenshot" markdown>
+![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../../assets/screenshots/corpus-analysis.webp)
+</figure>
+
 **:material/bar_chart: Corpus Analysis** summarizes many trials at once. It uses the same
 dataset and trial filters as the Scanpath view. The line beside the dataset
 picker counts what those filters keep (for example *12 of 24 trials · 1 of 2
 participants*) and names each active filter. **Edit filters** opens the Scanpath
 view's filter panel, and **Clear** resets every filter.
-
-<figure class="sps-screenshot" markdown>
-![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../../assets/screenshots/corpus-analysis.webp)
-</figure>
 
 ## Reading measures come from your data
 

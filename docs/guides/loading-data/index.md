@@ -1,5 +1,9 @@
 # Loading public and own data
 
+<figure class="sps-screenshot" markdown>
+![The Data Management page: the available datasets, and the counts and tables of the open one](../../assets/screenshots/data-page.webp)
+</figure>
+
 ## Choose a source
 
 Open the dataset picker above the plot, or the :material/database: **Data Management** page.
@@ -132,7 +136,3 @@ Columns keep the names they have in your files, so a column uploaded as
 plot controls, a mapped field is named by its role (*Participant*, *Duration
 (ms)*), with your column's name in its tooltip. A column marked *(computed)* is
 one Scanpath Studio derived, such as a saccade's amplitude.
-
-<figure class="sps-screenshot" markdown>
-![The Data Management page: the available datasets, and the counts and tables of the open one](../../assets/screenshots/data-page.webp)
-</figure>

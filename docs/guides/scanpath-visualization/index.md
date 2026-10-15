@@ -1,13 +1,5 @@
 # Scanpath visualization
 
-The Scanpath view draws one reading on the screen it was recorded on.
-
-!!! tip "Looking for a specific button?"
-
-    [All controls](controls.md) lists every button and setting on this view,
-    menu by menu, with a picture of each menu. Search it for what you want to
-    change, such as *saccade color* or *legend position*.
-
 <figure class="sps-screenshot" markdown>
 ![The Scanpath view, its regions numbered](../../assets/screenshots/scanpath-view.webp)
 </figure>
@@ -18,6 +10,14 @@ The Scanpath view draws one reading on the screen it was recorded on.
 4. The figure.
 5. Plot controls.
 6. Annotations, Stimulus & context, Comparisons, Export and Share.
+
+The Scanpath view draws one reading on the screen it was recorded on.
+
+!!! tip "Looking for a specific button?"
+
+    [All controls](controls.md) lists every button and setting on this view,
+    menu by menu, with a picture of each menu. Search it for what you want to
+    change, such as *saccade color* or *legend position*.
 
 ## Choose a trial
 

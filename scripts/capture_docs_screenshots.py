@@ -161,14 +161,8 @@ def capture(page: Page) -> None:
     ui.deep_link(page, ui.DEMO_TRIAL)
     ui.reset_viz(page)
 
-    print("scanpath view")
-    page.evaluate(CALLOUT_JS, [list(c) for c in SCANPATH_CALLOUTS])
-    page.wait_for_timeout(300)
-    ui.shot(page, "scanpath-view")
-    _webp("scanpath-view")
-    page.evaluate(
-        "() => document.querySelectorAll('.docs-callout').forEach(e => e.remove())"
-    )
+    # The numbered overview (scanpath-view) is `--overview`'s: it needs a
+    # dataset with screens, which the demo is not.
 
     print("export and share")
     tabs = page.locator('[data-testid="stTabs"]').first

@@ -4,7 +4,7 @@
 
 ### The fixations don't line up with the text
 
-Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([Data format → Units](https://lacclab.github.io/scanpath-studio/data-format/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data Management → Edit dataset → Recording setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.
+Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/guides/loading-data/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data Management → Edit dataset → Recording setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.
 
 ### The text is too big or too small
 
@@ -54,7 +54,7 @@ When you run it locally or as the desktop app, nowhere: it stays on your compute
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app saves your datasets and settings on this computer (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/#back-up-your-work)).
+Not on a local or desktop install: the app saves your datasets and settings on this computer (when it listens only on this computer, as `scanpath-studio` and the desktop app do — see [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
 
 If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
@@ -70,7 +70,7 @@ Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussi
 
 ### Will my links, settings and scripts work after an update?
 
-Scanpath Studio is in beta, so they may not. Until 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [Changelog](https://lacclab.github.io/scanpath-studio/changelog/index.md) lists every change. To reproduce a result exactly, note the version you used and install that one: `pip install scanpath-studio==<version>`.
+Scanpath Studio is in beta, so they may not. Until 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly, note the version you used and install that one: `pip install scanpath-studio==<version>`.
 
 ## Citing
 

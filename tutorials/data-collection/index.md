@@ -1,39 +1,23 @@
-# Tutorial: check data collection
+# Optimize data collection
 
-Use this workflow during piloting, experimenter training, or session review. The result is a short record of which trials need attention and why.
+Problems in eye-tracking data are cheapest to fix before and during collection. Use Scanpath Studio to:
 
-## 1. Load a pilot session
+- **pilot your setup:** your eye tracker and software, and the stimulus layout (font, spacing), before you commit to them;
+- **check that the setup is correct:** calibration problems often only show up in a plot of the data, and during collection the data moves too fast to see every issue;
+- **train and supervise experimenters:** problems such as a participant blinking often are hard to notice live but easy to see in the plots, so new experimenters can learn from them and the person overseeing collection can check each session.
 
-On the **Data Management** page select **Add dataset → Import files**, upload the Words (interest areas) and Fixations tables, then check the proposed columns and the **Recording setup** (the actual monitor resolution) before selecting **Add dataset**. If the dataset is already loaded, click its row in the list of datasets.
+Each page below is one task, with recordings of it in the app.
 
-## 2. Check the setup on one trial
+- **[Check a session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/index.md)**
 
-Keep the default visualization first. Confirm that:
+  Check a pilot or completed session for setup, calibration and recording problems, and record what you find.
 
-- word boxes match the displayed text;
-- fixations fall on or near words rather than off-canvas;
-- the first and last fixations look plausible.
+- **[Compare two eye trackers](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/index.md)**
 
-If every trial is shifted in the same way, check the monitor size and coordinate system before judging participants.
+  Record the same text with two trackers, or two setups, and compare.
 
-## 3. Replay the recording
+- **[Audit an experimenter](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)**
 
-Turn on **Animate**. Look for long missing periods, repeated points out of bounds, frequent interruptions, or a vertical shift that grows during the trial.
+  Review one experimenter's sessions, or compare two experimenters'.
 
-Use **Filters & highlights → Fixations** in the plot rail to **Highlight** short, long, or out-of-bounds fixations. Highlighting keeps the full trial visible; **Discard** is better reserved for a later, documented filtering decision.
-
-## 4. Record the decision
-
-Open **Annotations** for the selected trial:
-
-- star a good example;
-- add a tag such as `calibration`, `blink`, `setup`, or `review`;
-- write one sentence describing the evidence and action.
-
-Move through the participant's trials with the trial picker.
-
-## 5. Save the review
-
-Open **Data Management → Annotations** and select **Export**. The file keeps your favorites, tags and notes for later review; **Share → File** keeps the view settings beside it. To return to a trial from its note, select **Open** on its row there; a screen annotation opens that screen.
-
-**Done:** you have checked geometry and timing, marked suspicious trials, and saved the review. For a formal retained/excluded pool, continue with [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
+For a formal retained and excluded pool afterwards, continue with [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).

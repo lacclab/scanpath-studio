@@ -14,20 +14,20 @@ A paper is in preparation. Until it is out, cite the software by its Zenodo DOI,
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.38.1},
+  version = {0.38.2},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.38.1) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.38.2) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 The DOI always resolves to the latest release; the [Zenodo record](https://doi.org/10.5281/zenodo.22933884) lists a DOI for each version if you need to pin the one you used. The entry above is generated from [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff), the same file behind GitHub's **Cite this repository** button and the app's **Help → About** dialog.
 
 ## The data
 
-The bundled demo is a subset of [OneStop Eye Movements](https://lacclab.github.io/scanpath-studio/onestop/index.md). If you used it, please cite the corpus as well:
+The bundled demo is a subset of [OneStop Eye Movements](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop). If you used it, please cite the corpus as well:
 
 ```
 @article{berzak2025onestop,

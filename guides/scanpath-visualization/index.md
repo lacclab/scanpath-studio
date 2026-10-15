@@ -1,60 +1,61 @@
 # Scanpath visualization
 
-The Scanpath view draws one reading on the screen it was recorded on.
-
 1. Views and Help.
-1. Dataset and trial pickers, sort (⇅) and filter funnel.
+1. The trial control bar: dataset, trial, screen, sort (⇅) and filter ().
 1. The trial's summary.
 1. The figure.
 1. Plot controls.
 1. Annotations, Stimulus & context, Comparisons, Export and Share.
 
+The Scanpath view draws one reading on the screen it was recorded on.
+
+Looking for a specific button?
+
+[All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md) lists every button and setting on this view, menu by menu, with a picture of each menu. Search it for what you want to change, such as *saccade color* or *legend position*.
+
 ## Choose a trial
 
-Pick a trial above the plot. The **filter funnel** beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. A trial with several screens gets a second navigator to move between them. When several participants have the same trial ID, each reading is in the list on its own, with its participant in brackets, `3 [p2]`.
+Pick a trial above the plot. The filter () beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. A trial with several screens gets a second navigator to move between them. When several participants have the same trial ID, each reading is in the list on its own, with its participant in brackets, `3 [p2]`.
 
 ## Control the layers
 
-The **Plot controls** rail starts with **Animate**, **Compare**, four design presets and a palette. Below them, each section is one line: a switch, and a **▾** with its settings.
+The **Plot controls** column holds every setting of the figure. Each layer is one line: a switch, and a **▾** with its settings.
 
-| Section              | What it controls                                                                                                                                    |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fixations            | markers: size, color, order                                                                                                                         |
-| Saccades             | lines and arrows, colored by direction or reading type                                                                                              |
-| Stimulus             | text, span highlight, stimulus image, font and background                                                                                           |
-| Word boxes           | each word's interest area: outline color and opacity; fill color and opacity. In Compare, each scanpath has its own, the figure's until you set one |
-| Heatmap              | where fixations concentrate, by count or duration                                                                                                   |
-| Raw gaze             | the gaze samples as recorded                                                                                                                        |
-| Filters & highlights | which fixations and saccades are drawn                                                                                                              |
-| Figure & canvas      | screen framing, axes and grid, title and labels, hover fields, legends                                                                              |
+| Section              | What it controls                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Animate              | play the reading as a video, at a speed you choose                                                                   |
+| Compare              | a second reading beside or over this one                                                                             |
+| Design presets       | restyle the whole figure in one click: Scanpath, Heatmap, Illustration or your last custom settings                  |
+| My designs           | save the current settings as a design, apply it again in one click, or export it to share or use on another computer |
+| Palette              | one color scheme for the whole figure, such as colorblind-safe or print                                              |
+| Fixations            | markers: size, color, order                                                                                          |
+| Saccades             | lines and arrows, colored by direction or reading type                                                               |
+| Stimulus             | text, span highlight, stimulus image, font and background                                                            |
+| Word boxes           | each word's interest area: outline and fill, color and opacity                                                       |
+| Heatmap              | where fixations concentrate, by count or duration                                                                    |
+| Raw gaze             | the gaze samples as recorded                                                                                         |
+| Filters & highlights | which fixations and saccades are drawn, and which stand out                                                          |
+| Figure & canvas      | screen framing, axes and grid, title and labels, hover fields, legends                                               |
 
-Color ranges start on **Auto**, scaled to each trial. Pin a range to keep it fixed as you step through trials and filters, so they stay comparable; its number boxes take any endpoint, beyond the data shown too. The word-box heatmap's range is in dwell time per word (ms), the summed duration of the fixations in each box, or in fixations per word; on Auto it runs from 0 to the trial's highest. **Interpolated** blurs the fixations with a Gaussian (its **Blur** row: Auto, or a σ in px) and scales to each figure's own peak, so its range is grayed. The range still applies to Word boxes, and in Compare, which always draws word boxes.
+## Under the plot
 
-Marker size shows fixation duration on a **fixed scale**: 50–600 ms span the smallest to the largest marker in every trial, both sides of a comparison, the replay and every export, so one duration is always one size. Shorter fixations take the smallest marker and longer ones the largest. Under **Fixations ▾**, **Scale** picks the curve: **√ duration** (the default) grows marker area with duration, **Linear** grows the diameter with it, **Log** compresses long fixations. **Durations** sets the two bounds, and **Size key** draws reference circles labeled in ms in the figure's corner (in Compare, only while both scanpaths use the same marker size range). **Relative to this figure** stretches each figure from its own shortest to longest fixation instead, so its sizes compare only within that figure. Share links, settings files, saved designs and restored sessions from before the fixed scale reopen on the relative one, as they were drawn.
+| Tab                    | What it is for                                                                                                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Annotations**        | Star, tag and write notes on the trial, to find or filter it later.                                                                                                                                                                                          |
+| **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans.                                                                                                                                                                |
+| **Comparisons**        | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side.                                                                                                                       |
+| **Export**             | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. PDF, GIF and MP4 need Chrome, Chromium or Edge installed ([FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails)). |
+| **Share**              | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file.                                                                                                        |
 
-## Filters & highlights
+## Back up your work
 
-**Filters & highlights** thins the trial on screen (the funnel above the plot chooses *which* trials you can pick). For fixations, **Highlight** or **Discard** short, long, out-of-bounds or blink fixations, or show only an index range. *Out of bounds* means outside every word box, not off the screen; *blink* needs a blink column in your fixations (`is_blink`, `blink`, `blink_before`, `blink_after`), and without one nothing is flagged. For saccades, choose which reading types are drawn: hide everything but regressions, for example. Filtering changes only the figure, never your data.
+Each of these files can be saved and loaded again:
 
-## Place the legends
+| What                               | Where                                      |
+| ---------------------------------- | ------------------------------------------ |
+| figure settings                    | **Share → File**                           |
+| favorites, tags and notes          | **Data Management → Annotations → Export** |
+| column mapping and recording setup | **Edit dataset → Download setup file**     |
+| saved figure designs               | **My designs → Export**                    |
 
-**Figure & canvas → Legends** is a table with a row for each legend the current figure draws: **Compare (A/B)** while comparing, **Saccade types** when saccades are coloured by type, **Fixation colors** for a categorical **Color by**, a Highlight filter or raw gaze, the duration **Size key** on a fixed marker scale, and **Text highlight**, the note naming the highlighted words, while words are highlighted ( Stimulus → Highlight). A legend the figure does not draw has no row. Its columns:
-
-- **Show**: draw the legend at all. This is the only place to turn a legend on or off.
-- **Position**: one of eight spots (**Top left**, **Top center**, **Top right**, **Left**, **Right**, **Bottom left**, **Bottom center**, **Bottom right**), each **outside** or **inside** the plot. **Left** and **Right** run down that side. An outside spot makes the figure larger instead of shrinking the plot, so the text stays true to scale. Legends sharing a spot stack, the size key included.
-- **Arrangement**: **Stacked** (one item under the other) or **Side by side**. On **Auto**, a legend at the middle of the top or bottom edge is a row and every other one a stack. The text-highlight note is one line, so it has none.
-- **Text size**: in px; empty uses the figure's own.
-
-On **Auto** a legend stays where it is drawn by default. The size key's circles keep the true marker sizes wherever it goes; its **Text size** sets the labels. Compare's A/B label patterns stay under **Compare ▾**. Share links, settings files, saved designs, `render --legend` / `--no-color-legend` / `--no-highlight-legend` and the API's `legend_layout` / `show_color_legend` / `show_highlight_legend` all carry these.
-
-## Replay and compare
-
-- **Animate** replays the trial; its **▾** sets the speed.
-- **Compare** adds a second reading, overlaid or side by side. **Compare with** can take it from another dataset.
-- **Comparisons** lists other trials that match this one on a field you choose: other readings of the same text, or the same participant's other trials. It shows 12 at a time, with a pager for the rest, and a table of the chips from above the plot for this trial and each match on the page.
-
-Side by side, each panel shows its own reading's stimulus image, or none when that reading has no image. An uploaded image stands for the first reading's page, so the second shows it only when it reads the same text on the same screen.
-
-Two readings can be overlaid only when they were shown on the same screen size, within one dataset too; otherwise they are drawn side by side, each on its own screen. Nothing is rescaled to force an overlay.
-
-Compare is also available from Python ([`compare_scanpaths`](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.compare_scanpaths)) and the [CLI](https://lacclab.github.io/scanpath-studio/cli/#compare-two-scanpaths).
+None of them holds your data, so load the same data before restoring one. On your own computer, the app also keeps your datasets and work between sessions.

@@ -1,38 +1,33 @@
-# Tutorial: filter data
+# Filter data
 
-This workflow finds trials unsuitable for an analysis or publication and leaves an auditable retained pool.
+Decide which trials an analysis or a publication should use, and leave a record anyone can audit — without changing the data itself. Each page below is one task.
 
-## 1. Narrow the trial pool
+- **[Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md)**
 
-Load the dataset, then open the **filter funnel** beside the trial picker: it holds the text and participant pickers together with the condition and annotation filters. Start with broad dataset fields such as participant, condition, correctness, or repeated-reading status. Use the ⇅ trial-ordering popover to surface unusually short or long trials.
+  Mark poorly calibrated, skimming or non-reading trials and leave them out.
 
-A condition filter decides each trial as a whole, from whichever table holds the field: a difficulty level recorded only in your Words table narrows the fixations too. A trial whose Words and Fixations tables give it different values is left out, and a warning above the plot names it.
+- **[Select participants by a field](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/select-participants/index.md)**
 
-If the pool becomes empty, the app names the filter that emptied it and offers to clear just that one.
+  Keep, for example, the native speakers of one language with good calibration, and export their trial IDs.
 
-## 2. Review candidate trials
+- **[Find the trials an analysis needs](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/index.md)**
 
-For each candidate, inspect the default scanpath and turn on **Animate** only when timing helps. Open **Filters & highlights → Fixations** in the plot rail and set **Highlight** for:
+  Trials with out-of-bounds, very short or very long fixations, or many blinks.
 
-- out-of-bounds points;
-- fixations below or above your duration thresholds.
+## How the filters work
 
-Use **Fixation index range** in the same place to show only part of the trial.
+Open the **filter funnel** beside the trial picker: it holds the text and participant pickers together with the condition and annotation filters. A condition filter decides each trial as a whole, from whichever table holds the field: a difficulty level recorded only in your Words table narrows the fixations too. A trial whose Words and Fixations tables give it different values is left out, and a warning above the plot names it. If the pool becomes empty, the app names the filter that emptied it and offers to clear just that one.
 
-## 3. Annotate the decision
+## Every task ends the same way
 
-In **Annotations**, apply a consistent tag vocabulary—for example `exclude`, `review`, `poor-calibration`, or `skimming`—and add a brief reason. Star trials that are useful examples or approved for a figure.
+**Check the pool.** Look at one trial from each participant or condition, then confirm on the **Data Management** page that the counts under **What's in … → Stats** are plausible. They follow the filters; the dataset table above them counts the whole dataset.
 
-Return to the trial filters and, under **By trial annotation**, put `exclude` in **Excluding tags** — not in **With any of these tags**, which would keep only the rejected trials. This turns the review decisions into the active pool without deleting the source data. Before you narrow the pool, save the full record with **Data Management → Annotations → Export**: it lists every trial you tagged, including the ones the filter now hides.
+**Export it.** Use **Export → Export bundle** for the active filtered pool, with the tidy tables, `plot_config.json` and **Annotations (JSON)**. The bundle's `index.csv` lists the participant and trial of every trial it exported.
 
-These filters read the trial's own star and tags. On a dataset with several screens per trial, a star or tag on a single screen does not keep or hide its trial, and its tags are not offered in the pickers; find those on **Data Management → Annotations**.
+\[!\[
 
-## 4. Verify the retained pool
+\](../../assets/workflows/export-bundle_poster.webp)\](../../assets/workflows/export-bundle.mp4)
 
-Check at least one trial from each participant or condition. Then open the **Data Management** page and confirm that the participant, text, trial, fixation, and word counts under **What's in … → Stats** are plausible. Those follow the filters; the dataset table above them counts the whole dataset.
+*Building a zip of every trial's figures and tables (the build is fast-forwarded).*
 
-## 5. Export the record
-
-Use **Export → Export bundle** for the active filtered pool. Include the tidy tables, `plot_config.json` and **Annotations (JSON)** — the tags and notes are the human review record; export figures only if they are part of the analysis record.
-
-**Done:** the original data remains intact, the retained trials are in the export bundle, and each manual decision has a tag and a reason in the annotations file you exported from the Data Management page. (The bundle's `annotations.json` covers only the trials it exports.)
+**Keep the record.** Export the annotations from **Data Management → Annotations → Export**: each entry names its participant and trial with its star, tags and note, including trials a filter now hides. (The bundle's `annotations.json` covers only the trials it exports.) The original data stays intact.

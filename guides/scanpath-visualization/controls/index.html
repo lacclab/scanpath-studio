@@ -1,0 +1,3412 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
+      
+      
+      
+        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../../loading-data/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>All controls - Scanpath Studio</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        
+        <link rel="stylesheet" href="../../../assets/external/fonts.googleapis.com/css.49ea35f2.css">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_markdown_exec_pyodide.css">
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="All controls - Scanpath Studio" />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
+<meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/guides/scanpath-visualization/controls.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="All controls - Scanpath Studio" />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
+<meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/guides/scanpath-visualization/controls.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#all-controls" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Scanpath Studio" class="md-header__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../../../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scanpath Studio
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              All controls
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../install/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Install
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Feature guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../gallery/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Plot gallery
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../automation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API & CLI
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../cite/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  About
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Scanpath Studio" class="md-nav__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../../../assets/icon.png" alt="logo">
+
+    </a>
+    Scanpath Studio
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../tutorials/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../tutorials/data-collection/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimize data collection
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Optimize data collection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/data-collection/check-a-session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Check a session
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/data-collection/compare-eye-trackers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compare two eye trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/data-collection/audit-an-experimenter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit an experimenter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../tutorials/data-filtering/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filter data
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Filter data
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/data-filtering/exclude-unsuitable-trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclude unsuitable trials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/data-filtering/select-participants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Select participants by a field
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/data-filtering/find-trials-for-an-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Find the trials an analysis needs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../tutorials/exporting-figures/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export customized figures
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Export customized figures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/exporting-figures/export-one-figure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export one figure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/exporting-figures/export-a-replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export a replay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/exporting-figures/export-every-trial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export every trial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../tutorials/corpus-analysis/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyze a corpus
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Analyze a corpus
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/corpus-analysis/analyze-one-text/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyze one text
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/corpus-analysis/compare-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compare groups or conditions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/corpus-analysis/progression-over-time/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    See progression over time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature guides
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Feature guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanpath visualization
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Scanpath visualization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    All controls
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    All controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#trial-control-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trial control bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plot-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plot controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plot controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#animate-play-the-reading-as-a-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animate: play the reading as a video
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-presets-and-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design presets and palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saccades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saccades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stimulus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stimulus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word boxes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filters-highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filters &amp; highlights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#figure-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Figure &amp; canvas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reset-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In Compare
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#under-the-plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Under the plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../loading-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../corpus-workspace/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus Analysis
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Corpus Analysis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../computations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Computations & methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plot gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API & CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../automation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    About
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cite
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#trial-control-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trial control bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plot-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plot controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plot controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#animate-play-the-reading-as-a-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animate: play the reading as a video
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-presets-and-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design presets and palette
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saccades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saccades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stimulus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stimulus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word boxes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filters-highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filters &amp; highlights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#figure-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Figure &amp; canvas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reset-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In Compare
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#under-the-plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Under the plot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../../" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Feature guides
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Scanpath visualization
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="all-controls">All controls<a class="headerlink" href="#all-controls" title="Permanent link">&para;</a></h1>
+<p>Every control on the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> page, where it is and what it
+does — in the order you meet them on screen. Search this page (<span class="keys"><kbd class="key-control">Ctrl</kbd><span>+</span><kbd class="key-f">F</kbd></span>, or
+<span class="keys"><kbd class="key-command">Cmd</kbd><span>+</span><kbd class="key-f">F</kbd></span> on a Mac) for the thing you want to change, such as <em>colors</em>,
+<em>legends</em> or <em>axes</em>.</p>
+<p>The page has two sets of controls:</p>
+<ul>
+<li>The <strong>trial control bar</strong>, above the plot, decides <em>what</em> you see: the
+  dataset, the trial, and which trials are in the list.</li>
+<li>The <strong>plot controls</strong>, the column on the right, decide <em>how</em> it is drawn:
+  each layer of the figure, its colors and sizes, and the figure as a whole.</li>
+</ul>
+<p>The tabs under the plot then work with the trial on screen: annotate it, read
+its context, compare it, export it or share it. For how the parts fit
+together, see the <a href="../">Scanpath visualization</a> guide.</p>
+<h2 id="trial-control-bar">Trial control bar<a class="headerlink" href="#trial-control-bar" title="Permanent link">&para;</a></h2>
+<p><a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The trial control bar" loading="lazy"></a></p>
+<p><a class="sps-ctl sps-ctl--menu" data-label="Show chips menu" href="../../../assets/screenshots/controls/chips.webp" title="Open full size"><img src="../../../assets/screenshots/controls/chips.webp" alt="The chips menu, opened from the pencil button" loading="lazy"></a></p>
+<p>The bar above the plot: pick a dataset and a trial, step through the trials,
+and narrow, sort or label the list.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Select dataset</strong></td>
+<td>The dataset the page shows.</td>
+</tr>
+<tr>
+<td><strong>+</strong> → <strong>Create manually</strong></td>
+<td>Add a dataset by manual illustration: write a text and place its fixations by hand.</td>
+</tr>
+<tr>
+<td><strong>+</strong> → <strong>Import files</strong></td>
+<td>Add a dataset from data tables: upload your own tables as a new dataset.</td>
+</tr>
+<tr>
+<td><strong>Select trial</strong></td>
+<td>The trial to show. Click it and type to narrow the list.</td>
+</tr>
+<tr>
+<td><strong>Trial</strong> slider</td>
+<td>Scrub through the trials in the list.</td>
+</tr>
+<tr>
+<td><strong>◀ ▶</strong></td>
+<td>The previous or next trial.</td>
+</tr>
+<tr>
+<td><strong>⇅</strong> → <strong>Sort trials by</strong></td>
+<td>Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached.</td>
+</tr>
+<tr>
+<td><strong>⇅</strong> → <strong>Descending</strong></td>
+<td>Reverse that order.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <strong>Text</strong> / <strong>Participant</strong></td>
+<td>Keep only these texts or participants.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <em>a field of your data</em></td>
+<td>Keep only trials with these values, or, for a number, in this range.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <strong>By participant</strong> / <strong>By trial</strong> / <strong>By text</strong></td>
+<td>The same, for the columns of an attached metadata table.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <strong>Favorites only</strong></td>
+<td>Keep only starred trials.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <strong>With any of these tags</strong></td>
+<td>Keep only trials with any of these tags.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <strong>Excluding tags</strong></td>
+<td>Hide trials with any of these tags, such as <code>exclude</code>.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> → <strong>Clear all filters</strong></td>
+<td>Reset every filter in the panel.</td>
+</tr>
+<tr>
+<td><strong>✏️</strong> → <strong>Show chips above the plot</strong></td>
+<td>Show or hide the row of facts about the trial above the plot.</td>
+</tr>
+<tr>
+<td><strong>✏️</strong> → field lists</td>
+<td>Drag fields between <em>Shown</em> and <em>Available</em> to choose the chips. <em>Available</em> holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count.</td>
+</tr>
+<tr>
+<td><strong>✏️</strong> → field colors</td>
+<td>Give a chip a highlight color; its <strong>✕</strong> puts it back to the default gray.</td>
+</tr>
+<tr>
+<td><strong>✏️</strong> → <strong>Refresh fields</strong></td>
+<td>Look again for which fields are trial-level.</td>
+</tr>
+<tr>
+<td><strong>Screen</strong> and its <strong>◀ ▶</strong></td>
+<td>On a trial recorded over several screens: the screen to show.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="plot-controls">Plot controls<a class="headerlink" href="#plot-controls" title="Permanent link">&para;</a></h2>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a></p>
+<p>The column on the right of the plot. At the top, the modes and designs change
+the whole figure at once. Under them, each layer of the figure has a row of its
+own: the switch turns the layer on or off, and the <strong>▾</strong> beside it opens that
+layer's settings, described below one menu at a time. The last two rows,
+<strong>Filters &amp; highlights</strong> and <strong>Figure &amp; canvas</strong>, cover the figure as a whole.
+A greyed-out control says why when you hover over it.</p>
+<h3 id="animate-play-the-reading-as-a-video"><span class="sps-icon" data-icon="movie" aria-hidden="true"></span> Animate: play the reading as a video<a class="headerlink" href="#animate-play-the-reading-as-a-video" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="The Animate menu" loading="lazy"></a></p>
+<p>The <strong>Animate</strong> switch turns the figure into an animation, a video of the
+reading played back fixation by fixation, with play and pause buttons and a
+time slider under the plot. Its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Replay</strong> → <strong>Speed</strong></td>
+<td>How fast the video plays, from ×0.25 to ×8: ×1 is the reader's own pace, ×2 twice as fast, ×0.5 half as fast.</td>
+</tr>
+<tr>
+<td><strong>Replay</strong> → <strong>Autoplay</strong> → <strong>On load</strong></td>
+<td>Start playing the animation automatically as soon as the plot is shown; otherwise it starts only when you click play.</td>
+</tr>
+<tr>
+<td><strong>Replay</strong> → <strong>Duration</strong></td>
+<td>For information only: the trial's reading time, and how long the video runs at this speed.</td>
+</tr>
+<tr>
+<td><strong>Frames</strong> → <strong>Quality</strong></td>
+<td>How smooth the video is: more frames play more smoothly but take longer to build. <strong>Custom</strong> sets the two below by hand.</td>
+</tr>
+<tr>
+<td><strong>Frames</strong> → <strong>Every</strong></td>
+<td>Reading time between frames, in ms.</td>
+</tr>
+<tr>
+<td><strong>Frames</strong> → <strong>Limit</strong></td>
+<td>The most frames a video gets; a long trial gets wider frame steps to fit.</td>
+</tr>
+<tr>
+<td><strong>Frames</strong> → <strong>Result</strong></td>
+<td>For information only: how many frames this trial's video has, and how far apart they ended up.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="compare"><span class="sps-icon" data-icon="compare" aria-hidden="true"></span> Compare<a class="headerlink" href="#compare" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a></p>
+<p>The <strong>Compare</strong> switch shows a second scanpath, B, beside or over this one
+(pick it in the <a href="#trial-control-bar">trial control bar</a>, above the plot);
+its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>View</strong></td>
+<td><strong>Overlay</strong> both scanpaths, or give each its own panel, <strong>Side by side</strong> or <strong>Top &amp; bottom</strong>.</td>
+</tr>
+<tr>
+<td><strong>Stimulus from</strong></td>
+<td>In an overlay, whose word boxes and text are drawn: both, A's or B's.</td>
+</tr>
+<tr>
+<td><strong>Label A</strong> / <strong>Label B</strong></td>
+<td>Each scanpath's name in the legend, written with fields such as <code>{participant_id}</code>; empty uses the automatic one.</td>
+</tr>
+<tr>
+<td><strong>Available fields</strong></td>
+<td>The fields a label can use.</td>
+</tr>
+<tr>
+<td><strong>Step</strong> → <strong>A and B together</strong></td>
+<td>◀ ▶ move both scanpaths at once.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="design-presets-and-palette"><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> Design presets and palette<a class="headerlink" href="#design-presets-and-palette" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/designs.webp" alt="Design presets, My designs open on two saved designs, and the palette" loading="lazy"></a></p>
+<p>Restyle the whole figure in one click, with a ready-made design or one of your
+own saved designs:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scanpath</strong> / <strong>Heatmap</strong> / <strong>Illustration</strong></td>
+<td>Ready-made designs: a classic scanpath, a word-box heatmap, or a clean schematic.</td>
+</tr>
+<tr>
+<td><strong>Custom</strong></td>
+<td>Your most recent hand-made settings.</td>
+</tr>
+<tr>
+<td><strong>My designs</strong></td>
+<td>Your saved designs: click one to apply it; the pencil renames it and the bin deletes it.</td>
+</tr>
+<tr>
+<td><strong>My designs</strong> → save button</td>
+<td>Save the settings on screen as a named design, to apply again later in one click.</td>
+</tr>
+<tr>
+<td><strong>My designs</strong> → <strong>Export</strong> / <strong>Import</strong></td>
+<td>Download your designs as a file, or load a file of designs: share a look with co-authors and partners, reproduce a figure exactly, or move your designs to another computer.</td>
+</tr>
+<tr>
+<td><strong>Palette</strong></td>
+<td>A color scheme for the whole figure, such as colorblind-safe or print.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fixations"><span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations<a class="headerlink" href="#fixations" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/fixations.webp" title="Open full size"><img src="../../../assets/screenshots/controls/fixations.webp" alt="The Fixations menu" loading="lazy"></a></p>
+<p>The <strong>Fixations</strong> switch draws the fixation markers; its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Marker</strong> → <strong>Color</strong></td>
+<td>What decides each marker's color. <strong>One color</strong> paints them all alike. Pick a number column of the fixations, such as duration or the fixation's order in the trial, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as the line of text or the next saccade's direction, and each value gets its own color, with a legend.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → color box</td>
+<td>Choose the fixation marker color.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Shape</strong></td>
+<td>Choose the fixation marker shape: circle, square, diamond, triangle, star…</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Size</strong></td>
+<td>Set the marker size range: the smallest and largest marker diameter, in px.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Scale</strong></td>
+<td>Choose how duration sets marker size: square root, linear, log, or relative to the trial.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Durations</strong></td>
+<td>Choose the duration range: set the durations that get the smallest and the largest marker.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Opacity</strong></td>
+<td>Set the fixation marker opacity; lower it to see overlapping fixations.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Outline</strong></td>
+<td>Set the width and color of the ring round each marker.</td>
+</tr>
+<tr>
+<td><strong>Color bar</strong> → <strong>Show</strong></td>
+<td>Show the color scale's bar, when markers are colored by a number.</td>
+</tr>
+<tr>
+<td><strong>Color bar</strong> → orientation, <strong>Angle</strong>, <strong>Size</strong>, <strong>Thickness</strong>, <strong>Length</strong></td>
+<td>Set the bar's direction, tick-label angle and size, and its thickness and length.</td>
+</tr>
+<tr>
+<td><strong>Fixation index</strong> → <strong>Show</strong></td>
+<td>Number each fixation in reading order.</td>
+</tr>
+<tr>
+<td><strong>Fixation index</strong> → color, <strong>Size</strong></td>
+<td>Choose the numbers' color and size.</td>
+</tr>
+<tr>
+<td><strong>Snap</strong> → <strong>To line</strong></td>
+<td>Move each fixation onto its line of text — a schematic, labelled <em>Illustration</em>.</td>
+</tr>
+<tr>
+<td><strong>Snap</strong> → <strong>Position</strong></td>
+<td>Choose where on its line a snapped fixation sits.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="saccades"><span class="sps-icon" data-icon="arrow_outward" aria-hidden="true"></span> Saccades<a class="headerlink" href="#saccades" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/saccades.webp" title="Open full size"><img src="../../../assets/screenshots/controls/saccades.webp" alt="The Saccades menu" loading="lazy"></a></p>
+<p>The <strong>Saccades</strong> switch draws the lines between fixations; its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Line</strong> → <strong>Color</strong></td>
+<td>Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. Forward / regression and by type need a word ID for each fixation, the word it landed on, mapped in your fixations table (such as EyeLink's <code>CURRENT_FIX_INTEREST_AREA_ID</code>); without one every saccade reads as <em>other</em>.</td>
+</tr>
+<tr>
+<td><strong>Line</strong> → color box</td>
+<td>Choose the saccade line color.</td>
+</tr>
+<tr>
+<td><strong>Line</strong> → type colors</td>
+<td>With <strong>By type</strong>: choose the color of each saccade type, such as regressions or return sweeps.</td>
+</tr>
+<tr>
+<td><strong>Line</strong> → <strong>Style</strong></td>
+<td>Choose the saccade line style: solid, dashed, dotted or dash-dot.</td>
+</tr>
+<tr>
+<td><strong>Line</strong> → <strong>Width</strong></td>
+<td>Set the saccade line width (thickness), in px.</td>
+</tr>
+<tr>
+<td><strong>Line</strong> → <strong>Opacity</strong></td>
+<td>Set the saccade line and arrow opacity; lower it to bring the fixations forward.</td>
+</tr>
+<tr>
+<td><strong>Shape</strong></td>
+<td>Choose the saccade shape: straight lines, or arcs over the text (a schematic, labelled <em>Illustration</em>).</td>
+</tr>
+<tr>
+<td><strong>Direction arrows</strong> → <strong>Show</strong></td>
+<td>Show saccade direction arrows: an arrowhead on each saccade, pointing where the eye went.</td>
+</tr>
+<tr>
+<td><strong>Direction arrows</strong> → <strong>Arrow size</strong></td>
+<td>Set the saccade arrowhead size.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="stimulus"><span class="sps-icon" data-icon="article" aria-hidden="true"></span> Stimulus<a class="headerlink" href="#stimulus" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/stimulus.webp" title="Open full size"><img src="../../../assets/screenshots/controls/stimulus.webp" alt="The Stimulus menu" loading="lazy"></a></p>
+<p>The <strong>Stimulus</strong> switch draws the text and the stimulus image; its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Text</strong> → <strong>Show</strong></td>
+<td>Show the stimulus text, the words the participant read, at their place on the screen.</td>
+</tr>
+<tr>
+<td><strong>Fit</strong> → <strong>Fit to word boxes</strong></td>
+<td>Size the stimulus text to fill its word boxes, instead of a fixed font size.</td>
+</tr>
+<tr>
+<td><strong>Spacing</strong></td>
+<td>Set the stimulus text line spacing: how far apart the lines are, in font sizes.</td>
+</tr>
+<tr>
+<td><strong>Size</strong></td>
+<td>Set the stimulus text font size, in px or pt.</td>
+</tr>
+<tr>
+<td><strong>Font</strong></td>
+<td>Choose the stimulus text font (typeface); <em>Other…</em> takes any font name.</td>
+</tr>
+<tr>
+<td><strong>Color</strong> → text color</td>
+<td>Choose the stimulus text color.</td>
+</tr>
+<tr>
+<td><strong>Background</strong></td>
+<td>Choose the plot background color: a preset, or any color in the box beside it.</td>
+</tr>
+<tr>
+<td><strong>Highlight</strong> → <strong>Show</strong></td>
+<td>Highlight words in the stimulus text, such as the answer span.</td>
+</tr>
+<tr>
+<td><strong>Highlight</strong> → <strong>Highlight words by</strong></td>
+<td>Choose which words to highlight: a true/false word column, such as the critical span.</td>
+</tr>
+<tr>
+<td><strong>Style</strong></td>
+<td>Choose the word highlight style: colored text, or a border round the words; and the highlight color.</td>
+</tr>
+<tr>
+<td><strong>Image</strong> → <strong>Show</strong></td>
+<td>Show the stimulus image, the screen as shown in the experiment, under the scanpath.</td>
+</tr>
+<tr>
+<td><strong>File</strong></td>
+<td>Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath.</td>
+</tr>
+<tr>
+<td><strong>Opacity</strong></td>
+<td>Set the stimulus image opacity; lower it so the scanpath reads over it.</td>
+</tr>
+<tr>
+<td><strong>Offset</strong> → <strong>X</strong> / <strong>Y</strong></td>
+<td>Move (nudge) the stimulus image left, right, up or down, in px, to line it up with the word boxes.</td>
+</tr>
+<tr>
+<td><strong>Scale</strong></td>
+<td>Resize (scale) the stimulus image so its text matches the word boxes.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="word-boxes"><span class="sps-icon" data-icon="crop_square" aria-hidden="true"></span> Word boxes<a class="headerlink" href="#word-boxes" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/word-boxes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/word-boxes.webp" alt="The Word boxes menu" loading="lazy"></a></p>
+<p>The <strong>Word boxes</strong> switch draws each word's interest area; its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Box</strong> → <strong>Line</strong> color</td>
+<td>Choose the word box outline (border) color.</td>
+</tr>
+<tr>
+<td><strong>Box</strong> → <strong>Line</strong> opacity</td>
+<td>Set the word box outline opacity; 0 hides the outlines.</td>
+</tr>
+<tr>
+<td><strong>Box</strong> → <strong>Fill</strong> color</td>
+<td>Choose the word box fill color, inside each box.</td>
+</tr>
+<tr>
+<td><strong>Box</strong> → <strong>Fill</strong> opacity</td>
+<td>Set the word box fill opacity; 0 draws outlines only.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="heatmap"><span class="sps-icon" data-icon="local_fire_department" aria-hidden="true"></span> Heatmap<a class="headerlink" href="#heatmap" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/heatmap.webp" title="Open full size"><img src="../../../assets/screenshots/controls/heatmap.webp" alt="The Heatmap menu" loading="lazy"></a></p>
+<p>The <strong>Heatmap</strong> switch shows where reading concentrated; its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Style</strong></td>
+<td>Choose the heatmap style: colored word boxes, a smooth interpolated map, or fixation density.</td>
+</tr>
+<tr>
+<td><strong>Blur</strong></td>
+<td>Set the heatmap blur: how far each fixation spreads, for the smooth styles; <strong>Auto</strong> picks it.</td>
+</tr>
+<tr>
+<td><strong>Color</strong> → <strong>By</strong></td>
+<td>Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations.</td>
+</tr>
+<tr>
+<td><strong>Color</strong> → <strong>Colors</strong></td>
+<td>Choose the heatmap colors (color scale).</td>
+</tr>
+<tr>
+<td><strong>Scale</strong></td>
+<td>Choose a linear or log heatmap scale.</td>
+</tr>
+<tr>
+<td><strong>Range</strong></td>
+<td>Set the heatmap color range: the values the colors span. Anything below the range takes the lowest color, and anything above it the highest, so a fixed range keeps colors comparable across trials. <strong>Auto</strong> fits each trial.</td>
+</tr>
+<tr>
+<td><strong>Opacity</strong></td>
+<td>Set the heatmap opacity; <strong>Auto</strong> uses each style's own.</td>
+</tr>
+<tr>
+<td><strong>Color bar</strong> → <strong>Show</strong>, orientation, <strong>Angle</strong>, <strong>Size</strong>, <strong>Thickness</strong>, <strong>Length</strong></td>
+<td>Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="raw-gaze"><span class="sps-icon" data-icon="grain" aria-hidden="true"></span> Raw gaze<a class="headerlink" href="#raw-gaze" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/raw-gaze.webp" title="Open full size"><img src="../../../assets/screenshots/controls/raw-gaze.webp" alt="The Raw gaze menu" loading="lazy"></a></p>
+<p>The <strong>Raw gaze</strong> switch draws the gaze samples as recorded; its <strong>▾</strong> holds:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Marker</strong> → <strong>Color</strong></td>
+<td>Choose the raw gaze sample color.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Size</strong></td>
+<td>Set the raw gaze sample marker size.</td>
+</tr>
+<tr>
+<td><strong>Marker</strong> → <strong>Opacity</strong></td>
+<td>Set the raw gaze sample opacity.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="filters-highlights"><span class="sps-icon" data-icon="filter_list" aria-hidden="true"></span> Filters &amp; highlights<a class="headerlink" href="#filters-highlights" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a></p>
+<p>Which fixations and saccades are drawn, and which stand out:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Fixations</strong> → <strong>Index range</strong></td>
+<td>Show only some fixations: a range of the reading order, such as fixations 10 to 40.</td>
+</tr>
+<tr>
+<td><strong>Fixations</strong> → <strong>All trials</strong></td>
+<td>Keep that fixation range when you move to another trial; otherwise it applies to this trial only, and the next trial shows all its fixations.</td>
+</tr>
+<tr>
+<td><strong>Short</strong> / <strong>Long</strong></td>
+<td>Find short or long fixations by a duration threshold (ms): <strong>Highlight</strong> marks them, <strong>Discard</strong> hides them.</td>
+</tr>
+<tr>
+<td><strong>Out of bounds</strong></td>
+<td>Highlight or discard out-of-bounds fixations, which land in no word box.</td>
+</tr>
+<tr>
+<td><strong>Blink</strong></td>
+<td>Highlight or discard fixations at or next to a blink (needs a blink column).</td>
+</tr>
+<tr>
+<td>marker and color</td>
+<td>Choose the marker shape and color of each highlighted fixation kind.</td>
+</tr>
+<tr>
+<td><strong>Saccades</strong> → <strong>Types</strong></td>
+<td>Show only some saccade types, such as regressions or return sweeps. Needs a word ID for each fixation, as for coloring saccades by type.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="figure-canvas"><span class="sps-icon" data-icon="aspect_ratio" aria-hidden="true"></span> Figure &amp; canvas<a class="headerlink" href="#figure-canvas" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure & canvas menu" loading="lazy"></a></p>
+<p>The figure as a whole:</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Frame</strong> → <strong>Crop to data</strong></td>
+<td>Crop (zoom) the figure to the part of the screen with data, instead of the whole screen.</td>
+</tr>
+<tr>
+<td><strong>Margin</strong></td>
+<td>Set the crop margin: the space round the data when cropping; <strong>Auto</strong> uses 5%.</td>
+</tr>
+<tr>
+<td><strong>Border</strong> → <strong>Show</strong>, color</td>
+<td>Show the border line round the plot area, and choose its color. It marks the edge of the screen, or, with <strong>Crop to data</strong>, the edge of the cropped area.</td>
+</tr>
+<tr>
+<td><strong>Grid</strong> → <strong>Show</strong></td>
+<td>Show pixel grid lines (a coordinate grid) over the screen.</td>
+</tr>
+<tr>
+<td><strong>Grid</strong> → <strong>Auto</strong>, interval</td>
+<td>Set the grid spacing (interval), in px, or let <strong>Auto</strong> choose it.</td>
+</tr>
+<tr>
+<td><strong>Labels</strong></td>
+<td>Set the grid label (tick label) font size.</td>
+</tr>
+<tr>
+<td><strong>Axes</strong> → <strong>X</strong> / <strong>Y</strong></td>
+<td>Choose the x and y axis fields. <strong>X</strong> / <strong>Y</strong> draws the reading on the screen. Any other pair turns the figure into a scatter plot (chart) of the fixations, with no text, word boxes or saccades, keeping the marker colors and sizes. For example: <strong>Time (ms)</strong> against <strong>X</strong> for a time course of the reading, where regressions show as dips; <strong>Time (ms)</strong> against <strong>Word #</strong> for reading progress through the text; <strong>Fixation #</strong> against <strong>Duration (ms)</strong> for fixation durations over the trial.</td>
+</tr>
+<tr>
+<td><strong>Illustration</strong> → <strong>Label</strong></td>
+<td>Choose when to label the figure as a manual illustration, not the recorded positions: when a setting changes its geometry (such as snapping fixations to a line or drawing saccades as arcs), always, or never.</td>
+</tr>
+<tr>
+<td><strong>Illustration</strong> → <strong>Text</strong></td>
+<td>Write the <em>Illustration</em> label's text.</td>
+</tr>
+<tr>
+<td><strong>Title</strong> → <strong>Show</strong>, text, <strong>Size</strong></td>
+<td>Add a figure title above the plot, and set its font size; <code>{field}</code> inserts a value of the trial.</td>
+</tr>
+<tr>
+<td><strong>Caption</strong> → <strong>Show</strong>, text, <strong>Size</strong>, color</td>
+<td>Add a figure caption below the plot, and set its font size and color.</td>
+</tr>
+<tr>
+<td><strong>Hover</strong> → <strong>Words</strong> / <strong>Fixations</strong></td>
+<td>Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation.</td>
+</tr>
+<tr>
+<td><strong>Legends</strong> → <strong>Show</strong></td>
+<td>Show or hide each legend: Compare (A/B), Saccade types, Fixation colors, Size key or Text highlight.</td>
+</tr>
+<tr>
+<td><strong>Legends</strong> → <strong>Position</strong></td>
+<td>Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot.</td>
+</tr>
+<tr>
+<td><strong>Legends</strong> → <strong>Arrangement</strong></td>
+<td>Choose the legend arrangement: items stacked or side by side.</td>
+</tr>
+<tr>
+<td><strong>Legends</strong> → <strong>Text size</strong></td>
+<td>Set the legend text (font) size, in px.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="reset-visualization"><span class="sps-icon" data-icon="restart_alt" aria-hidden="true"></span> Reset visualization<a class="headerlink" href="#reset-visualization" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="The Plot controls column, with Reset visualization circled at its foot" loading="lazy"></a></p>
+<p>The button at the foot of the column.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Reset visualization</strong></td>
+<td>Reset all plot settings to the defaults. Annotations, filters, data and the selected trial stay.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="in-compare">In Compare<a class="headerlink" href="#in-compare" title="Permanent link">&para;</a></h2>
+<p><a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/compare-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-row.webp" alt="The trial control bar in Compare: scanpath A's row, and B's under it" loading="lazy"></a></p>
+<p>With <strong>Compare</strong> on, scanpath B gets a row of its own, and several menus split
+into a <strong>Scanpath A</strong> and a <strong>Scanpath B</strong> group.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Dataset B</strong></td>
+<td>Choose the dataset scanpath B comes from: this one, or another dataset.</td>
+</tr>
+<tr>
+<td><strong>Trial B</strong>, slider, <strong>◀ ▶</strong></td>
+<td>Choose scanpath B's trial: 📄 marks the same text, 👤 the same participant.</td>
+</tr>
+<tr>
+<td><strong>⇅</strong> on B's row</td>
+<td>Sort scanpath B's trial list, apart from A's. By default, trials of the same text as A come first, then the same participant, then the rest; or sort by any field, as on A's row.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> on B's row</td>
+<td>Filter scanpath B's trials, apart from A's.</td>
+</tr>
+<tr>
+<td><strong>Fixations ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong>, <strong>Size</strong>, <strong>Opacity</strong></td>
+<td>Choose each scanpath's fixation marker color, size range and opacity.</td>
+</tr>
+<tr>
+<td><strong>Saccades ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong>, <strong>Style</strong>, <strong>Width</strong></td>
+<td>Choose each scanpath's saccade line color, style and width.</td>
+</tr>
+<tr>
+<td><strong>Word boxes ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Line</strong>, <strong>Fill</strong></td>
+<td>Choose each scanpath's word box outline and fill colors and opacities.</td>
+</tr>
+<tr>
+<td><strong>Heatmap ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Colors</strong></td>
+<td>Choose each scanpath's heatmap colors (color scale).</td>
+</tr>
+<tr>
+<td><strong>Raw gaze ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong></td>
+<td>Choose each scanpath's raw gaze sample color.</td>
+</tr>
+<tr>
+<td><strong>Filters &amp; highlights ▾</strong> → <strong>· B</strong> groups</td>
+<td>Set scanpath B's own fixation range, fixation highlights and saccade types.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="under-the-plot">Under the plot<a class="headerlink" href="#under-the-plot" title="Permanent link">&para;</a></h2>
+<p><a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/under-the-plot.webp" title="Open full size"><img src="../../../assets/screenshots/controls/under-the-plot.webp" alt="The tabs under the plot" loading="lazy"></a></p>
+<p>The tabs under the figure:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Annotations</strong></td>
+<td><strong>Favorite</strong></td>
+<td>Star the trial as a favorite, to find it again with the favorites filter.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Tags</strong> / <strong>Add a tag</strong></td>
+<td>Tag the trial, with an existing tag or a new one, such as <code>exclude</code>. Tags let you filter the trial list later: the <span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span> in the trial control bar keeps or hides trials by tag.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Notes</strong></td>
+<td>Write a free-text note on the trial.</td>
+</tr>
+<tr>
+<td><strong>Stimulus &amp; context</strong></td>
+<td><strong>Context fields</strong></td>
+<td>Choose the trial context to show, such as the text's title, a question or an answer.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Highlighted spans</strong></td>
+<td>Choose true/false word columns to highlight in the text, each with a summary.</td>
+</tr>
+<tr>
+<td><strong>Comparisons</strong></td>
+<td><strong>Match field</strong></td>
+<td>Compare with other trials: show the trials that share this trial's value of a field, such as the same text.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Columns</strong></td>
+<td>Set how many comparison panels per row.</td>
+</tr>
+<tr>
+<td><strong>Export</strong></td>
+<td><strong>Download format</strong></td>
+<td>Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Width</strong>, unit, <strong><abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr></strong></td>
+<td>Set the PNG export size for print: width, unit and resolution (<abbr title="Dots per inch: how many display pixels make an inch">DPI</abbr>).</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Trials to include</strong></td>
+<td>Choose which trials to export in the bundle: this one, the filtered trials, or all of them.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Formats</strong> / <strong>Tabular data</strong></td>
+<td>Choose the bundle's figure formats and the data tables (CSV or Parquet) to include.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Separable layers</strong></td>
+<td>Export each visual layer (fixations, saccades, word boxes…) as its own file, to stack in a vector editor.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Annotations (JSON)</strong> / <strong>Settings file (JSON)</strong></td>
+<td><strong>Settings file</strong>: beside each trial's figure, a <code>plot_config.json</code> recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. <strong>Annotations</strong>: one <code>annotations.json</code> with the exported trials' favorites, tags and notes, which <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <strong>Annotations</strong> can import again.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>File path pattern</strong></td>
+<td>Set the file names inside the export bundle.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Build export</strong></td>
+<td>Build the export bundle (a zip) to download.</td>
+</tr>
+<tr>
+<td><strong>Share</strong></td>
+<td><strong>Link</strong></td>
+<td>Copy a share link that reopens this trial with these settings. The data doesn't travel in the link: whoever opens it needs the same dataset. The bundled demo works anywhere; a public corpus has to be downloaded on their side; for your own dataset, send its files and setup file (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> → <strong>Download setup file</strong>) so they can add it first. A link made on your own computer (a <code>localhost</code> address) opens only where the app runs at that same address.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Code</strong> → <strong>Flavour</strong>, <strong>Show every option</strong></td>
+<td>Get the Python or command-line code that redraws this figure, for scripts and reproduction.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>File</strong> → <strong>Download settings</strong> / <strong>Restore settings</strong></td>
+<td>Save the plot settings to a file, or load (restore) a saved settings file.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 15, 2026 12:44:55 UTC">October 15, 2026</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../" class="md-footer__link md-footer__link--prev" aria-label="Previous: Scanpath visualization">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Scanpath visualization
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../loading-data/" class="md-footer__link md-footer__link--next" aria-label="Next: Data management">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Data management
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licensed · cite it by its DOI, <a href="https://doi.org/10.5281/zenodo.22933884">10.5281/zenodo.22933884</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/lacclab/scanpath-studio" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/scanpath-studio/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://scanpath-studio.streamlit.app" target="_blank" rel="noopener" title="Live demo" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 16.5v-9l6 4.5M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../../assets/_markdown_exec_pyodide.js"></script>
+      
+        <script src="../../../javascripts/figures.js"></script>
+      
+        <script src="../../../javascripts/video.js"></script>
+      
+        <script src="../../../javascripts/controls.js"></script>
+      
+    
+  </body>
+</html>

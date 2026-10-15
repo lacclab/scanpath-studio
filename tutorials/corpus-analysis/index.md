@@ -1,37 +1,25 @@
-# Tutorial: analyze a corpus
+# Analyze a corpus
 
-Use this workflow to move from individual scanpaths to a text, participant, condition, or group-level result.
+Move from single scanpaths to a text, condition or group-level result. Each page below is one task.
+
+- **[Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md)**
+
+  How one text was read, word by word, across its readers.
+
+- **[Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)**
+
+  Two cohorts or conditions side by side, with their difference.
+
+- **[See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)**
+
+  How reading changes over a session, for a participant or a group.
+
+## Before you start
 
 Corpus Analysis shows the reading measures your interest-area table brings (mapped under **Reading measures** when you add or edit a dataset); it computes none itself. The bundled demo has them. With fixations alone, compute the measures with your own pipeline (EyeLink Data Viewer's interest-area report, for example), join them onto your Words (interest areas) table by participant, trial and word ID, and load that; EyeLink's `IA_*` names map themselves.
 
-## 1. Define the analysis pool
+**Define the pool.** Narrow the trials with the Scanpath view's filter or **Edit filters** at the top of Corpus Analysis. The line beside the dataset picker there counts the trials and participants left and names each active filter; **Clear** resets them. A text ID must identify the same stimulus across participants; a trial ID identifies one trial.
 
-Load the corpus and narrow the trial pool, with the Scanpath view's filter or **Edit filters** at the top of Corpus Analysis. The line beside the dataset picker there counts the trials and participants left and names each active filter; **Clear** resets them. The participant, text, and trial counts under **What's in … → Stats** on the **Data Management** page follow the filters too. A text ID must identify the same stimulus across participants; a trial ID identifies one trial.
+## Keep the result
 
-## 2. Open Corpus Analysis
-
-Select **Corpus Analysis** in the navigation, then choose the view that matches the question:
-
-| Question                                       | View                |
-| ---------------------------------------------- | ------------------- |
-| How was one text read?                         | **Per text**        |
-| How does one participant behave across trials? | **Per participant** |
-| How do conditions or populations differ?       | **Groups**          |
-
-## 3. Choose one measure
-
-Start with one familiar measure: total fixation duration for overall attention, first-pass reading time for initial processing, or regression rate for rereading.
-
-For a word profile, set a minimum number of participants per word so isolated observations do not appear as stable estimates.
-
-## 4. Read the result with its denominator
-
-Check how many participants, trials, or observations contribute to the chart. In **Groups**, turn on comparison only after one cohort looks correct; then define the second cohort and read **Group means & difference**. It compares the two cohorts' per-participant means and is descriptive: there is no significance test. The caption says how many participants are in each cohort and how many are in both; a participant in both contributes to both means, and then the standardized difference is not shown — see [how it is computed](https://lacclab.github.io/scanpath-studio/computations/#agg-effect-size).
-
-Use a scanpath view to investigate surprising cases.
-
-## 5. Download the table
-
-Select **Download this table (CSV)** beside the relevant result, and **Download the recipe (JSON)** beside it. The recipe records how the table was made: the app version, the dataset's name, the trial filters, the view's text, screen, measure, aggregation, normalization, spread, minimum participants and group definitions, and the trial and participant counts. It names the dataset rather than copying it, and holds no figure settings: a **Share → File** settings file keeps those and the trial selection, but no trial filters. A Share link carries neither the filters nor the Corpus Analysis choices.
-
-**Done:** you have a scoped corpus result, its contributing counts, the table used for downstream statistics or reporting, and the recipe that made it.
+Select **Download this table (CSV)** beside a result, and **Download the recipe (JSON)** beside it. The recipe records how the table was made: the app version, the dataset's name, the trial filters, the view's text, screen, measure, aggregation, normalization, spread, minimum participants and group definitions, and the trial and participant counts. It names the dataset rather than copying it, and holds no figure settings. A Share link carries neither the filters nor the Corpus Analysis choices.

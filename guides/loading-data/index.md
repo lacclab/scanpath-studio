@@ -1,52 +1,63 @@
-# Loading public and own data
+# Data management
 
-## Choose a source
+## Choose a dataset
 
-Open the dataset picker above the plot, or the **Data Management** page.
+Pick one in the dataset picker above the plot, or on the **Data Management** page:
 
-- **Bundled demo** — a small OneStop sample, for learning the app.
-- **Synthetic sample** — a hand-made six-word trial.
-- **Public corpus** — OneStop or PoTeC, downloaded when you ask, on your own computer only (see [OneStop](https://lacclab.github.io/scanpath-studio/onestop/index.md)).
-- **+ → Import files** — your own tables.
-- **+ → Create manually** — type a text and place fixations on it by hand: click to add, drag to move, or edit the table.
+- **Bundled demo**: a small OneStop sample, for learning the app.
+- **Hand-drawn sample**: a six-word trial drawn by hand.
+- **Public corpus**: OneStop or PoTeC, downloaded once when you open it.
+- **+ → Import files**: your own tables.
+- **+ → Create manually**: type a text and place fixations on it by hand.
+
+### The demo and OneStop
+
+The bundled demo is a small part of [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements), an English eye-tracking-while-reading corpus of 360 participants (Berzak et al., *Scientific Data* 2025, [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)). The full corpus is four datasets, one per reading regime: ordinary reading, information seeking, repeated reading, and information seeking (repeated). Each downloads from [OSF](https://osf.io/2prdq/) the first time you open it (about 1 GB). A trial is one reading of one paragraph, and its title, paragraph, question, answers and feedback are its screens.
 
 ## What your data needs
 
-| Table                                                        | Minimum                                                         |
-| ------------------------------------------------------------ | --------------------------------------------------------------- |
-| Words (interest areas) — e.g. EyeLink's Interest Area Report | trial ID, word ID, and the word box (the word text, to show it) |
-| Fixations — e.g. EyeLink's Fixation Report                   | trial ID, duration, and x/y or a word ID                        |
+| Table                                                            | One row per | Needs                                                                            |
+| ---------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------- |
+| **Fixations** (e.g. EyeLink's Fixation Report)                   | fixation    | trial ID, duration (ms), and x/y or a word ID                                    |
+| **Words (interest areas)** (e.g. EyeLink's Interest Area Report) | word        | trial ID, word ID, and its box: `IA_LEFT/RIGHT/TOP/BOTTOM` or `x/y/width/height` |
+| **Raw gaze**                                                     | gaze sample | participant ID, trial ID, x, y                                                   |
+| **Participants** *(optional)*                                    | participant | participant ID, plus any columns you like                                        |
+| **Trials** *(optional)*                                          | trial       | trial ID, plus any columns you like                                              |
+| **Texts** *(optional)*                                           | text        | text ID, plus any columns you like                                               |
 
-Either table alone also works. Participant and text IDs, timestamps, raw gaze, conditions and reading measures are optional and unlock more features.
+A dataset needs fixations, words or raw gaze; any one of them is enough, and the others are optional. Participant ID, text ID and timestamps are optional too, and conditions and reading measures unlock more features. Columns are detected from common EyeLink, Gazepoint, Tobii, SMI and Pupil Labs names, and you can correct any guess. Any other column of any table can be kept too (each table's **Extra fields to keep**): a field with one value per trial, such as a condition, then works as a trial filter, a sort key and a chip above the plot.
 
-Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of these. A `.zip` holding both EyeLink reports (one folder per participant, say) can go in both rows: each row reads only its own reports and says which it left out. See [Data format](https://lacclab.github.io/scanpath-studio/data-format/index.md) for every field.
+### Files and units
 
-## Import files
+Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of these. A `.zip` holding both EyeLink reports (one folder per participant, say) can go in both rows: each row reads only its own reports and says which it left out.
 
-The import screen has three parts, and a fourth when the app runs on your own computer:
+Times are in milliseconds; a header naming another unit (`[s]`, `[μs]`) is converted. Positions are in **pixels**: screen fractions are not converted.
 
-1. **Name & description** — the description is optional.
-1. **Upload data tables** — start from scratch, or with **Start from** reuse a setup you already have: a dataset you added before (its column mapping, the fields it kept and its recording setup, copied without a file) or a setup file saved with **Download setup file**. Everything stays editable, and **Undo** puts the screen back. Then upload Fixations, Words (interest areas) and, optionally, raw gaze — each row says what its table must map. The app guesses which column is which; check its guesses. The trial count under each ID picker is a quick sanity check, and hovering the icon beside a mapped field shows its first few values and how they are read, for example `0.12 → 120 ms` for a column in seconds. On a guess you have not confirmed yet, the same values are on the confirm button's tooltip. If trial order was randomized, map your item column as **Text ID**: `TRIAL_INDEX` only orders a participant's trials. Reading measures from an EyeLink interest-area report (`IA_DWELL_TIME`, …) are picked up automatically, and are what Corpus Analysis shows. Optional tables, one row per participant, trial or text, add fields to filter and group by.
-1. **Recording setup** — the screen the data was recorded on (below).
-1. **Stimulus images** — optional: a folder with a screenshot of each text or trial, drawn under the scanpath, and a filename pattern that names each file from your fields, such as `{text_id}.png`. The folder is saved with the dataset and never put on a share link.
+### Metadata tables
 
-Then click **Add dataset**. Anything the app cannot use is listed above the button before you confirm.
+The participants, trials and texts tables work like columns of your data: they filter trials, appear as chips, sort the trial list, group readers in Corpus Analysis, and are exported beside the data. They are never copied onto the fixations, and a participant missing from the table stays in the data.
 
-### Recording setup
+### Trials over several screens
 
-Describe the screen the data was **recorded** on, not the one you are using now. Four lines, each already filled in with the answer that invents nothing:
+A trial shown over several screens maps a `screen_id` column (and optionally a `screen_index` for their order) in both tables. Each screen keeps its own coordinates, and the app shows one screen at a time.
 
-- **Screen** — estimated from the extent of your word boxes and fixations. That is a lower bound: text rarely fills the screen, so choose **I know it** and enter the real resolution if you have it.
-- **Physical size** — off. **I know it** takes the monitor's width in millimetres (the visible area, not the diagonal); **Typical 597 mm** assumes one. The width gives the screen's DPI, which turns a font size in points into pixels; while it is off, a point size is read as pixels.
-- **Text size** — each word sized to its box. **I know the size** takes the font size in points.
-- **Font** — a generic monospace until you name the typeface (Courier New, Consolas, Arial, Times New Roman, …, or **Other…**). The word labels are then drawn in it wherever it is installed, so they line up with the stimulus.
+### Reading measures
 
-Beside each value, a label says how it is known — *You entered it*, *From your data*, *Estimated*, *Assumed* or *Off* — and that travels with the dataset, so others can tell measured values from assumed ones. While a line is an estimate or a default, a note above them asks for the real value; nothing waits on it, and every line can be changed later on **Edit dataset**.
+Per-word reading measures (TFD, FFD, first-pass time, regression path…) are columns of the **Words** table. An EyeLink interest-area report maps them from its `IA_*` names. Corpus Analysis shows only the measures you mapped and computes none of its own; how each is defined is in [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md).
+
+## Add your own data
+
+**+ → Import files** opens the add dataset screen:
+
+1. **Name** the dataset.
+1. **Upload** the tables. The app autodetects which columns are which: check what it picked, and hover the beside a field to see its first values.
+1. **Recording setup**: the screen the data was recorded on. Each value starts as an estimate or a default and is labelled so; enter the real screen size, physical width, font size and font if you know them.
+1. **Stimulus images** (optional, on your own computer): a folder with a screenshot of each text, drawn under the scanpath.
+
+Then click **Add dataset**. Anything the app cannot use is listed above the button first.
 
 ## The Data Management page
 
-**Data Management** lists every dataset with its counts; click a row to open it. The on a row opens that dataset's editor under the list, below its counts and tables. It changes its name, description, column mapping, recording setup, stimulus images and metadata tables, or adds a table it is missing (Fixations, Words (interest areas) or raw gaze); its mapped fields show the same value preview. On an added dataset, changing an ID or coordinate column shows a few values as they are now and as they will be after saving, and **Count trials and check joins** says whether trials would merge or the word boxes or a metadata table would stop matching. Its **Download setup file** writes the mapping in your files' own column names, so whoever has the same files can restore it on the add screen; anything a restore cannot redo by itself is listed beside the button. For the demo and the public corpora, a recording setup you save is your own for that dataset alone: the setup the corpus declares is kept, and **Reset to source setup** goes back to it. Nothing applies until you click **Save changes**; **Cancel** discards all of it. The page also holds each dataset's tables and its annotations, and at the foot, what is saved on this computer.
+The page lists every dataset with its counts; click a row to open it. Under the list are the open dataset's tables, its annotations, and **Data checks**, which flag values that cannot be right (such as 0 ms fixations), without removing anything.
 
-Above the open dataset's tables, **Data checks** looks for values that loaded as numbers but cannot be right: fixations lasting 0 ms or less or with an infinite duration or onset, fixations or raw-gaze samples whose position is missing or infinite, word boxes with no width or height or at infinity, and per-screen screen sizes that are infinite or 0 or less. Each finding gives the rows and trials affected, the columns they came from, a few example rows, and what the app does with them. Nothing is removed: the rows stay in every table and export. `check_data_health` runs the same checks from Python, and `scanpath-studio check` from the terminal.
-
-Columns keep the names they have in your files, so a column uploaded as `CURRENT_FIX_DURATION` is called that in the tables. On chips, filters and plot controls, a mapped field is named by its role (*Participant*, *Duration (ms)*), with your column's name in its tooltip. A column marked *(computed)* is one Scanpath Studio derived, such as a saccade's amplitude.
+The on a row edits the dataset: its name, column mapping, recording setup, stimulus images and metadata tables. **Download setup file** saves the mapping and setup, so the same files can be added again elsewhere. Nothing changes until you click **Save changes**. The editor works on the dataset as it was added: only the columns you mapped or chose to keep were stored (the others are listed under *dropped at import*), so it cannot map a column that was left out. To use one, add the files again.

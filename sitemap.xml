@@ -2,102 +2,134 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/agents/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/api/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/automation/</loc>
-         <lastmod>2026-10-13</lastmod>
-    </url>
-    <url>
-         <loc>https://lacclab.github.io/scanpath-studio/changelog/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/cite/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/cli/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/computations/</loc>
-         <lastmod>2026-10-13</lastmod>
-    </url>
-    <url>
-         <loc>https://lacclab.github.io/scanpath-studio/data-format/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/faq/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/gallery/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
-         <loc>https://lacclab.github.io/scanpath-studio/getting-started/</loc>
-         <lastmod>2026-10-13</lastmod>
-    </url>
-    <url>
-         <loc>https://lacclab.github.io/scanpath-studio/glossary/</loc>
-         <lastmod>2026-10-13</lastmod>
-    </url>
-    <url>
-         <loc>https://lacclab.github.io/scanpath-studio/onestop/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <loc>https://lacclab.github.io/scanpath-studio/install/</loc>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/privacy/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/guides/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/guides/loading-data/</loc>
-         <lastmod>2026-10-13</lastmod>
-    </url>
-    <url>
-         <loc>https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/</loc>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/</loc>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-collection/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/</loc>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/select-participants/</loc>
+         <lastmod>2026-10-15</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/</loc>
-         <lastmod>2026-10-13</lastmod>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-a-replay/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/</loc>
+         <lastmod>2026-10-15</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/</loc>
+         <lastmod>2026-10-15</lastmod>
     </url>
 </urlset>

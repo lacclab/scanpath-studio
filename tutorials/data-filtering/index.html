@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/">
       
       
-        <link rel="prev" href="../data-collection/">
+        <link rel="prev" href="../data-collection/audit-an-experimenter/">
       
       
-        <link rel="next" href="../exporting-figures/">
+        <link rel="next" href="exclude-unsuitable-trials/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Data filtering - Scanpath Studio</title>
+        <title>Filter data - Scanpath Studio</title>
       
     
     
@@ -67,17 +67,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Data filtering - Scanpath Studio" />
+<meta property="og:title" content="Filter data - Scanpath Studio" />
 <meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
-<meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/data-filtering.png" />
+<meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/data-filtering/index.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="Data filtering - Scanpath Studio" />
+<meta property="twitter:title" content="Filter data - Scanpath Studio" />
 <meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
-<meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/data-filtering.png" />
+<meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/tutorials/data-filtering/index.png" />
 </head>
   
   
@@ -97,7 +97,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-filter-data" class="md-skip">
+        <a href="#filter-data" class="md-skip">
           Skip to content
         </a>
       
@@ -132,7 +132,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Data filtering
+              Filter data
             
           </span>
         </div>
@@ -261,19 +261,60 @@
   
   
   
+  
+    <li class="md-tabs__item">
+      <a href="../../install/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Install
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
     
   
   
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../getting-started/" class="md-tabs__link">
+        <a href="../" class="md-tabs__link">
           
   
   
     
   
-  Use the app
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Feature guides
 
         </a>
       </li>
@@ -293,7 +334,7 @@
   
     
   
-  Gallery
+  Plot gallery
 
       </a>
     </li>
@@ -314,29 +355,7 @@
   
     
   
-  Automate
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../data-format/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  Reference
+  API & CLI
 
         </a>
       </li>
@@ -358,7 +377,7 @@
   
     
   
-  Project
+  About
 
         </a>
       </li>
@@ -447,84 +466,17 @@
       
   
   
-    
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Use the app
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Use the app
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../../install/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Get started
+    Install
   
 
     
@@ -536,10 +488,9 @@
     </li>
   
 
-              
-            
-              
-                
+    
+      
+      
   
   
     
@@ -565,11 +516,9 @@
     
     
       
+        
+        
       
-        
-          
-          
-        
       
     
     
@@ -577,7 +526,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -599,14 +548,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_2_2" id="__nav_2_2_label" tabindex="">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2_2">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -624,52 +573,42 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../data-collection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
     
-  
-    Check data collection
-  
-
     
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
       
         
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
           
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../data-collection/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
     
   
-    Data filtering
+    Optimize data collection
   
 
     
@@ -677,103 +616,26 @@
   
   
 
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
         
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
   
-  
-  <span class="md-ellipsis">
-    
-  
-    Data filtering
-  
-
-    
-  </span>
-  
+    Optimize data collection
   
 
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-narrow-the-trial-pool" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Narrow the trial pool
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-review-candidate-trials" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Review candidate trials
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-annotate-the-decision" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Annotate the decision
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-verify-the-retained-pool" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Verify the retained pool
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-export-the-record" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Export the record
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
               
             
               
@@ -783,14 +645,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../exporting-figures/" class="md-nav__link">
+      <a href="../data-collection/check-a-session/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Exporting figures
+    Check a session
   
 
     
@@ -811,14 +673,207 @@
   
   
     <li class="md-nav__item">
-      <a href="../corpus-analysis/" class="md-nav__link">
+      <a href="../data-collection/compare-eye-trackers/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Corpus analysis
+    Compare two eye trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-collection/audit-an-experimenter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit an experimenter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="./" class="md-nav__link md-nav__link--active">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filter data
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link md-nav__link--active" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Filter data
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="exclude-unsuitable-trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclude unsuitable trials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="select-participants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Select participants by a field
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="find-trials-for-an-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Find the trials an analysis needs
   
 
     
@@ -859,25 +914,353 @@
       
         
       
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../exporting-figures/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export customized figures
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Export customized figures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exporting-figures/export-one-figure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export one figure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exporting-figures/export-a-replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export a replay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exporting-figures/export-every-trial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export every trial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
-    
-      
       
         
           
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../corpus-analysis/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyze a corpus
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Analyze a corpus
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/analyze-one-text/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyze one text
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/compare-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compare groups or conditions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/progression-over-time/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    See progression over time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
           
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -899,14 +1282,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_2_3" id="__nav_2_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -924,9 +1307,32 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../guides/scanpath-visualization/" class="md-nav__link">
+    
+    
+      
         
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../guides/scanpath-visualization/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -940,7 +1346,59 @@
   
   
 
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Scanpath visualization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/scanpath-visualization/controls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    All controls
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -960,7 +1418,7 @@
   <span class="md-ellipsis">
     
   
-    Loading public and own data
+    Data management
   
 
     
@@ -980,9 +1438,32 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../guides/corpus-workspace/" class="md-nav__link">
+    
+    
+      
         
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../guides/corpus-workspace/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -996,10 +1477,26 @@
   
   
 
-      </a>
-    </li>
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Corpus Analysis
   
 
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
               
             
               
@@ -1009,14 +1506,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/outputs-sharing/" class="md-nav__link">
+      <a href="../../computations/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Outputs and sharing
+    Computations & methodology
   
 
     
@@ -1087,7 +1584,7 @@
   <span class="md-ellipsis">
     
   
-    Gallery
+    Plot gallery
   
 
     
@@ -1122,25 +1619,23 @@
     
       
       
-        
-      
     
     
     <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Automate
+    API & CLI
   
 
     
@@ -1151,12 +1646,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Automate
+    API & CLI
   
 
           </label>
@@ -1294,16 +1789,10 @@
       
         
       
-        
-      
-        
-      
     
     
     
       
-      
-        
       
     
     
@@ -1311,17 +1800,17 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Reference
+    About
   
 
     
@@ -1332,191 +1821,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../data-format/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data format
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../computations/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Computations & methodology
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../glossary/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Glossary
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../onestop/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    OneStop corpus
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Project
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Project
+    About
   
 
           </label>
@@ -1537,34 +1847,6 @@
     
   
     Cite
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../changelog/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Changelog
   
 
     
@@ -1640,10 +1922,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-narrow-the-trial-pool" class="md-nav__link">
+  <a href="#how-the-filters-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Narrow the trial pool
+        How the filters work
       
     </span>
   </a>
@@ -1651,43 +1933,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-review-candidate-trials" class="md-nav__link">
+  <a href="#every-task-ends-the-same-way" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Review candidate trials
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-annotate-the-decision" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Annotate the decision
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-verify-the-retained-pool" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Verify the retained pool
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-export-the-record" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Export the record
+        Every task ends the same way
       
     </span>
   </a>
@@ -1737,10 +1986,10 @@
     
     
       <li class="md-path__item">
-        <a href="../../getting-started/" class="md-path__link">
+        <a href="../" class="md-path__link">
           
   <span class="md-ellipsis">
-    Use the app
+    Tutorials
   </span>
 
         </a>
@@ -1755,10 +2004,10 @@
     
     
       <li class="md-path__item">
-        <a href="../" class="md-path__link">
+        <a href="./" class="md-path__link">
           
   <span class="md-ellipsis">
-    Tutorials
+    Filter data
   </span>
 
         </a>
@@ -1780,59 +2029,57 @@
   
 
 
-<h1 id="tutorial-filter-data">Tutorial: filter data<a class="headerlink" href="#tutorial-filter-data" title="Permanent link">&para;</a></h1>
-<p>This workflow finds trials unsuitable for an analysis or publication and leaves
-an auditable retained pool.</p>
-<h2 id="1-narrow-the-trial-pool">1. Narrow the trial pool<a class="headerlink" href="#1-narrow-the-trial-pool" title="Permanent link">&para;</a></h2>
-<p>Load the dataset, then open the <strong>filter funnel</strong> beside the trial picker: it
-holds the text and participant pickers together with the condition and annotation
-filters. Start with broad dataset fields such as participant, condition,
-correctness, or repeated-reading status. Use the ⇅ trial-ordering popover to
-surface unusually short or long trials.</p>
-<p>A condition filter decides each trial as a whole, from whichever table holds
-the field: a difficulty level recorded only in your Words table narrows the
-fixations too. A trial whose Words and Fixations tables give it different
-values is left out, and a warning above the plot names it.</p>
-<p>If the pool becomes empty, the app names the filter that emptied it and offers
-to clear just that one.</p>
-<h2 id="2-review-candidate-trials">2. Review candidate trials<a class="headerlink" href="#2-review-candidate-trials" title="Permanent link">&para;</a></h2>
-<p>For each candidate, inspect the default scanpath and turn on <strong>Animate</strong> only
-when timing helps. Open <strong><span class="sps-icon" data-icon="filter_list" aria-hidden="true"></span> Filters &amp; highlights → <span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations</strong> in the plot rail and set
-<strong>Highlight</strong> for:</p>
+<h1 id="filter-data">Filter data<a class="headerlink" href="#filter-data" title="Permanent link">&para;</a></h1>
+<p>Decide which trials an analysis or a publication should use, and leave a
+record anyone can audit — without changing the data itself. Each page below is
+one task.</p>
+<div class="grid cards">
 <ul>
-<li>out-of-bounds points;</li>
-<li>fixations below or above your duration thresholds.</li>
+<li>
+<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M8.27 3 3 8.27v7.46L8.27 21h7.46C17.5 19.24 21 15.73 21 15.73V8.27L15.73 3M9.1 5h5.8L19 9.1v5.8L14.9 19H9.1L5 14.9V9.1m4.12-1.39L7.71 9.12 10.59 12l-2.88 2.88 1.41 1.41L12 13.41l2.88 2.88 1.41-1.41L13.41 12l2.88-2.88-1.41-1.41L12 10.59"/></svg></span> <strong><a href="exclude-unsuitable-trials/">Exclude unsuitable trials</a></strong></p>
+<p>Mark poorly calibrated, skimming or non-reading trials and leave them out.</p>
+</li>
+<li>
+<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 21 1.8 1.77c.5.5 1.2.1 1.2-.49V18l2.8-3.4A1 1 0 0 0 22 13h-7c-.8 0-1.3 1-.8 1.6L17 18zm-2-1H2v-3c0-2.7 5.3-4 8-4 .6 0 1.3.1 2.1.2-.2.6-.1 1.3.1 1.9-.7-.1-1.5-.2-2.2-.2-3 0-6.1 1.5-6.1 2.1v1.1h10.6l.5.6zM10 4C7.8 4 6 5.8 6 8s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4m0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2"/></svg></span> <strong><a href="select-participants/">Select participants by a field</a></strong></p>
+<p>Keep, for example, the native speakers of one language with good
+calibration, and export their trial IDs.</p>
+</li>
+<li>
+<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 22v-2h3v-3h2v3.5c0 .39-.16.74-.46 1.04s-.65.46-1.04.46zM7 22H3.5c-.39 0-.74-.16-1.04-.46S2 20.89 2 20.5V17h2v3h3zM17 2h3.5c.39 0 .74.16 1.04.46s.46.65.46 1.04V7h-2V4h-3zM7 2v2H4v3H2V3.5c0-.39.16-.74.46-1.04S3.11 2 3.5 2zm3.5 4C13 6 15 8 15 10.5c0 .88-.25 1.7-.69 2.4l3.26 3.26-1.41 1.41-3.26-3.26c-.7.44-1.52.69-2.4.69C8 15 6 13 6 10.5S8 6 10.5 6m0 2a2.5 2.5 0 0 0 0 5 2.5 2.5 0 0 0 0-5"/></svg></span> <strong><a href="find-trials-for-an-analysis/">Find the trials an analysis needs</a></strong></p>
+<p>Trials with out-of-bounds, very short or very long fixations, or many
+blinks.</p>
+</li>
 </ul>
-<p>Use <strong>Fixation index range</strong> in the same place to show only part of the trial.</p>
-<h2 id="3-annotate-the-decision">3. Annotate the decision<a class="headerlink" href="#3-annotate-the-decision" title="Permanent link">&para;</a></h2>
-<p>In <strong>Annotations</strong>, apply a consistent tag vocabulary—for example <code>exclude</code>,
-<code>review</code>, <code>poor-calibration</code>, or <code>skimming</code>—and add a brief reason. Star trials
-that are useful examples or approved for a figure.</p>
-<p>Return to the trial filters and, under <strong>By trial annotation</strong>, put <code>exclude</code> in
-<strong>Excluding tags</strong> — not in <strong>With any of these tags</strong>, which would keep only
-the rejected trials. This turns the review decisions into the active pool
-without deleting the source data. Before you narrow the pool, save the full
-record with <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management → Annotations → Export</strong>: it lists every trial you
-tagged, including the ones the filter now hides.</p>
-<p>These filters read the trial's own star and tags. On a dataset with several
-screens per trial, a star or tag on a single screen does not keep or hide its
-trial, and its tags are not offered in the pickers; find those on
-<strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management → Annotations</strong>.</p>
-<h2 id="4-verify-the-retained-pool">4. Verify the retained pool<a class="headerlink" href="#4-verify-the-retained-pool" title="Permanent link">&para;</a></h2>
-<p>Check at least one trial from each participant or condition. Then open the
-<span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> page and confirm that the participant, text, trial,
-fixation, and word counts under <strong>What's in … → Stats</strong> are
-plausible. Those follow the filters; the dataset table above them counts the
-whole dataset.</p>
-<h2 id="5-export-the-record">5. Export the record<a class="headerlink" href="#5-export-the-record" title="Permanent link">&para;</a></h2>
-<p>Use <strong>Export → Export bundle</strong> for the active filtered pool. Include the tidy
-tables, <code>plot_config.json</code> and <strong>Annotations (JSON)</strong> — the tags and notes are
-the human review record; export figures only if they are part of the analysis
-record.</p>
-<p><strong>Done:</strong> the original data remains intact, the retained trials are in the
-export bundle, and each manual decision has a tag and a reason in the
-annotations file you exported from the Data Management page. (The bundle's
-<code>annotations.json</code> covers only the trials it exports.)</p>
+</div>
+<h2 id="how-the-filters-work">How the filters work<a class="headerlink" href="#how-the-filters-work" title="Permanent link">&para;</a></h2>
+<p>Open the <strong>filter funnel</strong> beside the trial picker: it holds the text and
+participant pickers together with the condition and annotation filters. A
+condition filter decides each trial as a whole, from whichever table holds the
+field: a difficulty level recorded only in your Words table narrows the
+fixations too. A trial whose Words and Fixations tables give it different
+values is left out, and a warning above the plot names it. If the pool becomes
+empty, the app names the filter that emptied it and offers to clear just that
+one.</p>
+<h2 id="every-task-ends-the-same-way">Every task ends the same way<a class="headerlink" href="#every-task-ends-the-same-way" title="Permanent link">&para;</a></h2>
+<p><strong>Check the pool.</strong> Look at one trial from each participant or condition, then
+confirm on the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> page that the counts
+under <strong>What's in … → Stats</strong> are plausible. They follow the filters; the
+dataset table above them counts the whole dataset.</p>
+<p><strong>Export it.</strong> Use <strong>Export → Export bundle</strong> for the active filtered pool, with
+the tidy tables, <code>plot_config.json</code> and <strong>Annotations (JSON)</strong>. The bundle's
+<code>index.csv</code> lists the participant and trial of every trial it exported.</p>
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/export-bundle_poster.webp" data-autoplay
+       aria-label="Exporting every trial's figures and tables as one zip">
+  <source src="../../assets/workflows/export-bundle.mp4" type="video/mp4">
+</video>
+
+<p><em>Building a zip of every trial's figures and tables (the build is fast-forwarded).</em></p>
+<p><strong>Keep the record.</strong> Export the annotations from <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data
+Management → Annotations → Export</strong>: each entry names its participant and trial
+with its star, tags and note, including trials a filter now hides. (The
+bundle's <code>annotations.json</code> covers only the trials it exports.) The original
+data stays intact.</p>
 
 
 
@@ -1853,7 +2100,7 @@ annotations file you exported from the Data Management page. (The bundle's
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 15:28:42 UTC">October 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 15, 2026 08:01:21 UTC">October 15, 2026</span>
   </span>
 
     
@@ -1891,7 +2138,7 @@ annotations file you exported from the Data Management page. (The bundle's
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../data-collection/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Check data collection">
+          <a href="../data-collection/audit-an-experimenter/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Audit an experimenter">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1901,20 +2148,20 @@ annotations file you exported from the Data Management page. (The bundle's
                 Previous
               </span>
               <div class="md-ellipsis">
-                Check data collection
+                Audit an experimenter
               </div>
             </div>
           </a>
         
         
           
-          <a href="../exporting-figures/" class="md-footer__link md-footer__link--next" aria-label="Next: Exporting figures">
+          <a href="exclude-unsuitable-trials/" class="md-footer__link md-footer__link--next" aria-label="Next: Exclude unsuitable trials">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Exporting figures
+                Exclude unsuitable trials
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -1992,7 +2239,7 @@ annotations file you exported from the Data Management page. (The bundle's
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
@@ -2002,6 +2249,8 @@ annotations file you exported from the Data Management page. (The bundle's
         <script src="../../javascripts/figures.js"></script>
       
         <script src="../../javascripts/video.js"></script>
+      
+        <script src="../../javascripts/controls.js"></script>
       
     
   </body>

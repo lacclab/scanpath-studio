@@ -6,34 +6,40 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 
 ## Use the app
 
-- [Get started](https://lacclab.github.io/scanpath-studio/getting-started/index.md): Install, launch, and a first plot
+- [Install](https://lacclab.github.io/scanpath-studio/install/index.md): Install, launch, and a first plot
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md)
-- [Corpus analysis](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)
-- [Check data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)
-- [Data filtering](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md)
-- [Exporting figures](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md)
+- [Analyze a corpus](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)
+- [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md)
+- [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)
+- [See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
+- [Optimize data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)
+- [Audit an experimenter](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)
+- [Check a session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/index.md)
+- [Compare two eye trackers](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/index.md)
+- [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md)
+- [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md)
+- [Find the trials an analysis needs](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/index.md)
+- [Select participants by a field](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/select-participants/index.md)
+- [Export customized figures](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md)
+- [Export a replay](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-a-replay/index.md)
+- [Export every trial](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/index.md)
+- [Export one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/index.md)
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md)
 - [Corpus Analysis](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/index.md)
-- [Loading public and own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md)
-- [Outputs and sharing](https://lacclab.github.io/scanpath-studio/guides/outputs-sharing/index.md)
+- [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md)
 - [Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md)
+- [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+- [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md): How every measure and derived value is computed
 - [FAQ](https://lacclab.github.io/scanpath-studio/faq/index.md)
 
-## Automate
+## API & CLI
 
 - [Overview](https://lacclab.github.io/scanpath-studio/automation/index.md): Choosing between the app, the CLI and the Python API
 - [Python API](https://lacclab.github.io/scanpath-studio/api/index.md): The Python API reference
 - [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md): The CLI reference, every flag included
 - [For coding agents](https://lacclab.github.io/scanpath-studio/agents/index.md): Headless use by a coding agent or script
 
-## Reference
-
-- [Data format](https://lacclab.github.io/scanpath-studio/data-format/index.md): Accepted tables, units and metadata
-- [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md): How every measure and derived value is computed
-- [Glossary](https://lacclab.github.io/scanpath-studio/glossary/index.md)
-- [OneStop corpus](https://lacclab.github.io/scanpath-studio/onestop/index.md)
-
-## Project
+## About
 
 - [Cite](https://lacclab.github.io/scanpath-studio/cite/index.md)
 - [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)

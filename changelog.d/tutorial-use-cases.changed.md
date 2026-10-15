@@ -1,1 +1,0 @@
-The docs' task cards and tutorials now walk through the example use cases: comparing two eye trackers on one text, picking participants by a field such as native language and exporting the marked trials, saving a figure's look as a design, and seeing reading progress over time.

@@ -256,7 +256,7 @@ The figure as a whole:
 | **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Labels** | Set the grid label (tick label) font size. |
 | **Axes** → **X** / **Y** | Choose the x and y axis fields. **X** / **Y** draws the reading on the screen. Any other pair turns the figure into a scatter plot (chart) of the fixations, with no text, word boxes or saccades, keeping the marker colors and sizes. For example: **Time (ms)** against **X** for a time course of the reading, where regressions show as dips; **Time (ms)** against **Word #** for reading progress through the text; **Fixation #** against **Duration (ms)** for fixation durations over the trial. |
-| **Illustration** → **Label** | Choose when to label the figure *Illustration*: when a setting changes its geometry, always, or never. |
+| **Illustration** → **Label** | Choose when to label the figure as a manual illustration, not the recorded positions: when a setting changes its geometry (such as snapping fixations to a line or drawing saccades as arcs), always, or never. |
 | **Illustration** → **Text** | Write the *Illustration* label's text. |
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size; `{field}` inserts a value of the trial. |
 | **Caption** → **Show**, text, **Size**, color | Add a figure caption below the plot, and set its font size and color. |

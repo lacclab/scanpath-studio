@@ -319,6 +319,6 @@ The tabs under the figure:
 | | **Annotations (JSON)** / **Settings file (JSON)** | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which :material/database: **Data Management** → **Annotations** can import again. |
 | | **File path pattern** | Set the file names inside the export bundle. |
 | | **Build export** | Build the export bundle (a zip) to download. |
-| **Share** | **Link** | Copy a share link that reopens this trial with these settings. |
+| **Share** | **Link** | Copy a share link that reopens this trial with these settings. The data doesn't travel in the link: whoever opens it needs the same dataset. The bundled demo works anywhere; a public corpus has to be downloaded on their side; for your own dataset, send its files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it first. A link made on your own computer (a `localhost` address) opens only where the app runs at that same address. |
 | | **Code** → **Flavour**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
 | | **File** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |

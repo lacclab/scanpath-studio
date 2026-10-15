@@ -206,7 +206,7 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 | **Color** → **By** | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations. |
 | **Color** → **Colors** | Choose the heatmap colors (color scale). |
 | **Scale** | Choose a linear or log heatmap scale. |
-| **Range** | Set the heatmap color range: the values the colors span; **Auto** fits the trial. |
+| **Range** | Set the heatmap color range: the values the colors span. Anything below the range takes the lowest color, and anything above it the highest, so a fixed range keeps colors comparable across trials. **Auto** fits each trial. |
 | **Opacity** | Set the heatmap opacity; **Auto** uses each style's own. |
 | **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length. |
 
@@ -233,7 +233,7 @@ Which fixations and saccades are drawn, and which stand out:
 | Control | What it does |
 | --- | --- |
 | **Fixations** → **Index range** | Show only some fixations: a range of the reading order, such as fixations 10 to 40. |
-| **Fixations** → **All trials** | Keep that fixation range when you move to another trial. |
+| **Fixations** → **All trials** | Keep that fixation range when you move to another trial; otherwise it applies to this trial only, and the next trial shows all its fixations. |
 | **Short** / **Long** | Find short or long fixations by a duration threshold (ms): **Highlight** marks them, **Discard** hides them. |
 | **Out of bounds** | Highlight or discard out-of-bounds fixations, which land in no word box. |
 | **Blink** | Highlight or discard fixations at or next to a blink (needs a blink column). |

@@ -1,4 +1,4 @@
-"""The chips popover's ✕ removes a chip's highlight.
+"""The chips popover's ✕ puts a chip's color back to the default gray.
 
 Picking the default gray back was the only way before, and the color picker
 gives no way to land on that exact gray.
@@ -13,7 +13,7 @@ from tests.conftest import APP_SCRIPT
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 
 
-def test_clear_button_removes_the_highlight() -> None:
+def test_clear_button_resets_the_color_to_gray() -> None:
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=300)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.session_state["trial_chip_fields"] = ["participant_id"]
@@ -25,6 +25,8 @@ def test_clear_button_removes_the_highlight() -> None:
 
     clear.click().run()
 
+    assert at.session_state["trial_chip_color_participant_id"] == "#EEF2F7"
+    # …which the picker logic reads as no highlight.
     assert at.session_state["trial_chip_colors"] == {}
     assert next(b for b in at.button if b.key == key).disabled
     assert not at.exception

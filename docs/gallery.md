@@ -4,7 +4,7 @@ hide:
   - navigation
 ---
 
-# Gallery
+# Plot gallery
 
 Every figure on this page is drawn from the bundled demo while the docs are
 built, by the code shown under it, so what you see is what the current release
@@ -171,6 +171,19 @@ profile = (
 fig = sps.plot_corpus_figure(
     profile, kind="profile", measure_label="Total fixation duration (ms)"
 )
+print(embed(fig))  # markdown-exec: hide
+```
+
+## Other axes
+
+The same fixations on any two of their fields: here time against horizontal
+position, a time course of the reading. Each line of text climbs as the eye
+moves right, the jump to the next line drops back down, and a regression shows
+as a dip. In the app, set the axes under
+:material/aspect_ratio: **Figure & canvas → Axes**.
+
+```python exec="true" html="true" source="below" session="gallery"
+fig = sps.plot_scanpath(words, fixations, pid, tid, x_field="timestamp_ms", y_field="x")
 print(embed(fig))  # markdown-exec: hide
 ```
 

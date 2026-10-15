@@ -1,7 +1,7 @@
 """MkDocs hooks for the docs build (ENG-78, ENG-79).
 
 The pages' generated content — the gallery, printed example output, the CLI
-and figure-option references, the Cite and Changelog pages — is produced by
+and figure-option references, the Cite page — is produced by
 ``exec="true"`` fences run by markdown-exec, calling ``scripts/docs_support.py``.
 (It replaced UX-21's hand-rolled fence runner: markdown-exec is also what
 Zensical supports, so the pages do not tie the site to MkDocs.) What is left

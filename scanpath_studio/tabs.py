@@ -9259,7 +9259,10 @@ def _measure_note(host, measure: Measure, observation: str) -> None:
     is, and a link to the measure's full definition."""
     entry = measure_entry(measure.column)
     if entry is None:
-        about, url = "As recorded in the data.", f"{CITATION['docs_url']}glossary/"
+        about, url = (
+            "As recorded in the data.",
+            f"{CITATION['docs_url']}data-format/#reading-measures",
+        )
         unit = measure.unit or "count"
     else:
         # The register's summaries can end in a tracker id ("(BUG-25)").

@@ -163,7 +163,7 @@ ROLE_LABELS: dict[str, str] = {
 
 #: #374 F5: one-sentence descriptions of the bundled OneStop demo's own columns,
 #: shown as a tooltip beside their (unchanged) names. Only what the repo's docs
-#: state (docs/onestop.md, docs/glossary.md); a column not listed gets none.
+#: state (docs/onestop.md and the OneStop corpus docs); a column not listed gets none.
 DEMO_COLUMN_NOTES: dict[str, str] = {
     "difficulty_level": "The paragraph's version: Adv (Advanced) or Ele (Elementary).",
     "question_preview": "True when the question was shown before the paragraph "

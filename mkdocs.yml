@@ -44,7 +44,6 @@ theme:
     - navigation.instant
     - navigation.instant.progress
     - navigation.path
-    - navigation.sections
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.top
@@ -75,56 +74,50 @@ extra:
 # it, someone looking a definition up, and someone citing or contributing.
 nav:
   - Home: index.md
-  - Use the app:
-      # The home page itself is the Home tab; this is a link back to it, so the
-      # side menu has one too (the same page twice in `nav` is not allowed).
-      - Home: https://lacclab.github.io/scanpath-studio/
-      - Install: getting-started.md
-      - Tutorials:
-          - tutorials/index.md
-          - Optimize data collection:
-              - tutorials/data-collection/index.md
-              - Check a session: tutorials/data-collection/check-a-session.md
-              - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
-              - Audit an experimenter: tutorials/data-collection/audit-an-experimenter.md
-          - Filter data:
-              - tutorials/data-filtering/index.md
-              - Exclude unsuitable trials: tutorials/data-filtering/exclude-unsuitable-trials.md
-              - Select participants by a field: tutorials/data-filtering/select-participants.md
-              - Find the trials an analysis needs: tutorials/data-filtering/find-trials-for-an-analysis.md
-          - Export customized figures:
-              - tutorials/exporting-figures/index.md
-              - Export one figure: tutorials/exporting-figures/export-one-figure.md
-              - Export a replay: tutorials/exporting-figures/export-a-replay.md
-              - Export every trial: tutorials/exporting-figures/export-every-trial.md
-          - Analyze a corpus:
-              - tutorials/corpus-analysis/index.md
-              - Analyze one text: tutorials/corpus-analysis/analyze-one-text.md
-              - Compare groups or conditions: tutorials/corpus-analysis/compare-groups.md
-              - See progression over time: tutorials/corpus-analysis/progression-over-time.md
-      - Feature guides:
-          - guides/index.md
-          - Scanpath visualization:
-              - guides/scanpath-visualization/index.md
-              - All controls: guides/scanpath-visualization/controls.md
-          - Loading public and own data: guides/loading-data.md
-          - Corpus Analysis: guides/corpus-workspace.md
-          - Outputs and sharing: guides/outputs-sharing.md
+  - Install: install.md
+  - Tutorials:
+      - tutorials/index.md
+      - Optimize data collection:
+          - tutorials/data-collection/index.md
+          - Check a session: tutorials/data-collection/check-a-session.md
+          - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
+          - Audit an experimenter: tutorials/data-collection/audit-an-experimenter.md
+      - Filter data:
+          - tutorials/data-filtering/index.md
+          - Exclude unsuitable trials: tutorials/data-filtering/exclude-unsuitable-trials.md
+          - Select participants by a field: tutorials/data-filtering/select-participants.md
+          - Find the trials an analysis needs: tutorials/data-filtering/find-trials-for-an-analysis.md
+      - Export customized figures:
+          - tutorials/exporting-figures/index.md
+          - Export one figure: tutorials/exporting-figures/export-one-figure.md
+          - Export a replay: tutorials/exporting-figures/export-a-replay.md
+          - Export every trial: tutorials/exporting-figures/export-every-trial.md
+      - Analyze a corpus:
+          - tutorials/corpus-analysis/index.md
+          - Analyze one text: tutorials/corpus-analysis/analyze-one-text.md
+          - Compare groups or conditions: tutorials/corpus-analysis/compare-groups.md
+          - See progression over time: tutorials/corpus-analysis/progression-over-time.md
+  - Feature guides:
+      - guides/index.md
+      - Scanpath visualization:
+          - guides/scanpath-visualization/index.md
+          - All controls: guides/scanpath-visualization/controls.md
+      - Loading public and own data: guides/loading-data.md
+      - Corpus Analysis: guides/corpus-workspace.md
+      - Outputs and sharing: guides/outputs-sharing.md
       - FAQ: faq.md
-  - Gallery: gallery.md
-  - Automate:
+  - Plot gallery: gallery.md
+  - API & CLI:
       - Overview: automation.md
       - Python API: api.md
       - CLI reference: cli.md
       - For coding agents: agents.md
-  - Reference:
+  - Data & methods:
       - Data format: data-format.md
       - Computations & methodology: computations.md
-      - Glossary: glossary.md
       - OneStop corpus: onestop.md
-  - Project:
+  - About:
       - Cite: cite.md
-      - Changelog: changelog.md
       - Privacy: privacy.md
 
 # Fail the strict build on a link to a heading that does not exist, not only on
@@ -164,6 +157,7 @@ plugins:
   # The pages UX-23 retired and ENG-77 deleted: their old URLs keep working.
   - redirects:
       redirect_maps:
+        glossary.md: data-format.md
         bring-your-own-data.md: guides/loading-data.md
         corpus-analysis.md: guides/corpus-workspace.md
         tutorials/batch-export.md: tutorials/exporting-figures/export-every-trial.md
@@ -182,7 +176,8 @@ plugins:
         rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
         # ENG-88 folded these into Getting started and the FAQ.
-        desktop.md: getting-started.md#install
+        desktop.md: install.md#install
+        getting-started.md: install.md
         export-troubleshooting.md: faq.md#export-fails
   # Runs the pages' `exec="true"` fences: the gallery, printed example output,
   # and the generated references (scripts/docs_support.py).
@@ -209,7 +204,6 @@ plugins:
       type: date
       fallback_to_build_date: true
       exclude:
-        - changelog.md
         - cite.md
         - gallery.md
   - llmstxt:
@@ -224,21 +218,20 @@ plugins:
       full_output: llms-full.txt
       sections:
         Use the app:
-          - getting-started.md: Install, launch, and a first plot
+          - install.md: Install, launch, and a first plot
           - tutorials/*.md
           - guides/*.md
           - faq.md
-        Automate:
+        API & CLI:
           - automation.md: Choosing between the app, the CLI and the Python API
           - api.md: The Python API reference
           - cli.md: The CLI reference, every flag included
           - agents.md: Headless use by a coding agent or script
-        Reference:
+        Data & methods:
           - data-format.md: Accepted tables, units and metadata
           - computations.md: How every measure and derived value is computed
-          - glossary.md
           - onestop.md
-        Project:
+        About:
           - cite.md
           - privacy.md
 

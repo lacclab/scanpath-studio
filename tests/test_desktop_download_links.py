@@ -16,7 +16,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DOWNLOAD = "https://github.com/lacclab/scanpath-studio/releases/latest/download/"
-PAGES = ["README.md", "docs/getting-started.md"]
+PAGES = ["README.md", "docs/install.md"]
 
 
 def _published_assets(key: str = "archive|installer") -> set[str]:
@@ -50,4 +50,4 @@ def test_every_os_has_a_download_link(page):
 
 
 def test_getting_started_links_every_asset():
-    assert _linked_archives("docs/getting-started.md") == _published_assets()
+    assert _linked_archives("docs/install.md") == _published_assets()

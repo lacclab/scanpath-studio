@@ -275,7 +275,7 @@ User-facing docs live in `docs/` and publish to
 <https://lacclab.github.io/scanpath-studio/>. The Python API reference is
 generated from the `api.py` docstrings, so keep those current. The gallery,
 printed example output, CLI and figure-option references,
-and the Cite / Changelog pages are generated at build time by `exec="true"`
+and the Cite page are generated at build time by `exec="true"`
 fences calling `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
 CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff

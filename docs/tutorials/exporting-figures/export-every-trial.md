@@ -1,12 +1,11 @@
 # Export every trial
 
-The same view across many trials — for a supplement, or as a consistent image
-set for downstream processing.
+Export static figures and tables for many trials.
 
 ## 1. Set the view once
 
-Choose the view as for [one figure](export-one-figure.md#1-choose-the-view);
-every trial in the batch is drawn with it.
+Set the layers, colors and sizes as for [one figure](export-one-figure.md#1-choose-the-view).
+The bundle draws each trial separately, without animation or a comparison partner.
 
 ## 2. Build the bundle
 
@@ -36,5 +35,5 @@ file with its participant, trial and screen, and any that failed. Record the
 dataset version and the trial filters you used in the caption or analysis log —
 the export does not store them.
 
-**Done:** the exported files share one visual configuration and can be
-recreated. For scripted runs, see [Automation](../../automation.md).
+Keep the original data and setup with the bundle. For scripted runs, see
+[Automation](../../automation.md).

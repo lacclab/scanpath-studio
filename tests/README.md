@@ -37,7 +37,7 @@ pytest --cov --cov-report=html    # plus a browsable htmlcov/index.html
 Settings live in `pyproject.toml` (`[tool.coverage.run]` / `[tool.coverage.report]`),
 so a local run gates on the same `fail_under` as CI. The published report is at
 <https://lacclab.github.io/scanpath-studio/coverage/>, rebuilt with the docs site
-on every push to main; the README badge reads its `badge.json`.
+on each release tag; the README badge reads its `badge.json`.
 
 ### Run specific tests
 

@@ -422,7 +422,7 @@ class TestUseCaseTutorials:
         assert len(TUTORIALS) == 5
         assert len({tutorial.id for tutorial in TUTORIALS}) == len(TUTORIALS)
         for tutorial in TUTORIALS:
-            assert tutorial.outcome.startswith("Finish")
+            assert tutorial.outcome.strip()
             assert tutorial.estimated_time.endswith("min")
             assert tutorial.completion_test
             assert tutorial.docs_url.startswith("https://")

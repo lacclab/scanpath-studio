@@ -37,7 +37,7 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | :material/movie: Animate | play the reading as a video, at a speed you choose |
 | :material/compare: Compare | a second reading beside or over this one |
 | Design presets | restyle the whole figure in one click: Scanpath, Heatmap, Illustration or your last custom settings |
-| :material/palette: My designs | save the current settings as a design, and apply it again in one click |
+| :material/palette: My designs | save the current settings as a design, apply it again in one click, or export it to share or use on another computer |
 | Palette | one color scheme for the whole figure, such as colorblind-safe or print |
 | :material/blur_on: Fixations | markers: size, color, order |
 | :material/arrow_outward: Saccades | lines and arrows, colored by direction or reading type |

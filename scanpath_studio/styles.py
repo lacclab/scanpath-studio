@@ -46,23 +46,20 @@ def get_app_css() -> str:
        things it draws — the scanpath canvas plus its rail, the Corpus tables,
        the dataset table. Trimmed to a gutter that still keeps text off the
        window edge. `!important` because Streamlit's own padding rule carries
-       higher specificity than a bare class selector. */
-    .stMainBlockContainer,
-    section.main > div.block-container {
+       higher specificity than a bare class selector. The bottom gap is the
+       theme's `paddingBottom` (constants.APP_THEME). */
+    .stMainBlockContainer {
         padding-top: 3rem;
-        padding-bottom: 0 !important;
         padding-left: 1.5rem !important;
         padding-right: 1.5rem !important;
     }
     @media (max-width: 640px) {
-        .stMainBlockContainer,
-        section.main > div.block-container {
+        .stMainBlockContainer {
             padding-left: 0.75rem !important;
             padding-right: 0.75rem !important;
         }
     }
-    .stMainBlockContainer > [data-testid="stVerticalBlock"] > :last-child,
-    section.main > div.block-container > [data-testid="stVerticalBlock"] > :last-child {
+    .stMainBlockContainer > [data-testid="stVerticalBlock"] > :last-child {
         margin-bottom: 0 !important;
     }
     /* Remove all whitespace around plotly charts */
@@ -2441,8 +2438,7 @@ def get_app_css() -> str:
     /* First: reclaim the page's horizontal padding, which is the cheapest way to
        give the plot + rail split more room before anything has to reflow. */
     @media (max-width: 1400px) {
-        .stMainBlockContainer,
-        section.main > div.block-container {
+        .stMainBlockContainer {
             padding-left: 1.5rem !important;
             padding-right: 1.5rem !important;
         }
@@ -2509,8 +2505,7 @@ def get_app_css() -> str:
     /* Last resort at the bottom of the target range: nothing may overflow its
        container, even a long unbroken id or a translated label. */
     @media (max-width: 1024px) {
-        .stMainBlockContainer,
-        section.main > div.block-container {
+        .stMainBlockContainer {
             padding-left: 0.75rem !important;
             padding-right: 0.75rem !important;
         }

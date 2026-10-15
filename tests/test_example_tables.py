@@ -106,9 +106,7 @@ class TestTheWizard:
         at = self._boot(monkeypatch, {})
         at.run(timeout=90)
         assert not at.exception, at.exception
-        assert not [
-            b for b in at.get("download_button") if b.key == "wizard_example_download"
-        ]
+        assert not [b for b in at.download_button if b.key == "wizard_example_download"]
 
     def test_the_example_adds_with_no_manual_mapping(self, monkeypatch):
         from tests.conftest import answer_setup_step

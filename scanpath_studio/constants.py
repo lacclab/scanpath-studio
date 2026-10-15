@@ -591,6 +591,12 @@ APP_THEME = {
     "secondaryBackgroundColor": "#f5f7fa",
     "textColor": "#212529",
     "font": "sans-serif",
+    # No built-in gap under the last element (Streamlit's default is ~10rem of
+    # empty scroll). Streamlit 1.66's own setting, replacing the
+    # `padding-bottom: 0 !important` that styles.py used to carry. Its top
+    # counterpart, `paddingTop`, is measured from *below* the header, so it
+    # cannot express styles.py's tighter `padding-top` — that one stays CSS.
+    "paddingBottom": "0",
 }
 # Dark-variant overrides ([theme.dark] in config.toml). Users switch via the ☰
 # menu → Settings → Appearance, or follow their OS.

@@ -162,7 +162,7 @@ class TestTheUiSurfacesAreAbsent:
         at = AppTest.from_file(APP_SCRIPT)
         at.run(timeout=90)
         assert not at.exception, at.exception
-        labels = {t.proto.label for t in at.get("tab")}
+        labels = {t.label for t in at.tabs}
         assert tabs.SUBTAB_LINE_ASSIGNMENT not in labels
         # …and the ones that remain are all still there.
         for kept in (tabs.SUBTAB_COMPARISONS, tabs.SUBTAB_EXPORT, tabs.SUBTAB_SHARE):

@@ -48,13 +48,6 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | :material/filter_list: Filters & highlights | which fixations and saccades are drawn, and which stand out |
 | :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields, legends |
 
-## Replay and compare
-
-- **Animate** replays the trial as a video; its **▾** sets the speed.
-- **Compare** adds a second reading, overlaid or side by side, from this
-  dataset or another. Two readings overlay only when they were shown on the
-  same screen size; otherwise they are drawn side by side.
-
 ## Under the plot
 
 | Tab | What it is for |

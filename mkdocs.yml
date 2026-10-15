@@ -162,7 +162,7 @@ plugins:
         bring-your-own-data.md: guides/loading-data/index.md
         corpus-analysis.md: guides/corpus-workspace/index.md
         tutorials/batch-export.md: tutorials/exporting-figures/export-every-trial.md
-        tutorials/compare-two-readers.md: guides/scanpath-visualization/index.md#replay-and-compare
+        tutorials/compare-two-readers.md: guides/scanpath-visualization/controls.md#compare
         tutorials/figure-for-a-paper.md: tutorials/exporting-figures/export-one-figure.md
         tutorials/line-assignment.md: guides/scanpath-visualization/index.md
         tutorials/load-your-own-data.md: guides/loading-data/index.md

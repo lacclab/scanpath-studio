@@ -119,7 +119,7 @@ The **Fixations** switch draws the fixation markers; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Marker** → **Color** | What decides each marker's color. **One color** paints them all alike. Pick a number column, such as fixation duration or surprisal, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as the line, the fixation pass or a condition, and each value gets its own color, with a legend. |
+| **Marker** → **Color** | What decides each marker's color. **One color** paints them all alike. Pick a number column of the fixations, such as duration or the fixation's order in the trial, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as the line of text or the next saccade's direction, and each value gets its own color, with a legend. |
 | **Marker** → color box | The single color every marker wears. |
 | **Marker** → **Shape** | Marker shape: circle, square, diamond, triangle, star… |
 | **Marker** → **Size** | The smallest and largest marker diameter, in px. |

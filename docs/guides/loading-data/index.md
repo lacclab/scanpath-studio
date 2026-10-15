@@ -80,7 +80,7 @@ computes none of its own; how each is defined is in
 
 ## Add your own data
 
-**+ → Import files** opens the add screen:
+**+ → Import files** opens the add dataset screen:
 
 1. **Name** the dataset.
 2. **Upload** the tables. The app guesses which column is which: check its

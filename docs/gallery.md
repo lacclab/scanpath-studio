@@ -174,6 +174,21 @@ fig = sps.plot_corpus_figure(
 print(embed(fig))  # markdown-exec: hide
 ```
 
+## Other axes
+
+The same fixations on any two of their fields: here time against horizontal
+position, a time course of the reading. Each line of text climbs as the eye
+moves right, the jump to the next line drops back down, and a regression shows
+as a dip. In the app, set the axes under
+:material/aspect_ratio: **Figure & canvas → Axes**.
+
+```python exec="true" html="true" source="below" session="gallery"
+fig = sps.plot_scanpath(
+    words, fixations, pid, tid, x_field="timestamp_ms", y_field="x"
+)
+print(embed(fig))  # markdown-exec: hide
+```
+
 ## The app at work
 
 One task each, recorded in the app on the bundled demo. The bar at the top

@@ -107,7 +107,7 @@ nav:
       - Outputs and sharing: guides/outputs-sharing.md
       - FAQ: faq.md
   - Plot gallery: gallery.md
-  - Automate:
+  - API & CLI:
       - Overview: automation.md
       - Python API: api.md
       - CLI reference: cli.md
@@ -224,7 +224,7 @@ plugins:
           - tutorials/*.md
           - guides/*.md
           - faq.md
-        Automate:
+        API & CLI:
           - automation.md: Choosing between the app, the CLI and the Python API
           - api.md: The Python API reference
           - cli.md: The CLI reference, every flag included

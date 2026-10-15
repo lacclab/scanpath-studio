@@ -68,7 +68,8 @@ datasets and settings; with pip, run `pip install -U scanpath-studio`.
 
 ## Next steps
 
+- [Plot gallery](gallery.md) shows what the app draws, for ideas.
 - [Tutorials](tutorials/index.md) walk through common tasks, from checking a
   pilot to exporting a figure.
 - [Feature guides](guides/index.md) explain each part of the app.
-- [Automation](automation.md) covers the Python API and the command line.
+- [API & CLI](automation.md) covers the Python API and the command line.

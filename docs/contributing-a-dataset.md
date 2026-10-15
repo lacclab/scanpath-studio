@@ -6,7 +6,7 @@ back from this release); this page is the contract for adding another.
 
 !!! tip "You probably don't need this page"
     To load a corpus **you already have**, no code is needed at all — see
-    [Loading public and own data](guides/loading-data.md). This page is only for making a
+    [Data management](guides/loading-data/index.md). This page is only for making a
     corpus appear as a built-in source for everyone.
 
 ## Do you need an adapter?
@@ -220,7 +220,7 @@ applies — the picker entry is one surface out of four:
   `_build_share_query`.
 
 Then add a docs page under **Public corpora** describing the corpus and the modelling
-decisions your adapter makes ([OneStop](onestop.md) and
+decisions your adapter makes ([OneStop](guides/loading-data/index.md#onestop) and
 [MultiplEYE](multipleye.md) are the templates), and list it in `mkdocs.yml`'s
 `nav:` — a page that isn't in the nav still builds, but nothing links to it.
 

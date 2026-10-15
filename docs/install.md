@@ -49,7 +49,7 @@
 ## Explore the demo
 
 The app opens on a small bundled sample of the
-[OneStop](onestop.md) corpus.
+[OneStop](guides/loading-data/index.md#onestop) corpus.
 
 1. Pick a trial with the picker above the plot.
 2. Switch layers on and off in **Plot controls**: Fixations, Saccades,
@@ -57,7 +57,7 @@ The app opens on a small bundled sample of the
 3. Turn on **Animate** to replay the trial.
 4. Open **Export → Current figure** to download it.
 5. Load your own data: click **+** beside **Select dataset** and choose
-   **Import files** (see [Loading data](guides/loading-data.md)).
+   **Import files** (see [Data management](guides/loading-data/index.md)).
 
 ## Updating { #updating }
 

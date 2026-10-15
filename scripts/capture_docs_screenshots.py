@@ -142,28 +142,27 @@ def _webp(name: str) -> None:
     print(f"  → {webp.name} ({webp.stat().st_size // 1024} KB)")
 
 
-def capture(page: Page) -> None:
-    ui.deep_link(page, ui.DEMO_TRIAL)
+def capture_overview(page: Page) -> None:
+    """The Scanpath view with its regions numbered (``--overview``), on a
+    dataset whose trials have several screens, so the Screen picker shows."""
+    ui.deep_link(page, {**MULTI_SCREEN_LINK, "screen": "Paragraph"})
+    page.locator(".st-key-tour_grp_screen_picker").first.wait_for(
+        state="visible", timeout=900_000
+    )
     ui.reset_viz(page)
-
-    print("scanpath view")
+    ui.settle(page, quiet=3.0)
     page.evaluate(CALLOUT_JS, [list(c) for c in SCANPATH_CALLOUTS])
     page.wait_for_timeout(300)
     ui.shot(page, "scanpath-view")
     _webp("scanpath-view")
-    page.evaluate(
-        "() => document.querySelectorAll('.docs-callout').forEach(e => e.remove())"
-    )
 
-    print("export and share")
-    tabs = page.locator('[data-testid="stTabs"]').first
-    for label, name in (("Export", "export"), ("Share", "share")):
-        page.locator(f'[data-testid="stTab"]:has-text("{label}")').first.click()
-        ui.settle(page, quiet=2.0)
-        ui.shot_block(page, name, tabs, max_h=900)
-        _webp(name)
-    page.locator('[data-testid="stTab"]:has-text("Annotations")').first.click()
-    ui.settle(page, quiet=1.5)
+
+def capture(page: Page) -> None:
+    ui.deep_link(page, ui.DEMO_TRIAL)
+    ui.reset_viz(page)
+
+    # The numbered overview (scanpath-view) is `--overview`'s: it needs a
+    # dataset with screens, which the demo is not.
 
     print("corpus analysis")
     ui.nav(page, "Corpus Analysis")
@@ -446,7 +445,9 @@ def main() -> None:
                 f"s.textContent = {ui.HIDE_CSS!r};"
                 "document.head.appendChild(s);});"
             )
-            if "--controls" in sys.argv:
+            if "--overview" in sys.argv:
+                capture_overview(ctx.new_page())
+            elif "--controls" in sys.argv:
                 names = sys.argv[sys.argv.index("--controls") + 1 :]
                 capture_controls(ctx.new_page(), set(names) or None)
             else:

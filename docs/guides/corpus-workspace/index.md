@@ -1,22 +1,22 @@
 # Corpus Analysis
 
+<figure class="sps-screenshot" markdown>
+![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../../assets/screenshots/corpus-analysis.webp)
+</figure>
+
 **:material/bar_chart: Corpus Analysis** summarizes many trials at once. It uses the same
 dataset and trial filters as the Scanpath view. The line beside the dataset
 picker counts what those filters keep (for example *12 of 24 trials · 1 of 2
 participants*) and names each active filter. **Edit filters** opens the Scanpath
 view's filter panel, and **Clear** resets every filter.
 
-<figure class="sps-screenshot" markdown>
-![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../assets/screenshots/corpus-analysis.webp)
-</figure>
-
 ## Reading measures come from your data
 
 Corpus Analysis shows the reading measures your interest-area report provides
 (first fixation duration, total fixation duration, regression path, and so on).
-It does not compute them itself. An EyeLink report's `IA_*` columns are mapped
-automatically; other names can be mapped under :material/database: **Data Management → Edit dataset**.
-Without any, the page says so. The per-fixation measures are the fixation table's
+It does not compute them itself, and without any, the page says so. Which
+columns count as reading measures is set when the data is loaded (see
+[Reading measures](../loading-data/index.md#reading-measures)). The per-fixation measures are the fixation table's
 own durations, and its saccade amplitudes, or, when it has none, the distance
 between consecutive fixations.
 

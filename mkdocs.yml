@@ -116,7 +116,7 @@ nav:
       - Data format: data-format.md
       - Computations & methodology: computations.md
       - OneStop corpus: onestop.md
-  - Project:
+  - About:
       - Cite: cite.md
       - Changelog: changelog.md
       - Privacy: privacy.md
@@ -233,7 +233,7 @@ plugins:
           - data-format.md: Accepted tables, units and metadata
           - computations.md: How every measure and derived value is computed
           - onestop.md
-        Project:
+        About:
           - cite.md
           - privacy.md
 

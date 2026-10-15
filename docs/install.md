@@ -1,6 +1,6 @@
 # Install
 
-## 1. Download { #install }
+## Download { #install }
 
 === "Desktop app"
 
@@ -46,7 +46,7 @@
     can't download the public corpora, so for your own data use the desktop
     app or pip.
 
-## 2. Explore the demo
+## Explore the demo
 
 The app opens on a small bundled sample of the
 [OneStop](onestop.md) corpus.
@@ -56,6 +56,8 @@ The app opens on a small bundled sample of the
    Stimulus (the text), Word boxes, Heatmap.
 3. Turn on **Animate** to replay the trial.
 4. Open **Export → Current figure** to download it.
+5. Load your own data: click **+** beside **Select dataset** and choose
+   **Import files** (see [Loading data](guides/loading-data.md)).
 
 ## Updating { #updating }
 

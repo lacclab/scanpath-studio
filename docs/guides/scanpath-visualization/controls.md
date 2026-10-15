@@ -251,7 +251,7 @@ The figure as a whole:
 | --- | --- |
 | **Frame** → **Crop to data** | Crop (zoom) the figure to the part of the screen with data, instead of the whole screen. |
 | **Margin** | Set the crop margin: the space round the data when cropping; **Auto** uses 5%. |
-| **Border** → **Show**, color | Show the border line round the plot area, and choose its color. |
+| **Border** → **Show**, color | Show the border line round the plot area, and choose its color. It marks the edge of the screen, or, with **Crop to data**, the edge of the cropped area. |
 | **Grid** → **Show** | Show pixel grid lines (a coordinate grid) over the screen. |
 | **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Labels** | Set the grid label (tick label) font size. |

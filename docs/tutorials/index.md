@@ -23,7 +23,9 @@ with [Install](../install.md).
 - :material-filter:{ .lg .middle } **[Filter data for analysis or publication](data-filtering/index.md)**
 
     Exclude or flag poorly calibrated, skimming, or non-reading trials, and
-    trials with out-of-bounds, very short, or very long fixations. Find the
+    trials with out-of-bounds, very short, or very long fixations. Annotate
+    trials as you look through them: star them, tag them (such as
+    `not reading`) or add notes, then filter by those tags. Find the
     trials a specific analysis needs — for example, participants with a given
     native language and good calibration — and export the marked trial IDs.
 

@@ -65,4 +65,4 @@ ready-to-render table.
         ```
 
     [API parameters](../../api.md#scanpath_studio.api.plot_corpus_figure) ·
-    [CLI options](../../cli.md#corpus-figures)
+    [CLI options](../../cli.md#corpus)

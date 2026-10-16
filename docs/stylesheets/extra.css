@@ -86,10 +86,61 @@
 
 /* ---------- Generated reference tables (ENG-79) ---------- */
 
-/* An option name is one token; let the table scroll rather than break it. */
-.md-typeset .sps-reference-table td:first-child code,
-.md-typeset .sps-reference-table td:nth-child(3) code {
+/* The reference tables span the column, so the description gets the room
+   the names leave; Material would otherwise size them to their content and
+   scroll them sideways. */
+.md-typeset .sps-reference-table table:not([class]) {
+  display: table;
+  width: 100%;
+}
+
+/* An option name or flag is one token: never break it. Its cell is the
+   first; the CLI tables' second (the value) may wrap. */
+.md-typeset .sps-reference-table td:first-child {
   white-space: nowrap;
+  width: 1%;
+}
+
+/* A default such as `('order_in_trial', 'duration_ms')` wraps anywhere. */
+.md-typeset .sps-option-table td:nth-child(2) code {
+  overflow-wrap: anywhere;
+}
+
+/* The `render` flag under an option's name, as its secondary label. */
+.md-typeset .sps-option-table td:first-child br + code,
+.md-typeset .sps-option-table td:first-child br ~ code {
+  color: var(--md-default-fg-color--light);
+  background: none;
+  padding-left: 0;
+}
+
+/* A flag such as `--trial-metadata-participant-column` is too long to keep
+   whole, so the CLI tables break flags and values at their hyphens and
+   spaces only, never mid-word. */
+.md-typeset .sps-flag-table td:first-child {
+  white-space: normal;
+  width: 28%;
+}
+
+.md-typeset .sps-flag-table td:nth-child(-n + 2) code {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.md-typeset .sps-flag-table td:nth-child(2) {
+  width: 16%;
+}
+
+/* A metavar such as `KIND=POSITION[,...]` has no hyphen to break at. */
+.md-typeset .sps-flag-table td:nth-child(2) code {
+  overflow-wrap: anywhere;
+}
+
+/* The API index: a section's row heads the functions under it. */
+.md-typeset .sps-api-index tr:has(td:empty) td {
+  background: var(--sps-surface-alt);
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
 }
 
 /* ---------- Home page recording ---------- */

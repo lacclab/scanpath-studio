@@ -17,7 +17,7 @@ its context, compare it, export it or share it. For how the parts fit
 together, see the [Scanpath visualization](index.md) guide.
 
 For the corresponding Python keywords and CLI flags, use the
-[figure options table](../../api.md#figure-options).
+[figure options table](../../figure-options.md).
 
 ## Trial control bar
 

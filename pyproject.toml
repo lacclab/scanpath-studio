@@ -98,6 +98,9 @@ docs = [
     "mkdocs-redirects>=1.2.3",
     "mkdocs-git-revision-date-localized-plugin>=1.6.0",
     "mkdocs-llmstxt>=0.5.0",
+    # mkdocstrings wraps the API reference's signatures with it. Pinned with
+    # the `lint` extra's, so the two extras resolve together.
+    "ruff==0.16.8",
 ]
 
 [project.urls]
@@ -150,7 +153,8 @@ include = ["scanpath_studio", "scanpath_studio.*"]
 # turns on S101 and flags all 4,734 asserts in the test suite). The residual
 # risk is that a future ruff moves the default again — the guard against that
 # is the pinned version (`ruff==0.16.8` in `.github/workflows/ci.yml` and in the
-# `lint` extra above), so a new default arrives only with a deliberate bump.
+# `lint` and `docs` extras above), so a new default arrives only with a
+# deliberate bump.
 #
 # These three are named explicitly because the codebase carries `# noqa`
 # directives for them and 0.16 does NOT enable them by default. Leaving them to

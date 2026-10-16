@@ -49,15 +49,58 @@ def test_the_cli_reference_leaves_out_tracker_ids():
     assert not re.search(r"\b(VIZ|PRE|EXP|CMP|DATA)-\d+\b", page)
 
 
-def test_the_figure_option_table_covers_every_option():
-    table = docs_support.figure_options_table()
+def test_the_figure_option_reference_covers_every_option_once():
+    page = docs_support.figure_options_reference()
     names = (
         set(api.figure_options())
         | set(api.figure_options("animation"))
         | set(api.figure_options("comparison"))
     )
     for name in names:
-        assert f"| `{name}` |" in table, name
+        assert page.count(f"| `{name}`") == 1, name
+
+
+def test_the_figure_option_reference_describes_every_option():
+    # Every row has a description: its flag's help, or a note for the few
+    # options no flag sets.
+    page = docs_support.figure_options_reference()
+    rows = [line for line in page.splitlines() if line.startswith("| `")]
+    assert rows
+    for row in rows:
+        assert row.rstrip("| ").split(" | ")[-1].strip(), row
+
+
+def test_a_figure_option_without_a_section_fails_the_build():
+    names = set().union(*docs_support._figure_kinds().values())
+    with pytest.raises(RuntimeError, match="unplaced"):
+        docs_support._option_topics(names | {"new_option"})
+
+
+def test_the_published_references_leave_out_drift_correction(monkeypatch):
+    # The site is built without SCANPATH_EXPERIMENTAL, so the held-back
+    # feature's options and flags stay off it.
+    monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
+    assert "## Drift correction" not in docs_support.figure_options_reference()
+    render = docs_support.cli_reference("render", heading="###")
+    assert "--drift-correction" not in render
+    assert "### Drift correction" not in render
+
+
+def test_the_render_reference_is_split_by_topic():
+    page = docs_support.cli_reference("render", heading="###")
+    headings = re.findall(r"^### (.+)$", page, flags=re.MULTILINE)
+    assert headings[:2] == ["Trial and output", "Input"]
+    assert {"Fixations", "Heatmap", "Comparison", "Size and export"} <= set(headings)
+    assert len(headings) == len(set(headings))
+
+
+def test_the_api_index_lists_what_the_page_documents():
+    page = (ROOT / "docs" / "api.md").read_text(encoding="utf-8")
+    documented = re.findall(r"^::: (\S+)$", page, flags=re.MULTILINE)
+    index = docs_support.api_index()
+    assert documented
+    for path in documented:
+        assert f"][{path}] |" in index, path
 
 
 def _heading_anchors(page: Path) -> set[str]:

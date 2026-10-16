@@ -68,4 +68,4 @@ The CLI's `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
     Use `fmt="gif"` and a `.gif` filename for GIF output.
 
 [Export setup and troubleshooting](../../faq.md#export-fails) ·
-[Python save options](../../api.md#save) · [CLI options](../../cli.md#common-options)
+[Python save options](../../api.md#save) · [CLI options](../../cli.md#common-tasks)

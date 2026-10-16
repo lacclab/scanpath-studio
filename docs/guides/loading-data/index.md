@@ -89,7 +89,7 @@ Load the same files in a script; column names are detected automatically.
         ```
 
     For raw gaze, metadata and explicit column mappings, see the
-    [loaders](../../api.md#load) and [CLI input options](../../cli.md#render).
+    [loaders](../../api.md#load-your-data) and [CLI input options](../../cli.md#render).
 
 ## Manage datasets
 

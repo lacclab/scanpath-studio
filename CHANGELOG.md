@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.38.4] - 2026-10-16
+
+### Added
+- Add a heart-shaped fixation and arrowed-saccade gallery example with app, Python and CLI recipes. ([#462](https://github.com/lacclab/scanpath-studio/issues/462))
+
+### Changed
+- Made installation choices easier to scan with platform download buttons, compact alternative cards and expandable setup details. ([#458](https://github.com/lacclab/scanpath-studio/issues/458))
+- Removed the redundant coding-agent guide; its old URL redirects to the Python API reference. ([#458](https://github.com/lacclab/scanpath-studio/issues/458))
+- Every docs page has its own search title and description, the home page carries a schema.org record for search engines, and the PyPI and Zenodo keywords cover eye trackers, eye movements, gaze, fixations and saccades. ([#459](https://github.com/lacclab/scanpath-studio/issues/459))
+- The Reference docs are easier to use: a new Figure options page groups every option by plot-rail section with a description, the CLI reference is organized by command with every `render` flag listed by topic, and each Python API entry has an at-a-glance index row and a parameter list. ([#460](https://github.com/lacclab/scanpath-studio/issues/460))
+- The Slack release notification now posts only the version, its PyPI link and how many items each changelog group holds, not the release notes. ([#461](https://github.com/lacclab/scanpath-studio/issues/461))
+- Bring workflow recordings into the homepage and feature guides, simplify the header links, and guide new users through saving their first figure. ([#462](https://github.com/lacclab/scanpath-studio/issues/462))
+- Added word-box heatmap and text-highlight examples, animated the replay preview, clarified full-reader comparisons and two-line schematics, and replaced the bottom plots with an across-experiment trend. ([#462](https://github.com/lacclab/scanpath-studio/issues/462))
+- Shorten the privacy page to explain local data processing and the hosted-demo distinction in two sentences. ([#462](https://github.com/lacclab/scanpath-studio/issues/462))
+- Refine the homepage demos, add a Customize tab, simplify getting started, and add an About page with developers, citation and feedback links. ([#466](https://github.com/lacclab/scanpath-studio/issues/466))
+
+### Fixed
+- In Animate, the highlight note and the fixation-size key no longer straddle the plot's bottom border. ([#455](https://github.com/lacclab/scanpath-studio/issues/455))
+- Keep outlined documentation buttons legible when hovered or focused in both themes. ([#462](https://github.com/lacclab/scanpath-studio/issues/462))
+
 ## [0.38.3] - 2026-10-16
 
 ### Changed

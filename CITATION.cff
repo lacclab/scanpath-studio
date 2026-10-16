@@ -47,7 +47,7 @@ doi: "10.5281/zenodo.22933884"
 repository-code: "https://github.com/lacclab/scanpath-studio"
 url: "https://scanpath-studio.streamlit.app"
 license: MIT
-version: 0.38.3
+version: 0.38.4
 date-released: "2026-10-16"
 keywords:
   - eye-tracking

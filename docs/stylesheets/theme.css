@@ -274,6 +274,7 @@
 .md-typeset .md-button:focus {
   background: var(--sps-surface-alt);
   border-color: var(--sps-brand);
+  color: var(--sps-brand);
 }
 
 .md-typeset .md-button--primary,

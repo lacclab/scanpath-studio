@@ -18,7 +18,7 @@ print(gallery_figure("heatmap"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
     2. Turn on Heatmap. In Heatmap ▾, choose Interpolated and weight by fixation duration.
     3. Turn off Fixations and Saccades; keep Stimulus on.
 
@@ -30,6 +30,7 @@ print(gallery_figure("heatmap"))
     scanpath-studio render --sample \
       -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
       --heatmap --heatmap-style interpolated --no-fixations --no-saccades \
+      --highlight-column '' \
       -o heatmap.html
     ```
 

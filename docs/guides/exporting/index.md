@@ -17,6 +17,14 @@ Save a figure, export a batch, or reuse a view in the app or in code.
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
 
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/share-link_poster.webp" data-autoplay
+       aria-label="Copying a link that reopens the same trial and design">
+  <source src="../../assets/workflows/share-link.mp4" type="video/mp4">
+</video>
+
+A shared link reopens the view for someone with the same dataset loaded.
+
 ## Reproduce a figure { #from-the-app-to-a-script }
 
 Open Share → Code and copy Python or CLI. The snippet carries the figure's

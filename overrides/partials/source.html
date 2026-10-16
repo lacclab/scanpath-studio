@@ -1,0 +1,13 @@
+{# Compact project links, shared by the header and mobile navigation. #}
+<div class="sps-project-links">
+  <a href="{{ config.repo_url }}" class="md-header__button md-icon"
+     title="GitHub repository" aria-label="GitHub repository">
+    {% include ".icons/fontawesome/brands/github.svg" %}
+  </a>
+  {% for item in config.extra.social if item.name == "Live demo" %}
+  <a href="{{ item.link }}" class="md-header__button md-icon"
+     title="Try the live demo" aria-label="Try the live demo">
+    {% include ".icons/simple/streamlit.svg" %}
+  </a>
+  {% endfor %}
+</div>

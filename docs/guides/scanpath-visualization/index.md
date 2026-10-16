@@ -52,6 +52,12 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | :material/filter_list: Filters & highlights | which fixations and saccades are drawn, and which stand out |
 | :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields, legends |
 
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/plot-controls_poster.webp" data-autoplay
+       aria-label="Changing the plot layers and their settings">
+  <source src="../../assets/workflows/plot-controls.mp4" type="video/mp4">
+</video>
+
 ## Under the plot
 
 | Tab | What it is for |
@@ -61,6 +67,14 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | **Comparisons** | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side. |
 | **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. |
 | **Share** | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+
+??? example "Watch the tabs under the figure"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="../../assets/workflows/subtabs_poster.webp" data-autoplay
+           aria-label="Annotations, stimulus context, comparisons, export and share">
+      <source src="../../assets/workflows/subtabs.mp4" type="video/mp4">
+    </video>
 
 ## Render in code
 

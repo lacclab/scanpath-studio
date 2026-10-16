@@ -18,7 +18,7 @@ print(gallery_figure("text-lines"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
     2. Open Fixations ▾ → Marker → Color and choose Line.
     3. Keep Saccades and Stimulus on. The colors follow the word-box lines.
 
@@ -30,6 +30,7 @@ print(gallery_figure("text-lines"))
     scanpath-studio render --sample \
       -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
       --color-by-line \
+      --highlight-column '' \
       -o text-lines.html
     ```
 

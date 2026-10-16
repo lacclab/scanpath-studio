@@ -48,15 +48,37 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 Local installs support public corpus downloads. The online demo has limited memory.
 
-## Explore
+## Your first figure { #explore }
 
-The app opens with a small [OneStop sample](guides/loading-data/index.md#onestop).
+Start with the bundled [OneStop sample](guides/loading-data/index.md#onestop).
+No files to prepare: choose a look and save an interactive figure.
 
-1. Pick a trial above the plot.
-2. Toggle fixations, saccades, text, word boxes and heatmaps in Plot controls.
-3. Turn on Animate to replay the reading.
-4. Download a figure from Export.
-5. Add your own data with + → Import files.
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/design-presets_poster.webp" data-autoplay
+       aria-label="Switching between Scanpath, Heatmap and Illustration designs">
+  <source src="../assets/workflows/design-presets.mp4" type="video/mp4">
+</video>
+
+<div class="grid cards sps-first-figure" markdown>
+
+- **1 · Open a reading**
+
+    In Scanpath, keep **Bundled demo** selected. Use **Select trial** to choose a reading.
+
+- **2 · Choose a view**
+
+    Click **Heatmap** in Design presets to see where fixation time concentrates.
+    Switch to **Scanpath** to follow the sequence.
+
+- **3 · Save your figure**
+
+    Open **Export → Current figure**, choose **HTML**, then download.
+    Open the saved file to explore the figure in your browser.
+
+</div>
+
+[Follow the export tutorial :material-arrow-right:](tutorials/exporting-figures/export-one-figure.md){ .md-button }
+[Bring your own data](guides/loading-data/index.md#add-your-own-data)
 
 ## Update { #updating }
 

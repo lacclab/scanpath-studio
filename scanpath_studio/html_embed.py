@@ -41,15 +41,22 @@ def embed_html_iframe(
     # A whole document supplies its own. Which one this is shows in its first
     # bytes — a replay's markup runs to 55 MB, and lower-casing all of it to
     # look for "<body" cost 0.2 s a rerun (PERF-16).
+    # A zero-height script carrier is drawn 1 px tall, and `st.iframe` always
+    # lets its frame scroll: the body's default margin overflowed that pixel and
+    # drew a sliver of scrollbar at the frame's right edge — stray "—" marks on
+    # the tour card, stacked into a "≡" at the top of the page. Its body takes
+    # no room and never scrolls.
     source = html
     if not html[:1024].lstrip().lower().startswith(_DOCUMENT_STARTS):
-        source = f"<!doctype html><html><body>{html}</body></html>"
+        body = _CARRIER_BODY if int(height) <= 0 else "<body>"
+        source = f"<!doctype html><html>{body}{html}</body></html>"
     st.iframe(
         source, height=max(1, int(height)), tab_index=0 if focusable else -1, alt=alt
     )
 
 
 _DOCUMENT_STARTS = ("<!doctype", "<html", "<head", "<body")
+_CARRIER_BODY = '<body style="margin:0;overflow:hidden">'
 
 
 def plotlyjs_dir() -> Path:

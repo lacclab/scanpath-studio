@@ -1,3 +1,7 @@
+---
+description: "Use scanpath plots while collecting eye-tracking data: check each recording session, compare two eye trackers or setups, and review an experimenter's sessions."
+---
+
 # Optimize data collection
 
 <div class="grid cards" markdown>

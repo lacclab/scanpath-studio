@@ -1,4 +1,6 @@
 ---
+title: "Scanpath replay"
+description: "An animated replay of a reading, fixation by fixation in reading order, exportable as GIF or MP4, with Python and CLI code."
 hide:
   - navigation
   - toc

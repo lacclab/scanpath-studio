@@ -1,3 +1,7 @@
+---
+description: "Select eye-tracking participants by metadata such as native language, age or group, by attaching a participants table to the dataset."
+---
+
 # Select participants by a field
 
 Select readers using metadata such as native language, age or group.

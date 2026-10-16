@@ -1,3 +1,7 @@
+---
+description: "Answers to common questions about Scanpath Studio: fixations that do not line up with the text, wrongly detected columns, reading measures, export, privacy and citing."
+---
+
 # FAQ
 
 ## Loading data

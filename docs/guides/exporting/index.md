@@ -1,3 +1,7 @@
+---
+description: "Export eye-tracking figures as PNG, SVG or animated replays, export every trial at once, and share a view as a link or as Python and CLI code."
+---
+
 # Export and share
 
 Save a figure, export a batch, or reuse a view in the app or in code.

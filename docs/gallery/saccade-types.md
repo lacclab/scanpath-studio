@@ -1,4 +1,6 @@
 ---
+title: "Saccade types"
+description: "Saccades colored by type — forward movements, skips, refixations, return sweeps and regressions — over the text, with Python and CLI code."
 hide:
   - navigation
   - toc

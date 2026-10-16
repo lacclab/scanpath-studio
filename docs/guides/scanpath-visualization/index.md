@@ -1,3 +1,7 @@
+---
+description: "Visualize eye movements over the text: fixations, saccades, word boxes, heatmaps and raw gaze for each trial, plus replay and comparison of two scanpaths."
+---
+
 # Scanpath visualization
 
 <figure class="sps-screenshot" markdown>

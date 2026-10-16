@@ -1,7 +1,8 @@
 site_name: Scanpath Studio
 site_description: >-
-  Interactive workbench for eye-tracking-while-reading data: draw, replay and
-  compare scanpaths over the text, and export figures and tables.
+  Free, open-source software for visualizing eye-tracking data from reading
+  studies: scanpaths, fixations, saccades, gaze heatmaps and raw gaze drawn over
+  the text, from EyeLink, Tobii and other eye trackers.
 site_url: https://lacclab.github.io/scanpath-studio/
 repo_url: https://github.com/lacclab/scanpath-studio
 repo_name: lacclab/scanpath-studio
@@ -11,6 +12,9 @@ copyright: >-
 
 theme:
   name: material
+  # Search-engine metadata: the home page's schema.org record and the
+  # Search Console tag (`extra` below).
+  custom_dir: overrides
   logo: assets/icon.png
   favicon: assets/icon.png
   font:
@@ -72,6 +76,48 @@ extra:
     - icon: material/play-circle
       link: https://scanpath-studio.streamlit.app
       name: Live demo
+  # Google Search Console's HTML-tag verification for the URL-prefix property
+  # https://lacclab.github.io/scanpath-studio/ — paste the `content` value of
+  # the tag it offers. Empty writes no tag.
+  google_site_verification: ""
+  # schema.org record written into the home page's head (overrides/main.html),
+  # so a search engine knows what the site is about.
+  structured_data:
+    "@context": https://schema.org
+    "@type": SoftwareApplication
+    name: Scanpath Studio
+    description: >-
+      Free, open-source software for visualizing eye-tracking-while-reading
+      data: scanpaths, fixations, saccades, gaze heatmaps and raw gaze over the
+      text at its on-screen position, participant comparison, reading measures
+      and figure export. Runs as a desktop app, in the browser, or from Python
+      and the command line.
+    url: https://lacclab.github.io/scanpath-studio/
+    downloadUrl: https://lacclab.github.io/scanpath-studio/install/
+    applicationCategory: Scientific visualization
+    operatingSystem: Windows, macOS, Linux
+    isAccessibleForFree: true
+    offers:
+      "@type": Offer
+      price: "0"
+      priceCurrency: USD
+    license: https://opensource.org/licenses/MIT
+    identifier: https://doi.org/10.5281/zenodo.22933884
+    image: https://lacclab.github.io/scanpath-studio/assets/icon.png
+    screenshot: https://lacclab.github.io/scanpath-studio/assets/screenshots/scanpath-view.webp
+    keywords: >-
+      eye tracking, eye tracker, eye movements, gaze, scanpath, fixations,
+      saccades, heatmap, reading, psycholinguistics, EyeLink, Tobii,
+      visualization
+    author:
+      "@type": Organization
+      name: Language, Computation and Cognition (LaCC) Lab, Technion
+      url: https://lacclab.github.io/
+    sameAs:
+      - https://github.com/lacclab/scanpath-studio
+      - https://pypi.org/project/scanpath-studio/
+      - https://scanpath-studio.streamlit.app
+      - https://doi.org/10.5281/zenodo.22933884
 
 # Task guides and examples lead; technical references remain separate.
 nav:

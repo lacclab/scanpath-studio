@@ -1,3 +1,7 @@
+---
+description: "Filter eye-tracking data for analysis: exclude unsuitable trials, select participants by metadata, and find the trials with particular fixation patterns."
+---
+
 # Filter data
 
 <div class="grid cards" markdown>

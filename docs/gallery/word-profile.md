@@ -1,4 +1,6 @@
 ---
+title: "Word profile"
+description: "Mean total fixation duration per word across readers, with a standard-deviation band, from eye-tracking-while-reading data."
 hide:
   - navigation
   - toc

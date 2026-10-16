@@ -1,4 +1,6 @@
 ---
+title: "Reading schematic"
+description: "A schematic of a reading for papers and talks: fixations snapped to words and saccades drawn as arcs, with Python and CLI code."
 hide:
   - navigation
   - toc

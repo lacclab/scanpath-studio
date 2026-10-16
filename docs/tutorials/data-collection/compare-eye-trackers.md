@@ -1,3 +1,7 @@
+---
+description: "Compare two eye trackers or setups on the same text: put their scanpaths side by side or overlaid and check fixation placement, spread and missing data."
+---
+
 # Compare two eye trackers
 
 Review the same text recorded with two trackers or setups.

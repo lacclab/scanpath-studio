@@ -1,3 +1,7 @@
+---
+description: "Analyze an eye-tracking reading corpus: compare participants on one text, compare groups or conditions, and follow a reading measure over time."
+---
+
 # Analyze a corpus
 
 <div class="grid cards" markdown>

@@ -1,3 +1,8 @@
+---
+title: "Load eye-tracking data"
+description: "Load your own eye-tracking data — fixation reports, interest areas and raw gaze from EyeLink, Tobii, Gazepoint, SMI or Pupil Labs — or open a public reading corpus."
+---
+
 # Data management
 
 Load your own data, open a public corpus, or try the bundled sample.

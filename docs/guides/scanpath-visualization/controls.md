@@ -1,3 +1,8 @@
+---
+title: "All scanpath controls"
+description: "Every control on Scanpath Studio's Scanpath page — fixations, saccades, stimulus, word boxes, heatmap, raw gaze, filters and figure layout — and what it does."
+---
+
 # All controls
 
 Every control on the :material/route: **Scanpath** page, where it is and what it

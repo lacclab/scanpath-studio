@@ -1,4 +1,6 @@
 ---
+title: "Raw gaze"
+description: "Raw eye-tracker gaze samples drawn under translucent fixations over the text, with Python and CLI code."
 hide:
   - navigation
   - toc

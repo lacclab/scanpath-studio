@@ -1,3 +1,7 @@
+---
+description: "Review the eye-tracking recordings one experimenter collected: filter by experimenter, replay their trials, tag problems and export the review."
+---
+
 # Audit an experimenter
 
 Review recordings collected by one experimenter.

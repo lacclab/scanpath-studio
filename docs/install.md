@@ -12,6 +12,7 @@
     - [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe):
       run the installer, then launch from the Start menu.
       If SmartScreen warns, choose More info → Run anyway.
+      Or use the [portable ZIP](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip).
     - [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz):
       extract and run `./ScanpathStudio/ScanpathStudio`.
 

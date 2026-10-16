@@ -89,7 +89,7 @@ data to the online demo. See [Privacy](privacy.md).
 
 Not on a local or desktop install: the app saves your datasets and
 settings on this computer (when it listens only on this computer, as
-`scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
+`scanpath-studio` and the desktop app do), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
 ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).

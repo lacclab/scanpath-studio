@@ -57,21 +57,33 @@ Bring your own data, or start with the bundled demo.
 === "Inspect & replay"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
-           poster="assets/workflows/replay_poster.webp" data-autoplay
+           poster="assets/workflows/home-replay_poster.webp" data-autoplay
            aria-label="Follow a reading">
-      <source src="assets/workflows/replay.mp4" type="video/mp4">
+      <source src="assets/workflows/home-replay.mp4" type="video/mp4">
     </video>
 
-    **Follow a reading.** Inspect fixations, saccades and heatmaps. Replay the reading at your chosen speed.
+    **Follow a reading.** Inspect fixations, saccades and heatmaps. Replay the reading, fixation by fixation.
 
     [Review a session :material-arrow-right:](tutorials/data-collection/check-a-session.md){ .md-button }
+
+=== "Customize"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/home-customize_poster.webp" data-autoplay
+           aria-label="Design presets, palettes and plot controls">
+      <source src="assets/workflows/home-customize.mp4" type="video/mp4">
+    </video>
+
+    **Make the view your own.** Try a design preset, choose a palette, and adjust the layers and their properties.
+
+    [Explore plot controls :material-arrow-right:](guides/scanpath-visualization/controls.md){ .md-button }
 
 === "Filter & annotate"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
-           poster="assets/workflows/trial-filtering_poster.webp" data-autoplay
+           poster="assets/workflows/home-filter-annotate_poster.webp" data-autoplay
            aria-label="Find the trials you need">
-      <source src="assets/workflows/trial-filtering.mp4" type="video/mp4">
+      <source src="assets/workflows/home-filter-annotate.mp4" type="video/mp4">
     </video>
 
     **Find the trials you need.** Filter by participant or condition. Star, tag and add notes to readings worth a second look.
@@ -81,9 +93,9 @@ Bring your own data, or start with the bundled demo.
 === "Compare readings"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
-           poster="assets/workflows/compare_poster.webp" data-autoplay
+           poster="assets/workflows/home-compare_poster.webp" data-autoplay
            aria-label="Put readings side by side">
-      <source src="assets/workflows/compare.mp4" type="video/mp4">
+      <source src="assets/workflows/home-compare.mp4" type="video/mp4">
     </video>
 
     **Put readings side by side.** Compare readers or datasets on the same text. Overlay scanpaths when their screen coordinates match.
@@ -105,9 +117,9 @@ Bring your own data, or start with the bundled demo.
 === "Export & share"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
-           poster="assets/workflows/export-figure_poster.webp" data-autoplay
+           poster="assets/workflows/home-export-share_poster.webp" data-autoplay
            aria-label="Take the figure with you">
-      <source src="assets/workflows/export-figure.mp4" type="video/mp4">
+      <source src="assets/workflows/home-export-share.mp4" type="video/mp4">
     </video>
 
     **Take the figure with you.** Save figures, replays or a batch of trials. Share a view, or copy its Python or CLI code.

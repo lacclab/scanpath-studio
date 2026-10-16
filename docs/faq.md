@@ -119,6 +119,15 @@ with the version, your operating system and how you run the app (pip, the
 desktop app or the online demo). :material/help: **Help → About** shows the
 version and links both; on the command line, `scanpath-studio --version`.
 
+### How do I update Scanpath Studio? { #updating }
+
+Open :material/help: **Help → About → Check for updates**. In the desktop app,
+choose **Update & restart**. For a Python install, run:
+
+```bash
+pip install -U scanpath-studio
+```
+
 ### Will my links, settings and scripts work after an update?
 
 Scanpath Studio is in beta, so they may not. Until 1.0, any release may change

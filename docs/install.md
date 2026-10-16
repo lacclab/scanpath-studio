@@ -46,8 +46,6 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 </div>
 
-Local installs support public corpus downloads. The online demo has limited memory.
-
 ## Your first figure { #explore }
 
 Start with the bundled [OneStop sample](guides/loading-data/index.md#onestop).
@@ -77,21 +75,24 @@ No files to prepare: choose a look and save an interactive figure.
 
 </div>
 
-[Follow the export tutorial :material-arrow-right:](tutorials/exporting-figures/export-one-figure.md){ .md-button }
-[Bring your own data](guides/loading-data/index.md#add-your-own-data)
-
-## Update { #updating }
-
-Open :material/help: Help → :material/info: About → Check for updates.
-For the desktop app, choose Update & restart. With pip:
-
-```bash
-pip install -U scanpath-studio
-```
-
 ## Next steps
 
-- [Tutorials](tutorials/index.md): common research tasks
-- [Feature guides](guides/index.md): each view and its controls
-- [Plot gallery](gallery.md): example figures
-- [Python API](api.md) and [CLI reference](cli.md): full technical references
+<div class="grid cards" markdown>
+
+- **[Bring your own data](guides/loading-data/index.md#add-your-own-data)**
+
+    Import your recordings and check the column mapping.
+
+- **[Prepare a figure](tutorials/exporting-figures/export-one-figure.md)**
+
+    Choose a format and size for your paper or slides.
+
+- **[Explore more views](gallery.md)**
+
+    Try an example, then follow its app instructions or the [feature guides](guides/index.md).
+
+- **[Work in code](guides/scanpath-visualization/index.md#render-in-code)**
+
+    Reproduce a view in Python or with the CLI.
+
+</div>

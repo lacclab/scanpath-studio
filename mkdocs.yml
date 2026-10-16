@@ -125,7 +125,6 @@ nav:
   - Reference:
       - Python API: api.md
       - CLI reference: cli.md
-      - For coding agents: agents.md
   - About:
       - Cite: cite.md
       - Privacy: privacy.md
@@ -180,6 +179,7 @@ plugins:
         tutorials/load-your-own-data.md: guides/loading-data/index.md
         tutorials/run-it-headless.md: guides/scanpath-visualization/index.md#render-in-code
         automation.md: guides/exporting/index.md
+        agents.md: api.md
         # ENG-80 took these off the site for the beta; old links land on the
         # repository file that now carries the subject.
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
@@ -234,7 +234,6 @@ plugins:
         Reference:
           - api.md: The Python API reference
           - cli.md: The CLI reference, every flag included
-          - agents.md: Headless use by a coding agent or script
           - gallery/*.md
         About:
           - cite.md

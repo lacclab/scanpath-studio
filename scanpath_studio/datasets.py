@@ -490,7 +490,7 @@ def potec_raw_frames(
 
 
 def load_potec(
-    root,
+    root: str | Path,
     *,
     readers: Iterable | None = None,
     texts: Iterable[str] | None = None,
@@ -499,28 +499,34 @@ def load_potec(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load PoTeC as normalized ``(words, fixations)`` frames, ready to plot.
 
-    Under PoTeC's own column names; ``names="canonical"`` for the internal
-    ones (see `api.load_scanpath_data`).
+    A participant is a PoTeC reader id, as a string. A trial is one reader's reading of
+    one text, ``<reader>_<text>`` (``"0_b0"``), and its ``text_id`` is the text:
+    ``b0``–``b5`` are biology, ``p0``–``p5`` physics. The full corpus is 75 readers × 12
+    texts = 900 trials.
 
-    ``root`` is a clone of the PoTeC repo (with the eye-tracking data
-    downloaded) or any folder; with ``download=True`` the needed files are
-    fetched into it on first use (~10 MB). Narrow the load with ``readers``
-    (e.g. ``[0, 1]``) and/or ``texts`` (e.g. ``["b0", "p3"]``) — the full
-    corpus is 75 readers × 12 texts = 900 trials.
+    PoTeC's monitor was 1680×1050 (DELL P2210, 60 Hz). Pass that as ``canvas_size`` to
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
 
-    Participants are PoTeC reader ids (as strings); a trial is one reader's
-    reading of one text, ``<reader>_<text>`` (``"0_b0"``), and ``text_id`` is
-    the text (``b0``–``b5`` biology, ``p0``–``p5`` physics)::
+    Args:
+        root: A clone of the PoTeC repository with its eye-tracking data downloaded, or
+            any folder to download into.
+        readers: Load only these readers (``[0, 1]``).
+        texts: Load only these texts (``["b0", "p3"]``).
+        download: Fetch the files the load needs into ``root`` on first use, about 10
+            MB.
+        names: ``"source"`` for PoTeC's own column names, ``"canonical"`` for the
+            internal ones (see `api.load_scanpath_data`).
 
+    Returns:
+        The normalized ``(words, fixations)`` frames.
+
+    Examples:
+        ```python
         import scanpath_studio as sps
 
         words, fixations = sps.load_potec("data/PoTeC", readers=[0], texts=["b0"])
-        fig = sps.plot_scanpath(
-            words, fixations, "0", "0_b0", canvas_size=(1680, 1050)
-        )
-
-    The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as ``canvas_size`` to
-    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
+        fig = sps.plot_scanpath(words, fixations, "0", "0_b0", canvas_size=(1680, 1050))
+        ```
     """
     words_raw, fixations_raw = potec_raw_frames(
         root, readers=readers, texts=texts, download=download
@@ -1102,7 +1108,7 @@ def _onestop_drop_unmatched_screens(
 
 
 def load_onestop(
-    root,
+    root: str | Path,
     *,
     regime: str = "ordinary",
     parts: Iterable[str] | None = None,
@@ -1112,18 +1118,32 @@ def load_onestop(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load OneStop as normalized ``(words, fixations)`` frames, ready to plot.
 
-    Under OneStop's own column names; ``names="canonical"`` for the internal
-    ones (see `api.load_scanpath_data`).
+    OneStop's presentation monitor was 2560×1440 px (Dell U2715H; Berzak et al. 2025,
+    Methods → Apparatus). Pass that as ``canvas_size`` to
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
+    The reports already match the bundled demo's schema, so they load through the same
+    auto-detection as any other data.
 
-    ``root`` is a folder holding (or to download into, public variant only) the
-    OneStop reports. Narrow the load with ``regime`` (``ordinary`` /
-    ``information_seeking`` / ``repeated`` / ``information_seeking_repeated``),
-    ``parts`` (any subset of ``Title / Question_Preview / Paragraph / Questions /
-    Answers / QA / Feedback`` — default Paragraph), and ``variant`` (``public``
-    OSF release or ``lacclab`` local export). The public OSF reports are large;
-    pass ``download=True`` to fetch the chosen regime + parts into ``root`` on
-    first use::
+    Args:
+        root: A folder holding the OneStop reports, or (public variant only) to download
+            them into.
+        regime: ``"ordinary"``, ``"information_seeking"``, ``"repeated"`` or
+            ``"information_seeking_repeated"``.
+        parts: Any subset of ``Title``, ``Question_Preview``, ``Paragraph``,
+            ``Questions``, ``Answers``, ``QA`` and ``Feedback``. Left out,
+            ``Paragraph``.
+        variant: ``"public"`` for the OSF release, ``"lacclab"`` for the lab's local
+            export.
+        download: Fetch the chosen regime and parts into ``root`` on first use. The
+            public reports are large.
+        names: ``"source"`` for OneStop's own column names, ``"canonical"`` for the
+            internal ones (see `api.load_scanpath_data`).
 
+    Returns:
+        The normalized ``(words, fixations)`` frames.
+
+    Examples:
+        ```python
         import scanpath_studio as sps
 
         words, fixations = sps.load_onestop(
@@ -1131,12 +1151,7 @@ def load_onestop(
         )
         pid, tid = sps.list_trials(words, fixations).iloc[0]  # one reading
         fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-
-    OneStop's presentation monitor was 2560×1440 px (Dell U2715H; Berzak et al.
-    2025, Methods → Apparatus); pass that as ``canvas_size`` to
-    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] for true-to-scale rendering.
-    The reports already match the bundled demo's schema, so this reuses the generic
-    auto-detect → normalize path (no OneStop-specific column mapping).
+        ```
     """
     words_raw, fixations_raw = onestop_raw_frames(
         root, regime=regime, parts=parts, variant=variant, download=download

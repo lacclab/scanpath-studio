@@ -170,6 +170,7 @@ nav:
       - App recordings: gallery/workflows.md
   - Reference:
       - Python API: api.md
+      - Figure options: figure-options.md
       - CLI reference: cli.md
   - About:
       - Cite: cite.md
@@ -253,13 +254,21 @@ plugins:
           options:
             show_source: false
             show_root_heading: true
+            # `load_scanpath_data`, not `scanpath_studio.api.load_scanpath_data`:
+            # every function is imported from the package root.
+            show_root_full_path: false
             heading_level: 3
+            # The signature lists names and defaults, wrapped by ruff at this
+            # width; the types are in the parameter list under it.
             separate_signature: true
-            show_signature_annotations: true
-            signature_crossrefs: true
+            line_length: 72
+            show_signature_annotations: false
             show_symbol_type_heading: true
             show_symbol_type_toc: true
             docstring_style: google
+            docstring_section_style: list
+            merge_init_into_class: true
+            members_order: source
   - llmstxt:
       markdown_description: >-
         Scanpath Studio is an interactive Streamlit workbench, a Python API
@@ -279,6 +288,7 @@ plugins:
           - faq.md
         Reference:
           - api.md: The Python API reference
+          - figure-options.md: Every figure option, its default and its CLI flag
           - cli.md: The CLI reference, every flag included
           - gallery/*.md
         About:

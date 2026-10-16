@@ -37,6 +37,10 @@ The **Plot controls** column holds every setting of the figure. Each layer is on
 | Filters & highlights | which fixations and saccades are drawn, and which stand out                                                          |
 | Figure & canvas      | screen framing, axes and grid, title and labels, hover fields, legends                                               |
 
+\[!\[
+
+\](../../assets/workflows/plot-controls_poster.webp)\](../../assets/workflows/plot-controls.mp4)
+
 ## Under the plot
 
 | Tab                    | What it is for                                                                                                                                        |
@@ -46,6 +50,12 @@ The **Plot controls** column holds every setting of the figure. Each layer is on
 | **Comparisons**        | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side.                |
 | **Export**             | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials.                         |
 | **Share**              | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+
+Watch the tabs under the figure
+
+\[!\[
+
+\](../../assets/workflows/subtabs_poster.webp)\](../../assets/workflows/subtabs.mp4)
 
 ## Render in code
 
@@ -66,7 +76,7 @@ scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
 ```
 
-For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). Figure settings are listed in the [API options](https://lacclab.github.io/scanpath-studio/api/#figure-options) and [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-options).
+For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). Figure settings are listed in the [API options](https://lacclab.github.io/scanpath-studio/figure-options/index.md) and [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-tasks).
 
 The [gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md) gives app, CLI and Python instructions for heatmaps, comparisons, replays and other views. For [batch exports and GIF/MP4](https://lacclab.github.io/scanpath-studio/guides/exporting/index.md), see Export and share.
 

@@ -2,7 +2,7 @@
 
 Samples under translucent fixations. The demo samples are synthetic.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
 1. Turn on Raw gaze and turn off Saccades.
 1. In Fixations ▾ → Marker → Opacity, choose 0.35 so the samples show through.
 
@@ -12,6 +12,7 @@ Samples under translucent fixations. The demo samples are synthetic.
 scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
+  --highlight-column '' \
   -o raw-gaze.html
 ```
 
@@ -27,6 +28,7 @@ fig = sps.plot_scanpath(
     "l37_1129",
     "l37_1129_2_2_2_Adv_r0",
     raw_gaze=raw_gaze,
+    highlight_column=None,
     fixation_opacity=0.35,
     show_saccades=False,
 )

@@ -4,7 +4,7 @@ Forward movements, skips, refixations, return sweeps and regressions.
 
 ForwardSkipRefixationReturn sweepRegressionOther
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
 1. Open Saccades ▾ → Line → Color and choose By type.
 1. To match this view, hide the on-figure type legend under Figure & canvas → Legends. The color key is shown below this example.
 
@@ -14,6 +14,7 @@ ForwardSkipRefixationReturn sweepRegressionOther
 scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --saccade-color-by-type --no-saccade-type-legend \
+  --highlight-column '' \
   -o saccade-types.html
 ```
 
@@ -27,6 +28,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    highlight_column=None,
     saccade_color_mode="By type",
     saccade_type_legend=False,
 )

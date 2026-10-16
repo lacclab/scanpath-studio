@@ -1,0 +1,7 @@
+participant_id,trial_id,text_id,word_id,text,line_idx,x,y,width,height
+synthetic,synthetic_2line_demo,synthetic_2line_demo,0,The,1,100,100,50,20
+synthetic,synthetic_2line_demo,synthetic_2line_demo,1,cat,1,200,100,50,20
+synthetic,synthetic_2line_demo,synthetic_2line_demo,2,sat,1,300,100,50,20
+synthetic,synthetic_2line_demo,synthetic_2line_demo,3,on,1,100,200,50,20
+synthetic,synthetic_2line_demo,synthetic_2line_demo,4,the,1,200,200,50,20
+synthetic,synthetic_2line_demo,synthetic_2line_demo,5,mat,1,300,200,50,20

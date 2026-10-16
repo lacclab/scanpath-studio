@@ -13,6 +13,12 @@ Save a figure, export a batch, or reuse a view in the app or in code.
 
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md).
 
+\[!\[
+
+\](../../assets/workflows/share-link_poster.webp)\](../../assets/workflows/share-link.mp4)
+
+A shared link reopens the view for someone with the same dataset loaded.
+
 ## Reproduce a figure
 
 Open Share → Code and copy Python or CLI. The snippet carries the figure's settings and your column mapping; replace any placeholder file paths. [Render in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code) shows a minimal example.
@@ -60,4 +66,4 @@ Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 
 Use `fmt="gif"` and a `.gif` filename for GIF output.
 
-[Export setup and troubleshooting](https://lacclab.github.io/scanpath-studio/faq/#export-fails) · [Python save options](https://lacclab.github.io/scanpath-studio/api/#save) · [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-options)
+[Export setup and troubleshooting](https://lacclab.github.io/scanpath-studio/faq/#export-fails) · [Python save options](https://lacclab.github.io/scanpath-studio/api/#save) · [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-tasks)

@@ -2,48 +2,69 @@
 
 ## Install
 
-Recommended for your own data. No Python needed.
+- **Desktop app** Recommended
 
-- [macOS (14+, Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg): open the DMG, drag Scanpath Studio to Applications, then launch it. If blocked, use System Settings → Privacy & Security → Open Anyway.
-- [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe): run the installer, then launch from the Start menu. If SmartScreen warns, choose More info → Run anyway. Or use the [portable ZIP](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip).
-- [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz): extract and run `./ScanpathStudio/ScanpathStudio`.
+  No coding required. Your data stays on your computer.
 
-On an Intel Mac or older macOS, use pip. [All downloads](https://github.com/lacclab/scanpath-studio/releases/latest).
+  [macOS](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg) [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe) [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz)
 
-Python 3.11–3.14:
+  Setup details & other downloads
 
-```
-pip install scanpath-studio
-scanpath-studio
-```
+  - macOS 14+, Apple silicon: open the DMG, drag to Applications, then launch. If blocked: System Settings → Privacy & Security → Open Anyway. Intel Mac or older macOS? Use Python below.
+  - Windows: run the installer, then launch from Start. If SmartScreen warns: More info → Run anyway. A [portable ZIP](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) is also available.
+  - Linux: extract, then run `./ScanpathStudio/ScanpathStudio`.
 
-Opens the app at <http://localhost:8501>.
+  [All downloads](https://github.com/lacclab/scanpath-studio/releases/latest)
 
-Open the [live demo](https://scanpath-studio.streamlit.app). No installation needed.
+- **Try online**
 
-Desktop and pip installs keep your data on your computer and download OneStop and PoTeC in one click. The online demo has limited memory and no corpus downloads.
+  Explore the bundled demo. No installation.
 
-## Explore
+  [Launch demo](https://scanpath-studio.streamlit.app)
 
-The app opens with a small [OneStop sample](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop).
+- **Install with Python**
 
-1. Pick a trial above the plot.
-1. Toggle fixations, saccades, text, word boxes and heatmaps in Plot controls.
-1. Turn on Animate to replay the reading.
-1. Download a figure from Export.
-1. Add your own data with + → Import files.
+  Python 3.11–3.14. Opens in your browser.
 
-## Update
+  ```
+  pip install scanpath-studio
+  scanpath-studio
+  ```
 
-Open Help → About → Check for updates. For the desktop app, choose Update & restart. With pip:
+## Your first figure
 
-```
-pip install -U scanpath-studio
-```
+Start with the bundled [OneStop sample](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop). No files to prepare: choose a look and save an interactive figure.
+
+\[!\[
+
+\](../assets/workflows/design-presets_poster.webp)\](../assets/workflows/design-presets.mp4)
+
+- **1 · Open a reading**
+
+  In Scanpath, keep **Bundled demo** selected. Use **Select trial** to choose a reading.
+
+- **2 · Choose a view**
+
+  Click **Heatmap** in Design presets to see where fixation time concentrates. Switch to **Scanpath** to follow the sequence.
+
+- **3 · Save your figure**
+
+  Open **Export → Current figure**, choose **HTML**, then download. Open the saved file to explore the figure in your browser.
 
 ## Next steps
 
-- [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md): common research tasks
-- [Feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md): each view and its controls
-- [Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md): example figures
-- [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) and [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md): full technical references
+- **[Bring your own data](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data)**
+
+  Import your recordings and check the column mapping.
+
+- **[Prepare a figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/index.md)**
+
+  Choose a format and size for your paper or slides.
+
+- **[Explore more views](https://lacclab.github.io/scanpath-studio/gallery/index.md)**
+
+  Try an example, then follow its app instructions or the [feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md).
+
+- **[Work in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code)**
+
+  Reproduce a view in Python or with the CLI.

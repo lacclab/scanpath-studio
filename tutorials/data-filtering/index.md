@@ -16,6 +16,10 @@
 
 Open a dataset in Scanpath. The filter button beside Select trial selects whole trials. Plot controls → Filters & highlights changes which fixations and saccades the figure draws.
 
+\[!\[
+
+\](../../assets/workflows/trial-filtering_poster.webp)\](../../assets/workflows/trial-filtering.mp4)
+
 ## Check and export the selection
 
 1. Check the remaining trial and participant counts and inspect a few trials.

@@ -26,7 +26,7 @@ Download a result table as CSV and its analysis recipe as JSON. The recipe recor
 
 ## Plot a summary in code
 
-Use a tidy summary table: a word profile needs `word_id` and `value`, with optional `lo` and `hi` for a band. Rename a source word ID column to `word_id` if needed. The [gallery example](https://lacclab.github.io/scanpath-studio/gallery/word-profile/index.md) includes a ready-to-render table.
+Use a tidy summary table: a word profile needs `word_id` and `value`, with optional `lo` and `hi` for a band. Rename a source word ID column to `word_id` if needed. Use a result table exported from Corpus Analysis. For a trial-order trend, see [Across the experiment](https://lacclab.github.io/scanpath-studio/gallery/across-experiment/index.md).
 
 Python and CLI: word profile
 
@@ -46,4 +46,4 @@ scanpath-studio corpus --input profile.csv --kind profile \
   --measure-label "Total fixation duration (ms)" -o profile.html
 ```
 
-[API parameters](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.plot_corpus_figure) · [CLI options](https://lacclab.github.io/scanpath-studio/cli/#corpus-figures)
+[API parameters](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.plot_corpus_figure) · [CLI options](https://lacclab.github.io/scanpath-studio/cli/#corpus)

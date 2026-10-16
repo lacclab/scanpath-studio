@@ -1,6 +1,6 @@
 # Scanpath Studio
 
-> Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.
+> Free, open-source software for visualizing eye-tracking data from reading studies: scanpaths, fixations, saccades, gaze heatmaps and raw gaze drawn over the text, from EyeLink, Tobii and other eye trackers.
 
 Scanpath Studio is an interactive Streamlit workbench, a Python API (`import scanpath_studio as sps`) and a CLI (`scanpath-studio`) for eye-tracking-while-reading data: it draws fixations, saccades and heatmaps over the text at its true on-screen position, shows the per-word reading measures your data brings (FFD, FPRT, RPD, TFD, skips, regressions), compares participants, and exports figures and tables. The bundled demo is a subset of the OneStop Eye Movements corpus.
 
@@ -35,22 +35,24 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 ## Reference
 
 - [Python API](https://lacclab.github.io/scanpath-studio/api/index.md): The Python API reference
+- [Figure options](https://lacclab.github.io/scanpath-studio/figure-options/index.md): Every figure option, its default and its CLI flag
 - [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md): The CLI reference, every flag included
-- [For coding agents](https://lacclab.github.io/scanpath-studio/agents/index.md): Headless use by a coding agent or script
+- [Across the experiment](https://lacclab.github.io/scanpath-studio/gallery/across-experiment/index.md)
 - [Two readers](https://lacclab.github.io/scanpath-studio/gallery/comparison/index.md)
-- [Heatmap](https://lacclab.github.io/scanpath-studio/gallery/heatmap/index.md)
+- [Hearts & arrows](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/index.md)
+- [Gaze heatmap](https://lacclab.github.io/scanpath-studio/gallery/heatmap/index.md)
+- [Highlighted text](https://lacclab.github.io/scanpath-studio/gallery/highlighted-text/index.md)
 - [Reading schematic](https://lacclab.github.io/scanpath-studio/gallery/illustration/index.md)
 - [Raw gaze](https://lacclab.github.io/scanpath-studio/gallery/raw-gaze/index.md)
 - [Replay](https://lacclab.github.io/scanpath-studio/gallery/replay/index.md)
 - [Saccade types](https://lacclab.github.io/scanpath-studio/gallery/saccade-types/index.md)
 - [Scanpath](https://lacclab.github.io/scanpath-studio/gallery/scanpath/index.md)
 - [Fixations by line](https://lacclab.github.io/scanpath-studio/gallery/text-lines/index.md)
-- [Time course](https://lacclab.github.io/scanpath-studio/gallery/time-course/index.md)
-- [Word profile](https://lacclab.github.io/scanpath-studio/gallery/word-profile/index.md)
-- [App recordings](https://lacclab.github.io/scanpath-studio/gallery/workflows/index.md)
+- [Word-box heatmap](https://lacclab.github.io/scanpath-studio/gallery/word-boxes/index.md)
 
 ## About
 
+- [About Scanpath Studio](https://lacclab.github.io/scanpath-studio/about/index.md)
 - [Cite](https://lacclab.github.io/scanpath-studio/cite/index.md)
 - [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md)
 

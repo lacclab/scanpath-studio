@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
+        <meta name="description" content="Command-line reference for scanpath-studio: launch the app, or render scanpath figures from eye-tracking data headlessly, with every flag listed.">
       
       
       
         <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/cli/">
       
       
-        <link rel="prev" href="../api/">
+        <link rel="prev" href="../figure-options/">
       
       
-        <link rel="next" href="../agents/">
+        <link rel="next" href="../about/">
       
       
         
@@ -68,9 +68,12 @@
     
     
   
+  <meta name="google-site-verification" content="FEUvYyUUeFoiAVgouYHaGdMKyTgLGUFLUe99oofr_DY">
+
+  
 <meta property="og:type" content="website" />
 <meta property="og:title" content="CLI reference - Scanpath Studio" />
-<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
+<meta property="og:description" content="Command-line reference for scanpath-studio: launch the app, or render scanpath figures from eye-tracking data headlessly, with every flag listed." />
 <meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/cli.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -78,7 +81,7 @@
 <meta property="og:url" content="https://lacclab.github.io/scanpath-studio/cli/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="CLI reference - Scanpath Studio" />
-<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
+<meta property="twitter:description" content="Command-line reference for scanpath-studio: launch the app, or render scanpath figures from eye-tracking data headlessly, with every flag listed." />
 <meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/cli.png" />
 </head>
   
@@ -221,15 +224,17 @@
     
     
       <div class="md-header__source">
-        <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    
+        
+<div class="sps-project-links">
+  <a href="https://github.com/lacclab/scanpath-studio" class="md-header__button md-icon" title="GitHub repository" aria-label="GitHub repository">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
-  </div>
-  <div class="md-source__repository">
-    lacclab/scanpath-studio
-  </div>
-</a>
+  </a>
+  
+  <a href="https://scanpath-studio.streamlit.app" class="md-header__button md-icon" title="Try the live demo" aria-label="Try the live demo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m16.673 11.32 6.862-3.618c.233-.136.554.12.442.387L20.463 17.1zm-8.556-.229 3.473-5.187c.203-.328.578-.316.793-.028l7.886 11.75zm-3.375 7.25c-.28 0-.835-.284-.993-.716l-3.72-9.46c-.118-.331.139-.614.48-.464l19.474 10.306c-.149.147-.453.337-.72.334z"/></svg>
+  </a>
+  
+</div>
       </div>
     
   </nav>
@@ -376,7 +381,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../cite/" class="md-tabs__link">
+        <a href="../about/" class="md-tabs__link">
           
   
   
@@ -427,15 +432,17 @@
   </label>
   
     <div class="md-nav__source">
-      <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    
+      
+<div class="sps-project-links">
+  <a href="https://github.com/lacclab/scanpath-studio" class="md-header__button md-icon" title="GitHub repository" aria-label="GitHub repository">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
-  </div>
-  <div class="md-source__repository">
-    lacclab/scanpath-studio
-  </div>
-</a>
+  </a>
+  
+  <a href="https://scanpath-studio.streamlit.app" class="md-header__button md-icon" title="Try the live demo" aria-label="Try the live demo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m16.673 11.32 6.862-3.618c.233-.136.554.12.442.387L20.463 17.1zm-8.556-.229 3.473-5.187c.203-.328.578-.316.793-.028l7.886 11.75zm-3.375 7.25c-.28 0-.835-.284-.993-.716l-3.72-9.46c-.118-.331.139-.614.48-.464l19.474 10.306c-.149.147-.453.337-.72.334z"/></svg>
+  </a>
+  
+</div>
     </div>
   
   <ul class="md-nav__list" data-md-scrollfix>
@@ -1596,6 +1603,8 @@
       
         
       
+        
+      
     
     
     
@@ -1674,6 +1683,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../gallery/hearts-arrows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hearts & arrows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../gallery/scanpath/" class="md-nav__link">
         
   
@@ -1709,7 +1746,35 @@
   <span class="md-ellipsis">
     
   
-    Heatmap
+    Gaze heatmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gallery/word-boxes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Word-box heatmap
   
 
     
@@ -1898,14 +1963,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../gallery/word-profile/" class="md-nav__link">
+      <a href="../gallery/highlighted-text/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Word profile
+    Highlighted text
   
 
     
@@ -1926,42 +1991,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../gallery/time-course/" class="md-nav__link">
+      <a href="../gallery/across-experiment/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Time course
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../gallery/workflows/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    App recordings
+    Across the experiment
   
 
     
@@ -2077,6 +2114,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../figure-options/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figure options
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -2140,10 +2205,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#launch" class="md-nav__link">
+  <a href="#launch-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Launch
+        Launch the app
       
     </span>
   </a>
@@ -2154,13 +2219,85 @@
   <a href="#render" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Render
+        render
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Render">
+    <nav class="md-nav" aria-label="render">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compare-two-scanpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare two scanpaths
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compare two scanpaths">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#style-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Style keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-comparison-cant-combine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a comparison can't combine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multipart-trials-and-many-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multipart trials and many trials
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#when-a-column-isnt-recognized" class="md-nav__link">
@@ -2179,10 +2316,203 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#public-corpora" class="md-nav__link">
+  <a href="#render-flags" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Public corpora
+        render flags
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="render flags">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags-trial-and-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trial and output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-fixations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-saccades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saccades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-text-and-stimulus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text and stimulus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-word-boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word boxes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-legends-and-color-bars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legends and color bars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-figure-and-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Figure and canvas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-title-and-caption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Title and caption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-hover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-illustration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Illustration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-size-and-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Size and export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#corpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        corpus
       
     </span>
   </a>
@@ -2190,10 +2520,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#compare-two-scanpaths" class="md-nav__link">
+  <a href="#check" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Compare two scanpaths
+        check
       
     </span>
   </a>
@@ -2201,10 +2531,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-options" class="md-nav__link">
+  <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common options
+        cache
       
     </span>
   </a>
@@ -2212,65 +2542,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#corpus-figures" class="md-nav__link">
+  <a href="#version" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Corpus figures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-checks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Data checks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#many-trials" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Many trials
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recovery-cache" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recovery cache
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#version-and-updates" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Version and updates
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#full-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Full reference
+        version
       
     </span>
   </a>
@@ -2281,34 +2556,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../agents/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    For coding agents
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -2329,6 +2576,8 @@
   
     
     
+      
+        
       
         
       
@@ -2376,6 +2625,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About Scanpath Studio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -2467,10 +2744,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#launch" class="md-nav__link">
+  <a href="#launch-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Launch
+        Launch the app
       
     </span>
   </a>
@@ -2481,13 +2758,85 @@
   <a href="#render" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Render
+        render
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Render">
+    <nav class="md-nav" aria-label="render">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compare-two-scanpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare two scanpaths
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compare two scanpaths">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#style-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Style keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-comparison-cant-combine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a comparison can't combine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multipart-trials-and-many-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multipart trials and many trials
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#when-a-column-isnt-recognized" class="md-nav__link">
@@ -2506,10 +2855,203 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#public-corpora" class="md-nav__link">
+  <a href="#render-flags" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Public corpora
+        render flags
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="render flags">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags-trial-and-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trial and output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-fixations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-saccades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saccades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-text-and-stimulus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text and stimulus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-word-boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word boxes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-raw-gaze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raw gaze
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-legends-and-color-bars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legends and color bars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-figure-and-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Figure and canvas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-title-and-caption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Title and caption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-hover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-illustration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Illustration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-size-and-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Size and export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#corpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        corpus
       
     </span>
   </a>
@@ -2517,10 +3059,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#compare-two-scanpaths" class="md-nav__link">
+  <a href="#check" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Compare two scanpaths
+        check
       
     </span>
   </a>
@@ -2528,10 +3070,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-options" class="md-nav__link">
+  <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common options
+        cache
       
     </span>
   </a>
@@ -2539,65 +3081,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#corpus-figures" class="md-nav__link">
+  <a href="#version" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Corpus figures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-checks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Data checks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#many-trials" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Many trials
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recovery-cache" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recovery cache
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#version-and-updates" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Version and updates
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#full-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Full reference
+        version
       
     </span>
   </a>
@@ -2673,109 +3160,197 @@
 
 
 <h1 id="cli-reference">CLI reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<p><code>scanpath-studio</code> launches the app by default. Its <code>render</code> subcommand writes
-one trial without opening the UI.</p>
-<h2 id="launch">Launch<a class="headerlink" href="#launch" title="Permanent link">&para;</a></h2>
+<p><code>scanpath-studio</code> launches the app. Its subcommands do the rest without opening
+it:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#launch-the-app"><code>scanpath-studio</code></a>, <code>run</code></td>
+<td>Launch the app</td>
+</tr>
+<tr>
+<td><a href="#render"><code>render</code></a></td>
+<td>Write one trial's scanpath, heatmap or replay to a file</td>
+</tr>
+<tr>
+<td><a href="#corpus"><code>corpus</code></a></td>
+<td>Render a corpus figure from a tidy CSV you already have</td>
+</tr>
+<tr>
+<td><a href="#check"><code>check</code></a></td>
+<td>Run the Data checks on your tables</td>
+</tr>
+<tr>
+<td><a href="#cache"><code>cache</code></a></td>
+<td>Show or clear the recovery cache</td>
+</tr>
+<tr>
+<td><a href="#version"><code>version</code></a></td>
+<td>Show the build, and whether a newer release is out</td>
+</tr>
+</tbody>
+</table>
+<p>Each command takes <code>--help</code>, and <code>scanpath-studio --version</code> prints the version.
+A word that is not a command is an error naming the closest one, rather than
+an argument passed on to Streamlit.</p>
+<h2 id="launch-the-app">Launch the app<a class="headerlink" href="#launch-the-app" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don't cache the session on this computer</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>scanpath-studio<span class="w"> </span>--download-dir<span class="w"> </span>D:<span class="se">\c</span>orpora<span class="w">  </span><span class="c1"># where ⬇ Download saves public datasets</span>
 </code></pre></div>
+<p><code>scanpath-studio run …</code> is the same. Any other launch flag is passed on to
+<code>streamlit run</code>.</p>
 <p>The app listens on this computer only (<code>127.0.0.1</code>). It has no login, so
-serving it to other machines is a deliberate step — pass
+serving it to other machines is a deliberate step. Pass
 <code>--server.address 0.0.0.0</code> (or set <code>server.address</code> in a Streamlit
 <code>config.toml</code>, or <code>STREAMLIT_SERVER_ADDRESS</code>), and only on a network you trust:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="w"> </span><span class="m">0</span>.0.0.0
 </code></pre></div>
 <p>Served on a network, the app also turns off everything that reads or writes the
-server's own folders — the <em>Data directory</em> box, the <span class="sps-icon" data-icon="folder_open" aria-hidden="true"></span> folder picker, ⬇ Download
-for the public corpora and stimulus-image folders — since any visitor could use
-them. On a lab server you trust, turn them back on with <code>SCANPATH_LOCAL_FS=1</code>
+server's own folders, since any visitor could use them: the <em>Data directory</em>
+box, the <span class="sps-icon" data-icon="folder_open" aria-hidden="true"></span> folder picker, and ⬇ Download for the public
+corpora and stimulus-image folders. On a lab server you trust, turn them back
+on with <code>SCANPATH_LOCAL_FS=1</code>
 (<code>SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0</code>).</p>
-<p>Additional launch flags are forwarded to Streamlit. A word that is not one of
-the commands (<code>run</code>, <code>render</code>, <code>corpus</code>, <code>check</code>, <code>cache</code>) is an error that
-names the closest one, rather than an argument handed to Streamlit.</p>
-<h2 id="render">Render<a class="headerlink" href="#render" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Inspect available IDs</span>
+<h2 id="render">render<a class="headerlink" href="#render" title="Permanent link">&para;</a></h2>
+<p><code>render</code> writes one trial to a file without opening the app. The extension
+picks the format: <code>.html</code> is interactive and needs nothing else, while <code>.png</code>,
+<code>.svg</code> and <code>.pdf</code> need Chrome, Chromium or Edge (or run <code>plotly_get_chrome -y</code>
+once; see the <a href="../faq/#export-fails">FAQ</a>). The figure is the app's Scanpath
+design unless a flag changes it, and every <a href="../figure-options/">figure option</a>
+has a flag.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># The trials there are to pick from</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Render the bundled demo</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># The bundled demo</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Render your data (replace p1 / t3 with ids from --list-trials)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your own data (replace p1 / t3 with ids from --list-trials)</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># Render an authoring file saved from the app's Author a scanpath screen</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># An authoring file saved from the app's Author a scanpath screen</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Inspect and render an ordered multipart trial</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># A public corpus, loaded the way the app loads it (PoTeC downloads on first use)</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>--list-trials
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
 </code></pre></div>
-<p>See the <a href="../faq/#export-fails">FAQ</a> for image-export setup.</p>
-<h3 id="when-a-column-isnt-recognized">When a column isn't recognized<a class="headerlink" href="#when-a-column-isnt-recognized" title="Permanent link">&para;</a></h3>
-<p>Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
-snake_case spellings). When one isn't, <code>render</code> stops and prints which field it
-could not find, the names it looked for, the columns your table has, and a
-mapping to start from. Pass that mapping back as JSON — inline, or as a path to
-a <code>.json</code> file — with <code>--word-schema</code> (the <code>--words</code> table) and/or
-<code>--fix-schema</code> (the <code>--fixations</code> table). <code>check</code> takes the same two flags.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--word-schema<span class="w"> </span><span class="s1">'{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="s1">                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--fix-schema<span class="w"> </span>fix_schema.json<span class="w"> </span>-o<span class="w"> </span>scanpath.html
-</code></pre></div>
-<p>A mapping replaces auto-detection for that table, so it has to name every
-required field, not only the one that failed. It is the same dict
-<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python.</p>
-<h2 id="public-corpora">Public corpora<a class="headerlink" href="#public-corpora" title="Permanent link">&para;</a></h2>
-<p>A public corpus loads headlessly the same way the app loads it — no export step
-in between:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># PoTeC, downloaded on first use</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>--list-trials
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># OneStop, choosing the variant, regime and part</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
-</code></pre></div>
-<p>The Python API takes the same corpora through <code>load_potec</code> and
-<code>load_onestop</code>.</p>
-<h2 id="compare-two-scanpaths">Compare two scanpaths<a class="headerlink" href="#compare-two-scanpaths" title="Permanent link">&para;</a></h2>
-<p><code>--compare-with PARTICIPANT:TRIAL</code> draws a second trial beside or over the
-first — the headless form of the app's <strong>Compare</strong> mode.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>-o<span class="w"> </span>compare.html
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Side by side — each panel draws its own trial's stimulus</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># B from a second dataset</span>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
+<p>The Python API loads the same corpora with
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_potec&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_potec"><code>load_potec</code></a> and
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_onestop&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_onestop"><code>load_onestop</code></a>.</p>
+<h3 id="common-tasks">Common tasks<a class="headerlink" href="#common-tasks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>add a layer</td>
+<td><code>--word-boxes</code>, <code>--fixation-index</code>, <code>--heatmap</code></td>
+</tr>
+<tr>
+<td>hide a layer</td>
+<td><code>--no-text</code>, <code>--no-fixations</code>, <code>--no-saccades</code></td>
+</tr>
+<tr>
+<td>animate</td>
+<td><code>--animate</code>, optionally <code>--playback-speed X</code>. Every styling flag the replay can draw is honored; the rest are named in a warning</td>
+</tr>
+<tr>
+<td>set the display geometry</td>
+<td><code>--canvas WIDTHxHEIGHT</code>. <code>--crop-to-data</code> frames the data instead of the whole monitor, with <code>--crop-margin PX</code> around it (default: 5% of its extent, at least 20 px)</td>
+</tr>
+<tr>
+<td>color fixations</td>
+<td><code>--color-by FIELD</code>, including a column of your own once <code>--keep-columns COLUMN…</code> carries it through loading</td>
+</tr>
+<tr>
+<td>size fixations by duration</td>
+<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--no-duration-size-legend</code></td>
+</tr>
+<tr>
+<td>draw only part of a trial</td>
+<td><code>--fix-index-range START:END</code> (1-based, both inclusive; <code>--animate</code> and <code>--compare-with</code> honor it too)</td>
+</tr>
+<tr>
+<td>draw the stimulus</td>
+<td><code>--stimulus-image PATH</code> for one image. <code>--show-stimulus-image</code> draws each trial's own page, the <code>image_path</code> its rows carry (<code>--sample</code> ships its pages). <code>--image-root DIR --image-pattern '{text_id}.png'</code> fills <code>image_path</code> from a folder</td>
+</tr>
+<tr>
+<td>smooth the heatmap</td>
+<td><code>--heatmap-style interpolated --heatmap-sigma 20</code> (σ in px; leave it out for an automatic σ)</td>
+</tr>
+<tr>
+<td>style the word boxes</td>
+<td><code>--word-box-color</code>, <code>--word-box-line-opacity</code>, <code>--word-box-fill-color</code>, <code>--word-box-fill-opacity</code> (0 draws outlines only, or fill only)</td>
+</tr>
+<tr>
+<td>size the figure</td>
+<td><code>--width</code>, <code>--height</code>, <code>--scale</code>. For print, <code>--width-mm MM</code> or <code>--width-in IN</code> with <code>--dpi N</code> (default 300)</td>
+</tr>
+<tr>
+<td>title and caption it</td>
+<td><code>--title</code>, <code>--caption</code></td>
+</tr>
+<tr>
+<td>export editable layers</td>
+<td><code>--separable-layers</code></td>
+</tr>
+<tr>
+<td>print the equivalent code</td>
+<td><code>--print-code python</code> (or <code>cli</code> / <code>both</code>), plus <code>--print-code-explicit</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="compare-two-scanpaths">Compare two scanpaths<a class="headerlink" href="#compare-two-scanpaths" title="Permanent link">&para;</a></h3>
+<p><code>--compare-with PARTICIPANT:TRIAL</code> draws a second trial, B, beside or over the
+first. It is the headless form of the app's <strong>Compare</strong> mode.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>-o<span class="w"> </span>compare.html
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Side by side: each panel draws its own trial's stimulus</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># Each scanpath styled</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># B from a second dataset</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
 </code></pre></div>
 <table>
 <thead>
 <tr>
 <th>Goal</th>
-<th>Option</th>
+<th>Flags</th>
 </tr>
 </thead>
 <tbody>
@@ -2792,7 +3367,7 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 <td><code>--compare-layout {overlay,side-by-side,stacked}</code> (default <code>overlay</code>)</td>
 </tr>
 <tr>
-<td>whose stimulus an overlay draws</td>
+<td>choose whose stimulus an overlay draws</td>
 <td><code>--compare-stimulus {both,a,b}</code> (default <code>both</code>)</td>
 </tr>
 <tr>
@@ -2801,375 +3376,184 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 </tr>
 <tr>
 <td>style each scanpath</td>
-<td><code>--style-a SPEC</code>, <code>--style-b SPEC</code> (below)</td>
+<td><code>--style-a SPEC</code>, <code>--style-b SPEC</code> (<a href="#style-keys">keys below</a>)</td>
 </tr>
 <tr>
-<td>the A/B legend (on by default)</td>
-<td><code>--no-compare-legend</code> to leave it off</td>
+<td>leave out the A/B legend</td>
+<td><code>--no-compare-legend</code></td>
 </tr>
 <tr>
-<td>B's own stimulus page (split layouts)</td>
+<td>give B its own stimulus page (split layouts)</td>
 <td><code>--stimulus-image-b PATH</code>, with <code>--stimulus-image-size-b WxH</code> / <code>--stimulus-image-origin-b X,Y</code></td>
 </tr>
 <tr>
-<td>B from another dataset</td>
-<td><code>--compare-words PATH… --compare-fixations PATH…</code></td>
-</tr>
-<tr>
-<td>that dataset's raw gaze</td>
-<td><code>--compare-raw-gaze PATH…</code></td>
-</tr>
-<tr>
-<td>name that dataset</td>
-<td><code>--compare-dataset-name NAME</code></td>
+<td>take B from another dataset</td>
+<td><code>--compare-words PATH… --compare-fixations PATH…</code>, plus <code>--compare-raw-gaze PATH…</code> and <code>--compare-dataset-name NAME</code></td>
 </tr>
 <tr>
 <td>declare the screens</td>
 <td><code>--canvas WxH</code>, <code>--compare-canvas WxH</code></td>
 </tr>
 <tr>
-<td>co-animate both scanpaths</td>
+<td>replay both on one clock</td>
 <td>add <code>--animate</code> (HTML output)</td>
 </tr>
 </tbody>
 </table>
-<p><code>--label-a</code> / <code>--label-b</code> also label the <code>--animate</code> co-animation, and
-<code>--style-a</code> / <code>--style-b</code> (below) style it as they style the comparison.</p>
-<p><code>--style-a</code> / <code>--style-b</code> are the app's per-scanpath styling (the Compare rows
-under <span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations, <span class="sps-icon" data-icon="arrow_outward" aria-hidden="true"></span> Saccades, the
-word boxes, heatmap and raw gaze — their <em>Scanpath A</em> / <em>Scanpath B</em> groups), <code>compare_scanpaths</code>'s <code>style_a</code> / <code>style_b</code>:
-a comma-separated <code>KEY=VALUE</code> list, repeatable, with <code>fix_color</code>,
-<code>saccade_color</code>, <code>box_color</code>, <code>box_fill_color</code> and <code>raw_gaze_color</code> (<code>#RRGGBB</code>;
-<code>box_color</code> outlines that scanpath's word boxes, its <code>fix_color</code> when left out,
-<code>box_fill_color</code> fills them, <code>--word-box-fill-color</code> when left out,
-<code>box_line_opacity</code> / <code>box_fill_opacity</code> (0–1) are their outline's and fill's
-opacity, <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code> when left out, and
-<code>raw_gaze_color</code> colors its raw-gaze samples, its <code>fix_color</code> when left out —
-all of these static comparison only, the <code>--animate</code> co-animation draws one set of
-boxes and no raw gaze), <code>heatmap_colorscale</code> (a Plotly color scale for that
-scanpath's heatmap, <code>--heatmap-colorscale</code> when left out; the range stays shared,
-and two different scales get a color bar each), <code>saccade_style</code> (<code>solid</code>, <code>dash</code>,
-<code>dot</code>, <code>dashdot</code>), <code>saccade_width</code> (px), <code>marker_size_range</code> (<code>MIN:MAX</code>),
-<code>opacity</code> (0.1–1) and <code>hollow</code> (<code>true</code> / <code>false</code>). A key left out keeps that
+<p><code>--label-a</code> / <code>--label-b</code> and <code>--style-a</code> / <code>--style-b</code> apply to the
+<code>--animate</code> replay too.</p>
+<h4 id="style-keys">Style keys<a class="headerlink" href="#style-keys" title="Permanent link">&para;</a></h4>
+<p><code>--style-a</code> and <code>--style-b</code> take a comma-separated <code>KEY=VALUE</code> list and can be
+repeated. They are the app's <em>Scanpath A</em> / <em>Scanpath B</em> rows and
+<code>compare_scanpaths</code>'s <code>style_a</code> / <code>style_b</code>. A key left out keeps that
 scanpath's default.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
-</code></pre></div>
-<p><code>--animate --compare-with</code> replays <strong>both</strong> scanpaths on one clock, the same dual
-co-animation the app renders with Animate and Compare both on.
-<code>--compare-with</code> cannot be combined with <code>--all-screens</code> or <code>--screens</code>: a comparison
-is a single figure of two trials, each drawn from one screen. Pick A's with
-<code>--screen</code> and B's with <code>--compare-screen</code>; B's is looked up in B's own trial,
-so it can be a later page, or a page of the second dataset.</p>
-<p><strong>Overlay across two datasets requires matching canvases.</strong> On two different
-canvases <code>--compare-layout overlay</code> fails rather than falling back, and so does
-<code>--animate</code>, which replays both scanpaths in one coordinate space; pass
-<code>--compare-layout side-by-side</code> or <code>stacked</code>, without <code>--animate</code>. Without
-<code>--compare-canvas</code> the second dataset's screen is read off its data, as A's is
-when neither <code>--canvas</code> nor a built-in source gives one. That extent rarely
-spans the whole screen, so state both screens when you know them. Within one
-dataset, two screens whose own canvases differ are refused the same way.
-Nothing is rescaled.</p>
-<p>A second dataset is loaded from <strong>files only</strong>. Any corpus reachable from Python
-can still be scanpath B via
-<a href="../api/#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>, which takes
-B's frames directly.</p>
-<h2 id="common-options">Common options<a class="headerlink" href="#common-options" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Goal</th>
-<th>Option</th>
+<th>Key</th>
+<th>Value</th>
+<th>Left out</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>add a layer</td>
-<td><code>--word-boxes</code>, <code>--fixation-index</code>, <code>--heatmap</code> (the default is the app's Scanpath design)</td>
+<td><code>fix_color</code></td>
+<td><code>#RRGGBB</code></td>
+<td>that scanpath's default</td>
 </tr>
 <tr>
-<td>hide a layer</td>
-<td><code>--no-text</code>, <code>--no-fixations</code>, <code>--no-saccades</code></td>
+<td><code>saccade_color</code></td>
+<td><code>#RRGGBB</code></td>
+<td>that scanpath's default</td>
 </tr>
 <tr>
-<td>animate</td>
-<td><code>--animate</code> and optionally <code>--playback-speed X</code>; every styling flag the replay can draw (<code>api.figure_options("animation")</code>) is honored, and the rest are named in a warning</td>
+<td><code>box_color</code></td>
+<td><code>#RRGGBB</code>, the outline of that scanpath's word boxes</td>
+<td>its <code>fix_color</code></td>
 </tr>
 <tr>
-<td>set display geometry</td>
-<td><code>--canvas WIDTHxHEIGHT</code>; <code>--crop-to-data</code> frames the data instead of the whole monitor, with <code>--crop-margin PX</code> around it (default: 5% of its extent, at least 20 px)</td>
+<td><code>box_fill_color</code></td>
+<td><code>#RRGGBB</code>, the boxes' fill</td>
+<td><code>--word-box-fill-color</code></td>
 </tr>
 <tr>
-<td>color fixations</td>
-<td><code>--color-by FIELD</code> — a column of your own too, once <code>--keep-columns COLUMN…</code> carries it through loading</td>
+<td><code>box_line_opacity</code>, <code>box_fill_opacity</code></td>
+<td>0–1</td>
+<td><code>--word-box-line-opacity</code>, <code>--word-box-fill-opacity</code></td>
 </tr>
 <tr>
-<td>size fixations by duration</td>
-<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--no-duration-size-legend</code></td>
+<td><code>raw_gaze_color</code></td>
+<td><code>#RRGGBB</code>, that scanpath's raw-gaze samples</td>
+<td>its <code>fix_color</code></td>
 </tr>
 <tr>
-<td>draw only part of a trial</td>
-<td><code>--fix-index-range START:END</code> (1-based, both inclusive; honored by <code>--animate</code> and <code>--compare-with</code> too)</td>
+<td><code>heatmap_colorscale</code></td>
+<td>a Plotly color scale; the range stays shared, and two different scales get a color bar each</td>
+<td><code>--heatmap-colorscale</code></td>
 </tr>
 <tr>
-<td>add the stimulus image</td>
-<td><code>--stimulus-image PATH</code></td>
+<td><code>saccade_style</code></td>
+<td><code>solid</code>, <code>dash</code>, <code>dot</code> or <code>dashdot</code></td>
+<td>that scanpath's default</td>
 </tr>
 <tr>
-<td>draw each trial's own stimulus page</td>
-<td><code>--show-stimulus-image</code> — the <code>image_path</code> the trial's rows carry (<code>--sample</code> ships its pages)</td>
+<td><code>saccade_width</code></td>
+<td>px</td>
+<td>that scanpath's default</td>
 </tr>
 <tr>
-<td>match pages from a folder</td>
-<td><code>--image-root DIR --image-pattern '{text_id}.png'</code> fills each row's <code>image_path</code>; add <code>--show-stimulus-image</code> to draw it</td>
+<td><code>marker_size_range</code></td>
+<td><code>MIN:MAX</code></td>
+<td>that scanpath's default</td>
 </tr>
 <tr>
-<td>use a smoothed (Gaussian) heatmap</td>
-<td><code>--heatmap-style interpolated --heatmap-sigma 20</code> (σ in px; omit it for the automatic σ)</td>
+<td><code>opacity</code></td>
+<td>0.1–1</td>
+<td>that scanpath's default</td>
 </tr>
 <tr>
-<td>map arbitrary source rows to screens</td>
-<td><code>--trial-parts-manifest manifest.json</code></td>
-</tr>
-<tr>
-<td>export editable layers</td>
-<td><code>--separable-layers</code></td>
-</tr>
-<tr>
-<td>style the word boxes</td>
-<td><code>--word-box-color</code>, <code>--word-box-line-opacity</code>, <code>--word-box-fill-color</code>, <code>--word-box-fill-opacity</code> (0 draws outlines only / fill only)</td>
-</tr>
-<tr>
-<td>draw the raw gaze</td>
-<td><code>--raw-gaze PATH…</code> (or <code>--sample-raw-gaze</code> with <code>--sample</code>), <code>--raw-gaze-schema JSON</code>, <code>--raw-gaze-color</code>, <code>--raw-gaze-marker-size</code>, <code>--raw-gaze-opacity</code>; <code>--no-raw-gaze</code> loads the table but hides the layer</td>
-</tr>
-<tr>
-<td>size the figure</td>
-<td><code>--width</code>, <code>--height</code>, <code>--scale</code></td>
-</tr>
-<tr>
-<td>size a PNG for print</td>
-<td><code>--width-mm MM</code> or <code>--width-in IN</code>, with <code>--dpi N</code> (default 300)</td>
-</tr>
-<tr>
-<td>title and caption it</td>
-<td><code>--title</code>, <code>--caption</code></td>
-</tr>
-<tr>
-<td>print the equivalent Python</td>
-<td><code>--print-code python</code> (or <code>cli</code> / <code>both</code>, plus <code>--print-code-explicit</code>)</td>
+<td><code>hollow</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>that scanpath's default</td>
 </tr>
 </tbody>
 </table>
-<p>The <a href="../api/#figure-options">figure options table</a> gives every figure option's
-flag.</p>
-<p>Raw gaze is a third table rather than an option: <code>--raw-gaze</code> reads it (columns
-auto-detected like <code>--fixations</code>) and draws the plotted trial's samples under the
-fixations. With <code>--compare-with</code> it covers both scanpaths, each drawn in its
-own color, and <code>--compare-raw-gaze PATH…</code> is B's when B comes from
-another dataset. <code>--animate</code> ignores it with a warning.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
+<p>The <code>--animate</code> replay draws one set of word boxes and no raw gaze, so it
+ignores the <code>box_*</code> keys and <code>raw_gaze_color</code>.</p>
+<h4 id="what-a-comparison-cant-combine">What a comparison can't combine<a class="headerlink" href="#what-a-comparison-cant-combine" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>--compare-with</code> cannot be combined with <code>--all-screens</code> or <code>--screens</code>. A
+  comparison is one figure of two trials, each drawn from one screen. B's
+  <code>--compare-screen</code> is looked up in B's own trial, so it can be a later page,
+  or a page of the second dataset.</li>
+<li><strong>An overlay of two datasets needs matching canvases.</strong> On two different
+  canvases, <code>--compare-layout overlay</code> fails rather than falling back, and so
+  does <code>--animate</code>, which replays both scanpaths in one coordinate space. Use
+  <code>--compare-layout side-by-side</code> or <code>stacked</code>, without <code>--animate</code>. Two
+  screens of one dataset whose canvases differ are refused the same way.
+  Nothing is rescaled.</li>
+<li>Without <code>--compare-canvas</code>, the second dataset's screen is read off its data,
+  as A's is when neither <code>--canvas</code> nor a built-in source gives one. That
+  extent rarely spans the whole screen, so state both screens when you know
+  them.</li>
+<li>A second dataset is loaded from <strong>files only</strong>. Any corpus you can load in
+  Python can still be B through
+  <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;compare_scanpaths&lt;/span&gt;" href="../api/#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>, which takes
+  B's frames directly.</li>
+</ul>
+<h3 id="raw-gaze">Raw gaze<a class="headerlink" href="#raw-gaze" title="Permanent link">&para;</a></h3>
+<p><code>--raw-gaze PATH…</code> reads a third table, with its columns auto-detected like
+<code>--fixations</code>, and draws the plotted trial's samples under the fixations. With
+<code>--compare-with</code> it covers both scanpaths, each in its own color, and
+<code>--compare-raw-gaze PATH…</code> is B's when B comes from another dataset.
+<code>--animate</code> ignores it with a warning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
 </code></pre></div>
 <p>On its own, with no other input, <code>--raw-gaze</code> is the dataset: <code>--list-trials</code>
 lists its trials and <code>render</code> draws the chosen trial's samples as recorded.
 No fixations are detected from them, so <code>--animate</code> and <code>--compare-with</code> exit
 with that reason instead.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--list-trials
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>-o<span class="w"> </span>samples.png
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--list-trials
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>-o<span class="w"> </span>samples.png
 </code></pre></div>
-<h2 id="corpus-figures">Corpus figures<a class="headerlink" href="#corpus-figures" title="Permanent link">&para;</a></h2>
-<p><code>scanpath-studio corpus</code> goes the other way: it reads a tidy CSV you already
-have (for <code>--kind profile</code>, columns <code>word_id</code> and <code>value</code>) and renders a styled
-corpus figure
-(<a href="../api/#scanpath_studio.api.plot_corpus_figure"><code>api.plot_corpus_figure</code></a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
-</code></pre></div>
-<p><strong>Options</strong></p>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Value</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>--input</code></td>
-<td><code>PATH</code></td>
-<td>required</td>
-<td>The CSV. profile reads word_id plus the value column (and optional lo / hi), distribution the value column, difference word_id and diff.</td>
-</tr>
-<tr>
-<td><code>--kind</code></td>
-<td><code>{profile,distribution,difference}</code></td>
-<td>required</td>
-<td>A per-word profile, a distribution, or a difference profile.</td>
-</tr>
-<tr>
-<td><code>-o</code>, <code>--output</code></td>
-<td><code>PATH</code></td>
-<td>required</td>
-<td>Output file; any extension save_figure writes (.html, .png, .svg, .pdf).</td>
-</tr>
-<tr>
-<td><code>--measure-label</code></td>
-<td><code>MEASURE_LABEL</code></td>
-<td><code>Value</code></td>
-<td>Axis / legend label for the value (default: Value).</td>
-</tr>
-<tr>
-<td><code>--series-col</code></td>
-<td><code>SERIES_COL</code></td>
-<td><code>series</code></td>
-<td>Column naming the overlaid series, when present (default: series).</td>
-</tr>
-<tr>
-<td><code>--value-col</code></td>
-<td><code>VALUE_COL</code></td>
-<td><code>value</code></td>
-<td>The value column (default: value).</td>
-</tr>
-<tr>
-<td><code>--primary-color</code></td>
-<td><code>PRIMARY_COLOR</code></td>
-<td><code>#1f77b4</code></td>
-<td>First series color (default: #1f77b4).</td>
-</tr>
-<tr>
-<td><code>--secondary-color</code></td>
-<td><code>SECONDARY_COLOR</code></td>
-<td><code>#e45756</code></td>
-<td>Second series color (default: #e45756).</td>
-</tr>
-</tbody>
-</table>
-<h2 id="data-checks">Data checks<a class="headerlink" href="#data-checks" title="Permanent link">&para;</a></h2>
-<p><code>check</code> runs the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management</strong> page's <strong>Data checks</strong> on your
-tables without opening the app: fixations lasting 0 ms or less or with an
-infinite duration or onset, fixations and raw-gaze samples with no finite
-position, word boxes with no area or no finite position, and per-screen screen
-sizes that are not finite and positive. Each
-finding gives the rows and trials affected, a few example rows, and what the
-app does with them. It changes nothing, and it exits 0 whatever it finds;
-<code>--json</code> prints the table
-<a href="../api/#scanpath_studio.api.check_data_health"><code>api.check_data_health</code></a> returns.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
-</code></pre></div>
-<p><strong>Options</strong></p>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Value</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>--sample</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Check the bundled OneStop demo instead of your own tables.</td>
-</tr>
-<tr>
-<td><code>--words</code></td>
-<td><code>PATH [PATH ...]</code></td>
-<td>—</td>
-<td>Words table(s), as for render.</td>
-</tr>
-<tr>
-<td><code>--fixations</code></td>
-<td><code>PATH [PATH ...]</code></td>
-<td>—</td>
-<td>Fixations table(s), as for render.</td>
-</tr>
-<tr>
-<td><code>--raw-gaze</code></td>
-<td><code>PATH [PATH ...]</code></td>
-<td>—</td>
-<td>Raw (sample-level) gaze table(s), as for render.</td>
-</tr>
-<tr>
-<td><code>--raw-gaze-schema</code></td>
-<td><code>JSON</code></td>
-<td>—</td>
-<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection (same shape as <code>--fix-schema</code>).</td>
-</tr>
-<tr>
-<td><code>--trial-parts-manifest</code></td>
-<td><code>PATH</code></td>
-<td>—</td>
-<td>JSON manifest assigning source rows to ordered screens.</td>
-</tr>
-<tr>
-<td><code>--json</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Print the findings as JSON (the rows api.check_data_health returns).</td>
-</tr>
-<tr>
-<td><code>--word-schema</code></td>
-<td><code>JSON</code></td>
-<td>—</td>
-<td>Column mapping for the <code>--words</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognized; the error then prints a mapping to start from.</td>
-</tr>
-<tr>
-<td><code>--fix-schema</code></td>
-<td><code>JSON</code></td>
-<td>—</td>
-<td>Column mapping for the <code>--fixations</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognized; the error then prints a mapping to start from.</td>
-</tr>
-<tr>
-<td><code>--keep-columns</code></td>
-<td><code>COLUMN [COLUMN ...]</code></td>
-<td>—</td>
-<td>Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — otherwise loading keeps only the mapped and recognized fields. A kept fixation column can then be <code>--color-by</code>, an axis or a hover field. The keep_columns= of api.load_scanpath_data.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="many-trials">Many trials<a class="headerlink" href="#many-trials" title="Permanent link">&para;</a></h2>
-<p>The <code>render</code> command renders one trial per invocation; use the <a href="../guides/exporting/#batch-pattern">Python batch recipe</a>
-or <strong>Export → Export bundle</strong> for many figures.</p>
-<p><code>--all-screens</code> is the multipart exception: it writes one deterministic
-<code>__screen-001-&lt;id&gt;</code> file per screen of the selected parent trial.
+<h3 id="multipart-trials-and-many-trials">Multipart trials and many trials<a class="headerlink" href="#multipart-trials-and-many-trials" title="Permanent link">&para;</a></h3>
+<p><code>render</code> writes one trial per run. For many figures, use the
+<a href="../guides/exporting/#batch-pattern">Python batch recipe</a> or the app's
+<strong>Export → Export bundle</strong>.</p>
+<p>A multipart trial is the exception. <code>--all-screens</code> writes one
+<code>__screen-001-&lt;id&gt;</code> file per screen of the selected trial, and
 <code>--screens Title,Paragraph</code> writes only the screens named, each still numbered
-by its place in the trial.</p>
-<h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
-<p>A local or desktop run caches your session on your own machine — uploaded
-datasets, column mappings, view settings, saved designs, metadata tables and
-annotations — so a refresh or a
-restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+by its place in the trial. <code>--trial-parts-manifest manifest.json</code> assigns
+arbitrary source rows to screens.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
 </code></pre></div>
-<p>The same information is at the foot of the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management</strong> page, under <strong>Saved on
-this computer</strong>. A running app writes a new copy at its next change, so clear
-with the app closed. <code>SCANPATH_STUDIO_PERSIST=0</code> turns caching
-off wherever it is set, <code>--no-persist</code> for one launch, and <code>SCANPATH_STUDIO_STATE_DIR</code>
-moves the folder. Hosted deployments never cache. See
-<a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>.</p>
-<h2 id="version-and-updates">Version and updates<a class="headerlink" href="#version-and-updates" title="Permanent link">&para;</a></h2>
-<p><code>scanpath-studio --version</code> prints the version. <code>version</code> says which build it
-is and how it was installed; <code>--check</code> also asks GitHub whether a newer release
-is out and prints the command that updates your install — the only time the
-command uses the network:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<h3 id="when-a-column-isnt-recognized">When a column isn't recognized<a class="headerlink" href="#when-a-column-isnt-recognized" title="Permanent link">&para;</a></h3>
+<p>Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
+snake_case spellings). When one isn't, <code>render</code> stops and prints which field it
+could not find, the names it looked for, the columns your table has, and a
+mapping to start from. Pass that mapping back as JSON, inline or as a path to
+a <code>.json</code> file, with <code>--word-schema</code> (the <code>--words</code> table) and/or
+<code>--fix-schema</code> (the <code>--fixations</code> table). <code>check</code> takes the same two flags.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--word-schema<span class="w"> </span><span class="s1">'{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="s1">                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--fix-schema<span class="w"> </span>fix_schema.json<span class="w"> </span>-o<span class="w"> </span>scanpath.html
 </code></pre></div>
-<p>Between releases the version names the build: <code>0.35.0.post3+g8f18219</code> is three
-commits after 0.35.0, at commit <code>8f18219</code>. The same check is
-<strong><span class="sps-icon" data-icon="help" aria-hidden="true"></span> Help → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> About → <span class="sps-icon" data-icon="update" aria-hidden="true"></span> Check for updates</strong>
-in the app, and <code>check_for_updates()</code> in the <a href="../api/#version-and-updates">API</a>.</p>
-<p><strong>Options</strong></p>
+<p>A mapping replaces auto-detection for that table, so it has to name every
+required field, not only the one that failed. It is the same dict
+<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python.</p>
+<h2 id="render-flags">render flags<a class="headerlink" href="#render-flags" title="Permanent link">&para;</a></h2>
+<p>Every <code>render</code> flag, generated from the parser the command uses, so the
+defaults and help are the ones <code>--help</code> prints. The figure flags are grouped
+like the <a href="../figure-options/">figure options</a> they set.</p>
+<p><h3 id="flags-trial-and-output">Trial and output<a class="headerlink" href="#flags-trial-and-output" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
 <tr>
@@ -3181,72 +3565,13 @@ in the app, and <code>check_for_updates()</code> in the <a href="../api/#version
 </thead>
 <tbody>
 <tr>
-<td><code>--check</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Ask GitHub for the latest release and say how to update this install.</td>
-</tr>
-<tr>
-<td><code>--timeout</code></td>
-<td><code>SECONDS</code></td>
-<td><code>5.0</code></td>
-<td>How long to wait for GitHub (default 5).</td>
-</tr>
-</tbody>
-</table>
-<h2 id="full-reference">Full reference<a class="headerlink" href="#full-reference" title="Permanent link">&para;</a></h2>
-<p>Generated from the parsers the commands themselves use, so every flag is here
-with the default and help <code>--help</code> prints.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio 0.38.3 — visualize eye-tracking-while-reading scanpaths
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>usage:
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  scanpath-studio                  launch the interactive app (Streamlit)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  scanpath-studio run [args…]      same, forwarding args to `streamlit run`
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                                   (its --help lists Streamlit's options only)
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  scanpath-studio [run] --no-persist
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                                   launch without the on-device recovery cache
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                                   (this run only; see `cache` below)
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  scanpath-studio [run] --download-dir DIR
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                   where Download saves public datasets when
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                                   the Data Management page's Download folder is blank
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>  scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>                                   (see `scanpath-studio render --help`)
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  scanpath-studio corpus …         render a styled corpus-analysis figure
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  scanpath-studio check …          run the Data checks on your tables
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  scanpath-studio cache …          show / clear the on-device recovery cache
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>  scanpath-studio version [--check]
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>                                   show this build and how it was installed;
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>                                   --check asks GitHub whether a newer
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>                                   release is out
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>  scanpath-studio --version        print the version
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>Unrecognized flags are forwarded to `streamlit run` (e.g.
-<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>`scanpath-studio --server.port 8502`); an unknown command word is an error.
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>The app listens on this computer only; `--server.address 0.0.0.0` serves it
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>on your network (it has no login) with local folder access off, unless
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>SCANPATH_LOCAL_FS=1.
-</code></pre></div>
-<details class="note">
-<summary><code>render</code> — every flag</summary>
-<p><strong>Options</strong></p>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Value</th>
-<th>Default</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-p</code>, <code>--participant</code></td>
+<td><code>-p</code><br><code>--participant</code></td>
 <td><code>PARTICIPANT</code></td>
 <td>—</td>
 <td>Participant id (default: first available).</td>
 </tr>
 <tr>
-<td><code>-t</code>, <code>--trial</code></td>
+<td><code>-t</code><br><code>--trial</code></td>
 <td><code>TRIAL</code></td>
 <td>—</td>
 <td>Trial id (default: first for the participant).</td>
@@ -3283,12 +3608,12 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--screen-transition</code></td>
-<td><code>{instant,recorded}</code></td>
+<td><code>instant</code>, <code>recorded</code></td>
 <td><code>instant</code></td>
 <td>For <code>--all-screens</code> <code>--animate</code>, record zero or observed inter-screen delay in each output's metadata (default: instant).</td>
 </tr>
 <tr>
-<td><code>-o</code>, <code>--output</code></td>
+<td><code>-o</code><br><code>--output</code></td>
 <td><code>PATH</code></td>
 <td>—</td>
 <td>Output file; format from extension (.html/.png/.svg/.pdf).</td>
@@ -3301,7 +3626,9 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Input (bundled demo, or words and/or fixations)</strong></p>
+</div>
+<h3 id="flags-input">Input<a class="headerlink" href="#flags-input" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
 <tr>
@@ -3386,19 +3713,19 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--onestop-regime</code></td>
-<td><code>REGIME</code></td>
+<td><code>ordinary</code>, <code>information_seeking</code>, <code>repeated</code>, <code>information_seeking_repeated</code></td>
 <td><code>ordinary</code></td>
 <td>OneStop reading regime for <code>--onestop</code> (default: ordinary).</td>
 </tr>
 <tr>
 <td><code>--onestop-part</code></td>
-<td><code>PART</code></td>
+<td><code>Title</code>, <code>Question_Preview</code>, <code>Paragraph</code>, <code>Questions</code>, <code>Answers</code>, <code>QA</code>, <code>Feedback</code></td>
 <td>—</td>
 <td>OneStop trial part(s) for <code>--onestop</code>; repeatable (default: Paragraph). Loading several makes each part its own trial.</td>
 </tr>
 <tr>
 <td><code>--onestop-variant</code></td>
-<td><code>VARIANT</code></td>
+<td><code>public</code>, <code>lacclab</code></td>
 <td><code>public</code></td>
 <td>OneStop source variant for <code>--onestop</code>: 'public' (OSF download) or 'lacclab' (a local lab-processed export; no download).</td>
 </tr>
@@ -3415,7 +3742,7 @@ with the default and help <code>--help</code> prints.</p>
 <td>Trial-level metadata table: one row per trial, a trial-id column plus anything known about it. Several files (or a glob) are stacked into one table. Validated and reported the same way, and its fields are added to <code>--list-trials</code> output.</td>
 </tr>
 <tr>
-<td><code>--trial-metadata-participant-column</code>, <code>--trial-metadata-reader-column</code></td>
+<td><code>--trial-metadata-participant-column</code><br><code>--trial-metadata-reader-column</code></td>
 <td><code>COLUMN</code></td>
 <td>—</td>
 <td>Key the <code>--trial-metadata</code> table by participant AND trial, using this column as the participant id. Without it the table is keyed by trial id alone: a row describes a text, and every trial of it inherits that row. Never inferred: nothing in the file says which of the two a corpus means.</td>
@@ -3428,7 +3755,9 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Visualization (draws the app's Scanpath design: fixations, saccades and the text; add <code>--word-boxes</code>, <code>--heatmap</code> or <code>--fixation-index</code>, or hide a layer with its <code>--no-</code>* flag)</strong></p>
+</div>
+<h3 id="flags-fixations">Fixations<a class="headerlink" href="#flags-fixations" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
 <tr>
@@ -3439,24 +3768,6 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><code>--word-boxes</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Draw the word boxes.</td>
-</tr>
-<tr>
-<td><code>--no-word-boxes</code>, <code>--no-words</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Hide the word boxes (the default).</td>
-</tr>
-<tr>
-<td><code>--no-text</code>, <code>--no-labels</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Hide the reading text.</td>
-</tr>
 <tr>
 <td><code>--no-fixations</code></td>
 <td>switch</td>
@@ -3470,40 +3781,151 @@ with the default and help <code>--help</code> prints.</p>
 <td>Number the fixations in reading order.</td>
 </tr>
 <tr>
-<td><code>--no-fixation-index</code>, <code>--no-order</code></td>
+<td><code>--no-fixation-index</code><br><code>--no-order</code></td>
 <td>switch</td>
 <td>—</td>
 <td>Hide the fixation numbers (the default).</td>
 </tr>
 <tr>
-<td><code>--word-hover-fields</code></td>
-<td><code>FIELDS</code></td>
+<td><code>--fix-index-range</code></td>
+<td><code>START:END</code></td>
 <td>—</td>
-<td>Comma-separated word columns shown on hover (e.g. text,word_id,gpt2_surprisal).</td>
+<td>Draw only fixations START through END of the trial (1-based, both inclusive), e.g. <code>--fix-index-range</code> 1:40. Honored by <code>--animate</code> too, which then replays only that window, and by <code>--compare-with</code>, which windows both scanpaths (unless <code>--compare-fix-index-range</code> gives B its own).</td>
 </tr>
 <tr>
-<td><code>--fixation-hover-fields</code></td>
-<td><code>FIELDS</code></td>
+<td><code>--fixation-flag</code></td>
+<td><code>SPEC</code></td>
 <td>—</td>
-<td>Comma-separated fixation columns shown on hover (e.g. order_in_trial,duration_ms,eye).</td>
+<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, discard — e.g. <code>--fixation-flag</code> short=discard,threshold_ms=80. discard drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
 </tr>
+<tr>
+<td><code>--snap-fixations</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Move each fixation up or down onto its text line (its word's, else the nearest); it keeps its x. <code>--snap-position</code> says where on the line.</td>
+</tr>
+<tr>
+<td><code>--snap-position</code></td>
+<td><code>LINES</code></td>
+<td>—</td>
+<td>Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge (default: -0.5). Used with <code>--snap-fixations</code>.</td>
+</tr>
+<tr>
+<td><code>--palette</code></td>
+<td><code>{default,print,high-contrast}</code></td>
+<td>—</td>
+<td>Color palette for the marks (the app's Palette): default (colorblind-safe, Okabe–Ito), print (grayscale, survives a B&amp;W print) or high-contrast. The app's own names work too. Individual --*-color flags override it.</td>
+</tr>
+<tr>
+<td><code>--color-by</code></td>
+<td><code>FIELD</code></td>
+<td>—</td>
+<td>Fixation column to color by, e.g. duration_ms, or 'line' to color each fixation by its text line (same as <code>--color-by-line</code>). Default: '(uniform)', one flat color, since marker size already shows duration.</td>
+</tr>
+<tr>
+<td><code>--fixation-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Flat fixation marker color used when <code>--color-by</code> is (uniform) (default: #0072B2).</td>
+</tr>
+<tr>
+<td><code>--fixation-symbol</code></td>
+<td><code>circle</code>, <code>square</code>, <code>diamond</code>, <code>triangle-up</code>, <code>cross</code>, <code>x</code>, <code>star</code>, <code>hexagon</code>, <code>heart</code></td>
+<td>—</td>
+<td>Fixation marker shape. Unlike color, shape survives a grayscale print (default: circle).</td>
+</tr>
+<tr>
+<td><code>--fixation-colorscale</code></td>
+<td><code>NAME</code></td>
+<td>—</td>
+<td>Color scale for <code>--color-by</code>, e.g. Viridis (default: Blues).</td>
+</tr>
+<tr>
+<td><code>--marker-size-range</code></td>
+<td><code>MIN MAX</code></td>
+<td>—</td>
+<td>Min/max fixation marker size in px, e.g. 4 12 (default: 8 24). Smaller ranges suit small thumbnails.</td>
+</tr>
+<tr>
+<td><code>--marker-size-scale</code></td>
+<td><code>sqrt</code>, <code>linear</code>, <code>log</code>, <code>relative</code></td>
+<td>—</td>
+<td>How duration sets marker size (default: sqrt). sqrt / linear / log map <code>--marker-duration-range</code> onto <code>--marker-size-range</code> the same way for every figure, so one duration is one size across trials, comparisons and replays; sqrt makes marker area grow with duration. relative stretches each figure from its own shortest to longest fixation.</td>
+</tr>
+<tr>
+<td><code>--marker-duration-range</code></td>
+<td><code>LO HI</code></td>
+<td>—</td>
+<td>Durations in ms given the smallest and largest marker on a fixed scale (default: 50 600). Shorter and longer fixations clamp to them.</td>
+</tr>
+<tr>
+<td><code>--fixation-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).</td>
+</tr>
+<tr>
+<td><code>--fixation-outline-width</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Outline round each filled fixation marker, 0–5 px; 0 draws none (default: 0.5).</td>
+</tr>
+<tr>
+<td><code>--fixation-outline-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of that outline (default: #111111).</td>
+</tr>
+<tr>
+<td><code>--hollow-fixations</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Draw the fixations as outlines instead of filled markers.</td>
+</tr>
+<tr>
+<td><code>--color-by-line</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Color each fixation by the text line it lands on (lines inferred from the word boxes); overrides <code>--color-by</code>. Same as <code>--color-by</code> line.</td>
+</tr>
+<tr>
+<td><code>--fixation-color-range</code></td>
+<td><code>LO HI</code></td>
+<td>—</td>
+<td>Pin the <code>--color-by</code> color scale to LO..HI instead of the trial's own range, so several figures share one scale.</td>
+</tr>
+<tr>
+<td><code>--order-font-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Fixation index label size (default: 10).</td>
+</tr>
+<tr>
+<td><code>--order-font-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Fixation index label color (default: #111111).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-saccades">Saccades<a class="headerlink" href="#flags-saccades" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
 <tr>
 <td><code>--no-saccades</code></td>
 <td>switch</td>
 <td>—</td>
 <td>Hide saccade lines.</td>
-</tr>
-<tr>
-<td><code>--heatmap</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Draw the heatmap.</td>
-</tr>
-<tr>
-<td><code>--no-heatmap</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Hide the heatmap (the default).</td>
 </tr>
 <tr>
 <td><code>--saccade-arrows</code></td>
@@ -3519,7 +3941,7 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--saccade-style</code></td>
-<td><code>{solid,dash,dot,dashdot}</code></td>
+<td><code>solid</code>, <code>dash</code>, <code>dot</code>, <code>dashdot</code></td>
 <td>—</td>
 <td>Saccade line dash style (default: solid).</td>
 </tr>
@@ -3560,54 +3982,6 @@ with the default and help <code>--help</code> prints.</p>
 <td>Override a reading-type color, e.g. <code>--saccade-type-color</code> regression=#000000 (repeatable; classes: forward, skip, refixation, return_sweep, regression). Implies <code>--saccade-color-by-type</code>, unless <code>--saccade-color-by-direction</code> is given — then it recolors that two-way split (its forward and regression colors).</td>
 </tr>
 <tr>
-<td><code>--no-highlight-legend</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Hide the note naming the highlighted words (the words stay marked). Shows by default; <code>--legend</code> highlight=SPEC places it.</td>
-</tr>
-<tr>
-<td><code>--no-color-legend</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Hide the fixation-colour legend: the categories of a categorical <code>--color-by</code> and the highlighted fixations' entries (the markers still draw). Shows by default.</td>
-</tr>
-<tr>
-<td><code>--no-saccade-type-legend</code></td>
-<td>switch</td>
-<td>—</td>
-<td>With <code>--saccade-color-by-type</code>: hide the saccade-type color key on the figure (the colored lines still draw). Legend shows by default.</td>
-</tr>
-<tr>
-<td><code>--fix-index-range</code></td>
-<td><code>START:END</code></td>
-<td>—</td>
-<td>Draw only fixations START through END of the trial (1-based, both inclusive), e.g. <code>--fix-index-range</code> 1:40. Honored by <code>--animate</code> too, which then replays only that window, and by <code>--compare-with</code>, which windows both scanpaths (unless <code>--compare-fix-index-range</code> gives B its own).</td>
-</tr>
-<tr>
-<td><code>--highlight-column</code></td>
-<td><code>COLUMN</code></td>
-<td>—</td>
-<td>Boolean words column marking the text to highlight — the critical span (default: is_in_aspan, OneStop's answer span). Pass <code>--highlight-column</code> '' to highlight nothing. How it is drawn is <code>--critical-span-style</code>.</td>
-</tr>
-<tr>
-<td><code>--critical-span-style</code></td>
-<td><code>{mark-text,mark-border,none}</code></td>
-<td>—</td>
-<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither (default: mark-text).</td>
-</tr>
-<tr>
-<td><code>--fixation-flag</code></td>
-<td><code>SPEC</code></td>
-<td>—</td>
-<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, discard — e.g. <code>--fixation-flag</code> short=discard,threshold_ms=80. discard drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
-</tr>
-<tr>
-<td><code>--legend</code></td>
-<td><code>SPEC</code></td>
-<td>—</td>
-<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key, highlight (the highlighted-words note); POSITION auto or SPOT-outside / SPOT-inside with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right (outside grows the figure; left and right run down the side); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right-outside,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
-</tr>
-<tr>
 <td><code>--saccade-classes</code></td>
 <td><code>CLASSES</code></td>
 <td>—</td>
@@ -3619,149 +3993,38 @@ with the default and help <code>--help</code> prints.</p>
 <td>—</td>
 <td>Draw saccades as upward arcs (the linear-reading diagram) instead of straight connectors.</td>
 </tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-text-and-stimulus">Text and stimulus<a class="headerlink" href="#flags-text-and-stimulus" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
 <tr>
-<td><code>--snap-fixations</code></td>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--no-text</code><br><code>--no-labels</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Move each fixation up or down onto its text line (its word's, else the nearest); it keeps its x. <code>--snap-position</code> says where on the line.</td>
+<td>Hide the reading text.</td>
 </tr>
 <tr>
-<td><code>--snap-position</code></td>
-<td><code>LINES</code></td>
-<td>—</td>
-<td>Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge (default: -0.5). Used with <code>--snap-fixations</code>.</td>
-</tr>
-<tr>
-<td><code>--illustration</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Apply the clean schematic preset: snapped fixations, arced saccades, uniform colors, and no analytical overlays.</td>
-</tr>
-<tr>
-<td><code>--illustration-label</code></td>
-<td><code>{auto,show,hide}</code></td>
-<td><code>auto</code></td>
-<td>Auto-label transformed/schematic figures, force the label, or explicitly hide it (default: auto).</td>
-</tr>
-<tr>
-<td><code>--illustration-text</code></td>
-<td><code>TEXT</code></td>
-<td>—</td>
-<td>The Illustration label's text (default: "Illustration · &lt;reasons&gt;").</td>
-</tr>
-<tr>
-<td><code>--palette</code></td>
-<td><code>{default,print,high-contrast}</code></td>
-<td>—</td>
-<td>Color palette for the marks (the app's Palette): default (colorblind-safe, Okabe–Ito), print (grayscale, survives a B&amp;W print) or high-contrast. The app's own names work too. Individual --*-color flags override it.</td>
-</tr>
-<tr>
-<td><code>--color-by</code></td>
-<td><code>FIELD</code></td>
-<td>—</td>
-<td>Fixation column to color by, e.g. duration_ms, or 'line' to color each fixation by its text line (same as <code>--color-by-line</code>). Default: '(uniform)', one flat color, since marker size already shows duration.</td>
-</tr>
-<tr>
-<td><code>--fixation-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Flat fixation marker color used when <code>--color-by</code> is (uniform) (default: #0072B2).</td>
-</tr>
-<tr>
-<td><code>--fixation-symbol</code></td>
-<td><code>{circle,square,diamond,triangle-up,cross,x,star,hexagon,heart}</code></td>
-<td>—</td>
-<td>Fixation marker shape. Unlike color, shape survives a grayscale print (default: circle).</td>
-</tr>
-<tr>
-<td><code>--heatmap-metric</code></td>
+<td><code>--highlight-column</code></td>
 <td><code>COLUMN</code></td>
 <td>—</td>
-<td>Heatmap weighting: the fixation duration column — under your file's name or as duration_ms (the default) — or counts.</td>
+<td>Boolean words column marking the text to highlight — the critical span (default: is_in_aspan, OneStop's answer span). Pass <code>--highlight-column</code> '' to highlight nothing. How it is drawn is <code>--critical-span-style</code>.</td>
 </tr>
 <tr>
-<td><code>--heatmap-style</code></td>
-<td><code>{word-boxes,interpolated}</code></td>
+<td><code>--critical-span-style</code></td>
+<td><code>mark-text</code>, <code>mark-border</code>, <code>none</code></td>
 <td>—</td>
-<td>Heatmap geometry (default: word-boxes).</td>
-</tr>
-<tr>
-<td><code>--heatmap-sigma</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Gaussian σ in px for <code>--heatmap-style</code> interpolated (default: 2% of the data's larger span, at least 8 px).</td>
-</tr>
-<tr>
-<td><code>--heatmap-colorscale</code></td>
-<td><code>NAME</code></td>
-<td>—</td>
-<td>Heatmap color scale, e.g. Greens (default: Blues).</td>
-</tr>
-<tr>
-<td><code>--heatmap-norm</code></td>
-<td><code>{linear,log}</code></td>
-<td>—</td>
-<td>Heatmap color scaling: linear (default) or log — log compresses heavy-tailed dwell times so a few hot words don't wash out the rest.</td>
-</tr>
-<tr>
-<td><code>--heatmap-opacity</code></td>
-<td><code>O</code></td>
-<td>—</td>
-<td>Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes 0.5, or 0.35 with no word boxes; interpolated 0.45).</td>
-</tr>
-<tr>
-<td><code>--fixation-colorscale</code></td>
-<td><code>NAME</code></td>
-<td>—</td>
-<td>Color scale for <code>--color-by</code>, e.g. Viridis (default: Blues).</td>
-</tr>
-<tr>
-<td><code>--marker-size-range</code></td>
-<td><code>MIN MAX</code></td>
-<td>—</td>
-<td>Min/max fixation marker size in px, e.g. 4 12 (default: 8 24). Smaller ranges suit small thumbnails.</td>
-</tr>
-<tr>
-<td><code>--marker-size-scale</code></td>
-<td><code>{sqrt,linear,log,relative}</code></td>
-<td>—</td>
-<td>How duration sets marker size (default: sqrt). sqrt / linear / log map <code>--marker-duration-range</code> onto <code>--marker-size-range</code> the same way for every figure, so one duration is one size across trials, comparisons and replays; sqrt makes marker area grow with duration. relative stretches each figure from its own shortest to longest fixation.</td>
-</tr>
-<tr>
-<td><code>--marker-duration-range</code></td>
-<td><code>LO HI</code></td>
-<td>—</td>
-<td>Durations in ms given the smallest and largest marker on a fixed scale (default: 50 600). Shorter and longer fixations clamp to them.</td>
-</tr>
-<tr>
-<td><code>--no-duration-size-legend</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Hide the duration-size key (reference circles labelled in ms) drawn on a fixed <code>--marker-size-scale</code>.</td>
-</tr>
-<tr>
-<td><code>--canvas</code></td>
-<td><code>WxH</code></td>
-<td>—</td>
-<td>Monitor size in px, e.g. 2560x1440 (default: the source's screen — 2560x1440 for <code>--sample</code>/<code>--onestop</code>, 1680x1050 for <code>--potec</code> — else estimated from the data).</td>
-</tr>
-<tr>
-<td><code>--coordinate-grid</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Overlay a monitor-pixel X/Y grid on the scanpath.</td>
-</tr>
-<tr>
-<td><code>--coordinate-grid-spacing</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Pin the major coordinate-grid interval in pixels. Implies <code>--coordinate-grid</code>; omit for automatic 1/2/5×10ⁿ spacing.</td>
-</tr>
-<tr>
-<td><code>--coordinate-grid-font-size</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Size of the coordinate grid's labels, 6–36 px (default: 18).</td>
+<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither (default: mark-text).</td>
 </tr>
 <tr>
 <td><code>--stimulus-image</code></td>
@@ -3794,60 +4057,6 @@ with the default and help <code>--help</code> prints.</p>
 <td>Draw each trial's own stimulus page under the scanpath: the image_path its rows carry (from <code>--image-root</code>, or a dataset that ships its pages, like <code>--sample</code>), placed at its image_x / image_y. <code>--stimulus-image</code> PATH wins.</td>
 </tr>
 <tr>
-<td><code>--fixation-opacity</code></td>
-<td><code>O</code></td>
-<td>—</td>
-<td>Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).</td>
-</tr>
-<tr>
-<td><code>--fixation-outline-width</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Outline round each filled fixation marker, 0–5 px; 0 draws none (default: 0.5).</td>
-</tr>
-<tr>
-<td><code>--fixation-outline-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Color of that outline (default: #111111).</td>
-</tr>
-<tr>
-<td><code>--hollow-fixations</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Draw the fixations as outlines instead of filled markers.</td>
-</tr>
-<tr>
-<td><code>--color-by-line</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Color each fixation by the text line it lands on (lines inferred from the word boxes); overrides <code>--color-by</code>. Same as <code>--color-by</code> line.</td>
-</tr>
-<tr>
-<td><code>--fixation-color-range</code></td>
-<td><code>LO HI</code></td>
-<td>—</td>
-<td>Pin the <code>--color-by</code> color scale to LO..HI instead of the trial's own range, so several figures share one scale.</td>
-</tr>
-<tr>
-<td><code>--heatmap-range</code></td>
-<td><code>LO HI</code></td>
-<td>—</td>
-<td>Pin the heatmap's color scale to LO..HI instead of the trial's own range.</td>
-</tr>
-<tr>
-<td><code>--order-font-size</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Fixation index label size (default: 10).</td>
-</tr>
-<tr>
-<td><code>--order-font-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Fixation index label color (default: #111111).</td>
-</tr>
-<tr>
 <td><code>--text-color</code></td>
 <td><code>COLOR</code></td>
 <td>—</td>
@@ -3866,24 +4075,6 @@ with the default and help <code>--help</code> prints.</p>
 <td>Box color under <code>--critical-span-style</code> mark-border (default: #000000).</td>
 </tr>
 <tr>
-<td><code>--background-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Plot background color (default: #ffffff).</td>
-</tr>
-<tr>
-<td><code>--no-plot-frame</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Leave out the border round the plot area.</td>
-</tr>
-<tr>
-<td><code>--plot-frame-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Color of the border round the plot area (default: #000000).</td>
-</tr>
-<tr>
 <td><code>--line-spacing</code></td>
 <td><code>N</code></td>
 <td>—</td>
@@ -3896,10 +4087,136 @@ with the default and help <code>--help</code> prints.</p>
 <td>Draw the reading text at <code>--font-size</code> instead of sizing it from the word boxes.</td>
 </tr>
 <tr>
-<td><code>--word-hover-measure</code></td>
-<td><code>FIELD</code></td>
+<td><code>--font-size</code></td>
+<td><code>PX</code></td>
+<td><code>16</code></td>
+<td>Base figure font size (default: 16).</td>
+</tr>
+<tr>
+<td><code>--font-family</code></td>
+<td><code>NAME</code></td>
 <td>—</td>
-<td>The reading measure a word's hover shows (default: total_fixation_duration_ms; '' for none).</td>
+<td>Font for all figure text (default: monospace).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-word-boxes">Word boxes<a class="headerlink" href="#flags-word-boxes" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--word-boxes</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Draw the word boxes.</td>
+</tr>
+<tr>
+<td><code>--no-word-boxes</code><br><code>--no-words</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the word boxes (the default).</td>
+</tr>
+<tr>
+<td><code>--word-box-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Word-box outline color (default: #6c757d). A comparison outlines each scanpath's boxes in its own color instead.</td>
+</tr>
+<tr>
+<td><code>--word-box-line-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Word-box outline opacity, 0–1; 0 draws the fill only (default: 1). Below 1 the outline color must be #rrggbb, #rgb or rgb(r, g, b).</td>
+</tr>
+<tr>
+<td><code>--word-box-fill-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Word-box fill color, drawn at <code>--word-box-fill-opacity</code>: #rrggbb, #rgb or rgb(r, g, b) (default: #646464).</td>
+</tr>
+<tr>
+<td><code>--word-box-fill-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Word-box fill opacity, 0–1; 0 draws outlines only (default: 0.05).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-heatmap">Heatmap<a class="headerlink" href="#flags-heatmap" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--heatmap</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Draw the heatmap.</td>
+</tr>
+<tr>
+<td><code>--no-heatmap</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the heatmap (the default).</td>
+</tr>
+<tr>
+<td><code>--heatmap-metric</code></td>
+<td><code>COLUMN</code></td>
+<td>—</td>
+<td>Heatmap weighting: the fixation duration column — under your file's name or as duration_ms (the default) — or counts.</td>
+</tr>
+<tr>
+<td><code>--heatmap-style</code></td>
+<td><code>word-boxes</code>, <code>interpolated</code></td>
+<td>—</td>
+<td>Heatmap geometry (default: word-boxes).</td>
+</tr>
+<tr>
+<td><code>--heatmap-sigma</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Gaussian σ in px for <code>--heatmap-style</code> interpolated (default: 2% of the data's larger span, at least 8 px).</td>
+</tr>
+<tr>
+<td><code>--heatmap-colorscale</code></td>
+<td><code>NAME</code></td>
+<td>—</td>
+<td>Heatmap color scale, e.g. Greens (default: Blues).</td>
+</tr>
+<tr>
+<td><code>--heatmap-norm</code></td>
+<td><code>linear</code>, <code>log</code></td>
+<td>—</td>
+<td>Heatmap color scaling: linear (default) or log — log compresses heavy-tailed dwell times so a few hot words don't wash out the rest.</td>
+</tr>
+<tr>
+<td><code>--heatmap-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes 0.5, or 0.35 with no word boxes; interpolated 0.45).</td>
+</tr>
+<tr>
+<td><code>--heatmap-range</code></td>
+<td><code>LO HI</code></td>
+<td>—</td>
+<td>Pin the heatmap's color scale to LO..HI instead of the trial's own range.</td>
 </tr>
 <tr>
 <td><code>--word-heatmap-col</code></td>
@@ -3913,29 +4230,107 @@ with the default and help <code>--help</code> prints.</p>
 <td>—</td>
 <td>Color-bar title for <code>--word-heatmap-col</code> (default: Value).</td>
 </tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-raw-gaze">Raw gaze<a class="headerlink" href="#flags-raw-gaze" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
 <tr>
-<td><code>--x-field</code></td>
-<td><code>FIELD</code></td>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--raw-gaze</code></td>
+<td><code>PATH [PATH ...]</code></td>
 <td>—</td>
-<td>Fixation column on the x axis (default: x). A non-spatial one draws a chart of the fixations instead of the scanpath.</td>
+<td>Raw (sample-level) gaze table(s) to draw under the fixations, columns auto-detected like <code>--fixations</code> (same formats; several paths or a quoted glob concatenate). Static figures and <code>--compare-with</code> comparisons, where each scanpath's samples take its color (not <code>--animate</code>). On its own (no other input) it is the dataset: its trials are listed and drawn as recorded — no fixations are detected from the samples.</td>
 </tr>
 <tr>
-<td><code>--y-field</code></td>
-<td><code>FIELD</code></td>
-<td>—</td>
-<td>Fixation column on the y axis (default: y).</td>
-</tr>
-<tr>
-<td><code>--crop-to-data</code>, <code>--no-full-monitor</code></td>
+<td><code>--no-raw-gaze</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Frame the axes on the data instead of the whole <code>--canvas</code> monitor (the app's Crop to data).</td>
+<td>Load the <code>--raw-gaze</code> table but hide its layer — the app's 🔵 Raw gaze switch turned off. With raw gaze as the only input the figure then draws no gaze.</td>
 </tr>
 <tr>
-<td><code>--crop-margin</code></td>
+<td><code>--sample-raw-gaze</code></td>
+<td>switch</td>
+<td>—</td>
+<td>With <code>--sample</code>: draw the bundled demo's raw gaze (synthesized, for one trial — the one the app overlays it on).</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection (same shape as <code>--fix-schema</code>); needed only when a column isn't recognized.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Raw-gaze sample color (default: #888888). A comparison draws each scanpath's samples in its own color instead.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-marker-size</code></td>
 <td><code>PX</code></td>
 <td>—</td>
-<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
+<td>Raw-gaze sample size, 1–12 (default: 4).</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Raw-gaze sample opacity, 0.1–1.0 (default: 0.6).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-legends-and-color-bars">Legends and color bars<a class="headerlink" href="#flags-legends-and-color-bars" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--no-highlight-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the note naming the highlighted words (the words stay marked). Shows by default; <code>--legend</code> highlight=SPEC places it.</td>
+</tr>
+<tr>
+<td><code>--no-color-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the fixation-colour legend: the categories of a categorical <code>--color-by</code> and the highlighted fixations' entries (the markers still draw). Shows by default.</td>
+</tr>
+<tr>
+<td><code>--no-saccade-type-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>With <code>--saccade-color-by-type</code>: hide the saccade-type color key on the figure (the colored lines still draw). Legend shows by default.</td>
+</tr>
+<tr>
+<td><code>--legend</code></td>
+<td><code>SPEC</code></td>
+<td>—</td>
+<td>Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE] with KIND one of compare, saccades, colors (the fixation colour categories), size-key, highlight (the highlighted-words note); POSITION auto or SPOT-outside / SPOT-inside with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right (outside grows the figure; left and right run down the side); ARRANGEMENT stacked or side-by-side; SIZE the text size in px — e.g. <code>--legend</code> saccades=right-outside,stacked,14. Whether a legend is drawn at all is still its own switch.</td>
+</tr>
+<tr>
+<td><code>--no-duration-size-legend</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Hide the duration-size key (reference circles labelled in ms) drawn on a fixed <code>--marker-size-scale</code>.</td>
 </tr>
 <tr>
 <td><code>--no-fixation-colorbar</code></td>
@@ -3945,7 +4340,7 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--fixation-colorbar-orientation</code></td>
-<td><code>{vertical,horizontal}</code></td>
+<td><code>vertical</code>, <code>horizontal</code></td>
 <td>—</td>
 <td>Fixation color bar: beside the plot (vertical, default) or below it.</td>
 </tr>
@@ -3981,7 +4376,7 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--heatmap-colorbar-orientation</code></td>
-<td><code>{vertical,horizontal}</code></td>
+<td><code>vertical</code>, <code>horizontal</code></td>
 <td>—</td>
 <td>Heatmap color bar: beside the plot (vertical, default) or below it.</td>
 </tr>
@@ -4009,72 +4404,252 @@ with the default and help <code>--help</code> prints.</p>
 <td>—</td>
 <td>Heatmap color bar: length as a share of the plot's side, 0.1–1.0 (default: a third of its height upright, 0.6 of its width lying down).</td>
 </tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-figure-and-canvas">Figure and canvas<a class="headerlink" href="#flags-figure-and-canvas" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
 <tr>
-<td><code>--raw-gaze</code></td>
-<td><code>PATH [PATH ...]</code></td>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--canvas</code></td>
+<td><code>WxH</code></td>
 <td>—</td>
-<td>Raw (sample-level) gaze table(s) to draw under the fixations, columns auto-detected like <code>--fixations</code> (same formats; several paths or a quoted glob concatenate). Static figures and <code>--compare-with</code> comparisons, where each scanpath's samples take its color (not <code>--animate</code>). On its own (no other input) it is the dataset: its trials are listed and drawn as recorded — no fixations are detected from the samples.</td>
+<td>Monitor size in px, e.g. 2560x1440 (default: the source's screen — 2560x1440 for <code>--sample</code>/<code>--onestop</code>, 1680x1050 for <code>--potec</code> — else estimated from the data).</td>
 </tr>
 <tr>
-<td><code>--no-raw-gaze</code></td>
+<td><code>--coordinate-grid</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Load the <code>--raw-gaze</code> table but hide its layer — the app's 🔵 Raw gaze switch turned off. With raw gaze as the only input the figure then draws no gaze.</td>
+<td>Overlay a monitor-pixel X/Y grid on the scanpath.</td>
 </tr>
 <tr>
-<td><code>--sample-raw-gaze</code></td>
-<td>switch</td>
-<td>—</td>
-<td>With <code>--sample</code>: draw the bundled demo's raw gaze (synthesized, for one trial — the one the app overlays it on).</td>
-</tr>
-<tr>
-<td><code>--raw-gaze-schema</code></td>
-<td><code>JSON</code></td>
-<td>—</td>
-<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection (same shape as <code>--fix-schema</code>); needed only when a column isn't recognized.</td>
-</tr>
-<tr>
-<td><code>--word-box-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Word-box outline color (default: #6c757d). A comparison outlines each scanpath's boxes in its own color instead.</td>
-</tr>
-<tr>
-<td><code>--word-box-line-opacity</code></td>
-<td><code>O</code></td>
-<td>—</td>
-<td>Word-box outline opacity, 0–1; 0 draws the fill only (default: 1). Below 1 the outline color must be #rrggbb, #rgb or rgb(r, g, b).</td>
-</tr>
-<tr>
-<td><code>--word-box-fill-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Word-box fill color, drawn at <code>--word-box-fill-opacity</code>: #rrggbb, #rgb or rgb(r, g, b) (default: #646464).</td>
-</tr>
-<tr>
-<td><code>--word-box-fill-opacity</code></td>
-<td><code>O</code></td>
-<td>—</td>
-<td>Word-box fill opacity, 0–1; 0 draws outlines only (default: 0.05).</td>
-</tr>
-<tr>
-<td><code>--raw-gaze-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Raw-gaze sample color (default: #888888). A comparison draws each scanpath's samples in its own color instead.</td>
-</tr>
-<tr>
-<td><code>--raw-gaze-marker-size</code></td>
+<td><code>--coordinate-grid-spacing</code></td>
 <td><code>PX</code></td>
 <td>—</td>
-<td>Raw-gaze sample size, 1–12 (default: 4).</td>
+<td>Pin the major coordinate-grid interval in pixels. Implies <code>--coordinate-grid</code>; omit for automatic 1/2/5×10ⁿ spacing.</td>
 </tr>
 <tr>
-<td><code>--raw-gaze-opacity</code></td>
-<td><code>O</code></td>
+<td><code>--coordinate-grid-font-size</code></td>
+<td><code>PX</code></td>
 <td>—</td>
-<td>Raw-gaze sample opacity, 0.1–1.0 (default: 0.6).</td>
+<td>Size of the coordinate grid's labels, 6–36 px (default: 18).</td>
 </tr>
+<tr>
+<td><code>--background-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Plot background color (default: #ffffff).</td>
+</tr>
+<tr>
+<td><code>--no-plot-frame</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Leave out the border round the plot area.</td>
+</tr>
+<tr>
+<td><code>--plot-frame-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of the border round the plot area (default: #000000).</td>
+</tr>
+<tr>
+<td><code>--x-field</code></td>
+<td><code>FIELD</code></td>
+<td>—</td>
+<td>Fixation column on the x axis (default: x). A non-spatial one draws a chart of the fixations instead of the scanpath.</td>
+</tr>
+<tr>
+<td><code>--y-field</code></td>
+<td><code>FIELD</code></td>
+<td>—</td>
+<td>Fixation column on the y axis (default: y).</td>
+</tr>
+<tr>
+<td><code>--crop-to-data</code><br><code>--no-full-monitor</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Frame the axes on the data instead of the whole <code>--canvas</code> monitor (the app's Crop to data).</td>
+</tr>
+<tr>
+<td><code>--crop-margin</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-title-and-caption">Title and caption<a class="headerlink" href="#flags-title-and-caption" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--title</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td>Title band stamped on the figure; off by default. The figure grows to make room rather than shrinking the plot.</td>
+</tr>
+<tr>
+<td><code>--caption</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td>Caption band stamped on the figure; off by default.</td>
+</tr>
+<tr>
+<td><code>--title-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Size of the <code>--title</code> text, 8–48 px (default: 20).</td>
+</tr>
+<tr>
+<td><code>--caption-size</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>Size of the <code>--caption</code> text, 6–36 px (default: 13).</td>
+</tr>
+<tr>
+<td><code>--caption-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of the <code>--caption</code> text (default: #555555).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-hover">Hover<a class="headerlink" href="#flags-hover" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--word-hover-fields</code></td>
+<td><code>FIELDS</code></td>
+<td>—</td>
+<td>Comma-separated word columns shown on hover (e.g. text,word_id,gpt2_surprisal).</td>
+</tr>
+<tr>
+<td><code>--fixation-hover-fields</code></td>
+<td><code>FIELDS</code></td>
+<td>—</td>
+<td>Comma-separated fixation columns shown on hover (e.g. order_in_trial,duration_ms,eye).</td>
+</tr>
+<tr>
+<td><code>--word-hover-measure</code></td>
+<td><code>FIELD</code></td>
+<td>—</td>
+<td>The reading measure a word's hover shows (default: total_fixation_duration_ms; '' for none).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-illustration">Illustration<a class="headerlink" href="#flags-illustration" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--illustration</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Apply the clean schematic preset: snapped fixations, arced saccades, uniform colors, and no analytical overlays.</td>
+</tr>
+<tr>
+<td><code>--illustration-label</code></td>
+<td><code>auto</code>, <code>show</code>, <code>hide</code></td>
+<td><code>auto</code></td>
+<td>Auto-label transformed/schematic figures, force the label, or explicitly hide it (default: auto).</td>
+</tr>
+<tr>
+<td><code>--illustration-text</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td>The Illustration label's text (default: "Illustration · &lt;reasons&gt;").</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-replay">Replay<a class="headerlink" href="#flags-replay" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--playback-speed</code></td>
+<td><code>X</code></td>
+<td><code>1.0</code></td>
+<td>Animation speed multiplier for <code>--animate</code> (default: 1.0 = real time).</td>
+</tr>
+<tr>
+<td><code>--no-autoplay</code></td>
+<td>switch</td>
+<td>—</td>
+<td>With <code>--animate</code>: start the replay paused (press ▶ Play to run it). By default the saved HTML autoplays on load at the playback speed.</td>
+</tr>
+<tr>
+<td><code>--anim-grid-step-ms</code></td>
+<td><code>MS</code></td>
+<td>—</td>
+<td>With <code>--animate</code>: emit a frame every MS of reading time (default: 100). Smaller is smoother and larger to export.</td>
+</tr>
+<tr>
+<td><code>--anim-max-frames</code></td>
+<td><code>N</code></td>
+<td>—</td>
+<td>With <code>--animate</code>: at most N frames, the first included (default: 360). A trial too long for that many at <code>--anim-grid-step-ms</code> gets a wider step instead.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-size-and-export">Size and export<a class="headerlink" href="#flags-size-and-export" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
 <tr>
 <td><code>--width</code></td>
 <td><code>PX</code></td>
@@ -4112,80 +4687,14 @@ with the default and help <code>--help</code> prints.</p>
 <td>Resolution of <code>--width-mm</code> / <code>--width-in</code> (default: 300).</td>
 </tr>
 <tr>
-<td><code>--font-size</code></td>
-<td><code>PX</code></td>
-<td><code>16</code></td>
-<td>Base figure font size (default: 16).</td>
-</tr>
-<tr>
-<td><code>--font-family</code></td>
-<td><code>NAME</code></td>
-<td>—</td>
-<td>Font for all figure text (default: monospace).</td>
-</tr>
-<tr>
-<td><code>--title</code></td>
-<td><code>TEXT</code></td>
-<td>—</td>
-<td>Title band stamped on the figure; off by default. The figure grows to make room rather than shrinking the plot.</td>
-</tr>
-<tr>
-<td><code>--caption</code></td>
-<td><code>TEXT</code></td>
-<td>—</td>
-<td>Caption band stamped on the figure; off by default.</td>
-</tr>
-<tr>
-<td><code>--title-size</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Size of the <code>--title</code> text, 8–48 px (default: 20).</td>
-</tr>
-<tr>
-<td><code>--caption-size</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>Size of the <code>--caption</code> text, 6–36 px (default: 13).</td>
-</tr>
-<tr>
-<td><code>--caption-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Color of the <code>--caption</code> text (default: #555555).</td>
-</tr>
-<tr>
 <td><code>--separable-layers</code></td>
 <td>switch</td>
 <td>—</td>
 <td>Also write the figure split into one file per layer (word boxes / fixations / saccades / heatmap / labels / stimulus image) in a <code>&amp;lt;output&amp;gt;_layers/</code> folder, so each can be restyled in Illustrator / Inkscape. Static image output only (.svg/.pdf/.png); the layers register when stacked.</td>
 </tr>
 <tr>
-<td><code>--playback-speed</code></td>
-<td><code>X</code></td>
-<td><code>1.0</code></td>
-<td>Animation speed multiplier for <code>--animate</code> (default: 1.0 = real time).</td>
-</tr>
-<tr>
-<td><code>--no-autoplay</code></td>
-<td>switch</td>
-<td>—</td>
-<td>With <code>--animate</code>: start the replay paused (press ▶ Play to run it). By default the saved HTML autoplays on load at the playback speed.</td>
-</tr>
-<tr>
-<td><code>--anim-grid-step-ms</code></td>
-<td><code>MS</code></td>
-<td>—</td>
-<td>With <code>--animate</code>: emit a frame every MS of reading time (default: 100). Smaller is smoother and larger to export.</td>
-</tr>
-<tr>
-<td><code>--anim-max-frames</code></td>
-<td><code>N</code></td>
-<td>—</td>
-<td>With <code>--animate</code>: at most N frames, the first included (default: 360). A trial too long for that many at <code>--anim-grid-step-ms</code> gets a wider step instead.</td>
-</tr>
-<tr>
 <td><code>--print-code</code></td>
-<td><code>FLAVOR</code></td>
+<td><code>python</code>, <code>cli</code>, <code>both</code></td>
 <td>—</td>
 <td>Print the API / CLI code that reproduces this figure to stdout (python | cli | both), then render as usual. Only the options that differ from the defaults are written.</td>
 </tr>
@@ -4197,7 +4706,9 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Comparison: draw a second scanpath beside or over the first</strong></p>
+</div>
+<h3 id="flags-comparison">Comparison<a class="headerlink" href="#flags-comparison" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
 <tr>
@@ -4222,13 +4733,13 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 <tr>
 <td><code>--compare-layout</code></td>
-<td><code>{overlay,side-by-side,stacked}</code></td>
+<td><code>overlay</code>, <code>side-by-side</code>, <code>stacked</code></td>
 <td><code>overlay</code></td>
 <td>How the two scanpaths are arranged (default: overlay). Across two datasets, overlay needs both canvases to be the same size — two different canvases are refused rather than silently split, so pass side-by-side or stacked for them. Matching canvases that a dataset never recorded still overlay, with a warning.</td>
 </tr>
 <tr>
 <td><code>--compare-stimulus</code></td>
-<td><code>{both,a,b}</code></td>
+<td><code>both</code>, <code>a</code>, <code>b</code></td>
 <td><code>both</code></td>
 <td>On an overlay, whose word boxes and text to draw (default: both). Two datasets' word boxes coincide only when the text is identical.</td>
 </tr>
@@ -4245,7 +4756,7 @@ with the default and help <code>--help</code> prints.</p>
 <td>Name for the SECOND scanpath in the legend and hover, instead of the default. Requires <code>--label-a</code>.</td>
 </tr>
 <tr>
-<td><code>--compare-legend</code>, <code>--no-compare-legend</code></td>
+<td><code>--compare-legend</code><br><code>--no-compare-legend</code></td>
 <td>switch</td>
 <td>—</td>
 <td>Draw the legend naming the two scanpaths (the app's A/B legend; on by default, as in the app). Applies to the <code>--animate</code> co-animation too.</td>
@@ -4330,10 +4841,178 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 </tbody>
 </table>
-</details>
-<details class="note">
-<summary><code>cache</code> — every flag</summary>
-<p><strong>Options</strong></p>
+</div>
+</p>
+<h2 id="corpus">corpus<a class="headerlink" href="#corpus" title="Permanent link">&para;</a></h2>
+<p><code>corpus</code> goes the other way from <code>render</code>: it reads a tidy CSV you already
+have and renders a styled corpus figure, as
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_corpus_figure&lt;/span&gt;" href="../api/#scanpath_studio.api.plot_corpus_figure"><code>plot_corpus_figure</code></a> does. For
+<code>--kind profile</code> the CSV needs <code>word_id</code> and <code>value</code> columns.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
+</code></pre></div>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--input</code></td>
+<td><code>PATH</code></td>
+<td>required</td>
+<td>The CSV. profile reads word_id plus the value column (and optional lo / hi), distribution the value column, difference word_id and diff.</td>
+</tr>
+<tr>
+<td><code>--kind</code></td>
+<td><code>profile</code>, <code>distribution</code>, <code>difference</code></td>
+<td>required</td>
+<td>A per-word profile, a distribution, or a difference profile.</td>
+</tr>
+<tr>
+<td><code>-o</code><br><code>--output</code></td>
+<td><code>PATH</code></td>
+<td>required</td>
+<td>Output file; any extension save_figure writes (.html, .png, .svg, .pdf).</td>
+</tr>
+<tr>
+<td><code>--measure-label</code></td>
+<td><code>MEASURE_LABEL</code></td>
+<td><code>Value</code></td>
+<td>Axis / legend label for the value (default: Value).</td>
+</tr>
+<tr>
+<td><code>--series-col</code></td>
+<td><code>SERIES_COL</code></td>
+<td><code>series</code></td>
+<td>Column naming the overlaid series, when present (default: series).</td>
+</tr>
+<tr>
+<td><code>--value-col</code></td>
+<td><code>VALUE_COL</code></td>
+<td><code>value</code></td>
+<td>The value column (default: value).</td>
+</tr>
+<tr>
+<td><code>--primary-color</code></td>
+<td><code>PRIMARY_COLOR</code></td>
+<td><code>#1f77b4</code></td>
+<td>First series color (default: #1f77b4).</td>
+</tr>
+<tr>
+<td><code>--secondary-color</code></td>
+<td><code>SECONDARY_COLOR</code></td>
+<td><code>#e45756</code></td>
+<td>Second series color (default: #e45756).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="check">check<a class="headerlink" href="#check" title="Permanent link">&para;</a></h2>
+<p><code>check</code> runs the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management</strong> page's <strong>Data checks</strong>
+on your tables without opening the app. It looks for:</p>
+<ul>
+<li>fixations lasting 0 ms or less, or with an infinite duration or onset;</li>
+<li>fixations and raw-gaze samples with no finite position;</li>
+<li>word boxes with no area or no finite position;</li>
+<li>per-screen screen sizes that are not finite and positive.</li>
+</ul>
+<p>Each finding gives the rows and trials affected, a few example rows, and what
+the app does with them. <code>check</code> changes nothing and exits 0 whatever it finds.
+<code>--json</code> prints the table
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_data_health&lt;/span&gt;" href="../api/#scanpath_studio.api.check_data_health"><code>check_data_health</code></a> returns.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
+</code></pre></div>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--sample</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Check the bundled OneStop demo instead of your own tables.</td>
+</tr>
+<tr>
+<td><code>--words</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Words table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--fixations</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Fixations table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Raw (sample-level) gaze table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection (same shape as <code>--fix-schema</code>).</td>
+</tr>
+<tr>
+<td><code>--trial-parts-manifest</code></td>
+<td><code>PATH</code></td>
+<td>—</td>
+<td>JSON manifest assigning source rows to ordered screens.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Print the findings as JSON (the rows api.check_data_health returns).</td>
+</tr>
+<tr>
+<td><code>--word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--words</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognized; the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--fixations</code> table, replacing auto-detection: a JSON object (or a path to a .json file holding one) from each field to a column name, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}' — the same dict api.load_scanpath_data takes. Needed only when a column isn't recognized; the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>Further columns of your own to carry through loading under their own names (e.g. a pupil size), from whichever table has them — otherwise loading keeps only the mapped and recognized fields. A kept fixation column can then be <code>--color-by</code>, an axis or a hover field. The keep_columns= of api.load_scanpath_data.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="cache">cache<a class="headerlink" href="#cache" title="Permanent link">&para;</a></h2>
+<p>A local or desktop run caches your session on your own machine, so a refresh
+or a restart resumes where you left off: uploaded datasets, column mappings,
+view settings, saved designs, metadata tables and annotations. <code>cache</code> shows
+what is stored and removes it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+</code></pre></div>
+<div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
 <tr>
@@ -4364,14 +5043,80 @@ with the default and help <code>--help</code> prints.</p>
 </tr>
 </tbody>
 </table>
-</details>
-<p><code>corpus</code>, <code>check</code> and <code>version</code> are listed in full in their own sections above.</p>
+</div>
+<p>The same information is at the foot of the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data
+Management</strong> page, under <strong>Saved on this computer</strong>. A running app writes a new
+copy at its next change, so clear the cache with the app closed.</p>
+<table>
+<thead>
+<tr>
+<th>To</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>turn caching off for one launch</td>
+<td><code>scanpath-studio --no-persist</code></td>
+</tr>
+<tr>
+<td>turn it off wherever the variable is set</td>
+<td><code>SCANPATH_STUDIO_PERSIST=0</code></td>
+</tr>
+<tr>
+<td>move the folder</td>
+<td><code>SCANPATH_STUDIO_STATE_DIR</code></td>
+</tr>
+</tbody>
+</table>
+<p>Hosted deployments do not cache by default.</p>
+<h2 id="version">version<a class="headerlink" href="#version" title="Permanent link">&para;</a></h2>
+<p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
+asks GitHub whether a newer release is out and prints the command that updates
+your install. It is the only time the command uses the network.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+</code></pre></div>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--check</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Ask GitHub for the latest release and say how to update this install.</td>
+</tr>
+<tr>
+<td><code>--timeout</code></td>
+<td><code>SECONDS</code></td>
+<td><code>5.0</code></td>
+<td>How long to wait for GitHub (default 5).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Between releases the version names the build: <code>0.35.0.post3+g8f18219</code> is three
+commits after 0.35.0, at commit <code>8f18219</code>. The same check is
+<strong><span class="sps-icon" data-icon="help" aria-hidden="true"></span> Help → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> About → <span class="sps-icon" data-icon="update" aria-hidden="true"></span> Check for
+updates</strong> in the app, and
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_for_updates&lt;/span&gt;" href="../api/#scanpath_studio.api.check_for_updates"><code>check_for_updates</code></a> in Python.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
@@ -4403,7 +5148,7 @@ with the default and help <code>--help</code> prints.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../api/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Python API">
+          <a href="../figure-options/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Figure options">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4413,20 +5158,20 @@ with the default and help <code>--help</code> prints.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Python API
+                Figure options
               </div>
             </div>
           </a>
         
         
           
-          <a href="../agents/" class="md-footer__link md-footer__link--next" aria-label="Next: For coding agents">
+          <a href="../about/" class="md-footer__link md-footer__link--next" aria-label="Next: About Scanpath Studio">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                For coding agents
+                About Scanpath Studio
               </div>
             </div>
             <div class="md-footer__button md-icon">

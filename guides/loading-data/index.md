@@ -54,6 +54,10 @@ Include per-word reading measures in the Words table, such as first fixation dur
 1. Optionally attach stimulus screenshots from a local folder.
 1. Click Add dataset.
 
+\[!\[
+
+\](../../assets/workflows/add-your-data_poster.webp)\](../../assets/workflows/add-your-data.mp4)
+
 ## Load and inspect in code
 
 Load the same files in a script; column names are detected automatically.
@@ -72,7 +76,7 @@ scanpath-studio render --words ia.csv --fixations fixations.csv --list-trials
 scanpath-studio check --words ia.csv --fixations fixations.csv
 ```
 
-For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#render).
+For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load-your-data) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#render).
 
 ## Manage datasets
 

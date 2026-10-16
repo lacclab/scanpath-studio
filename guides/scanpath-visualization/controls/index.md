@@ -9,7 +9,7 @@ The page has two sets of controls:
 
 The tabs under the plot then work with the trial on screen: annotate it, read its context, compare it, export it or share it. For how the parts fit together, see the [Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md) guide.
 
-For the corresponding Python keywords and CLI flags, use the [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options).
+For the corresponding Python keywords and CLI flags, use the [figure options table](https://lacclab.github.io/scanpath-studio/figure-options/index.md).
 
 ## Trial control bar
 

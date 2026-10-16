@@ -2,7 +2,7 @@
 
 Where fixation time concentrates.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
 1. Turn on Heatmap. In Heatmap ▾, choose Interpolated and weight by fixation duration.
 1. Turn off Fixations and Saccades; keep Stimulus on.
 
@@ -12,6 +12,7 @@ Where fixation time concentrates.
 scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --heatmap --heatmap-style interpolated --no-fixations --no-saccades \
+  --highlight-column '' \
   -o heatmap.html
 ```
 
@@ -27,6 +28,7 @@ fig = sps.plot_scanpath(
     tid,
     show_heatmap=True,
     heatmap_style="Interpolated",
+    highlight_column=None,
     show_fixations=False,
     show_saccades=False,
 )

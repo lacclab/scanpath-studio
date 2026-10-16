@@ -1,0 +1,9 @@
+participant_id,trial_id,text_id,x,y,duration_ms,timestamp_ms,word_id,order_in_trial,pass_index
+synthetic,synthetic_2line_demo,synthetic_2line_demo,115,110,100,0,,1,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,135,110,50,100,,2,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,225,110,150,150,,3,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,325,110,120,300,,4,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,225,110,80,420,,5,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,125,210,200,500,,6,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,225,210,90,700,,7,1
+synthetic,synthetic_2line_demo,synthetic_2line_demo,325,210,110,850,,9,1

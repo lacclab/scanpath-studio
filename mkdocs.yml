@@ -168,7 +168,6 @@ nav:
       - Replay: gallery/replay.md
       - Highlighted text: gallery/highlighted-text.md
       - Across the experiment: gallery/across-experiment.md
-      - App recordings: gallery/workflows.md
   - Reference:
       - Python API: api.md
       - Figure options: figure-options.md
@@ -228,6 +227,7 @@ plugins:
         tutorials/run-it-headless.md: guides/scanpath-visualization/index.md#render-in-code
         automation.md: guides/exporting/index.md
         agents.md: api.md
+        gallery/workflows.md: index.md#from-recording-to-publication
         gallery/word-profile.md: gallery/across-experiment.md
         gallery/time-course.md: gallery.md
         # ENG-80 took these off the site for the beta; old links land on the

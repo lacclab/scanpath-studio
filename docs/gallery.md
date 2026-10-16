@@ -16,7 +16,5 @@ from gallery_examples import gallery_cards
 print(gallery_cards())
 ```
 
-## App recordings { #the-app-at-work }
-
-[Watch short workflow recordings](gallery/workflows.md), or follow a
-[step-by-step tutorial](tutorials/index.md).
+[See the app in action](index.md#from-recording-to-publication) ·
+[Follow a tutorial](tutorials/index.md)

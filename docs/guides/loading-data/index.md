@@ -71,6 +71,12 @@ Corpus Analysis uses the measures you supply.
 4. Optionally attach stimulus screenshots from a local folder.
 5. Click Add dataset.
 
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/add-your-data_poster.webp" data-autoplay
+       aria-label="Importing fixation and interest-area reports">
+  <source src="../../assets/workflows/add-your-data.mp4" type="video/mp4">
+</video>
+
 ## Load and inspect in code
 
 Load the same files in a script; column names are detected automatically.

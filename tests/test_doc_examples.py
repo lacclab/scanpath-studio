@@ -25,7 +25,6 @@ PAGES = (
     "cli.md",
     "guides/scanpath-visualization/index.md",
     "guides/exporting/index.md",
-    "agents.md",
     "../README.md",
 )
 

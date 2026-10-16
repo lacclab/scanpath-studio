@@ -79,7 +79,7 @@ extra:
   # Google Search Console's HTML-tag verification for the URL-prefix property
   # https://lacclab.github.io/scanpath-studio/ — paste the `content` value of
   # the tag it offers. Empty writes no tag.
-  google_site_verification: ""
+  google_site_verification: FEUvYyUUeFoiAVgouYHaGdMKyTgLGUFLUe99oofr_DY
   # schema.org record written into the home page's head (overrides/main.html),
   # so a search engine knows what the site is about.
   structured_data:

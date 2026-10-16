@@ -1,3 +1,7 @@
+---
+description: "Every Scanpath Studio figure option by section: its default, the render flag that sets it, and what it does."
+---
+
 # Figure options
 
 Every keyword the figure builders take: the default it renders with, the

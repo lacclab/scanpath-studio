@@ -157,6 +157,7 @@ nav:
       - FAQ: faq.md
   - Plot gallery:
       - gallery.md
+      - Hearts & arrows: gallery/hearts-arrows.md
       - Scanpath: gallery/scanpath.md
       - Gaze heatmap: gallery/heatmap.md
       - Word-box heatmap: gallery/word-boxes.md

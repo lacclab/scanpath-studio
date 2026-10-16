@@ -94,6 +94,37 @@ def _illustration() -> dict:
     return locals()
 
 
+def _hearts_arrows() -> dict:
+    from scanpath_studio.measures import fixation_in_text_mask
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    fixations = fixations[fixation_in_text_mask(fixations, words)].copy()
+    pid, tid = "synthetic", "synthetic_2line_demo"
+    fig = sps.plot_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        highlight_column=None,
+        canvas_size=(450, 300),
+        fixation_symbol="heart",
+        fixation_color="#d12d72",
+        marker_size_range=(18, 30),
+        fixation_opacity=0.85,
+        fixation_snap_to_line=True,
+        saccade_render_mode="Arc",
+        show_saccade_arrows=True,
+        saccade_color="#4f46a5",
+        saccade_width=2.5,
+        saccade_arrow_size=12,
+        show_order=False,
+        duration_size_legend=False,
+        illustration_text="Illustration · hand-drawn",
+    )
+    return locals()
+
+
 def _comparison() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_2_4_Ele_r0"
@@ -208,6 +239,12 @@ def _across_experiment() -> dict:
 
 
 EXAMPLES = (
+    Example(
+        "hearts-arrows",
+        "Hearts & arrows",
+        "Heart-shaped fixations and curved arrows: make the design your own.",
+        _hearts_arrows,
+    ),
     Example("scanpath", "Scanpath", "Fixations and saccades over the text.", _scanpath),
     Example("heatmap", "Gaze heatmap", "Where fixation time concentrates.", _heatmap),
     Example(
@@ -304,11 +341,12 @@ def gallery_python(slug: str) -> str:
 
 def write_gallery_assets(site: Path) -> None:
     """Downloadable data and scripts used by the gallery’s shell recipes."""
-    target = site / "gallery" / "illustration"
-    target.mkdir(parents=True, exist_ok=True)
-    example = _build("illustration")
-    example["words"].to_csv(target / "words.csv", index=False)
-    example["fixations"].to_csv(target / "fixations.csv", index=False)
+    for slug in ("illustration", "hearts-arrows"):
+        target = site / "gallery" / slug
+        target.mkdir(parents=True, exist_ok=True)
+        example = _build(slug)
+        example["words"].to_csv(target / "words.csv", index=False)
+        example["fixations"].to_csv(target / "fixations.csv", index=False)
     target = site / "gallery" / "across-experiment"
     target.mkdir(parents=True, exist_ok=True)
     code = (

@@ -45,5 +45,5 @@ A shared deployment should use these settings:
 - **Restart the server, or use Streamlit's Clear cache, after working with a
   sensitive corpus.** Parsed tables stay in the server's memory until then.
 
-A share link names a participant and a trial, and a saved plot config also
-carries your annotation notes, so read either before sending it on.
+A share link names a participant and a trial, so read it before sending it
+on.

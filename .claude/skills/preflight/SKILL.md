@@ -26,7 +26,7 @@ output). Fix trivial failures (formatting) directly; report anything else.
    `changelog.d/<issue>.<group>.md` (or `<slug>.<group>.md` when there is no
    issue) holding one line of plain text
    (`changelog.d/README.md`). If missing, write it. `CHANGELOG.md` itself must
-   **not** be in the diff — only a release edits it (ENG-86). Then
+   **not** be in the diff — only a release edits it. Then
    `python scripts/changelog_fragments.py check`.
 5. **Issue** — if the pending work corresponds to a GitHub issue
    (`gh issue list`), check its board Status and body write-up are current.

@@ -16,9 +16,9 @@ uv run streamlit run streamlit_app.py --server.address 127.0.0.1
 Python 3.11–3.14. Bind to `127.0.0.1`: the on-device recovery cache is off on a
 server other machines can reach.
 
-The architecture map is [AGENTS.md](AGENTS.md); the per-module reference and
-gotchas are in [scanpath_studio/CLAUDE.md](scanpath_studio/CLAUDE.md). AI
-coding assistants pick both up via [CLAUDE.md](CLAUDE.md).
+The architecture map, conventions and gotchas are in [AGENTS.md](AGENTS.md);
+the workflow rules in [CLAUDE.md](CLAUDE.md). AI coding assistants pick both up
+automatically.
 
 ### If a code change doesn't show up
 
@@ -53,8 +53,8 @@ uv run --extra lint ruff format .
   Conventions: CLAUDE.md → *Tracking work*.
 - `main` is protected: land work as a branch + PR, one commit per feature or
   fix, with the issue in the subject (`fix(viz): … (#341)`).
-- Several sessions sharing one checkout: agree who owns which file, stage
-  selectively, and read `git diff --cached` before committing.
+- Comments and docs describe the code as it is now; the history of a change
+  belongs in its commit message, PR and issue.
 
 ## Docs site
 

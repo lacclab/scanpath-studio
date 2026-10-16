@@ -1,6 +1,6 @@
 # Unreleased changes
 
-One file per changelog entry (ENG-86). A PR adds its file here and never edits
+One file per changelog entry. A PR adds its file here and never edits
 `CHANGELOG.md`, so parallel PRs don't conflict over it.
 
 - **Name:** `<issue>.<group>.md` when the change has an issue, e.g.
@@ -12,9 +12,6 @@ One file per changelog entry (ENG-86). A PR adds its file here and never edits
 - **Content:** one line of plain text saying what changed for the user, with no
   bullet and no number (the file name supplies both). Put the reasoning in the
   PR description or the issue instead.
-
-Fragments from before the `[PREFIX-N]` IDs were dropped (`UX-190.changed.md`)
-are slugs like any other and resolve to their PR the same way.
 
 `python scripts/changelog_fragments.py check` validates the files, `preview`
 prints the section they make, and `/release` runs `release <version>`, which

@@ -1,5 +1,5 @@
 ---
-description: Browse example figures, with the app controls and CLI and Python recipes for each.
+description: "Example eye-tracking figures made with Scanpath Studio — scanpaths, gaze heatmaps, saccade types, raw gaze, replays and word profiles — each with app, CLI and Python recipes."
 hide:
   - navigation
   - toc

@@ -1,3 +1,7 @@
+---
+description: "Feature guides to Scanpath Studio: scanpath visualization, loading eye-tracking data, Corpus Analysis, and exporting and sharing figures."
+---
+
 # Feature guides
 
 Each guide covers the app, with Python and CLI examples beside the relevant

@@ -1,0 +1,13 @@
+{#- Search-engine metadata the theme does not write itself (mkdocs.yml →
+    `extra.google_site_verification`, `extra.structured_data`). -#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {%- if config.extra.google_site_verification %}
+  <meta name="google-site-verification" content="{{ config.extra.google_site_verification }}">
+  {%- endif %}
+  {%- if page and page.is_homepage and config.extra.structured_data %}
+  <script type="application/ld+json">{{ config.extra.structured_data | tojson }}</script>
+  {%- endif %}
+{% endblock %}

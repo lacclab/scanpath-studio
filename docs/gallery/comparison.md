@@ -1,4 +1,6 @@
 ---
+title: "Two readers"
+description: "Two participants' scanpaths over the same text on one canvas, to compare eye movements between readers, with Python and CLI code."
 hide:
   - navigation
   - toc

@@ -1,3 +1,7 @@
+---
+description: "Compare how participants read the words of one text, using the eye-tracking reading measures your data brings."
+---
+
 # Analyze one text
 
 Compare how participants read the words of one text.

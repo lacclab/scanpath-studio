@@ -1,4 +1,6 @@
 ---
+title: "App recordings"
+description: "Short screen recordings of Scanpath Studio at work on eye-tracking data: loading data, inspecting scanpaths, comparing readers and exporting figures."
 hide:
   - navigation
   - toc

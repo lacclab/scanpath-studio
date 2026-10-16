@@ -1,3 +1,7 @@
+---
+description: "Command-line reference for scanpath-studio: launch the app, or render scanpath figures from eye-tracking data headlessly, with every flag listed."
+---
+
 # CLI reference
 
 `scanpath-studio` launches the app by default. Its `render` subcommand writes

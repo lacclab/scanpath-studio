@@ -1,3 +1,7 @@
+---
+description: "Export an animated scanpath replay of a reading as GIF or MP4 for a talk or a paper's supplement."
+---
+
 # Export a replay
 
 Save an animated reading for a talk or supplement.

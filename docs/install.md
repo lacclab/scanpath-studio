@@ -1,3 +1,7 @@
+---
+description: "Download Scanpath Studio for Windows, macOS or Linux, install it with pip, or try the eye-tracking visualization demo in the browser, then draw a first scanpath."
+---
+
 # Get started
 
 ## Install { #install }

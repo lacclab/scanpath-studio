@@ -1,3 +1,7 @@
+---
+description: "Python API reference for Scanpath Studio: load eye-tracking data, list trials, plot scanpaths, heatmaps and replays, and save figures from a script or notebook."
+---
+
 # Python API
 
 The public API follows one pipeline:

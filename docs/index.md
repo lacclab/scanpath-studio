@@ -1,4 +1,6 @@
 ---
+title: "Eye-tracking scanpath visualization for reading research"
+description: "Free, open-source software for visualizing eye movements in reading: scanpaths, fixations, saccades, gaze heatmaps and raw gaze over the text, from EyeLink, Tobii and other eye trackers."
 hide:
   - navigation
   - toc

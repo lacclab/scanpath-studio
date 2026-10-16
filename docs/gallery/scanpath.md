@@ -1,4 +1,6 @@
 ---
+title: "Scanpath plot"
+description: "A scanpath plot of a reading: fixations and saccades drawn over the text at its on-screen position, with the Python and CLI code that makes it."
 hide:
   - navigation
   - toc

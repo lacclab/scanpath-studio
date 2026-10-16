@@ -1,3 +1,7 @@
+---
+description: "Summarize eye-tracking reading measures by text, participant or group, plot them against word features such as surprisal, and compare groups."
+---
+
 # Corpus Analysis
 
 Summarize reading measures by text, participant or group. The selected dataset

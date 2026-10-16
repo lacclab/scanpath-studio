@@ -1,3 +1,7 @@
+---
+description: "Inspect an eye-tracking recording trial by trial — fixations against raw gaze and word boxes — tag the trials that need attention, and save the review."
+---
+
 # Check a session
 
 Inspect a recording and save the trials that need attention.

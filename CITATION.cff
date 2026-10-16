@@ -51,7 +51,12 @@ version: 0.38.3
 date-released: "2026-10-16"
 keywords:
   - eye-tracking
+  - eye movements
+  - gaze
   - scanpath
+  - fixations
+  - saccades
+  - heatmap
   - visualization
   - reading
   - psycholinguistics

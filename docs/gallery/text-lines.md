@@ -1,4 +1,6 @@
 ---
+title: "Fixations by line"
+description: "Fixations colored by the line of text they fall on, a check of line assignment in eye-tracking-while-reading data, with Python and CLI code."
 hide:
   - navigation
   - toc

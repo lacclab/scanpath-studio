@@ -1,3 +1,7 @@
+---
+description: "Follow an eye-tracking reading measure within trials or across a session, for one participant or a group."
+---
+
 # See progression over time
 
 Inspect a measure within trials or across a session.

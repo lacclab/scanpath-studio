@@ -1,4 +1,6 @@
 ---
+title: "Gaze heatmap"
+description: "An eye-tracking heatmap of where fixation time concentrates on the text, with the app controls and the Python and CLI code that make it."
 hide:
   - navigation
   - toc

@@ -1,4 +1,6 @@
 ---
+title: "Gaze time course"
+description: "Horizontal gaze position against fixation onset time for one reading, with Python and CLI code."
 hide:
   - navigation
   - toc

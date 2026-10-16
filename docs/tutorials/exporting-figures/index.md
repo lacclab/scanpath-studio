@@ -1,3 +1,7 @@
+---
+description: "Export eye-tracking figures for papers and talks: one scanpath or heatmap, an animated replay, or every trial at once."
+---
+
 # Export customized figures
 
 <div class="grid cards" markdown>

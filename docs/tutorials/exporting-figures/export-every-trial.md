@@ -1,3 +1,7 @@
+---
+description: "Batch-export scanpath figures and data tables for every selected eye-tracking trial as one ZIP."
+---
+
 # Export every trial
 
 Build a ZIP of static figures and data tables for a set of trials.

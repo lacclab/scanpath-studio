@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "scanpath-studio"
 dynamic = ["version"]
-description = "Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables."
+description = "Interactive visualization of eye-tracking data from reading studies: draw, replay and compare scanpaths, fixations, saccades and gaze heatmaps over the text, and export figures and tables."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
@@ -20,7 +20,11 @@ authors = [
 ]
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
-keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
+keywords = [
+    "eye-tracking", "eye-tracker", "eye-movements", "gaze", "scanpath", "fixations",
+    "saccades", "heatmap", "visualization", "reading", "psycholinguistics",
+    "cognitive-science", "eyelink", "tobii", "streamlit",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
@@ -101,6 +105,7 @@ docs = [
 ]
 
 [project.urls]
+"Live demo" = "https://scanpath-studio.streamlit.app"
 Repository = "https://github.com/lacclab/scanpath-studio"
 Documentation = "https://lacclab.github.io/scanpath-studio/"
 Issues = "https://github.com/lacclab/scanpath-studio/issues"

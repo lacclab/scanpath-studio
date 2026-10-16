@@ -1,3 +1,7 @@
+---
+description: "Where Scanpath Studio processes your eye-tracking data — the desktop app, a local install or the hosted demo — and how to keep participant recordings private."
+---
+
 # Privacy
 
 For sensitive participant data, use the desktop app or run Scanpath Studio on

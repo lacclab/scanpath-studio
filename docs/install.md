@@ -2,41 +2,50 @@
 
 ## Install { #install }
 
-=== "Desktop app"
+<div class="grid cards sps-install-options" markdown>
 
-    Recommended for your own data. No Python needed.
+- :material-monitor:{ .lg .middle } **Desktop app** <span class="sps-install-badge">Recommended</span>
 
-    - [macOS (14+, Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg):
-      open the DMG, drag Scanpath Studio to Applications, then launch it.
-      If blocked, use System Settings → Privacy & Security → Open Anyway.
-    - [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe):
-      run the installer, then launch from the Start menu.
-      If SmartScreen warns, choose More info → Run anyway.
-      Or use the [portable ZIP](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip).
-    - [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz):
-      extract and run `./ScanpathStudio/ScanpathStudio`.
+    No coding required. Your data stays on your computer.
 
-    On an Intel Mac or older macOS, use pip.
-    [All downloads](https://github.com/lacclab/scanpath-studio/releases/latest).
+    <div class="sps-install-downloads" markdown>
 
-=== "pip"
+    [:fontawesome-brands-apple: macOS](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg){ .md-button .md-button--primary }
+    [:fontawesome-brands-windows: Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe){ .md-button .md-button--primary }
+    [:fontawesome-brands-linux: Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz){ .md-button .md-button--primary }
 
-    Python 3.11–3.14:
+    </div>
+
+    ??? info "Setup details & other downloads"
+
+        - macOS 14+, Apple silicon: open the DMG, drag to Applications, then launch.
+          If blocked: System Settings → Privacy & Security → Open Anyway.
+          Intel Mac or older macOS? Use Python below.
+        - Windows: run the installer, then launch from Start.
+          If SmartScreen warns: More info → Run anyway.
+          A [portable ZIP](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) is also available.
+        - Linux: extract, then run `./ScanpathStudio/ScanpathStudio`.
+
+        [All downloads](https://github.com/lacclab/scanpath-studio/releases/latest)
+
+- :material-cloud-outline:{ .lg .middle } **Try online**
+
+    Explore the bundled demo. No installation.
+
+    [Launch demo :material-arrow-right:](https://scanpath-studio.streamlit.app){ .md-button }
+
+- :fontawesome-brands-python:{ .lg .middle } **Install with Python**
+
+    Python 3.11–3.14. Opens in your browser.
 
     ```bash
     pip install scanpath-studio
     scanpath-studio
     ```
 
-    Opens the app at <http://localhost:8501>.
+</div>
 
-=== "Try online"
-
-    Open the [live demo](https://scanpath-studio.streamlit.app).
-    No installation needed.
-
-Desktop and pip installs keep your data on your computer and download OneStop
-and PoTeC in one click. The online demo has limited memory and no corpus downloads.
+Local installs support public corpus downloads. The online demo has limited memory.
 
 ## Explore
 

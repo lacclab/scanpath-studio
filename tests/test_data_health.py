@@ -190,13 +190,13 @@ def test_the_data_page_names_the_dataset_s_own_columns(clean):
     assert not at.exception
     if clean:
         assert not at.warning
-        assert any("finite number" in c.value for c in at.caption)
+        assert any("No issues found" in c.value for c in at.caption)
         return
     (warning,) = at.warning
     assert "Fixations lasting 0 ms or less" in warning.value
     assert "1 of 2 fixation rows, in 1 trial (1 negative)" in warning.value
     assert "`CURRENT_FIX_DURATION`" in warning.value
-    assert any("Nothing is removed or changed" in c.value for c in at.caption)
+    assert any("Flagged rows are kept" in c.value for c in at.caption)
 
 
 def test_the_api_reads_frames_under_the_datasets_own_names():

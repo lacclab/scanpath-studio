@@ -1,16 +1,18 @@
 # See progression over time
 
-Does reading change as a session goes on — with fatigue, practice, or as a
-condition takes effect? In **:material/bar_chart: Corpus Analysis**:
+Inspect a measure within trials or across a session.
 
-| Question | View |
-| --- | --- |
-| How does one participant's reading change over the session? | **Per participant → Per-trial trend** |
-| How do their fixation durations change over the session? | **Per participant → Fixation duration over time** |
-| How does a group's reading change over time? | **Groups → Group trend** |
+1. [Select the trials](index.md#before-you-start) and open Corpus Analysis.
+2. Choose the view for the question:
 
-The trend follows the trials in the order your data's trial index records, so
-map that column when you add the dataset.
-Narrow the pool first to the participants or condition the question is about —
-see [Before you start](index.md#before-you-start) — and keep the result as in
-[Keep the result](index.md#keep-the-result).
+    | Scope | View |
+    | --- | --- |
+    | One participant across trials | Per participant → Per-trial trend |
+    | Fixation duration within trials, pooled for one participant | Per participant → Fixation duration over time |
+    | A group across trials | Groups → Group trend |
+
+3. Choose a measure and aggregation where offered. For across-trial trends,
+   map the recorded trial-order column when importing; inferred order may
+   differ from presentation order. For the within-trial view, choose fixation
+   order or recorded onset time if available.
+4. [Download the table and recipe](index.md#keep-the-result).

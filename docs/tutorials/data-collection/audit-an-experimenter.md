@@ -1,37 +1,14 @@
 # Audit an experimenter
 
-When several people run sessions, check each experimenter's work: whether
-their participants are calibrated well, and whether problems recur in their
-sessions.
+Review recordings collected by one experimenter.
 
-You need to know which experimenter ran each session. Keep that as a column in
-your data (under **Extra fields to keep** when you add the dataset), or as a
-column of a participants table (**Metadata → Participants**). Either way it
-becomes a filter in the trial picker's filter funnel — a data column among the
-conditions, a participants-table column under **By participant**.
+1. Keep an experimenter field when importing the data, or attach it in a
+   participants table if each participant has one experimenter.
+2. Open the filter button beside Select trial and choose the experimenter.
+   Participants-table fields appear under By participant.
+3. [Inspect and replay their trials](check-a-session.md#2-inspect-a-trial).
+4. Tag trials `review` in Annotations and note recurring observations.
+5. [Export the review](check-a-session.md#5-save-the-review).
 
-## Review one experimenter's sessions
-
-1. Open the filter funnel beside the trial picker and pick the experimenter.
-2. Step through their trials with ◀ ▶, and [replay](check-a-session.md#3-replay-the-recording)
-   the ones that look wrong.
-3. In **Annotations**, tag what you find, such as `calibration` or `blink`, with
-   the experimenter's name in the note, so the review is one export away.
-
-<video class="sps-shot" controls muted loop playsinline preload="none"
-       poster="../../../assets/workflows/trial-filtering_poster.webp" data-autoplay
-       aria-label="Narrowing the trials by condition and participant">
-  <source src="../../../assets/workflows/trial-filtering.mp4" type="video/mp4">
-</video>
-
-*Narrowing the trial list by a condition and one participant — the same funnel narrows it to one experimenter.*
-
-## Compare two experimenters
-
-1. Turn on **Compare**.
-2. Narrow scanpath A's trials to one experimenter, and scanpath B's — with the
-   filter funnel on B's own row — to the other.
-3. Pick trials of the same text, marked 📄, and compare how the two sets of
-   recordings look: precision, missing stretches, drift.
-
-Save what you found as in [Check a session](check-a-session.md#5-save-the-review).
+To compare experimenters, turn on Compare, filter each scanpath's trial list
+by a different experimenter, and select readings of the same text.

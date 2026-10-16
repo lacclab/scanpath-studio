@@ -141,7 +141,5 @@ print(figure_options_table())
 
 ::: scanpath_studio.api.check_for_updates
 
-For a batch loop, see [Automation](automation.md#batch-pattern). GIF and MP4
-export uses
-`scanpath_studio.animation_export.export_animation` and requires Kaleido plus
-Chrome, Chromium or Edge.
+For [batch exports](guides/exporting/index.md#batch-pattern) and
+[GIF/MP4 replays](guides/exporting/index.md#replays-as-gif-or-mp4), see Export and share.

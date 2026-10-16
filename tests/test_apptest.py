@@ -4088,7 +4088,7 @@ class TestCorpusAnalysisTab:
         assert d.value == "—"
 
     def test_the_measure_and_error_bars_are_explained_in_place(self):
-        """The Measure picker carries the register's definition, unit, link and
+        """The Measure picker carries the register's definition, unit and
         what one plotted value is; the error-bar choice says what it shows."""
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
@@ -4097,7 +4097,7 @@ class TestCorpusAnalysisTab:
         at.run(timeout=60)
         assert not at.exception, at.exception
         captions = [c.value for c in at.caption]
-        note = next(c for c in captions if "computations/#measure-tfd" in c)
+        note = next(c for c in captions if "All time spent on a word" in c)
         assert "All time spent on a word" in note and "Unit: ms." in note
         assert "Each word's value is the mean across its participants." in note
         assert any(

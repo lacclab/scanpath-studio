@@ -90,6 +90,9 @@ def on_post_build(config, **kwargs) -> None:
     font.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(_streamlit_icon_font(), font)
 
+    from gallery_examples import write_gallery_assets
+
+    write_gallery_assets(site)
     _check_llms_txt(site / "llms.txt")
 
 

@@ -1,20 +1,17 @@
 # Exclude unsuitable trials
 
-Mark the trials that should not be analysed — poorly calibrated, skimming, or
-not reading at all — and leave them out of the pool without deleting them.
+Apply your exclusion criteria and leave rejected trials out of the selection.
 
-## 1. Review each trial
+1. [Review the session](../data-collection/check-a-session.md#2-inspect-a-trial).
+   Judge trials against your study's criteria; a scanpath pattern alone does
+   not establish skimming or poor calibration.
+2. In Annotations, tag rejected trials `exclude` and add a brief reason.
+3. Open the filter button beside Select trial. Under By trial annotation,
+   enter `exclude` in Excluding tags.
+4. [Check and export the selection](index.md#every-task-ends-the-same-way).
 
-Inspect the default scanpath, and turn on **Animate** when timing helps:
-skimming shows as long jumps and few fixations, poor calibration as fixations
-shifted off the lines. Open **:material/filter_list: Filters & highlights →
-:material/blur_on: Fixations** in the plot rail and **Highlight** out-of-bounds
-fixations; highlighting keeps the whole trial visible.
-
-## 2. Tag the decision
-
-In **Annotations**, apply a consistent tag vocabulary — for example `exclude`,
-`poor-calibration` or `skimming` — and add a brief reason.
+For trials with several screens, apply the exclusion tag to the whole trial.
+A screen-only annotation does not exclude its parent trial.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/favorites_poster.webp" data-autoplay
@@ -22,18 +19,5 @@ In **Annotations**, apply a consistent tag vocabulary — for example `exclude`,
   <source src="../../../assets/workflows/favorites.mp4" type="video/mp4">
 </video>
 
-*Starring a trial and tagging it, starring another, then showing only the starred ones.*
-
-## 3. Leave the tagged trials out
-
-First save the full record (**:material/database: Data Management →
-Annotations → Export**). Then, in the filter funnel under **By trial
-annotation**, put `exclude` in **Excluding tags** — not in **With any of these
-tags**, which would keep only the rejected trials. The pool is now the trials
-you kept.
-
-On a dataset with several screens per trial, a tag on a single screen does not
-hide its trial; find those on **:material/database: Data Management →
-Annotations**.
-
-**Then:** [check and export the pool](index.md#every-task-ends-the-same-way).
+*The recording shows stars and tags. Use the `exclude` tag and Excluding tags
+for the selection above.*

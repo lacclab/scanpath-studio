@@ -1,23 +1,14 @@
 # Export every trial
 
-Export static figures and tables for many trials.
+Build a ZIP of static figures and data tables for a set of trials.
 
-## 1. Set the view once
-
-Set the layers, colors and sizes as for [one figure](export-one-figure.md#1-choose-the-view).
-The bundle draws each trial separately, without animation or a comparison partner.
-
-## 2. Build the bundle
-
-In **Export → Export bundle**:
-
-1. choose this trial, the active filtered pool, or the whole dataset;
-2. select figure and table formats;
-3. preview the filename pattern;
-4. start the export and inspect one file before using the batch.
-
-For post-production, enable separable layers so text, boxes, fixations,
-saccades, heatmap, and stimulus image can be stacked in a vector editor.
+1. [Set the figure's design](export-one-figure.md#1-choose-the-view) once.
+   Each exported trial uses that design, without animation or a comparison partner.
+2. Open Export → Export bundle and select this trial, the active filtered pool,
+   or the whole dataset.
+3. Choose figure and table formats and check the filename pattern.
+   For editing individual layers later, enable separable layers.
+4. Build and download the bundle, then inspect one exported figure.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/export-bundle_poster.webp" data-autoplay
@@ -25,15 +16,11 @@ saccades, heatmap, and stimulus image can be stacked in a vector editor.
   <source src="../../../assets/workflows/export-bundle.mp4" type="video/mp4">
 </video>
 
-*Adding PNG and the fixation and word-measure tables, then building a zip of all 24 trials (fast-forwarded) and downloading it.*
+*Exporting figures and tables for the demo's trials; the build is fast-forwarded.*
 
-## 3. Keep provenance
+Keep `plot_config.json` for the design, `README.md` for the build details and
+`index.csv` for the file list and failures. Keep your original data and record
+its version and the selected trial filters separately.
 
-Keep `plot_config.json` with the batch. The bundle's `README.md` records the
-package version and which trials it was built from, and `index.csv` lists every
-file with its participant, trial and screen, and any that failed. Record the
-dataset version and the trial filters you used in the caption or analysis log —
-the export does not store them.
-
-Keep the original data and setup with the bundle. For scripted runs, see
-[Automation](../../automation.md).
+For a [scripted batch](../../guides/exporting/index.md#batch-pattern), use the
+Python recipe in Export and share.

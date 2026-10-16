@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import shlex
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -19,9 +20,14 @@ from scanpath_studio import api, cli
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
-#: The pages whose shell examples use the bundled demo — the README's too
-#: (ENG-76), which promises they run as-is.
-PAGES = ("cli.md", "automation.md", "agents.md", "../README.md")
+#: The pages whose shell examples use the bundled demo.
+PAGES = (
+    "cli.md",
+    "guides/scanpath-visualization/index.md",
+    "guides/exporting/index.md",
+    "agents.md",
+    "../README.md",
+)
 
 
 def _sample_commands(page: str) -> list[str]:
@@ -58,19 +64,19 @@ def test_a_documented_sample_command_runs(tmp_path, monkeypatch, page, command):
     cli.main(argv)
 
 
-def test_the_readme_python_example_runs_as_written(tmp_path, monkeypatch):
-    """The README's Python block is the first code most people paste (ENG-76)."""
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
+def test_the_visualization_guide_python_example_runs_as_written(tmp_path, monkeypatch):
+    """The app-first guide's demo recipe runs when copied from its Python tab."""
+    text = (DOCS / "guides/scanpath-visualization/index.md").read_text(encoding="utf-8")
     (block,) = re.findall(r"```python\n(.*?)```", text, flags=re.DOTALL)
     monkeypatch.chdir(tmp_path)
     namespace: dict = {}
-    exec(compile(block, "<README>", "exec"), namespace)  # noqa: S102
+    exec(compile(textwrap.dedent(block), "<visualization guide>", "exec"), namespace)  # noqa: S102
     assert namespace["fig"].data
     assert (tmp_path / "scanpath.html").exists()
 
 
 def test_the_documented_figure_code_call_builds_its_figure(monkeypatch):
-    """docs/api.md, docs/automation.md and the `figure_code` docstring name
+    """docs/api.md and the `figure_code` docstring name
     this trial; the snippet it prints has to run against the demo."""
     import scanpath_studio as sps
 
@@ -92,7 +98,7 @@ def test_the_documented_examples_name_real_demo_ids():
         ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
     ):
         assert pair in pairs
-    for page in ("api.md", "automation.md"):
+    for page in ("api.md", "guides/scanpath-visualization/index.md"):
         text = (DOCS / page).read_text(encoding="utf-8")
         assert "l7_101" not in text and "1_Adv_1" not in text
 

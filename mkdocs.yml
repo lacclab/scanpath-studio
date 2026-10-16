@@ -13,13 +13,15 @@ theme:
   name: material
   logo: assets/icon.png
   favicon: assets/icon.png
+  font:
+    text: Inter
+    code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
     edit: material/pencil
     view: material/file-eye-outline
   palette:
-    # Brand palette (APP_THEME / APP_THEME_DARK in scanpath_studio/constants.py)
-    # via the `custom` scheme colors in stylesheets/extra.css.
+    # Blue brand palette, with the docs surface and type tokens in theme.css.
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: custom
@@ -54,6 +56,7 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/theme.css
 
 extra_javascript:
   - javascripts/figures.js
@@ -70,11 +73,10 @@ extra:
       link: https://scanpath-studio.streamlit.app
       name: Live demo
 
-# Four tabs, one per reader (ENG-77): someone using the app, someone scripting
-# it, someone looking a definition up, and someone citing or contributing.
+# Task guides and examples lead; technical references remain separate.
 nav:
   - Home: index.md
-  - Install: install.md
+  - Get started: install.md
   - Tutorials:
       - tutorials/index.md
       - Optimize data collection:
@@ -105,11 +107,22 @@ nav:
       - Data management: guides/loading-data/index.md
       - Corpus Analysis:
           - guides/corpus-workspace/index.md
-          - Computations & methodology: computations.md
+      - Export and share: guides/exporting/index.md
       - FAQ: faq.md
-  - Plot gallery: gallery.md
-  - API & CLI:
-      - Overview: automation.md
+  - Plot gallery:
+      - gallery.md
+      - Scanpath: gallery/scanpath.md
+      - Heatmap: gallery/heatmap.md
+      - Fixations by line: gallery/text-lines.md
+      - Saccade types: gallery/saccade-types.md
+      - Reading schematic: gallery/illustration.md
+      - Two readers: gallery/comparison.md
+      - Raw gaze: gallery/raw-gaze.md
+      - Replay: gallery/replay.md
+      - Word profile: gallery/word-profile.md
+      - Time course: gallery/time-course.md
+      - App recordings: gallery/workflows.md
+  - Reference:
       - Python API: api.md
       - CLI reference: cli.md
       - For coding agents: agents.md
@@ -165,7 +178,8 @@ plugins:
         tutorials/figure-for-a-paper.md: tutorials/exporting-figures/export-one-figure.md
         tutorials/line-assignment.md: guides/scanpath-visualization/index.md
         tutorials/load-your-own-data.md: guides/loading-data/index.md
-        tutorials/run-it-headless.md: automation.md
+        tutorials/run-it-headless.md: guides/scanpath-visualization/index.md#render-in-code
+        automation.md: guides/exporting/index.md
         # ENG-80 took these off the site for the beta; old links land on the
         # repository file that now carries the subject.
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
@@ -200,12 +214,6 @@ plugins:
             show_symbol_type_heading: true
             show_symbol_type_toc: true
             docstring_style: google
-  - git-revision-date-localized:
-      type: date
-      fallback_to_build_date: true
-      exclude:
-        - cite.md
-        - gallery.md
   - llmstxt:
       markdown_description: >-
         Scanpath Studio is an interactive Streamlit workbench, a Python API
@@ -220,14 +228,14 @@ plugins:
         Use the app:
           - install.md: Install, launch, and a first plot
           - tutorials/*.md
-          - guides/*.md
-          - computations.md: How every measure and derived value is computed
+          - guides/index.md
+          - guides/**/*.md
           - faq.md
-        API & CLI:
-          - automation.md: Choosing between the app, the CLI and the Python API
+        Reference:
           - api.md: The Python API reference
           - cli.md: The CLI reference, every flag included
           - agents.md: Headless use by a coding agent or script
+          - gallery/*.md
         About:
           - cite.md
           - privacy.md

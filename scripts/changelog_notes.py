@@ -8,7 +8,10 @@ Usage:
 Extracts the ``## [<version>] - ...`` section (Keep a Changelog format). With
 ``--format slack`` (the default) Markdown is rewritten to Slack mrkdwn
 (``**bold**`` -> ``*bold*``, ``### Heading`` -> ``*Heading*``); with
-``--format markdown`` the section is emitted verbatim (for GitHub releases).
+``--format markdown`` the section is emitted verbatim (for GitHub releases);
+with ``--format counts`` only the number of items per group is printed
+(``Changed: 7 · Fixed: 3``) — what the Slack release notification posts, which
+announces a release without repeating its notes.
 Prints nothing and exits 0 if the version has no section or the file is
 missing, so the release workflow can fall back to a plain message.
 
@@ -97,12 +100,45 @@ def _fit(notes: str, max_chars: int, details_url: str) -> str:
     return "\n".join(kept).rstrip() + pointer
 
 
+#: A group heading in the headline half (``### Added``), and one item under it.
+_GROUP = re.compile(r"^### (.+?)\s*$")
+_ITEM = re.compile(r"^[-*] ")
+
+
+def counts(changelog: str, version: str) -> dict[str, int]:
+    """Return how many items each group of *version*'s section lists.
+
+    Only the headline half is counted — ``### Details`` repeats every item at
+    length. Groups keep the order the section lists them in; an unknown
+    version gives ``{}``.
+    """
+    notes = extract(changelog, version, "markdown")
+    split = _DETAILS.search(notes)
+    if split is not None:
+        notes = notes[: split.start()]
+    found: dict[str, int] = {}
+    group = None
+    for line in notes.splitlines():
+        heading = _GROUP.match(line)
+        if heading:
+            group = heading.group(1)
+            found.setdefault(group, 0)
+        elif group is not None and _ITEM.match(line):
+            found[group] += 1
+    return {name: n for name, n in found.items() if n}
+
+
+def format_counts(found: dict[str, int]) -> str:
+    """``{"Changed": 7, "Fixed": 3}`` → ``Changed: 7 · Fixed: 3``."""
+    return " · ".join(f"{name}: {n}" for name, n in found.items())
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version")
     parser.add_argument("changelog_path", nargs="?", default="CHANGELOG.md")
     parser.add_argument(
-        "--format", choices=("slack", "markdown"), default="slack", dest="fmt"
+        "--format", choices=("slack", "markdown", "counts"), default="slack", dest="fmt"
     )
     parser.add_argument(
         "--max-chars",
@@ -120,7 +156,11 @@ def main(argv: list[str]) -> int:
     ns = parser.parse_args(argv[1:])
     version = re.sub(r"^v", "", ns.version)
     path = Path(ns.changelog_path)
-    if path.is_file():
+    if path.is_file() and ns.fmt == "counts":
+        sys.stdout.write(
+            format_counts(counts(path.read_text(encoding="utf-8"), version))
+        )
+    elif path.is_file():
         sys.stdout.write(
             extract(
                 path.read_text(encoding="utf-8"),

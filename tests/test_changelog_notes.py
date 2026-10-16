@@ -116,3 +116,24 @@ class TestCap:
         assert (
             "*A short headline*" in notes
         )  # mrkdwn bold, so it went through slack fmt
+
+
+class TestCounts:
+    def test_counts_items_per_group_in_the_headline_half_only(self):
+        assert changelog_notes.counts(CHANGELOG, "9.9.0") == {"Added": 2}
+
+    def test_groups_keep_their_order(self):
+        text = """## [1.0.0] - 2026-10-16
+
+### Changed
+- one
+- two
+
+### Fixed
+- three
+"""
+        found = changelog_notes.counts(text, "1.0.0")
+        assert changelog_notes.format_counts(found) == "Changed: 2 · Fixed: 1"
+
+    def test_an_unknown_version_counts_nothing(self):
+        assert changelog_notes.counts(CHANGELOG, "0.0.1") == {}
